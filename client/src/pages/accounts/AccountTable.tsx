@@ -103,7 +103,7 @@ export function AccountTable({
                         ) : (
                           <span className="w-3.5 shrink-0" />
                         )}
-                        <span className="truncate text-sm max-sm:whitespace-normal max-sm:line-clamp-2 max-sm:break-words">
+                        <span className="truncate text-sm max-sm:min-w-0 max-sm:flex-1 max-sm:whitespace-normal max-sm:line-clamp-2 max-sm:break-words">
                           {account.name}
                         </span>
                         {account.accountId && !isGroup && (
@@ -113,7 +113,7 @@ export function AccountTable({
                         )}
                         {onEdit && account.type === "ledger" && (
                           <button
-                            className="opacity-0 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                            className="opacity-0 group-hover/row:opacity-100 [@media(hover:none)]:opacity-100 [@media(hover:none)]:p-2.5 transition-opacity ml-1 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
                             onClick={(e) => {
                               e.stopPropagation();
                               onEdit(account);

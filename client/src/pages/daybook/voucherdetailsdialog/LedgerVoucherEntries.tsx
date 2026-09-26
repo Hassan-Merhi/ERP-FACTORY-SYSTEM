@@ -156,7 +156,11 @@ function AccountEntryRows({
             </TableCell>
           ) : (
             <>
-              <TableCell className="text-right font-mono">
+              {/* Phone cards drop the empty side, so each entry shows only its own amount. */}
+              <TableCell
+                className="text-right font-mono"
+                data-mobile-cell={parseFloat(entry.debitAmount) > 0 ? undefined : "hidden"}
+              >
                 {parseFloat(entry.debitAmount) > 0 ? (
                   <div>
                     {formatAmount(entry.debitAmount)}
@@ -168,7 +172,10 @@ function AccountEntryRows({
                   "-"
                 )}
               </TableCell>
-              <TableCell className="text-right font-mono">
+              <TableCell
+                className="text-right font-mono"
+                data-mobile-cell={parseFloat(entry.creditAmount) > 0 ? undefined : "hidden"}
+              >
                 {parseFloat(entry.creditAmount) > 0 ? (
                   <div>
                     {formatAmount(entry.creditAmount)}
@@ -187,7 +194,10 @@ function AccountEntryRows({
                   "-"
                 )}
               </TableCell>
-              <TableCell className="text-sm text-muted-foreground">{entry.narration || "-"}</TableCell>
+              {/* The card title already shows the narration under the account. */}
+              <TableCell className="text-sm text-muted-foreground" data-mobile-cell="hidden">
+                {entry.narration || "-"}
+              </TableCell>
             </>
           )}
         </TableRow>

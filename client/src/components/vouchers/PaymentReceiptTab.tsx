@@ -1,3 +1,4 @@
+import { useVoucherEditCancel } from "@/pages/vouchers/VoucherPhoneActionBar";
 import { useState, useMemo } from "react";
 import { UseFormReturn, UseFieldArrayReturn, type SubmitHandler } from "react-hook-form";
 import { format } from "date-fns";
@@ -123,6 +124,7 @@ export function PaymentReceiptTab({
   onEffectiveDateChange,
 }: PaymentReceiptTabProps) {
   const { formatAmount } = useCurrencyContext();
+  const cancelEdit = useVoucherEditCancel(!!isEditMode);
   const { formatDisplayDate: _formatDisplayDate } = useDateFormat();
 
   // Notes collapse state — auto-open if there is already a notes value
@@ -661,10 +663,13 @@ export function PaymentReceiptTab({
               </div>
 
               {/* ── Action bar — the total stays with Save, pinned to the bottom of the card ── */}
-              <div className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+              <div
+                className="sticky bottom-0 z-20 rounded-b-lg border-t bg-card/95 px-4 sm:px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/80 max-sm:bg-card max-sm:shadow-[0_-4px_12px_-8px_hsl(var(--foreground)/0.25)] max-sm:supports-[backdrop-filter]:bg-card max-sm:py-2"
+                data-voucher-sticky-actions=""
+              >
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div className="flex items-center gap-5">
-                    <div className="flex flex-col">
+                    <div className="flex flex-col max-sm:hidden">
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                         Lines
                       </span>
@@ -711,6 +716,18 @@ export function PaymentReceiptTab({
                     />
 
                     <div className="flex flex-col items-end gap-1 w-full sm:w-auto">
+                      {/* Phones editing a voucher get Cancel beside Save (back to where they came from). */}
+                      {cancelEdit && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full sm:hidden"
+                          onClick={cancelEdit}
+                          data-testid="button-cancel-voucher-edit"
+                        >
+                          Cancel
+                        </Button>
+                      )}
                       <Button
                         type="submit"
                         size="default"

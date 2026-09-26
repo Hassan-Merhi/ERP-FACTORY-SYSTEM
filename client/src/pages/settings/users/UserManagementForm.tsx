@@ -67,7 +67,7 @@ export function UserManagementForm({
   const [showPasswordReset, setShowPasswordReset] = useState(false);
 
   return (
-    <div className="px-6 py-4 space-y-4 pb-6">
+    <div className="px-4 py-4 space-y-4 pb-6 sm:px-6">
       {/* Card 1: Account */}
       <Card>
         <CardHeader className="pb-3">
@@ -77,7 +77,7 @@ export function UserManagementForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label className="text-xs">Username</Label>
               <Input
@@ -175,7 +175,7 @@ export function UserManagementForm({
                 This user can only view data — all write actions are blocked. Use the toggles below to choose which
                 sections they can access. If both are on, they can view everything.
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <p className="text-sm font-medium">ERP</p>
@@ -202,7 +202,7 @@ export function UserManagementForm({
             </>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex items-center justify-between rounded-md border p-3">
                   <div>
                     <p className="text-sm font-medium">ERP</p>

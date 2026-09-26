@@ -1,3 +1,4 @@
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ChevronsUp, ArrowUp, ArrowDown, ArrowLeftRight, XIcon } from "lucide-react";
@@ -67,6 +68,8 @@ export function AgentCardTable(props: AgentCardTableProps) {
     clearedRows,
   } = props;
 
+  // ERP phones read each container as a card (labels from these headers); desktop keeps the grid.
+  const { tableProps } = useMobileCardTable();
   const cols = [
     "CONTAINER",
     "SUPPLIER",
@@ -84,7 +87,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-xs whitespace-nowrap border-collapse">
+      <table className="w-full text-xs whitespace-nowrap border-collapse" {...tableProps}>
         <thead>
           <tr className="bg-slate-700 dark:bg-slate-800 text-slate-100 border-b border-slate-600">
             {cols.map((h) => (
@@ -246,7 +249,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                       <td colSpan={9} className="py-2 px-3 text-[11px] uppercase tracking-widest font-semibold">
                         Account Balance
                       </td>
-                      <td className="py-2 px-3 text-right text-sm font-bold tabular-nums">
+                      <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
                         ${fmt(Math.abs(rawBal), 0)}
                         {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                       </td>
@@ -268,7 +271,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                     <td colSpan={9} className="py-2 px-3 text-[11px] uppercase tracking-widest font-semibold">
                       Account Balance
                     </td>
-                    <td className="py-2 px-3 text-right text-sm font-bold tabular-nums">
+                    <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
                       ${fmt(adjAbs, 0)}
                       <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({adjLabel})</span>
                     </td>
@@ -281,7 +284,7 @@ export function AgentCardTable(props: AgentCardTableProps) {
                   <td colSpan={9} className="py-2 px-3 text-[11px] uppercase tracking-widest font-semibold">
                     Account Balance
                   </td>
-                  <td className="py-2 px-3 text-right text-sm font-bold tabular-nums">
+                  <td className="py-2 px-3 text-right text-sm font-bold tabular-nums" data-label="Balance">
                     ${fmt(Math.abs(rawBal), 0)}
                     {balLabel && <span className="ml-1.5 text-[11px] opacity-80 font-semibold">({balLabel})</span>}
                   </td>

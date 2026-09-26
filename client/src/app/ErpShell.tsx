@@ -11,6 +11,8 @@ import { DailyRateModal } from "@/components/DailyRateModal";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AppTopBar } from "@/components/AppTopBar";
 import { ErpMobileBottomNav } from "@/components/ErpMobileBottomNav";
+import { ErpMobileNavSheet } from "@/components/ErpMobileNavSheet";
+import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { CommandPalette } from "@/components/CommandPalette";
 import { SkipLink } from "@/components/ui/responsive-accessibility";
@@ -37,7 +39,7 @@ function CompanyDailyRateModal() {
 
 export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog }: ErpShellProps) {
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [currentLocation] = useLocation();
   const { t } = useApplicationLanguage();
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
@@ -50,6 +52,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   useEffect(() => installErpNavigationHistory(), []);
   // ERP-only dialog styling must not follow the user into Factory, POS or Properties.
   useDocumentAppShell("erp");
+  // Phone sheets and dialogs size to the visible viewport, so the keyboard never hides their actions.
+  useVisualViewportMetrics();
 
   return (
     <AppModeProvider mode="erp">
@@ -66,8 +70,6 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 user={{ username: user.username, role: user.role ?? "" }}
                 onLogout={handleLogout}
                 onSearchOpen={() => setPaletteOpen(true)}
-                mobileMoreOpen={mobileMoreOpen}
-                onMobileMoreOpenChange={setMobileMoreOpen}
                 simplifyMobileNavigation
               />
               <main
@@ -90,7 +92,8 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   </div>
                 </WorkspaceRouteBoundary>
               </main>
-              <ErpMobileBottomNav user={user} onMore={() => setMobileMoreOpen(true)} />
+              <ErpMobileBottomNav user={user} onMore={() => setMobileNavOpen(true)} moreOpen={mobileNavOpen} />
+              <ErpMobileNavSheet user={user} open={mobileNavOpen} onOpenChange={setMobileNavOpen} />
             </div>
           </div>
         </SidebarProvider>

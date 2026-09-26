@@ -6,7 +6,8 @@
  * ids are unchanged.
  */
 import { useMemo, useRef } from "react";
-import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft } from "lucide-react";
+import { TrendingUp, TrendingDown, X, FileDown, Printer, ArrowRightLeft, ArrowLeft } from "lucide-react";
+import { ErpMobileActionsMenu } from "@/components/ui/erp-mobile-records";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,6 +46,8 @@ interface AgentStatementPanelProps {
   onClearAccount: () => void;
   formatAmount: (value: number) => string;
   formatDisplayDate: (date: Date | string) => string;
+  /** Phone layout: the statement is its own screen with Back to the agent list. */
+  phone?: boolean;
 }
 
 export function AgentStatementPanel({
@@ -62,6 +65,7 @@ export function AgentStatementPanel({
   onClearAccount,
   formatAmount,
   formatDisplayDate,
+  phone = false,
 }: AgentStatementPanelProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -84,12 +88,27 @@ export function AgentStatementPanel({
   const closingSide = balanceSideLabel(closingBalance, selectedAccount.type);
 
   return (
-    <div className="p-6 space-y-5 max-w-5xl">
+    <div className={phone ? "space-y-4" : "p-6 space-y-5 max-w-5xl"} data-testid="agent-statement-panel">
       {/* Header */}
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+        {phone && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onClearAccount}
+            className="w-full justify-start gap-2"
+            data-testid="button-back-to-agents"
+          >
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
+            Back to agents
+          </Button>
+        )}
+        <div className={phone ? "min-w-0 flex-1" : undefined}>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-xl font-bold tracking-tight" data-testid="text-agent-account-name">
+            <h2
+              className={`${phone ? "break-words text-lg" : "text-xl"} font-bold tracking-tight`}
+              data-testid="text-agent-account-name"
+            >
               {selectedAccount.name}
             </h2>
             <Badge
@@ -114,37 +133,60 @@ export function AgentStatementPanel({
             <span className="text-xs text-muted-foreground">current balance</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onExportExcel}
-            disabled={transactionsLoading || vouchersWithBalance.length === 0}
-            data-testid="button-export-excel"
-          >
-            <FileDown className="h-3.5 w-3.5 mr-1.5" />
-            Excel
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handlePrint()}
-            disabled={transactionsLoading}
-            data-testid="button-print"
-          >
-            <Printer className="h-3.5 w-3.5 mr-1.5" />
-            Print
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={onClearAccount}
-            data-testid="button-clear-account"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
+        {phone ? (
+          <ErpMobileActionsMenu
+            iconOnly
+            data-testid="button-agent-statement-actions"
+            actions={[
+              {
+                label: "Export Excel",
+                icon: FileDown,
+                onSelect: onExportExcel,
+                disabled: transactionsLoading || vouchersWithBalance.length === 0,
+                testId: "button-export-excel",
+              },
+              {
+                label: "Print",
+                icon: Printer,
+                onSelect: () => handlePrint(),
+                disabled: transactionsLoading,
+                testId: "button-print",
+              },
+            ]}
+          />
+        ) : (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onExportExcel}
+              disabled={transactionsLoading || vouchersWithBalance.length === 0}
+              data-testid="button-export-excel"
+            >
+              <FileDown className="h-3.5 w-3.5 mr-1.5" />
+              Excel
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePrint()}
+              disabled={transactionsLoading}
+              data-testid="button-print"
+            >
+              <Printer className="h-3.5 w-3.5 mr-1.5" />
+              Print
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={onClearAccount}
+              data-testid="button-clear-account"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Period filter */}
@@ -319,7 +361,13 @@ export function AgentStatementPanel({
                             </Badge>
                           </TableCell>
                           <TableCell className="py-3">
-                            {note && <p className="text-xs text-muted-foreground truncate max-w-xs">{note}</p>}
+                            {note && (
+                              <p
+                                className={`text-xs text-muted-foreground ${phone ? "break-words" : "truncate max-w-xs"}`}
+                              >
+                                {note}
+                              </p>
+                            )}
                           </TableCell>
                           <TableCell className="py-3 text-right font-mono text-sm">
                             {v.totalDebit > 0 ? (

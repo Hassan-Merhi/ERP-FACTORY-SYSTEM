@@ -174,7 +174,10 @@ export function EmployeesTab({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setCreateGroupDialogOpen(true)} data-testid="button-create-employee-group">
+                <DropdownMenuItem
+                  onClick={() => setCreateGroupDialogOpen(true)}
+                  data-testid="button-create-employee-group"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Create Group
                 </DropdownMenuItem>
@@ -251,7 +254,11 @@ export function EmployeesTab({
               </DropdownMenu>
             )}
 
-            <Button className="h-10" onClick={() => setCreateEmployeeDialogOpen(true)} data-testid="button-create-employee">
+            <Button
+              className="h-10"
+              onClick={() => setCreateEmployeeDialogOpen(true)}
+              data-testid="button-create-employee"
+            >
               <Plus className="mr-2 h-4 w-4" />
               New Employee
             </Button>
@@ -272,9 +279,10 @@ export function EmployeesTab({
             <p className="mt-1 text-sm text-muted-foreground">Try a different search or status filter.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <div className="min-w-[980px]">
-              <div className="grid grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] items-center gap-3 border-b bg-muted/25 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          // Phones: each employee is a card (two figures per row, labelled); sm+ keeps the grid table.
+          <div className="overflow-x-auto" data-testid="employee-list">
+            <div className="sm:min-w-[980px]">
+              <div className="hidden grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] items-center gap-3 border-b bg-muted/25 px-5 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:grid">
                 <div>Employee</div>
                 <div>Salary</div>
                 <div>Balance</div>
@@ -291,10 +299,10 @@ export function EmployeesTab({
                 return (
                   <div
                     key={employee.id}
-                    className="grid grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] items-center gap-3 border-b px-5 py-3.5 transition-colors last:border-b-0 hover:bg-muted/25"
+                    className="grid grid-cols-2 items-center gap-3 border-b px-4 py-3.5 transition-colors last:border-b-0 hover:bg-muted/25 sm:grid-cols-[minmax(260px,1.5fr)_130px_150px_140px_140px_150px] sm:px-5"
                     data-testid={`card-employee-${employee.id}`}
                   >
-                    <div className="flex min-w-0 items-center gap-3">
+                    <div className="col-span-2 flex min-w-0 items-center gap-3 sm:col-span-1">
                       <Avatar className="h-10 w-10 shrink-0 border">
                         <AvatarFallback className={`text-sm font-bold ${avatarColor}`}>{initials}</AvatarFallback>
                       </Avatar>
@@ -318,36 +326,63 @@ export function EmployeesTab({
                     </div>
 
                     <div>
-                      <p className="font-mono text-sm font-medium">{formatAmount(parseFloat(employee.monthlySalary || "0"))}</p>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Salary
+                      </p>
+                      <p className="font-mono text-sm font-medium">
+                        {formatAmount(parseFloat(employee.monthlySalary || "0"))}
+                      </p>
                     </div>
                     <div>
-                      <p className={`font-mono text-sm font-semibold ${balance >= 0 ? "text-emerald-500" : "text-destructive"}`}>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Balance
+                      </p>
+                      <p
+                        className={`font-mono text-sm font-semibold ${balance >= 0 ? "text-emerald-500" : "text-destructive"}`}
+                      >
                         {formatAmount(balance)}
                       </p>
                     </div>
                     <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Deposits
+                      </p>
                       <p className="font-mono text-sm text-muted-foreground">
                         {formatAmount(parseFloat(employee.totalDeposits || "0"))}
                       </p>
                     </div>
                     <div>
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">
+                        Withdrawals
+                      </p>
                       <p className="font-mono text-sm text-muted-foreground">
                         {formatAmount(parseFloat(employee.totalWithdrawals || "0"))}
                       </p>
                     </div>
 
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="col-span-2 flex items-center justify-end gap-1 max-sm:border-t max-sm:pt-2 sm:col-span-1">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button size="sm" variant="outline" className="h-8" data-testid={`button-actions-${employee.id}`}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8"
+                            data-testid={`button-actions-${employee.id}`}
+                          >
                             Actions <ChevronDown className="ml-1 h-3.5 w-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleDeposit(employee)} data-testid={`button-deposit-${employee.id}`}>
+                          <DropdownMenuItem
+                            onClick={() => handleDeposit(employee)}
+                            data-testid={`button-deposit-${employee.id}`}
+                          >
                             <TrendingUp className="mr-2 h-4 w-4" /> Deposit
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleBonus(employee)} data-testid={`button-bonus-${employee.id}`}>
+                          <DropdownMenuItem
+                            onClick={() => handleBonus(employee)}
+                            data-testid={`button-bonus-${employee.id}`}
+                          >
                             <DollarSign className="mr-2 h-4 w-4" /> Bonus
                           </DropdownMenuItem>
                           <DropdownMenuItem

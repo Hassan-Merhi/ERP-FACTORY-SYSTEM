@@ -52,7 +52,7 @@ Pages that intentionally keep a panel-owned heading instead of a page header:
 
 | Route | Reason |
 | --- | --- |
-| `/agents` | Master/detail ledger tool; the Phase 1 master/detail phone layout is keyed to its root element. |
+| `/agents` | Master/detail ledger tool with a panel-owned heading. On phones it shows the agent list and the statement as separate screens (R2). |
 | `/chat` | Messaging workspace with a fixed-height conversation layout. |
 | `/spreadsheet` (open workbook) | Full-bleed editor toolbar; the library view uses `PageHeader`. |
 
@@ -305,3 +305,191 @@ Known issues outside this program (unchanged by it, red on `main`): the Reposito
 `applicationRoutes.ts` line cap, the CI-only frontend failures in `phase4-split-pages` and
 `period-filter`, Backend / Database Tests, and the github-advanced-security setup step.
 
+
+## Real-device remediation
+
+A follow-up program for the screens that still felt desktop-first on real phones. Each phase
+lands as its own commit; the status of every reported item is tracked at the end of this
+section.
+
+### R1 — Shared navigation and dialog foundations
+
+- **One phone navigation model.** The bottom navigation keeps its four areas (Tracking,
+  Inventory, Sales, Accounts). **More** now opens the grouped page menu
+  (`ErpMobileNavSheet`): every other page the user may open, under section headings, with a
+  page search that also matches the localised name. It closes after navigation and never
+  repeats a bottom-navigation destination. The header sidebar toggle is hidden on phones (it
+  opened the same pages in a second, desktop-style menu); the header "⋯" keeps account,
+  language, theme and logout. Tablet and desktop keep the sidebar.
+- The off-canvas sidebar (640–767px) no longer splits into two squeezed columns: the global
+  `.flex.gap-*` wrap rule is released for `[data-slot="sidebar-content"]`.
+- **Keyboard-safe dialogs.** `useVisualViewportMetrics` (mounted by `ErpShell`) publishes
+  `--erp-visual-viewport-height` and `--erp-keyboard-inset`. Phone bottom-sheet dialogs and
+  bottom sheets sit above the on-screen keyboard and cap their height to the visible viewport,
+  so the pinned action row stays reachable while typing; the focused field is scrolled back
+  into view when the keyboard opens. Column dialogs with their own scrolling body let that
+  body shrink (`min-height: 0`), so the footer is never pushed out of the sheet.
+- **Bespoke record cards.** `client/src/components/ui/erp-mobile-records.tsx` adds
+  `ErpMobileRecordCard` (title, headline value, two-column fields, collapsible details,
+  actions, tap-to-open), `ErpMobileRecordList`, `ErpMobileRecordGroup`,
+  `ErpMobileSummaryGrid` (two-column KPIs) and `ErpMobileActionsMenu` (compact Actions
+  overflow). They sit on the existing `ResponsiveDataList` primitives and are used where rows do
+  not map onto `<Table mobileLayout="cards">`.
+
+### R2 — Accounting and ledger phone workflows
+
+- **Accounts statement.** Below `md` the statement table was hidden (`hidden md:block`) with no
+  phone replacement, so a phone showed the KPIs and no transactions. `AccountStatementCards`
+  renders the opening balance, one card per transaction (tap opens the voucher, as on desktop)
+  and the period totals, paging long statements 100 cards at a time. On ERP phones the account
+  header is compact (Back to accounts, name, closing balance) and WhatsApp, Excel, PDF
+  (EN/FR/AR), Show Deleted and Delete Selected move into one Actions menu; KPIs use the
+  two-column `ErpMobileSummaryGrid`. The page actions and tabs step aside while a statement is
+  open. Figures come from the same props as the desktop table.
+- **Agent Ledger.** Phones no longer stack a height-capped `w-72` list above the statement.
+  State 1 is the full-width list (title, Add Account, search, agents); tapping an agent opens
+  state 2, the statement with Back to agents, balance, period, KPIs, card rows and an Actions
+  menu (Excel, Print). Desktop keeps the master/detail layout.
+- **View Voucher (Daybook and All Daybook).** Every ERP phone dialog now pins its header and
+  Close control while the body scrolls. Tables inside phone dialogs and sheets no longer cap
+  their own height (Table's default `max-h-[70vh]` region), so there is a single scroll
+  container. Daybook entry cards drop the empty Debit/Credit side and the duplicated narration.
+  All Daybook's Close/Edit row is a `DialogFooter` (pinned), its ledger entries show Dr/Cr, and
+  its item tables become cards.
+- **Edit Voucher.** Daybook and All Daybook share `voucherEditPath`, so Edit opens the same
+  editor from both (All Daybook used to land on the Daybook list via an ignored `voucherId`
+  parameter). The editor itself is the voucher form covered by R3. Daybook's
+  `VoucherEditDialog` is never opened by the page; it is unchanged.
+- **Edits & Activity** (Daybook tab, and the Settings activity section that reuses it). Phones
+  get the shared filter model (search visible, action/module/date filters in the filter sheet)
+  and day-grouped activity cards (record, time, user, module, action, concise detail); tapping
+  a card opens the existing detail sheet, whose field and entry grids now stack on phones.
+  Factory keeps its layout.
+
+### R3 — Voucher entry on phones (all seven types)
+
+- **Voucher type selector.** The phone strip of seven pills showed three types; the rest were
+  off-screen. Phones now get one full-width "Voucher type" control that opens a grouped sheet
+  (Financial / Adjustments) of every type the user may use (`VoucherMobileTabs`, keeping the
+  `tab-mobile-*` ids). Tablet and desktop keep the sidebar nav.
+- **Pinned save bar.** `VoucherPhoneActionBar` sticks to the bottom of the workspace on ERP phones
+  with the running totals, the validation state and Cancel | Save. Save calls each form's
+  existing submit (or submits the enclosing form), so validation and posting are unchanged; the
+  form's own Save row does not render on phones, so there is one Save. Cancel appears in edit
+  mode and returns to where the voucher was opened from (`useVoucherEditCancel`).
+  - Journal: Dr/Cr totals with Balanced / Off by; Save disabled while unbalanced (as on desktop).
+  - Stock Transfer: items · qty · total, Save as Revision in edit mode.
+  - Stock Adjustment: qty · total. The duplicate desktop totals row and the card-in-card padding
+    are gone on phones, which also removes the page's horizontal overflow (378px at 360px).
+  - Transfer Order: items · bales, Validate and Save as Revision, Process / Update Order.
+  - Credit Note: items · refund, Create / Update Note (Cancel resets an edit); the cart table
+    reads as cards and the item picker is bounded on phones.
+  - Payment / Receipt keep their existing pinned action bar, now opaque and more compact on
+    phones, with Cancel in edit mode.
+- **Entry cards.** Journal entries are labelled "Entry N" with Remove beside the label, so the
+  account field gets the full row. Journal and Stock Transfer header fields stack full width.
+- **Portalled sheets no longer split into columns.** The global `.flex.gap-*` phone wrap rule
+  also hit sheets and dialogs portalled outside the shell: the Payment/Receipt entry sheet
+  rendered its account list as an off-screen second column. ERP sheets, dialogs and their
+  column containers stay single-line.
+- While a voucher save bar is on screen, `#main-content` reserves `scroll-padding-bottom`, so a
+  focused field or tapped entry scrolls above the bar. The entry sheet caps its height to the
+  visible viewport (keyboard) and keeps Done clear of the close control.
+- Transfer Order inside the Vouchers page shows a section heading instead of a second page
+  header; the standalone `/stock-transfer-order` page keeps its `PageHeader`.
+
+### R4 — GIT tracking and Location Inventory
+
+- **GIT Truck / Location.** Phones get one card per container (container #, supplier, status,
+  truck/plate, location, agent, transporter) under the same shop → supplier grouping as the
+  table. The desktop table and the WhatsApp image template are unchanged.
+- **GIT Agent / Duty.** The agent open-container and in-transit tables opt into the shared card
+  layout (`useMobileCardTable`) inside each agent section, so duty, cleared and remaining
+  amounts, statuses, the prepaid / reorder controls and the account balance stay available
+  without sideways scrolling. The balance cell is labelled "Balance".
+- **GIT Detail.** The default workbook view already used cards; the Flat Table view now reads as
+  cards on phones too (it was 1313px wide).
+- **Shared card fixes.** Card rows ignore desktop row heights (`h-12` rows clipped the Stock Group
+  Items cards to their title), and bare icon controls in a card's action row get a 40px hit
+  area, laid out in a row.
+- **Location → Stock Groups.** On phones: location name with one Actions menu (View All Stock
+  Items, Show/Hide zero stock, Excel/PDF exports — the with-cost PDF only when cost is visible —
+  and the location's rename, WhatsApp and delete actions); a two-column summary (Groups, Items,
+  Qty, and Value only when cost is visible); full-width search and category filter; and one
+  card per stock group (items, qty, and average rate/value when cost is visible) that opens the
+  group, with its PDF export. The movement From/To filter sits on one row.
+- **Stock Group Items / All Items.** Item cards now show the full record (name, code, category,
+  quantity with unit, and rate/value when permitted); the name still opens the item history.
+- **Translation fix.** A generated Arabic/French catalogue entry held an untranslated,
+  truncated source template, so any "N items" text rendered raw template code in Arabic. It now
+  maps to "{{0}} عنصر" / "{{0}} article(s)" (catalogue size unchanged).
+
+### R5 — POS phone item sheet
+
+- On phones (the POS mobile layout, used by the ERP and POS shells alike), tapping a search
+  result opens `PosMobileItemSheet` instead of adding a line at once. The sheet shows the item
+  name and code, available stock, the configured price and the last price it sold at, a
+  quantity stepper, the selling price and the line total; **Add Item** puts the line in the
+  cart, clears the search and returns focus to it so the next item can be scanned or typed.
+  Nothing is posted until Checkout; cart cards keep quantity, price and delete editing.
+- No second pricing path: `resolvePosItemRate` (last sold price, else configured price, then
+  CFA conversion) is the one resolver for the grid and the sheet, and the sheet adds through
+  the existing `selectItem`, which now accepts `{ quantity, rate }` overrides. A typed price
+  converts back to USD exactly as editing the Rate cell does. Row placement for a repeated item
+  is unchanged (a new line, as in the grid).
+- The stock rule runs before the sheet opens (`ensureItemSellable`): an item that may not be
+  sold (no stock, no negative-stock permission) shows the existing zero-stock alert instead.
+- Desktop and tablet POS (the grid and inventory picker) are unchanged.
+
+### R6 — Profit Check, Payroll, Rentals and Settings
+
+- **Profit Check**: on phones each item is an `ErpMobileRecordCard` with the editable Selling
+  Price (or group sell), Dubai Price and Qty to Order inputs, plus Landing Cost and Cost Profit;
+  the remaining columns (Extra/Bale, Inv. Avg Cost, Hassan price and profit, stock, sales) sit
+  behind "More details". The card reuses the table's input components and honours the column
+  visibility settings, so hidden-cost columns stay hidden. The setup row and search stack.
+- **Payroll**: employee rows become labelled cards below `sm`, worker cards wrap long names and
+  move actions to a footer row, and the Advances, Run Payroll preview, history and pay tables
+  use the card layout. Dialogs scroll inside themselves with a sticky header; the sticky header
+  rule now skips `p-0` dialogs that lay out their own header.
+- **Rentals (shops and warehouses)**: ERP phones show a summary grid and one card per unit,
+  grouped by location (tenant, outstanding or credit, monthly rent, next billing, guarantee,
+  start; scheduled amount and note under "More details"). Tapping a card opens the existing
+  unit dialog; the card footer holds "Select for payment" and delete. Add Shop stays primary and
+  Payments Log, Run Monthly Update and Select all move to the Actions menu. In the unit dialog
+  the six tabs wrap to two rows, the statement and payment lists use cards, and the payment,
+  guarantee, contract and bulk-payment forms stack to one column.
+- **Settings**: sub-tabs wrap on phones instead of scrolling sideways, File Storage stacks the
+  folder list above the files (folder actions visible without hover, files as cards), Login
+  History uses cards and the user sheet and Add User dialog stack their fields.
+- Shared fix: in a `grid-cols-1 sm:grid-cols-2` form, a bare `col-span-2` row created an
+  implicit second column that squeezed every field on phones. Such rows now span the single
+  column (ERP phones), and the rental forms use `sm:col-span-2`.
+
+### R7 — Certification of the real-device workflows
+
+`scripts/verify-erp-mobile-program.mjs --workflows` adds workflow probes
+(`scripts/lib/erp-mobile-workflows.mjs`) to the route sweep. On every phone viewport (320,
+360, 393, 412 and phone landscape) and language they drive the fourteen remediation items:
+
+| # | Probe | What it proves |
+| - | ----- | -------------- |
+| 1 | `git-tracking` | every GIT tab renders without a table wider than the phone |
+| 2 | `location-inventory` | location → stock → Stock Groups → group items stay card-based |
+| 3 | `pos-item-sheet` | a search result opens the item sheet; Add closes it and refocuses search |
+| 4 | `account-statement` | tapping an account name opens the statement as cards |
+| 5 | `mobile-navigation` | More opens the page menu, search finds Payroll, navigation closes it |
+| 6 | `agent-ledger` | agent list → statement → Back to agents |
+| 7 | `daybook-voucher` | a voucher opens in a dialog that fits, with its last action reachable |
+| 8 | `edits-activity` | Edits & Activity renders without a wide table |
+| 9 | `all-daybook` | All Daybook renders without a wide table |
+| 10 | `voucher-types` | each of the seven voucher types reaches its Save action |
+| 11 | `profit-check` | Profit Check renders as cards |
+| 12 | `payroll` | every Payroll tab renders without a wide table |
+| 13 | `rental-shops` | unit cards open the unit dialog with uncut tabs |
+| 14 | `settings` | every Settings section renders, sub-tabs uncut |
+
+A probe without fixture data (for example no POS items) is reported as `skipped` with the
+reason, never as passed. `ERP_MOBILE_POS_QUERY` and `ERP_MOBILE_POS_LOCATION_ID` point the POS
+probe at fixture items. The report's `workflows` array and the `workflowFailures` summary join
+the route results; any workflow failure fails the run.

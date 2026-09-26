@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/PageHeader";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { ErrorState } from "@/components/ui/page-state";
 import { AccountDialogs } from "./accounts/AccountDialogs";
 import { AccountTable } from "./accounts/AccountTable";
@@ -33,6 +34,9 @@ import {
 export default function Accounts() {
   const model = useAccountsLegacyModel();
   const { selectedAccount, selectedAccountIsLedger } = model;
+  const isPhone = useErpPhoneLayout();
+  // An open statement owns the phone screen: its own header carries Back and the statement actions.
+  const phoneStatementOpen = isPhone && !!selectedAccount;
   const { data: myAccess } = useQuery<FactoryMyAccess>({
     queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60000,
@@ -121,16 +125,18 @@ export default function Accounts() {
   return (
     <div className="space-y-6">
       <PageHeader title="Accounts Overview" subtitle="View all accounts, balances, and transaction history">
-        {showViewAccounts && (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
-          <Button
-            variant="outline"
-            data-testid="button-account-groups"
-            onClick={() => model.navigate(`${model.modePrefix}/account-groups`)}
-          >
-            <Layers className="w-4 h-4 mr-2" /> Account Groups
-          </Button>
-        )}
-        {showViewAccounts && (
+        {showViewAccounts &&
+          !phoneStatementOpen &&
+          (model.currentUser?.role === "Admin" || model.currentUser?.role === "Developer") && (
+            <Button
+              variant="outline"
+              data-testid="button-account-groups"
+              onClick={() => model.navigate(`${model.modePrefix}/account-groups`)}
+            >
+              <Layers className="w-4 h-4 mr-2" /> Account Groups
+            </Button>
+          )}
+        {showViewAccounts && !phoneStatementOpen && (
           <Button
             data-testid="button-create-account"
             disabled={!model.selectedCompany}
@@ -182,7 +188,7 @@ export default function Accounts() {
           onValueChange={(value) => setRequestedAccountTab(value as "view" | "find")}
           className="space-y-6"
         >
-          <TabsList>
+          <TabsList className={phoneStatementOpen ? "hidden" : undefined}>
             {showViewAccounts && <TabsTrigger value="view">View Accounts</TabsTrigger>}
             {showFindVoucher && <TabsTrigger value="find">Find Voucher</TabsTrigger>}
           </TabsList>

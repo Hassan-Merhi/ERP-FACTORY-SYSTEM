@@ -16,6 +16,42 @@ interface PosRowCalculationsParams {
   focusCell: (row: number, col: number) => void;
 }
 
+/** Quantity and price a cashier set before adding an item (the phone item sheet). */
+export interface PosItemSelectionOverrides {
+  quantity?: number;
+  /** Price in the active display currency, as typed. */
+  rate?: number;
+}
+
+/**
+ * The price a new sale line starts with: the last price this item sold at, else its configured
+ * price, converted to the active display currency. Shared by the grid and the phone item sheet so
+ * the default is never computed twice.
+ */
+export function resolvePosItemRate(
+  item: InventoryItem,
+  lastSoldPrices: Record<number, string>,
+  activeCurrency: string,
+  exchangeRate: number | null
+): {
+  rateUSD: number;
+  displayRate: number;
+  /** The item's configured selling price in the display currency. */
+  normalDisplayRate: number;
+  /** The last price it sold at in the display currency, when there is one. */
+  lastSoldDisplayRate: number | null;
+} {
+  const toDisplay = (usd: number) => (activeCurrency === "CFA" ? Math.round(usd * (exchangeRate ?? 0)) : usd);
+  const lastSoldUSD = lastSoldPrices[item.stockItemId] ? parseFloat(lastSoldPrices[item.stockItemId]) : null;
+  const rateUSD = lastSoldUSD ?? item.price;
+  return {
+    rateUSD,
+    displayRate: toDisplay(rateUSD),
+    normalDisplayRate: toDisplay(item.price),
+    lastSoldDisplayRate: lastSoldUSD === null ? null : toDisplay(lastSoldUSD),
+  };
+}
+
 /**
  * Row-level item selection and cell-edit calculations for the POS grid.
  * Extracted from usePosHandlers.ts (Phase 18 structural split) — logic unchanged.
@@ -34,16 +70,27 @@ export function usePosRowCalculations({
   posUser,
   focusCell,
 }: PosRowCalculationsParams) {
-  const selectItem = (item: InventoryItem, targetRowOverride?: number) => {
-    // authUser is refreshed for the active company and must win over the route
-    // prop if the company changed after the app first authenticated.
+  /**
+   * Whether the item may be added under the stock rules; shows the zero-stock alert when not.
+   * authUser is refreshed for the active company and must win over the route prop if the
+   * company changed after the app first authenticated.
+   */
+  const ensureItemSellable = (item: InventoryItem): boolean => {
     const canSellNegativeStock = authUser?.canSellNegativeStock ?? posUser?.canSellNegativeStock ?? false;
     const availableStock = Number(item.stock);
     if (Number.isFinite(availableStock) && availableStock <= 0 && !canSellNegativeStock) {
       setZeroStockItem(item.name);
       setZeroStockAlert(true);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const resolveItemRate = (item: InventoryItem) =>
+    resolvePosItemRate(item, lastSoldPrices, activeCurrency, exchangeRate);
+
+  const selectItem = (item: InventoryItem, targetRowOverride?: number, overrides?: PosItemSelectionOverrides) => {
+    if (!ensureItemSellable(item)) return;
     // Prefer the active row, then the first draft row (typed text but no item
     // selected yet), then the first truly empty row.  Using only !r.itemName
     // would skip a draft row whose itemName is already "eg", causing the item
@@ -64,8 +111,16 @@ export function usePosRowCalculations({
         amount: 0,
       });
     }
-    const rateUSD = lastSoldPrices[item.stockItemId] ? parseFloat(lastSoldPrices[item.stockItemId]) : item.price;
-    const displayRate = activeCurrency === "CFA" ? Math.round(rateUSD * (exchangeRate ?? 0)) : rateUSD;
+    const resolved = resolveItemRate(item);
+    // A typed price converts back to USD exactly as editing the Rate cell does (updateRow).
+    const displayRate = overrides?.rate ?? resolved.displayRate;
+    const rateUSD =
+      overrides?.rate === undefined
+        ? resolved.rateUSD
+        : activeCurrency === "CFA" && exchangeRate
+          ? overrides.rate / exchangeRate
+          : overrides.rate;
+    const quantity = overrides?.quantity ?? 1;
 
     newRows[targetRow] = {
       ...newRows[targetRow],
@@ -74,8 +129,8 @@ export function usePosRowCalculations({
       stockItemId: item.stockItemId,
       rate: displayRate,
       rateUSD,
-      quantity: 1,
-      amount: displayRate,
+      quantity,
+      amount: quantity * displayRate,
       configuredPrice: item.configuredPrice,
     };
 
@@ -108,5 +163,5 @@ export function usePosRowCalculations({
     setRows(newRows);
   };
 
-  return { selectItem, updateRow };
+  return { selectItem, updateRow, ensureItemSellable, resolveItemRate };
 }

@@ -404,6 +404,8 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
     handleNewSale,
     selectItem,
     updateRow,
+    ensureItemSellable,
+    resolveItemRate,
     handleLoadDraft,
     handleExportInventory,
     handleSummaryExport,
@@ -754,6 +756,8 @@ export default function POS({ posUser, editVoucherId }: { posUser?: AuthMe; edit
         mobileSearchInputRef={mobileSearchInputRef}
         inventory={inventory}
         selectItem={selectItem}
+        ensureItemSellable={ensureItemSellable}
+        resolveItemRate={resolveItemRate}
         rows={rows}
         setRows={setRows}
         updateRow={updateRow}

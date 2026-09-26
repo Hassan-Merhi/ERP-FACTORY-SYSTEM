@@ -157,6 +157,7 @@ vi.mock("@/components/ui/dialog", () => ({
   DialogHeader: ({ children }: any) => <div>{children}</div>,
   DialogTitle: ({ children }: any) => <h2>{children}</h2>,
   DialogDescription: ({ children }: any) => <p>{children}</p>,
+  DialogFooter: ({ children }: any) => <div>{children}</div>,
 }));
 
 import TransactionJournal from "@/pages/TransactionJournal";

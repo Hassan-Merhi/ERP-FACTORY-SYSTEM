@@ -48,50 +48,75 @@ export function StockTransferOrderHeader({ model, onSwitchToNormalView }: StockT
 
   return (
     <div className="space-y-3">
-      <PageHeader
-        title={editVoucherId ? "Edit Stock Transfer Order" : "Stock Transfer Order"}
-        subtitle={
-          editVoucherId
-            ? "Edit and update this stock transfer using the order view"
-            : "Build orders by selecting items from multiple source locations"
-        }
-      >
-        {editVoucherId && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              if (onSwitchToNormalView) {
-                onSwitchToNormalView();
-                return;
-              }
-              navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`);
-            }}
-            data-testid="button-switch-to-normal-view"
-          >
-            <List className="h-4 w-4 mr-2" />
-            Normal View
-          </Button>
-        )}
+      {(() => {
+        const title = editVoucherId ? "Edit Stock Transfer Order" : "Stock Transfer Order";
+        const actions = (
+          <>
+            {editVoucherId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (onSwitchToNormalView) {
+                    onSwitchToNormalView();
+                    return;
+                  }
+                  navigate(`/vouchers?edit=${editVoucherId}&tab=transfer`);
+                }}
+                data-testid="button-switch-to-normal-view"
+              >
+                <List className="h-4 w-4 mr-2" />
+                Normal View
+              </Button>
+            )}
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" disabled={orderItems.length === 0} data-testid="button-export-order">
-              <FileDown className="h-4 w-4 mr-1" />
-              Export
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
-              Export without Cost
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
-              Export with Cost
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </PageHeader>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={orderItems.length === 0}
+                  data-testid="button-export-order"
+                >
+                  <FileDown className="h-4 w-4 mr-1" />
+                  Export
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExportOrder(false)} data-testid="export-order-no-cost">
+                  Export without Cost
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportOrder(true)} data-testid="export-order-with-cost">
+                  Export with Cost
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        );
+        // Inside the Vouchers page (onSwitchToNormalView) the page already has its header; the
+        // order view gets a section heading instead of a second page header.
+        return onSwitchToNormalView ? (
+          <div
+            className="flex flex-wrap items-center justify-between gap-2"
+            data-testid="stock-transfer-order-section-header"
+          >
+            <h2 className="text-base font-semibold">{title}</h2>
+            <div className="flex flex-wrap items-center gap-2">{actions}</div>
+          </div>
+        ) : (
+          <PageHeader
+            title={title}
+            subtitle={
+              editVoucherId
+                ? "Edit and update this stock transfer using the order view"
+                : "Build orders by selecting items from multiple source locations"
+            }
+          >
+            {actions}
+          </PageHeader>
+        );
+      })()}
 
       <div
         className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:flex sm:flex-wrap sm:items-center"

@@ -23,6 +23,8 @@ import { NoteCell } from "./property-rental/components/NoteCell";
 import { CreateUnitDialog } from "./property-rental/components/CreateUnitDialog";
 import { UnitActionDialog } from "./property-rental/components/UnitActionDialog";
 import { BulkPaymentDialog } from "./property-rental/components/BulkPaymentDialog";
+import { RentalUnitCards } from "./property-rental/components/RentalUnitCards";
+import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 export default function PropertyRentalPage({
   unitType,
   pageTitle,
@@ -148,6 +150,46 @@ export default function PropertyRentalPage({
   // ERP renders the shared ERP page-header contract; Properties keeps its established header.
   const isErp = appMode === "erp";
   const isPhoneLayout = useErpPhoneLayout();
+  // ERP phones: cards instead of the twelve-column table, and one primary action plus a menu.
+  const phoneCards = isErp && isPhoneLayout;
+  const phoneHeaderActions = (
+    <>
+      {selectedContractIds.size > 0 && (
+        <Button onClick={() => setBulkPayOpen(true)} data-testid={`button-${testIdPrefix}-bulk-pay`}>
+          <CreditCard className="h-4 w-4 me-1" />
+          Pay Selected ({selectedContractIds.size})
+        </Button>
+      )}
+      <Button onClick={() => setCreateUnitOpen(true)} data-testid={`button-${testIdPrefix}-add-unit`}>
+        <Plus className="h-4 w-4 me-1" />
+        {unitType === "WAREHOUSE" ? "Add Warehouse" : "Add Shop"}
+      </Button>
+      <ErpMobileActionsMenu
+        data-testid={`button-${testIdPrefix}-actions`}
+        actions={[
+          !!paymentsLogUrl && {
+            label: "Payments Log",
+            icon: ClipboardList,
+            onSelect: () => navigate(paymentsLogUrl),
+            testId: `button-${testIdPrefix}-payments-log`,
+          },
+          {
+            label: "Run Monthly Update",
+            icon: RefreshCw,
+            onSelect: () => runMonthly.mutate(),
+            disabled: runMonthly.isPending,
+            testId: `button-${testIdPrefix}-run-monthly`,
+          },
+          contractedUnits.length > 0 && {
+            label: selectedContractIds.size === contractedUnits.length ? "Clear selection" : "Select all",
+            onSelect: toggleSelectAll,
+            separated: true,
+            testId: `checkbox-${testIdPrefix}-select-all`,
+          },
+        ]}
+      />
+    </>
+  );
   const headerActions = (
     <>
       {selectedContractIds.size > 0 && (
@@ -193,7 +235,7 @@ export default function PropertyRentalPage({
             subtitle="Click any unit to manage payments, modify rent, post guarantee, or end the contract."
             icon={pageIcon}
           >
-            {headerActions}
+            {phoneCards ? phoneHeaderActions : headerActions}
           </PageHeader>
         ) : (
           <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -210,305 +252,359 @@ export default function PropertyRentalPage({
           </div>
         )}
 
-        {/* Summary tiles */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-          <Card>
-            <CardHeader className="px-3 pt-3 pb-1">
-              <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">TOTAL UNITS</CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-units`}>
-                {units.length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="px-3 pt-3 pb-1">
-              <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
-                RENT / MONTH
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div
-                className="text-lg font-bold text-blue-600 dark:text-blue-400"
-                data-testid={`stat-${testIdPrefix}-monthly-rent`}
-              >
-                ${fmtMoney(totals.totalMonthlyRent)}
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5">expected from active leases</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="px-3 pt-3 pb-1">
-              <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
-                TOTAL GUARANTEE
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-guarantee`}>
-                ${fmtMoney(totals.totalGuarantee)}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="px-3 pt-3 pb-1">
-              <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">TOTAL PAID</CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 pb-3">
-              <div
-                className={`text-lg font-bold ${totals.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
-                data-testid={`stat-${testIdPrefix}-total-paid`}
-              >
-                ${fmtMoney(totals.totalPaid)}
-              </div>
-            </CardContent>
-          </Card>
-          {/* Two metrics share this card; on ERP phones (portrait 2-column and landscape 3-column
+        {phoneCards ? (
+          <ErpMobileSummaryGrid
+            data-testid={`summary-${testIdPrefix}`}
+            items={[
+              { label: "TOTAL UNITS", value: units.length },
+              {
+                label: "RENT / MONTH",
+                value: `$${fmtMoney(totals.totalMonthlyRent)}`,
+                valueClassName: "text-blue-600 dark:text-blue-400",
+              },
+              {
+                label: "OUTSTANDING",
+                value: `$${fmtMoney(totals.totalOwed)}`,
+                valueClassName: "text-red-600 dark:text-red-400",
+              },
+              {
+                label: "CREDIT",
+                value: `$${fmtMoney(totals.totalCredit)}`,
+                valueClassName: "text-green-600 dark:text-green-400",
+              },
+              { label: "TOTAL GUARANTEE", value: `$${fmtMoney(totals.totalGuarantee)}` },
+              { label: "TOTAL PAID", value: `$${fmtMoney(totals.totalPaid)}` },
+            ]}
+          />
+        ) : (
+          /* Summary tiles */
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                  TOTAL UNITS
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-units`}>
+                  {units.length}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                  RENT / MONTH
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div
+                  className="text-lg font-bold text-blue-600 dark:text-blue-400"
+                  data-testid={`stat-${testIdPrefix}-monthly-rent`}
+                >
+                  ${fmtMoney(totals.totalMonthlyRent)}
+                </div>
+                <p className="text-[10px] text-muted-foreground mt-0.5">expected from active leases</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                  TOTAL GUARANTEE
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div className="text-lg font-bold" data-testid={`stat-${testIdPrefix}-total-guarantee`}>
+                  ${fmtMoney(totals.totalGuarantee)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="px-3 pt-3 pb-1">
+                <CardTitle className="text-[10px] text-muted-foreground font-normal tracking-wide">
+                  TOTAL PAID
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-3 pb-3">
+                <div
+                  className={`text-lg font-bold ${totals.totalPaid > 0 ? "text-green-600 dark:text-green-400" : ""}`}
+                  data-testid={`stat-${testIdPrefix}-total-paid`}
+                >
+                  ${fmtMoney(totals.totalPaid)}
+                </div>
+              </CardContent>
+            </Card>
+            {/* Two metrics share this card; on ERP phones (portrait 2-column and landscape 3-column
               grids) it spans two columns so neither is clipped. */}
-          <Card className={isErp && isPhoneLayout ? "col-span-2" : undefined}>
-            <CardContent className="p-0 flex h-full">
-              <div className="flex-1 px-3 pt-3 pb-3">
-                <p className="text-[10px] text-muted-foreground font-normal tracking-wide">OUTSTANDING</p>
-                <div
-                  className="text-lg font-bold text-red-600 dark:text-red-400 mt-1"
-                  data-testid={`stat-${testIdPrefix}-total-outstanding`}
-                >
-                  ${fmtMoney(totals.totalOwed)}
+            <Card className={isErp && isPhoneLayout ? "col-span-2" : undefined}>
+              <CardContent className="p-0 flex h-full">
+                <div className="flex-1 px-3 pt-3 pb-3">
+                  <p className="text-[10px] text-muted-foreground font-normal tracking-wide">OUTSTANDING</p>
+                  <div
+                    className="text-lg font-bold text-red-600 dark:text-red-400 mt-1"
+                    data-testid={`stat-${testIdPrefix}-total-outstanding`}
+                  >
+                    ${fmtMoney(totals.totalOwed)}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">owed by tenants</p>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">owed by tenants</p>
-              </div>
-              <div className="w-px bg-border self-stretch my-2" />
-              <div className="flex-1 px-3 pt-3 pb-3">
-                <p className="text-[10px] text-muted-foreground font-normal tracking-wide">CREDIT</p>
-                <div
-                  className="text-lg font-bold text-green-600 dark:text-green-400 mt-1"
-                  data-testid={`stat-${testIdPrefix}-total-credit`}
-                >
-                  ${fmtMoney(totals.totalCredit)}
+                <div className="w-px bg-border self-stretch my-2" />
+                <div className="flex-1 px-3 pt-3 pb-3">
+                  <p className="text-[10px] text-muted-foreground font-normal tracking-wide">CREDIT</p>
+                  <div
+                    className="text-lg font-bold text-green-600 dark:text-green-400 mt-1"
+                    data-testid={`stat-${testIdPrefix}-total-credit`}
+                  >
+                    ${fmtMoney(totals.totalCredit)}
+                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">advance / overpaid</p>
                 </div>
-                <p className="text-[10px] text-muted-foreground mt-0.5">advance / overpaid</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        {/* Main table */}
-        <Card>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
-              {isLoading ? (
-                <div className="p-8 text-center text-muted-foreground">Loading units…</div>
-              ) : grouped.length === 0 ? (
-                <div className="p-8 text-center text-muted-foreground">
-                  {unitType === "WAREHOUSE"
-                    ? "No warehouses yet. Add your first unit above."
-                    : "No shops yet. Add your first unit above."}
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 border-b sticky top-0 z-30">
-                    <tr>
-                      <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          checked={contractedUnits.length > 0 && selectedContractIds.size === contractedUnits.length}
-                          onCheckedChange={toggleSelectAll}
-                          data-testid={`checkbox-${testIdPrefix}-select-all`}
-                          aria-label="Select all"
-                        />
-                      </th>
-                      <th className="text-left px-3 py-2 font-semibold">Unit</th>
-                      <th className="text-left px-3 py-2 font-semibold">Dimensions</th>
-                      <th className="text-left px-3 py-2 font-semibold">Tenant</th>
-                      <th className="text-left px-3 py-2 font-semibold">Note</th>
-                      <th className="text-right px-3 py-2 font-semibold">Monthly Rent</th>
-                      <th className="text-right px-3 py-2 font-semibold">Guarantee</th>
-                      <th className="text-right px-3 py-2 font-semibold">Outstanding</th>
-                      <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Scheduled</th>
-                      <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Next Billing</th>
-                      <th className="text-left px-3 py-2 font-semibold">Start</th>
-                      <th className="px-2 py-2"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grouped.map(([group, groupUnits], gIdx) => {
-                      const GROUP_PALETTE = [
-                        { headerBg: "#1d4ed8", headerText: "#fff", r: 29, g: 78, b: 216 },
-                        { headerBg: "#047857", headerText: "#fff", r: 4, g: 120, b: 87 },
-                        { headerBg: "#7c3aed", headerText: "#fff", r: 124, g: 58, b: 237 },
-                        { headerBg: "#b45309", headerText: "#fff", r: 180, g: 83, b: 9 },
-                        { headerBg: "#be123c", headerText: "#fff", r: 190, g: 18, b: 60 },
-                        { headerBg: "#0e7490", headerText: "#fff", r: 14, g: 116, b: 144 },
-                        { headerBg: "#c2410c", headerText: "#fff", r: 194, g: 65, b: 12 },
-                        { headerBg: "#4d7c0f", headerText: "#fff", r: 77, g: 124, b: 15 },
-                      ];
-                      const p = GROUP_PALETTE[gIdx % GROUP_PALETTE.length];
-                      const rowBgEven = `rgba(${p.r},${p.g},${p.b},0.06)`;
-                      const rowBgOdd = `rgba(${p.r},${p.g},${p.b},0.12)`;
-                      const unitNumBg = `rgba(${p.r},${p.g},${p.b},0.18)`;
-                      const unitNumColor = p.headerBg;
-                      return (
-                        <>
-                          <tr key={`grp-${group}`} className="border-t">
-                            <td
-                              colSpan={12}
-                              className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
-                              style={{ backgroundColor: p.headerBg, color: p.headerText }}
-                            >
-                              {group}
-                            </td>
-                          </tr>
-                          {groupUnits.map((u, uIdx) => (
-                            <tr
-                              key={u.id}
-                              className="border-t cursor-pointer transition-colors"
-                              style={{ backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }}
-                              onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.93)")}
-                              onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
-                              onClick={() => setOpenUnitId(u.id)}
-                              data-testid={`row-unit-${u.id}`}
-                            >
-                              <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
-                                {u.contract && !u.isShared && (
-                                  <Checkbox
-                                    checked={selectedContractIds.has(u.contract.id)}
-                                    onCheckedChange={() =>
-                                      toggleSelect(u.contract!.id, { stopPropagation: () => {} } as React.MouseEvent<
-                                        Element,
-                                        MouseEvent
-                                      >)
-                                    }
-                                    onClick={(e) => e.stopPropagation()}
-                                    data-testid={`checkbox-unit-${u.id}`}
-                                    aria-label={`Select ${u.unitNumber}`}
-                                  />
-                                )}
-                              </td>
+        {phoneCards ? (
+          isLoading ? (
+            <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+          ) : grouped.length === 0 ? (
+            <div className="rounded-lg border p-8 text-center text-muted-foreground">
+              {unitType === "WAREHOUSE"
+                ? "No warehouses yet. Add your first unit above."
+                : "No shops yet. Add your first unit above."}
+            </div>
+          ) : (
+            <RentalUnitCards
+              grouped={grouped}
+              selectedContractIds={selectedContractIds}
+              onToggleSelect={(contractId) =>
+                toggleSelect(contractId, { stopPropagation: () => {} } as React.MouseEvent<Element, MouseEvent>)
+              }
+              onOpenUnit={setOpenUnitId}
+              onDeleteUnit={setConfirmDeleteUnitId}
+            />
+          )
+        ) : (
+          /* Main table */
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
+                {isLoading ? (
+                  <div className="p-8 text-center text-muted-foreground">Loading units…</div>
+                ) : grouped.length === 0 ? (
+                  <div className="p-8 text-center text-muted-foreground">
+                    {unitType === "WAREHOUSE"
+                      ? "No warehouses yet. Add your first unit above."
+                      : "No shops yet. Add your first unit above."}
+                  </div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 border-b sticky top-0 z-30">
+                      <tr>
+                        <th className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
+                          <Checkbox
+                            checked={contractedUnits.length > 0 && selectedContractIds.size === contractedUnits.length}
+                            onCheckedChange={toggleSelectAll}
+                            data-testid={`checkbox-${testIdPrefix}-select-all`}
+                            aria-label="Select all"
+                          />
+                        </th>
+                        <th className="text-left px-3 py-2 font-semibold">Unit</th>
+                        <th className="text-left px-3 py-2 font-semibold">Dimensions</th>
+                        <th className="text-left px-3 py-2 font-semibold">Tenant</th>
+                        <th className="text-left px-3 py-2 font-semibold">Note</th>
+                        <th className="text-right px-3 py-2 font-semibold">Monthly Rent</th>
+                        <th className="text-right px-3 py-2 font-semibold">Guarantee</th>
+                        <th className="text-right px-3 py-2 font-semibold">Outstanding</th>
+                        <th className="text-right px-3 py-2 font-semibold text-muted-foreground">Scheduled</th>
+                        <th className="text-left px-3 py-2 font-semibold text-muted-foreground">Next Billing</th>
+                        <th className="text-left px-3 py-2 font-semibold">Start</th>
+                        <th className="px-2 py-2"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grouped.map(([group, groupUnits], gIdx) => {
+                        const GROUP_PALETTE = [
+                          { headerBg: "#1d4ed8", headerText: "#fff", r: 29, g: 78, b: 216 },
+                          { headerBg: "#047857", headerText: "#fff", r: 4, g: 120, b: 87 },
+                          { headerBg: "#7c3aed", headerText: "#fff", r: 124, g: 58, b: 237 },
+                          { headerBg: "#b45309", headerText: "#fff", r: 180, g: 83, b: 9 },
+                          { headerBg: "#be123c", headerText: "#fff", r: 190, g: 18, b: 60 },
+                          { headerBg: "#0e7490", headerText: "#fff", r: 14, g: 116, b: 144 },
+                          { headerBg: "#c2410c", headerText: "#fff", r: 194, g: 65, b: 12 },
+                          { headerBg: "#4d7c0f", headerText: "#fff", r: 77, g: 124, b: 15 },
+                        ];
+                        const p = GROUP_PALETTE[gIdx % GROUP_PALETTE.length];
+                        const rowBgEven = `rgba(${p.r},${p.g},${p.b},0.06)`;
+                        const rowBgOdd = `rgba(${p.r},${p.g},${p.b},0.12)`;
+                        const unitNumBg = `rgba(${p.r},${p.g},${p.b},0.18)`;
+                        const unitNumColor = p.headerBg;
+                        return (
+                          <>
+                            <tr key={`grp-${group}`} className="border-t">
                               <td
-                                className="px-3 py-2 font-mono text-xs font-bold"
-                                style={{ backgroundColor: unitNumBg, color: unitNumColor }}
+                                colSpan={12}
+                                className="px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-center"
+                                style={{ backgroundColor: p.headerBg, color: p.headerText }}
                               >
-                                {u.unitNumber}
-                              </td>
-                              <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                                {u.dimensions ? (
-                                  <span className="font-medium text-foreground">{u.dimensions}</span>
-                                ) : u.size ? (
-                                  <span>{u.size}</span>
-                                ) : (
-                                  <span>—</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                {u.contract ? (
-                                  <span className="font-medium flex items-center gap-1.5 flex-wrap">
-                                    {u.contract.tenantName}
-                                    {u.contract.isInternal && (
-                                      <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
-                                    )}
-                                    {u.isShared && (
-                                      <Badge
-                                        className="text-xs bg-sky-600 text-white"
-                                        title={u.ownerCompanyName ? `From: ${u.ownerCompanyName}` : undefined}
-                                      >
-                                        Shared
-                                      </Badge>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <Badge variant="secondary" className="text-xs">
-                                    Vacant
-                                  </Badge>
-                                )}
-                              </td>
-                              <td className="px-3 py-2">
-                                {u.contract ? (
-                                  <NoteCell
-                                    contractId={u.contract.id}
-                                    note={u.contract.notes}
-                                    testId={`unit-${u.id}`}
-                                  />
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">—</span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums">
-                                {u.contract ? fmtMoneyCurrency(u.contract.rentalAmount, u.contract.currency) : "—"}
-                              </td>
-                              <td
-                                className={`px-3 py-2 text-right tabular-nums font-semibold ${
-                                  u.contract && Number(u.contract.guaranteeAmount) > 0
-                                    ? u.contract.guaranteePostedToStatement
-                                      ? "text-green-600 dark:text-green-400"
-                                      : "text-red-600 dark:text-red-400"
-                                    : "text-muted-foreground"
-                                }`}
-                              >
-                                {u.contract
-                                  ? fmtMoneyCurrency(
-                                      (
-                                        u as unknown as Unit & {
-                                          guaranteeRemaining: string | number | null | undefined;
-                                        }
-                                      ).guaranteeRemaining ?? u.contract.guaranteeAmount,
-                                      u.contract.currency
-                                    )
-                                  : "—"}
-                              </td>
-                              <td
-                                className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
-                              >
-                                {u.outstanding !== null
-                                  ? fmtMoneyCurrency(
-                                      (u.outstanding ?? 0) > 0
-                                        ? u.outstanding!
-                                        : (u as { prepaidCredit: 0 }).prepaidCredit > 0
-                                          ? u.prepaidCredit
-                                          : 0,
-                                      u.contract?.currency
-                                    )
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground text-xs">
-                                {(u as { scheduledAmount: 0 }).scheduledAmount > 0
-                                  ? fmtMoneyCurrency(u.scheduledAmount, u.contract?.currency)
-                                  : "—"}
-                              </td>
-                              <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                                {u.nextBillingDate ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM") : "—"}
-                              </td>
-                              <td className="px-3 py-2 text-xs text-muted-foreground">
-                                {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
-                              </td>
-                              <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-end gap-1">
-                                  {!u.isShared && (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="text-muted-foreground hover:text-destructive"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setConfirmDeleteUnitId(u.id);
-                                      }}
-                                      data-testid={`button-delete-unit-${u.id}`}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                                </div>
+                                {group}
                               </td>
                             </tr>
-                          ))}
-                        </>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                            {groupUnits.map((u, uIdx) => (
+                              <tr
+                                key={u.id}
+                                className="border-t cursor-pointer transition-colors"
+                                style={{ backgroundColor: uIdx % 2 === 0 ? rowBgEven : rowBgOdd }}
+                                onMouseEnter={(e) => (e.currentTarget.style.filter = "brightness(0.93)")}
+                                onMouseLeave={(e) => (e.currentTarget.style.filter = "")}
+                                onClick={() => setOpenUnitId(u.id)}
+                                data-testid={`row-unit-${u.id}`}
+                              >
+                                <td className="px-3 py-2 w-8" onClick={(e) => e.stopPropagation()}>
+                                  {u.contract && !u.isShared && (
+                                    <Checkbox
+                                      checked={selectedContractIds.has(u.contract.id)}
+                                      onCheckedChange={() =>
+                                        toggleSelect(u.contract!.id, { stopPropagation: () => {} } as React.MouseEvent<
+                                          Element,
+                                          MouseEvent
+                                        >)
+                                      }
+                                      onClick={(e) => e.stopPropagation()}
+                                      data-testid={`checkbox-unit-${u.id}`}
+                                      aria-label={`Select ${u.unitNumber}`}
+                                    />
+                                  )}
+                                </td>
+                                <td
+                                  className="px-3 py-2 font-mono text-xs font-bold"
+                                  style={{ backgroundColor: unitNumBg, color: unitNumColor }}
+                                >
+                                  {u.unitNumber}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                  {u.dimensions ? (
+                                    <span className="font-medium text-foreground">{u.dimensions}</span>
+                                  ) : u.size ? (
+                                    <span>{u.size}</span>
+                                  ) : (
+                                    <span>—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {u.contract ? (
+                                    <span className="font-medium flex items-center gap-1.5 flex-wrap">
+                                      {u.contract.tenantName}
+                                      {u.contract.isInternal && (
+                                        <Badge className="text-xs bg-violet-600 text-white">Internal</Badge>
+                                      )}
+                                      {u.isShared && (
+                                        <Badge
+                                          className="text-xs bg-sky-600 text-white"
+                                          title={u.ownerCompanyName ? `From: ${u.ownerCompanyName}` : undefined}
+                                        >
+                                          Shared
+                                        </Badge>
+                                      )}
+                                    </span>
+                                  ) : (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Vacant
+                                    </Badge>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2">
+                                  {u.contract ? (
+                                    <NoteCell
+                                      contractId={u.contract.id}
+                                      note={u.contract.notes}
+                                      testId={`unit-${u.id}`}
+                                    />
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums">
+                                  {u.contract ? fmtMoneyCurrency(u.contract.rentalAmount, u.contract.currency) : "—"}
+                                </td>
+                                <td
+                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${
+                                    u.contract && Number(u.contract.guaranteeAmount) > 0
+                                      ? u.contract.guaranteePostedToStatement
+                                        ? "text-green-600 dark:text-green-400"
+                                        : "text-red-600 dark:text-red-400"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {u.contract
+                                    ? fmtMoneyCurrency(
+                                        (
+                                          u as unknown as Unit & {
+                                            guaranteeRemaining: string | number | null | undefined;
+                                          }
+                                        ).guaranteeRemaining ?? u.contract.guaranteeAmount,
+                                        u.contract.currency
+                                      )
+                                    : "—"}
+                                </td>
+                                <td
+                                  className={`px-3 py-2 text-right tabular-nums font-semibold ${(u.outstanding ?? 0) > 0 ? "text-red-600 dark:text-red-400" : (u as { prepaidCredit: 0 }).prepaidCredit > 0 ? "text-green-600 dark:text-green-400" : "text-muted-foreground"}`}
+                                >
+                                  {u.outstanding !== null
+                                    ? fmtMoneyCurrency(
+                                        (u.outstanding ?? 0) > 0
+                                          ? u.outstanding!
+                                          : (u as { prepaidCredit: 0 }).prepaidCredit > 0
+                                            ? u.prepaidCredit
+                                            : 0,
+                                        u.contract?.currency
+                                      )
+                                    : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-right tabular-nums text-muted-foreground text-xs">
+                                  {(u as { scheduledAmount: 0 }).scheduledAmount > 0
+                                    ? fmtMoneyCurrency(u.scheduledAmount, u.contract?.currency)
+                                    : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                                  {u.nextBillingDate
+                                    ? format(new Date(u.nextBillingDate + "T00:00:00Z"), "dd MMM")
+                                    : "—"}
+                                </td>
+                                <td className="px-3 py-2 text-xs text-muted-foreground">
+                                  {u.contract ? format(new Date(u.contract.startDate), "dd MMM yyyy") : "—"}
+                                </td>
+                                <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                  <div className="flex items-center justify-end gap-1">
+                                    {!u.isShared && (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setConfirmDeleteUnitId(u.id);
+                                        }}
+                                        data-testid={`button-delete-unit-${u.id}`}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {bulkPayOpen && selectedUnits.length > 0 && (
           <BulkPaymentDialog

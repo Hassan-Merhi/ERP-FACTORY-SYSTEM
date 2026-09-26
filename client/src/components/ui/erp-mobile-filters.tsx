@@ -184,7 +184,7 @@ export function ErpFilterSheet({
         side="bottom"
         // flex-nowrap: the global phone rule that wraps `.flex.gap-*` rows would otherwise wrap this
         // height-capped column into side-by-side columns. mx-auto centres it under the dialog width cap.
-        className="mx-auto max-h-[min(85dvh,calc(var(--app-viewport-height)-2rem))] !flex-nowrap gap-3 rounded-t-2xl px-4 pb-[max(1rem,var(--safe-area-bottom))] pt-4"
+        className="mx-auto max-h-[min(85dvh,calc(var(--erp-visual-viewport-height,var(--app-viewport-height))-2rem))] !flex-nowrap gap-3 rounded-t-2xl px-4 pb-[max(1rem,var(--safe-area-bottom))] pt-4"
         data-testid={`${testId}-sheet`}
       >
         <SheetHeader>

@@ -59,7 +59,12 @@ describe("Mobile repair Phase 1 critical flows", () => {
 
     expect(agentList).toContain('data-testid="button-add-agent"');
     expect(agentStatement).toContain('data-testid="text-agent-account-name"');
-    expect(agentList).toContain('className="w-72 shrink-0');
+    // Desktop keeps the fixed master pane; ERP phones show the list and the statement as separate
+    // screens (agents-phone-layout) instead of stacking them.
+    expect(agentList).toContain('"w-72 shrink-0');
+    expect(agentList).toContain('data-testid="agent-list-panel"');
+    expect(source("client/src/pages/Agents.tsx")).toContain('data-testid="agents-phone-layout"');
+    expect(agentStatement).toContain('data-testid="button-back-to-agents"');
 
     expect(groups).toContain('data-testid="button-create-group"');
     expect(groups).toContain('className="w-72 border-r flex flex-col shrink-0"');

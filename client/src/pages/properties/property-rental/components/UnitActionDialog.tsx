@@ -133,7 +133,7 @@ function UnitActionDialog({
           </Tabs>
         ) : (
           <Tabs defaultValue="payment" className="w-full">
-            <TabsList className="grid w-full grid-cols-6">
+            <TabsList className="grid h-auto w-full grid-cols-3 rounded-2xl sm:grid-cols-6 sm:rounded-full">
               <TabsTrigger value="payment" data-testid={`tab-${testIdPrefix}-payment`}>
                 <DollarSign className="h-4 w-4 mr-1" />
                 Payment

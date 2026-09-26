@@ -531,6 +531,8 @@ try {
       await tapTestId(phonePage, `card-pos-location-${fixture.erp.locationId}`);
       await typeTestId(phonePage, "input-mobile-product-search", "Phase 7");
       await tapTestId(phonePage, `button-mobile-select-item-${fixture.erp.stockItemId}`);
+      // Phones set quantity and price in the item sheet before the line enters the cart.
+      await tapTestId(phonePage, "button-pos-sheet-add");
       // Clear and retype the quantity the way a cashier does; the line must stay put.
       await replaceTestIdValue(phonePage, "input-mobile-qty-0", "3");
       await waitForText(phonePage, "[data-pos-mobile-page]", "Qty 3");
@@ -626,11 +628,10 @@ try {
         [fixture.companies.erp, fixture.erp.locationId, fixture.erp.stockItemId],
       );
       await openRoute(phonePage, "/tracking");
-      await tapTestId(phonePage, "button-sidebar-toggle");
-      await tapTestId(phonePage, "button-section-inventory");
-      await tapTestId(phonePage, "link-/inventory");
+      // Phones navigate from the bottom navigation (More holds every other page).
+      await tapTestId(phonePage, "mobile-nav-inventory");
       const path = await phonePage.evaluate(() => window.location.pathname);
-      if (path !== "/inventory") throw new Error(`Sidebar navigation landed on ${path}`);
+      if (path !== "/inventory") throw new Error(`Phone navigation landed on ${path}`);
       await tapTestId(phonePage, `card-location-${fixture.erp.locationId}`);
       const expected = `${Number(stock.quantity)}BL`;
       await waitForText(phonePage, "#main-content", expected);

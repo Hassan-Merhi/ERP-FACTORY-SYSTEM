@@ -533,8 +533,14 @@ export function VoucherEntriesTable({
           }
         }}
       >
-        <SheetContent side="bottom" className="flex flex-col p-0" style={{ height: "auto", maxHeight: "88vh" }}>
-          <SheetHeader className="px-4 pt-4 pb-3 border-b shrink-0">
+        <SheetContent
+          side="bottom"
+          className="flex flex-col p-0"
+          // Capped to the visible viewport, so the Amount field stays above the phone keyboard.
+          style={{ height: "auto", maxHeight: "min(88vh, calc(var(--erp-visual-viewport-height, 100dvh) - 1rem))" }}
+        >
+          {/* pe-14 keeps Done clear of the sheet's close control. */}
+          <SheetHeader className="px-4 pe-14 pt-4 pb-3 border-b shrink-0">
             <div className="flex items-center justify-between gap-2">
               <SheetTitle className="text-base truncate">
                 {mobileEditIndex !== null && (entries[mobileEditIndex]?.accountId ?? 0) > 0
