@@ -159,12 +159,31 @@ async function selectFactoryCompany(page) {
   });
 }
 
-async function openRoute(page, route) {
+async function openRoute(page, route, setStage) {
+  setStage(`navigate ${route.path}`);
   const response = await page.goto(`${BASE_URL}${route.path}`, { waitUntil: "domcontentloaded", timeout: TIMEOUT_MS });
+  setStage(`wait for #main-content on ${route.path}`);
   await page.waitForFunction(() => Boolean(document.getElementById("main-content")), { timeout: TIMEOUT_MS });
-  if (route.anchor) await page.waitForSelector(route.anchor, { visible: true, timeout: TIMEOUT_MS });
+  if (route.anchor) {
+    setStage(`wait for ${route.anchor} on ${route.path}`);
+    await page.waitForSelector(route.anchor, { visible: true, timeout: TIMEOUT_MS });
+  }
+  setStage(`settle ${route.path}`);
   await settle(page);
   return response?.status() ?? null;
+}
+
+/** What the page looked like when a wait timed out, so a CI hang names its cause. */
+async function describeHang(page, pendingRequests) {
+  const snapshot = await page
+    .evaluate(() => ({
+      url: `${location.pathname}${location.search}`,
+      readyState: document.readyState,
+      mainContent: Boolean(document.getElementById("main-content")),
+      bodyText: (document.body?.innerText || "").replace(/\s+/g, " ").slice(0, 240),
+    }))
+    .catch((error) => ({ evaluateError: error instanceof Error ? error.message : String(error) }));
+  return { ...snapshot, pendingRequests: [...pendingRequests].slice(0, 20) };
 }
 
 async function readState(page, route, viewport) {
@@ -255,7 +274,12 @@ try {
     const pageErrors = [];
     let stage = "initialize";
     let currentRoute = null;
+    const pendingRequests = new Set();
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("request", (request) => pendingRequests.add(`${request.method()} ${request.url().replace(BASE_URL, "")}`));
+    const settleRequest = (request) => pendingRequests.delete(`${request.method()} ${request.url().replace(BASE_URL, "")}`);
+    page.on("requestfinished", settleRequest);
+    page.on("requestfailed", settleRequest);
 
     try {
       await page.evaluateOnNewDocument(() => localStorage.setItem("erp.application-language", "en"));
@@ -266,8 +290,9 @@ try {
 
       for (const route of ROUTES) {
         currentRoute = route.path;
-        stage = `open ${route.path}`;
-        const status = await openRoute(page, route);
+        const status = await openRoute(page, route, (next) => {
+          stage = next;
+        });
         stage = `inspect ${route.path}`;
         const state = await readState(page, route, viewport);
         const failures = assertState(state, viewport, route);
@@ -284,6 +309,12 @@ try {
       report.failures.push(
         `${viewport.name}${routeLabel} [${stage}]: ${error instanceof Error ? error.message : String(error)}`
       );
+      const hang = await describeHang(page, pendingRequests);
+      report.hangs = [...(report.hangs ?? []), { viewport: viewport.name, route: currentRoute, stage, ...hang }];
+      console.error(`${viewport.name}${routeLabel} hang snapshot: ${JSON.stringify(hang)}`);
+      await page
+        .screenshot({ path: path.join(OUTPUT_DIR, `${viewport.name}-failure.png`), fullPage: true })
+        .catch(() => undefined);
     } finally {
       report.failures.push(...pageErrors.map((error) => `${viewport.name}: pageerror: ${error}`));
       await page.close();

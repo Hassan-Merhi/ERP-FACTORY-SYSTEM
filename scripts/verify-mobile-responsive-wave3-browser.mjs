@@ -284,25 +284,35 @@ try {
     await page.setViewport(viewport);
     const pageErrors = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    // Name the step a timeout happened in: "Waiting failed" alone does not say
+    // whether sign-in, the company switch or which route stalled.
+    let step = "sign-in";
 
     try {
       await page.evaluateOnNewDocument(() => localStorage.setItem("erp.application-language", "en"));
       await login(page);
+      step = "company switch";
       await selectErpCompany(page);
 
       for (const route of ROUTES) {
+        step = `open ${route.url}`;
         const status = await openRoute(page, route);
+        step = `read ${route.url}`;
         const state = await readState(page, route, viewport);
         const failures = assertState(state, viewport, route);
         const directory = path.join(OUTPUT_DIR, viewport.name);
         await fs.mkdir(directory, { recursive: true });
         const screenshot = path.join(directory, `${safeName(route.url)}.png`);
+        step = `screenshot ${route.url}`;
         await page.screenshot({ path: screenshot, fullPage: true });
         report.cases.push({ viewport: viewport.name, route: route.url, status, state, screenshot, failures });
         report.failures.push(...failures);
       }
     } catch (error) {
-      report.failures.push(`${viewport.name}: ${error instanceof Error ? error.message : String(error)}`);
+      report.failures.push(`${viewport.name} (${step}): ${error instanceof Error ? error.message : String(error)}`);
+      await page
+        .screenshot({ path: path.join(OUTPUT_DIR, `${viewport.name}-failure.png`), fullPage: true })
+        .catch(() => undefined);
     } finally {
       report.failures.push(...pageErrors.map((error) => `${viewport.name}: pageerror: ${error}`));
       await page.close();

@@ -151,7 +151,9 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {canAccess("pos") ? (
         <Route path="/pos/edit/:id">{(params) => <POS editVoucherId={params.id} />}</Route>
       ) : (
-        <Route path="/pos/edit/:id"><Redirect replace to="/tracking" /></Route>
+        <Route path="/pos/edit/:id">
+          <Redirect replace to="/tracking" />
+        </Route>
       )}
       {effectiveRole !== "POS" && canAccess("pos") ? (
         <Route path="/pos-item-replacement" component={POSItemReplacement} />
@@ -164,12 +166,16 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {canAccessAny(["location_inventory", "stock_otw", "containers"]) ? (
         <Route path="/inventory">{() => <InventoryHub access={erpAccess} />}</Route>
       ) : (
-        <Route path="/inventory"><Redirect replace to="/tracking" /></Route>
+        <Route path="/inventory">
+          <Redirect replace to="/tracking" />
+        </Route>
       )}
       {canAccessAny(["stock_items", "stock_query"]) ? (
         <Route path="/stock">{() => <StockHub access={erpAccess} />}</Route>
       ) : (
-        <Route path="/stock"><Redirect replace to="/tracking" /></Route>
+        <Route path="/stock">
+          <Redirect replace to="/tracking" />
+        </Route>
       )}
       {canAccess("location_inventory") ? (
         <Route path="/location-inventory">
@@ -344,7 +350,11 @@ export function ErpRoutes({ user }: ErpRoutesProps) {
       {G("/stock-items/:id/history/:year/:month", "stock_items", StockItemVouchers)}
       {G("/stock-items/:stockItemId/monthly-summary", "stock_items", LocationMonthlySummary)}
       {G("/locations/:locationId/stock-items/:stockItemId/history", "location_inventory", LocationMonthlySummary)}
-      {G("/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month", "location_inventory", LocationVouchers)}
+      {G(
+        "/locations/:locationId/stock-items/:stockItemId/vouchers/:year/:month",
+        "location_inventory",
+        LocationVouchers
+      )}
 
       {G("/sales-report", "sales_report", SalesReport)}
       {G("/stock-in-sales-report", "sales_report", StockInSalesReport)}

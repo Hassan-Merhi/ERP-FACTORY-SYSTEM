@@ -82,11 +82,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
       for (const acc of companyAccounts) {
-        if (
-          acc.code === "PURCHASES" ||
-          acc.code?.startsWith("PURCHASES_") ||
-          isInventoryValuationOnlyAccount(acc)
-        ) {
+        if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES_") || isInventoryValuationOnlyAccount(acc)) {
           excludedFromExpenses.add(acc.id);
         }
       }
@@ -421,8 +417,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const workerAdvancesDisplay = round2(employeeLinkedAdvanceAssets);
       if (workerLiabilitiesDisplay > 0) {
         onUsTotal = round2(onUsTotal + workerLiabilitiesDisplay);
-        categoryTotals["liability_Payroll"] =
-          round2((categoryTotals["liability_Payroll"] || 0) + workerLiabilitiesDisplay);
+        categoryTotals["liability_Payroll"] = round2(
+          (categoryTotals["liability_Payroll"] || 0) + workerLiabilitiesDisplay
+        );
         onUsAccounts.push({
           name: "Payroll Payable",
           code: "PAYROLL_PAYABLE",
@@ -432,8 +429,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       }
       if (payrollOverpaymentDisplay > 0) {
         forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] =
-          round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
+        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
         forUsAccounts.push({
           name: "Payroll Overpayment",
           code: "PAYROLL_PAYABLE",

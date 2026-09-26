@@ -30,7 +30,11 @@ const legacyCall = callIndex("registerVoucherTransferRoutes");
 
 const checks = [
   [createSale.includes("clientSaleId"), "POS creation must retain clientSaleId identity"],
-  [createSale.includes("pg_advisory_xact_lock") || createSale.includes("advisory"), "POS creation must retain transaction advisory locking"],
+  [
+    createSale.includes("lockAndFindExistingPosSaleTx") &&
+      read("server/services/pos/posSaleIdempotency.ts").includes("pg_advisory_xact_lock"),
+    "POS creation must retain transaction advisory locking",
+  ],
   [createSale.includes("_idempotent"), "POS replay must remain explicit"],
   [createSale.includes("transaction"), "POS accounting and inventory must remain transaction-owned"],
   [editSale.includes('.for("update")') || editSale.includes(".for('update')") || editSale.includes("FOR UPDATE"), "POS edit must lock current persisted state"],

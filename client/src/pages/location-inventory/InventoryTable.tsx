@@ -229,8 +229,7 @@ export function InventoryTable({
                     <td className="px-3 text-right font-mono font-bold">
                       {formatAmount(
                         filteredStockItems.reduce(
-                          (sum, item) =>
-                            sum + parseFloat(item.quantity || "0") * parseFloat(item.averageRate || "0"),
+                          (sum, item) => sum + parseFloat(item.quantity || "0") * parseFloat(item.averageRate || "0"),
                           0
                         )
                       )}

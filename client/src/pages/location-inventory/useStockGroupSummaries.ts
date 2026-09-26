@@ -39,17 +39,13 @@ export function useStockGroupSummaries({
 }: UseStockGroupSummariesParams) {
   const openingInventoryMap = useMemo(() => {
     const map = new Map<number, number>();
-    openingInventoryData.forEach((item: InventoryItem) =>
-      map.set(item.stockItemId, parseFloat(item.quantity || "0"))
-    );
+    openingInventoryData.forEach((item: InventoryItem) => map.set(item.stockItemId, parseFloat(item.quantity || "0")));
     return map;
   }, [openingInventoryData]);
 
   const showMovement = !!(fromDate && asOfDate);
   const activeInventoryData = showMovement ? closingInventoryData : inventoryData;
-  const activeInventoryLoading = showMovement
-    ? closingInventoryLoading || openingInventoryLoading
-    : inventoryLoading;
+  const activeInventoryLoading = showMovement ? closingInventoryLoading || openingInventoryLoading : inventoryLoading;
 
   // All items (respecting zero filter)
   const inventory: InventoryItem[] = showZeroStock

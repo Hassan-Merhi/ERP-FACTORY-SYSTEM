@@ -17,9 +17,17 @@ const registry = read("server/chat/reports/implementations/reportImplementationR
 
 if (lines("server/chat/reports.ts") > 30) failures.push("server/chat/reports.ts must remain a thin facade");
 if (!facade.includes("dispatchDataQuery")) failures.push("report facade must delegate to the domain dispatcher");
-if (!chatService.includes('from "./chat/reports"')) failures.push("chatService must use the stable report facade");
-if ((chatService.match(/runDataQuery/g) || []).length < 2) failures.push("chatService report gateway wiring is missing");
-if (/switch\s*\(\s*params\.queryType\s*\)/.test(chatService)) failures.push("chatService must not own report dispatch logic");
+// chatService was decomposed (god-file wave 8): it reaches reports through
+// chat/phase1DataQuery.ts, which is the only caller of the stable facade.
+const dataQueryGateway = read("server/chat/phase1DataQuery.ts");
+if (!chatService.includes('from "./chat/phase1DataQuery"') || !chatService.includes("runPhase1DataQuery(")) {
+  failures.push("chatService must route data queries through the phase1 data-query gateway");
+}
+if (!dataQueryGateway.includes('from "./reports"')) failures.push("chat data-query gateway must use the stable report facade");
+if ((dataQueryGateway.match(/runDataQuery/g) || []).length < 2) failures.push("chatService report gateway wiring is missing");
+for (const [name, source] of [["chatService", chatService], ["phase1DataQuery", dataQueryGateway]]) {
+  if (/switch\s*\(\s*params\.queryType\s*\)/.test(source)) failures.push(`${name} must not own report dispatch logic`);
+}
 if (!dispatcher.includes("reportDomains")) failures.push("domain registry is missing");
 if (!registry.includes("reportImplementationShards")) failures.push("implementation registry is missing");
 if (/runLegacyDataQuery|legacyReportEngine/.test(dispatcher + domainFactory + registry)) {

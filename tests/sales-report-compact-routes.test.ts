@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import { transformSalesReportBandwidthSource } from "../build/viteSalesReportBandwidthPlugin";
@@ -76,6 +77,49 @@ function registeredPaths(files: string[]): Set<string> {
   return out;
 }
 
+function parseTsx(code: string): ts.SourceFile {
+  return ts.createSourceFile("page.tsx", code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+}
+
+/** Every name bound by a variable/function/import declaration (destructuring included). */
+function declaredBindings(code: string): Set<string> {
+  const names = new Set<string>();
+  const bind = (name: ts.BindingName) => {
+    if (ts.isIdentifier(name)) names.add(name.text);
+    else for (const element of name.elements) if (!ts.isOmittedExpression(element)) bind(element.name);
+  };
+  const visit = (node: ts.Node) => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node) || ts.isBindingElement(node)) bind(node.name);
+    else if ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) names.add(node.name.text);
+    else if (ts.isImportClause(node) && node.name) names.add(node.name.text);
+    else if (ts.isImportSpecifier(node) || ts.isNamespaceImport(node)) names.add(node.name.text);
+    ts.forEachChild(node, visit);
+  };
+  visit(parseTsx(code));
+  return names;
+}
+
+/** Identifiers read as values (property names and declaration names excluded). */
+function referencedIdentifiers(code: string): Set<string> {
+  const names = new Set<string>();
+  const visit = (node: ts.Node) => {
+    if (ts.isIdentifier(node)) {
+      const parent = node.parent;
+      const isPropertyName =
+        (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+        (ts.isPropertyAssignment(parent) && parent.name === node) ||
+        (ts.isBindingElement(parent) && parent.propertyName === node);
+      const isDeclarationName =
+        (ts.isVariableDeclaration(parent) || ts.isBindingElement(parent) || ts.isParameter(parent)) &&
+        parent.name === node;
+      if (!isPropertyName && !isDeclarationName) names.add(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parseTsx(code));
+  return names;
+}
+
 /** Sales-report URLs the built Sales Report pages fetch (raw lines included). */
 function clientRequestedSalesReportUrls(): string[] {
   const pageSources: Array<[string, string]> = [
@@ -121,15 +165,25 @@ describe("compact sales-report routes are mounted by the live registry", () => {
     expect(missing, `unmounted sales-report endpoints: ${missing.join(", ")}`).toEqual([]);
   });
 
-  it("keeps the automatic COGS reconciliation variables in the built Sales Report", () => {
-    const source = read("client/src/pages/SalesReportLegacy.tsx");
-    const built =
-      transformSalesReportBandwidthSource(source, path.join(repoRoot, "client/src/pages/SalesReportLegacy.tsx")) ??
-      source;
+  it("keeps the automatic COGS reconciliation query and its bindings in the built Sales Report", () => {
+    const file = "client/src/pages/SalesReportLegacy.tsx";
+    const source = read(file);
+    const built = transformSalesReportBandwidthSource(source, path.join(repoRoot, file)) ?? source;
 
-    expect(built).toContain("const isAllTimeReconciliationView =");
-    expect(built).toContain('queryKey: ["/api/sales-report/cogs-reconciliation"]');
-    expect(built).toContain("const { data: cogsReconciliation }");
+    // The built page still requests the reconciliation endpoint...
+    expect(clientRequestedSalesReportUrls()).toEqual(expect.arrayContaining(["/api/sales-report/cogs-reconciliation"]));
+
+    // ...and the transform must not drop a declaration the built code still reads:
+    // that compiles away silently and fails only at runtime with a ReferenceError.
+    const sourceBindings = declaredBindings(source);
+    const builtBindings = declaredBindings(built);
+    const builtReferences = referencedIdentifiers(built);
+    for (const name of ["isAllTimeReconciliationView", "cogsReconciliation"]) {
+      expect(builtBindings.has(name), `${name} must stay declared`).toBe(true);
+      expect(builtReferences.has(name), `${name} must stay in use`).toBe(true);
+    }
+    const dropped = [...sourceBindings].filter((name) => !builtBindings.has(name) && builtReferences.has(name));
+    expect(dropped, `declarations removed but still referenced: ${dropped.join(", ")}`).toEqual([]);
   });
 
   it("registers the compact summary routes before the legacy raw report route", () => {

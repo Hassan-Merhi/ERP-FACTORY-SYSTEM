@@ -45,7 +45,7 @@ const checks = [
   [lifecycle.includes("FOR UPDATE"), "active edit must lock the voucher row"],
   [lifecycle.includes("buildLegacyPaymentReceiptEditTarget"), "edit must preserve legacy single-target representation"],
   [lifecycle.includes('direction: "reverse"') && lifecycle.includes('direction: "apply"'), "edit must reverse old and apply new employee effects"],
-  [lifecycle.includes("isReadonlyMigratedVoucher"), "migrated vouchers must remain read-only"],
+  [lifecycle.includes("voucherMutationBlockReason(existing)"), "migrated vouchers must remain read-only"],
   [lifecycle.includes("existing.optional") && lifecycle.includes("body.optional === true") && lifecycle.includes("next()"), "optional edit transitions must remain legacy passthrough"],
   [lifecycle.includes("voucher currency/exchangeRate are not"), "edit currency preservation boundary must remain documented in source"],
   [policy.includes("shouldUseCentralPaymentReceiptDeletion"), "deletion eligibility policy must remain centralized"],

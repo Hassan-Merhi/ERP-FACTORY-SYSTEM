@@ -19,9 +19,18 @@ const assert = (condition, message) => {
 
 const daybookRoute = read("server/routes/factory/factoryDaybookPaginationRoutes.ts");
 const accountsWrapper = read("client/src/pages/Accounts.tsx");
-const accountsPage = read("client/src/pages/AccountsLegacy.tsx");
+// AccountsLegacy.tsx keeps its view; data wiring moved to its model hook.
+const accountsPage = [
+  read("client/src/pages/AccountsLegacy.tsx"),
+  read("client/src/pages/accountslegacy/useAccountsLegacyModel.ts"),
+].join("\n");
 const ledgerWrapper = read("server/routes/ledgerRoutes.ts");
-const ledgerRoutes = read("server/routes/ledgerRoutesLegacy.ts");
+// ledgerRoutesLegacy.ts was split into server/routes/ledger/ (Phase 3 route monoliths).
+const ledgerRoutes = fs
+  .readdirSync(path.join(root, "server/routes/ledger"))
+  .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+  .map((file) => read(`server/routes/ledger/${file}`))
+  .join("\n");
 const ledgerOptions = read("server/services/ledgerAccountOptionsService.ts");
 const netProfitRoute = read("server/routes/stats/statsNetProfitRoutes.ts");
 
@@ -42,7 +51,7 @@ assert(ledgerOptions.includes('eq(ledgerAccounts.subType, "Group")'), "Parent-gr
 assert(ledgerOptions.includes("inArray(ledgerAccounts.id, legacyParentIds)"), "Parent-group endpoint must retain legacy parent accounts.");
 assert(ledgerOptions.includes(".select({"), "Parent-group endpoint must use an explicit field-limited select.");
 assert(ledgerRoutes.includes("eq(ledgerAccounts.accountType, accountType.trim())"), "Ledger account type filtering must remain server-side.");
-assert(ledgerRoutes.includes("ilike(ledgerAccounts.name, q)"), "Ledger account search must remain server-side.");
+assert(ledgerRoutes.includes("punctuationInsensitiveSearch(ledgerAccounts.name, term)"), "Ledger account search must remain server-side.");
 
 assert(netProfitRoute.includes('app.get("/api/stats/net-profit"'), "Net-profit summary endpoint must remain registered.");
 assert(netProfitRoute.includes("_getCached(_cacheKey)"), "Net-profit summary must retain its short company/date keyed cache.");

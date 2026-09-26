@@ -157,7 +157,6 @@ export default function SalesReport() {
     refetchOnWindowFocus: false,
   });
 
-
   // Build set of stockItemIds that belong to selected groups (for client-side group filtering)
   const selectedGroupItemIds = useMemo(() => {
     if (selectedStockGroups.length === 0) return null;

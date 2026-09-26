@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2008,
+  "routeCount": 2013,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -409,6 +409,8 @@
     "GET /api/factory/analytics/sales-by-customer [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/pos-summary [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/container-sales-report [requireAuth > <anonymous>]",
+    "GET /api/factory/analytics/customer-orders [requireAuth > <anonymous>]",
+    "GET /api/factory/analytics/customer-order-items [requireAuth > <anonymous>]",
     "GET /api/factory/analytics/stock-summary [requireAuth > <anonymous>]",
     "POST /api/factory/bales/relabel/validate [requireAuth > <anonymous>]",
     "POST /api/factory/bales/relabel/apply [requireAuth > <anonymous>]",
@@ -1492,6 +1494,7 @@
     "GET /api/stats/stock-summary [requireAuth > <anonymous>]",
     "GET /api/stats/expense-breakdown [requireAuth > <anonymous>]",
     "GET /api/sales-report [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/sales-report/cogs-reconciliation [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/dashboard/sales-report-all [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/sales-report/recalculate-costs [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/profit-loss [requireAuth > requireNonPOS > <anonymous>]",

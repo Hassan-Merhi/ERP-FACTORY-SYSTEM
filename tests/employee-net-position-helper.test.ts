@@ -51,11 +51,9 @@ describe("computeEmployeeNetPosition", () => {
     const employees = [{ id: 30, openingBalance: "0", openingBalanceSide: "Cr" }];
     const balances = new Map([[30, { debit: 700, credit: 0 }]]);
 
-    const result = computeEmployeeNetPositionWithManagedAdvances(
-      employees,
-      balances,
-      [{ employeeId: 30, postedDebit: 500, remainingBalance: 300 }]
-    );
+    const result = computeEmployeeNetPositionWithManagedAdvances(employees, balances, [
+      { employeeId: 30, postedDebit: 500, remainingBalance: 300 },
+    ]);
 
     // $700 debit = $500 managed advance + $200 direct withdrawal.
     // Replace the managed $500 original debit with its $300 remaining balance.
@@ -67,11 +65,9 @@ describe("computeEmployeeNetPosition", () => {
     const employees = [{ id: 31, openingBalance: "0", openingBalanceSide: "Cr" }];
     const balances = new Map([[31, { debit: 650, credit: 0 }]]);
 
-    const result = computeEmployeeNetPositionWithManagedAdvances(
-      employees,
-      balances,
-      [{ employeeId: 31, postedDebit: 500, remainingBalance: 0 }]
-    );
+    const result = computeEmployeeNetPositionWithManagedAdvances(employees, balances, [
+      { employeeId: 31, postedDebit: 500, remainingBalance: 0 },
+    ]);
 
     expect(result.advances).toBe(150);
     expect(result.liabilities).toBe(0);
