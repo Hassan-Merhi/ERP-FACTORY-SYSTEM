@@ -121,6 +121,17 @@ describe("compact sales-report routes are mounted by the live registry", () => {
     expect(missing, `unmounted sales-report endpoints: ${missing.join(", ")}`).toEqual([]);
   });
 
+  it("keeps the automatic COGS reconciliation variables in the built Sales Report", () => {
+    const source = read("client/src/pages/SalesReportLegacy.tsx");
+    const built =
+      transformSalesReportBandwidthSource(source, path.join(repoRoot, "client/src/pages/SalesReportLegacy.tsx")) ??
+      source;
+
+    expect(built).toContain("const isAllTimeReconciliationView =");
+    expect(built).toContain('queryKey: ["/api/sales-report/cogs-reconciliation"]');
+    expect(built).toContain("const { data: cogsReconciliation }");
+  });
+
   it("registers the compact summary routes before the legacy raw report route", () => {
     const registry = read(`server/routes/${statsRegistryImport}.ts`);
     const compact = registry.indexOf("registerSalesReportBandwidthRoutes(app)");
