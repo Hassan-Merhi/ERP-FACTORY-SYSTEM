@@ -14,6 +14,8 @@ import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../
 import { calculateHistoricalLocationInventory } from "../routes/_helpers";
 import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+import { computeEmployeeNetPositionWithManagedAdvances } from "./employeeNetPosition";
+import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 
 /**
  * The two grouped balance projections read below.
@@ -76,37 +78,119 @@ export async function calculateNetPositionAsOf(
   //
   //   suppGrouped  — filters by VOUCHER's company_id for supplier/employee
   //                  balances, which are always booked to the voucher's company.
-  const [acctGrouped, suppGrouped] = await Promise.all([
-    db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
-      SELECT
-        ve.ledger_account_id,
-        SUM(CAST(ve.debit_amount  AS numeric)) AS total_debit,
-        SUM(CAST(ve.credit_amount AS numeric)) AS total_credit
-      FROM voucher_entries ve
-      INNER JOIN vouchers v ON ve.voucher_id = v.id
-      INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id
-      WHERE la.company_id   = ${companyId}
-        AND v.optional      = false
-        AND v.deleted_at    IS NULL
-        AND v.voucher_date <= ${toDate}
-      GROUP BY ve.ledger_account_id
-    `),
-    db.execute<RawQueryRow<PartyBalanceRow>>(sql`
-      SELECT
-        ve.supplier_id,
-        ve.employee_id,
-        SUM(CAST(ve.debit_amount  AS numeric)) AS total_debit,
-        SUM(CAST(ve.credit_amount AS numeric)) AS total_credit
-      FROM voucher_entries ve
-      INNER JOIN vouchers v ON ve.voucher_id = v.id
-      WHERE v.company_id    = ${companyId}
-        AND v.optional      = false
-        AND v.deleted_at    IS NULL
-        AND v.voucher_date <= ${toDate}
-        AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
-      GROUP BY ve.supplier_id, ve.employee_id
-    `),
-  ]);
+  const loadAccountBalances = async () => {
+    try {
+      return await db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
+        SELECT
+          ve.ledger_account_id,
+          SUM(CAST(COALESCE(ve.base_debit_amount, ve.debit_amount) AS numeric)) AS total_debit,
+          SUM(CAST(COALESCE(ve.base_credit_amount, ve.credit_amount) AS numeric)) AS total_credit
+        FROM voucher_entries ve
+        INNER JOIN vouchers v ON ve.voucher_id = v.id
+        INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id
+        WHERE la.company_id = ${companyId}
+          AND v.optional = false
+          AND v.deleted_at IS NULL
+          AND v.voucher_date <= ${toDate}
+        GROUP BY ve.ledger_account_id
+      `);
+    } catch {
+      return db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
+        SELECT
+          ve.ledger_account_id,
+          SUM(CAST(ve.debit_amount AS numeric)) AS total_debit,
+          SUM(CAST(ve.credit_amount AS numeric)) AS total_credit
+        FROM voucher_entries ve
+        INNER JOIN vouchers v ON ve.voucher_id = v.id
+        INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id
+        WHERE la.company_id = ${companyId}
+          AND v.optional = false
+          AND v.deleted_at IS NULL
+          AND v.voucher_date <= ${toDate}
+        GROUP BY ve.ledger_account_id
+      `);
+    }
+  };
+
+  const loadPartyBalances = async () => {
+    try {
+      return await db.execute<RawQueryRow<PartyBalanceRow>>(sql`
+        SELECT
+          ve.supplier_id,
+          ve.employee_id,
+          SUM(
+            CASE
+              WHEN ve.supplier_id IS NOT NULL THEN
+                CASE
+                  WHEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric > 0
+                   AND COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric = 0
+                  THEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric
+                  ELSE 0
+                END
+              ELSE COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric
+            END
+          ) AS total_debit,
+          SUM(
+            CASE
+              WHEN ve.supplier_id IS NOT NULL THEN
+                CASE
+                  WHEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric > 0
+                   AND COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric = 0
+                  THEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric
+                  ELSE 0
+                END
+              ELSE COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric
+            END
+          ) AS total_credit
+        FROM voucher_entries ve
+        INNER JOIN vouchers v ON ve.voucher_id = v.id
+        WHERE v.company_id = ${companyId}
+          AND v.optional = false
+          AND v.deleted_at IS NULL
+          AND v.voucher_date <= ${toDate}
+          AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
+        GROUP BY ve.supplier_id, ve.employee_id
+      `);
+    } catch {
+      return db.execute<RawQueryRow<PartyBalanceRow>>(sql`
+        SELECT
+          ve.supplier_id,
+          ve.employee_id,
+          SUM(
+            CASE
+              WHEN ve.supplier_id IS NOT NULL THEN
+                CASE
+                  WHEN ve.debit_amount::numeric > 0 AND ve.credit_amount::numeric = 0
+                  THEN ve.debit_amount::numeric
+                  ELSE 0
+                END
+              ELSE ve.debit_amount::numeric
+            END
+          ) AS total_debit,
+          SUM(
+            CASE
+              WHEN ve.supplier_id IS NOT NULL THEN
+                CASE
+                  WHEN ve.credit_amount::numeric > 0 AND ve.debit_amount::numeric = 0
+                  THEN ve.credit_amount::numeric
+                  ELSE 0
+                END
+              ELSE ve.credit_amount::numeric
+            END
+          ) AS total_credit
+        FROM voucher_entries ve
+        INNER JOIN vouchers v ON ve.voucher_id = v.id
+        WHERE v.company_id = ${companyId}
+          AND v.optional = false
+          AND v.deleted_at IS NULL
+          AND v.voucher_date <= ${toDate}
+          AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
+        GROUP BY ve.supplier_id, ve.employee_id
+      `);
+    }
+  };
+
+  const [acctGrouped, suppGrouped] = await Promise.all([loadAccountBalances(), loadPartyBalances()]);
 
   const accountBalances = new Map<number, { debit: number; credit: number }>();
   const supplierBalances = new Map<number, { debit: number; credit: number }>();
@@ -134,8 +218,10 @@ export async function calculateNetPositionAsOf(
     }
   }
 
-  const parentCompanyId = await storage.getParentCompanyId();
-  const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
+  // Match the live dashboard: supplier balances are delegated only by an
+  // explicit per-company parent link. A standalone ERP company still owns and
+  // reports its suppliers even when some unrelated global parent exists.
+  const shouldIncludeSuppliers = companyRow?.parentCompanyId == null;
   const supplierPartnerCustomerPosition = isSupplierPartner
     ? await getSupplierPartnerCustomerNetPosition(companyId, toDate)
     : null;
@@ -212,7 +298,9 @@ export async function calculateNetPositionAsOf(
       for (const inv of items) {
         const qty = parseFloat(inv.quantity || "0");
         const rate = parseFloat(inv.averageRate || "0");
-        if (qty > 0) stockFloorTotal += qty * rate;
+        // Signed valuation must match the live inventory table. Negative stock
+        // is a real position and must reduce Stock In Hand rather than disappear.
+        if (qty !== 0) stockFloorTotal += qty * rate;
       }
     }
   }
@@ -229,55 +317,28 @@ export async function calculateNetPositionAsOf(
 
   // ── Employee advances / liabilities ──────────────────────────────────
   const companyEmployees = await db
-    .select()
+    .select({
+      id: employees.id,
+      openingBalance: employees.openingBalance,
+      openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
+    })
     .from(employees)
-    .where(and(eq(employees.companyId, companyId), eq(employees.active, true), isNull(employees.deletedAt)))
+    .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
     .execute();
 
-  let employeeAdvanceTotal = 0;
-  let employeeLiabilityTotal = 0;
-  for (const emp of companyEmployees) {
-    const opening = parseFloat(emp.openingBalance || "0");
-    const openingSide =
-      (
-        emp as unknown as {
-          id: number;
-          companyId: number;
-          code: string;
-          firstName: string;
-          lastName: string;
-          email: string | null;
-          phone: string | null;
-          joinDate: string;
-          department: string | null;
-          employeeType: string;
-          monthlySalary: string;
-          openingBalance: string | null;
-          currentBalance: string;
-          totalDeposits: string;
-          totalWithdrawals: string;
-          active: boolean;
-          salesBonusPct: string | null;
-          salesBonusPctSourceCompanyId: number | null;
-          salesBonusPctLocationId: number | null;
-          balesBonusRate: string | null;
-          deletedAt: Date | null;
-          createdAt: Date;
-        } & { openingBalanceSide: "Dr" }
-      ).openingBalanceSide === "Dr"
-        ? 1
-        : -1;
-    const signedOpening = opening * openingSide;
-    const balance = employeeBalances.get(emp.id) || { debit: 0, credit: 0 };
-    const netBalance = signedOpening + balance.debit - balance.credit;
-    if (netBalance < 0) {
-      onUsTotal += Math.abs(netBalance);
-      employeeLiabilityTotal += Math.abs(netBalance);
-    } else if (netBalance > 0) {
-      forUsTotal += netBalance;
-      employeeAdvanceTotal += netBalance;
-    }
-  }
+  // Inactive employees can still carry receivables/payables, so deactivation
+  // must not erase an accounting position. Use the same shared sign logic as
+  // the live dashboard.
+  const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
+  const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
+    companyEmployees,
+    employeeBalances,
+    managedSalaryAdvances
+  );
+  const employeeAdvanceTotal = employeePosition.advances;
+  const employeeLiabilityTotal = employeePosition.liabilities;
+  forUsTotal += employeeAdvanceTotal;
+  onUsTotal += employeeLiabilityTotal;
   if (employeeAdvanceTotal > 0) {
     forUsLines.push({
       label: "Employee Advances",
@@ -297,25 +358,27 @@ export async function calculateNetPositionAsOf(
 
   // ── Supplier balances ─────────────────────────────────────────────────
   if (shouldIncludeSuppliers) {
-    const allSuppliers = await db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute();
+    const allSuppliers = await db
+      .select()
+      .from(suppliers)
+      .where(and(eq(suppliers.companyId, companyId), isNull(suppliers.deletedAt)))
+      .execute();
     let supplierTotal = 0;
     for (const sup of allSuppliers) {
-      const balance = supplierBalances.get(sup.id);
-      if (balance) {
-        const opening = parseFloat(sup.openingBalance || "0");
-        const netBalance = opening + balance.credit - balance.debit;
-        if (netBalance > 0) {
-          onUsTotal += netBalance;
-          supplierTotal += netBalance;
-        } else if (netBalance < 0) {
-          forUsTotal += Math.abs(netBalance);
-          forUsLines.push({
-            label: `Supplier Credit: ${sup.legalName}`,
-            value: round2(Math.abs(netBalance)),
-            category: "Supplier Credits",
-            side: "forUs",
-          });
-        }
+      const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
+      const opening = parseFloat(sup.openingBalance || "0");
+      const netBalance = opening + balance.credit - balance.debit;
+      if (netBalance > 0) {
+        onUsTotal += netBalance;
+        supplierTotal += netBalance;
+      } else if (netBalance < 0) {
+        forUsTotal += Math.abs(netBalance);
+        forUsLines.push({
+          label: `Supplier Credit: ${sup.legalName}`,
+          value: round2(Math.abs(netBalance)),
+          category: "Supplier Credits",
+          side: "forUs",
+        });
       }
     }
     if (supplierTotal > 0) {

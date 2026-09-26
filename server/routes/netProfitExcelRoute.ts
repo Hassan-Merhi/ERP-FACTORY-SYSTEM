@@ -5,6 +5,8 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { logAudit } from "./_helpers";
+import { computeEmployeeNetPositionWithManagedAdvances } from "../helpers/employeeNetPosition";
+import { loadSalaryAdvanceNetPositionAdjustments } from "../helpers/salaryAdvanceNetPosition";
 import {
   inventory,
   containers,
@@ -199,7 +201,10 @@ export function registerNetProfitExcelRoute(app: Express) {
         allTimeIdsXlsx.length > 0
           ? await db
               .select({
+                voucherId: voucherEntries.voucherId,
                 ledgerAccountId: voucherEntries.ledgerAccountId,
+                supplierId: voucherEntries.supplierId,
+                employeeId: voucherEntries.employeeId,
                 debitAmount: sql<string>`COALESCE("voucher_entries"."base_debit_amount", "voucher_entries"."debit_amount")`,
                 creditAmount: sql<string>`COALESCE("voucher_entries"."base_credit_amount", "voucher_entries"."credit_amount")`,
               })
@@ -245,31 +250,20 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       // Build supplier balance map from all-time entries
       const xlsxSupplierBals = new Map<number, { debit: number; credit: number }>();
+      const xlsxEmployeeBals = new Map<number, { debit: number; credit: number }>();
       for (const e of allTimeEntriesXlsx) {
-        if (
-          (
-            e as unknown as { ledgerAccountId: number | null; debitAmount: string; creditAmount: string } & {
-              supplierId: unknown;
-            }
-          ).supplierId
-        ) {
-          const d = parseFloat(e.debitAmount || "0"),
-            c = parseFloat(e.creditAmount || "0");
-          const cur = xlsxSupplierBals.get(
-            (
-              e as unknown as { ledgerAccountId: number | null; debitAmount: string; creditAmount: string } & {
-                supplierId: number;
-              }
-            ).supplierId
-          ) || { debit: 0, credit: 0 };
-          xlsxSupplierBals.set(
-            (
-              e as unknown as { ledgerAccountId: number | null; debitAmount: string; creditAmount: string } & {
-                supplierId: number;
-              }
-            ).supplierId,
-            { debit: cur.debit + d, credit: cur.credit + c }
-          );
+        const d = parseFloat(e.debitAmount || "0");
+        const c = parseFloat(e.creditAmount || "0");
+        if (e.supplierId) {
+          const cur = xlsxSupplierBals.get(e.supplierId) || { debit: 0, credit: 0 };
+          xlsxSupplierBals.set(e.supplierId, {
+            debit: cur.debit + (d > 0 && c === 0 ? d : 0),
+            credit: cur.credit + (c > 0 && d === 0 ? c : 0),
+          });
+        }
+        if (e.employeeId) {
+          const cur = xlsxEmployeeBals.get(e.employeeId) || { debit: 0, credit: 0 };
+          xlsxEmployeeBals.set(e.employeeId, { debit: cur.debit + d, credit: cur.credit + c });
         }
       }
 
@@ -368,14 +362,22 @@ export function registerNetProfitExcelRoute(app: Express) {
 
         // Add worker/employee liabilities
         const xlsxEmployees = await db
-          .select()
+          .select({
+            id: employees.id,
+            openingBalance: employees.openingBalance,
+            openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
+          })
           .from(employees)
-          .where(and(eq(employees.companyId, companyId), eq(employees.active, true), isNull(employees.deletedAt)))
+          .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
           .execute();
-        let xlsxWorkerBal = 0;
-        for (const emp of xlsxEmployees) xlsxWorkerBal += parseFloat(emp.currentBalance || "0");
-        if (xlsxWorkerBal > 0) npOnUs += xlsxWorkerBal;
-        else if (xlsxWorkerBal < 0) npForUs += Math.abs(xlsxWorkerBal);
+        const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
+        const xlsxEmployeePosition = computeEmployeeNetPositionWithManagedAdvances(
+          xlsxEmployees,
+          xlsxEmployeeBals,
+          xlsxManagedAdvances
+        );
+        npForUs += xlsxEmployeePosition.advances;
+        npOnUs += xlsxEmployeePosition.liabilities;
 
         // Add OTW containers as assets
         const xlsxOtwContainers = await db
@@ -389,18 +391,21 @@ export function registerNetProfitExcelRoute(app: Express) {
       }
 
       // Add suppliers (always included — xlsxSupplierBals is already bounded by endDate)
-      const xlsxParentCompanyId = await storage.getParentCompanyId();
-      const xlsxShouldIncludeSuppliers = xlsxParentCompanyId === null || companyId === xlsxParentCompanyId;
+      // Match the dashboard: only an explicit parent_company_id on this company
+      // delegates supplier balances. Standalone companies keep their own suppliers.
+      const xlsxShouldIncludeSuppliers = company?.parentCompanyId == null;
       if (xlsxShouldIncludeSuppliers) {
-        const xlsxAllSuppliers = await db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute();
+        const xlsxAllSuppliers = await db
+          .select()
+          .from(suppliers)
+          .where(and(eq(suppliers.companyId, companyId), isNull(suppliers.deletedAt)))
+          .execute();
         for (const sup of xlsxAllSuppliers) {
-          const balance = xlsxSupplierBals.get(sup.id);
-          if (balance) {
-            const opening = parseFloat(sup.openingBalance || "0");
-            const netBalance = opening + balance.credit - balance.debit;
-            if (netBalance > 0) npOnUs += netBalance;
-            else if (netBalance < 0) npForUs += Math.abs(netBalance);
-          }
+          const balance = xlsxSupplierBals.get(sup.id) || { debit: 0, credit: 0 };
+          const opening = parseFloat(sup.openingBalance || "0");
+          const netBalance = opening + balance.credit - balance.debit;
+          if (netBalance > 0) npOnUs += netBalance;
+          else if (netBalance < 0) npForUs += Math.abs(netBalance);
         }
       }
 

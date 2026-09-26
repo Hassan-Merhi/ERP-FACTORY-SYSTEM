@@ -241,9 +241,12 @@ export async function createPosSale(
       });
 
       const txSaleItems = [];
+      const issueOrdinalByStockItem = new Map<number, number>();
 
       for (const validatedItem of inventoryValidation) {
         const { item } = validatedItem;
+        const issueOrdinal = (issueOrdinalByStockItem.get(item.stockItemId) ?? 0) + 1;
+        issueOrdinalByStockItem.set(item.stockItemId, issueOrdinal);
 
         const { costPrice } = await lockAndDeductInventoryForSaleItem(
           tx,
@@ -254,7 +257,7 @@ export async function createPosSale(
           currentCompanyId,
           {
             sourceId: String(txVoucher.id),
-            idempotencyKey: `pos-sale:${txVoucher.id}:rev0:${item.stockItemId}`,
+            idempotencyKey: `pos-sale:${txVoucher.id}:rev0:issue:${item.stockItemId}:line:${issueOrdinal}`,
           }
         );
 
