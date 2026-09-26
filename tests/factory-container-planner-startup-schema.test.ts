@@ -2,7 +2,10 @@ import { getTableColumns, getTableName } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { pool } from "../server/db";
-import { ensureFactoryContainerPlannerSchema } from "../server/startup/factoryContainerPlannerSchema";
+import {
+  ensureFactoryContainerPlannerSchema,
+  ensureFactoryContainerPlannerSchemaOnBoot,
+} from "../server/startup/factoryContainerPlannerSchema";
 import {
   factoryContainerPlanAllocations,
   factoryContainerPlanBales,
@@ -92,5 +95,38 @@ describe("Factory container planner startup schema", () => {
     await pool.query(`CREATE TABLE ${SCHEMA}.companies (id SERIAL PRIMARY KEY)`);
     await expect(ensureFactoryContainerPlannerSchema(scopedPool)).rejects.toThrow(/customers/);
     expect((await columnsByTable()).has("factory_container_plans")).toBe(false);
+  });
+});
+
+describe("Factory container planner schema on boot", () => {
+  function fakePool(failures: number) {
+    let calls = 0;
+    const pool = {
+      connect: async () => ({
+        query: async (text: string) => {
+          if (text === "BEGIN") calls += 1;
+          if (text.includes("CREATE TABLE") && calls <= failures) throw new Error("lock timeout");
+          return { rows: [] };
+        },
+        release: () => undefined,
+      }),
+    };
+    return { pool: pool as never, attempts: () => calls };
+  }
+
+  it("retries a transient failure and succeeds", async () => {
+    const { pool, attempts } = fakePool(1);
+    await expect(ensureFactoryContainerPlannerSchemaOnBoot(pool, { attempts: 3, backoffMs: [0] })).resolves.toBe(
+      undefined
+    );
+    expect(attempts()).toBe(2);
+  });
+
+  it("fails boot after exhausting its retries instead of starting without the planner schema", async () => {
+    const { pool, attempts } = fakePool(Number.POSITIVE_INFINITY);
+    await expect(ensureFactoryContainerPlannerSchemaOnBoot(pool, { attempts: 3, backoffMs: [0] })).rejects.toThrow(
+      "lock timeout"
+    );
+    expect(attempts()).toBe(3);
   });
 });

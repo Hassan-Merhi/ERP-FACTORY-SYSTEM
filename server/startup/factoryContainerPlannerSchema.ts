@@ -218,3 +218,29 @@ export async function ensureFactoryContainerPlannerSchema(pool: StartupPool): Pr
     client.release();
   }
 }
+
+/**
+ * Boot-time wrapper: retries transient failures (a lock timeout while another
+ * instance is still serving) and then rethrows, so startup fails and the
+ * previous deployment stays live instead of a new one going healthy without
+ * the planner tables.
+ */
+export async function ensureFactoryContainerPlannerSchemaOnBoot(
+  pool: StartupPool,
+  { attempts = 3, backoffMs = [2_000, 5_000] }: { attempts?: number; backoffMs?: readonly number[] } = {}
+): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await ensureFactoryContainerPlannerSchema(pool);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        const delay = backoffMs[Math.min(attempt - 1, backoffMs.length - 1)] ?? 0;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
