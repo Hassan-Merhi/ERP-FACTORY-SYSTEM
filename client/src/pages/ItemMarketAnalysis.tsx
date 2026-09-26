@@ -338,7 +338,7 @@ export default function ItemMarketAnalysis() {
         const profit = orderedRows.reduce((sum, row) => sum + row.profit, 0);
         const purchaseCurrencies = [...new Set(orderedRows.flatMap((row) => row.purchaseCurrencies))];
         const purchaseValue =
-          purchaseCurrencies.length === 1 && orderedRows.every((row) => row.purchaseValue != null)
+          purchaseCurrencies.length === 1
             ? orderedRows.reduce((sum, row) => sum + (row.purchaseValue ?? 0), 0)
             : null;
         const weightedPurchaseCost =
