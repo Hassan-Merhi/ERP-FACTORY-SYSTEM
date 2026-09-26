@@ -298,7 +298,7 @@ export function CombinedStockView({
                                   maximumFractionDigits: 2,
                                 })}{" "}
                                 units
-                                {groupValue > 0 && <span className="ml-3">{formatAmount(groupValue)}</span>}
+                                {groupValue !== 0 && <span className="ml-3">{formatAmount(groupValue)}</span>}
                               </span>
                             </div>
                           </td>
@@ -347,17 +347,19 @@ export function CombinedStockView({
                             <td
                               key={loc.name}
                               className="px-4 py-2 text-right font-mono whitespace-nowrap text-muted-foreground hover:text-foreground hover:underline"
-                              title={cellQty > 0 ? `View movement at ${loc.name}` : undefined}
+                              title={cellQty !== 0 ? `View movement at ${loc.name}` : undefined}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (cellQty > 0) openMovement(loc.id, loc.name, row.stockItemId, row.stockItemName);
+                                if (cellQty !== 0) openMovement(loc.id, loc.name, row.stockItemId, row.stockItemName);
                               }}
                             >
-                              {cellQty > 0 ? (
-                                cellQty.toLocaleString(undefined, {
-                                  minimumFractionDigits: 0,
-                                  maximumFractionDigits: 2,
-                                })
+                              {cellQty !== 0 ? (
+                                <span className={cellQty < 0 ? "text-red-600 dark:text-red-400" : undefined}>
+                                  {cellQty.toLocaleString(undefined, {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  })}
+                                </span>
                               ) : (
                                 <span className="text-muted-foreground/30">—</span>
                               )}
@@ -378,8 +380,10 @@ export function CombinedStockView({
                           )}
                         </td>
                         <td className="px-4 py-2 text-right font-mono whitespace-nowrap">
-                          {row.totalValue > 0 ? (
-                            <span className="font-medium">{formatAmount(row.totalValue)}</span>
+                          {row.totalValue !== 0 ? (
+                            <span className={cn("font-medium", row.totalValue < 0 && "text-red-600 dark:text-red-400")}>
+                              {formatAmount(row.totalValue)}
+                            </span>
                           ) : (
                             <span className="text-muted-foreground/30">—</span>
                           )}
@@ -404,8 +408,10 @@ export function CombinedStockView({
                         key={loc.name}
                         className="px-4 py-2.5 text-right font-mono whitespace-nowrap text-muted-foreground"
                       >
-                        {locTotal > 0 ? (
-                          locTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+                        {locTotal !== 0 ? (
+                          <span className={locTotal < 0 ? "text-red-600 dark:text-red-400" : undefined}>
+                            {locTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                          </span>
                         ) : (
                           <span className="opacity-30">—</span>
                         )}

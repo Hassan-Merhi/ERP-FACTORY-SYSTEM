@@ -39,6 +39,7 @@ import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithR
 import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHandlers";
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
+import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -260,6 +261,12 @@ let migrationsDone = false;
           error: getErrorMessage(staffTrackingSchemaErr),
         });
       }
+      // The Container Planner's registered migrations are never applied by
+      // production's boot path, so ensure its tables here unconditionally. A
+      // failure after retries is fatal: the previous deployment stays live rather
+      // than a new one reporting healthy with the planner broken.
+      await ensureFactoryContainerPlannerSchemaOnBoot(pool);
+      logger.info("[startup] ✓ Factory container planner schema ensured");
       if (migrationsEnabled) {
         try {
           await runMigrations();

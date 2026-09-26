@@ -1,36 +1,65 @@
-import { and, eq, ilike, isNull, or } from "drizzle-orm";
+import { and, eq, ilike, inArray, isNull, or } from "drizzle-orm";
 import { ledgerAccounts } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 
 /**
  * Resolve the inventory control ledger used by credit/debit-note accounting.
  *
- * Older code silently skipped the inventory leg when no matching account was
- * present, creating an unbalanced journal. This helper never returns null: it
- * reuses a live inventory asset, revives the canonical INVENTORY code when it
- * was soft-deleted, or creates the control account transactionally.
+ * Canonical INVENTORY is a balance-sheet asset, never an operating expense.
+ * Older companies may still have a live INVENTORY row that was created as an
+ * Indirect Expense. Normalize that row before reusing it so future returns do
+ * not keep flowing through the indirect-expense section.
  */
 export async function getOrCreateInventoryControlAccount(
   tx: DatabaseOrTransaction,
   companyId: number
 ): Promise<{ id: number }> {
-  const [liveByMeaning] = await tx
-    .select({ id: ledgerAccounts.id })
+  const [liveCanonical] = await tx
+    .select({
+      id: ledgerAccounts.id,
+      name: ledgerAccounts.name,
+      accountType: ledgerAccounts.accountType,
+      subType: ledgerAccounts.subType,
+      active: ledgerAccounts.active,
+      isHidden: ledgerAccounts.isHidden,
+    })
     .from(ledgerAccounts)
     .where(
       and(
         eq(ledgerAccounts.companyId, companyId),
-        isNull(ledgerAccounts.deletedAt),
-        or(
-          eq(ledgerAccounts.code, "INVENTORY"),
-          ilike(ledgerAccounts.name, "%inventory%"),
-          ilike(ledgerAccounts.name, "%stock in hand%"),
-          ilike(ledgerAccounts.name, "%stock on hand%")
-        )
+        eq(ledgerAccounts.code, "INVENTORY"),
+        isNull(ledgerAccounts.deletedAt)
       )
     )
     .limit(1);
-  if (liveByMeaning) return liveByMeaning;
+
+  if (liveCanonical) {
+    const needsNormalization =
+      liveCanonical.accountType !== "Asset" ||
+      liveCanonical.subType !== "Current Asset" ||
+      !liveCanonical.active ||
+      liveCanonical.isHidden ||
+      liveCanonical.name.trim().toLowerCase() === "credit note - customer return";
+
+    if (!needsNormalization) return { id: liveCanonical.id };
+
+    const [normalized] = await tx
+      .update(ledgerAccounts)
+      .set({
+        name:
+          liveCanonical.name.trim().toLowerCase() === "credit note - customer return"
+            ? "Inventory"
+            : liveCanonical.name,
+        accountType: "Asset",
+        subType: "Current Asset",
+        active: true,
+        isHidden: false,
+      })
+      .where(eq(ledgerAccounts.id, liveCanonical.id))
+      .returning({ id: ledgerAccounts.id });
+
+    if (normalized) return normalized;
+  }
 
   const [canonicalByCode] = await tx
     .select({ id: ledgerAccounts.id })
@@ -53,6 +82,24 @@ export async function getOrCreateInventoryControlAccount(
       .returning({ id: ledgerAccounts.id });
     if (revived) return revived;
   }
+
+  const [liveByMeaning] = await tx
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.companyId, companyId),
+        isNull(ledgerAccounts.deletedAt),
+        inArray(ledgerAccounts.accountType, ["Asset", "Current Asset"]),
+        or(
+          ilike(ledgerAccounts.name, "%inventory%"),
+          ilike(ledgerAccounts.name, "%stock in hand%"),
+          ilike(ledgerAccounts.name, "%stock on hand%")
+        )
+      )
+    )
+    .limit(1);
+  if (liveByMeaning) return liveByMeaning;
 
   const [created] = await tx
     .insert(ledgerAccounts)

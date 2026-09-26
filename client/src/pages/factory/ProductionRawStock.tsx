@@ -212,14 +212,8 @@ export default function ProductionRawStock() {
     // as Production Overview -> Original Batches. Raw-stock rows can legitimately omit
     // historical suppliers that no longer have a current stock/adjustment row, while
     // mix-batch totals remain the authoritative historical usage/value record.
-    const totalUsed = originalBatches.reduce(
-      (sum, batch) => sum + (parseFloat(batch.totalWeightKg || "0") || 0),
-      0
-    );
-    const totalUsedValue = originalBatches.reduce(
-      (sum, batch) => sum + (parseFloat(batch.totalCost || "0") || 0),
-      0
-    );
+    const totalUsed = originalBatches.reduce((sum, batch) => sum + (parseFloat(batch.totalWeightKg || "0") || 0), 0);
+    const totalUsedValue = originalBatches.reduce((sum, batch) => sum + (parseFloat(batch.totalCost || "0") || 0), 0);
 
     return {
       totalReceived: rs.reduce((sum, r) => sum + parseFloat(r.receivedKg || "0"), 0),

@@ -46,7 +46,8 @@ const gitHook = read("client/src/pages/git-containers/usePaginatedGITContainers.
 for (const required of [
   "canonicalApiUrl",
   "canonicalSetValues",
-  "paginatedCompanyDataKey",
+  "companyDataKey(",
+  "useInfiniteQuery",
   "companyIdentity",
   "loadContainerDetail = async (id: number, companyId: number)",
   "frontendQueryPolicies.operational",

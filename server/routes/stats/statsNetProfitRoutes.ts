@@ -3,7 +3,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { containers, employees, salaryAdvances, exchangeRates } from "@shared/schema";
+import { containers, employees, exchangeRates } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, or, desc, sql, isNull, lte } from "drizzle-orm";
 import {
@@ -21,6 +21,9 @@ import { getNetPositionCurrencySummary } from "../../services/accounting/netPosi
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
+import { computeEmployeeNetPositionWithManagedAdvances } from "../../helpers/employeeNetPosition";
+import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
+import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -79,12 +82,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
       for (const acc of companyAccounts) {
-        if (
-          acc.code === "PURCHASES" ||
-          acc.code?.startsWith("PURCHASES_") ||
-          acc.code === "PRODUCTION_ADJUSTMENT" ||
-          acc.code === "CONSUMPTION_EXPENSE"
-        ) {
+        if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES_") || isInventoryValuationOnlyAccount(acc)) {
           excludedFromExpenses.add(acc.id);
         }
       }
@@ -219,7 +217,15 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       for (const acc of companyAccounts) {
         const netBalance = getAccountNetBalance(acc, accountBalances);
-        const isAnyExpenseType = expenseTypesArr.includes(acc.accountType || "");
+        // Expense accounts are stored in two legacy-compatible forms:
+        //   accountType = "Indirect Expense" / "Direct Expense"
+        //   accountType = "Expense" + subType = "Indirect Expense" / "Direct Expense"
+        // Normalize both forms so every report classifies the same account the same way.
+        const normalizedExpenseType =
+          acc.accountType === "Expense" && ["Direct Expense", "Indirect Expense"].includes(acc.subType || "")
+            ? acc.subType
+            : acc.accountType;
+        const isAnyExpenseType = expenseTypesArr.includes(normalizedExpenseType || "");
         const isIncomeAccount = acc.accountType === "Income";
 
         if (isIncomeAccount) {
@@ -246,7 +252,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
             });
           }
         } else if (isAnyExpenseType && !excludedFromExpenses.has(acc.id)) {
-          const category = acc.accountType || "Expense";
+          const category = normalizedExpenseType || "Expense";
           if (netBalance > 0) {
             expensesTotal += netBalance;
             categoryTotals[`exp_${category}`] = (categoryTotals[`exp_${category}`] || 0) + netBalance;
@@ -308,34 +314,65 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
 
-      // Add Workers/Payroll - employee balances (salary payable only)
-      // Select only the columns we actually use to avoid schema-mismatch errors on production
-      // when new columns have been added to the Drizzle schema but not yet migrated.
+      // Payroll payable has one durable source of truth: the Payroll Payable ledger.
+      // Modern payroll generation/payment posts to this control account, not to employeeId.
+      // Legacy employee-linked voucher balances are kept only as a fallback for older data.
+      //
+      // Always detach Payroll Payable from the generic classifier first. This makes the
+      // result resilient even if an old database has this system account mis-typed.
+      const isPayrollPayableAccount = (acc: { name?: string | null; code?: string | null }) => {
+        const name = (acc.name || "").trim().toLowerCase().replace(/\s+/g, " ");
+        const code = (acc.code || "").trim().toUpperCase();
+        return name === "payroll payable" || code === "PAYROLL_PAYABLE" || code === "PAY_PAYABLE";
+      };
+
+      const payrollLedgerAccounts = companyAccounts.filter(isPayrollPayableAccount);
+      const payrollLedgerIds = new Set(payrollLedgerAccounts.map((acc) => acc.id));
+      let payrollLedgerSignedBalance = 0;
+      for (const acc of payrollLedgerAccounts) {
+        payrollLedgerSignedBalance += getAccountNetBalance(acc, accountBalances);
+      }
+
+      const stripPayrollEntries = (accounts: NetPositionAccount[], side: "asset" | "liability") => {
+        for (let i = accounts.length - 1; i >= 0; i--) {
+          const acc = accounts[i];
+          if ((acc.id && payrollLedgerIds.has(acc.id)) || isPayrollPayableAccount(acc)) {
+            const value = Number(acc.value || 0);
+            if (side === "asset") forUsTotal = round2(forUsTotal - value);
+            else onUsTotal = round2(onUsTotal - value);
+            const catKey = `${side}_${acc.category || acc.name}`;
+            if (categoryTotals[catKey] !== undefined) {
+              categoryTotals[catKey] = round2(categoryTotals[catKey] - value);
+              if (Math.abs(categoryTotals[catKey]) < 0.01) delete categoryTotals[catKey];
+            }
+            accounts.splice(i, 1);
+          }
+        }
+      };
+      stripPayrollEntries(forUsAccounts, "asset");
+      stripPayrollEntries(onUsAccounts, "liability");
+
+      // Legacy fallback: include inactive employees too. Deactivating a worker must never
+      // erase an unpaid salary liability from Net Position.
       const companyEmployees = await db
         .select({
           id: employees.id,
           companyId: employees.companyId,
           openingBalance: employees.openingBalance,
+          openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
         })
         .from(employees)
-        .where(and(eq(employees.companyId, companyId), eq(employees.active, true), isNull(employees.deletedAt)))
+        .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
         .execute();
-      // Compute each employee's net voucher balance to find salary owed (liability only).
-      // Advances are NOT sourced from the ledger here — they are read directly from
-      // salaryAdvances.remainingBalance below to match the Payroll → Advances "Outstanding" card.
-      let workerLiabilities = 0;
-      for (const emp of companyEmployees) {
-        const opening = parseFloat(emp.openingBalance || "0");
-        // employees table has no openingBalanceSide — convention is Cr (we owe them), so negate.
-        const signedOpening = opening * -1;
-        const balance = employeeBalances.get(emp.id) || { debit: 0, credit: 0 };
-        const netBalance = signedOpening + balance.debit - balance.credit;
-        if (netBalance < 0) {
-          workerLiabilities += Math.abs(netBalance);
-        }
-        // netBalance > 0 (advance) is intentionally NOT included here —
-        // the authoritative outstanding figure comes from salaryAdvances.remainingBalance below.
-      }
+
+      const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
+      const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
+        companyEmployees,
+        employeeBalances,
+        managedSalaryAdvances
+      );
+      const legacyWorkerLiabilities = employeePosition.liabilities;
+      const employeeLinkedAdvanceAssets = employeePosition.advances;
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
@@ -357,40 +394,47 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
 
-      // Authoritative ERP worker advances = SUM(salaryAdvances.remainingBalance)
-      // WHERE fullyPaid = false AND companyId = X — exactly what Payroll → Advances shows.
-      // Wrapped in try-catch: if salary_advances is missing remaining_balance / fully_paid
-      // (pre-migration production schema), fall back to 0 rather than crashing the whole
-      // net-profit response with a 500 / column-not-found error.
-      let rawSalaryAdvances = 0;
-      try {
-        const [saRow] = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(${salaryAdvances.remainingBalance} AS numeric)), 0)` })
-          .from(salaryAdvances)
-          .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false)));
-        rawSalaryAdvances = round2(parseFloat(saRow?.total || "0"));
-      } catch (saErr: unknown) {
-        // Fallback: column may be absent on old production schemas. Dashboard still loads.
-        logger.warn("[/api/stats/net-profit] salary_advances query skipped (schema gap):", {
-          error: getErrorMessage(saErr),
-        });
-      }
       // For CFA companies, worker balances come from voucher entries.
       // Guard: only convert if ALL entries are pre-migration (hasMigratedEntries=false).
       // After migration COALESCE already returns USD-base values; re-dividing by CFA rate
       // would produce incorrect double-conversion.
-      const workerLiabilitiesDisplay = workerLiabilities;
-      // rawSalaryAdvances comes from the salary_advances table (not voucher entries).
-      // Its currency follows the company base currency for CFA companies.
-      const workerAdvancesDisplay = rawSalaryAdvances;
+      // Credit balance on Payroll Payable means we owe payroll; debit balance means
+      // payroll has been overpaid/prepaid. If the control ledger is absent/zero, fall
+      // back to legacy employee-linked balances for backward compatibility.
+      const payrollLedgerLiability = Math.max(0, -payrollLedgerSignedBalance);
+      const payrollLedgerOverpayment = Math.max(0, payrollLedgerSignedBalance);
+
+      // Employee-linked salary deposits are a separate live ERP posting path
+      // (ledger_account_id = NULL, employee_id = X). They must be combined with
+      // the Payroll Payable control ledger rather than used only as a fallback;
+      // otherwise any non-zero control balance hides outstanding employee payables.
+      const workerLiabilitiesDisplay = round2(payrollLedgerLiability + legacyWorkerLiabilities);
+      const payrollOverpaymentDisplay = round2(payrollLedgerOverpayment);
+
+      // Managed salary advances are reconciled above by replacing their
+      // original employee debit with remaining_balance. Direct employee debits
+      // (for example a payroll withdrawal/advance) remain in the subledger.
+      const workerAdvancesDisplay = round2(employeeLinkedAdvanceAssets);
       if (workerLiabilitiesDisplay > 0) {
-        onUsTotal += workerLiabilitiesDisplay;
-        categoryTotals["liability_Workers"] = (categoryTotals["liability_Workers"] || 0) + workerLiabilitiesDisplay;
+        onUsTotal = round2(onUsTotal + workerLiabilitiesDisplay);
+        categoryTotals["liability_Payroll"] = round2(
+          (categoryTotals["liability_Payroll"] || 0) + workerLiabilitiesDisplay
+        );
         onUsAccounts.push({
-          name: "Workers/Employees Payable",
-          code: "COMPUTED",
-          value: workerLiabilitiesDisplay,
-          category: "Workers",
+          name: "Payroll Payable",
+          code: "PAYROLL_PAYABLE",
+          value: round2(workerLiabilitiesDisplay),
+          category: "Payroll",
+        });
+      }
+      if (payrollOverpaymentDisplay > 0) {
+        forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
+        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
+        forUsAccounts.push({
+          name: "Payroll Overpayment",
+          code: "PAYROLL_PAYABLE",
+          value: round2(payrollOverpaymentDisplay),
+          category: "Payroll",
         });
       }
       if (workerAdvancesDisplay > 0) {

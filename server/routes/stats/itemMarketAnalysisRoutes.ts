@@ -57,11 +57,7 @@ function parseCompanyIds(value: string | undefined, activeCompanyId: number): nu
     .filter(Boolean);
   const ids = [...new Set(parts.map((part) => Number(part)))];
 
-  if (
-    ids.length === 0 ||
-    ids.length > 20 ||
-    ids.some((id) => !Number.isSafeInteger(id) || id <= 0)
-  ) {
+  if (ids.length === 0 || ids.length > 20 || ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
     throw new CompanyAccessError(400, "companyIds must contain 1 to 20 valid company IDs", "INVALID_COMPANY_IDS");
   }
 
@@ -135,7 +131,10 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
             selectedCompanies.map(async (company) => {
               const assignment =
                 company.id === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, company.id);
-              const role = company.id === activeCompanyId ? activeRole : assignment?.role ?? (activeRole === "Developer" ? "Developer" : null);
+              const role =
+                company.id === activeCompanyId
+                  ? activeRole
+                  : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
 
               if (!role || role === "POS") {
                 throw new CompanyAccessError(
@@ -162,7 +161,9 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
                 userId,
                 role,
                 currentLocationId:
-                  company.id === activeCompanyId ? req.session.currentLocationId : assignment?.assignedLocationId ?? null,
+                  company.id === activeCompanyId
+                    ? req.session.currentLocationId
+                    : (assignment?.assignedLocationId ?? null),
                 requestedLocationIds: [],
               });
 

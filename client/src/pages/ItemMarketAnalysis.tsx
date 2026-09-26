@@ -73,8 +73,19 @@ function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
   return <Badge variant="outline">No sales</Badge>;
 }
 
+type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
+
+const PROFIT_EPSILON = 0.005;
+
 function normalizeItemCode(code: string) {
   return code.trim().toLocaleUpperCase();
+}
+
+function matchesProfitDirection(profit: number, filter: ProfitDirectionFilter) {
+  if (filter === "gaining") return profit > PROFIT_EPSILON;
+  if (filter === "losing") return profit < -PROFIT_EPSILON;
+  if (filter === "none") return Math.abs(profit) <= PROFIT_EPSILON;
+  return true;
 }
 
 function getMarketStatus(soldQty: number, profit: number, marginPct: number): MarketRow["marketStatus"] {
@@ -107,9 +118,11 @@ export default function ItemMarketAnalysis() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [stockGroupName, setStockGroupName] = useState("all");
+  const [profitDirection, setProfitDirection] = useState<ProfitDirectionFilter>("all");
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
+  const [visibleRowCount, setVisibleRowCount] = useState(250);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -118,6 +131,7 @@ export default function ItemMarketAnalysis() {
 
   useEffect(() => {
     setStockGroupName("all");
+    setProfitDirection("all");
     setExpandedItemCode(null);
     setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
   }, [selectedCompany?.id]);
@@ -152,8 +166,15 @@ export default function ItemMarketAnalysis() {
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
     enabled: selectedCompany?.companyType === "erp" && selectedCompanyIds.length > 0,
-    staleTime: 30_000,
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
   });
+
+  useEffect(() => {
+    setVisibleRowCount(250);
+    setExpandedItemCode(null);
+  }, [queryUrl, stockGroupName, profitDirection, multiCompany]);
 
   if (selectedCompany && selectedCompany.companyType !== "erp") {
     return (
@@ -167,19 +188,34 @@ export default function ItemMarketAnalysis() {
   }
 
   const rawRows = data?.rows ?? [];
-  const stockGroups = [...new Set(
-    rawRows
-      .map((row) => row.stockGroupName?.trim())
-      .filter((name): name is string => Boolean(name))
-  )].sort((left, right) => left.localeCompare(right));
+  const stockGroups = [
+    ...new Set(rawRows.map((row) => row.stockGroupName?.trim()).filter((name): name is string => Boolean(name))),
+  ].sort((left, right) => left.localeCompare(right));
 
-  const rows = rawRows
+  const baseRows = rawRows
     .filter((row) => stockGroupName === "all" || row.stockGroupName?.trim() === stockGroupName)
     .sort(
       (left, right) =>
         normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
         left.companyName.localeCompare(right.companyName)
     );
+
+  // In multi-company mode, filter by the combined profit for the item code so
+  // expanding a kept item still shows every selected company's contribution.
+  const combinedProfitByItemKey = new Map<string, number>();
+  if (multiCompany && profitDirection !== "all") {
+    for (const row of baseRows) {
+      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+      combinedProfitByItemKey.set(itemKey, (combinedProfitByItemKey.get(itemKey) ?? 0) + row.profit);
+    }
+  }
+
+  const rows = baseRows.filter((row) => {
+    if (profitDirection === "all") return true;
+    if (!multiCompany) return matchesProfitDirection(row.profit, profitDirection);
+    const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+    return matchesProfitDirection(combinedProfitByItemKey.get(itemKey) ?? 0, profitDirection);
+  });
 
   const summaryTotals = rows.reduce(
     (totals, row) => {
@@ -192,9 +228,7 @@ export default function ItemMarketAnalysis() {
     { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
   );
   const summary = {
-    itemCount: new Set(
-      rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
-    ).size,
+    itemCount: new Set(rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)).size,
     ...summaryTotals,
     marginPct: summaryTotals.revenue === 0 ? 0 : (summaryTotals.profit / summaryTotals.revenue) * 100,
   };
@@ -224,19 +258,15 @@ export default function ItemMarketAnalysis() {
 
   const topProfitCompanyByItem = new Map<
     string,
-    { companyName: string; profit: number; marginPct: number } | null
+    { kind: "winner"; companyName: string; profit: number; marginPct: number } | { kind: "equal" } | { kind: "none" }
   >();
 
-  const profitByCode = new Map<
-    string,
-    Map<number, { companyName: string; profit: number; revenue: number }>
-  >();
+  const profitByCode = new Map<string, Map<number, { companyName: string; profit: number; revenue: number }>>();
 
   for (const row of rows) {
     const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
     const byCompany =
-      profitByCode.get(itemKey) ??
-      new Map<number, { companyName: string; profit: number; revenue: number }>();
+      profitByCode.get(itemKey) ?? new Map<number, { companyName: string; profit: number; revenue: number }>();
     const current = byCompany.get(row.companyId);
     byCompany.set(row.companyId, {
       companyName: row.companyName,
@@ -247,18 +277,29 @@ export default function ItemMarketAnalysis() {
   }
 
   for (const [itemKey, byCompany] of profitByCode) {
-    const values = [...byCompany.values()].sort((left, right) => right.profit - left.profit);
-    if (values.length === 0) continue;
-    const topProfit = values[0].profit;
-    const tied = values.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+    // "Top Profit Company" should only identify a market that actually made
+    // positive profit. A company with no sales (profit = 0) must never beat a
+    // company that sold the item at a loss, and if nobody made money we show None.
+    const profitableValues = [...byCompany.values()]
+      .filter((entry) => entry.revenue > 0 && entry.profit > 0)
+      .sort((left, right) => right.profit - left.profit);
 
-    if (tied.length > 1) {
-      topProfitCompanyByItem.set(itemKey, null);
+    if (profitableValues.length === 0) {
+      topProfitCompanyByItem.set(itemKey, { kind: "none" });
       continue;
     }
 
-    const best = values[0];
+    const topProfit = profitableValues[0].profit;
+    const tied = profitableValues.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+
+    if (tied.length > 1) {
+      topProfitCompanyByItem.set(itemKey, { kind: "equal" });
+      continue;
+    }
+
+    const best = profitableValues[0];
     topProfitCompanyByItem.set(itemKey, {
+      kind: "winner",
       companyName: best.companyName,
       profit: best.profit,
       marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
@@ -275,9 +316,7 @@ export default function ItemMarketAnalysis() {
 
     return [...grouped.entries()]
       .map(([itemKey, companyRows]) => {
-        const orderedRows = [...companyRows].sort((left, right) =>
-          left.companyName.localeCompare(right.companyName)
-        );
+        const orderedRows = [...companyRows].sort((left, right) => left.companyName.localeCompare(right.companyName));
         const firstRow = orderedRows[0]!;
         const importCount = orderedRows.reduce((sum, row) => sum + row.importCount, 0);
         const importedQty = orderedRows.reduce((sum, row) => sum + row.importedQty, 0);
@@ -287,11 +326,8 @@ export default function ItemMarketAnalysis() {
         const profit = orderedRows.reduce((sum, row) => sum + row.profit, 0);
         const purchaseCurrencies = [...new Set(orderedRows.flatMap((row) => row.purchaseCurrencies))];
         const purchaseValue =
-          purchaseCurrencies.length === 1 && orderedRows.every((row) => row.purchaseValue != null)
-            ? orderedRows.reduce((sum, row) => sum + (row.purchaseValue ?? 0), 0)
-            : null;
-        const weightedPurchaseCost =
-          purchaseValue != null && importedQty !== 0 ? purchaseValue / importedQty : null;
+          purchaseCurrencies.length === 1 ? orderedRows.reduce((sum, row) => sum + (row.purchaseValue ?? 0), 0) : null;
+        const weightedPurchaseCost = purchaseValue != null && importedQty !== 0 ? purchaseValue / importedQty : null;
         const avgSellingPrice = soldQty === 0 ? 0 : revenue / soldQty;
         const profitPerUnit = soldQty === 0 ? 0 : profit / soldQty;
         const marginPct = revenue === 0 ? 0 : (profit / revenue) * 100;
@@ -317,12 +353,12 @@ export default function ItemMarketAnalysis() {
           marketStatus: getMarketStatus(soldQty, profit, marginPct),
         };
       })
-      .sort(
-        (left, right) =>
-          left.name.localeCompare(right.name) ||
-          left.itemKey.localeCompare(right.itemKey)
-      );
+      .sort((left, right) => left.name.localeCompare(right.name) || left.itemKey.localeCompare(right.itemKey));
   })();
+
+  const visibleRows = rows.slice(0, visibleRowCount);
+  const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
+  const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
 
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
@@ -416,8 +452,27 @@ export default function ItemMarketAnalysis() {
           <SelectContent>
             <SelectItem value="all">All Stock Groups</SelectItem>
             {stockGroups.map((groupName) => (
-              <SelectItem key={groupName} value={groupName}>{groupName}</SelectItem>
+              <SelectItem key={groupName} value={groupName}>
+                {groupName}
+              </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={profitDirection}
+          onValueChange={(value) => {
+            setProfitDirection(value as ProfitDirectionFilter);
+            setExpandedItemCode(null);
+          }}
+        >
+          <SelectTrigger className="w-[150px]" data-testid="select-item-market-profit-direction">
+            <SelectValue placeholder="All Profit" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Profit</SelectItem>
+            <SelectItem value="gaining">Gaining</SelectItem>
+            <SelectItem value="losing">Losing</SelectItem>
+            <SelectItem value="none">None</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -430,7 +485,6 @@ export default function ItemMarketAnalysis() {
             return (
               <div key={company.companyId} className="rounded-xl border bg-card p-4">
                 <div className="truncate text-sm font-semibold">{company.companyName}</div>
-                <div className="text-xs text-muted-foreground">{company.companyCode}</div>
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
                   <div>
                     <div className="text-muted-foreground">Sold Qty</div>
@@ -442,7 +496,9 @@ export default function ItemMarketAnalysis() {
                   </div>
                   <div>
                     <div className="text-muted-foreground">Profit</div>
-                    <div className={`font-medium tabular-nums ${companyProfitClass}`}>{formatAmount(company.profit)}</div>
+                    <div className={`font-medium tabular-nums ${companyProfitClass}`}>
+                      {formatAmount(company.profit)}
+                    </div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Margin</div>
@@ -494,206 +550,231 @@ export default function ItemMarketAnalysis() {
               {isLoading &&
                 Array.from({ length: 6 }).map((_, index) => (
                   <TableRow key={index}>
-                    <TableCell colSpan={multiCompany ? 13 : 11}><Skeleton className="h-8 w-full" /></TableCell>
+                    <TableCell colSpan={multiCompany ? 13 : 11}>
+                      <Skeleton className="h-8 w-full" />
+                    </TableCell>
                   </TableRow>
                 ))}
 
-              {!isLoading && multiCompany && groupedRows.map((group) => {
-                const expanded = expandedItemCode === group.itemKey;
-                const mixedCurrency = group.purchaseCurrencies.length > 1;
-                const topCompany = topProfitCompanyByItem.get(group.itemKey);
-                const topProfitClass =
-                  topCompany && topCompany.profit < 0
-                    ? "text-red-600 dark:text-red-400"
-                    : "text-emerald-600 dark:text-emerald-400";
+              {!isLoading &&
+                multiCompany &&
+                visibleGroupedRows.map((group) => {
+                  const expanded = expandedItemCode === group.itemKey;
+                  const mixedCurrency = group.purchaseCurrencies.length > 1;
+                  const topCompany = topProfitCompanyByItem.get(group.itemKey);
+                  const topProfitClass = "text-emerald-600 dark:text-emerald-400";
 
-                return (
-                  <Fragment key={group.itemKey}>
-                    <TableRow data-testid={`row-item-market-group-${group.itemKey}`}>
-                      <TableCell>
-                        <div className="max-w-[260px] truncate font-medium">{group.name}</div>
-                      </TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 gap-1.5 px-2"
-                          onClick={() => setExpandedItemCode(expanded ? null : group.itemKey)}
-                          data-testid={`button-item-market-expand-${group.itemKey}`}
+                  return (
+                    <Fragment key={group.itemKey}>
+                      <TableRow data-testid={`row-item-market-group-${group.itemKey}`}>
+                        <TableCell>
+                          <div className="max-w-[260px] truncate font-medium">{group.name}</div>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 gap-1.5 px-2"
+                            onClick={() => setExpandedItemCode(expanded ? null : group.itemKey)}
+                            data-testid={`button-item-market-expand-${group.itemKey}`}
+                          >
+                            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            {selectedCompanyNames.length} Companies
+                          </Button>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(group.importCount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(group.importedQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {mixedCurrency ? (
+                            <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                          ) : (
+                            formatNativePurchase(group.purchaseValue, group.purchaseCurrencies)
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNativePurchase(group.weightedPurchaseCost, group.purchaseCurrencies)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(group.soldQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(group.avgSellingPrice)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(group.revenue)}</TableCell>
+                        <TableCell
+                          className={`text-right font-medium tabular-nums ${
+                            group.profit < 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-emerald-600 dark:text-emerald-400"
+                          }`}
                         >
-                          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          {selectedCompanyNames.length} Companies
-                        </Button>
+                          {formatAmount(group.profit)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{group.marginPct.toFixed(1)}%</TableCell>
+                        <TableCell>
+                          {topCompany?.kind === "equal" ? (
+                            <span className="font-medium">Equal</span>
+                          ) : topCompany?.kind === "winner" ? (
+                            <div>
+                              <div className="font-medium">{topCompany.companyName}</div>
+                              <div className={`text-xs tabular-nums ${topProfitClass}`}>
+                                {formatAmount(topCompany.profit)} · {topCompany.marginPct.toFixed(1)}%
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">None</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge status={group.marketStatus} />
+                        </TableCell>
+                      </TableRow>
+
+                      {expanded && (
+                        <TableRow key={`${group.itemKey}:companies`}>
+                          <TableCell colSpan={13} className="bg-muted/20 p-0">
+                            <div className="p-3">
+                              <div className="mb-2 text-xs font-medium text-muted-foreground">
+                                Company breakdown for {group.name}
+                              </div>
+                              <div className="overflow-x-auto rounded-md border">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Company</TableHead>
+                                      <TableHead className="text-right">Imports</TableHead>
+                                      <TableHead className="text-right">Imported Qty</TableHead>
+                                      <TableHead className="text-right">Purchase Value</TableHead>
+                                      <TableHead className="text-right">Avg Purchase</TableHead>
+                                      <TableHead className="text-right">Sold Qty</TableHead>
+                                      <TableHead className="text-right">Avg Sell</TableHead>
+                                      <TableHead className="text-right">Revenue</TableHead>
+                                      <TableHead className="text-right">Profit</TableHead>
+                                      <TableHead className="text-right">Margin</TableHead>
+                                      <TableHead>Status</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {selectedCompanyNames.map((company) => {
+                                      const row = group.companyRows.find((entry) => entry.companyId === company.id);
+                                      if (!row) {
+                                        return (
+                                          <TableRow key={company.id}>
+                                            <TableCell>
+                                              <div className="font-medium">{company.name}</div>
+                                            </TableCell>
+                                            <TableCell
+                                              colSpan={10}
+                                              className="text-center text-xs text-muted-foreground"
+                                            >
+                                              No import or sales activity for this item code in the selected period.
+                                            </TableCell>
+                                          </TableRow>
+                                        );
+                                      }
+
+                                      const rowMixedCurrency = row.purchaseCurrencies.length > 1;
+                                      return (
+                                        <TableRow key={company.id}>
+                                          <TableCell>
+                                            <div className="font-medium">{row.companyName}</div>
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatNumber(row.importCount)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatNumber(row.importedQty)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {rowMixedCurrency ? (
+                                              <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                                            ) : (
+                                              formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
+                                            )}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatNumber(row.soldQty)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatAmount(row.avgSellingPrice)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {formatAmount(row.revenue)}
+                                          </TableCell>
+                                          <TableCell
+                                            className={`text-right font-medium tabular-nums ${
+                                              row.profit < 0
+                                                ? "text-red-600 dark:text-red-400"
+                                                : "text-emerald-600 dark:text-emerald-400"
+                                            }`}
+                                          >
+                                            {formatAmount(row.profit)}
+                                          </TableCell>
+                                          <TableCell className="text-right tabular-nums">
+                                            {row.marginPct.toFixed(1)}%
+                                          </TableCell>
+                                          <TableCell>
+                                            <StatusBadge status={row.marketStatus} />
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  );
+                })}
+
+              {!isLoading &&
+                !multiCompany &&
+                visibleRows.map((row) => {
+                  const rowKey = `${row.companyId}:${row.stockItemId}`;
+                  const mixedCurrency = row.purchaseCurrencies.length > 1;
+                  return (
+                    <TableRow key={rowKey} data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
+                      <TableCell>
+                        <div className="max-w-[260px] truncate font-medium">{row.name}</div>
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(group.importCount)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(group.importedQty)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {mixedCurrency ? (
                           <span className="text-xs text-muted-foreground">Mixed currencies</span>
                         ) : (
-                          formatNativePurchase(group.purchaseValue, group.purchaseCurrencies)
+                          formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatNativePurchase(group.weightedPurchaseCost, group.purchaseCurrencies)}
+                        {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(group.soldQty)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(group.avgSellingPrice)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(group.revenue)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
                       <TableCell
                         className={`text-right font-medium tabular-nums ${
-                          group.profit < 0
-                            ? "text-red-600 dark:text-red-400"
-                            : "text-emerald-600 dark:text-emerald-400"
+                          row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                         }`}
                       >
-                        {formatAmount(group.profit)}
+                        {formatAmount(row.profit)}
                       </TableCell>
-                      <TableCell className="text-right tabular-nums">{group.marginPct.toFixed(1)}%</TableCell>
+                      <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
                       <TableCell>
-                        {topCompany === null ? (
-                          <span className="font-medium">Equal</span>
-                        ) : topCompany ? (
-                          <div>
-                            <div className="font-medium">{topCompany.companyName}</div>
-                            <div className={`text-xs tabular-nums ${topProfitClass}`}>
-                              {formatAmount(topCompany.profit)} · {topCompany.marginPct.toFixed(1)}%
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
+                        <StatusBadge status={row.marketStatus} />
                       </TableCell>
-                      <TableCell><StatusBadge status={group.marketStatus} /></TableCell>
                     </TableRow>
-
-                    {expanded && (
-                      <TableRow key={`${group.itemKey}:companies`}>
-                        <TableCell colSpan={13} className="bg-muted/20 p-0">
-                          <div className="p-3">
-                            <div className="mb-2 text-xs font-medium text-muted-foreground">
-                              Company breakdown for {group.name}
-                            </div>
-                            <div className="overflow-x-auto rounded-md border">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow>
-                                    <TableHead>Company</TableHead>
-                                    <TableHead className="text-right">Imports</TableHead>
-                                    <TableHead className="text-right">Imported Qty</TableHead>
-                                    <TableHead className="text-right">Purchase Value</TableHead>
-                                    <TableHead className="text-right">Avg Purchase</TableHead>
-                                    <TableHead className="text-right">Sold Qty</TableHead>
-                                    <TableHead className="text-right">Avg Sell</TableHead>
-                                    <TableHead className="text-right">Revenue</TableHead>
-                                    <TableHead className="text-right">Profit</TableHead>
-                                    <TableHead className="text-right">Margin</TableHead>
-                                    <TableHead>Status</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {selectedCompanyNames.map((company) => {
-                                    const row = group.companyRows.find((entry) => entry.companyId === company.id);
-                                    if (!row) {
-                                      return (
-                                        <TableRow key={company.id}>
-                                          <TableCell>
-                                            <div className="font-medium">{company.name}</div>
-                                            <div className="text-xs text-muted-foreground">{company.code}</div>
-                                          </TableCell>
-                                          <TableCell colSpan={10} className="text-center text-xs text-muted-foreground">
-                                            No import or sales activity for this item code in the selected period.
-                                          </TableCell>
-                                        </TableRow>
-                                      );
-                                    }
-
-                                    const rowMixedCurrency = row.purchaseCurrencies.length > 1;
-                                    return (
-                                      <TableRow key={company.id}>
-                                        <TableCell>
-                                          <div className="font-medium">{row.companyName}</div>
-                                          <div className="text-xs text-muted-foreground">{row.companyCode}</div>
-                                        </TableCell>
-                                        <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
-                                        <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
-                                        <TableCell className="text-right tabular-nums">
-                                          {rowMixedCurrency
-                                            ? <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                                            : formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)}
-                                        </TableCell>
-                                        <TableCell className="text-right tabular-nums">
-                                          {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
-                                        </TableCell>
-                                        <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
-                                        <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
-                                        <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                                        <TableCell
-                                          className={`text-right font-medium tabular-nums ${
-                                            row.profit < 0
-                                              ? "text-red-600 dark:text-red-400"
-                                              : "text-emerald-600 dark:text-emerald-400"
-                                          }`}
-                                        >
-                                          {formatAmount(row.profit)}
-                                        </TableCell>
-                                        <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                                        <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
-                                      </TableRow>
-                                    );
-                                  })}
-                                </TableBody>
-                              </Table>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </Fragment>
-                );
-              })}
-
-              {!isLoading && !multiCompany && rows.map((row) => {
-                const rowKey = `${row.companyId}:${row.stockItemId}`;
-                const mixedCurrency = row.purchaseCurrencies.length > 1;
-                return (
-                  <TableRow key={rowKey} data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
-                    <TableCell>
-                      <div className="max-w-[260px] truncate font-medium">{row.name}</div>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {mixedCurrency ? (
-                        <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                      ) : (
-                        formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                    <TableCell
-                      className={`text-right font-medium tabular-nums ${
-                        row.profit < 0
-                          ? "text-red-600 dark:text-red-400"
-                          : "text-emerald-600 dark:text-emerald-400"
-                      }`}
-                    >
-                      {formatAmount(row.profit)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
-                    <TableCell><StatusBadge status={row.marketStatus} /></TableCell>
-                  </TableRow>
-                );
-              })}
+                  );
+                })}
 
               {!isLoading && (multiCompany ? groupedRows.length === 0 : rows.length === 0) && (
                 <TableRow>
-                  <TableCell colSpan={multiCompany ? 13 : 11} className="py-10 text-center text-sm text-muted-foreground">
+                  <TableCell
+                    colSpan={multiCompany ? 13 : 11}
+                    className="py-10 text-center text-sm text-muted-foreground"
+                  >
                     No imported or sold items match these filters.
                   </TableCell>
                 </TableRow>
@@ -701,6 +782,17 @@ export default function ItemMarketAnalysis() {
             </TableBody>
           </Table>
         </div>
+        {!isLoading && visibleRowCount < totalVisibleSourceRows && (
+          <div className="flex items-center justify-between border-t px-4 py-3">
+            <div className="text-xs text-muted-foreground">
+              Showing {formatNumber(Math.min(visibleRowCount, totalVisibleSourceRows))} of{" "}
+              {formatNumber(totalVisibleSourceRows)} items
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setVisibleRowCount((count) => count + 250)}>
+              Load 250 more
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

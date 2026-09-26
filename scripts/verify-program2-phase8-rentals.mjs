@@ -28,7 +28,7 @@ const deletion = read(files.deleteRoute);
 const doc = read(files.doc);
 
 assertHas(service, "pg_advisory_xact_lock", "scheduled-posting advisory lock");
-assertHas(service, "posting_status = 'POSTED'", "posted-payment authority");
+assertHas(service, "${propertyPayments.postingStatus} = 'POSTED'", "posted-payment authority");
 assertHas(service, "normalizeVoucherEntryAmounts", "historical currency normalization");
 assertHas(service, "...normEntry(accrualAmt.toFixed(2), \"0\")", "accrued-rent debit");
 assertHas(service, "...normEntry(advanceAmt.toFixed(2), \"0\")", "advance-rent debit");

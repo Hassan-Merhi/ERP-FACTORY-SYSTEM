@@ -90,6 +90,32 @@ describe("canonical journal for POS sales", () => {
     expect(Number(rows[0].unit_cost)).toBeGreaterThan(0);
   }, 30000);
 
+  it("records every duplicate stock-item line with a unique canonical key", async () => {
+    const res = await agent.post("/api/pos/sales").send({
+      locationId: ctx.locationId,
+      items: [
+        { stockItemId: ctx.stockItemIds[0], quantity: 2, rate: 50 },
+        { stockItemId: ctx.stockItemIds[0], quantity: 3, rate: 50 },
+      ],
+      paymentAccountType: "ledger",
+      paymentAccountId: ctx.cashAccountId,
+      voucherDate: new Date().toISOString().split("T")[0],
+    });
+    expect(res.status).toBeGreaterThanOrEqual(200);
+    expect(res.status).toBeLessThan(300);
+
+    const voucherId = voucherIdFrom(res.body);
+    const rows = await saleJournalRows(String(voucherId));
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => Number(row.quantity_delta))).toEqual([-2, -3]);
+    expect(rows.reduce((sum, row) => sum + Number(row.quantity_delta), 0)).toBe(-5);
+
+    const keys = new Set(rows.map((row) => row.idempotency_key));
+    expect(keys.size).toBe(2);
+    for (const key of keys) expect(String(key)).toContain(":line:");
+  }, 30000);
+
   it("appends a reversal and a reissue when the sale is edited", async () => {
     const created = await agent.post("/api/pos/sales").send({
       locationId: ctx.locationId,

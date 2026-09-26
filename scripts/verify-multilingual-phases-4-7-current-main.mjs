@@ -37,7 +37,7 @@ const bundles = [
     parts: 3,
     translatorImport: "translatePhase5PropertiesRentalsText",
     test: "tests/phase5-properties-rentals-translations.test.ts",
-    expectedCount: 182,
+    expectedCount: 186,
   },
   {
     phase: 6,

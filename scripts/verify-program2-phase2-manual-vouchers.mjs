@@ -54,7 +54,7 @@ const checks = [
   [genericCreate.includes("supportsCentralGenericVoucher(req.body)") && genericCreate.includes("postBalancedVoucherTx") && genericCreate.includes("db.transaction"), "generic supported subset must use central transaction-owned posting"],
   [genericCreate.includes("if (!posted.replayed)"), "generic effects must remain replay-safe"],
   [genericCreate.includes("POSTING_LINKED_LEDGER_MISMATCH"), "customer linked-ledger mismatches must remain rejected"],
-  [journalLifecycle.includes("isReadonlyMigratedVoucher") && journalLifecycle.includes('existing.voucherType !== "Journal"'), "migrated and non-Journal lifecycle paths must remain isolated"],
+  [journalLifecycle.includes("voucherMutationBlockReason(existing)") && journalLifecycle.includes('existing.voucherType !== "Journal"'), "migrated and non-Journal lifecycle paths must remain isolated"],
   [journalLifecycle.includes("existing.optional") && journalLifecycle.includes("req.body?.optional === true"), "optional Journal transitions must remain on the legacy path"],
   [before("registerCentralJournalCreateRoute(app);", "registerVoucherJournalRoutes(app);"), "central journal route must register before legacy journal route"],
   [before("registerCentralJournalLifecycleRoutes(app);", "registerVoucherJournalRoutes(app);"), "central journal lifecycle must register before legacy journal route"],

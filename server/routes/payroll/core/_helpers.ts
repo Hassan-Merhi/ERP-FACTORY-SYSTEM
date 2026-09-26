@@ -91,7 +91,12 @@ export async function findOrCreateLedger(
 ): Promise<{ id: number }> {
   let accountName = name;
   let [existing] = await db
-    .select({ id: ledgerAccounts.id })
+    .select({
+      id: ledgerAccounts.id,
+      accountType: ledgerAccounts.accountType,
+      active: ledgerAccounts.active,
+      isHidden: ledgerAccounts.isHidden,
+    })
     .from(ledgerAccounts)
     .where(
       and(
@@ -104,7 +109,12 @@ export async function findOrCreateLedger(
   if (existing && opts?.parentId && existing.id === opts.parentId) {
     accountName = `${name} (Detail)`;
     [existing] = await db
-      .select({ id: ledgerAccounts.id })
+      .select({
+        id: ledgerAccounts.id,
+        accountType: ledgerAccounts.accountType,
+        active: ledgerAccounts.active,
+        isHidden: ledgerAccounts.isHidden,
+      })
       .from(ledgerAccounts)
       .where(
         and(
@@ -114,7 +124,24 @@ export async function findOrCreateLedger(
         )
       );
   }
-  if (existing) return existing;
+  if (existing) {
+    // Payroll control accounts are system-owned accounting contracts. Repair any
+    // stale legacy type/visibility metadata when the account is reused so future
+    // postings and balance-sheet classification cannot silently lose them.
+    const normalizedName = accountName.trim().toLowerCase().replace(/\s+/g, " ");
+    const isPayrollControlAccount =
+      normalizedName === "payroll payable" || normalizedName === "factory worker advances";
+    if (
+      isPayrollControlAccount &&
+      (existing.accountType !== accountType || existing.active !== true || existing.isHidden === true)
+    ) {
+      await db
+        .update(ledgerAccounts)
+        .set({ accountType, active: true, isHidden: false })
+        .where(eq(ledgerAccounts.id, existing.id));
+    }
+    return { id: existing.id };
+  }
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const [maxCodeRow] = await db

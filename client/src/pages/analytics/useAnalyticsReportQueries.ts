@@ -9,11 +9,7 @@ import type {
   POSTransaction,
   StockMovementData,
 } from "./analyticsTypes";
-import {
-  fetchAnalyticsAccounts,
-  fetchAnalyticsArray,
-  fetchAnalyticsJson,
-} from "./analyticsQueryClient";
+import { fetchAnalyticsAccounts, fetchAnalyticsArray, fetchAnalyticsJson } from "./analyticsQueryClient";
 
 type DateRange = Record<string, string>;
 
@@ -48,8 +44,7 @@ export function useAnalyticsReportQueries({
   stockMovementUrl,
   openingStockLocationId,
 }: UseAnalyticsReportQueriesProps) {
-  const analyticsAccountsPath =
-    appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
+  const analyticsAccountsPath = appMode === "factory" ? "/api/factory/analytics/accounts" : "/api/accounts/all";
 
   const accountsQuery = useQuery<Account[]>({
     queryKey: [...analyticsKeys.accounts(selectedCompanyId, balStartDate, balEndDate), appMode],
@@ -68,7 +63,7 @@ export function useAnalyticsReportQueries({
     queryFn: () =>
       fetchAnalyticsArray<LocationSales>(
         `/api/financial/sales?${new URLSearchParams(dateRange)}`,
-        "Failed to fetch sales data",
+        "Failed to fetch sales data"
       ),
     enabled: !!selectedCompanyId,
   });
@@ -78,7 +73,7 @@ export function useAnalyticsReportQueries({
     queryFn: () =>
       fetchAnalyticsArray<POSTransaction>(
         `/api/financial/sales/${selectedLocationForDetails}/transactions?${new URLSearchParams(detailsDateRange)}`,
-        "Failed to fetch transactions",
+        "Failed to fetch transactions"
       ),
     enabled: !!selectedLocationForDetails,
   });

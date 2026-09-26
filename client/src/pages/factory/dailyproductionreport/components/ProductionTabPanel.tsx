@@ -58,8 +58,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
   const selectedBalesValue = data?.production.totalValue ?? 0;
   const consumedMixValue = (data?.rawMaterial.totalCost ?? 0) - (data?.balanceOnTable.value ?? 0);
   const productionProfitValue = selectedBalesValue - consumedMixValue;
-  const productionProfitMarginPct =
-    selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
+  const productionProfitMarginPct = selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
   return (
     <>
       {/* ── Production tab ── */}
@@ -230,7 +229,9 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         </div>
                         <div className="w-px h-5 bg-border" />
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Profit</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Profit
+                          </span>
                           <span
                             className={`text-base font-bold px-3 py-0.5 rounded-md ${
                               productionProfitValue > 0
@@ -254,7 +255,9 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         </div>
                         <div className="w-px h-5 bg-border" />
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Margin</span>
+                          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Margin
+                          </span>
                           <span className="text-base font-bold tabular-nums" data-testid="text-profit-margin">
                             {productionProfitMarginPct.toFixed(1)}%
                           </span>
@@ -275,7 +278,13 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   const totalKg = productionsKg - origKg;
                   const isPositive = totalKg >= 0;
                   return (
-                    <div className={showMoneySummary ? "flex flex-wrap items-center gap-5 pt-2 border-t border-border" : "flex flex-wrap items-center gap-5"}>
+                    <div
+                      className={
+                        showMoneySummary
+                          ? "flex flex-wrap items-center gap-5 pt-2 border-t border-border"
+                          : "flex flex-wrap items-center gap-5"
+                      }
+                    >
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-muted-foreground">Productions</span>
                         <span className="text-base font-bold" data-testid="text-weight-productions">
@@ -338,7 +347,11 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                   <StatRow label="Weight" value={fmtKg(data?.rawMaterial.totalWeightKg ?? 0)} />
                   {!costsHidden && (
                     <>
-                      <StatRow label="Batch Rate" value={fmtRate(data?.rawMaterial.blendedCostPerKg ?? 0)} sub="per kg" />
+                      <StatRow
+                        label="Batch Rate"
+                        value={fmtRate(data?.rawMaterial.blendedCostPerKg ?? 0)}
+                        sub="per kg"
+                      />
                       <StatRow label="Value" value={fmtMoney(data?.rawMaterial.totalCost ?? 0)} />
                     </>
                   )}
@@ -598,7 +611,7 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
             }
           }
           const mergedCategories = [...(data?.production.byCategory ?? []), ...wgCats];
-          const mergedProducts = [...(((data?.production.byProduct ?? []))), ...wgProds];
+          const mergedProducts = [...(data?.production.byProduct ?? []), ...wgProds];
           const mergedTotalBales = (data?.production.totalBales ?? 0) + wgCats.reduce((s, c) => s + c.qty, 0);
           const mergedTotalWeightKg =
             (data?.production.totalWeightKg ?? 0) + wgCats.reduce((s, c) => s + c.totalWeightKg, 0);

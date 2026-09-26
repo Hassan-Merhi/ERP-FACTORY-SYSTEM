@@ -22,6 +22,9 @@ const ACTION_PATTERNS = [
 const EDITABLE_PATTERNS = [
   /data-remote-control-editable\s*=\s*["']true["']/g,
   /setAttribute\(\s*["']data-remote-control-editable["']\s*,\s*["']true["']\s*\)/g,
+  // Fields are now annotated at runtime by annotateRemoteControlSurface
+  // (remote-control-surface-coverage.ts), which owns the attribute per element.
+  /setOwnedAnnotation\(\s*\w+\s*,\s*["']data-remote-control-editable["']/g,
 ];
 const REGISTRY_RE = /REMOTE_CONTROL_ALLOWED_ACTIONS\s*=\s*\[([\s\S]*?)\]\s*as const/;
 
@@ -32,7 +35,10 @@ async function walk(dir, out = []) {
     if (e.isDirectory()) {
       if (["node_modules", ".git", "dist", "build"].includes(e.name)) continue;
       await walk(full, out);
-    } else if (/\.(ts|tsx|js|jsx)$/.test(e.name)) {
+    } else if (/\.(ts|tsx|js|jsx)$/.test(e.name) && !/\.(test|spec)\.[jt]sx?$/.test(e.name)) {
+      // Tests deliberately use unregistered actions ("delete-everything") to prove
+      // they are rejected; scanning them would put those fixtures into the
+      // production allowlist on the next --write.
       out.push(full);
     }
   }

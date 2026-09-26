@@ -182,9 +182,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       const orderFilters = [
         sql`co.company_id = ${companyId}`,
         sql`co.deleted_at IS NULL`,
-        status === "all"
-          ? sql`co.status IN ('LOADING', 'VERIFIED', 'FINALIZED')`
-          : sql`co.status = ${status}`,
+        status === "all" ? sql`co.status IN ('LOADING', 'VERIFIED', 'FINALIZED')` : sql`co.status = ${status}`,
       ];
       if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
       if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
@@ -199,12 +197,14 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         );
       }
       if (location?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
-        );
+        orderFilters.push(sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`);
       }
 
-      const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
+      const normalizeSearch = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[.\s-]+/g, "")
+          .slice(0, 100);
       const itemSearch = item ? normalizeSearch(item) : "";
       if (itemSearch) {
         orderFilters.push(sql`EXISTS (
@@ -242,7 +242,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
               END
             ), 0) AS invoice_total
           FROM customer_orders co
-          LEFT JOIN customers c ON c.id = co.customer_id
+          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
           LEFT JOIN locations l ON l.id = co.location_id
           LEFT JOIN customer_order_lines col ON col.order_id = co.id
           WHERE ${sql.join(orderFilters, sql` AND `)}
@@ -427,9 +427,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       const orderFilters = [
         sql`co.company_id = ${companyId}`,
         sql`co.deleted_at IS NULL`,
-        status === "all"
-          ? sql`co.status IN ('VERIFIED', 'FINALIZED')`
-          : sql`co.status = ${status}`,
+        status === "all" ? sql`co.status IN ('VERIFIED', 'FINALIZED')` : sql`co.status = ${status}`,
       ];
       if (startDate) orderFilters.push(sql`co.order_date >= ${startDate}`);
       if (endDate) orderFilters.push(sql`co.order_date <= ${endDate}`);
@@ -444,12 +442,14 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         );
       }
       if (location?.trim()) {
-        orderFilters.push(
-          sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`
-        );
+        orderFilters.push(sql`lower(COALESCE(l.name, '')) LIKE ${`%${location.trim().toLowerCase().slice(0, 100)}%`}`);
       }
 
-      const normalizeSearch = (value: string) => value.toLowerCase().replace(/[.\s-]+/g, "").slice(0, 100);
+      const normalizeSearch = (value: string) =>
+        value
+          .toLowerCase()
+          .replace(/[.\s-]+/g, "")
+          .slice(0, 100);
       const itemSearch = item ? normalizeSearch(item) : "";
       const lineFilter = itemSearch
         ? sql`regexp_replace(
@@ -479,7 +479,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
             co.customer_id,
             c.legal_name AS customer_name
           FROM customer_orders co
-          LEFT JOIN customers c ON c.id = co.customer_id
+          LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
           LEFT JOIN locations l ON l.id = co.location_id
           WHERE ${sql.join(orderFilters, sql` AND `)}
         ),

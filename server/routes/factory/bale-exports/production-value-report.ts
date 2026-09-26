@@ -456,16 +456,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // Reuse the exact same 10-decimal backend rate as Original Batches so the
       // two cards cannot drift apart internally.
       const balanceCostPerKg = blendedCostPerKg;
-      const balanceValue = balanceWeightDecimal
-        .times(blendedCostPerKgDecimal)
-        .toDecimalPlaces(2)
-        .toNumber();
+      const balanceValue = balanceWeightDecimal.times(blendedCostPerKgDecimal).toDecimalPlaces(2).toNumber();
 
       // Keep rate-dependent profit arithmetic in high-precision decimal space too.
-      const producedMaterialCostDecimal = new BatchRateDecimal(String(totalBaleWeightKg))
-        .times(allTimeBlendedCpkDecimal);
-      const statusValueDecimal = new BatchRateDecimal(String(totalProductionValue))
-        .minus(producedMaterialCostDecimal);
+      const producedMaterialCostDecimal = new BatchRateDecimal(String(totalBaleWeightKg)).times(
+        allTimeBlendedCpkDecimal
+      );
+      const statusValueDecimal = new BatchRateDecimal(String(totalProductionValue)).minus(producedMaterialCostDecimal);
       const statusValue = statusValueDecimal.toNumber();
       const profitValue = statusValue;
       const profitMarginPct =

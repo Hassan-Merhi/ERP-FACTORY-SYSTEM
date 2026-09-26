@@ -68,7 +68,7 @@
       "classification": "legacy-isolated",
       "phaseOwner": "2D",
       "entryPoints": ["container offload", "own-account freight", "post-offload charges"],
-      "evidence": ["server/routes/factory/raw-stock/rawStockContainerRoutes.ts", "server/routes/factory/raw-stock/postOffloadChargeMutation.ts", "server/routes/factory/supplierBrokerRoutes.ts"],
+      "evidence": ["server/routes/factory/raw-stock/rawStockContainerRoutes.ts", "server/services/factory/post-offload-charge/index.ts", "server/routes/factory/suppliers/broker/index.ts"],
       "reason": "factory costing, supplier balances, container state, and vouchers have high regression risk"
     },
     {
@@ -92,7 +92,7 @@
       "classification": "legacy-isolated",
       "phaseOwner": "2D",
       "entryPoints": ["Supplier Partner sales", "profit split", "migration/setup posting"],
-      "evidence": ["server/services/pos/postSaleAccounting.ts", "server/routes/spMigrationRoutes.ts"],
+      "evidence": ["server/services/pos/postSaleAccounting.ts", "server/routes/sp-migration/index.ts"],
       "reason": "separate company and profit-sharing compatibility rules"
     },
     {
@@ -100,7 +100,7 @@
       "classification": "legacy-isolated",
       "phaseOwner": "2D",
       "entryPoints": ["payroll run", "salary advance", "payroll reversal"],
-      "evidence": ["server/routes/payrollRoutes.ts"],
+      "evidence": ["server/routes/erp-payroll/index.ts"],
       "reason": "employee balances and payroll-run lifecycle require specialized reversal"
     },
     {

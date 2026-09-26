@@ -146,6 +146,116 @@ export function registerStatsDataRoutes(app: Express) {
     }
   });
 
+  app.get("/api/sales-report/cogs-reconciliation", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const result = await db.execute(sql`
+        WITH opening AS (
+          SELECT COALESCE(SUM(COALESCE(si.opening_value, 0)::numeric), 0) AS value
+          FROM stock_items si
+          WHERE si.company_id = ${companyId}
+            AND si.deleted_at IS NULL
+        ),
+        offloads AS (
+          SELECT COALESCE(SUM(coi.total_value::numeric), 0) AS value
+          FROM container_offload_items coi
+          INNER JOIN container_offloads co ON co.id = coi.offload_id
+          INNER JOIN containers c ON c.id = co.container_id
+          WHERE c.company_id = ${companyId}
+            AND co.optional = false
+        ),
+        notes AS (
+          SELECT COALESCE(SUM(
+            CASE
+              WHEN v.voucher_type = 'Credit Note'
+                THEN cni.quantity::numeric * COALESCE(cni.inventory_cost, 0)::numeric
+              WHEN v.voucher_type = 'Debit Note'
+                THEN -(cni.quantity::numeric * COALESCE(cni.inventory_cost, 0)::numeric)
+              ELSE 0
+            END
+          ), 0) AS value
+          FROM credit_note_items cni
+          INNER JOIN vouchers v ON v.id = cni.voucher_id
+          WHERE v.company_id = ${companyId}
+            AND v.optional = false
+            AND v.deleted_at IS NULL
+        ),
+        adjustments AS (
+          SELECT COALESCE(SUM(ve.credit_amount::numeric - ve.debit_amount::numeric), 0) AS value
+          FROM voucher_entries ve
+          INNER JOIN vouchers v ON v.id = ve.voucher_id
+          INNER JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+          WHERE v.company_id = ${companyId}
+            AND v.optional = false
+            AND v.deleted_at IS NULL
+            AND UPPER(COALESCE(la.code, '')) = 'STOCK_ADJUSTMENT'
+        ),
+        closing AS (
+          SELECT COALESCE(SUM(i.quantity::numeric * i.average_rate::numeric), 0) AS value
+          FROM inventory i
+          INNER JOIN locations l ON l.id = i.location_id
+          WHERE l.company_id = ${companyId}
+            AND l.active = true
+            AND l.deleted_at IS NULL
+        ),
+        sales AS (
+          SELECT
+            COALESCE(SUM(si.total_sales::numeric), 0) AS total_sales,
+            COALESCE(SUM(si.total_cost::numeric), 0) AS stored_cogs
+          FROM sales_items si
+          INNER JOIN vouchers v ON v.id = si.voucher_id
+          WHERE v.company_id = ${companyId}
+            AND v.optional = false
+            AND v.deleted_at IS NULL
+        )
+        SELECT
+          opening.value AS opening_stock,
+          offloads.value AS stock_received,
+          notes.value AS note_inventory_net,
+          adjustments.value AS stock_adjustment_net,
+          closing.value AS closing_stock,
+          sales.total_sales,
+          sales.stored_cogs,
+          (opening.value + offloads.value + notes.value + adjustments.value - closing.value) AS reconciled_cogs
+        FROM opening, offloads, notes, adjustments, closing, sales
+      `);
+
+      const row = result.rows[0] as Record<string, string | number | null> | undefined;
+      // Parse the SQL numerics as decimals and only convert to JSON numbers at the
+      // edge, so the reconciliation and profit differences carry no float drift.
+      const dec = (value: string | number | null | undefined) => toInventoryDecimal(value ?? 0);
+      const openingStock = dec(row?.opening_stock);
+      const stockReceived = dec(row?.stock_received);
+      const noteInventoryNet = dec(row?.note_inventory_net);
+      const stockAdjustmentNet = dec(row?.stock_adjustment_net);
+      const closingStock = dec(row?.closing_stock);
+      const totalSales = dec(row?.total_sales);
+      const storedCogs = dec(row?.stored_cogs);
+      const reconciledCogs = dec(row?.reconciled_cogs);
+
+      res.json({
+        openingStock: openingStock.toNumber(),
+        stockReceived: stockReceived.toNumber(),
+        noteInventoryNet: noteInventoryNet.toNumber(),
+        stockAdjustmentNet: stockAdjustmentNet.toNumber(),
+        closingStock: closingStock.toNumber(),
+        totalSales: totalSales.toNumber(),
+        storedCogs: storedCogs.toNumber(),
+        reconciledCogs: reconciledCogs.toNumber(),
+        reconciliation: subtractInventoryValues(storedCogs, reconciledCogs).toNumber(),
+        storedCostProfit: subtractInventoryValues(totalSales, storedCogs).toNumber(),
+        adjustedCostProfit: subtractInventoryValues(totalSales, reconciledCogs).toNumber(),
+        formula:
+          "Opening Stock + Stock Received + Net Credit/Debit Note Inventory + Stock Adjustment Net - Closing Stock",
+      });
+    } catch (error: unknown) {
+      logger.error("Sales report COGS reconciliation error:", { error });
+      res.status(500).json({ message: getErrorMessage(error), details: String(error) });
+    }
+  });
+
   app.get("/api/dashboard/sales-report-all", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const userId = req.session.userId;

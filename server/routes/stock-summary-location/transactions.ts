@@ -23,6 +23,7 @@ import {
   stockTransferItems,
   stockAdjustmentVouchers,
   stockAdjustmentItems,
+  creditNoteItems,
 } from "@shared/schema";
 
 function dayBefore(dateStr: string): string {
@@ -248,6 +249,49 @@ export function registerLocationStockTransactionRoutes(app: Express) {
           isPOS: true,
           posSellingRate: Math.max(finite(s.sellingPrice), 0),
           posSellingValue: Math.max(finite(s.totalSales), 0),
+        });
+      }
+
+      // Credit / Debit Notes
+      const rangeNotes = await db
+        .select({
+          voucherDate: vouchers.voucherDate,
+          voucherId: vouchers.id,
+          voucherNumber: vouchers.voucherNumber,
+          noteType: vouchers.voucherType,
+          quantity: creditNoteItems.quantity,
+          inventoryCost: creditNoteItems.inventoryCost,
+        })
+        .from(creditNoteItems)
+        .innerJoin(vouchers, eq(creditNoteItems.voucherId, vouchers.id))
+        .where(
+          and(
+            eq(creditNoteItems.stockItemId, stockItemId),
+            eq(creditNoteItems.locationId, locationId),
+            eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt),
+            sql`${vouchers.voucherDate}::date >= ${startDate}::date`,
+            sql`${vouchers.voucherDate}::date <= ${endDate}::date`
+          )
+        )
+        .orderBy(vouchers.voucherDate);
+
+      for (const n of rangeNotes) {
+        const qty = Math.abs(finite(n.quantity));
+        const rate = Math.max(finite(n.inventoryCost), 0);
+        const value = qty * rate;
+        const isCredit = n.noteType === "Credit Note";
+        txns.push({
+          date: n.voucherDate,
+          particulars: n.voucherNumber || n.noteType || "Credit/Debit Note",
+          vchType: isCredit ? "Credit Note" : "Debit Note",
+          voucherId: n.voucherId,
+          inwardQty: isCredit ? qty : 0,
+          inwardRate: isCredit ? rate : 0,
+          inwardValue: isCredit ? value : 0,
+          outwardQty: isCredit ? 0 : qty,
+          outwardRate: isCredit ? 0 : rate,
+          outwardValue: isCredit ? 0 : value,
         });
       }
 

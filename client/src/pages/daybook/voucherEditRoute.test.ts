@@ -8,7 +8,7 @@ describe("voucherEditPath", () => {
       "/vouchers?edit=8&tab=transferorder&from=daybook"
     );
     expect(voucherEditPath({ id: 9, voucherType: "Debit Note" }, "/properties/vouchers")).toBe(
-      "/properties/vouchers?edit=9&tab=credit-note&from=daybook"
+      "/properties/vouchers?edit=9&tab=creditnote&from=daybook"
     );
   });
 
