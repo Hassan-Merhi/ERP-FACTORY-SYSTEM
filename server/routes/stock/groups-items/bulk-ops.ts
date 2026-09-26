@@ -10,9 +10,8 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
-import { stockItems, stockItemLocationPrices } from "@shared/schema";
+import { inventory, stockItems, stockItemLocationPrices } from "@shared/schema";
 import { eq, and, or, inArray, sql } from "drizzle-orm";
-import type { RawQueryRow } from "../../../db";
 
 export function registerStockItemBulkRoutes(app: Express) {
   // Bulk delete stock items
@@ -41,14 +40,12 @@ export function registerStockItemBulkRoutes(app: Express) {
       }
 
       // Block deletion if any item has inventory records (regardless of quantity)
-      const inventoryCheck = await db.execute<RawQueryRow<{ stock_item_id: number }>>(
-        sql`SELECT stock_item_id FROM inventory WHERE stock_item_id = ANY(ARRAY[${sql.join(
-          validIds.map((id) => sql`${id}`),
-          sql`, `
-        )}]) GROUP BY stock_item_id`
-      );
-      if (inventoryCheck.rows.length > 0) {
-        const blockedIds = new Set(inventoryCheck.rows.map((r) => Number(r.stock_item_id)));
+      const inventoryCheck = await db
+        .selectDistinct({ stockItemId: inventory.stockItemId })
+        .from(inventory)
+        .where(inArray(inventory.stockItemId, validIds));
+      if (inventoryCheck.length > 0) {
+        const blockedIds = new Set(inventoryCheck.map((r) => Number(r.stockItemId)));
         const blockedCodes = validItems.filter((item) => blockedIds.has(item.id)).map((item) => item.code);
         return res.status(400).json({
           message: `Cannot delete ${blockedCodes.length} item(s) — they have existing inventory records: ${blockedCodes.join(", ")}. Please clear all inventory first.`,
