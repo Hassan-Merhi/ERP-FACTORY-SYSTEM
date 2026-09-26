@@ -223,29 +223,30 @@ export function registerStatsDataRoutes(app: Express) {
       `);
 
       const row = result.rows[0] as Record<string, string | number | null> | undefined;
-      const num = (value: string | number | null | undefined) => Number.parseFloat(String(value ?? "0")) || 0;
-      const openingStock = num(row?.opening_stock);
-      const stockReceived = num(row?.stock_received);
-      const noteInventoryNet = num(row?.note_inventory_net);
-      const stockAdjustmentNet = num(row?.stock_adjustment_net);
-      const closingStock = num(row?.closing_stock);
-      const totalSales = num(row?.total_sales);
-      const storedCogs = num(row?.stored_cogs);
-      const reconciledCogs = num(row?.reconciled_cogs);
-      const reconciliation = storedCogs - reconciledCogs;
+      // Parse the SQL numerics as decimals and only convert to JSON numbers at the
+      // edge, so the reconciliation and profit differences carry no float drift.
+      const dec = (value: string | number | null | undefined) => toInventoryDecimal(value ?? 0);
+      const openingStock = dec(row?.opening_stock);
+      const stockReceived = dec(row?.stock_received);
+      const noteInventoryNet = dec(row?.note_inventory_net);
+      const stockAdjustmentNet = dec(row?.stock_adjustment_net);
+      const closingStock = dec(row?.closing_stock);
+      const totalSales = dec(row?.total_sales);
+      const storedCogs = dec(row?.stored_cogs);
+      const reconciledCogs = dec(row?.reconciled_cogs);
 
       res.json({
-        openingStock,
-        stockReceived,
-        noteInventoryNet,
-        stockAdjustmentNet,
-        closingStock,
-        totalSales,
-        storedCogs,
-        reconciledCogs,
-        reconciliation,
-        storedCostProfit: totalSales - storedCogs,
-        adjustedCostProfit: totalSales - reconciledCogs,
+        openingStock: openingStock.toNumber(),
+        stockReceived: stockReceived.toNumber(),
+        noteInventoryNet: noteInventoryNet.toNumber(),
+        stockAdjustmentNet: stockAdjustmentNet.toNumber(),
+        closingStock: closingStock.toNumber(),
+        totalSales: totalSales.toNumber(),
+        storedCogs: storedCogs.toNumber(),
+        reconciledCogs: reconciledCogs.toNumber(),
+        reconciliation: subtractInventoryValues(storedCogs, reconciledCogs).toNumber(),
+        storedCostProfit: subtractInventoryValues(totalSales, storedCogs).toNumber(),
+        adjustedCostProfit: subtractInventoryValues(totalSales, reconciledCogs).toNumber(),
         formula:
           "Opening Stock + Stock Received + Net Credit/Debit Note Inventory + Stock Adjustment Net - Closing Stock",
       });
