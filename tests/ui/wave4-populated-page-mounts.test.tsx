@@ -731,6 +731,22 @@ describe("wave 4 populated page mounts", () => {
         pageState.companyType = "factory";
         pageState.appMode = "factory";
       }
+
+      // StockOTW consumes the production dictionary-compressed v2 contract.
+      // Exercise that real select/expansion path instead of feeding it the
+      // generic flat rows used by the rest of this broad page-mount matrix.
+      if (name === "StockOTW") {
+        stubSeededFetch({
+          "containers?profile=otw-summary": () => [
+            { id: 1, status: "OTW", containerNumber: "CONT1", grandTotal: "250" },
+          ],
+          "otw-items?profile=stock-otw-v2": () => ({
+            c: [["CONT1", "Supp 1"]],
+            i: [{ n: "Item 1", g: "Grade A", c: "Category A", r: [[0, 10, 250]] }],
+          }),
+        });
+      }
+
       const module = await load();
       const Component = (module.default ??
         module[name] ??
