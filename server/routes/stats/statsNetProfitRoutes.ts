@@ -314,12 +314,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
 
-      // Payroll payable has one durable source of truth: the Payroll Payable ledger.
-      // Modern payroll generation/payment posts to this control account, not to employeeId.
-      // Legacy employee-linked voucher balances are kept only as a fallback for older data.
-      //
-      // Always detach Payroll Payable from the generic classifier first. This makes the
-      // result resilient even if an old database has this system account mis-typed.
+      // ERP payroll has two distinct people domains in the same employees table:
+      // employeeType=Employee uses the employee subledger for salary accrual/payable,
+      // while employeeType=Worker is paid directly and uses the salary-advance workflow.
+      // A generic Payroll Payable ledger can be legacy/duplicate, so strip it from the
+      // classifier and inject the authoritative employee-subledger result exactly once.
       const isPayrollPayableAccount = (acc: { name?: string | null; code?: string | null }) => {
         const name = (acc.name || "").trim().toLowerCase().replace(/\s+/g, " ");
         const code = (acc.code || "").trim().toUpperCase();
@@ -328,10 +327,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       const payrollLedgerAccounts = companyAccounts.filter(isPayrollPayableAccount);
       const payrollLedgerIds = new Set(payrollLedgerAccounts.map((acc) => acc.id));
-      let payrollLedgerSignedBalance = 0;
-      for (const acc of payrollLedgerAccounts) {
-        payrollLedgerSignedBalance += getAccountNetBalance(acc, accountBalances);
-      }
 
       const stripPayrollEntries = (accounts: NetPositionAccount[], side: "asset" | "liability") => {
         for (let i = accounts.length - 1; i >= 0; i--) {
@@ -358,6 +353,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .select({
           id: employees.id,
           companyId: employees.companyId,
+          employeeType: employees.employeeType,
           openingBalance: employees.openingBalance,
           openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
         })
@@ -366,13 +362,18 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .execute();
 
       const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
+      const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
+      const payrollWorkers = companyEmployees.filter((employee) => employee.employeeType === "Worker");
       const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
-        companyEmployees,
+        payrollEmployees,
         employeeBalances,
         managedSalaryAdvances
       );
-      const legacyWorkerLiabilities = employeePosition.liabilities;
-      const employeeLinkedAdvanceAssets = employeePosition.advances;
+      const workerPosition = computeEmployeeNetPositionWithManagedAdvances(
+        payrollWorkers,
+        employeeBalances,
+        managedSalaryAdvances
+      );
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
@@ -394,58 +395,61 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
 
-      // For CFA companies, worker balances come from voucher entries.
-      // Guard: only convert if ALL entries are pre-migration (hasMigratedEntries=false).
-      // After migration COALESCE already returns USD-base values; re-dividing by CFA rate
-      // would produce incorrect double-conversion.
-      // Credit balance on Payroll Payable means we owe payroll; debit balance means
-      // payroll has been overpaid/prepaid. If the control ledger is absent/zero, fall
-      // back to legacy employee-linked balances for backward compatibility.
-      const payrollLedgerLiability = Math.max(0, -payrollLedgerSignedBalance);
-      const payrollLedgerOverpayment = Math.max(0, payrollLedgerSignedBalance);
+      // Keep the two payroll populations separate. Employee-type debit balances are
+      // employee receivables/current accounts; Worker-type debit balances are worker
+      // advances. Managed salary advances replace their original posted debit with the
+      // current remaining_balance, while legacy advance vouchers remain visible.
+      const employeeReceivablesDisplay = round2(employeePosition.advances);
+      const payrollPayableDisplay = round2(employeePosition.liabilities);
+      const workerAdvancesDisplay = round2(workerPosition.advances);
+      const workerPayableDisplay = round2(workerPosition.liabilities);
 
-      // Employee-linked salary deposits are a separate live ERP posting path
-      // (ledger_account_id = NULL, employee_id = X). They must be combined with
-      // the Payroll Payable control ledger rather than used only as a fallback;
-      // otherwise any non-zero control balance hides outstanding employee payables.
-      const workerLiabilitiesDisplay = round2(payrollLedgerLiability + legacyWorkerLiabilities);
-      const payrollOverpaymentDisplay = round2(payrollLedgerOverpayment);
-
-      // Managed salary advances are reconciled above by replacing their
-      // original employee debit with remaining_balance. Direct employee debits
-      // (for example a payroll withdrawal/advance) remain in the subledger.
-      const workerAdvancesDisplay = round2(employeeLinkedAdvanceAssets);
-      if (workerLiabilitiesDisplay > 0) {
-        onUsTotal = round2(onUsTotal + workerLiabilitiesDisplay);
+      if (employeeReceivablesDisplay > 0) {
+        forUsTotal = round2(forUsTotal + employeeReceivablesDisplay);
+        categoryTotals["asset_Employee Receivables"] = round2(
+          (categoryTotals["asset_Employee Receivables"] || 0) + employeeReceivablesDisplay
+        );
+        forUsAccounts.push({
+          name: "Employee Receivables",
+          code: "EMPLOYEE_RECEIVABLE",
+          value: employeeReceivablesDisplay,
+          category: "Employee Receivables",
+        });
+      }
+      if (payrollPayableDisplay > 0) {
+        onUsTotal = round2(onUsTotal + payrollPayableDisplay);
         categoryTotals["liability_Payroll"] = round2(
-          (categoryTotals["liability_Payroll"] || 0) + workerLiabilitiesDisplay
+          (categoryTotals["liability_Payroll"] || 0) + payrollPayableDisplay
         );
         onUsAccounts.push({
           name: "Payroll Payable",
           code: "PAYROLL_PAYABLE",
-          value: round2(workerLiabilitiesDisplay),
-          category: "Payroll",
-        });
-      }
-      if (payrollOverpaymentDisplay > 0) {
-        forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
-        forUsAccounts.push({
-          name: "Payroll Overpayment",
-          code: "PAYROLL_PAYABLE",
-          value: round2(payrollOverpaymentDisplay),
+          value: payrollPayableDisplay,
           category: "Payroll",
         });
       }
       if (workerAdvancesDisplay > 0) {
-        forUsTotal += workerAdvancesDisplay;
-        categoryTotals["asset_Worker Advances"] =
-          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay;
+        forUsTotal = round2(forUsTotal + workerAdvancesDisplay);
+        categoryTotals["asset_Worker Advances"] = round2(
+          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay
+        );
         forUsAccounts.push({
           name: "Worker Advances (Prepaid)",
           code: "COMPUTED",
           value: workerAdvancesDisplay,
           category: "Worker Advances",
+        });
+      }
+      if (workerPayableDisplay > 0) {
+        onUsTotal = round2(onUsTotal + workerPayableDisplay);
+        categoryTotals["liability_Worker Payroll"] = round2(
+          (categoryTotals["liability_Worker Payroll"] || 0) + workerPayableDisplay
+        );
+        onUsAccounts.push({
+          name: "Worker Payable",
+          code: "WORKER_PAYABLE",
+          value: workerPayableDisplay,
+          category: "Worker Payroll",
         });
       }
 
