@@ -19,6 +19,7 @@ import "./factoryTrackingModern.css";
 import { StockEntryTab } from "./bale-stock-entry/StockEntryTab";
 import { DailyStockSummary } from "./bale-stock-entry/DailyStockSummary";
 import type { FactoryMyAccess } from "@shared/apiTypes";
+import { canUseFactorySurface } from "@/lib/factoryClientAccess";
 
 export default function BaleStockEntry() {
   const todayStr = new Date().toLocaleDateString("en-CA");
@@ -51,6 +52,9 @@ export default function BaleStockEntry() {
   const showGroundScan = !hiddenTabs.includes("hide_tab_stockentry_ground_scan");
   const showDailyScan = !hiddenTabs.includes("hide_tab_stockentry_daily_scan");
   const showProductionTargets = !hiddenTabs.includes("hide_tab_stockentry_production_targets");
+  const canReadProductionSession = canUseFactorySurface(myAccess, "factory/stock-entry", [
+    "hide_tab_stockentry_production_targets",
+  ]);
 
   const defaultTab = showEntry
     ? "entry"
@@ -84,6 +88,7 @@ export default function BaleStockEntry() {
       return r.ok ? r.json() : null;
     },
     staleTime: 30000,
+    enabled: canReadProductionSession,
   });
 
   const _endProductionMutation = useMutation({
