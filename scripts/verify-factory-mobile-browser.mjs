@@ -36,6 +36,7 @@ import puppeteer from "puppeteer";
 
 import { awaitAuthenticatedShell, watchSignInResponses } from "./lib/browser-smoke-signin.mjs";
 import { resolveFactoryMobileSeeds } from "./lib/factory-mobile-fixture.mjs";
+import { DIALOG_TRIGGERS, SEED_KEYS, SEEDED_ROUTES, STATIC_ROUTES } from "./lib/factory-mobile-routes.mjs";
 
 const BASE_URL = (process.env.ERP_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
 const USERNAME = process.env.ERP_SMOKE_USERNAME || "";
@@ -63,87 +64,6 @@ const ALL_VIEWPORTS = [
   { name: "desktop-1440", width: 1440, height: 900, isMobile: false, hasTouch: false },
 ];
 
-/** Canonical Factory destinations (docs/factory-navigation-registry.md) and key workflows. */
-const STATIC_ROUTES = [
-  // Production / inventory
-  "/factory/production-report",
-  "/factory/stock-entry",
-  "/factory/raw-materials",
-  "/factory/raw-stock",
-  "/factory/waste-dispatch",
-  "/factory/bales-hub",
-  "/factory/location-inventory",
-  "/factory/containers-hub",
-  "/factory/stock-allocation-v5",
-  "/factory/sheets-sacks",
-  "/factory/stock-query",
-  // Finance / people
-  "/factory/daybook",
-  "/factory/accounts",
-  "/factory/vouchers",
-  "/factory/parties",
-  "/factory/contacts",
-  "/factory/payroll-hub",
-  // Sales
-  "/factory/invoicing",
-  "/factory/sales/new",
-  "/factory/sales/loading/new",
-  "/factory/dispatch-batches",
-  // Intelligence
-  "/factory/intelligence/dashboard",
-  "/factory/intelligence/kpis",
-  "/factory/intelligence/alerts",
-  "/factory/intelligence/supplier-hub",
-  "/factory/intelligence/financial-hub",
-  "/factory/intelligence/production-hub",
-  "/factory/financial-snapshot",
-  "/factory/net-position-details",
-  "/factory/production-comparison",
-  // Other
-  "/factory/rental/shops",
-  "/factory/rental/warehouses",
-  "/factory/rental/payments",
-  "/factory/settings",
-  "/factory/containers/new",
-  "/factory/analytics",
-  "/factory/agents",
-  // Forms and admin tools (Phase 10)
-  "/factory/create",
-  "/factory/raw-stock/recalculate",
-  "/factory/customer-logos",
-  "/factory/label-banners",
-  "/factory/intelligence/settings",
-  "/factory/chatbot-settings",
-  "/factory/conflicts",
-  "/factory/deleted-items",
-  "/factory/import-cycle-diagnostics",
-  "/factory/inventory-repair",
-  "/factory/company-data-reset",
-  "/my-settings",
-  // Every hub section/tab, not only the default one
-  "/factory/production-report?tab=production",
-  "/factory/production-report?tab=comparison",
-  "/factory/production-report?tab=product-comparison",
-  "/factory/production-report?tab=shipping",
-  "/factory/production-report?tab=sheets",
-  "/factory/production-report?tab=container-tracking",
-  "/factory/bales-hub?tab=barcode",
-  "/factory/bales-hub?tab=products",
-  "/factory/bales-hub?tab=customer-loading",
-  "/factory/containers-hub?section=otw",
-  "/factory/invoicing?tab=loadings",
-  "/factory/invoicing?tab=pending",
-  "/factory/invoicing?tab=proformas",
-  "/factory/parties?section=suppliers",
-  "/factory/payroll-hub?section=employees",
-  "/factory/payroll-hub?section=insurance",
-  "/factory/intelligence/supplier-hub?section=statement",
-  "/factory/intelligence/supplier-hub?section=scores",
-  "/factory/intelligence/production-hub?section=waste",
-  "/factory/intelligence/production-hub?section=mix-optimizer",
-  "/factory/intelligence/production-hub?section=container-tracking",
-];
-
 /**
  * Canonical top-level destinations, read from docs/factory-navigation-registry.md (the same list the
  * route-registry test guards). Escape must never navigate away from these or their hub sections.
@@ -157,67 +77,10 @@ const TOP_LEVEL_ROUTES = new Set(
 );
 const isTopLevelRoute = (route) => TOP_LEVEL_ROUTES.has(route.split("?")[0]);
 
-/**
- * A safe dialog or sheet per route (never a submit action). The regression opens it, checks it
- * fits the viewport, scrolls internally, keeps its last action reachable and keeps a focused field
- * in view, then closes it with Escape, which must not navigate.
- */
-const DIALOG_TRIGGERS = [
-  { route: "/factory/contacts", selector: '[data-testid="button-add-contact"]' },
-  { route: "/factory/sheets-sacks", selector: '[data-testid="button-add-item"]' },
-  { route: "/factory/dispatch-batches", selector: '[data-testid="button-new-dispatch-batch"]', exact: true },
-  { route: "/factory/rental/shops", selector: '[data-testid="button-factory-rental-shops-add-unit"]' },
-  { route: "/factory/daybook", selector: '[data-testid="factory-daybook-filters-open"]', phoneOnly: true },
-  {
-    route: "/factory/production-comparison",
-    selector: '[data-testid="production-comparison-filters-open"]',
-    phoneOnly: true,
-  },
-  { route: "/factory/employees/", selector: '[data-testid="button-edit-employee"]' },
-  // Data-dependent: skipped (not failed) when the list has no matching row.
-  {
-    route: "/factory/containers-hub",
-    selector: '[data-testid^="button-view-container-"]',
-    exact: true,
-    optional: true,
-  },
-  {
-    route: "/factory/containers-hub?section=otw",
-    selector: '[data-testid^="button-otw-edit-"], [data-testid^="button-tracking-settings-"]',
-    exact: true,
-    optional: true,
-  },
-];
-
-/** Detail/workflow routes that need an existing record; ids resolve at runtime. */
-const SEEDED_ROUTES = [
-  { key: "order", path: (s) => `/factory/sales/invoices/${s.order}` },
-  { key: "order", path: (s) => `/factory/invoices/${s.order}/loading-scan` },
-  { key: "order", path: (s) => `/factory/sales/pending-invoices/${s.order}/verify` },
-  { key: "batch", path: (s) => `/factory/dispatch-batches/${s.batch}` },
-  { key: "ride", path: (s) => `/factory/dispatch-batches/${s.batch}/rides/${s.ride}/scan` },
-  { key: "customer", path: (s) => `/factory/customers/${s.customer}` },
-  { key: "employee", path: (s) => `/factory/employees/${s.employee}` },
-  { key: "worker", path: (s) => `/factory/workers/${s.worker}` },
-  { key: "proforma", path: (s) => `/factory/sales/proformas/${s.proforma}/add-line` },
-  { key: "product", path: (s) => `/factory/stock-query/${s.product}` },
-  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}` },
-  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}/2026/all` },
-  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}/2026/9` },
-  { key: "account", path: (s) => `/factory/ledger-monthly/${s.account}` },
-  { key: "account", path: (s) => `/factory/ledger-vouchers/${s.account}/2026/9` },
-  { key: "voucher", path: (s) => `/factory/voucher-detail/${s.voucher}` },
-  { key: "voucher", path: (s) => `/factory/vouchers/${s.voucher}/edit` },
-  { key: "openingBalance", path: (s) => `/factory/raw-stock/opening-balance/${s.openingBalance}/edit` },
-];
-
-/** Seed keys a seeded route needs (composite keys expand to their parts). */
-const SEED_KEYS = { ride: ["batch", "ride"], productLocation: ["product", "location"] };
-
-/** Scanner routes: input at least 44px, 16px text, focusable, status visible. */
 /** Escape navigation is a keyboard contract; it is checked on one phone and on desktop. */
 const ESCAPE_VIEWPORTS = new Set(["phone-390", "desktop-1440"]);
 
+/** Scanner routes: input at least 44px, 16px text, focusable, status visible. */
 const SCANNER_SELECTORS = ['[data-testid="input-scan-code"]', '[data-testid="input-barcode"]', '[data-testid="input-scan"]'];
 
 const routeFilter = (process.env.ERP_FACTORY_MOBILE_ROUTES || "")

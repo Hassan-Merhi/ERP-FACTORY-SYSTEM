@@ -175,8 +175,9 @@ async function resolveInPage({ seeds, createMissing, companyId }) {
 
   // Raw materials opening balance (its edit form is a Phase 10 route).
   if (!out.openingBalance) {
-    const raw = await list("/api/factory/raw-stock?profile=list");
-    out.openingBalance = firstId(raw, (row) => row.sourceType === "OPENING_BALANCE");
+    // Per-record list (the default raw-stock list is aggregated by supplier and carries no ids).
+    const records = await list("/api/factory/raw-stock/by-container");
+    out.openingBalance = firstId(records, (row) => row.containerStatus === "OPENING_BALANCE");
     if (!out.openingBalance) {
       const created = await create("/api/factory/raw-stock/opening-balance", {
         supplierName: "Harbor Recycling",
