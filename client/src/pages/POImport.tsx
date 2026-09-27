@@ -159,6 +159,13 @@ export default function POImport() {
   } = useQuery<Supplier[]>({
     queryKey: companyQueryKey("/api/suppliers?allowParentFallback=true", selectedCompany?.id),
     enabled: Boolean(selectedCompany?.id),
+    // Parent-company assignment can change while this page's company-scoped
+    // supplier cache is still inside the normal 30-minute reference-data
+    // stale window. PO Import must always re-check the server relationship on
+    // entry so a newly created/linked child immediately inherits its parent's
+    // suppliers instead of reusing an old empty list.
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: parentFreightAccounts = [] } = useQuery<{ id: number; name: string; code: string }[]>({
