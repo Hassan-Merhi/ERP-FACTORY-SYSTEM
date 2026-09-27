@@ -7,6 +7,7 @@ export interface ItemMarketAnalysisFilters {
   endDate?: string;
   search?: string;
   stockGroupId?: number;
+  stockGroupName?: string;
 }
 
 type NumericRow = Record<string, string | number | null | string[]>;
@@ -34,6 +35,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     filters.endDate ?? null,
     filters.search ?? null,
     filters.stockGroupId ?? null,
+    filters.stockGroupName ?? null,
   ];
 
   const commonCtes = `
@@ -45,6 +47,7 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         AND si.deleted_at IS NULL
         AND ($5::text IS NULL OR si.code ILIKE '%' || $5 || '%' OR si.name ILIKE '%' || $5 || '%')
         AND ($6::int IS NULL OR si.stock_group_id = $6)
+        AND ($7::text IS NULL OR BTRIM(sg.name) = BTRIM($7))
     ),
     imports AS (
       SELECT pli.stock_item_id,
