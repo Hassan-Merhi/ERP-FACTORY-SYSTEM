@@ -60,7 +60,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         companyBaseCurrency,
         accountBalances,
         supplierBalances,
-        employeeBalances,
+        employeeBalances: _employeeBalances,
       } = reportData;
 
       // ============ NET POSITION CALCULATION ============
@@ -421,9 +421,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       }
       if (payrollOverpaymentDisplay > 0) {
         forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] = round2(
-          (categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay
-        );
+        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
         forUsAccounts.push({
           name: "Payroll Overpayment",
           code: "PAYROLL_PAYABLE",
