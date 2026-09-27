@@ -247,80 +247,75 @@ export async function loadDatabasePhase3AccountingAudit(input: {
   });
 
   const payrollResult = await tx.execute(sql`
+    WITH payment_vouchers AS (
+      SELECT
+        pv.id AS voucher_id,
+        substring(pv.voucher_number from '^PAYMENT-PAY-([0-9]+)-')::bigint AS payroll_id,
+        pv.total_amount
+      FROM vouchers pv
+      WHERE pv.company_id = ${companyId}
+        AND pv.deleted_at IS NULL
+        AND pv.voucher_type = 'Payment'
+        AND pv.voucher_number ~ '^PAYMENT-PAY-[0-9]+-'
+    ), payment_voucher_agg AS (
+      SELECT
+        payroll_id,
+        COUNT(*)::int AS payment_voucher_count,
+        COALESCE(SUM(total_amount), 0) AS payment_voucher_total
+      FROM payment_vouchers
+      GROUP BY payroll_id
+    ), payment_entry_agg AS (
+      SELECT
+        pv.payroll_id,
+        COALESCE(SUM(COALESCE(ve.base_debit_amount, ve.debit_amount, 0)), 0) AS payment_debit,
+        COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0)), 0) AS payment_credit
+      FROM payment_vouchers pv
+      LEFT JOIN voucher_entries ve ON ve.voucher_id = pv.voucher_id
+      GROUP BY pv.payroll_id
+    ), payment_cash_agg AS (
+      SELECT
+        pv.payroll_id,
+        ve.ledger_account_id,
+        COALESCE(SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0)), 0) AS payment_cash_credit
+      FROM payment_vouchers pv
+      JOIN voucher_entries ve ON ve.voucher_id = pv.voucher_id
+      WHERE ve.ledger_account_id IS NOT NULL
+      GROUP BY pv.payroll_id, ve.ledger_account_id
+    ), daybook_agg AS (
+      SELECT
+        d.reference_id AS payroll_id,
+        COUNT(*)::int AS daybook_count,
+        COALESCE(SUM(d.amount_usd), 0) AS daybook_amount
+      FROM factory_daybook_entries d
+      WHERE d.company_id = ${companyId}
+        AND d.reference_table = 'factory_payrolls'
+        AND d.tx_type = 'PAYROLL_PAYMENT'
+      GROUP BY d.reference_id
+    )
     SELECT
       p.id AS payroll_id,
       p.status,
       p.net_salary::text AS net_salary,
       p.cash_account_id,
-      (
-        SELECT COUNT(*)::int
-        FROM vouchers pv
-        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-          AND pv.voucher_type = 'Payment'
-          AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-      ) AS payment_voucher_count,
-      COALESCE((
-        SELECT SUM(pv.total_amount)
-        FROM vouchers pv
-        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-          AND pv.voucher_type = 'Payment'
-          AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-      ), 0)::text AS payment_voucher_total,
-      COALESCE((
-        SELECT SUM(COALESCE(ve.base_debit_amount, ve.debit_amount, 0))
-        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-          AND pv.voucher_type = 'Payment'
-          AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-      ), 0)::text AS payment_debit,
-      COALESCE((
-        SELECT SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0))
-        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-          AND pv.voucher_type = 'Payment'
-          AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-      ), 0)::text AS payment_credit,
-      COALESCE((
-        SELECT SUM(COALESCE(ve.base_credit_amount, ve.credit_amount, 0))
-        FROM voucher_entries ve JOIN vouchers pv ON pv.id = ve.voucher_id
-        WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-          AND pv.voucher_type = 'Payment'
-          AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-          AND ve.ledger_account_id = p.cash_account_id
-      ), 0)::text AS payment_cash_credit,
-      (
-        SELECT COUNT(*)::int
-        FROM factory_daybook_entries d
-        WHERE d.company_id = p.company_id
-          AND d.reference_table = 'factory_payrolls'
-          AND d.reference_id = p.id
-          AND d.tx_type = 'PAYROLL_PAYMENT'
-      ) AS daybook_count,
-      COALESCE((
-        SELECT SUM(d.amount_usd)
-        FROM factory_daybook_entries d
-        WHERE d.company_id = p.company_id
-          AND d.reference_table = 'factory_payrolls'
-          AND d.reference_id = p.id
-          AND d.tx_type = 'PAYROLL_PAYMENT'
-      ), 0)::text AS daybook_amount
+      COALESCE(pva.payment_voucher_count, 0)::int AS payment_voucher_count,
+      COALESCE(pva.payment_voucher_total, 0)::text AS payment_voucher_total,
+      COALESCE(pea.payment_debit, 0)::text AS payment_debit,
+      COALESCE(pea.payment_credit, 0)::text AS payment_credit,
+      COALESCE(pca.payment_cash_credit, 0)::text AS payment_cash_credit,
+      COALESCE(da.daybook_count, 0)::int AS daybook_count,
+      COALESCE(da.daybook_amount, 0)::text AS daybook_amount
     FROM factory_payrolls p
+    LEFT JOIN payment_voucher_agg pva ON pva.payroll_id = p.id
+    LEFT JOIN payment_entry_agg pea ON pea.payroll_id = p.id
+    LEFT JOIN payment_cash_agg pca
+      ON pca.payroll_id = p.id
+     AND pca.ledger_account_id = p.cash_account_id
+    LEFT JOIN daybook_agg da ON da.payroll_id = p.id
     WHERE p.company_id = ${companyId}
       AND (
         upper(COALESCE(p.status, '')) = 'PAID'
-        OR EXISTS (
-          SELECT 1 FROM vouchers pv
-          WHERE pv.company_id = p.company_id AND pv.deleted_at IS NULL
-            AND pv.voucher_type = 'Payment'
-            AND pv.voucher_number LIKE ('PAYMENT-PAY-' || p.id::text || '-%')
-        )
-        OR EXISTS (
-          SELECT 1 FROM factory_daybook_entries d
-          WHERE d.company_id = p.company_id
-            AND d.reference_table = 'factory_payrolls'
-            AND d.reference_id = p.id
-            AND d.tx_type = 'PAYROLL_PAYMENT'
-        )
+        OR COALESCE(pva.payment_voucher_count, 0) > 0
+        OR COALESCE(da.daybook_count, 0) > 0
       )
     ORDER BY p.id
   `);

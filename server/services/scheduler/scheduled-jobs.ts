@@ -134,21 +134,41 @@ export function startScheduler() {
     timezone: "America/New_York",
   });
 
-  // Every hour: check stock report, net position export, AND the configurable daily export.
-  // Individual modules are loaded only when this tick executes instead of at process startup.
+  // Keep the hourly maintenance checks isolated. A slow WhatsApp upload/export
+  // must never hold one shared in-process lock and suppress every other hourly
+  // responsibility for the lifetime of the process. Staggering the jobs also
+  // avoids four cold database/report workloads hitting the pool at once.
   cron.schedule(
     "0 * * * *",
-    createSchedulerTick("hourlyChecks", async () => {
-      const stockReport = await import("./stock-report");
-      await stockReport.checkAndRunStockReport();
-      await stockReport.checkAndRunNetPositionExport();
-      await checkAndRunScheduledDailyExport();
+    createSchedulerTick("hourlyStockReport", async () => {
+      const { checkAndRunStockReport } = await import("./stock-report");
+      await checkAndRunStockReport();
+    }),
+    { timezone: "America/New_York" }
+  );
+
+  cron.schedule(
+    "5 * * * *",
+    createSchedulerTick("hourlyNetPositionExport", async () => {
+      const { checkAndRunNetPositionExport } = await import("./stock-report");
+      await checkAndRunNetPositionExport();
+    }),
+    { timezone: "America/New_York" }
+  );
+
+  cron.schedule(
+    "10 * * * *",
+    createSchedulerTick("hourlyDailyExportCheck", checkAndRunScheduledDailyExport),
+    { timezone: "America/New_York" }
+  );
+
+  cron.schedule(
+    "15 * * * *",
+    createSchedulerTick("hourlyContainersWhatsApp", async () => {
       const { checkAndRunContainersWhatsApp } = await import("./maintenance");
       await checkAndRunContainersWhatsApp();
     }),
-    {
-      timezone: "America/New_York",
-    }
+    { timezone: "America/New_York" }
   );
 
   // Wave I: every day at 3:30 AM ET, reconcile accounting/inventory evidence
@@ -221,7 +241,10 @@ export function startScheduler() {
     jobs: [
       "monthlyNetPositionWhatsApp(1st 07:00 EST)",
       "dailyRentalAccrual(daily 06:00 ET)",
-      "hourlyChecks(stock/export/containers)",
+      "hourlyStockReport(hourly :00 ET)",
+      "hourlyNetPositionExport(hourly :05 ET)",
+      "hourlyDailyExportCheck(hourly :10 ET)",
+      "hourlyContainersWhatsApp(hourly :15 ET)",
       "convergenceReconciliation(daily 03:30 ET)",
       "overdueCustomers(daily 09:00 EST)",
       "softDeletePurge(daily 02:00 EST)",

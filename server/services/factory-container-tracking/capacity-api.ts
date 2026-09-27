@@ -8,7 +8,14 @@ import { activeStatusFilter, anyProviderConfigured, isInactiveStatus, isValidCon
 import { trackOneContainer } from "./track-one";
 
 const MAX_CONCURRENT_TRACK_JOBS = 5;
+const DEFAULT_FACTORY_TRACKING_MAX_PER_RUN = 30;
 let _activeTrackJobs = 0;
+
+function factoryTrackingMaxPerRun(): number {
+  const configured = Number(process.env.FACTORY_TRACKING_MAX_PER_RUN);
+  if (!Number.isFinite(configured)) return DEFAULT_FACTORY_TRACKING_MAX_PER_RUN;
+  return Math.max(1, Math.min(100, Math.trunc(configured)));
+}
 
 /** True when the server already has the maximum number of tracking jobs running. */
 export function isFactoryTrackingAtCapacity(): boolean {
@@ -173,9 +180,26 @@ export async function trackDueFactoryContainers(): Promise<void> {
     return true;
   });
 
-  logger.info(`[FactoryTracking] ${eligible.length} of ${rows.length} factory containers eligible for auto-tracking.`);
+  // Bound each six-hour run so a large backlog does not turn into a long burst
+  // of carrier requests. Oldest/never-checked rows go first, so deferred rows
+  // naturally rotate into the next run without being marked as checked.
+  eligible.sort((a, b) => {
+    const aChecked = a.trackingLastCheckedAt?.getTime() ?? 0;
+    const bChecked = b.trackingLastCheckedAt?.getTime() ?? 0;
+    if (aChecked !== bChecked) return aChecked - bChecked;
+    return a.id - b.id;
+  });
 
-  for (const row of eligible) {
+  const maxPerRun = factoryTrackingMaxPerRun();
+  const toTrack = eligible.slice(0, maxPerRun);
+  const deferred = eligible.length - toTrack.length;
+
+  logger.info(
+    `[FactoryTracking] ${eligible.length} of ${rows.length} factory containers eligible; ` +
+      `tracking ${toTrack.length} this run, deferring ${deferred}.`
+  );
+
+  for (const row of toTrack) {
     try {
       const destCountry = row.destination || "Congo";
       const carrierHint = row.trackingCarrierHint ?? null;
@@ -189,7 +213,12 @@ export async function trackDueFactoryContainers(): Promise<void> {
     }
   }
 
-  logger.info("[FactoryTracking] Auto-tracking run complete.");
+  logger.info("[FactoryTracking] Auto-tracking run complete.", {
+    eligible: eligible.length,
+    tracked: toTrack.length,
+    deferred,
+    maxPerRun,
+  });
 }
 
 export async function updateFactoryContainerTrackingSettings(

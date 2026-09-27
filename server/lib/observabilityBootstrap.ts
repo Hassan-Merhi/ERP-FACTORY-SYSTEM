@@ -48,7 +48,10 @@ function installExternalFetchTracing(): void {
       const slow = durationMs >= thresholdMs;
       if (failed || slow) {
         const isServerFailure = response.status >= 500;
-        const level = isServerFailure ? "error" : "warn";
+        // Scheduler tracking deliberately tries fallbacks. A provider attempt can
+        // fail while the overall job succeeds, so keep those attempts visible as
+        // warnings and reserve error-level scheduler logs for the final job failure.
+        const level = isServerFailure && trace?.source !== "scheduler" ? "error" : "warn";
         logger[level]("External dependency operation", {
           module: "dependency",
           action: failed ? "request_failed" : "slow_request",
@@ -70,7 +73,7 @@ function installExternalFetchTracing(): void {
         failed: true,
         source: trace?.source || "background",
       });
-      logger.error("External dependency operation", {
+      const context = {
         module: "dependency",
         action: "request_failed",
         dependency,
@@ -78,7 +81,12 @@ function installExternalFetchTracing(): void {
         requestId: trace?.requestId,
         source: trace?.source,
         error,
-      });
+      };
+      if (trace?.source === "scheduler") {
+        logger.warn("External dependency operation", context);
+      } else {
+        logger.error("External dependency operation", context);
+      }
       throw error;
     }
   }) as typeof globalThis.fetch;
