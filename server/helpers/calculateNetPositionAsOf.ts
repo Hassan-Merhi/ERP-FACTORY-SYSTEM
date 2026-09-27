@@ -15,7 +15,7 @@ import { calculateHistoricalLocationInventory } from "../routes/_helpers";
 import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { computeEmployeeNetPositionWithManagedAdvances } from "./employeeNetPosition";
+import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 
 /**
@@ -332,18 +332,13 @@ export async function calculateNetPositionAsOf(
   // must not erase an accounting position. Keep ERP Employees and Workers
   // separated exactly like the live dashboard.
   const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-  const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
-  const payrollWorkers = companyEmployees.filter((employee) => employee.employeeType === "Worker");
-  const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
-    payrollEmployees,
+  const payrollPosition = computeEmployeeWorkerNetPosition(
+    companyEmployees,
     employeeBalances,
     managedSalaryAdvances
   );
-  const workerPosition = computeEmployeeNetPositionWithManagedAdvances(
-    payrollWorkers,
-    employeeBalances,
-    managedSalaryAdvances
-  );
+  const employeePosition = payrollPosition.employees;
+  const workerPosition = payrollPosition.workers;
 
   const employeeReceivables = round2(employeePosition.advances);
   const payrollPayable = round2(employeePosition.liabilities);
