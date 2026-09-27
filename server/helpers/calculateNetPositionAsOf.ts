@@ -338,21 +338,30 @@ export async function calculateNetPositionAsOf(
     managedSalaryAdvances
   );
   const employeePosition = payrollPosition.employees;
-  const workerPosition = payrollPosition.workers;
+  const payrollWorkerIds = new Set(
+    companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
+  );
 
-  const employeeReceivables = round2(employeePosition.advances);
-  const payrollPayable = round2(employeePosition.liabilities);
-  const workerAdvances = round2(workerPosition.advances);
-  const workerPayable = round2(workerPosition.liabilities);
+  // Historical exports do not have a historical employees.currentBalance snapshot,
+  // so reconstruct Employee payroll from the dated subledger and net it into one
+  // control account. Worker advances stay table-driven, matching the live dashboard.
+  const payrollSigned = round2(employeePosition.liabilities - employeePosition.advances);
+  const payrollPayable = Math.max(0, payrollSigned);
+  const payrollOverpayment = Math.max(0, -payrollSigned);
+  const workerAdvances = round2(
+    managedSalaryAdvances
+      .filter((advance) => payrollWorkerIds.has(advance.employeeId))
+      .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+  );
 
-  forUsTotal += employeeReceivables + workerAdvances;
-  onUsTotal += payrollPayable + workerPayable;
+  forUsTotal += payrollOverpayment + workerAdvances;
+  onUsTotal += payrollPayable;
 
-  if (employeeReceivables > 0) {
+  if (payrollOverpayment > 0) {
     forUsLines.push({
-      label: "Employee Receivables",
-      value: employeeReceivables,
-      category: "Employee Receivables",
+      label: "Payroll Overpayment",
+      value: payrollOverpayment,
+      category: "Payroll",
       side: "forUs",
     });
   }
@@ -369,14 +378,6 @@ export async function calculateNetPositionAsOf(
       label: "Payroll Payable",
       value: payrollPayable,
       category: "Payroll",
-      side: "onUs",
-    });
-  }
-  if (workerPayable > 0) {
-    onUsLines.push({
-      label: "Worker Payable",
-      value: workerPayable,
-      category: "Worker Payroll",
       side: "onUs",
     });
   }
