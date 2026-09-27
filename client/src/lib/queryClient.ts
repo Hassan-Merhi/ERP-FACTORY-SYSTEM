@@ -81,22 +81,27 @@ let _redirectFn: ((href: string) => void) | null = null;
 
 function scheduleSessionExpiredRedirect() {
   if (_sessionExpiredHandled) return;
+  if (typeof window !== "undefined") {
+    // Don't redirect when already on the login page — avoids loops from
+    // wrong-password 401s and initial unauthenticated loads.
+    const path = window.location.pathname;
+    if (path === "/login" || path.startsWith("/login/")) return;
+  }
+
+  // Flip the gate before doing any async cleanup. From this point onward the
+  // global fetch interceptor rejects protected API work locally, so mounted
+  // pollers/heartbeats cannot keep generating 401 traffic while navigation
+  // to the login page is still settling.
+  _sessionExpiredHandled = true;
+  resetCsrfToken();
+  void queryClient.cancelQueries();
+
   // Test hook: avoids needing a browser environment.
   if (_redirectFn) {
-    _sessionExpiredHandled = true;
     _redirectFn("/login");
     return;
   }
   if (typeof window === "undefined") return;
-  // Don't redirect when already on the login page — avoids loops from
-  // wrong-password 401s and initial unauthenticated loads.
-  const path = window.location.pathname;
-  if (path === "/login" || path.startsWith("/login/")) return;
-
-  // Mark the expiry handled before navigation so later in-flight 401 responses
-  // do not start another /api/auth/me verification request.
-  _sessionExpiredHandled = true;
-  resetCsrfToken();
   window.location.replace("/login");
 }
 
@@ -132,6 +137,17 @@ export async function verifySessionExpired(originalFetch: typeof window.fetch): 
 // Routes that must never trigger session verification to avoid recursion or
 // interfering with the login flow itself.
 const AUTH_PATHS = new Set(["/api/auth/me", "/api/auth/login", "/api/auth/logout", "/api/csrf-token"]);
+
+function shouldBlockExpiredSessionRequest(pathname: string | null): boolean {
+  return _sessionExpiredHandled && !!pathname?.startsWith("/api/") && !AUTH_PATHS.has(pathname);
+}
+
+function expiredSessionResponse(): Response {
+  return new Response(JSON.stringify({ message: "Session expired", code: "SESSION_EXPIRED" }), {
+    status: 401,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 let referenceMutationQueryClient: QueryClient | null = null;
 let factoryAccountingModuleAccess: boolean | null = null;
@@ -169,6 +185,9 @@ export async function handlePossibleSessionExpiry(
 export function _testOnly_resetSessionExpired() {
   _sessionExpiredHandled = false;
   _sessionVerificationPromise = null;
+}
+export function _testOnly_isSessionTrafficBlocked() {
+  return _sessionExpiredHandled;
 }
 /** @internal – inject a redirect observer for unit tests (no browser required) */
 export function _testOnly_setRedirectFn(fn: ((href: string) => void) | null) {
@@ -220,6 +239,14 @@ if (
     }
 
     const method = (init?.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+
+    // Once /api/auth/me has confirmed expiry, stop protected traffic at the
+    // browser boundary. This catches React Query, raw fetch(), polling hooks,
+    // presence updates, and screen-feed heartbeats without weakening backend
+    // authorization or treating ordinary business 401s as logout.
+    if (shouldBlockExpiredSessionRequest(pathname)) {
+      return expiredSessionResponse();
+    }
 
     // Factory pages reuse a small set of shared ERP accounting/inventory APIs.
     // Mark every API request made while the browser is on a Factory route,
@@ -537,6 +564,10 @@ const globalQueryCache = new QueryCache({
     // before redirecting. Handling 401 here too would bypass that check and cause
     // false logouts on business endpoints that return 401 for non-session reasons.
     if (error?.name !== "AbortError") return;
+    // A confirmed expired session intentionally cancels active queries. Do not
+    // convert those cancellations back into refetches while the login redirect
+    // is in progress.
+    if (_sessionExpiredHandled) return;
     // Swallow — schedule a transparent recovery refetch if the component is still mounted
     const observerCount = query.getObserversCount();
     setTimeout(() => {
