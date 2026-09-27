@@ -8,8 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, Download, FileSpreadsheet, X, ExternalLink, Upload, Plus, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, X, ExternalLink, Upload, Plus, Save, Trash2 } from "lucide-react";
 import { useDateFormat } from "@/contexts/DateFormatContext";
+import { CustomerStatementExports } from "./factorycustomerstatement/CustomerStatementExports";
 import { drCrClass } from "@/lib/formatNumber";
 import { useState, useEffect, useMemo, useRef } from "react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -370,49 +371,12 @@ export default function FactoryCustomerStatement() {
           )}
         </div>
         {showStatementTab && (
-          // Phones give the exports their own full-width row so the customer name keeps the width.
-          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const params = new URLSearchParams();
-                if (filterDateFrom) params.set("dateFrom", filterDateFrom);
-                if (filterDateTo) params.set("dateTo", filterDateTo);
-                if (filterDestination) params.set("destination", filterDestination);
-                const qs = params.toString();
-                const url = `/api/factory/customers/${customerId}/statement/export-pdf${qs ? `?${qs}` : ""}`;
-                if (!navigator.onLine) {
-                  window.print();
-                  return;
-                }
-                window.open(url, "_blank");
-              }}
-              data-testid="button-export-pdf"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Export PDF
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const params = new URLSearchParams();
-                if (filterDateFrom) params.set("dateFrom", filterDateFrom);
-                if (filterDateTo) params.set("dateTo", filterDateTo);
-                if (filterDestination) params.set("destination", filterDestination);
-                const qs = params.toString();
-                window.open(
-                  `/api/factory/customers/${customerId}/statement/export-excel${qs ? `?${qs}` : ""}`,
-                  "_blank"
-                );
-              }}
-              data-testid="button-export-excel"
-            >
-              <FileSpreadsheet className="mr-2 h-4 w-4" />
-              Export Excel
-            </Button>
-          </div>
+          <CustomerStatementExports
+            customerId={customerId}
+            filterDateFrom={filterDateFrom}
+            filterDateTo={filterDateTo}
+            filterDestination={filterDestination}
+          />
         )}
       </div>
 

@@ -326,7 +326,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
               aria-hidden="true"
               // Mouse-only reordering: touch browsers cannot start HTML drag-and-drop, so the handle
               // is dropped there rather than left as an invisible control that does nothing.
-              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0 [@media(hover:none)]:hidden"
+              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0 [@media(pointer:coarse)]:hidden"
               title="Drag to reorder"
             >
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />

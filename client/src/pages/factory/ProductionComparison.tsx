@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, ChevronDown, Package, Scale } from "lucide-react";
@@ -34,15 +33,9 @@ import {
 import { MultiSelectFilter } from "./productioncomparison/components/MultiSelectFilter";
 import { DiffCell } from "./productioncomparison/components/DiffCell";
 import { StatCard } from "./productioncomparison/components/StatCard";
+import { ComparisonPresetPicker } from "./productioncomparison/components/ComparisonPresetPicker";
 import { buildWorkerSummaryByArticle, WorkerSummaryHover } from "./productioncomparison/components/WorkerSummaryHover";
 // ── Date helpers ─────────────────────────────────────────────────────────────
-
-const PRESET_OPTIONS: [Preset, string][] = [
-  ["today-yesterday", "Today vs Yesterday"],
-  ["month", "This Month vs Last Month"],
-  ["year", "This Year vs Last Year"],
-  ["custom", "Custom"],
-];
 
 export default function ProductionComparison() {
   const [preset, setPreset] = useState<Preset>("month");
@@ -340,31 +333,7 @@ export default function ProductionComparison() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       {/* Header + preset buttons */}
       <PageHeader title="Production Comparison" subtitle="Compare output across two time periods">
-        {/* The four preset buttons need ~33rem, more than the header has beside the title below xl
-            (tablet and small laptop); there the same presets are a compact select. */}
-        <div className="hidden flex-wrap gap-2 xl:flex">
-          {PRESET_OPTIONS.map(([p, label]) => (
-            <Button key={p} variant={preset === p ? "default" : "outline"} size="sm" onClick={() => setPreset(p)}>
-              {label}
-            </Button>
-          ))}
-        </div>
-        <Select value={preset} onValueChange={(value) => setPreset(value as Preset)}>
-          <SelectTrigger
-            className="col-span-2 w-full sm:w-56 xl:hidden"
-            aria-label="Comparison period"
-            data-testid="select-comparison-preset"
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {PRESET_OPTIONS.map(([p, label]) => (
-              <SelectItem key={p} value={p}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ComparisonPresetPicker preset={preset} onChange={setPreset} />
       </PageHeader>
 
       {/* Custom date pickers */}

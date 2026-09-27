@@ -7,9 +7,11 @@
 
 /*
  * Hover-revealed row actions (edit/delete icons with opacity-0 + group-hover) cannot be
- * discovered without a pointer that hovers. On touch devices they are always visible.
+ * discovered without a pointer that hovers. On touch devices they are always visible. Same
+ * media condition as the global rule in mobile-browser-compat.css (a coarse primary pointer);
+ * this adds the focus-within and `invisible` variants that rule does not cover.
  */
-@media (hover: none) {
+@media (pointer: coarse) {
   [data-factory-workspace] :is(button, a, div, span)[class*="opacity-0"][class*="group-hover"],
   [data-factory-workspace] :is(button, a, div, span)[class*="opacity-0"][class*="group-focus-within"] {
     opacity: 1 !important;
