@@ -5,6 +5,7 @@ export interface EmployeeBalanceTotals {
 
 export interface EmployeePositionRow {
   id: number;
+  employeeType?: string | null;
   openingBalance?: string | null;
   openingBalanceSide?: string | null;
 }
@@ -79,3 +80,30 @@ export function computeEmployeeNetPositionWithManagedAdvances(
 
   return computeEmployeeNetPosition(employees, adjusted);
 }
+
+export interface EmployeeWorkerNetPosition {
+  employees: EmployeeNetPosition;
+  workers: EmployeeNetPosition;
+}
+
+/**
+ * ERP Payroll deliberately has two populations in the same `employees` table:
+ * - Employee: salary accrual/current-account balances
+ * - Worker: direct-paid staff whose debit balances represent worker advances
+ *
+ * Keep them separate before the Net Position route assigns accounting labels.
+ */
+export function computeEmployeeWorkerNetPosition(
+  rows: EmployeePositionRow[],
+  balances: Map<number, EmployeeBalanceTotals>,
+  managedAdvances: ManagedEmployeeAdvance[]
+): EmployeeWorkerNetPosition {
+  const employeeRows = rows.filter((row) => row.employeeType !== "Worker");
+  const workerRows = rows.filter((row) => row.employeeType === "Worker");
+
+  return {
+    employees: computeEmployeeNetPositionWithManagedAdvances(employeeRows, balances, managedAdvances),
+    workers: computeEmployeeNetPositionWithManagedAdvances(workerRows, balances, managedAdvances),
+  };
+}
+
