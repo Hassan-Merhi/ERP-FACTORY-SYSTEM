@@ -21,6 +21,10 @@ import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary
 import type { MyAccess } from "./factoryAccessGuard";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
+import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
+import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
+import "@/mobile-shell-dialogs.css";
+import "@/factory-mobile-operations.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
   import("@/components/FactoryFrenchCatalogManager").then((module) => ({
@@ -101,6 +105,10 @@ export function FactoryShell({
     /^\/factory\/invoices\/\d+\/loading-scan(?:\?|$)/.test(currentLocation);
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(factoryContainerRef);
+  // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css),
+  // so the on-screen keyboard never hides their actions.
+  useDocumentAppShell("factory");
+  useVisualViewportMetrics();
   const hasAdminSearch = canUseAdminSearch(user);
 
   return (

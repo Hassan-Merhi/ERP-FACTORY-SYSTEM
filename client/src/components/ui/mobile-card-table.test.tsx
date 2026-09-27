@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { labelMobileCardCells, mobileCardColumnLabels } from "./mobile-card-table";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./table";
 
-const phone = vi.hoisted(() => ({ value: true, mode: "erp" as "erp" | "factory" }));
+const phone = vi.hoisted(() => ({ value: true, mode: "erp" as "erp" | "factory" | "properties" }));
 
 vi.mock("@/hooks/use-erp-phone-layout", () => ({
   useErpPhoneLayout: () => phone.value,
@@ -130,6 +130,13 @@ function renderTable(mobileLayout?: "cards") {
 }
 
 describe("Table mobileLayout", () => {
+  it("renders cards on Factory phones too", () => {
+    phone.mode = "factory";
+    renderTable("cards");
+    expect(screen.getByTestId("table")).toHaveAttribute("data-mobile-cards", "true");
+    expect(screen.getByText("Shirts")).toHaveAttribute("data-mobile-cell", "title");
+  });
+
   it("renders cards on ERP phones and labels cells from the header", () => {
     renderTable("cards");
     const table = screen.getByTestId("table");
@@ -139,14 +146,14 @@ describe("Table mobileLayout", () => {
     expect(screen.getByText("Shirts")).toHaveAttribute("data-mobile-cell", "title");
   });
 
-  it("keeps the table on tablet/desktop, outside ERP mode, and when not opted in", () => {
+  it("keeps the table on tablet/desktop, outside ERP/Factory mode, and when not opted in", () => {
     phone.value = false;
     renderTable("cards");
     expect(screen.getByTestId("table")).not.toHaveAttribute("data-mobile-cards");
     cleanup();
 
     phone.value = true;
-    phone.mode = "factory";
+    phone.mode = "properties";
     renderTable("cards");
     expect(screen.getByTestId("table")).not.toHaveAttribute("data-mobile-cards");
     cleanup();

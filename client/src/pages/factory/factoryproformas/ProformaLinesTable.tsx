@@ -100,7 +100,7 @@ export function ProformaLinesTable({
 
   return (
     <div>
-      <Table wrapperClassName="max-h-[400px] overflow-auto">
+      <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto">
         <TableHeader className="sticky top-0 z-30 bg-background">
           <TableRow>
             <TableHead className="text-xs uppercase tracking-wide text-muted-foreground font-medium">

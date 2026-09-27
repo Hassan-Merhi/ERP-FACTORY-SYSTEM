@@ -408,6 +408,7 @@ export default function FactoryShippingContainers() {
         {/* ── Main Table ── */}
         <div className="rounded-md border">
           <Table
+            mobileLayout="cards"
             className="text-xs"
             style={{ minWidth: "1100px" }}
             wrapperClassName="max-h-[calc(100vh-300px)] overflow-auto"
@@ -678,7 +679,7 @@ export default function FactoryShippingContainers() {
             ) : (
               <div>
                 <div className="overflow-x-auto">
-                  <Table className="text-xs">
+                  <Table mobileLayout="cards" className="text-xs">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-xs">Invoice #</TableHead>

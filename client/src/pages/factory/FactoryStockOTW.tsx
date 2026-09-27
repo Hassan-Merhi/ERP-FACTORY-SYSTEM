@@ -306,7 +306,7 @@ export default function FactoryStockOTW() {
         </div>
       ) : (
         <div className="rounded-md border overflow-x-auto">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader className="sticky top-0 z-20 bg-background">
               <TableRow>
                 <TableHead className="w-10 text-center">#</TableHead>

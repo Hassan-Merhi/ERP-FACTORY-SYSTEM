@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -158,7 +159,9 @@ export default function FactoryPendingInvoiceVerify() {
   }
 
   return (
-    <div className="flex flex-col h-full p-4 lg:p-6 overflow-y-auto">
+    <div
+      className={`flex h-full flex-col overflow-y-auto sm:p-4 lg:p-6 ${isPending || isVerified ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-4 lg:pb-6` : ""}`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-3">
           <Button
@@ -203,7 +206,9 @@ export default function FactoryPendingInvoiceVerify() {
 
                   {isAdminOrOwner && (
                     <>
-                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">Pricing</DropdownMenuLabel>
+                      <DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
+                        Pricing
+                      </DropdownMenuLabel>
                       <DropdownMenuItem
                         onClick={() => applyProductionPricesMutation.mutate()}
                         disabled={applyProductionPricesMutation.isPending}
@@ -579,7 +584,7 @@ export default function FactoryPendingInvoiceVerify() {
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-[320px] p-0" align="start">
+                <PopoverContent className="w-[min(320px,calc(100vw-2rem))] p-0" align="start">
                   <Command>
                     <CommandInput placeholder="Search accounts..." data-testid="input-charge-account-search" />
                     <CommandList>
@@ -640,7 +645,11 @@ export default function FactoryPendingInvoiceVerify() {
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2"></div>
 
-        <div className="flex items-center gap-2">
+        {/* Phones pin the verification actions above the home indicator; sm+ keeps the inline row. */}
+        <FactoryMobileActionBar
+          className={`sm:items-center sm:gap-2 ${isPending || isVerified ? "" : "hidden sm:flex"}`}
+          data-testid="verify-mobile-actions"
+        >
           {isPending && (
             <Button
               onClick={() => setShowApproveDialog(true)}
@@ -672,7 +681,7 @@ export default function FactoryPendingInvoiceVerify() {
               Finalize Invoice
             </Button>
           )}
-        </div>
+        </FactoryMobileActionBar>
       </div>
 
       <FactoryPendingInvoiceVerifyDialog1 model={model} />
@@ -709,7 +718,7 @@ export default function FactoryPendingInvoiceVerify() {
                 </p>
               ) : (
                 <div className="overflow-auto max-h-[60vh]">
-                  <Table data-testid="table-view-proforma">
+                  <Table mobileLayout="cards" data-testid="table-view-proforma">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Article</TableHead>

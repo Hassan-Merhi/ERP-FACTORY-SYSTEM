@@ -43,7 +43,7 @@ export function FactoryPendingInvoiceVerifyDialog4({ model }: { model: Model }) 
 
             {finalizePreview.baleCount > 0 && (
               <div className="border rounded-md overflow-hidden">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Reference</TableHead>

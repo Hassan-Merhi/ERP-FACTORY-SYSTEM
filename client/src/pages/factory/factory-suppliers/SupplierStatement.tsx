@@ -418,7 +418,7 @@ export function SupplierStatement({
           {!collapsedStmtSections.has("fxTransfers") && (
             <div>
               <div className="table-responsive">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-32">Date</TableHead>

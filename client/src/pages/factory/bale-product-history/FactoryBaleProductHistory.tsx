@@ -135,7 +135,7 @@ export function FactoryBaleProductHistory() {
 
       <Card>
         <CardContent className="pt-4">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader>
               <TableRow>
                 <TableHead>Month</TableHead>

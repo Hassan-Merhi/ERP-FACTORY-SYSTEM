@@ -454,7 +454,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
 
         {/* Table */}
         <div className="border rounded-xl overflow-auto max-h-[calc(100vh-220px)]">
-          <Table wrapperClassName="overflow-visible" className="w-full table-fixed">
+          <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full table-fixed">
             <TableHeader className="sticky top-0 z-30">
               <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                 <TableHead className="w-10 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2 pl-3 pr-1">

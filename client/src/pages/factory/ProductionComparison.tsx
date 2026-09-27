@@ -11,6 +11,8 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { AlertTriangle, ChevronDown, Package, Scale } from "lucide-react";
 import React from "react";
 import { cn } from "@/lib/utils";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 
 import type { MergedRow, Preset, ReportData, SupplierDayRow } from "./productioncomparison/types";
 import {
@@ -48,6 +50,9 @@ export default function ProductionComparison() {
   const [filterWorkers, setFilterWorkers] = useState<string[]>([]);
   // Supplier mix breakdown filter
   const [filterSuppliers, setFilterSuppliers] = useState<string[]>([]);
+  const isPhoneLayout = useErpPhoneLayout();
+  const [phoneTableView, setPhoneTableView] = useState(false);
+  const comparisonCards = useMobileCardTable(!phoneTableView);
 
   const { data: workers = [] } = useQuery<{ id: number; fullName: string; active?: boolean }[]>({
     queryKey: ["/api/factory/workers?profile=picker"],
@@ -538,7 +543,7 @@ export default function ProductionComparison() {
               </div>
 
               {/* Supplier summary table */}
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Supplier</TableHead>
@@ -626,7 +631,7 @@ export default function ProductionComparison() {
                     Per-day breakdown ({dailyBreakdown.length} rows)
                   </summary>
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="w-[110px]">Date</TableHead>
@@ -728,140 +733,161 @@ export default function ProductionComparison() {
                 : "No products match the active filters."}
             </div>
           ) : (
-            <div className="rounded-xl border overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    {/* Group row */}
-                    <tr className="bg-muted/40 border-b border-border">
-                      <th
-                        rowSpan={2}
-                        className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground min-w-[200px] border-r border-border/50 align-bottom"
-                      >
-                        Product
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom min-w-[180px]"
-                      >
-                        Product (Arabic)
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom"
-                      >
-                        Category
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom"
-                      >
-                        Grade
-                      </th>
-                      <th
-                        rowSpan={2}
-                        className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom min-w-[100px]"
-                      >
-                        Workers
-                      </th>
-                      <th
-                        colSpan={3}
-                        className="px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 border-b border-border/50 border-r border-border/50"
-                      >
-                        Quantity (Bales)
-                      </th>
-                      <th
-                        colSpan={3}
-                        className="px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400 border-b border-border/50"
-                      >
-                        Weight (kg)
-                      </th>
-                    </tr>
-                    {/* Sub-header row */}
-                    <tr className="bg-muted/20 border-b border-border">
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
-                        {labelA}
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">
-                        {labelB}
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-foreground border-r border-border/50">
-                        Diff
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
-                        {labelA}
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">
-                        {labelB}
-                      </th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-foreground">Diff</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((row, idx) => {
-                      const qDiff = row.aQty - row.bQty;
-                      const kDiff = row.aKg - row.bKg;
-                      const workerSummary = workerSummaryByArticle.get(row.articleCode) ?? [];
-                      const arabicName = arabicNameByArticle.get(row.articleCode.trim().toUpperCase()) ?? "";
-                      return (
-                        <tr
-                          key={row.articleCode}
-                          className={cn(
-                            "border-b border-border/30 hover:bg-accent/40 transition-colors",
-                            idx % 2 === 1 && "bg-muted/10"
-                          )}
+            <div className="space-y-2">
+              {/* Phones read one card per product by default; the full matrix stays one tap away. */}
+              {isPhoneLayout && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={phoneTableView}
+                    onClick={() => setPhoneTableView((current) => !current)}
+                    data-testid="button-comparison-table-view"
+                  >
+                    {phoneTableView ? "Card view" : "Table view"}
+                  </Button>
+                </div>
+              )}
+              <div className={cn("overflow-hidden", !comparisonCards.cards && "rounded-xl border shadow-sm")}>
+                <div className="overflow-x-auto">
+                  <table
+                    className="w-full text-sm border-collapse"
+                    {...comparisonCards.tableProps}
+                    data-testid="table-production-comparison"
+                  >
+                    <thead>
+                      {/* Group row */}
+                      <tr className="bg-muted/40 border-b border-border">
+                        <th
+                          rowSpan={2}
+                          className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground min-w-[200px] border-r border-border/50 align-bottom"
                         >
-                          <td className="px-4 py-2.5 border-r border-border/30">
-                            <span className="font-medium text-sm leading-snug">
-                              {row.productName || row.articleCode}
-                            </span>
-                          </td>
-                          <td
-                            className="px-3 py-2.5 text-sm text-right border-r border-border/30 min-w-[180px]"
-                            dir="rtl"
-                          >
-                            <span className={arabicName ? "font-medium" : "text-muted-foreground"}>
-                              {arabicName || "—"}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2.5 text-sm text-muted-foreground border-r border-border/30">
-                            {row.categoryName || "—"}
-                          </td>
-                          <td className="px-3 py-2.5 border-r border-border/30">
-                            {row.grade !== "—" ? (
-                              <Badge variant="secondary" className="text-xs font-semibold px-2">
-                                {row.grade}
-                              </Badge>
-                            ) : (
-                              <span className="text-muted-foreground text-xs">—</span>
+                          Product
+                        </th>
+                        <th
+                          rowSpan={2}
+                          className="px-3 py-3 text-right text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom min-w-[180px]"
+                        >
+                          Product (Arabic)
+                        </th>
+                        <th
+                          rowSpan={2}
+                          className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom"
+                        >
+                          Category
+                        </th>
+                        <th
+                          rowSpan={2}
+                          className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom"
+                        >
+                          Grade
+                        </th>
+                        <th
+                          rowSpan={2}
+                          className="px-3 py-3 text-left text-xs font-bold uppercase tracking-wider text-muted-foreground border-r border-border/50 align-bottom min-w-[100px]"
+                        >
+                          Workers
+                        </th>
+                        <th
+                          colSpan={3}
+                          className="px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-blue-600 dark:text-blue-400 border-b border-border/50 border-r border-border/50"
+                        >
+                          Quantity (Bales)
+                        </th>
+                        <th
+                          colSpan={3}
+                          className="px-4 py-2 text-center text-xs font-bold uppercase tracking-widest text-violet-600 dark:text-violet-400 border-b border-border/50"
+                        >
+                          Weight (kg)
+                        </th>
+                      </tr>
+                      {/* Sub-header row */}
+                      <tr className="bg-muted/20 border-b border-border">
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
+                          {labelA}
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">
+                          {labelB}
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-foreground border-r border-border/50">
+                          Diff
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-foreground whitespace-nowrap">
+                          {labelA}
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground whitespace-nowrap">
+                          {labelB}
+                        </th>
+                        <th className="px-4 py-2 text-right text-xs font-semibold text-foreground">Diff</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((row, idx) => {
+                        const qDiff = row.aQty - row.bQty;
+                        const kDiff = row.aKg - row.bKg;
+                        const workerSummary = workerSummaryByArticle.get(row.articleCode) ?? [];
+                        const arabicName = arabicNameByArticle.get(row.articleCode.trim().toUpperCase()) ?? "";
+                        return (
+                          <tr
+                            key={row.articleCode}
+                            className={cn(
+                              "border-b border-border/30 hover:bg-accent/40 transition-colors",
+                              idx % 2 === 1 && "bg-muted/10"
                             )}
-                          </td>
-                          <td className="px-3 py-2.5 border-r border-border/30">
-                            <WorkerSummaryHover workers={workerSummary} labelA={labelA} labelB={labelB} />
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
-                            {fmtNum(row.aQty)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            {fmtNum(row.bQty)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right border-r border-border/30">
-                            <DiffCell value={qDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtNum(n)} />
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
-                            {fmtKg(row.aKg)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                            {fmtKg(row.bKg)}
-                          </td>
-                          <td className="px-4 py-2.5 text-right">
-                            <DiffCell value={kDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtKg(n)} />
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          >
+                            <td className="px-4 py-2.5 border-r border-border/30">
+                              <span className="font-medium text-sm leading-snug">
+                                {row.productName || row.articleCode}
+                              </span>
+                            </td>
+                            <td
+                              className="px-3 py-2.5 text-sm text-right border-r border-border/30 min-w-[180px]"
+                              dir="rtl"
+                            >
+                              <span className={arabicName ? "font-medium" : "text-muted-foreground"}>
+                                {arabicName || "—"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-sm text-muted-foreground border-r border-border/30">
+                              {row.categoryName || "—"}
+                            </td>
+                            <td className="px-3 py-2.5 border-r border-border/30">
+                              {row.grade !== "—" ? (
+                                <Badge variant="secondary" className="text-xs font-semibold px-2">
+                                  {row.grade}
+                                </Badge>
+                              ) : (
+                                <span className="text-muted-foreground text-xs">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 border-r border-border/30">
+                              <WorkerSummaryHover workers={workerSummary} labelA={labelA} labelB={labelB} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
+                              {fmtNum(row.aQty)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                              {fmtNum(row.bQty)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right border-r border-border/30">
+                              <DiffCell value={qDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtNum(n)} />
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-foreground">
+                              {fmtKg(row.aKg)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
+                              {fmtKg(row.bKg)}
+                            </td>
+                            <td className="px-4 py-2.5 text-right">
+                              <DiffCell value={kDiff} fmt={(n) => (n > 0 ? "+" : "") + fmtKg(n)} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}

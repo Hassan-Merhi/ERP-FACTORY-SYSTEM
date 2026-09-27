@@ -59,7 +59,7 @@ export function SessionHistoryCard({
       </CardHeader>
       <CardContent className="p-0">
         <div className="table-responsive">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader className="sticky top-0 z-30 bg-background">
               <TableRow>
                 <TableHead>Session</TableHead>

@@ -143,7 +143,7 @@ export function SessionBalesDialog({
               unloaded.
             </p>
             <div className="table-responsive rounded-md border">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Reference</TableHead>

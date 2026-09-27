@@ -177,7 +177,7 @@ export function DeductionsView() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Worker</TableHead>

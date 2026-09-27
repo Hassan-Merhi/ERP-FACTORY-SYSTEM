@@ -266,7 +266,7 @@ export function AdvancesPanel({ model }: { model: ReturnType<typeof useAdvancesM
 
       {/* Table */}
       <div className="border rounded-xl overflow-x-auto">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="w-10 h-9">

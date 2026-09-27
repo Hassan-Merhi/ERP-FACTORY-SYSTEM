@@ -337,8 +337,11 @@ export default function ProformaAddLine() {
         </p>
       </div>
 
-      {/* Items grid — padded at bottom for the sticky bar */}
-      <div className={`flex-1 overflow-y-auto px-4 pb-${selectedItem ? "44" : "6"}`}>
+      {/* Items grid — padded at bottom for the sticky bar (literal classes so Tailwind emits them,
+          plus the home-indicator inset the bar sits above) */}
+      <div
+        className={`flex-1 overflow-y-auto px-4 ${selectedItem ? "pb-[calc(11rem+env(safe-area-inset-bottom))]" : "pb-6"}`}
+      >
         {itemsLoading ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 mt-2">
             {Array.from({ length: 12 }).map((_, i) => (
@@ -403,7 +406,7 @@ export default function ProformaAddLine() {
 
       {/* Sticky bottom panel when item selected */}
       {selectedItem && (
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-background border-t shadow-lg px-4 py-4">
+        <div className="fixed bottom-0 left-0 right-0 z-30 bg-background border-t shadow-lg px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
           {/* Autosave progress bar */}
           {autoSave && autoSaveCountdown > 0 && (
             <div className="absolute top-0 left-0 right-0 h-1 bg-muted overflow-hidden rounded-none">

@@ -1,6 +1,7 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -281,7 +282,9 @@ export default function FactoryInvoiceLoadingScan() {
   const inv = summary.invoice;
 
   return (
-    <div className="flex flex-col min-h-full p-4 sm:p-6 max-w-5xl mx-auto space-y-4">
+    <div
+      className={`mx-auto flex min-h-full max-w-5xl flex-col space-y-4 sm:p-6 ${activeSessionId && currentSession ? `${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:pb-6` : ""}`}
+    >
       <div className="flex flex-wrap items-center gap-3">
         <Button
           variant="ghost"
@@ -372,7 +375,7 @@ export default function FactoryInvoiceLoadingScan() {
             </div>
           ) : (
             <div className="table-responsive">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Article Code</TableHead>
@@ -590,7 +593,7 @@ export default function FactoryInvoiceLoadingScan() {
 
             {currentBales.length > 0 && (
               <div className="table-responsive rounded-md border">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead className="w-8">#</TableHead>
@@ -634,18 +637,22 @@ export default function FactoryInvoiceLoadingScan() {
             )}
 
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <Button
-                onClick={() => setCompleteDialogOpen(true)}
-                disabled={currentBales.length === 0 || completeSessionMutation.isPending}
-                data-testid="button-complete-session"
-              >
-                <CheckCircle className="h-4 w-4 mr-1" />
-                Complete Loading
-              </Button>
-              <Button variant="outline" onClick={() => setCancelDialogOpen(true)} data-testid="button-cancel-session">
-                <XCircle className="h-4 w-4 mr-1" />
-                Cancel Session
-              </Button>
+              {/* Phones pin Complete / Cancel above the home indicator while scanning; on sm+ the
+                  bar dissolves (`sm:contents`) and the buttons sit in this row as before. */}
+              <FactoryMobileActionBar className="sm:contents" data-testid="invoice-loading-mobile-actions">
+                <Button
+                  onClick={() => setCompleteDialogOpen(true)}
+                  disabled={currentBales.length === 0 || completeSessionMutation.isPending}
+                  data-testid="button-complete-session"
+                >
+                  <CheckCircle className="h-4 w-4 mr-1" />
+                  Complete Loading
+                </Button>
+                <Button variant="outline" onClick={() => setCancelDialogOpen(true)} data-testid="button-cancel-session">
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Cancel Session
+                </Button>
+              </FactoryMobileActionBar>
               <div className="ml-auto flex items-center gap-2">
                 <Button
                   variant="outline"

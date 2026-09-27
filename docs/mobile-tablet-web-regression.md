@@ -25,6 +25,20 @@ The Mobile Responsiveness workflow creates disposable ERP, Factory, Properties, 
 
 This targeted rendered gate complements the source-contract and frontend suites without rerunning the complete backend CI matrix. The six-size route matrix and the manual orientation/device checks below remain the final release certification.
 
+## Factory Mode rendered regression
+
+`scripts/verify-factory-mobile-browser.mjs` covers Factory Mode beyond the floor screens that the Wave 4 smoke protects: the canonical Factory destinations (production, inventory, finance, people, sales, intelligence, rentals, settings, Container Create) and the seeded detail/workflow routes (invoice detail, invoice loading scan, pending-invoice verification, dispatch batch detail and scan, customer, employee and worker detail). It runs at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 and fails on:
+
+- page or workspace (`#main-content`) horizontal overflow;
+- controls outside the viewport that no sideways scroller (tab strip, table region) clips;
+- touch targets under 44px and text inputs under 16px on phones;
+- hover-only controls, dialogs outside the viewport, fixed controls escaping the phone viewport;
+- controls hidden underneath a fixed mobile action bar;
+- a navigation drawer that is wider than the phone, scrolls sideways, has controls under 44px, or stays open after a destination is chosen;
+- scanner inputs under 44px/16px or not focusable.
+
+Ordinary tables that still scroll sideways on phones are reported as warnings (`ERP_FACTORY_MOBILE_STRICT_TABLES=1` makes them failures); analytical matrices opt out with `data-mobile-matrix`. In CI the Mobile Responsiveness job runs it with `ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1`, which creates one record of each kind in the disposable fixture company. Never use `ERP_FACTORY_MOBILE_CREATE_SEEDS` against real company data.
+
 ## Run against a local or preview deployment
 
 The target URL must serve a build of the pull-request branch. Testing the current production deployment does not validate unmerged code.

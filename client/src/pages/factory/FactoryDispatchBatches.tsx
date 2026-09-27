@@ -295,10 +295,12 @@ export default function FactoryDispatchBatches() {
               Reports
             </Button>
           )}
-          {showBatches && <Button onClick={() => setCreateOpen(true)} data-testid="button-new-dispatch-batch">
-            <Plus className="w-4 h-4 mr-2" />
-            New Dispatch Batch
-          </Button>}
+          {showBatches && (
+            <Button onClick={() => setCreateOpen(true)} data-testid="button-new-dispatch-batch">
+              <Plus className="w-4 h-4 mr-2" />
+              New Dispatch Batch
+            </Button>
+          )}
         </div>
       </PageHeader>
 
@@ -489,7 +491,7 @@ export default function FactoryDispatchBatches() {
                     </Button>
                   </div>
                 ) : (
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Batch #</TableHead>

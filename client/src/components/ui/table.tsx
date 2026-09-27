@@ -18,8 +18,8 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
    */
   maxHeight?: string;
   /**
-   * Phone presentation. `"cards"` restacks each body row as a labelled card on ERP-mode phone
-   * layouts (see `mobile-card-table.ts`); tablet and desktop always render the table. Omit it
+   * Phone presentation. `"cards"` restacks each body row as a labelled card on ERP and Factory
+   * phone layouts (see `mobile-card-table.ts`); tablet and desktop always render the table. Omit it
    * (or pass `"scroll"`) for matrix-style tables whose columns must stay side by side.
    */
   mobileLayout?: "cards" | "scroll";

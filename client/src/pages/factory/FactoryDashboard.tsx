@@ -188,7 +188,7 @@ export default function FactoryDashboard() {
               </p>
             ) : (
               <div className="overflow-x-auto">
-                <Table>
+                <Table mobileLayout="cards" data-testid="dashboard-containers-otw-table">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Container</TableHead>
@@ -244,7 +244,7 @@ export default function FactoryDashboard() {
                 <p className="text-sm text-muted-foreground">No bales pressed today</p>
               ) : (
                 <div className="max-h-64 overflow-y-auto">
-                  <Table>
+                  <Table mobileLayout="cards" data-testid="dashboard-recent-production-table">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Category</TableHead>
@@ -256,7 +256,9 @@ export default function FactoryDashboard() {
                     <TableBody>
                       {kpis.balesDetail.map((b, i) => (
                         <TableRow key={b.id ?? i} data-testid={`row-bale-${b.id ?? i}`}>
-                          <TableCell className="text-sm text-muted-foreground">{b.category || "—"}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground" data-mobile-cell="field">
+                            {b.category || "—"}
+                          </TableCell>
                           <TableCell className="text-sm">{b.productName || "—"}</TableCell>
                           <TableCell className="text-right font-mono text-sm">{b.quantity ?? 1}</TableCell>
                           <TableCell className="text-right font-mono text-sm">{fmt(b.weightKg, 2)}</TableCell>

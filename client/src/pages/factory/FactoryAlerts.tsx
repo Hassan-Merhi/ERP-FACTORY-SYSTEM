@@ -125,7 +125,7 @@ export default function FactoryAlerts() {
             </div>
           ) : (
             <div className="table-responsive">
-              <Table>
+              <Table mobileLayout="cards" data-testid="factory-alerts-table">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Severity</TableHead>
@@ -143,12 +143,13 @@ export default function FactoryAlerts() {
                       className={alert.read ? "opacity-60" : ""}
                       data-testid={`row-alert-${alert.id}`}
                     >
-                      <TableCell>{getSeverityBadge(alert.severity)}</TableCell>
+                      {/* Severity is a labelled field on phone cards; the alert title heads the card. */}
+                      <TableCell data-mobile-cell="field">{getSeverityBadge(alert.severity)}</TableCell>
                       <TableCell className="font-medium" data-testid={`text-alert-title-${alert.id}`}>
                         {alert.title}
                       </TableCell>
                       <TableCell
-                        className="text-muted-foreground max-w-xs truncate"
+                        className="text-muted-foreground sm:max-w-xs sm:truncate"
                         data-testid={`text-alert-message-${alert.id}`}
                       >
                         {alert.message}

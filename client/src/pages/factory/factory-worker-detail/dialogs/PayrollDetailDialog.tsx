@@ -137,7 +137,7 @@ export function PayrollDetailDialog({
                 </div>
               ) : (
                 <div className="rounded-md border overflow-hidden">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Date</TableHead>

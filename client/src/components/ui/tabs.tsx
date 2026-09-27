@@ -71,10 +71,31 @@ const TabsTrigger = React.forwardRef<
 >(({ className, value, onClick, children, ...props }, ref) => {
   const ctx = React.useContext(TabsContext);
   const active = ctx.value === value;
+  const localRef = React.useRef<HTMLButtonElement | null>(null);
+  const setRef = React.useCallback(
+    (node: HTMLButtonElement | null) => {
+      localRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref]
+  );
+
+  // A strip wider than a phone scrolls sideways; keep the active tab in view (horizontally only,
+  // so selecting a tab or opening a deep link never scrolls the page itself).
+  React.useEffect(() => {
+    const node = localRef.current;
+    const list = node?.closest<HTMLElement>('[role="tablist"]');
+    if (!active || !node || !list || list.scrollWidth <= list.clientWidth) return;
+    const listBox = list.getBoundingClientRect();
+    const tabBox = node.getBoundingClientRect();
+    if (tabBox.left < listBox.left) list.scrollLeft -= listBox.left - tabBox.left + 8;
+    else if (tabBox.right > listBox.right) list.scrollLeft += tabBox.right - listBox.right + 8;
+  }, [active]);
 
   return (
     <button
-      ref={ref}
+      ref={setRef}
       type="button"
       role="tab"
       aria-selected={active}

@@ -362,3 +362,22 @@ body {
 [data-testid="net-position-currency-context"].bg-muted\/20 {
   display: none !important;
 }
+
+/*
+ * Sidebar touch targets. Desktop sidebar rows are dense (py-1.5 links, py-1 section headers);
+ * in the phone drawer and on any touch-only screen every link and button is at least 44px tall
+ * so navigation works by thumb. Applies to the ERP, Factory and Properties sidebars alike.
+ */
+[data-sidebar="sidebar"][data-mobile="true"] :is(a[href], button) {
+  min-height: 2.75rem;
+}
+
+[data-sidebar="sidebar"][data-mobile="true"] button {
+  min-width: 2.75rem;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  [data-slot="sidebar"] :is(a[href], button) {
+    min-height: 2.75rem;
+  }
+}

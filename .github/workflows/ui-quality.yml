@@ -54,7 +54,7 @@ jobs:
 
             for file in "${files[@]}"; do
               case "$file" in
-                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
+                client/*|scripts/verify-mobile-responsive-*.mjs|scripts/verify-factory-mobile-*.mjs|tests/ui/factory-mobile-*|docs/factory-navigation-registry.md|scripts/audit-ux-module-consistency.mjs|scripts/prepare-phase9-browser-smoke-fixture.mjs|scripts/run-phase9-language-browser-smoke.mjs|scripts/lib/browser-smoke-*.mjs|scripts/verify-bandwidth-*.mjs|scripts/verify-phase10-dialog-form-consistency.mjs|tests/ui/mobile-responsive-*.test.ts|tests/ui/*filter*.test.*|docs/mobile-tablet-web-regression.md|docs/archive/mobile-responsive-phase-status.md|tsconfig.mobile.json|package.json|package-lock.json|.github/workflows/ui-quality.yml)
                   mobile=true
                   ;;
               esac
@@ -323,12 +323,16 @@ jobs:
           run_smoke scripts/verify-mobile-responsive-wave2-browser.mjs
           run_smoke scripts/verify-mobile-responsive-wave3-browser.mjs
           run_smoke scripts/verify-mobile-responsive-wave4-browser.mjs
+          # Factory Mode beyond the floor screens: canonical destinations plus seeded detail and
+          # workflow routes (the disposable fixture gets one record of each kind).
+          export ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1
+          run_smoke scripts/verify-factory-mobile-browser.mjs
 
       - name: Full responsive contract matrix
         run: node scripts/verify-mobile-responsive-phase11-regression.mjs
 
       - name: Focused responsive tests
-        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts
+        run: node node_modules/vitest/vitest.mjs run --config vitest.config.frontend.ts tests/ui/mobile-responsive-*.test.ts tests/ui/factory-mobile-*.test.*
 
       - name: Upload rendered UX evidence
         if: always()

@@ -86,7 +86,7 @@ export function WasteBaleGroupTable({ model }: { model: WasteDispatchModel }) {
         ) : (
           <>
             <div className="overflow-x-auto">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow className="bg-muted/40">
                     <TableHead className="w-8 px-3 py-2" />

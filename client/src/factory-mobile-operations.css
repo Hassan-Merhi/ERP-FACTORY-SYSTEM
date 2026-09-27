@@ -1,0 +1,102 @@
+/*
+ * Factory Mode phone/touch utilities, loaded by FactoryShell. Like the ERP equivalents in
+ * `erp-mobile-operations.css`, these key off the Factory workspace (`[data-factory-workspace]`)
+ * or `html[data-app-shell="factory"]` for portalled content, so they never leak into ERP, POS or
+ * Properties. Tablet/desktop layouts are untouched.
+ */
+
+/*
+ * Hover-revealed row actions (edit/delete icons with opacity-0 + group-hover) cannot be
+ * discovered without a pointer that hovers. On touch devices they are always visible.
+ */
+@media (hover: none) {
+  [data-factory-workspace] :is(button, a, div, span)[class*="opacity-0"][class*="group-hover"],
+  [data-factory-workspace] :is(button, a, div, span)[class*="opacity-0"][class*="group-focus-within"] {
+    opacity: 1 !important;
+  }
+
+  [data-factory-workspace] :is(button, a, div, span)[class~="invisible"][class*="group-hover:visible"] {
+    visibility: visible !important;
+  }
+}
+
+/*
+ * A single-column phone grid (`grid-cols-1 sm:grid-cols-2`) whose full-width rows use a bare
+ * `col-span-2` gains an implicit auto-sized second column, squeezing every field beside it.
+ * Below `sm` those rows span the one explicit column instead.
+ */
+@media (max-width: 639px) {
+  [data-factory-workspace] .grid-cols-1 > .col-span-2,
+  html[data-app-shell="factory"] [data-slot="dialog-content"] .grid-cols-1 > .col-span-2 {
+    grid-column: 1 / -1;
+  }
+}
+
+/*
+ * Popovers and dropdown menus never exceed the usable phone width, whatever fixed width
+ * (`w-[320px]`, `w-96`) the page gave them for desktop.
+ */
+@media (max-width: 639px) {
+  html[data-app-shell="factory"] [data-radix-popper-content-wrapper] > * {
+    max-width: calc(100vw - 1rem) !important;
+  }
+}
+
+/* Workspace tab strips scroll sideways instead of wrapping into tiny two-line tabs. */
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] {
+    justify-content: flex-start;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  [data-factory-workspace] [role="tablist"][data-factory-scroll-tabs="true"] > [role="tab"] {
+    flex: 0 0 auto;
+    min-height: 2.75rem;
+    white-space: nowrap;
+    scroll-snap-align: start;
+  }
+}
+
+/*
+ * index.css wraps every `.flex.gap-*` row at ≤768px so button rows cannot clip. On a column
+ * container that wrap does nothing useful and sizes each child to its max-content width, so a
+ * page column grew to the width of its widest tab strip (Stock Entry reached 502px on a 320px
+ * phone) and the phone drawer split its sections into side-by-side columns. Same fix as the ERP
+ * shell (`erp-mobile-operations.css`): columns, and rows that ask for `flex-nowrap`, stay
+ * single-line; so do the sheets and dialogs Factory portals outside the workspace.
+ */
+@media (max-width: 768px) {
+  [data-factory-workspace]
+    .flex.flex-col:is(.gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]),
+  [data-factory-workspace] .flex.flex-nowrap:is(.gap-2, .gap-3, .gap-4) {
+    flex-wrap: nowrap;
+  }
+
+  [data-slot="sidebar-content"] {
+    flex-wrap: nowrap !important;
+  }
+
+  html[data-app-shell="factory"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
+  html[data-app-shell="factory"]
+    :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"])
+    .flex.flex-col:is(.gap-1, .gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]) {
+    flex-wrap: nowrap;
+  }
+}
+
+/*
+ * The floating notes button defaults to the bottom-left corner, exactly where a phone workflow
+ * bar (FactoryMobileActionBar) puts Cancel / Save. While such a bar is on screen the button
+ * floats above it so it never covers a workflow action.
+ */
+@media (max-width: 639px) {
+  html[data-app-shell="factory"]:has([data-factory-mobile-action-bar="true"]) [data-testid="button-open-user-notes"] {
+    top: auto !important;
+    bottom: calc(9rem + env(safe-area-inset-bottom)) !important;
+  }
+}

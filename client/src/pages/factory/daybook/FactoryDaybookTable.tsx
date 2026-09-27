@@ -19,6 +19,16 @@ import type { DaybookEntry, DisplayEntry } from "./types";
 import { FactoryDaybookEntryRow } from "./FactoryDaybookEntryRow";
 import type { CondensedRow, FactoryDaybookModel } from "./useFactoryDaybookModel";
 
+/**
+ * Date/Type | Count | Total columns. The desktop widths (100px / 180px) leave no room for the
+ * type on a 320px phone, so phones get a narrow count and a capped total column instead.
+ */
+export function daybookColumnsClass(showAmounts: boolean) {
+  return showAmounts
+    ? "grid-cols-[minmax(0,1fr)_2.5rem_minmax(0,7.5rem)] sm:grid-cols-[minmax(0,1fr)_100px_180px]"
+    : "grid-cols-[minmax(0,1fr)_2.5rem] sm:grid-cols-[minmax(0,1fr)_100px]";
+}
+
 function BaleSummaryRow({
   row,
   colsClass,
@@ -39,6 +49,7 @@ function BaleSummaryRow({
       size="icon"
       variant="ghost"
       title="View details"
+      aria-label="View details"
       onClick={(e) => {
         e.stopPropagation();
         model.setViewEntry(mergedEntry);
@@ -49,15 +60,15 @@ function BaleSummaryRow({
     </Button>
   );
   return (
-    <div className={cn("grid w-full bg-muted/20 border-t items-center", colsClass)}>
-      <div className="pl-14 pr-2 py-2 min-w-0">
+    <div className={cn("flex w-full flex-wrap items-center border-t bg-muted/20 sm:grid", colsClass)}>
+      <div className="min-w-0 flex-1 py-2 pl-8 pr-2 sm:pl-14">
         <span className="text-sm text-foreground">
           {row.count} bale{row.count !== 1 ? "s" : ""}
         </span>
       </div>
-      <div />
+      <div className="hidden sm:block" />
       {model.showAmounts ? (
-        <div className="flex items-center justify-end gap-1 pr-2 py-2">
+        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">
           <span className="text-sm font-mono font-medium">
             {currencySymbol(row.currencyCode)}
             {formatNumber(row.totalAmountCurrency)}
@@ -65,7 +76,7 @@ function BaleSummaryRow({
           {viewButton}
         </div>
       ) : (
-        <div className="flex items-center justify-end gap-1 pr-2 py-2">{viewButton}</div>
+        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">{viewButton}</div>
       )}
     </div>
   );
@@ -99,7 +110,10 @@ function CondensedGroupRow({
         tabIndex={0}
         aria-expanded={isExpanded}
         aria-label={`${formatTxType(row.txType)} on ${row.date}`}
-        className={cn("grid w-full pl-6 pr-4 py-3 cursor-pointer hover-elevate items-center", colsClass)}
+        className={cn(
+          "grid w-full cursor-pointer items-center gap-x-2 py-3 pl-3 pr-3 hover-elevate sm:gap-x-0 sm:pl-6 sm:pr-4",
+          colsClass
+        )}
       >
         <div className="flex items-center gap-2 min-w-0">
           {isExpanded ? (
@@ -107,13 +121,13 @@ function CondensedGroupRow({
           ) : (
             <ChevronRight className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
-          <Badge variant={bv} className={cn(bc, "whitespace-nowrap")}>
+          <Badge variant={bv} className={cn(bc, "min-w-0 whitespace-normal break-words sm:whitespace-nowrap")}>
             {formatTxType(row.txType)}
           </Badge>
         </div>
         <div className="text-center text-muted-foreground text-sm font-mono">{row.count}</div>
         {model.showAmounts && (
-          <div className="text-right font-mono font-medium text-sm">
+          <div className="min-w-0 break-words text-right font-mono text-sm font-medium">
             {currencySymbol(row.currencyCode)}
             {formatNumber(row.totalAmountCurrency)}
             {row.currencyCode !== "USD" && (
@@ -148,7 +162,7 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
     if (!dateMap.has(row.date)) dateMap.set(row.date, []);
     dateMap.get(row.date)!.push(row);
   }
-  const colsClass = showAmounts ? "grid-cols-[minmax(0,1fr)_100px_180px]" : "grid-cols-[minmax(0,1fr)_100px]";
+  const colsClass = daybookColumnsClass(showAmounts);
   return (
     <>
       {Array.from(dateMap.entries()).map(([date, rows]) => {
@@ -157,11 +171,11 @@ function CondensedRows({ model }: { model: FactoryDaybookModel }) {
         return (
           <div key={date} className="w-full">
             {/* Date separator row */}
-            <div className={cn("grid w-full px-4 py-1.5 bg-muted/40 border-b", colsClass)}>
-              <span className="font-semibold text-sm">{formatDisplayDate(date + "T00:00:00")}</span>
+            <div className={cn("grid w-full gap-x-2 border-b bg-muted/40 px-3 py-1.5 sm:gap-x-0 sm:px-4", colsClass)}>
+              <span className="min-w-0 break-words text-sm font-semibold">{formatDisplayDate(date + "T00:00:00")}</span>
               <span />
               {showAmounts && (
-                <span className="font-mono font-medium text-sm text-right">
+                <span className="min-w-0 break-words text-right font-mono text-sm font-medium">
                   {currencySymbol(dayCcy)}
                   {formatNumber(dayTotal)}
                 </span>
@@ -235,8 +249,8 @@ export function FactoryDaybookTable({ model }: { model: FactoryDaybookModel }) {
             {/* Header */}
             <div
               className={cn(
-                "sticky top-0 z-30 bg-background border-b grid w-full px-4 py-2",
-                showAmounts ? "grid-cols-[minmax(0,1fr)_100px_180px]" : "grid-cols-[minmax(0,1fr)_100px]"
+                "sticky top-0 z-30 grid w-full gap-x-2 border-b bg-background px-3 py-2 sm:gap-x-0 sm:px-4",
+                daybookColumnsClass(showAmounts)
               )}
             >
               <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Date / Type</span>

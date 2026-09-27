@@ -9,20 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,17 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Plus,
-  Search,
-  Phone,
-  Pencil,
-  Trash2,
-  Copy,
-  BookMarked,
-  X,
-  Check,
-} from "lucide-react";
+import { Plus, Search, Phone, Pencil, Trash2, Copy, BookMarked, X, Check } from "lucide-react";
 
 interface PhoneEntry {
   label: string;
@@ -111,17 +89,13 @@ export default function FactoryContacts() {
   const filtered = useMemo(() => {
     if (!search.trim()) return contacts;
     return contacts.filter(
-      (c) =>
-        searchAny(search, c.name, c.role, c.notes) ||
-        c.numbers.some((n) => searchAny(search, n.number, n.label))
+      (c) => searchAny(search, c.name, c.role, c.notes) || c.numbers.some((n) => searchAny(search, n.number, n.label))
     );
   }, [contacts, search]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: typeof EMPTY_FORM) => {
-      const url = editingContact
-        ? `/api/factory/contacts/${editingContact.id}`
-        : "/api/factory/contacts";
+      const url = editingContact ? `/api/factory/contacts/${editingContact.id}` : "/api/factory/contacts";
       const method = editingContact ? "PATCH" : "POST";
       const res = await modeApiRequest(method, url, data);
       if (!res.ok) {
@@ -180,11 +154,9 @@ export default function FactoryContacts() {
     });
   };
 
-  const addNumber = () =>
-    setForm((f) => ({ ...f, numbers: [...f.numbers, { label: "", number: "" }] }));
+  const addNumber = () => setForm((f) => ({ ...f, numbers: [...f.numbers, { label: "", number: "" }] }));
 
-  const removeNumber = (idx: number) =>
-    setForm((f) => ({ ...f, numbers: f.numbers.filter((_, i) => i !== idx) }));
+  const removeNumber = (idx: number) => setForm((f) => ({ ...f, numbers: f.numbers.filter((_, i) => i !== idx) }));
 
   const handleSubmit = () => {
     if (!form.name.trim()) {
@@ -199,11 +171,7 @@ export default function FactoryContacts() {
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <PageHeader
-        title="Contacts"
-        subtitle="Personal reference — names, numbers, and notes"
-        showBackButton
-      >
+      <PageHeader title="Contacts" subtitle="Personal reference — names, numbers, and notes" showBackButton>
         <Button size="sm" onClick={openNew}>
           <Plus className="h-4 w-4 mr-1" />
           Add Contact
@@ -242,8 +210,8 @@ export default function FactoryContacts() {
             )}
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
+          <div className="sm:rounded-md sm:border">
+            <Table mobileLayout="cards" data-testid="factory-contacts-table">
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[180px]">Name</TableHead>
@@ -273,9 +241,7 @@ export default function FactoryContacts() {
                             <div key={i} className="flex items-center gap-2 text-sm">
                               <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <span className="font-mono">{n.number}</span>
-                              {n.label && (
-                                <span className="text-xs text-muted-foreground">({n.label})</span>
-                              )}
+                              {n.label && <span className="text-xs text-muted-foreground">({n.label})</span>}
                               <CopyButton text={n.number} />
                             </div>
                           ))}
@@ -284,21 +250,21 @@ export default function FactoryContacts() {
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="align-top py-3 max-w-[260px]">
+                    <TableCell className="align-top py-3 sm:max-w-[260px]">
                       {c.notes ? (
-                        <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">
-                          {c.notes}
-                        </p>
+                        <p className="text-xs text-muted-foreground whitespace-pre-wrap line-clamp-3">{c.notes}</p>
                       ) : (
                         <span className="text-muted-foreground text-xs">—</span>
                       )}
                     </TableCell>
                     <TableCell className="align-top py-3 text-right">
-                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
                         <Button
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7"
+                          aria-label={`Edit ${c.name}`}
+                          data-testid={`button-edit-contact-${c.id}`}
                           onClick={() => openEdit(c)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
@@ -307,6 +273,8 @@ export default function FactoryContacts() {
                           size="icon"
                           variant="ghost"
                           className="h-7 w-7 text-destructive hover:text-destructive"
+                          aria-label={`Delete ${c.name}`}
+                          data-testid={`button-delete-contact-${c.id}`}
                           onClick={() => setDeleteTarget(c)}
                         >
                           <Trash2 className="h-3.5 w-3.5" />

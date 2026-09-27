@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -417,7 +418,9 @@ export default function FactoryInvoiceCreate() {
         : "";
 
   return (
-    <div className="flex flex-col h-full p-4 lg:p-6">
+    <div
+      className={`flex h-full flex-col sm:p-4 lg:p-6 ${bales.length > 0 ? "pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:pb-4 lg:pb-6" : ""}`}
+    >
       <div className="flex items-center justify-between gap-4 mb-4">
         <div>
           <PageHeader title="Create Invoice" subtitle="POS-style bale sales invoice" />
@@ -530,6 +533,7 @@ export default function FactoryInvoiceCreate() {
                                   size="icon"
                                   onClick={() => removeBaleMutation.mutate(bale.id)}
                                   disabled={removeBaleMutation.isPending}
+                                  aria-label={`Remove bale ${bale.referenceNumber}`}
                                   data-testid={`button-remove-bale-${bale.id}`}
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -806,7 +810,7 @@ export default function FactoryInvoiceCreate() {
           )}
 
           <Button
-            className="w-full"
+            className={`w-full ${bales.length > 0 ? "hidden sm:inline-flex" : ""}`}
             size="lg"
             onClick={() => setShowFinalizeDialog(true)}
             disabled={!orderId || bales.length === 0 || finalizeMutation.isPending}
@@ -817,6 +821,25 @@ export default function FactoryInvoiceCreate() {
           </Button>
         </div>
       </div>
+
+      {/* Phones: the finalize action stays reachable above the home indicator while bales are scanned. */}
+      {bales.length > 0 && (
+        <FactoryMobileActionBar
+          className="min-[360px]:grid-cols-1 sm:hidden"
+          data-testid="invoice-create-mobile-actions"
+        >
+          <Button
+            size="lg"
+            onClick={() => setShowFinalizeDialog(true)}
+            disabled={!orderId || finalizeMutation.isPending}
+            data-testid="button-finalize-mobile"
+          >
+            <PackageCheck className="mr-2 h-5 w-5" />
+            Finalize Invoice ·{" "}
+            {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+          </Button>
+        </FactoryMobileActionBar>
+      )}
 
       <Dialog open={showFinalizeDialog} onOpenChange={setShowFinalizeDialog}>
         <DialogContent>

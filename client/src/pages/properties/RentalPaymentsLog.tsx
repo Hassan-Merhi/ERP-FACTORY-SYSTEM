@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
+import { useMobileCardTable } from "@/components/ui/mobile-card-table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,7 +81,10 @@ export default function RentalPaymentsLog({
 }: Props) {
   const { selectedCompany } = useCompany();
   const { toast } = useToast();
-  const isErp = useAppMode() === "erp";
+  const appMode = useAppMode();
+  const isErp = appMode === "erp";
+  // ERP and Factory phones restack the payments table as cards (Properties keeps the table).
+  const { tableProps: cardTableProps } = useMobileCardTable();
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<PaymentRow | null>(null);
 
@@ -117,7 +121,10 @@ export default function RentalPaymentsLog({
   const total = filtered.reduce((s, p) => s + Number(p.amount), 0);
 
   return (
-    <div className={isErp ? "space-y-4 sm:p-4" : "p-4 space-y-4"} data-testid={`page-${testIdPrefix}-payments-log`}>
+    <div
+      className={isErp || appMode === "factory" ? "space-y-4 sm:p-4" : "p-4 space-y-4"}
+      data-testid={`page-${testIdPrefix}-payments-log`}
+    >
       {isErp ? (
         <>
           <PageHeader
@@ -147,7 +154,7 @@ export default function RentalPaymentsLog({
               />
             </div>
           </div>
-          <div className="relative w-64">
+          <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-8"
@@ -206,7 +213,7 @@ export default function RentalPaymentsLog({
                 {payments.length === 0 ? "No payments recorded yet." : "No payments match your search."}
               </div>
             ) : (
-              <table className="w-full text-sm">
+              <table className="w-full text-sm" {...cardTableProps} data-testid={`table-${testIdPrefix}-payments`}>
                 <thead className="sticky top-0 z-30 bg-muted/50 border-b">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">Date</th>
@@ -263,6 +270,7 @@ export default function RentalPaymentsLog({
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteTarget(p)}
+                          aria-label="Delete payment"
                           data-testid={`button-delete-payment-${p.id}`}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />

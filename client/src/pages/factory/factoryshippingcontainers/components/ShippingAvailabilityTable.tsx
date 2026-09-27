@@ -4,16 +4,16 @@ import type { ClientErrorLike } from "@/lib/clientError";
  *
  * Extracted from FactoryShippingContainers.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {useQuery, useMutation} from "@tanstack/react-query";
-import {apiRequest, queryClient} from "@/lib/queryClient";
-import {Button} from "@/components/ui/button";
-import {Input} from "@/components/ui/input";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Plus, Trash2, Check, X, Loader2} from "lucide-react";
-import {useToast} from "@/hooks/use-toast";
-import type {AvailRow, EditingAvail} from "../types";
-import {AVAIL_KEY} from "../utils";
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Plus, Trash2, Check, X, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import type { AvailRow, EditingAvail } from "../types";
+import { AVAIL_KEY } from "../utils";
 
 export function ShippingAvailabilityTable() {
   const { toast } = useToast();
@@ -64,7 +64,8 @@ export function ShippingAvailabilityTable() {
       queryClient.invalidateQueries({ queryKey: [AVAIL_KEY] });
       toast({ title: "Row deleted" });
     },
-    onError: (e: ClientErrorLike) => toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
+    onError: (e: ClientErrorLike) =>
+      toast({ title: "Failed to delete", description: e.message, variant: "destructive" }),
   });
 
   function startEdit(row: AvailRow) {
@@ -100,7 +101,7 @@ export function ShippingAvailabilityTable() {
       </div>
 
       <div className="overflow-x-auto">
-        <Table className="text-xs">
+        <Table mobileLayout="cards" className="text-xs">
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs w-36">Date</TableHead>

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 import type { ProductRow } from "../types";
@@ -55,20 +56,24 @@ export function WorkerSummaryHover({
   labelA: string;
   labelB: string;
 }) {
+  // Hover opens it on desktop; a tap toggles it so touch screens (which never hover) can read it too.
+  const [open, setOpen] = useState(false);
   if (workers.length === 0) return <span className="text-muted-foreground text-xs">—</span>;
 
   return (
-    <HoverCard openDelay={150} closeDelay={100}>
+    <HoverCard open={open} onOpenChange={setOpen} openDelay={150} closeDelay={100}>
       <HoverCardTrigger asChild>
         <button
           type="button"
+          aria-expanded={open}
+          onClick={() => setOpen((current) => !current)}
           className="inline-flex items-center rounded-md border border-border bg-background px-2 py-1 text-xs font-medium whitespace-nowrap hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={`${workers.length} worker${workers.length === 1 ? "" : "s"}. Hover for bale details.`}
+          aria-label={`${workers.length} worker${workers.length === 1 ? "" : "s"}. Show bale details.`}
         >
           {workers.length} worker{workers.length === 1 ? "" : "s"}
         </button>
       </HoverCardTrigger>
-      <HoverCardContent align="start" className="w-80 p-3">
+      <HoverCardContent align="start" className="w-[min(20rem,calc(100vw-2rem))] p-3">
         <div className="mb-2 flex items-center justify-between gap-3">
           <p className="text-sm font-semibold">
             {workers.length} worker{workers.length === 1 ? "" : "s"}

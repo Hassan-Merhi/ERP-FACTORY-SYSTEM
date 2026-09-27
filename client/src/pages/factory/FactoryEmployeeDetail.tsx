@@ -523,7 +523,7 @@ export default function FactoryEmployeeDetail() {
               ) : !statement?.rows || statement.rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">No transactions yet</p>
               ) : (
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Date</TableHead>

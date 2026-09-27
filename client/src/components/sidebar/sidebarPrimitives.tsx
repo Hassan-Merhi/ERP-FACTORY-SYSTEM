@@ -71,8 +71,14 @@ export function SidebarNavLink({ item, color, testId, trailing, draggable }: Sid
   const [location] = useLocation();
   const isActive = sidebarPathMatches(location, item.url);
   const Icon = item.icon;
+  const linkRef = useRef<HTMLAnchorElement>(null);
+  // A long section list (the phone drawer especially) opens with the current page in view.
+  useEffect(() => {
+    if (isActive) linkRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [isActive]);
   return (
     <Link
+      ref={linkRef}
       href={item.url}
       draggable={draggable === false ? false : undefined}
       data-testid={testId}
@@ -89,7 +95,7 @@ export function SidebarNavLink({ item, color, testId, trailing, draggable }: Sid
       ) : (
         <Icon className="h-3.5 w-3.5 shrink-0" />
       )}
-      <span className="flex-1 leading-tight">{item.title}</span>
+      <span className="min-w-0 flex-1 break-words leading-tight">{item.title}</span>
       {trailing}
     </Link>
   );
@@ -133,7 +139,7 @@ export function SidebarFlatLink({
       ) : (
         <Icon className="h-3.5 w-3.5 shrink-0" />
       )}
-      <span className="flex-1 leading-tight">{label}</span>
+      <span className="min-w-0 flex-1 break-words leading-tight">{label}</span>
       {badge != null && badge > 0 && (
         <Badge variant="default" className="text-xs min-w-5 justify-center">
           {badge}
@@ -166,7 +172,9 @@ export function SidebarSectionGroup({
   return (
     <div>
       <button
+        type="button"
         onClick={onToggle}
+        aria-expanded={isOpen}
         data-testid={sectionTestId}
         className="flex w-full items-center gap-2 rounded-md px-2.5 py-1 text-left transition-colors hover:bg-sidebar-accent/30"
       >
@@ -315,7 +323,10 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
                 e.stopPropagation();
                 dragRef.current = item.url;
               }}
-              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0"
+              aria-hidden="true"
+              // Mouse-only reordering: touch browsers cannot start HTML drag-and-drop, so the handle
+              // is dropped there rather than left as an invisible control that does nothing.
+              className="flex items-center justify-center w-5 py-1.5 cursor-grab opacity-0 group-hover:opacity-40 shrink-0 [@media(hover:none)]:hidden"
               title="Drag to reorder"
             >
               <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
@@ -337,7 +348,7 @@ export function PinnedNavList({ items, color, onReorder, isVisible, testIdFor, t
               ) : (
                 <Icon className="h-3.5 w-3.5 shrink-0" />
               )}
-              <span className="flex-1 leading-tight">{item.title}</span>
+              <span className="min-w-0 flex-1 break-words leading-tight">{item.title}</span>
               {trailingFor?.(item)}
             </Link>
           </div>

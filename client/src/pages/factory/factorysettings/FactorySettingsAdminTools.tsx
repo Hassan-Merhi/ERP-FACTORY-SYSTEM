@@ -129,7 +129,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
             <div className="space-y-3">
               <div className="text-sm text-muted-foreground">{renamePreview.length} product(s) will be renamed:</div>
               <div className="max-h-80 overflow-y-auto border rounded-md">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Code</TableHead>
@@ -354,7 +354,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
 
               {baleValidationResult.validRows.length > 0 && (
                 <div className="border rounded-md overflow-auto max-h-64">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead className="w-12">Row</TableHead>
@@ -507,7 +507,7 @@ export function FactorySettingsAdminTools({ model }: Props) {
                   </span>
                 </div>
                 <div className="border rounded-md overflow-hidden">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Container</TableHead>
