@@ -2,7 +2,7 @@ import "./lib/observabilityBootstrap";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, WebSocket, type RawData } from "ws";
 import type { IncomingMessage, Server } from "http";
-import type { RequestHandler } from "express";
+import type { Express, RequestHandler } from "express";
 import { runWithTraceContext } from "./lib/traceContext";
 import { logger } from "./lib/logger";
 import {
@@ -208,6 +208,13 @@ async function handleAuthenticatedSocketMessage(
     }
   }
   await handleScreenFeedWebSocketMessage(ws, context, buffer, isBinary);
+}
+
+export function registerWebSocketHttpFallback(app: Express): void {
+  app.get("/ws", (_req, res) => {
+    res.setHeader("Upgrade", "websocket");
+    res.status(426).end();
+  });
 }
 
 export function setupWS(server: Server, sessionMiddleware?: RequestHandler): void {
