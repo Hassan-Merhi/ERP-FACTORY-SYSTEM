@@ -55,6 +55,7 @@ interface MarketCompanySummary {
 interface MarketResponse {
   generatedAt: string;
   rows: MarketRow[];
+  stockGroups: string[];
   companySummaries: MarketCompanySummary[];
   summary: {
     itemCount: number;
@@ -159,9 +160,10 @@ export default function ItemMarketAnalysis() {
     if (period.fromDate) params.set("startDate", period.fromDate);
     if (period.toDate) params.set("endDate", period.toDate);
     if (debouncedSearch) params.set("search", debouncedSearch);
+    if (stockGroupName !== "all") params.set("stockGroupName", stockGroupName);
     if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
     return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, selectedCompanyIds]);
+  }, [period, debouncedSearch, stockGroupName, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
@@ -174,69 +176,47 @@ export default function ItemMarketAnalysis() {
   useEffect(() => {
     setVisibleRowCount(250);
     setExpandedItemCode(null);
-  }, [queryUrl, stockGroupName, profitDirection, multiCompany]);
+  }, [queryUrl, profitDirection, multiCompany]);
 
-  if (selectedCompany && selectedCompany.companyType !== "erp") {
-    return (
-      <div className="container mx-auto p-4 sm:p-6">
-        <PageHeader title="Item Market Analysis" onBack={() => window.history.back()} />
-        <div className="mt-6 rounded-xl border p-6 text-sm text-muted-foreground">
-          Item Market Analysis is available for ERP companies only.
-        </div>
-      </div>
-    );
-  }
+  const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
+  const stockGroups = data?.stockGroups ?? [];
 
-  const rawRows = data?.rows ?? [];
-  const stockGroups = [
-    ...new Set(rawRows.map((row) => row.stockGroupName?.trim()).filter((name): name is string => Boolean(name))),
-  ].sort((left, right) => left.localeCompare(right));
-
-  const baseRows = rawRows
-    .filter((row) => stockGroupName === "all" || row.stockGroupName?.trim() === stockGroupName)
-    .sort(
-      (left, right) =>
-        normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
-        left.companyName.localeCompare(right.companyName)
-    );
+  const baseRows = useMemo(
+    () =>
+      [...rawRows].sort(
+        (left, right) =>
+          normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
+          left.companyName.localeCompare(right.companyName)
+      ),
+    [rawRows]
+  );
 
   // In multi-company mode, filter by the combined profit for the item code so
   // expanding a kept item still shows every selected company's contribution.
-  const combinedProfitByItemKey = new Map<string, number>();
-  if (multiCompany && profitDirection !== "all") {
-    for (const row of baseRows) {
-      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-      combinedProfitByItemKey.set(itemKey, (combinedProfitByItemKey.get(itemKey) ?? 0) + row.profit);
+  const combinedProfitByItemKey = useMemo(() => {
+    const combined = new Map<string, number>();
+    if (multiCompany && profitDirection !== "all") {
+      for (const row of baseRows) {
+        const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+        combined.set(itemKey, (combined.get(itemKey) ?? 0) + row.profit);
+      }
     }
-  }
+    return combined;
+  }, [baseRows, multiCompany, profitDirection]);
 
-  const rows = baseRows.filter((row) => {
-    if (profitDirection === "all") return true;
-    if (!multiCompany) return matchesProfitDirection(row.profit, profitDirection);
-    const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-    return matchesProfitDirection(combinedProfitByItemKey.get(itemKey) ?? 0, profitDirection);
-  });
-
-  const summaryTotals = rows.reduce(
-    (totals, row) => {
-      totals.importedQty += row.importedQty;
-      totals.soldQty += row.soldQty;
-      totals.revenue += row.revenue;
-      totals.profit += row.profit;
-      return totals;
-    },
-    { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
+  const rows = useMemo(
+    () =>
+      baseRows.filter((row) => {
+        if (profitDirection === "all") return true;
+        if (!multiCompany) return matchesProfitDirection(row.profit, profitDirection);
+        const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+        return matchesProfitDirection(combinedProfitByItemKey.get(itemKey) ?? 0, profitDirection);
+      }),
+    [baseRows, combinedProfitByItemKey, multiCompany, profitDirection]
   );
-  const summary = {
-    itemCount: new Set(rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)).size,
-    ...summaryTotals,
-    marginPct: summaryTotals.revenue === 0 ? 0 : (summaryTotals.profit / summaryTotals.revenue) * 100,
-  };
 
-  const selectedCompanyNames = erpCompanies.filter((company) => selectedCompanyIds.includes(company.id));
-  const companySummaries = selectedCompanyNames.map((company) => {
-    const companyRows = rows.filter((row) => row.companyId === company.id);
-    const totals = companyRows.reduce(
+  const summary = useMemo(() => {
+    const totals = rows.reduce(
       (acc, row) => {
         acc.importedQty += row.importedQty;
         acc.soldQty += row.soldQty;
@@ -246,67 +226,101 @@ export default function ItemMarketAnalysis() {
       },
       { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
     );
+
     return {
-      companyId: company.id,
-      companyCode: company.code,
-      companyName: company.name,
-      itemCount: companyRows.length,
+      itemCount: new Set(
+        rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
+      ).size,
       ...totals,
       marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
     };
-  });
+  }, [rows]);
 
-  const topProfitCompanyByItem = new Map<
-    string,
-    { kind: "winner"; companyName: string; profit: number; marginPct: number } | { kind: "equal" } | { kind: "none" }
-  >();
+  const selectedCompanyNames = useMemo(
+    () => erpCompanies.filter((company) => selectedCompanyIds.includes(company.id)),
+    [erpCompanies, selectedCompanyIds]
+  );
 
-  const profitByCode = new Map<string, Map<number, { companyName: string; profit: number; revenue: number }>>();
+  const companySummaries = useMemo(
+    () =>
+      selectedCompanyNames.map((company) => {
+        const companyRows = rows.filter((row) => row.companyId === company.id);
+        const totals = companyRows.reduce(
+          (acc, row) => {
+            acc.importedQty += row.importedQty;
+            acc.soldQty += row.soldQty;
+            acc.revenue += row.revenue;
+            acc.profit += row.profit;
+            return acc;
+          },
+          { importedQty: 0, soldQty: 0, revenue: 0, profit: 0 }
+        );
+        return {
+          companyId: company.id,
+          companyCode: company.code,
+          companyName: company.name,
+          itemCount: companyRows.length,
+          ...totals,
+          marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
+        };
+      }),
+    [rows, selectedCompanyNames]
+  );
 
-  for (const row of rows) {
-    const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-    const byCompany =
-      profitByCode.get(itemKey) ?? new Map<number, { companyName: string; profit: number; revenue: number }>();
-    const current = byCompany.get(row.companyId);
-    byCompany.set(row.companyId, {
-      companyName: row.companyName,
-      profit: (current?.profit ?? 0) + row.profit,
-      revenue: (current?.revenue ?? 0) + row.revenue,
-    });
-    profitByCode.set(itemKey, byCompany);
-  }
+  const topProfitCompanyByItem = useMemo(() => {
+    const topByItem = new Map<
+      string,
+      { kind: "winner"; companyName: string; profit: number; marginPct: number } | { kind: "equal" } | { kind: "none" }
+    >();
+    const profitByCode = new Map<string, Map<number, { companyName: string; profit: number; revenue: number }>>();
 
-  for (const [itemKey, byCompany] of profitByCode) {
-    // "Top Profit Company" should only identify a market that actually made
-    // positive profit. A company with no sales (profit = 0) must never beat a
-    // company that sold the item at a loss, and if nobody made money we show None.
-    const profitableValues = [...byCompany.values()]
-      .filter((entry) => entry.revenue > 0 && entry.profit > 0)
-      .sort((left, right) => right.profit - left.profit);
-
-    if (profitableValues.length === 0) {
-      topProfitCompanyByItem.set(itemKey, { kind: "none" });
-      continue;
+    for (const row of rows) {
+      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
+      const byCompany =
+        profitByCode.get(itemKey) ?? new Map<number, { companyName: string; profit: number; revenue: number }>();
+      const current = byCompany.get(row.companyId);
+      byCompany.set(row.companyId, {
+        companyName: row.companyName,
+        profit: (current?.profit ?? 0) + row.profit,
+        revenue: (current?.revenue ?? 0) + row.revenue,
+      });
+      profitByCode.set(itemKey, byCompany);
     }
 
-    const topProfit = profitableValues[0].profit;
-    const tied = profitableValues.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+    for (const [itemKey, byCompany] of profitByCode) {
+      // "Top Profit Company" should only identify a market that actually made
+      // positive profit. A company with no sales (profit = 0) must never beat a
+      // company that sold the item at a loss, and if nobody made money we show None.
+      const profitableValues = [...byCompany.values()]
+        .filter((entry) => entry.revenue > 0 && entry.profit > 0)
+        .sort((left, right) => right.profit - left.profit);
 
-    if (tied.length > 1) {
-      topProfitCompanyByItem.set(itemKey, { kind: "equal" });
-      continue;
+      if (profitableValues.length === 0) {
+        topByItem.set(itemKey, { kind: "none" });
+        continue;
+      }
+
+      const topProfit = profitableValues[0].profit;
+      const tied = profitableValues.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
+
+      if (tied.length > 1) {
+        topByItem.set(itemKey, { kind: "equal" });
+        continue;
+      }
+
+      const best = profitableValues[0];
+      topByItem.set(itemKey, {
+        kind: "winner",
+        companyName: best.companyName,
+        profit: best.profit,
+        marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
+      });
     }
 
-    const best = profitableValues[0];
-    topProfitCompanyByItem.set(itemKey, {
-      kind: "winner",
-      companyName: best.companyName,
-      profit: best.profit,
-      marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
-    });
-  }
+    return topByItem;
+  }, [rows]);
 
-  const groupedRows = (() => {
+  const groupedRows = useMemo(() => {
     const grouped = new Map<string, MarketRow[]>();
 
     for (const row of rows) {
@@ -354,11 +368,22 @@ export default function ItemMarketAnalysis() {
         };
       })
       .sort((left, right) => left.name.localeCompare(right.name) || left.itemKey.localeCompare(right.itemKey));
-  })();
+  }, [rows]);
 
   const visibleRows = rows.slice(0, visibleRowCount);
   const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
   const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
+
+  if (selectedCompany && selectedCompany.companyType !== "erp") {
+    return (
+      <div className="container mx-auto p-4 sm:p-6">
+        <PageHeader title="Item Market Analysis" onBack={() => window.history.back()} />
+        <div className="mt-6 rounded-xl border p-6 text-sm text-muted-foreground">
+          Item Market Analysis is available for ERP companies only.
+        </div>
+      </div>
+    );
+  }
 
   const profitClass = summary.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400";
 
