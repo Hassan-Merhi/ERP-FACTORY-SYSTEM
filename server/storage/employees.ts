@@ -453,8 +453,38 @@ export async function updateSalaryAdvance(
 }
 
 export async function deleteSalaryAdvance(id: number): Promise<void> {
-  await db.delete(schema.salaryAdvanceDeductions).where(eq(schema.salaryAdvanceDeductions.salaryAdvanceId, id));
-  await db.delete(schema.salaryAdvances).where(eq(schema.salaryAdvances.id, id));
+  await db.transaction(async (tx) => {
+    const [advance] = await tx
+      .select({
+        id: schema.salaryAdvances.id,
+        companyId: schema.salaryAdvances.companyId,
+        voucherId: schema.salaryAdvances.voucherId,
+      })
+      .from(schema.salaryAdvances)
+      .where(eq(schema.salaryAdvances.id, id))
+      .limit(1);
+
+    if (!advance) return;
+
+    await tx.delete(schema.salaryAdvanceDeductions).where(eq(schema.salaryAdvanceDeductions.salaryAdvanceId, id));
+    await tx.delete(schema.salaryAdvances).where(eq(schema.salaryAdvances.id, id));
+
+    // A non-opening salary advance creates an SA-* payment voucher. Deleting the
+    // advance must retire that voucher too; otherwise the cash/employee debit stays
+    // in accounting forever as an orphan and Net Position drifts from Payroll.
+    if (advance.voucherId) {
+      await tx
+        .update(schema.vouchers)
+        .set({ deletedAt: new Date() })
+        .where(
+          and(
+            eq(schema.vouchers.id, advance.voucherId),
+            eq(schema.vouchers.companyId, advance.companyId),
+            isNull(schema.vouchers.deletedAt)
+          )
+        );
+    }
+  });
 }
 
 // Salary Advance Deductions
