@@ -21,7 +21,6 @@ import { getNetPositionCurrencySummary } from "../../services/accounting/netPosi
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
-import { computeEmployeeWorkerNetPosition } from "../../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
@@ -354,6 +353,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
           id: employees.id,
           companyId: employees.companyId,
           employeeType: employees.employeeType,
+          currentBalance: employees.currentBalance,
           openingBalance: employees.openingBalance,
           openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
         })
@@ -362,13 +362,27 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .execute();
 
       const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-      const payrollPosition = computeEmployeeWorkerNetPosition(
-        companyEmployees,
-        employeeBalances,
-        managedSalaryAdvances
+      const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
+      const payrollWorkerIds = new Set(
+        companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
       );
-      const employeePosition = payrollPosition.employees;
-      const workerPosition = payrollPosition.workers;
+
+      // Current ERP Payroll is maintained in employees.currentBalance. This is the same
+      // balance shown on Payroll → Employees and includes legacy/imported salary state
+      // that cannot be reconstructed reliably from voucher history/opening_balance_side.
+      // Keep it as one net control account, scoped to Employee rows only.
+      const payrollSignedBalance = round2(
+        payrollEmployees.reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
+      );
+
+      // Worker advances have their own authoritative lifecycle table. Do not rebuild
+      // them from employee voucher debits: deleting an old advance historically left
+      // its voucher behind, which creates orphan debits and overstates advances.
+      const workerAdvancesDisplay = round2(
+        managedSalaryAdvances
+          .filter((advance) => payrollWorkerIds.has(advance.employeeId))
+          .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+      );
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
@@ -390,27 +404,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
 
-      // Keep the two payroll populations separate. Employee-type debit balances are
-      // employee receivables/current accounts; Worker-type debit balances are worker
-      // advances. Managed salary advances replace their original posted debit with the
-      // current remaining_balance, while legacy advance vouchers remain visible.
-      const employeeReceivablesDisplay = round2(employeePosition.advances);
-      const payrollPayableDisplay = round2(employeePosition.liabilities);
-      const workerAdvancesDisplay = round2(workerPosition.advances);
-      const workerPayableDisplay = round2(workerPosition.liabilities);
+      const payrollPayableDisplay = Math.max(0, payrollSignedBalance);
+      const payrollOverpaymentDisplay = Math.max(0, -payrollSignedBalance);
 
-      if (employeeReceivablesDisplay > 0) {
-        forUsTotal = round2(forUsTotal + employeeReceivablesDisplay);
-        categoryTotals["asset_Employee Receivables"] = round2(
-          (categoryTotals["asset_Employee Receivables"] || 0) + employeeReceivablesDisplay
-        );
-        forUsAccounts.push({
-          name: "Employee Receivables",
-          code: "EMPLOYEE_RECEIVABLE",
-          value: employeeReceivablesDisplay,
-          category: "Employee Receivables",
-        });
-      }
       if (payrollPayableDisplay > 0) {
         onUsTotal = round2(onUsTotal + payrollPayableDisplay);
         categoryTotals["liability_Payroll"] = round2(
@@ -420,6 +416,18 @@ export function registerStatsNetProfitRoutes(app: Express) {
           name: "Payroll Payable",
           code: "PAYROLL_PAYABLE",
           value: payrollPayableDisplay,
+          category: "Payroll",
+        });
+      }
+      if (payrollOverpaymentDisplay > 0) {
+        forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
+        categoryTotals["asset_Payroll"] = round2(
+          (categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay
+        );
+        forUsAccounts.push({
+          name: "Payroll Overpayment",
+          code: "PAYROLL_PAYABLE",
+          value: payrollOverpaymentDisplay,
           category: "Payroll",
         });
       }
@@ -433,18 +441,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
           code: "COMPUTED",
           value: workerAdvancesDisplay,
           category: "Worker Advances",
-        });
-      }
-      if (workerPayableDisplay > 0) {
-        onUsTotal = round2(onUsTotal + workerPayableDisplay);
-        categoryTotals["liability_Worker Payroll"] = round2(
-          (categoryTotals["liability_Worker Payroll"] || 0) + workerPayableDisplay
-        );
-        onUsAccounts.push({
-          name: "Worker Payable",
-          code: "WORKER_PAYABLE",
-          value: workerPayableDisplay,
-          category: "Worker Payroll",
         });
       }
 
