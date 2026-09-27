@@ -74,7 +74,10 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     error: containersError,
     refetch: refetchContainers,
   } = useQuery<Container[]>({
-    queryKey: ["/api/containers"],
+    // This page only needs OTW id/status/grandTotal. Keep the compact profile
+    // in queryKey[0] because the shared React Query fetcher uses that element
+    // as the literal request URL.
+    queryKey: ["/api/containers?profile=otw-summary"],
   });
 
   // Single bulk query replaces the N-per-container useQueries fan-out
@@ -84,7 +87,10 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     error: otwItemsError,
     refetch: refetchOtwItems,
   } = useQuery<StockItem[]>({
-    queryKey: ["/api/containers/otw-items"],
+    // Request the grouped compact contract explicitly. The navigation-scoped
+    // fetch guard is only a compatibility fallback and cannot protect direct
+    // Stock OTW routes from downloading the legacy multi-megabyte payload.
+    queryKey: ["/api/containers/otw-items?profile=stock-otw"],
   });
 
   const otwContainers = useMemo(() => containers.filter((c) => c.status === "OTW"), [containers]);
