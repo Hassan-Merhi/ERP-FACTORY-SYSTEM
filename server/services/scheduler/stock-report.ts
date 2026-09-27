@@ -10,12 +10,31 @@ import { storage } from "../../storage";
 import { buildNetPositionZip, getTodayLabel } from "./daily-export";
 import { shouldSendStockReport } from "./whatsapp-send";
 
+const SCHEDULER_PREFLIGHT_TIMEOUT_MS = 20_000;
+
+async function withSchedulerPreflightTimeout<T>(label: string, operation: Promise<T>): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms`)), SCHEDULER_PREFLIGHT_TIMEOUT_MS);
+    timer.unref();
+  });
+
+  try {
+    return await Promise.race([operation, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function checkAndRunStockReport(): Promise<void> {
   try {
-    const r = await pool.query(
-      `SELECT company_id, recipient_id, auto_send, enabled,
-              frequency, send_hour, send_day_of_week, last_sent_at
-       FROM whatsapp_stock_settings WHERE id = 1`
+    const r = await withSchedulerPreflightTimeout(
+      "StockReport settings read",
+      pool.query(
+        `SELECT company_id, recipient_id, auto_send, enabled,
+                frequency, send_hour, send_day_of_week, last_sent_at
+         FROM whatsapp_stock_settings WHERE id = 1`
+      )
     );
     if (!r.rows.length) return;
     const row = r.rows[0];
@@ -114,10 +133,13 @@ export async function checkAndRunStockReport(): Promise<void> {
 
 export async function checkAndRunNetPositionExport(): Promise<void> {
   try {
-    const r = await pool.query(
-      `SELECT recipient_id, frequency, send_hour, send_day_of_week,
-              enabled, auto_send, last_sent_at
-       FROM net_position_export_settings WHERE id = 1`
+    const r = await withSchedulerPreflightTimeout(
+      "NetPositionExport settings read",
+      pool.query(
+        `SELECT recipient_id, frequency, send_hour, send_day_of_week,
+                enabled, auto_send, last_sent_at
+         FROM net_position_export_settings WHERE id = 1`
+      )
     );
     if (!r.rows.length) return;
     const row = r.rows[0];
