@@ -68,6 +68,12 @@ export async function sendExportEmail(
     secure: false,
     auth: { user: settings.gmailUser, pass: settings.gmailAppPassword },
     tls: { rejectUnauthorized: true },
+    // Scheduled exports must never hold their cron guard forever when Gmail or
+    // the network stops responding. These timeouts bound connect, greeting,
+    // and in-flight SMTP socket waits while still allowing large attachments.
+    connectionTimeout: 30_000,
+    greetingTimeout: 30_000,
+    socketTimeout: 120_000,
   });
 
   // Verify the connection before sending.

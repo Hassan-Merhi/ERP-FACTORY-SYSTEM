@@ -39,6 +39,16 @@ export interface WaRecipient {
 
 type GreenApiCredentials = Pick<WaSettings, "instanceId" | "apiToken">;
 
+const GREEN_API_REQUEST_TIMEOUT_MS = 30_000;
+
+function greenApiRequestInit(init: RequestInit): RequestInit {
+  if (init.signal) return init;
+  return {
+    ...init,
+    signal: AbortSignal.timeout(GREEN_API_REQUEST_TIMEOUT_MS),
+  };
+}
+
 function cleanGreenApiCredential(value: unknown): string {
   // Green API puts both values directly in the request URL. Copy/paste can add
   // spaces, line breaks, BOMs or zero-width characters, all of which turn an
@@ -72,7 +82,10 @@ async function fetchGreenApiWithAuthFallback(
 ): Promise<Response> {
   const primaryInstanceId = cleanGreenApiCredential(credentials.instanceId);
   const primaryApiToken = cleanGreenApiCredential(credentials.apiToken);
-  const primary = await fetch(baseUrl(primaryInstanceId, primaryApiToken, method), init);
+  const primary = await fetch(
+    baseUrl(primaryInstanceId, primaryApiToken, method),
+    greenApiRequestInit(init)
+  );
   if (primary.status !== 401) return primary;
 
   const alternate = await getGreenApiAuthFallback({ instanceId: primaryInstanceId, apiToken: primaryApiToken });
@@ -84,7 +97,10 @@ async function fetchGreenApiWithAuthFallback(
     method,
   });
 
-  const fallback = await fetch(baseUrl(alternate.instanceId, alternate.apiToken, method), init);
+  const fallback = await fetch(
+    baseUrl(alternate.instanceId, alternate.apiToken, method),
+    greenApiRequestInit(init)
+  );
   if (fallback.ok) {
     logger.warn("[WhatsApp] Green API backup credentials accepted after primary 401", {
       primaryInstanceId,
