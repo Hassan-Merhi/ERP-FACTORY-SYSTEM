@@ -57,7 +57,7 @@ export default function ContainerVerification() {
 
   const { data: containerData } = useQuery<ContainerDetailData>({
     queryKey: [`/api/containers/${containerId}`],
-    enabled: !!containerId && !!containerData?.container,
+    enabled: !!containerId,
   });
 
   const { data: suppliers = [] } = useQuery<Supplier[]>({
@@ -98,7 +98,7 @@ export default function ContainerVerification() {
       if (!res.ok) throw new Error("Failed to fetch loaded items");
       return res.json();
     },
-    enabled: !!containerId,
+    enabled: !!containerId && !!containerData?.container,
   });
 
   const addItemMutation = useMutation({

@@ -23,10 +23,18 @@ function redirectFor(path: string, hiddenCostFields: string[]) {
 
 describe("Factory direct tab route restrictions", () => {
   it("maps representative deep routes to their owning tabs", () => {
-    expect(resolveFactoryTabRouteRestriction("/factory/customers/12")?.hiddenKeys).toContain("hide_tab_parties_customers");
-    expect(resolveFactoryTabRouteRestriction("/factory/sales/invoices/99")?.hiddenKeys).toContain("hide_invoicing_invoices_tab");
-    expect(resolveFactoryTabRouteRestriction("/factory/ledger-vouchers/5/2026/9")?.hiddenKeys).toContain("hide_tab_accounts_view");
-    expect(resolveFactoryTabRouteRestriction("/factory/dispatch-batches/7")?.hiddenKeys).toContain("hide_tab_dispatch_batches");
+    expect(resolveFactoryTabRouteRestriction("/factory/customers/12")?.hiddenKeys).toContain(
+      "hide_tab_parties_customers"
+    );
+    expect(resolveFactoryTabRouteRestriction("/factory/sales/invoices/99")?.hiddenKeys).toContain(
+      "hide_invoicing_invoices_tab"
+    );
+    expect(resolveFactoryTabRouteRestriction("/factory/ledger-vouchers/5/2026/9")?.hiddenKeys).toContain(
+      "hide_tab_accounts_view"
+    );
+    expect(resolveFactoryTabRouteRestriction("/factory/dispatch-batches/7")?.hiddenKeys).toContain(
+      "hide_tab_dispatch_batches"
+    );
     expect(resolveFactoryTabRouteRestriction("/factory/dispatch-batches")).toBeNull();
   });
 

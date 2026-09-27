@@ -390,7 +390,7 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
           .execute();
         const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
-        const xlsxPayrollSigned = round2(
+        const xlsxPayrollSigned = npRound2(
           xlsxEmployees
             .filter((employee) => employee.employeeType !== "Worker")
             .reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
@@ -398,7 +398,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         const xlsxWorkerIds = new Set(
           xlsxEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
         );
-        const xlsxWorkerAdvances = round2(
+        const xlsxWorkerAdvances = npRound2(
           xlsxManagedAdvances
             .filter((advance) => xlsxWorkerIds.has(advance.employeeId))
             .reduce((sum, advance) => sum + advance.remainingBalance, 0)

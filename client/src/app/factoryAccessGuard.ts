@@ -69,15 +69,8 @@ export function computeFactoryGuardRedirect(params: {
   factoryDefaultPage: string;
   currentLocation: string;
 }): string | null {
-  const {
-    isFactoryRoute,
-    isAdminOwner,
-    userRole,
-    myAccess,
-    factorySettings,
-    factoryDefaultPage,
-    currentLocation,
-  } = params;
+  const { isFactoryRoute, isAdminOwner, userRole, myAccess, factorySettings, factoryDefaultPage, currentLocation } =
+    params;
 
   if (!isFactoryRoute || myAccess === undefined) return null;
 
@@ -113,10 +106,7 @@ export function computeFactoryGuardRedirect(params: {
   // Apply the same hidden-tab rule to those direct URLs so a bookmark cannot
   // bypass a tab restriction that is enforced in the visible hub UI.
   const tabRoute = resolveFactoryTabRouteRestriction(currentLocation);
-  if (
-    tabRoute &&
-    tabRoute.hiddenKeys.some((key) => myAccess.hiddenCostFields?.includes(key))
-  ) {
+  if (tabRoute && tabRoute.hiddenKeys.some((key) => myAccess.hiddenCostFields?.includes(key))) {
     return tabRoute.fallback;
   }
 
