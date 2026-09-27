@@ -36,6 +36,7 @@ const querySchema = z.object({
   endDate: dateSchema.optional(),
   search: z.string().trim().max(100).optional(),
   stockGroupId: z.coerce.number().int().positive().optional(),
+  stockGroupName: z.string().trim().max(100).optional(),
   companyIds: z.string().trim().max(500).optional(),
 });
 
@@ -84,6 +85,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
       endDate: first(req.query.endDate),
       search: first(req.query.search),
       stockGroupId: first(req.query.stockGroupId),
+      stockGroupName: first(req.query.stockGroupName),
       companyIds: first(req.query.companyIds),
     });
     if (!parsed.success) {
@@ -124,61 +126,86 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
         return res.status(403).json({ message: "Item Market Analysis can only compare ERP companies" });
       }
 
-      const sections = await runWithDatabaseScopeRuntimeContext(
+      const { sections, stockGroups } = await runWithDatabaseScopeRuntimeContext(
         createTenantDatabaseScope(activeCompanyId, companyIds, "authorized-companies"),
-        async () =>
-          Promise.all(
-            selectedCompanies.map(async (company) => {
-              const assignment =
-                company.id === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, company.id);
-              const role =
-                company.id === activeCompanyId
-                  ? activeRole
-                  : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
+        async () => {
+          const [sections, stockGroupResult] = await Promise.all([
+            Promise.all(
+              selectedCompanies.map(async (company) => {
+                const assignment =
+                  company.id === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, company.id);
+                const role =
+                  company.id === activeCompanyId
+                    ? activeRole
+                    : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
 
-              if (!role || role === "POS") {
-                throw new CompanyAccessError(
-                  403,
-                  `You do not have report access to ${company.name}`,
-                  "COMPANY_REPORT_ACCESS_DENIED"
-                );
-              }
-
-              if (role !== "Developer" && role !== "Admin") {
-                const permissionRows = await storage.getRoleFeaturePermissions(company.id);
-                const permissionMap = buildPermissionMap(permissionRows, role);
-                if (!canAccess(role, "page_sales_report", permissionMap)) {
+                if (!role || role === "POS") {
                   throw new CompanyAccessError(
                     403,
-                    `You do not have Sales Report access in ${company.name}`,
+                    `You do not have report access to ${company.name}`,
                     "COMPANY_REPORT_ACCESS_DENIED"
                   );
                 }
-              }
 
-              const locationIds = await resolveStockInSalesLocationIds({
-                companyId: company.id,
-                userId,
-                role,
-                currentLocationId:
-                  company.id === activeCompanyId
-                    ? req.session.currentLocationId
-                    : (assignment?.assignedLocationId ?? null),
-                requestedLocationIds: [],
-              });
+                if (role !== "Developer" && role !== "Admin") {
+                  const permissionRows = await storage.getRoleFeaturePermissions(company.id);
+                  const permissionMap = buildPermissionMap(permissionRows, role);
+                  if (!canAccess(role, "page_sales_report", permissionMap)) {
+                    throw new CompanyAccessError(
+                      403,
+                      `You do not have Sales Report access in ${company.name}`,
+                      "COMPANY_REPORT_ACCESS_DENIED"
+                    );
+                  }
+                }
 
-              const analysis = await getItemMarketAnalysis({
-                companyId: company.id,
-                locationIds,
-                startDate: parsed.data.startDate,
-                endDate: parsed.data.endDate,
-                search: parsed.data.search || undefined,
-                stockGroupId: companyIds.length === 1 ? parsed.data.stockGroupId : undefined,
-              });
+                const locationIds = await resolveStockInSalesLocationIds({
+                  companyId: company.id,
+                  userId,
+                  role,
+                  currentLocationId:
+                    company.id === activeCompanyId
+                      ? req.session.currentLocationId
+                      : (assignment?.assignedLocationId ?? null),
+                  requestedLocationIds: [],
+                });
 
-              return { company, analysis };
-            })
-          )
+                const analysis = await getItemMarketAnalysis({
+                  companyId: company.id,
+                  locationIds,
+                  startDate: parsed.data.startDate,
+                  endDate: parsed.data.endDate,
+                  search: parsed.data.search || undefined,
+                  stockGroupId: companyIds.length === 1 ? parsed.data.stockGroupId : undefined,
+                  stockGroupName: parsed.data.stockGroupName || undefined,
+                });
+
+                return { company, analysis };
+              })
+            ),
+            pool.query<{ name: string }>(
+              `SELECT DISTINCT BTRIM(sg.name) AS name
+               FROM stock_groups sg
+               WHERE sg.company_id = ANY($1::int[])
+                 AND sg.deleted_at IS NULL
+                 AND COALESCE(sg.active, true) = true
+                 AND EXISTS (
+                   SELECT 1
+                   FROM stock_items si
+                   WHERE si.company_id = sg.company_id
+                     AND si.stock_group_id = sg.id
+                     AND si.deleted_at IS NULL
+                 )
+               ORDER BY BTRIM(sg.name)`,
+              [companyIds]
+            ),
+          ]);
+
+          return {
+            sections,
+            stockGroups: stockGroupResult.rows.map((row) => row.name).filter(Boolean),
+          };
+        }
       );
 
       const rows = sections.flatMap(({ company, analysis }) =>
@@ -211,6 +238,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
       return res.json({
         generatedAt: new Date().toISOString(),
         rows,
+        stockGroups,
         companySummaries,
         summary: {
           itemCount: new Set(
