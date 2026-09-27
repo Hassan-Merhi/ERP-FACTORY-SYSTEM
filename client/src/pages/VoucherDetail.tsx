@@ -258,7 +258,7 @@ export default function VoucherDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="border rounded-lg overflow-x-auto">
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader className="sticky top-0 z-30 bg-background">
                         <TableRow className="bg-muted/50">
                           <TableHead>Name of Item</TableHead>
@@ -309,7 +309,7 @@ export default function VoucherDetail() {
                 </CardHeader>
                 <CardContent>
                   <div className="border rounded-lg overflow-x-auto">
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader className="sticky top-0 z-30 bg-background">
                         <TableRow className="bg-muted/50">
                           <TableHead>Account Name</TableHead>

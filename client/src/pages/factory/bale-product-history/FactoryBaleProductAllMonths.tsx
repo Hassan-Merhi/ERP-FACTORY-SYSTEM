@@ -134,7 +134,7 @@ export function FactoryBaleProductAllMonths() {
         <CardContent>
           {/* Desktop table */}
           <div className="hidden md:block">
-            <Table mobileLayout="cards" wrapperClassName="overflow-visible">
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Bale Code</TableHead>

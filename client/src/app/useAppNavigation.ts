@@ -1,7 +1,7 @@
 import { useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useEscapeBack } from "@/hooks/use-escape-back";
-import { getParentRoute } from "@/lib/parent-routes";
+import { getParentRoute, isFactoryTopLevelPath } from "@/lib/parent-routes";
 import { goBackToPreviousErpLocation } from "@/lib/erp-navigation-history";
 import { useGlobalScrollKeys } from "./useGlobalScrollKeys";
 
@@ -47,6 +47,10 @@ export function useAppNavigation() {
     const parent = getSupplierPartnerParent(pathname) ?? getParentRoute(pathname);
     if (parent) {
       setLocation(parent);
+    } else if (isFactoryTopLevelPath(pathname)) {
+      // Top-level Factory pages have no parent; history.back() here returned to whatever page came
+      // before, including ERP pages, so Escape could leave Factory Mode.
+      return;
     } else if (window.history.length > 1) {
       window.history.back();
     }

@@ -1,3 +1,5 @@
+import { FACTORY_ACCESS_REGISTRY, normalizeFactoryAccessPath } from "@shared/factoryAccessRegistry";
+
 export function getParentRoute(pathname: string): string | null {
   const cleanPath = pathname.split("?")[0].split("#")[0];
 
@@ -172,4 +174,15 @@ export function getParentRoute(pathname: string): string | null {
   }
 
   return null;
+}
+
+const FACTORY_TOP_LEVEL_ROUTES: ReadonlySet<string> = new Set(FACTORY_ACCESS_REGISTRY.map((page) => page.route));
+
+/**
+ * True for a top-level Factory destination (a registry page, any hub section or query state).
+ * These pages have no parent: Escape/Back performs no navigation there (navigation registry
+ * contract), rather than falling back to browser history, which could leave Factory Mode.
+ */
+export function isFactoryTopLevelPath(pathname: string): boolean {
+  return FACTORY_TOP_LEVEL_ROUTES.has(normalizeFactoryAccessPath(pathname));
 }
