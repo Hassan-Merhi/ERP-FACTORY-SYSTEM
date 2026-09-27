@@ -6,7 +6,7 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { db } from "../../db";
+import { db, pool } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import {
@@ -42,48 +42,73 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       const _cached = _getCached(_cacheKey);
       if (_cached) return res.json(_cached);
 
-      // ── Single-pass voucher entry scan (same approach as /api/stats/net-profit)
-      // Builds accountBalances + supplierBalancesMap in one query so all component
-      // values are derived from identical data as the Net Position page.
-      const companyEntries = await db
-        .select({
-          ledgerAccountId: voucherEntries.ledgerAccountId,
-          supplierId: voucherEntries.supplierId,
-          employeeId: voucherEntries.employeeId,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
-        .execute();
+      // Aggregate voucher entries in PostgreSQL instead of materialising every row
+      // into Node. Company 1 currently has ~19k matching entry rows; the grouped
+      // result is only a few hundred rows and preserves the exact ledger and
+      // pure-side supplier semantics used by this endpoint.
+      const groupedBalanceRows = await pool.query<{
+        kind: "ledger" | "supplier";
+        entity_id: number;
+        total_debit: string;
+        total_credit: string;
+      }>(
+        `WITH entries AS MATERIALIZED (
+           SELECT
+             ve.ledger_account_id,
+             ve.supplier_id,
+             ve.debit_amount::numeric AS debit_amount,
+             ve.credit_amount::numeric AS credit_amount
+           FROM voucher_entries ve
+           JOIN vouchers v ON v.id = ve.voucher_id
+           WHERE v.company_id = $1
+             AND v.optional = false
+             AND v.deleted_at IS NULL
+         )
+         SELECT
+           'ledger'::text AS kind,
+           ledger_account_id AS entity_id,
+           COALESCE(SUM(debit_amount), 0)::text AS total_debit,
+           COALESCE(SUM(credit_amount), 0)::text AS total_credit
+         FROM entries
+         WHERE ledger_account_id IS NOT NULL
+         GROUP BY ledger_account_id
+
+         UNION ALL
+
+         SELECT
+           'supplier'::text AS kind,
+           supplier_id AS entity_id,
+           COALESCE(SUM(CASE
+             WHEN debit_amount > 0 AND credit_amount = 0 THEN debit_amount
+             ELSE 0
+           END), 0)::text AS total_debit,
+           COALESCE(SUM(CASE
+             WHEN credit_amount > 0 AND debit_amount = 0 THEN credit_amount
+             ELSE 0
+           END), 0)::text AS total_credit
+         FROM entries
+         WHERE supplier_id IS NOT NULL
+         GROUP BY supplier_id`,
+        [companyId]
+      );
 
       const accountBalances = new Map<number, { debit: number; credit: number }>();
       const supplierBalancesMap = new Map<number, { debit: number; credit: number }>();
 
-      for (const entry of companyEntries) {
-        if (entry.ledgerAccountId) {
-          const d = parseFloat(entry.debitAmount || "0");
-          const c = parseFloat(entry.creditAmount || "0");
-          const cur = accountBalances.get(entry.ledgerAccountId) || { debit: 0, credit: 0 };
-          accountBalances.set(entry.ledgerAccountId, { debit: cur.debit + d, credit: cur.credit + c });
-        }
-        if (entry.supplierId) {
-          const d = parseFloat(entry.debitAmount || "0");
-          const c = parseFloat(entry.creditAmount || "0");
-          const cur = supplierBalancesMap.get(entry.supplierId) || { debit: 0, credit: 0 };
-          // Pure-credit or pure-debit only — avoids FX settlement double-counting
-          // (identical filter to /api/stats/net-profit)
-          if (c > 0 && d === 0) {
-            supplierBalancesMap.set(entry.supplierId, { debit: cur.debit, credit: cur.credit + c });
-          } else if (d > 0 && c === 0) {
-            supplierBalancesMap.set(entry.supplierId, { debit: cur.debit + d, credit: cur.credit });
-          }
-        }
+      for (const row of groupedBalanceRows.rows) {
+        const balance = {
+          debit: parseFloat(row.total_debit || "0"),
+          credit: parseFloat(row.total_credit || "0"),
+        };
+        if (row.kind === "ledger") accountBalances.set(Number(row.entity_id), balance);
+        else supplierBalancesMap.set(Number(row.entity_id), balance);
       }
 
-      // All ledger accounts (including hidden) — same flag as net-profit route
-      const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
+      // The account list and parent-company lookup are independent.
+      const [companyAccounts, parentCompanyId] = await Promise.all([
+        storage.getAllLedgerAccounts(companyId, true),
+        storage.getParentCompanyId(),
+      ]);
 
       // Signed net balance for a single account (mirrors getAccountNetBalance from netPositionHelper)
       const nb = (acc: (typeof companyAccounts)[0]) => getAccountNetBalance(acc, accountBalances);
@@ -93,13 +118,56 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         companyAccounts.filter((a) => types.includes(a.accountType || "")).reduce((s, a) => s + nb(a), 0);
 
       // 1. Supplier Balance — same pure-debit/credit logic as /api/stats/net-profit
-      const parentCompanyId = await storage.getParentCompanyId();
       const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
+
+      // These reads are independent. Keep the batch small so one analytics
+      // request cannot monopolise the application pool while still eliminating
+      // four sequential network/database round trips.
+      const [allSuppliers, otwContainers, standaloneBankAccountEntries, standaloneBankAccounts] =
+        await Promise.all([
+          shouldIncludeSuppliers
+            ? db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute()
+            : Promise.resolve([]),
+          db
+            .select()
+            .from(containers)
+            .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW"))),
+          db
+            .select({
+              bankAccountId: voucherEntries.bankAccountId,
+              creditAmount: voucherEntries.creditAmount,
+              debitAmount: voucherEntries.debitAmount,
+            })
+            .from(voucherEntries)
+            .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+            .innerJoin(bankAccounts, eq(voucherEntries.bankAccountId, bankAccounts.id))
+            .where(
+              and(
+                isNotNull(voucherEntries.bankAccountId),
+                isNull(voucherEntries.ledgerAccountId),
+                isNull(bankAccounts.linkedLedgerId),
+                eq(bankAccounts.companyId, companyId),
+                isNull(bankAccounts.deletedAt),
+                eq(vouchers.companyId, companyId),
+                isNull(vouchers.deletedAt),
+                eq(vouchers.optional, false)
+              )
+            ),
+          db
+            .select()
+            .from(bankAccounts)
+            .where(
+              and(
+                eq(bankAccounts.companyId, companyId),
+                isNull(bankAccounts.deletedAt),
+                isNull(bankAccounts.linkedLedgerId)
+              )
+            ),
+        ]);
 
       let supplierLiabilities = 0;
       let supplierAssets = 0;
       if (shouldIncludeSuppliers) {
-        const allSuppliers = await db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute();
         for (const sup of allSuppliers) {
           const bal = supplierBalancesMap.get(sup.id);
           if (!bal) continue;
@@ -111,14 +179,9 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       }
       const supplierBalance = supplierLiabilities - supplierAssets;
 
-      // 2. Stock OTW (containers with OTW status — asset)
-      const otwContainers = await db
-        .select()
-        .from(containers)
-        .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")));
-      const stockOtwValue = otwContainers.reduce((sum, c) => {
-        const gTotal = parseFloat(c.grandTotal ?? "0");
-        return sum + (gTotal || parseFloat(c.itemsTotal ?? "0"));
+      const stockOtwValue = otwContainers.reduce((sum, container) => {
+        const gTotal = parseFloat(container.grandTotal ?? "0");
+        return sum + (gTotal || parseFloat(container.itemsTotal ?? "0"));
       }, 0);
 
       // 3-5. Duty Agent / Transporter Agent / Loans
@@ -132,40 +195,6 @@ export function registerImportCycleBalanceRoutes(app: Express) {
 
       // 7. Bank — ledger "Bank" accounts + standalone bank accounts (no linked ledger)
       const ledgerBankBalance = Math.max(0, sumNB(["Bank"]));
-
-      // Standalone bank accounts: entries where ledgerAccountId IS NULL and bank has no linkedLedgerId
-      const standaloneBankAccountEntries = await db
-        .select({
-          bankAccountId: voucherEntries.bankAccountId,
-          creditAmount: voucherEntries.creditAmount,
-          debitAmount: voucherEntries.debitAmount,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .innerJoin(bankAccounts, eq(voucherEntries.bankAccountId, bankAccounts.id))
-        .where(
-          and(
-            isNotNull(voucherEntries.bankAccountId),
-            isNull(voucherEntries.ledgerAccountId),
-            isNull(bankAccounts.linkedLedgerId),
-            eq(bankAccounts.companyId, companyId),
-            isNull(bankAccounts.deletedAt),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false)
-          )
-        );
-
-      const standaloneBankAccounts = await db
-        .select()
-        .from(bankAccounts)
-        .where(
-          and(
-            eq(bankAccounts.companyId, companyId),
-            isNull(bankAccounts.deletedAt),
-            isNull(bankAccounts.linkedLedgerId)
-          )
-        );
 
       const standaloneBankOpeningBalance = standaloneBankAccounts.reduce((sum, account) => {
         const raw = parseFloat(account.openingBalance || "0");
@@ -203,14 +232,63 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       // Only include inventory at valid, non-deleted locations (excludes orphaned inventory)
       // Calculate from quantity * averageRate to ensure accuracy (totalValue can get out of sync)
       // NOTE: Exclude the value impact of Mixed vouchers since their production/consumption net to 0
-      const inventoryItems = await db
-        .select({
-          quantity: inventory.quantity,
-          averageRate: inventory.averageRate,
-        })
-        .from(inventory)
-        .innerJoin(locations, eq(inventory.locationId, locations.id))
-        .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
+      // The remaining component reads are independent and individually short.
+      // Run them as one bounded batch (six leases against a 15-connection app
+      // pool) to remove the long sequential tail without recreating pool pressure.
+      const [inventoryItems, cogsData, adjustmentData, advancesData, employeesData, stockItemsWithOpening] =
+        await Promise.all([
+          db
+            .select({
+              quantity: inventory.quantity,
+              averageRate: inventory.averageRate,
+            })
+            .from(inventory)
+            .innerJoin(locations, eq(inventory.locationId, locations.id))
+            .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt))),
+          db
+            .select({
+              totalCost: salesItems.totalCost,
+            })
+            .from(salesItems)
+            .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
+            .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false))),
+          db
+            .select({
+              totalAmount: stockAdjustmentItems.totalAmount,
+              quantity: stockAdjustmentItems.quantity,
+              adjustmentType: stockAdjustmentVouchers.adjustmentType,
+            })
+            .from(stockAdjustmentItems)
+            .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+            .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+            .where(
+              and(
+                eq(vouchers.companyId, companyId),
+                isNull(vouchers.deletedAt),
+                eq(vouchers.optional, false),
+                sql`LOWER(${stockAdjustmentVouchers.adjustmentType}) IN ('consumption', 'production', 'mixed')`
+              )
+            ),
+          db
+            .select({
+              remainingBalance: salaryAdvances.remainingBalance,
+            })
+            .from(salaryAdvances)
+            .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false))),
+          db
+            .select({
+              currentBalance: employees.currentBalance,
+              openingBalance: employees.openingBalance,
+            })
+            .from(employees)
+            .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt))),
+          db
+            .select({
+              openingValue: stockItems.openingValue,
+            })
+            .from(stockItems)
+            .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt))),
+        ]);
 
       const stockOnFloorValue = inventoryItems.reduce((sum, item) => {
         const qty = parseFloat(item.quantity || "0");
@@ -220,14 +298,6 @@ export function registerImportCycleBalanceRoutes(app: Express) {
 
       // 12. Cost of Goods Sold (calculated from salesItems for non-optional, non-deleted sales vouchers)
       // This represents inventory that was sold and is now an expense
-      const cogsData = await db
-        .select({
-          totalCost: salesItems.totalCost,
-        })
-        .from(salesItems)
-        .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-        .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false)));
-
       const cogsBalance = cogsData.reduce((sum, item) => {
         return sum + parseFloat(item.totalCost || "0");
       }, 0);
@@ -235,25 +305,7 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       // 12b. Consumption expense (from stock adjustment items)
       // Includes: pure Consumption vouchers AND Mixed voucher items with negative quantity
       // This represents inventory that was consumed (not sold) and is now an expense
-      const consumptionData = await db
-        .select({
-          totalAmount: stockAdjustmentItems.totalAmount,
-          quantity: stockAdjustmentItems.quantity,
-          adjustmentType: stockAdjustmentVouchers.adjustmentType,
-        })
-        .from(stockAdjustmentItems)
-        .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
-        .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            sql`(LOWER(${stockAdjustmentVouchers.adjustmentType}) = 'consumption' OR LOWER(${stockAdjustmentVouchers.adjustmentType}) = 'mixed')`
-          )
-        );
-
-      const consumptionBalance = consumptionData.reduce((sum, item) => {
+      const consumptionBalance = adjustmentData.reduce((sum, item) => {
         const qty = parseFloat(item.quantity || "0");
         const adjustmentType = (item.adjustmentType || "").toLowerCase();
         // Pure Consumption: always count (totalAmount is positive, represents consumed value)
@@ -267,25 +319,7 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       // 12c. Production balance (from stock adjustment items)
       // Includes: pure Production vouchers AND Mixed voucher items with positive quantity
       // Production INCREASES inventory (stockOnFloorValue goes up)
-      const productionData = await db
-        .select({
-          totalAmount: stockAdjustmentItems.totalAmount,
-          quantity: stockAdjustmentItems.quantity,
-          adjustmentType: stockAdjustmentVouchers.adjustmentType,
-        })
-        .from(stockAdjustmentItems)
-        .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
-        .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            sql`(LOWER(${stockAdjustmentVouchers.adjustmentType}) = 'production' OR LOWER(${stockAdjustmentVouchers.adjustmentType}) = 'mixed')`
-          )
-        );
-
-      const productionBalance = productionData.reduce((sum, item) => {
+      const productionBalance = adjustmentData.reduce((sum, item) => {
         const qty = parseFloat(item.quantity || "0");
         const adjustmentType = (item.adjustmentType || "").toLowerCase();
         // Pure Production: always count (totalAmount is positive, represents produced value)
@@ -302,26 +336,12 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         .reduce((s, a) => s + Math.max(0, nb(a)), 0);
 
       // 14. Salary Advances - outstanding advances given to employees (asset - recoverable)
-      const advancesData = await db
-        .select({
-          remainingBalance: salaryAdvances.remainingBalance,
-        })
-        .from(salaryAdvances)
-        .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false)));
-
       const salaryAdvancesBalance = advancesData.reduce((sum, advance) => {
         return sum + parseFloat(advance.remainingBalance || "0");
       }, 0);
 
       // 15. Payroll Liabilities - wages owed to employees (from employees.currentBalance)
       // Positive currentBalance means company owes the employee (liability)
-      const employeesData = await db
-        .select({
-          currentBalance: employees.currentBalance,
-        })
-        .from(employees)
-        .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
-
       const payrollLiabilitiesBalance = employeesData.reduce((sum, emp) => {
         const balance = parseFloat(emp.currentBalance || "0");
         // Only count positive balances (amounts owed to employees)
@@ -387,14 +407,7 @@ export function registerImportCycleBalanceRoutes(app: Express) {
 
       // Include employee opening balances in the equity offset calculation
       // Employee opening balances are liabilities (money owed to employees) - credit side
-      const employeeOpeningBalances = await db
-        .select({
-          openingBalance: employees.openingBalance,
-        })
-        .from(employees)
-        .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
-
-      const totalEmployeeOpeningBalance = employeeOpeningBalances.reduce((sum, emp) => {
+      const totalEmployeeOpeningBalance = employeesData.reduce((sum, emp) => {
         return sum + parseFloat(emp.openingBalance || "0");
       }, 0);
 
@@ -410,13 +423,6 @@ export function registerImportCycleBalanceRoutes(app: Express) {
 
       // 22. Opening Stock Equity - stock items with opening values that weren't imported via PO
       // These are set via "Import Opening Balances" in Stock Items and need implicit equity offset
-      const stockItemsWithOpening = await db
-        .select({
-          openingValue: stockItems.openingValue,
-        })
-        .from(stockItems)
-        .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
-
       const openingStockValue = stockItemsWithOpening.reduce((sum, item) => {
         return sum + parseFloat(item.openingValue || "0");
       }, 0);
