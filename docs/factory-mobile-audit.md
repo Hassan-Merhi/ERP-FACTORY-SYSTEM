@@ -2,7 +2,7 @@
 
 Presentation-only work: no API, query-key, calculation, permission, mutation or schema changes. Desktop (≥ `sm`/`md`) keeps its tables and layouts; phones get cards, stacked forms and pinned workflow actions.
 
-Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/mobile-tablet-web-regression.md`), run in the UI Quality → Mobile Responsiveness job at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 over 35 canonical routes and 8 seeded detail/workflow routes. The Wave 4 smoke continues to protect the Factory floor screens.
+Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/mobile-tablet-web-regression.md`), run in the UI Quality → Mobile Responsiveness job at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 over 70 routes (canonical pages, every hub section, forms and admin tools) and 18 seeded detail/workflow routes. The Wave 4 smoke continues to protect the Factory floor screens.
 
 ## Shared building blocks
 
@@ -19,23 +19,23 @@ Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/m
 
 | Phase | Status |
 |---|---|
-| 1 Shell & sidebar | Done (drawer width/close/touch sizes, hover-only reorder handle removed on touch, safe areas via the shared bars). |
-| 2 Data pattern | Done via `mobileLayout="cards"`, `ErpMobileRecordCard`, shared dialog/popover rules. |
-| 3 Top-level pages | Contacts, Sheets & Sacks, Dashboard, KPIs, Alerts → cards; Daybook columns and filters reflowed for phones; View Entry uses the shared phone sheet. |
-| 4 Accounting | The shared account statement already had a phone header, summary grid and transaction cards; verified in Factory mode. |
-| 5 Sales / invoice / loading | Invoice Create finalize bar; Pending Invoice Verify action bar, popover clamp, proforma cards; Invoice Loading Scan progress/bale cards and Complete/Cancel bar; Invoice Detail line cards; Proforma Add Line padding and safe area. |
-| 6 Dispatch | Batch list and detail tables (rides, scans, proforma dialogs) → cards; scan screen regression-tested. |
-| 7 People | Customer statement and price list → cards with a full-width note field and phone header; worker and employee detail (all tabs, payroll batches) → cards, stacked columns on phones. |
-| 8 Rentals | Shops/Warehouses use the existing rental cards in Factory; payments log → cards. Properties Mode unchanged. |
-| 9 Intelligence | Hubs use the shared scrolling tab strip; Production Comparison defaults to cards with a “Table view” toggle, tap-to-open worker breakdown, preset select below `xl`; hover-only actions visible on touch. |
-| 10 Forms | Container Create stacks fields and charge lines, pinned Cancel/Create. |
-| 11 Remaining routes | Covered by the rendered regression where the fixture has data; operational tables in stock query, bale product history, OTW/container lists, supplier and broker statements, admin tools opted into cards. |
-| 12 Registry drift | `docs/factory-navigation-registry.md` reconciled; `/factory/pos` recorded as retired (live route redirects). Guarded by `tests/ui/factory-mobile-route-registry.test.ts`. |
-| 13 Browser coverage | `scripts/verify-factory-mobile-browser.mjs`, wired into CI with seeded records. |
+| 1 Shell & sidebar | Done: drawer width/close/touch sizes, no hover-only reorder handle on touch, active link in view, safe areas via the shared bars. |
+| 2 Data pattern | Done: `mobileLayout="cards"`, `ErpMobileRecordCard`, shared dialog/popover rules; multi-control filter bars use `ErpMobileFilters` (Daybook, Production Comparison) or an existing collapsible panel (Workers, OTW tracking). |
+| 3 Top-level pages | Done: Contacts, Sheets & Sacks, Dashboard, KPIs, Alerts → cards; Daybook columns and filters reflowed; View Entry uses the shared phone sheet. |
+| 4 Accounting | Done: statement phone header (title, balance, visible PDF/WhatsApp, the rest in the Actions menu), summary grid and transaction cards; monthly ledger cards and stacked summary. |
+| 5 Sales / invoice / loading | Done: Invoice Create bale cards and finalize bar; Pending Invoice Verify action bar, popover clamp, proforma cards; Invoice Loading Scan cards and Complete/Cancel bar; Invoice Detail line cards; Proforma Add Line sticky header/search and safe-area bar. |
+| 6 Dispatch | Done: batch list/detail tables and proforma dialogs → cards; scan screen regression-tested. |
+| 7 People | Done: customer statement and price list, worker and employee detail with every tab, payroll batches → cards; stacked detail columns on phones. |
+| 8 Rentals | Done: shops/warehouses cards and payments log cards in Factory; Properties Mode unchanged. |
+| 9 Intelligence | Done: every hub section rendered; Production Comparison cards + Table view, tap-to-open worker breakdown, preset select below `xl`; Production Summary cards; Net Position amounts kept on one line; hover-only actions visible on touch. |
+| 10 Forms & admin | Done: Container Create; Opening Balance edit, master-data create, settings, customer logos, label banners, chatbot/intel settings, conflicts, deleted items, diagnostics, inventory repair, data reset and raw-stock recalculation (tables → cards) rendered and reviewed. |
+| 11 Detail routes | Done: stock query detail, bale product history (product, year, month), monthly ledger, ledger vouchers, voucher detail and edit, proforma add-line, container detail and OTW dialogs rendered with data. Voucher detail under `/factory` was broken for every voucher (route matched only the ERP path) and is fixed. |
+| 12 Registry drift | Done: registry reconciled; `/factory/pos` recorded as retired. Guarded by `tests/ui/factory-mobile-route-registry.test.ts`. |
+| 13 Browser coverage | Done: `scripts/verify-factory-mobile-browser.mjs` — 88 routes (canonical pages, every hub section, forms/admin tools, 18 seeded detail/workflow routes) × 6 viewports, with seeded data (`scripts/lib/factory-mobile-fixture.mjs`), a safe dialog per route (fits, scrolls, last action reachable, focused field visible, Escape closes without navigating) and Escape navigation rules. Runs in CI. |
 
-## Known follow-ups
+## Known limits
 
-- Tables that are empty in the CI fixture are not exercised with rows; `ERP_FACTORY_MOBILE_STRICT_TABLES=1` turns remaining sideways-scrolling tables into failures once richer seed data exists.
-- Stock Entry's “Bales ready for stock entry” table scrolls sideways in touch landscape (protected Factory floor screen, left as is).
-- The draggable notes button can overlap content in touch landscape; it stays user-movable.
+- Stock Entry's "Bales ready for stock entry" table scrolls sideways in touch landscape (protected Factory floor screen, left as is; reported as a warning).
+- The draggable notes button can overlap content in touch landscape; it stays user-movable and floats above workflow bars on portrait phones.
+- The on-screen keyboard cannot be emulated headlessly; the regression checks that a focused dialog field is inside the visible viewport, and `useVisualViewportMetrics` lifts phone dialogs above the real keyboard.
 - Restoring Factory POS would need a product decision plus a sidebar/access entry and a real route.
