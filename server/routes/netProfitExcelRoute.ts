@@ -5,7 +5,6 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { logAudit } from "./_helpers";
-import { computeEmployeeWorkerNetPosition } from "../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../helpers/salaryAdvanceNetPosition";
 import {
   inventory,
@@ -383,6 +382,7 @@ export function registerNetProfitExcelRoute(app: Express) {
           .select({
             id: employees.id,
             employeeType: employees.employeeType,
+            currentBalance: employees.currentBalance,
             openingBalance: employees.openingBalance,
             openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
           })
@@ -390,13 +390,21 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
           .execute();
         const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
-        const xlsxPayrollPosition = computeEmployeeWorkerNetPosition(
-          xlsxEmployees,
-          xlsxEmployeeBals,
-          xlsxManagedAdvances
+        const xlsxPayrollSigned = round2(
+          xlsxEmployees
+            .filter((employee) => employee.employeeType !== "Worker")
+            .reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
         );
-        npForUs += xlsxPayrollPosition.employees.advances + xlsxPayrollPosition.workers.advances;
-        npOnUs += xlsxPayrollPosition.employees.liabilities + xlsxPayrollPosition.workers.liabilities;
+        const xlsxWorkerIds = new Set(
+          xlsxEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
+        );
+        const xlsxWorkerAdvances = round2(
+          xlsxManagedAdvances
+            .filter((advance) => xlsxWorkerIds.has(advance.employeeId))
+            .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+        );
+        npForUs += Math.max(0, -xlsxPayrollSigned) + xlsxWorkerAdvances;
+        npOnUs += Math.max(0, xlsxPayrollSigned);
 
         // Add OTW containers as assets
         const xlsxOtwContainers = await db
