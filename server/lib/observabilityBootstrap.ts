@@ -73,8 +73,7 @@ function installExternalFetchTracing(): void {
         failed: true,
         source: trace?.source || "background",
       });
-      const log = trace?.source === "scheduler" ? logger.warn.bind(logger) : logger.error.bind(logger);
-      log("External dependency operation", {
+      const context = {
         module: "dependency",
         action: "request_failed",
         dependency,
@@ -82,7 +81,12 @@ function installExternalFetchTracing(): void {
         requestId: trace?.requestId,
         source: trace?.source,
         error,
-      });
+      };
+      if (trace?.source === "scheduler") {
+        logger.warn("External dependency operation", context);
+      } else {
+        logger.error("External dependency operation", context);
+      }
       throw error;
     }
   }) as typeof globalThis.fetch;
