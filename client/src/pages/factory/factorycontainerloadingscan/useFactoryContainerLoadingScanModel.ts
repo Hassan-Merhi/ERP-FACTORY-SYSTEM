@@ -859,6 +859,7 @@ export function useFactoryContainerLoadingScanModel() {
     createOrderMutation,
     // order
     orderId,
+    orderDetail,
     isResuming,
     bales,
     orderedGroups,

@@ -133,7 +133,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           onChange={(e) => model.setScanCode(e.target.value)}
           onKeyDown={model.handleScan}
           placeholder={model.tr("scanPlaceholder")}
-          disabled={!model.orderId || !model.selectedLocationId || model.addBaleMutation.isPending}
+          disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
           className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-sm transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"

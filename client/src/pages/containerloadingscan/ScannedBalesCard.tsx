@@ -130,7 +130,7 @@ export function ScannedBalesCard({ model }: { model: ContainerLoadingScanModel }
               onChange={(e) => model.setScanCode(e.target.value)}
               onKeyDown={model.handleScan}
               placeholder="Scan barcode, ref number, or article code…"
-              disabled={!orderId || !model.selectedLocationId || model.addBaleMutation.isPending}
+              disabled={!orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
               className={`text-lg h-12 font-mono ${model.scanInputClass}`}
               autoFocus
               data-testid="input-scan-code"
