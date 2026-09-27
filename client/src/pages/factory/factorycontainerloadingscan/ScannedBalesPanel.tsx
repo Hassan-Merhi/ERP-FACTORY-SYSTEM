@@ -51,10 +51,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
   if (!model.orderId) return null;
 
   return (
-    <div
-      className="mb-4 rounded-2xl border bg-muted/20 p-3 sm:p-4"
-      data-testid="container-loading-scan-controls"
-    >
+    <div className="mb-4 rounded-2xl border bg-muted/20 p-3 sm:p-4" data-testid="container-loading-scan-controls">
       <div className="mb-3 flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -78,11 +75,7 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
                 ? "min-w-0 bg-amber-500 px-2 text-white hover:bg-amber-600 sm:px-3"
                 : "min-w-0 px-2 text-muted-foreground sm:px-3"
             }
-            title={
-              model.ignoreProforma
-                ? model.tr("ignoreProformaOnTitle")
-                : model.tr("ignoreProformaOffTitle")
-            }
+            title={model.ignoreProforma ? model.tr("ignoreProformaOnTitle") : model.tr("ignoreProformaOffTitle")}
             data-testid="button-ignore-proforma"
           >
             <ShieldOff className="h-3.5 w-3.5 shrink-0 sm:mr-1.5" />
@@ -133,7 +126,9 @@ function ScanControls({ model }: { model: FactoryContainerLoadingScanModel }) {
           onChange={(e) => model.setScanCode(e.target.value)}
           onKeyDown={model.handleScan}
           placeholder={model.tr("scanPlaceholder")}
-          disabled={!model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending}
+          disabled={
+            !model.orderId || !model.orderDetail || !model.selectedLocationId || model.addBaleMutation.isPending
+          }
           className={`h-14 min-w-0 rounded-xl border-border/80 bg-background pl-12 font-mono text-base shadow-sm transition-all focus-visible:ring-2 sm:text-lg ${model.scanInputClass}`}
           autoFocus
           data-testid="input-scan-code"
@@ -197,7 +192,9 @@ function BaleGroups({
                 <span className="font-mono font-semibold text-foreground">{group.bales.length}</span> {model.tr("qty")}
               </span>
               <span className="h-4 w-px bg-border" />
-              <span className="font-mono">{formatNumber(group.totalWeight, 2)} {model.tr("kgUnit")}</span>
+              <span className="font-mono">
+                {formatNumber(group.totalWeight, 2)} {model.tr("kgUnit")}
+              </span>
             </div>
           </button>
 
@@ -227,7 +224,9 @@ function BaleGroups({
                                 className="mt-0.5 text-[11px] text-muted-foreground/80"
                                 data-testid={`text-bale-scan-audit-${bale.id}`}
                               >
-                                {scanAudit.scannedBy ? model.tr("scannedBy", { name: scanAudit.scannedBy }) : model.tr("scanned")}
+                                {scanAudit.scannedBy
+                                  ? model.tr("scannedBy", { name: scanAudit.scannedBy })
+                                  : model.tr("scanned")}
                                 {scannedAtText ? ` • ${scannedAtText}` : ""}
                               </div>
                             )}
@@ -308,7 +307,13 @@ function RemovalLog({ model }: { model: FactoryContainerLoadingScanModel }) {
                   </TableCell>
                   <TableCell>{r.articleCode || "—"}</TableCell>
                   <TableCell className="text-right font-mono">
-                    {r.weightKg ? <>{formatNumber(parseFloat(r.weightKg), 2)} {model.tr("kgUnit")}</> : "—"}
+                    {r.weightKg ? (
+                      <>
+                        {formatNumber(parseFloat(r.weightKg), 2)} {model.tr("kgUnit")}
+                      </>
+                    ) : (
+                      "—"
+                    )}
                   </TableCell>
                   <TableCell>{r.removedByUsername || "—"}</TableCell>
                   <TableCell className="whitespace-nowrap">{new Date(r.removedAt).toLocaleString()}</TableCell>
@@ -349,11 +354,7 @@ export function ScannedBalesPanel({ model }: { model: FactoryContainerLoadingSca
     <div className="flex min-h-0 min-w-0 flex-col xl:w-[60%]">
       <div
         className={`flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border bg-background/90 shadow-sm transition-all duration-300 ${
-          scanFlash === "success"
-            ? "ring-2 ring-green-500/80"
-            : scanFlash === "error"
-              ? "ring-2 ring-red-500/80"
-              : ""
+          scanFlash === "success" ? "ring-2 ring-green-500/80" : scanFlash === "error" ? "ring-2 ring-red-500/80" : ""
         }`}
       >
         <div

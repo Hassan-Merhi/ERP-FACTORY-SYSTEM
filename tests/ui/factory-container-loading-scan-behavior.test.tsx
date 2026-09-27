@@ -283,13 +283,11 @@ describe("factory container loading scan behavior", () => {
     expect(
       harness.invalidateQueries.mock.calls.some(
         ([options]) =>
-          Array.isArray(options?.queryKey) &&
-          options.queryKey[0] === "/api/factory/customer-proformas/capacity"
+          Array.isArray(options?.queryKey) && options.queryKey[0] === "/api/factory/customer-proformas/capacity"
       )
     ).toBe(false);
     expect(localStorage.getItem("lastScannedBale_77")).toBeNull();
   });
-
 
   it("keeps the scanner disabled until loading order details are available", async () => {
     harness.orderDetailReady = false;
@@ -342,17 +340,15 @@ describe("factory container loading scan behavior", () => {
       status: 400,
       overloaded: true,
     });
-    harness.apiRequest
-      .mockRejectedValueOnce(overloadError)
-      .mockResolvedValueOnce({
-        json: async () => ({
-          ...orderDetail,
-          bales: [
-            ...orderDetail.bales,
-            { id: 13, baleReference: "REF-OVER", baleName: "Shirts", articleCode: "A1", weight: "48" },
-          ],
-        }),
-      });
+    harness.apiRequest.mockRejectedValueOnce(overloadError).mockResolvedValueOnce({
+      json: async () => ({
+        ...orderDetail,
+        bales: [
+          ...orderDetail.bales,
+          { id: 13, baleReference: "REF-OVER", baleName: "Shirts", articleCode: "A1", weight: "48" },
+        ],
+      }),
+    });
 
     render(<FactoryContainerLoadingScan />);
     const input = await screen.findByTestId("input-scan-code");
