@@ -9,7 +9,6 @@ import { visibleTabInterval } from "@/lib/queryPolicies";
 import { useState, useRef, useCallback, useEffect, useMemo, type KeyboardEvent, type ChangeEvent } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation, useSearch } from "wouter";
-import * as XLSX from "@/lib/excelHelper";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, keyStartsWith } from "@/lib/queryClient";
 import { useAppMode } from "@/contexts/AppModeContext";
@@ -45,6 +44,7 @@ import {
   playScanErrorSweep,
 } from "./scanFeedback";
 import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
+import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
 
 /** Statuses that mean an existing loading order is still open for this proforma. */
 const OPEN_ORDER_STATUSES = ["LOADING", "DRAFT", "PENDING_VERIFICATION"];
@@ -686,56 +686,19 @@ export function useFactoryContainerLoadingScanModel() {
       const reader = new FileReader();
       reader.onload = async (evt) => {
         try {
-          const data = new Uint8Array(evt.target?.result as ArrayBuffer);
-          const wb = await XLSX.read(data, { type: "array" });
-          const ws = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(ws);
-
-          // Detect mode: if any row has a "Ref" / "Reference" / "Ref Number" / "Ref Code" column, use ref mode
-          const firstRow = rows[0] || {};
-          const refKey = Object.keys(firstRow).find((k) =>
-            /^ref(erence)?([\s_-]?(number|code|no|num))?$/i.test(k.trim())
-          );
-
-          if (refKey) {
-            // REF NUMBER / REF CODE MODE
-            const refs = rows.map((r) => String(r[refKey] ?? "").trim()).filter(Boolean);
-            if (refs.length === 0) {
-              toast({
-                title: "No valid rows found",
-                description: "Ensure the Ref / Ref Code column has values",
-                variant: "destructive",
-              });
-              return;
-            }
-            setImportMode("refNumber");
-            setImportRefNumbers(refs);
-            setImportPreview([]);
-            setShowImportDialog(true);
-          } else {
-            // ARTICLE CODE MODE (existing)
-            const parsed = rows
-              .map((r) => ({
-                articleCode: String(
-                  r["Article Code"] ?? r.articleCode ?? r.article_code ?? r.ArticleCode ?? r.ARTICLECODE ?? ""
-                ).trim(),
-                qty: parseInt(String(r.Qty ?? r.qty ?? r.QTY ?? r.Quantity ?? r.quantity ?? 0), 10) || 0,
-              }))
-              .filter((r) => r.articleCode && r.qty > 0);
-            if (parsed.length === 0) {
-              toast({
-                title: "No valid rows found",
-                description:
-                  "Ensure columns are Article Code and Qty, or use a Ref Number column for individual bale import",
-                variant: "destructive",
-              });
-              return;
-            }
-            setImportMode("articleCode");
-            setImportPreview(parsed);
-            setImportRefNumbers([]);
-            setShowImportDialog(true);
+          const result = await parseBaleImportWorkbook(evt.target?.result as ArrayBuffer);
+          if (baleImportRowCount(result) === 0) {
+            toast({
+              title: "No valid rows found",
+              description: BALE_IMPORT_EMPTY_HINT[result.mode],
+              variant: "destructive",
+            });
+            return;
           }
+          setImportMode(result.mode);
+          setImportRefNumbers(result.mode === "refNumber" ? result.refNumbers : []);
+          setImportPreview(result.mode === "articleCode" ? result.rows : []);
+          setShowImportDialog(true);
         } catch (err) {
           toast({ title: "Parse error", description: getErrorDetails(err).message, variant: "destructive" });
         }

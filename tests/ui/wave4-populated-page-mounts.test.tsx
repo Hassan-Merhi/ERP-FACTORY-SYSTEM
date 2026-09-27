@@ -32,6 +32,8 @@ interface PageCase {
   landmark: string;
   factory?: boolean;
   showsRows?: boolean;
+  /** Responses for endpoints whose contract is not the generic seeded record list. */
+  fetchOverrides?: Record<string, () => unknown>;
 }
 
 const PAGES: PageCase[] = [
@@ -565,7 +567,19 @@ const PAGES: PageCase[] = [
   { name: "StockTransferOrder", load: () => import("@/pages/StockTransferOrder"), landmark: "select-destination" },
   { name: "StockEntryHistory", load: () => import("@/pages/StockEntryHistory"), landmark: "button-view-condensed" },
   { name: "StockItems", load: () => import("@/pages/StockItems"), landmark: "button-add-item", showsRows: true },
-  { name: "StockOTW", load: () => import("@/pages/StockOTW"), landmark: "button-export-excel", showsRows: true },
+  {
+    name: "StockOTW",
+    load: () => import("@/pages/StockOTW"),
+    landmark: "button-export-excel",
+    showsRows: true,
+    // Stock OTW requests the dictionary-compressed stock-otw-v2 contract.
+    fetchOverrides: {
+      "/api/containers/otw-items": () => ({
+        c: [["CONT1", "Supp 1"]],
+        i: [{ n: "Item 1", g: null, c: null, r: [[0, 2, 20]] }],
+      }),
+    },
+  },
   { name: "ImportStockItems", load: () => import("@/pages/ImportStockItems"), landmark: "button-back" },
   { name: "AccountsLegacy", load: () => import("@/pages/AccountsLegacy"), landmark: "button-create-account" },
   {
@@ -725,8 +739,9 @@ describe("wave 4 populated page mounts", () => {
     stubSeededFetch();
   });
 
-  for (const { name, load, landmark, factory, showsRows } of PAGES) {
+  for (const { name, load, landmark, factory, showsRows, fetchOverrides } of PAGES) {
     it(`${name} renders ${landmark}${showsRows ? " and its rows" : ""} with data loaded`, async () => {
+      if (fetchOverrides) stubSeededFetch(fetchOverrides);
       if (factory) {
         pageState.companyType = "factory";
         pageState.appMode = "factory";
