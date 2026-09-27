@@ -57,7 +57,7 @@ export default function ContainerVerification() {
 
   const { data: containerData } = useQuery<ContainerDetailData>({
     queryKey: [`/api/containers/${containerId}`],
-    enabled: !!containerId,
+    enabled: !!containerId && !!containerData?.container,
   });
 
   const { data: suppliers = [] } = useQuery<Supplier[]>({

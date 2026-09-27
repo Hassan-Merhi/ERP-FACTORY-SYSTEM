@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useToast } from "@/hooks/use-toast";
+import { canUseFactorySurface } from "@/lib/factoryClientAccess";
+import type { FactoryMyAccess } from "@shared/apiTypes";
 
 import { fetchProduction, type ProductionResponse } from "./factory/factoryProductionTargetsModel";
 import type { StockEntryWorker } from "./stockentryhistory/derived";
@@ -22,6 +24,16 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const { formatDisplayDate } = useDateFormat();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: myAccess } = useQuery<FactoryMyAccess>({
+    queryKey: ["/api/factory/my-access"],
+    staleTime: 5 * 60_000,
+  });
+  const canReadWorkerPicker = canUseFactorySurface(myAccess, "factory/payroll-hub", [
+    "hide_tab_payrollhub_workers",
+  ]);
+  const canReadProductionTargets = canUseFactorySurface(myAccess, "factory/stock-entry", [
+    "hide_tab_stockentry_production_targets",
+  ]);
   const today = new Date().toLocaleDateString("en-CA");
 
   const [selectedDate, setSelectedDate] = useState(today);
@@ -85,13 +97,14 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     queryKey: ["/api/factory/workers?profile=picker"],
     staleTime: 60_000,
     refetchOnWindowFocus: false,
+    enabled: canReadWorkerPicker,
   });
 
   const targetDate = selectedDate || null;
   const { data: productionTargets } = useQuery<ProductionResponse>({
     queryKey: ["/api/factory/staff-tracking", "production", "daily", targetDate, targetDate],
     queryFn: () => fetchProduction("daily", targetDate!, targetDate!),
-    enabled: Boolean(targetDate),
+    enabled: canReadProductionTargets && Boolean(targetDate),
     staleTime: 30_000,
     refetchOnWindowFocus: false,
   });
