@@ -21,7 +21,6 @@ import { getNetPositionCurrencySummary } from "../../services/accounting/netPosi
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
-import { computeEmployeeNetPositionWithManagedAdvances } from "../../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
@@ -314,12 +313,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
         });
       }
 
-      // Payroll payable has one durable source of truth: the Payroll Payable ledger.
-      // Modern payroll generation/payment posts to this control account, not to employeeId.
-      // Legacy employee-linked voucher balances are kept only as a fallback for older data.
-      //
-      // Always detach Payroll Payable from the generic classifier first. This makes the
-      // result resilient even if an old database has this system account mis-typed.
+      // ERP payroll has two distinct people domains in the same employees table:
+      // employeeType=Employee uses the employee subledger for salary accrual/payable,
+      // while employeeType=Worker is paid directly and uses the salary-advance workflow.
+      // A generic Payroll Payable ledger can be legacy/duplicate, so strip it from the
+      // classifier and inject the authoritative employee-subledger result exactly once.
       const isPayrollPayableAccount = (acc: { name?: string | null; code?: string | null }) => {
         const name = (acc.name || "").trim().toLowerCase().replace(/\s+/g, " ");
         const code = (acc.code || "").trim().toUpperCase();
@@ -328,10 +326,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       const payrollLedgerAccounts = companyAccounts.filter(isPayrollPayableAccount);
       const payrollLedgerIds = new Set(payrollLedgerAccounts.map((acc) => acc.id));
-      let payrollLedgerSignedBalance = 0;
-      for (const acc of payrollLedgerAccounts) {
-        payrollLedgerSignedBalance += getAccountNetBalance(acc, accountBalances);
-      }
 
       const stripPayrollEntries = (accounts: NetPositionAccount[], side: "asset" | "liability") => {
         for (let i = accounts.length - 1; i >= 0; i--) {
@@ -358,6 +352,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .select({
           id: employees.id,
           companyId: employees.companyId,
+          employeeType: employees.employeeType,
+          currentBalance: employees.currentBalance,
           openingBalance: employees.openingBalance,
           openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
         })
@@ -366,13 +362,27 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .execute();
 
       const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-      const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
-        companyEmployees,
-        employeeBalances,
-        managedSalaryAdvances
+      const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
+      const payrollWorkerIds = new Set(
+        companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
       );
-      const legacyWorkerLiabilities = employeePosition.liabilities;
-      const employeeLinkedAdvanceAssets = employeePosition.advances;
+
+      // Current ERP Payroll is maintained in employees.currentBalance. This is the same
+      // balance shown on Payroll → Employees and includes legacy/imported salary state
+      // that cannot be reconstructed reliably from voucher history/opening_balance_side.
+      // Keep it as one net control account, scoped to Employee rows only.
+      const payrollSignedBalance = round2(
+        payrollEmployees.reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
+      );
+
+      // Worker advances have their own authoritative lifecycle table. Do not rebuild
+      // them from employee voucher debits: deleting an old advance historically left
+      // its voucher behind, which creates orphan debits and overstates advances.
+      const workerAdvancesDisplay = round2(
+        managedSalaryAdvances
+          .filter((advance) => payrollWorkerIds.has(advance.employeeId))
+          .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+      );
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
@@ -394,53 +404,38 @@ export function registerStatsNetProfitRoutes(app: Express) {
         }
       }
 
-      // For CFA companies, worker balances come from voucher entries.
-      // Guard: only convert if ALL entries are pre-migration (hasMigratedEntries=false).
-      // After migration COALESCE already returns USD-base values; re-dividing by CFA rate
-      // would produce incorrect double-conversion.
-      // Credit balance on Payroll Payable means we owe payroll; debit balance means
-      // payroll has been overpaid/prepaid. If the control ledger is absent/zero, fall
-      // back to legacy employee-linked balances for backward compatibility.
-      const payrollLedgerLiability = Math.max(0, -payrollLedgerSignedBalance);
-      const payrollLedgerOverpayment = Math.max(0, payrollLedgerSignedBalance);
+      const payrollPayableDisplay = Math.max(0, payrollSignedBalance);
+      const payrollOverpaymentDisplay = Math.max(0, -payrollSignedBalance);
 
-      // Employee-linked salary deposits are a separate live ERP posting path
-      // (ledger_account_id = NULL, employee_id = X). They must be combined with
-      // the Payroll Payable control ledger rather than used only as a fallback;
-      // otherwise any non-zero control balance hides outstanding employee payables.
-      const workerLiabilitiesDisplay = round2(payrollLedgerLiability + legacyWorkerLiabilities);
-      const payrollOverpaymentDisplay = round2(payrollLedgerOverpayment);
-
-      // Managed salary advances are reconciled above by replacing their
-      // original employee debit with remaining_balance. Direct employee debits
-      // (for example a payroll withdrawal/advance) remain in the subledger.
-      const workerAdvancesDisplay = round2(employeeLinkedAdvanceAssets);
-      if (workerLiabilitiesDisplay > 0) {
-        onUsTotal = round2(onUsTotal + workerLiabilitiesDisplay);
+      if (payrollPayableDisplay > 0) {
+        onUsTotal = round2(onUsTotal + payrollPayableDisplay);
         categoryTotals["liability_Payroll"] = round2(
-          (categoryTotals["liability_Payroll"] || 0) + workerLiabilitiesDisplay
+          (categoryTotals["liability_Payroll"] || 0) + payrollPayableDisplay
         );
         onUsAccounts.push({
           name: "Payroll Payable",
           code: "PAYROLL_PAYABLE",
-          value: round2(workerLiabilitiesDisplay),
+          value: payrollPayableDisplay,
           category: "Payroll",
         });
       }
       if (payrollOverpaymentDisplay > 0) {
         forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
+        categoryTotals["asset_Payroll"] = round2(
+          (categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay
+        );
         forUsAccounts.push({
           name: "Payroll Overpayment",
           code: "PAYROLL_PAYABLE",
-          value: round2(payrollOverpaymentDisplay),
+          value: payrollOverpaymentDisplay,
           category: "Payroll",
         });
       }
       if (workerAdvancesDisplay > 0) {
-        forUsTotal += workerAdvancesDisplay;
-        categoryTotals["asset_Worker Advances"] =
-          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay;
+        forUsTotal = round2(forUsTotal + workerAdvancesDisplay);
+        categoryTotals["asset_Worker Advances"] = round2(
+          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay
+        );
         forUsAccounts.push({
           name: "Worker Advances (Prepaid)",
           code: "COMPUTED",

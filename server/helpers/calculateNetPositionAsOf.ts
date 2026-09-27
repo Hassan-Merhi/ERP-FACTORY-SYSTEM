@@ -15,7 +15,7 @@ import { calculateHistoricalLocationInventory } from "../routes/_helpers";
 import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { computeEmployeeNetPositionWithManagedAdvances } from "./employeeNetPosition";
+import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 
 /**
@@ -320,6 +320,7 @@ export async function calculateNetPositionAsOf(
   const companyEmployees = await db
     .select({
       id: employees.id,
+      employeeType: employees.employeeType,
       openingBalance: employees.openingBalance,
       openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
     })
@@ -327,32 +328,56 @@ export async function calculateNetPositionAsOf(
     .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
     .execute();
 
-  // Inactive employees can still carry receivables/payables, so deactivation
-  // must not erase an accounting position. Use the same shared sign logic as
-  // the live dashboard.
+  // Inactive people can still carry receivables/payables, so deactivation
+  // must not erase an accounting position. Keep ERP Employees and Workers
+  // separated exactly like the live dashboard.
   const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-  const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
+  const payrollPosition = computeEmployeeWorkerNetPosition(
     companyEmployees,
     employeeBalances,
     managedSalaryAdvances
   );
-  const employeeAdvanceTotal = employeePosition.advances;
-  const employeeLiabilityTotal = employeePosition.liabilities;
-  forUsTotal += employeeAdvanceTotal;
-  onUsTotal += employeeLiabilityTotal;
-  if (employeeAdvanceTotal > 0) {
+  const employeePosition = payrollPosition.employees;
+  const payrollWorkerIds = new Set(
+    companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
+  );
+
+  // Historical exports do not have a historical employees.currentBalance snapshot,
+  // so reconstruct Employee payroll from the dated subledger and net it into one
+  // control account. Worker advances stay table-driven, matching the live dashboard.
+  const payrollSigned = round2(employeePosition.liabilities - employeePosition.advances);
+  const payrollPayable = Math.max(0, payrollSigned);
+  const payrollOverpayment = Math.max(0, -payrollSigned);
+  const workerAdvances = round2(
+    managedSalaryAdvances
+      .filter((advance) => payrollWorkerIds.has(advance.employeeId))
+      .reduce((sum, advance) => sum + advance.remainingBalance, 0)
+  );
+
+  forUsTotal += payrollOverpayment + workerAdvances;
+  onUsTotal += payrollPayable;
+
+  if (payrollOverpayment > 0) {
     forUsLines.push({
-      label: "Employee Advances",
-      value: round2(employeeAdvanceTotal),
-      category: "Advances",
+      label: "Payroll Overpayment",
+      value: payrollOverpayment,
+      category: "Payroll",
       side: "forUs",
     });
   }
-  if (employeeLiabilityTotal > 0) {
+  if (workerAdvances > 0) {
+    forUsLines.push({
+      label: "Worker Advances (Prepaid)",
+      value: workerAdvances,
+      category: "Worker Advances",
+      side: "forUs",
+    });
+  }
+  if (payrollPayable > 0) {
     onUsLines.push({
-      label: "Owed to Employees",
-      value: round2(employeeLiabilityTotal),
-      category: "Payables",
+      label: "Payroll Payable",
+      value: payrollPayable,
+      category: "Payroll",
       side: "onUs",
     });
   }

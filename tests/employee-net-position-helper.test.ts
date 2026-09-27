@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeEmployeeNetPosition,
   computeEmployeeNetPositionWithManagedAdvances,
+  computeEmployeeWorkerNetPosition,
 } from "../server/helpers/employeeNetPosition";
 
 describe("computeEmployeeNetPosition", () => {
@@ -59,6 +60,29 @@ describe("computeEmployeeNetPosition", () => {
     // Replace the managed $500 original debit with its $300 remaining balance.
     expect(result.advances).toBe(500);
     expect(result.liabilities).toBe(0);
+  });
+
+
+  it("keeps Employee receivables/payables separate from Worker advances", () => {
+    const rows = [
+      { id: 40, employeeType: "Employee", openingBalance: "0", openingBalanceSide: "Cr" },
+      { id: 41, employeeType: "Employee", openingBalance: "0", openingBalanceSide: "Cr" },
+      { id: 42, employeeType: "Worker", openingBalance: "0", openingBalanceSide: "Cr" },
+    ];
+    const balances = new Map([
+      [40, { debit: 500, credit: 0 }],
+      [41, { debit: 0, credit: 75 }],
+      [42, { debit: 120, credit: 0 }],
+    ]);
+
+    const result = computeEmployeeWorkerNetPosition(
+      rows,
+      balances,
+      [{ employeeId: 42, postedDebit: 100, remainingBalance: 40 }]
+    );
+
+    expect(result.employees).toEqual({ advances: 500, liabilities: 75 });
+    expect(result.workers).toEqual({ advances: 60, liabilities: 0 });
   });
 
   it("removes a fully repaid managed advance but keeps unrelated employee debits", () => {
