@@ -137,6 +137,65 @@ if (!globalThis[INSTALL_KEY]) {
     }));
   }
 
+  function compactStockOtwItemsV2(body) {
+    const containers = [];
+    const containerIndexes = new Map();
+    const items = new Map();
+
+    for (const row of body) {
+      const containerNumber = row?.containerNumber || "";
+      const supplierName = row?.supplierName || "Unknown";
+      const containerKey = JSON.stringify([containerNumber, supplierName]);
+      let containerIndex = containerIndexes.get(containerKey);
+      if (containerIndex === undefined) {
+        containerIndex = containers.length;
+        containerIndexes.set(containerKey, containerIndex);
+        containers.push([containerNumber, supplierName]);
+      }
+
+      const itemName = row?.stockItemName || "";
+      let item = items.get(itemName);
+      if (!item) {
+        item = {
+          n: itemName,
+          g: row?.gradeName ?? null,
+          c: row?.categoryName ?? null,
+          r: new Map(),
+        };
+        items.set(itemName, item);
+      } else {
+        if (!item.g && row?.gradeName) item.g = row.gradeName;
+        if (!item.c && row?.categoryName) item.c = row.categoryName;
+      }
+
+      const quantity = Number(row?.quantity || 0);
+      const totalCost = Number(row?.totalCost || 0);
+      const existing = item.r.get(containerIndex);
+      if (existing) {
+        existing[1] += Number.isFinite(quantity) ? quantity : 0;
+        existing[2] += Number.isFinite(totalCost) ? totalCost : 0;
+      } else {
+        item.r.set(containerIndex, [
+          containerIndex,
+          Number.isFinite(quantity) ? quantity : 0,
+          Number.isFinite(totalCost) ? totalCost : 0,
+        ]);
+      }
+    }
+
+    return {
+      c: containers,
+      i: [...items.values()]
+        .sort((left, right) => left.n.localeCompare(right.n))
+        .map((item) => ({
+          n: item.n,
+          g: item.g,
+          c: item.c,
+          r: [...item.r.values()].sort((left, right) => left[0] - right[0]),
+        })),
+    };
+  }
+
   function compactCombinedContainerDetail(body) {
     const pos = Array.isArray(body?.pos)
       ? body.pos.map((po) => ({
@@ -235,6 +294,10 @@ if (!globalThis[INSTALL_KEY]) {
       return compactStockOtwItems(body);
     }
 
+    if (pathname === "/api/containers/otw-items" && profile === "stock-otw-v2" && Array.isArray(body)) {
+      return compactStockOtwItemsV2(body);
+    }
+
     if (
       /^\/api\/containers\/\d+$/.test(pathname) &&
       profile === "combined-detail" &&
@@ -328,6 +391,7 @@ if (!globalThis[INSTALL_KEY]) {
       responseProfiles: [
         "otw-summary",
         "stock-otw",
+        "stock-otw-v2",
         "combined-detail",
         "worker-bales-summary",
         "picker",
