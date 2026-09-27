@@ -30,7 +30,12 @@ export interface StockOtwWirePayload {
   }>;
 }
 
-export function expandStockOtwWirePayload(payload: StockOtwWirePayload): StockItem[] {
+export function expandStockOtwWirePayload(payload: StockOtwWirePayload | StockItem[]): StockItem[] {
+  // Response-profile compression is an optimization, not a correctness dependency.
+  // Direct server startup paths can return the legacy flat array even when v2 is
+  // requested, so preserve those valid rows rather than decoding them as empty.
+  if (Array.isArray(payload)) return payload;
+
   const containers = Array.isArray(payload?.c) ? payload.c : [];
   const items = Array.isArray(payload?.i) ? payload.i : [];
   const rows: StockItem[] = [];
