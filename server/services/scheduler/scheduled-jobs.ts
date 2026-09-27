@@ -175,29 +175,19 @@ async function checkAndRunScheduledDailyExport(): Promise<void> {
     if (currentHour !== configuredHour) return;
 
     if (await hasTodayExportSucceeded()) {
-      logger.info("[DailyExport] Hourly check: today's export already succeeded — skipping.");
+      logger.info("[DailyExport] Scheduled check: today's export already succeeded — skipping.");
       return;
     }
     if (await isTodayExportRunning()) {
-      logger.info("[DailyExport] Hourly check: export is currently running — skipping.");
+      logger.info("[DailyExport] Scheduled check: export is currently running — skipping.");
       return;
     }
 
-    logger.info(`[DailyExport] Hourly check: time matches (${configuredHour}:00 ${tz}) — starting export.`);
+    logger.info(`[DailyExport] Scheduled check: time matches (${configuredHour}:00 ${tz}) — starting export attempt.`);
     const { runDailyExport } = await import("./daily-export");
-    const MAX_ATTEMPTS = 4;
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const ok = await runDailyExport();
-      if (ok) {
-        if (attempt > 1) logger.info(`[DailyExport] Succeeded on retry attempt ${attempt}.`);
-        break;
-      }
-      if (attempt < MAX_ATTEMPTS) {
-        logger.info(`[DailyExport] Attempt ${attempt}/${MAX_ATTEMPTS} failed — retrying in 15 minutes...`);
-        await new Promise<void>((res) => setTimeout(res, 15 * 60 * 1000));
-      } else {
-        logger.error(`[DailyExport] All ${MAX_ATTEMPTS} attempts failed.`);
-      }
+    const ok = await runDailyExport();
+    if (!ok) {
+      logger.warn("[DailyExport] Attempt failed; the next scheduled tick will retry within this hour.");
     }
   } catch (err: unknown) {
     logger.error("[DailyExport] checkAndRunScheduledDailyExport error:", { error: getErrorMessage(err) || err });
@@ -312,9 +302,12 @@ export function startScheduler() {
     { timezone: "America/New_York" }
   );
 
+  // Give the configured daily export four independent attempts inside its
+  // configured hour without sleeping under one scheduler lock. Offset from
+  // the other hourly jobs to avoid stacking report workloads on the same minute.
   cron.schedule(
-    "10 * * * *",
-    createSchedulerTick("hourlyDailyExportCheck", checkAndRunScheduledDailyExport),
+    "10,25,40,55 * * * *",
+    createSchedulerTick("scheduledDailyExport", checkAndRunScheduledDailyExport, { quiet: true }),
     { timezone: "America/New_York" }
   );
 
@@ -403,7 +396,7 @@ export function startScheduler() {
       "dailyRentalAccrual(daily 06:00 ET)",
       "hourlyStockReport(hourly :00 ET)",
       "hourlyNetPositionExport(hourly :05 ET)",
-      "hourlyDailyExportCheck(hourly :10 ET)",
+      "scheduledDailyExport(:10/:25/:40/:55 ET; active only in configured hour)",
       "hourlyContainersWhatsApp(hourly :15 ET)",
       "convergenceReconciliation(daily 03:30 ET)",
       "overdueCustomers(daily 09:00 EST)",

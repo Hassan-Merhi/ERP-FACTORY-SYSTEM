@@ -27,7 +27,7 @@ export interface RemoteControlSessionView {
 }
 
 const TAB_KEY = "remote-support-browser-tab-id";
-const HEARTBEAT_MS = 4000;
+const HEARTBEAT_MS = 12_000;
 
 function createTabId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -90,6 +90,10 @@ export function useRemoteControlSession() {
         tabId,
         route: currentLocation || window.location.pathname,
       });
+      if (response.status === 204) {
+        setSession(null);
+        return;
+      }
       const payload = await response.json();
       setSession(normalizeSession(payload?.session));
     } catch (error) {

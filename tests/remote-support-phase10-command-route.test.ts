@@ -46,6 +46,24 @@ function controllerApp() {
   return app;
 }
 
+function targetApp() {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    Object.assign(req, {
+      session: {
+        userId: "22",
+        username: "employee",
+        currentRole: "Staff",
+        currentCompanyId: 7,
+      },
+    });
+    next();
+  });
+  registerRemoteControlSessionRoutes(app);
+  return app;
+}
+
 function startAuthorizedSession() {
   registerRemoteControlTab({
     userId: "22",
@@ -98,6 +116,32 @@ describe("remote support Phase 10 — mouse command endpoint", () => {
     resetRemoteControlSessionStateForTests();
     resetRemoteSupportRolloutForTests();
     restoreRemoteSupportBootDefaults("phase-10-route-test-cleanup");
+  });
+
+  it("returns no body for an idle target heartbeat", async () => {
+    const response = await request(targetApp())
+      .post("/api/screen-feed/control/tab-heartbeat")
+      .send({ tabId: "erp-tab-1", route: "/dashboard" });
+
+    expect(response.status).toBe(204);
+    expect(response.text).toBe("");
+  });
+
+  it("returns the active session when a heartbeat belongs to the controlled tab", async () => {
+    const session = startAuthorizedSession();
+
+    const response = await request(targetApp())
+      .post("/api/screen-feed/control/tab-heartbeat")
+      .send({ tabId: "erp-tab-1", route: "/inventory" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.session).toMatchObject({
+      id: session.id,
+      targetUserId: "22",
+      targetTabId: "erp-tab-1",
+      targetRoute: "/inventory",
+      status: "active",
+    });
   });
 
   it("accepts a command without waiting for the audit write", async () => {

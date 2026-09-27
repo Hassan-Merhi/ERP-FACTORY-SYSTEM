@@ -14,6 +14,7 @@ export function FactoryPendingInvoiceVerifyDialog5({ model }: { model: Model }) 
     selectedProformaId,
     setSelectedProformaId,
     proformas,
+    selectedProforma,
     applyProformaMutation,
     isPending: _isPending,
   } = model;
@@ -38,48 +39,43 @@ export function FactoryPendingInvoiceVerifyDialog5({ model }: { model: Model }) 
               <SelectContent>
                 {proformas.map((p) => (
                   <SelectItem key={p.id} value={String(p.id)} data-testid={`option-proforma-${p.id}`}>
-                    {p.name} ({p.lines.length} line{p.lines.length !== 1 ? "s" : ""})
+                    {p.name} ({p.lineCount} line{p.lineCount !== 1 ? "s" : ""})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
-          {selectedProformaId &&
-            (() => {
-              const pf = proformas.find((p) => String(p.id) === selectedProformaId);
-              if (!pf || pf.lines.length === 0) return null;
-              return (
-                <div className="rounded-md border p-3 space-y-1 max-h-48 overflow-y-auto">
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Price lines in this proforma:</p>
-                  {pf.lines.map((l, i) => {
-                    const isPerKg = l.pricingMode === "per_kg" && l.pricePerKg;
-                    const wt = parseFloat(l.weightPerBaleKg ?? "0");
-                    const pkgKgRate = isPerKg ? parseFloat(l.pricePerKg!) : 0;
-                    // Show weight × rate when weight is known; otherwise just show the rate
-                    const effectivePrice = isPerKg ? (wt > 0 ? wt * pkgKgRate : 0) : parseFloat(l.pricePerBale) || 0;
-                    return (
-                      <div key={i} className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{l.articleCode}</span>
-                        <div className="text-right">
-                          {isPerKg ? (
-                            <>
-                              <span className="font-medium">${fmtNum(pkgKgRate)}/kg</span>
-                              {wt > 0 && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  (≈${fmtNum(effectivePrice)}/bale)
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="font-medium">${fmtNum(effectivePrice)}</span>
+          {selectedProformaId && selectedProforma?.lines?.length ? (
+            <div className="rounded-md border p-3 space-y-1 max-h-48 overflow-y-auto">
+              <p className="text-xs font-medium text-muted-foreground mb-2">Price lines in this proforma:</p>
+              {selectedProforma.lines.map((l, i) => {
+                const isPerKg = l.pricingMode === "per_kg" && l.pricePerKg;
+                const wt = parseFloat(l.weightPerBaleKg ?? "0");
+                const pkgKgRate = isPerKg ? parseFloat(l.pricePerKg!) : 0;
+                // Show weight × rate when weight is known; otherwise just show the rate
+                const effectivePrice = isPerKg ? (wt > 0 ? wt * pkgKgRate : 0) : parseFloat(l.pricePerBale) || 0;
+                return (
+                  <div key={i} className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">{l.articleCode}</span>
+                    <div className="text-right">
+                      {isPerKg ? (
+                        <>
+                          <span className="font-medium">${fmtNum(pkgKgRate)}/kg</span>
+                          {wt > 0 && (
+                            <span className="text-xs text-muted-foreground ml-1">
+                              (≈${fmtNum(effectivePrice)}/bale)
+                            </span>
                           )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+                        </>
+                      ) : (
+                        <span className="font-medium">${fmtNum(effectivePrice)}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={() => setShowProformaDialog(false)} data-testid="button-cancel-proforma">
               Cancel
