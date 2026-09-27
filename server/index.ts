@@ -17,7 +17,7 @@ import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
 import { blockViewOnlyWrites } from "./auth";
-import { setupWS } from "./wsServer";
+import { registerWebSocketHttpFallback, setupWS } from "./wsServer";
 import { startScheduler } from "./services/scheduler";
 import { pool } from "./db";
 import { requestLogger } from "./middleware/requestLogger";
@@ -184,6 +184,9 @@ let migrationsDone = false;
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
   setupWS(server, sessionMiddleware);
+  // Valid websocket upgrades are handled by the upgrade path. Plain HTTP GET
+  // requests to /ws should fail explicitly instead of falling through to the SPA.
+  registerWebSocketHttpFallback(app);
   if (process.env.ENABLE_SCHEDULERS !== "false") {
     startScheduler();
     logger.info("[Schedulers] Started (ENABLE_SCHEDULERS != false)");
