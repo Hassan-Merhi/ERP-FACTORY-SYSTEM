@@ -41,6 +41,47 @@ interface StockItem {
   categoryName: string | null;
 }
 
+type StockOtwWireContainer = [containerNumber: string, supplierName: string];
+type StockOtwWireRow = [containerIndex: number, quantity: number, totalCost: number];
+
+interface StockOtwWirePayload {
+  c: StockOtwWireContainer[];
+  i: Array<{
+    n: string;
+    g: string | null;
+    c: string | null;
+    r: StockOtwWireRow[];
+  }>;
+}
+
+function expandStockOtwWirePayload(payload: StockOtwWirePayload): StockItem[] {
+  const containers = Array.isArray(payload?.c) ? payload.c : [];
+  const items = Array.isArray(payload?.i) ? payload.i : [];
+  const rows: StockItem[] = [];
+
+  for (const item of items) {
+    for (const [containerIndex, quantity, totalCost] of item.r || []) {
+      const [containerNumber = "", supplierName = "Unknown"] = containers[containerIndex] || [];
+      rows.push({
+        stockItemCode: "",
+        stockItemName: item.n || "",
+        quantity: String(quantity || 0),
+        totalCost: String(totalCost || 0),
+        rate: String(quantity ? totalCost / quantity : 0),
+        containerNumber,
+        supplierName,
+        importDate: "",
+        gradeId: null,
+        gradeName: item.g ?? null,
+        categoryId: null,
+        categoryName: item.c ?? null,
+      });
+    }
+  }
+
+  return rows;
+}
+
 interface GroupedStockItem {
   stockItemName: string;
   totalQuantity: number;
@@ -74,7 +115,10 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     error: containersError,
     refetch: refetchContainers,
   } = useQuery<Container[]>({
-    queryKey: ["/api/containers"],
+    // This page only needs OTW id/status/grandTotal. Keep the compact profile
+    // in queryKey[0] because the shared React Query fetcher uses that element
+    // as the literal request URL.
+    queryKey: ["/api/containers?profile=otw-summary"],
   });
 
   // Single bulk query replaces the N-per-container useQueries fan-out
@@ -83,8 +127,12 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
     isLoading: loadingOtwItems,
     error: otwItemsError,
     refetch: refetchOtwItems,
-  } = useQuery<StockItem[]>({
-    queryKey: ["/api/containers/otw-items"],
+  } = useQuery<StockOtwWirePayload, Error, StockItem[]>({
+    // Request the dictionary-compressed contract explicitly. Production data
+    // has thousands of item/container pairs, so even the older flat compact
+    // profile can exceed the operational response budget.
+    queryKey: ["/api/containers/otw-items?profile=stock-otw-v2"],
+    select: expandStockOtwWirePayload,
   });
 
   const otwContainers = useMemo(() => containers.filter((c) => c.status === "OTW"), [containers]);
