@@ -610,12 +610,6 @@ const PAGES: PageCase[] = [
     factory: true,
   },
   {
-    name: "FactoryPOS",
-    load: () => import("@/pages/factory/FactoryPOS"),
-    landmark: "button-complete-sale",
-    factory: true,
-  },
-  {
     name: "FactoryStatusBuilder",
     load: () => import("@/pages/factory/FactoryStatusBuilder"),
     landmark: "sb-button-export-excel",

@@ -109,7 +109,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/bale-ledger` | `/factory/production-report?tab=product-comparison` | same | legacy route redirected to Product Comparison |
 | `/factory/net-profit-analytics` | Financial Intelligence net-profit section | same | correct |
 | `/factory/net-position` | Financial Intelligence net-position section | same | correct |
-| `/factory/pos` | Factory default landing page | none (retired) | Factory POS is no longer a Factory destination: it has no sidebar/access-registry entry and the live route redirects to the user's default Factory page. It is excluded from canonical navigation and mobile certification. |
+| `/factory/pos` | Factory default landing page | none (retired) | Factory POS is retired (confirmed by the product owner). The page and its components are removed; the route only redirects old bookmarks to the user's default Factory page. The `/api/factory/pos` endpoints stay so historical POS sales remain visible in analytics. |
 
 ## Duplicate or overlapping destinations
 
@@ -167,7 +167,7 @@ Checked against `client/src/components/FactoryRoutes.tsx` and `shared/factoryAcc
 
 - Every canonical top-level page above is a live page route (no redirect).
 - All 53 sidebar/access-registry destinations resolve to live page routes.
-- `/factory/pos` was listed as canonical but redirects to the default Factory page; it is now recorded as a retired alias. Restoring Factory POS would need a sidebar/access entry and a real route, not only this document.
+- `/factory/pos` was listed as canonical but redirected to the default Factory page. Factory POS is confirmed retired: the frontend page is removed and the route remains only as a bookmark redirect.
 - `/factory/finance` and `/factory/worker-payroll` redirect directly (the documented chains no longer exist).
 - The year-level product history route is `/factory/bale-product-history/:productId/:locationId/:year/all`.
 

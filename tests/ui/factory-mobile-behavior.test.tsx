@@ -164,3 +164,35 @@ describe("Factory phone interactions", () => {
     }
   });
 });
+
+describe("Factory notes entry point", () => {
+  afterEach(() => {
+    delete document.documentElement.dataset.userNotes;
+  });
+
+  it("opens My Notes from the account menu, since phones hide the floating button", async () => {
+    const { UserMenu } = await import("@/components/UserMenu");
+    document.documentElement.dataset.userNotes = "available";
+    const opened = vi.fn();
+    window.addEventListener("user-notes:open", opened);
+    try {
+      renderWithProviders(
+        <UserMenu accentColor="#f60" user={{ username: "Rania", role: "Admin" }} onLogout={vi.fn()} />
+      );
+      const trigger = screen.getByTestId("button-user-menu");
+      fireEvent.pointerDown(trigger, { button: 0, pointerType: "mouse" });
+      fireEvent.click(await screen.findByTestId("button-user-menu-notes"));
+      expect(opened).toHaveBeenCalledTimes(1);
+    } finally {
+      window.removeEventListener("user-notes:open", opened);
+    }
+  });
+
+  it("does not offer notes in the menu when the user has notes disabled", async () => {
+    const { UserMenu } = await import("@/components/UserMenu");
+    renderWithProviders(<UserMenu accentColor="#f60" user={{ username: "Rania", role: "Admin" }} onLogout={vi.fn()} />);
+    fireEvent.pointerDown(screen.getByTestId("button-user-menu"), { button: 0, pointerType: "mouse" });
+    await screen.findByTestId("button-logout");
+    expect(screen.queryByTestId("button-user-menu-notes")).not.toBeInTheDocument();
+  });
+});

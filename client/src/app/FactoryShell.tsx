@@ -72,15 +72,6 @@ const factoryWorkspaceClasses = [
   "[&_[data-table-scroll-region]]:max-w-full",
 ].join(" ");
 
-const factoryPosWorkspaceClasses = [
-  "[&_input]:min-h-10",
-  "[&_select]:min-h-10",
-  "[&_textarea]:min-h-20",
-  "[&_table]:min-w-max",
-  "[&_th]:whitespace-nowrap",
-  "[&_td]:align-middle",
-].join(" ");
-
 export function FactoryShell({
   user,
   myAccess,
@@ -96,7 +87,6 @@ export function FactoryShell({
   useButtonClickFeedback(factoryContainerRef);
 
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
-  const isFactoryPosRoute = currentLocation === "/factory/pos" || currentLocation.startsWith("/factory/pos?");
   const isRawStockRecalculateRoute =
     currentLocation === "/factory/raw-stock/recalculate" ||
     currentLocation.startsWith("/factory/raw-stock/recalculate?");
@@ -129,19 +119,14 @@ export function FactoryShell({
             <main
               id="main-content"
               tabIndex={-1}
-              aria-label={isFactoryPosRoute ? "Factory point of sale workspace" : "Factory and inventory workspace"}
+              aria-label="Factory and inventory workspace"
               data-factory-workspace="true"
-              data-pos-workspace={isFactoryPosRoute ? "true" : undefined}
-              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses} ${isFactoryPosRoute ? factoryPosWorkspaceClasses : ""}`}
+              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses}`}
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}
-                loadingTitle={isFactoryPosRoute ? "Loading factory point of sale" : "Loading factory workspace"}
-                loadingDescription={
-                  isFactoryPosRoute
-                    ? "Preparing the latest sale-entry workspace."
-                    : "Preparing the latest factory and inventory information."
-                }
+                loadingTitle="Loading factory workspace"
+                loadingDescription="Preparing the latest factory and inventory information."
               >
                 <FactoryCatalogLanguageSwitch />
                 <Suspense fallback={null}>

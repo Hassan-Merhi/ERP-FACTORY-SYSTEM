@@ -164,7 +164,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
     landmark: "button-export-all-locations",
   },
   { name: "GroundScan", load: () => import("@/pages/factory/GroundScan"), landmark: "input-ground-scan" },
-  { name: "FactoryPOS", load: () => import("@/pages/factory/FactoryPOS"), landmark: "button-complete-sale" },
   {
     name: "BalesHistory",
     load: () => import("@/pages/factory/BalesHistory"),

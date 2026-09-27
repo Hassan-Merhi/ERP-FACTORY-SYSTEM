@@ -92,13 +92,23 @@
 }
 
 /*
- * The floating notes button defaults to the bottom-left corner, exactly where a phone workflow
- * bar (FactoryMobileActionBar) puts Cancel / Save. While such a bar is on screen the button
- * floats above it so it never covers a workflow action.
+ * The floating notes button covered page content and workflow bars on Factory phones (portrait
+ * and touch landscape). There the "…" workspace menu (portrait) and the account menu (landscape)
+ * open the notes panel instead, as the ERP shell does; tablet and desktop keep the button.
  */
-@media (max-width: 639px) {
-  html[data-app-shell="factory"]:has([data-factory-mobile-action-bar="true"]) [data-testid="button-open-user-notes"] {
-    top: auto !important;
-    bottom: calc(9rem + env(safe-area-inset-bottom)) !important;
+@media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  html[data-app-shell="factory"] [data-testid="button-open-user-notes"] {
+    display: none !important;
+  }
+}
+
+/*
+ * Stock Entry's cart renders its card list on landscape phones (the phone-layout rule), but the
+ * list keeps its md:hidden portrait/tablet split; short touch screens show it anyway, like the
+ * Wave 2 floor lists in mobile-browser-compat.css.
+ */
+@media (hover: none) and (pointer: coarse) and (max-height: 500px) {
+  [data-factory-stock-entry-cart="true"] > .md\:hidden {
+    display: block !important;
   }
 }

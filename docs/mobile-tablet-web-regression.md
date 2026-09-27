@@ -39,7 +39,7 @@ This targeted rendered gate complements the source-contract and frontend suites 
 - the route's safe dialog or sheet (for example Add Contact, New Dispatch Batch, the phone filter sheets) not fitting the viewport, not scrolling internally, hiding its last action, leaving a focused field outside the visible viewport, or not closing with Escape (or navigating when it does);
 - Escape on a canonical top-level page navigating away, or Escape anywhere leaving Factory Mode.
 
-Ordinary tables that still scroll sideways on phones are reported as warnings (`ERP_FACTORY_MOBILE_STRICT_TABLES=1` makes them failures); analytical matrices opt out with `data-mobile-matrix`. In CI the Mobile Responsiveness job runs it with `ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1`, which creates realistic rows through the Factory APIs (`scripts/lib/factory-mobile-fixture.mjs`) in the disposable fixture company. Never use `ERP_FACTORY_MOBILE_CREATE_SEEDS` against real company data.
+Ordinary tables that still scroll sideways on phones are reported as warnings locally and fail in CI (`ERP_FACTORY_MOBILE_STRICT_TABLES=1`); analytical matrices opt out with `data-mobile-matrix`. In CI the Mobile Responsiveness job runs it with `ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1 ERP_FACTORY_MOBILE_STRICT_TABLES=1`, which creates realistic rows through the Factory APIs (`scripts/lib/factory-mobile-fixture.mjs`) in the disposable fixture company. Never use `ERP_FACTORY_MOBILE_CREATE_SEEDS` against real company data.
 
 ## Run against a local or preview deployment
 

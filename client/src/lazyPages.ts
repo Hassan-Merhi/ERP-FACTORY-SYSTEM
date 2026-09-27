@@ -208,7 +208,6 @@ export const FactorySupplierHub = lazy(() => import("@/pages/factory/FactorySupp
 export const FactoryFinancialHub = lazy(() => import("@/pages/factory/FactoryFinancialHub"));
 export const FactoryProductionIntelHub = lazy(() => import("@/pages/factory/FactoryProductionIntelHub"));
 export const WasteDispatchPage = lazy(() => import("@/pages/factory/WasteDispatch"));
-export const FactoryPOS = lazy(() => import("@/pages/factory/FactoryPOS"));
 export const FactoryIntelSettings = lazy(() => import("@/pages/factory/FactorySettings"));
 export const FactoryRentalWarehouses = lazy(() => import("@/pages/factory/FactoryRentalWarehouses"));
 export const FactoryRentalShops = lazy(() => import("@/pages/factory/FactoryRentalShops"));

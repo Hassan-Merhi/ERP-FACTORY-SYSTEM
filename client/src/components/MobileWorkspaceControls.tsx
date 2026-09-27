@@ -8,6 +8,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserMenu } from "@/components/UserMenu";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useApplicationDirection, useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useAppMode } from "@/contexts/AppModeContext";
 import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 interface WorkspaceUser {
@@ -111,8 +112,12 @@ export default function MobileWorkspaceControls({
     onLogout();
   };
 
-  // ERP phones hide the floating notes button, so the workspace menu opens the panel instead.
-  const notesAvailable = simplifyMobileNavigation && open && document.documentElement.dataset.userNotes === "available";
+  // ERP and Factory phones hide the floating notes button, so the workspace menu opens the panel instead.
+  const appMode = useAppMode();
+  const notesAvailable =
+    (simplifyMobileNavigation || appMode === "factory") &&
+    open &&
+    document.documentElement.dataset.userNotes === "available";
   const openNotes = () => {
     setOpen(false);
     window.dispatchEvent(new Event("user-notes:open"));

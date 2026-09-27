@@ -31,12 +31,14 @@ Rendered certification: `scripts/verify-factory-mobile-browser.mjs` (see `docs/m
 | 10 Forms & admin | Done: Container Create; Opening Balance edit, master-data create, settings, customer logos, label banners, chatbot/intel settings, conflicts, deleted items, diagnostics, inventory repair, data reset and raw-stock recalculation (tables → cards) rendered and reviewed. |
 | 11 Detail routes | Done: stock query detail, bale product history (product, year, month), monthly ledger, ledger vouchers, voucher detail and edit, proforma add-line, container detail and OTW dialogs rendered with data. Voucher detail under `/factory` was broken for every voucher (route matched only the ERP path) and is fixed. |
 | Escape / Back | Fixed: on a top-level Factory page the global Escape/Back fallback called `history.back()`, returning to whatever page came before (including ERP pages). Top-level Factory destinations now perform no navigation, as the navigation registry requires; child pages still go to their registered parent. Covered by `tests/ui/factory-escape-navigation.test.tsx` and the rendered regression. |
-| 12 Registry drift | Done: registry reconciled; `/factory/pos` recorded as retired. Guarded by `tests/ui/factory-mobile-route-registry.test.ts`. |
+| 12 Registry drift | Done: registry reconciled; Factory POS confirmed retired — its page and components are removed and `/factory/pos` only redirects old bookmarks (the `/api/factory/pos` endpoints stay for historical sales in analytics). Guarded by `tests/ui/factory-mobile-route-registry.test.ts`. |
 | 13 Browser coverage | Done: `scripts/verify-factory-mobile-browser.mjs` — 88 routes (canonical pages, every hub section, forms/admin tools, 18 seeded detail/workflow routes) × 6 viewports, with seeded data (`scripts/lib/factory-mobile-fixture.mjs`), a safe dialog per route (fits, scrolls, last action reachable, focused field visible, Escape closes without navigating) and Escape navigation rules. Runs in CI. |
 
-## Known limits
+## Remaining limits
 
-- Stock Entry's "Bales ready for stock entry" table scrolls sideways in touch landscape (protected Factory floor screen, left as is; reported as a warning).
-- The draggable notes button can overlap content in touch landscape; it stays user-movable and floats above workflow bars on portrait phones.
-- The on-screen keyboard cannot be emulated headlessly; the regression checks that a focused dialog field is inside the visible viewport, and `useVisualViewportMetrics` lifts phone dialogs above the real keyboard.
-- Restoring Factory POS would need a product decision plus a sidebar/access entry and a real route.
+None open. Previously listed items are resolved:
+
+- Stock Entry's cart shows its card list on touch-landscape phones too (it used the portrait-only breakpoint), so no ordinary table scrolls sideways on any phone viewport; CI runs the regression with `ERP_FACTORY_MOBILE_STRICT_TABLES=1`.
+- The floating notes button is hidden on Factory phones (portrait and touch landscape); My Notes opens from the "…" workspace menu or the account menu, as in ERP. Tablet and desktop keep the button.
+- The on-screen keyboard cannot be opened headlessly, so its handling is unit-tested instead (`client/src/hooks/use-visual-viewport-metrics.test.tsx`: dialogs lifted by the keyboard height, focused dialog field scrolled into view); the rendered regression checks focused dialog fields stay inside the visible viewport.
+- Factory POS is retired: page removed, `/factory/pos` redirects old bookmarks.

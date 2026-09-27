@@ -267,6 +267,7 @@ export function FactoryRoutes({ user, myAccess, factoryDefaultPage }: FactoryRou
         <Redirect replace to="/factory/intelligence/production-hub?section=waste" />
       </Route>
       <Route path="/factory/waste-dispatch" component={WasteDispatchPage} />
+      {/* Factory POS is retired; old bookmarks land on the user's default Factory page. */}
       <Route path="/factory/pos">{() => <Redirect replace to={factoryDefaultPage} />}</Route>
       <Route path="/factory/bale-ledger">
         {() => <Redirect replace to="/factory/production-report?tab=product-comparison" />}
