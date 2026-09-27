@@ -65,6 +65,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
+| [factory-mobile-audit.md](factory-mobile-audit.md) | Factory mode phone layouts and mobile audit status |
 | [ux-consistency-program.md](ux-consistency-program.md) | Shared responsive, translation, route-boundary, and filter-state contracts |
 | [api-quickstart.md](api-quickstart.md) | Calling the API |
 | [compatibility.md](compatibility.md) | Supported browsers and platforms |

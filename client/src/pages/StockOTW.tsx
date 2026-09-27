@@ -25,78 +25,12 @@ import type { Container } from "@shared/schema";
 import { PageHeader } from "@/components/PageHeader";
 import CombinedInventory from "@/pages/CombinedInventory";
 import { ExcelJS, writeFile } from "@/lib/excelHelper";
-
-interface StockItem {
-  stockItemCode: string;
-  stockItemName: string;
-  quantity: string;
-  totalCost: string;
-  rate: string;
-  containerNumber: string;
-  supplierName: string;
-  importDate: string;
-  gradeId: number | null;
-  gradeName: string | null;
-  categoryId: number | null;
-  categoryName: string | null;
-}
-
-type StockOtwWireContainer = [containerNumber: string, supplierName: string];
-type StockOtwWireRow = [containerIndex: number, quantity: number, totalCost: number];
-
-interface StockOtwWirePayload {
-  c: StockOtwWireContainer[];
-  i: Array<{
-    n: string;
-    g: string | null;
-    c: string | null;
-    r: StockOtwWireRow[];
-  }>;
-}
-
-function expandStockOtwWirePayload(payload: StockOtwWirePayload): StockItem[] {
-  const containers = Array.isArray(payload?.c) ? payload.c : [];
-  const items = Array.isArray(payload?.i) ? payload.i : [];
-  const rows: StockItem[] = [];
-
-  for (const item of items) {
-    for (const [containerIndex, quantity, totalCost] of item.r || []) {
-      const [containerNumber = "", supplierName = "Unknown"] = containers[containerIndex] || [];
-      rows.push({
-        stockItemCode: "",
-        stockItemName: item.n || "",
-        quantity: String(quantity || 0),
-        totalCost: String(totalCost || 0),
-        rate: String(quantity ? totalCost / quantity : 0),
-        containerNumber,
-        supplierName,
-        importDate: "",
-        gradeId: null,
-        gradeName: item.g ?? null,
-        categoryId: null,
-        categoryName: item.c ?? null,
-      });
-    }
-  }
-
-  return rows;
-}
-
-interface GroupedStockItem {
-  stockItemName: string;
-  totalQuantity: number;
-  totalCost: number;
-  containerCount: number;
-  gradeName: string | null;
-  categoryName: string | null;
-  containers: {
-    containerNumber: string;
-    quantity: number;
-    cost: number;
-    rate: number;
-    supplierName: string;
-  }[];
-}
+import {
+  expandStockOtwWirePayload,
+  type GroupedStockItem,
+  type StockItem,
+  type StockOtwWirePayload,
+} from "@/lib/stockOtwWirePayload";
 
 function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boolean; onToggleCombined: () => void }) {
   const { formatAmount } = useCurrencyContext();
