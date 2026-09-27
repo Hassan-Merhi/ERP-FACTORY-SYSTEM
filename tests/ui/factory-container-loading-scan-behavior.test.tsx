@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const harness = vi.hoisted(() => ({
   // Emptying a loading is admin-only (#1732); most cases run as an admin.
   currentRole: "Admin",
+  orderDetailReady: true,
   toast: vi.fn(),
   navigate: vi.fn(),
   apiRequest: vi.fn(),
@@ -79,7 +80,7 @@ vi.mock("@tanstack/react-query", () => ({
       };
     }
     if (root === "/api/factory/customer-orders" && queryKey?.[1] === 77 && queryKey?.length === 2)
-      return { data: orderDetail };
+      return { data: harness.orderDetailReady ? orderDetail : undefined };
     if (root === "/api/factory/bale-stock-count") return { data: { A1: 5 } };
     if (root === "/api/factory/customer-orders" && queryKey?.[2] === "bale-removals") {
       return {
@@ -219,6 +220,7 @@ describe("factory container loading scan behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     harness.currentRole = "Admin";
+    harness.orderDetailReady = true;
     localStorage.clear();
     Object.defineProperty(window, "AudioContext", { configurable: true, value: FakeAudioContext });
     harness.apiRequest.mockImplementation(async (method: string, url: string, body: any) => {
@@ -288,6 +290,20 @@ describe("factory container loading scan behavior", () => {
     expect(localStorage.getItem("lastScannedBale_77")).toBeNull();
   });
 
+
+  it("keeps the scanner disabled until loading order details are available", async () => {
+    harness.orderDetailReady = false;
+
+    render(<FactoryContainerLoadingScan />);
+    const input = await screen.findByTestId("input-scan-code");
+
+    expect(input).toBeDisabled();
+    expect(
+      harness.apiRequest.mock.calls.filter(
+        ([method, url]) => method === "POST" && url === "/api/factory/customer-orders/77/bales"
+      )
+    ).toHaveLength(0);
+  });
 
   it("submits only one request when duplicate scanner Enter events arrive in the same render", async () => {
     let resolveScan!: (value: unknown) => void;
