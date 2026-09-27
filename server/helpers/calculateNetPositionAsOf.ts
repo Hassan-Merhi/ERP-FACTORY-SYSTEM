@@ -320,6 +320,7 @@ export async function calculateNetPositionAsOf(
   const companyEmployees = await db
     .select({
       id: employees.id,
+      employeeType: employees.employeeType,
       openingBalance: employees.openingBalance,
       openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
     })
@@ -327,32 +328,60 @@ export async function calculateNetPositionAsOf(
     .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
     .execute();
 
-  // Inactive employees can still carry receivables/payables, so deactivation
-  // must not erase an accounting position. Use the same shared sign logic as
-  // the live dashboard.
+  // Inactive people can still carry receivables/payables, so deactivation
+  // must not erase an accounting position. Keep ERP Employees and Workers
+  // separated exactly like the live dashboard.
   const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
+  const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
+  const payrollWorkers = companyEmployees.filter((employee) => employee.employeeType === "Worker");
   const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
-    companyEmployees,
+    payrollEmployees,
     employeeBalances,
     managedSalaryAdvances
   );
-  const employeeAdvanceTotal = employeePosition.advances;
-  const employeeLiabilityTotal = employeePosition.liabilities;
-  forUsTotal += employeeAdvanceTotal;
-  onUsTotal += employeeLiabilityTotal;
-  if (employeeAdvanceTotal > 0) {
+  const workerPosition = computeEmployeeNetPositionWithManagedAdvances(
+    payrollWorkers,
+    employeeBalances,
+    managedSalaryAdvances
+  );
+
+  const employeeReceivables = round2(employeePosition.advances);
+  const payrollPayable = round2(employeePosition.liabilities);
+  const workerAdvances = round2(workerPosition.advances);
+  const workerPayable = round2(workerPosition.liabilities);
+
+  forUsTotal += employeeReceivables + workerAdvances;
+  onUsTotal += payrollPayable + workerPayable;
+
+  if (employeeReceivables > 0) {
     forUsLines.push({
-      label: "Employee Advances",
-      value: round2(employeeAdvanceTotal),
-      category: "Advances",
+      label: "Employee Receivables",
+      value: employeeReceivables,
+      category: "Employee Receivables",
       side: "forUs",
     });
   }
-  if (employeeLiabilityTotal > 0) {
+  if (workerAdvances > 0) {
+    forUsLines.push({
+      label: "Worker Advances (Prepaid)",
+      value: workerAdvances,
+      category: "Worker Advances",
+      side: "forUs",
+    });
+  }
+  if (payrollPayable > 0) {
     onUsLines.push({
-      label: "Owed to Employees",
-      value: round2(employeeLiabilityTotal),
-      category: "Payables",
+      label: "Payroll Payable",
+      value: payrollPayable,
+      category: "Payroll",
+      side: "onUs",
+    });
+  }
+  if (workerPayable > 0) {
+    onUsLines.push({
+      label: "Worker Payable",
+      value: workerPayable,
+      category: "Worker Payroll",
       side: "onUs",
     });
   }
