@@ -174,7 +174,7 @@ export default function FactoryEmployeeBonusesTab() {
       ) : (
         <>
           <div className="hidden sm:block rounded-md border">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Employee</TableHead>

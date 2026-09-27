@@ -15,6 +15,7 @@ import {
   ResponsiveDataListItem,
   ResponsiveDataListTitle,
 } from "@/components/ui/responsive-data-list";
+import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { BaleLogoPickerPopover } from "./BaleLogoPickerPopover";
 import type { FactoryBaleProduct } from "@shared/schema";
@@ -75,7 +76,9 @@ export function StockEntryCart({
   onLogoPickerOpenChange: (productId: number | null) => void;
   filteredWorkers: WorkerOption[];
 }) {
-  const isMobile = useIsMobile();
+  // Landscape phones are wider than md but still get the card list (same rule as the phone shell).
+  const isPhoneLayout = useErpPhoneLayout();
+  const isMobile = useIsMobile() || isPhoneLayout;
 
   const handleCellKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>, productId: number, col: "qty" | "weight") => {

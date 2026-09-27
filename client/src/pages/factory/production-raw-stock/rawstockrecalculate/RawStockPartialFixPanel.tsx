@@ -64,7 +64,7 @@ export function RawStockPartialFixPanel({ rawStock }: RawStockPartialFixPanelPro
               </div>
 
               <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Container</TableHead>

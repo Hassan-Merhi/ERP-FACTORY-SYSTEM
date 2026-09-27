@@ -264,7 +264,7 @@ export function MovementLog({ items }: { items: SheetsAndSacksItem[] }) {
                 </div>
                 {/* Entries table */}
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow className="bg-muted/20">
                         <TableHead className="w-36 text-xs">Time</TableHead>

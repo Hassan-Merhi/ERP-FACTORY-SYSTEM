@@ -3,14 +3,14 @@
  *
  * Extracted from FactoryInsurance.tsx during the Phase 4 god-file split.
  */
-import {useMemo} from "react";
-import {useQuery} from "@tanstack/react-query";
-import {Shield, Loader2, FileText} from "lucide-react";
-import {Card, CardContent} from "@/components/ui/card";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Sheet, SheetContent, SheetHeader, SheetTitle} from "@/components/ui/sheet";
-import {useDateFormat} from "@/contexts/DateFormatContext";
-import type {InsuranceMember, LedgerEntry} from "../types";
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Shield, Loader2, FileText } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useDateFormat } from "@/contexts/DateFormatContext";
+import type { InsuranceMember, LedgerEntry } from "../types";
 
 export // ─── Member Statement Drawer ──────────────────────────────────────────────────
 function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; onClose: () => void }) {
@@ -86,7 +86,7 @@ function MemberStatementDrawer({ member, onClose }: { member: InsuranceMember; o
                 </Card>
               </div>
 
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>

@@ -321,7 +321,7 @@ export default function FactoryPriceList() {
               ))}
             </div>
           ) : filteredProducts.length > 0 ? (
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead className="hidden sm:table-cell">Article Code</TableHead>

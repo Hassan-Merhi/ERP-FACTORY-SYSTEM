@@ -25,6 +25,22 @@ The Mobile Responsiveness workflow creates disposable ERP, Factory, Properties, 
 
 This targeted rendered gate complements the source-contract and frontend suites without rerunning the complete backend CI matrix. The six-size route matrix and the manual orientation/device checks below remain the final release certification.
 
+## Factory Mode rendered regression
+
+`scripts/verify-factory-mobile-browser.mjs` covers Factory Mode beyond the floor screens that the Wave 4 smoke protects: every canonical Factory destination and hub section, the forms and admin tools, and 18 seeded detail/workflow routes (invoice detail, loading scan and verification, dispatch batch and scan, customer, employee and worker detail, proforma add-line, stock query and bale product history, monthly ledger and ledger vouchers, voucher detail and edit, opening balance edit). Route tables live in `scripts/lib/factory-mobile-routes.mjs`. It runs at 320×568, 360×800, 390×844, touch landscape 844×390, tablet 768×1024 and desktop 1440×900 and fails on:
+
+- page or workspace (`#main-content`) horizontal overflow;
+- controls outside the viewport that no sideways scroller (tab strip, table region) clips;
+- touch targets under 44px and text inputs under 16px on phones;
+- hover-only controls, dialogs outside the viewport, fixed controls escaping the phone viewport;
+- controls hidden underneath a fixed mobile action bar;
+- a navigation drawer that is wider than the phone, scrolls sideways, has controls under 44px, or stays open after a destination is chosen;
+- scanner inputs under 44px/16px or not focusable;
+- the route's safe dialog or sheet (for example Add Contact, New Dispatch Batch, the phone filter sheets) not fitting the viewport, not scrolling internally, hiding its last action, leaving a focused field outside the visible viewport, or not closing with Escape (or navigating when it does);
+- Escape on a canonical top-level page navigating away, or Escape anywhere leaving Factory Mode.
+
+Ordinary tables that still scroll sideways on phones are reported as warnings locally and fail in CI (`ERP_FACTORY_MOBILE_STRICT_TABLES=1`); analytical matrices opt out with `data-mobile-matrix`. In CI the Mobile Responsiveness job runs it with `ERP_FACTORY_MOBILE_CREATE_SEEDS=1 ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1 ERP_FACTORY_MOBILE_STRICT_TABLES=1`, which creates realistic rows through the Factory APIs (`scripts/lib/factory-mobile-fixture.mjs`) in the disposable fixture company. Never use `ERP_FACTORY_MOBILE_CREATE_SEEDS` against real company data.
+
 ## Run against a local or preview deployment
 
 The target URL must serve a build of the pull-request branch. Testing the current production deployment does not validate unmerged code.

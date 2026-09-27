@@ -2,13 +2,21 @@ import * as React from "react";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Bottom clearance for a page that shows a fixed {@link FactoryMobileActionBar} on phones. Below
+ * 360px the bar stacks its actions (two buttons are ~7.5rem tall), from 360px they share one row.
+ */
+const FACTORY_MOBILE_ACTION_BAR_CLEARANCE =
+  "pb-[calc(8.5rem+env(safe-area-inset-bottom))] min-[360px]:pb-[calc(5.5rem+env(safe-area-inset-bottom))]";
+
 const FactoryMobilePage = React.forwardRef<HTMLElement, React.HTMLAttributes<HTMLElement>>(
   ({ className, ...props }, ref) => (
     <section
       ref={ref}
       data-factory-mobile-page="true"
       className={cn(
-        "flex min-w-0 max-w-full flex-col gap-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:gap-5 sm:pb-0",
+        "flex min-w-0 max-w-full flex-col gap-4 sm:gap-5 sm:pb-0",
+        FACTORY_MOBILE_ACTION_BAR_CLEARANCE,
         className
       )}
       {...props}
@@ -102,6 +110,7 @@ const FactoryMobileActionBar = React.forwardRef<HTMLDivElement, React.HTMLAttrib
 FactoryMobileActionBar.displayName = "FactoryMobileActionBar";
 
 export {
+  FACTORY_MOBILE_ACTION_BAR_CLEARANCE,
   FactoryMobileActionBar,
   FactoryMobileHeader,
   FactoryMobileHeaderActions,

@@ -214,7 +214,6 @@ const PAGES: Array<{
   },
   { name: "FactoryLocationInventory", load: () => import("@/pages/factory/FactoryLocationInventory"), factory: true },
   { name: "GroundScan", load: () => import("@/pages/factory/GroundScan"), factory: true },
-  { name: "FactoryPOS", load: () => import("@/pages/factory/FactoryPOS"), factory: true },
   { name: "FactoryStatusBuilder", load: () => import("@/pages/factory/FactoryStatusBuilder"), factory: true },
   { name: "FactoryProformas", load: () => import("@/pages/factory/FactoryProformas"), factory: true },
   { name: "FactorySettings", load: () => import("@/pages/factory/FactorySettings"), factory: true },

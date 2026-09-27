@@ -21,6 +21,10 @@ import { WorkspaceRouteBoundary } from "@/components/ui/workspace-route-boundary
 import type { MyAccess } from "./factoryAccessGuard";
 import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { lazyRetry as lazy } from "@/lib/lazyRetry";
+import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
+import { useVisualViewportMetrics } from "@/hooks/use-visual-viewport-metrics";
+import "@/mobile-shell-dialogs.css";
+import "@/factory-mobile-operations.css";
 
 const FactoryFrenchCatalogManager = lazy(() =>
   import("@/components/FactoryFrenchCatalogManager").then((module) => ({
@@ -68,15 +72,6 @@ const factoryWorkspaceClasses = [
   "[&_[data-table-scroll-region]]:max-w-full",
 ].join(" ");
 
-const factoryPosWorkspaceClasses = [
-  "[&_input]:min-h-10",
-  "[&_select]:min-h-10",
-  "[&_textarea]:min-h-20",
-  "[&_table]:min-w-max",
-  "[&_th]:whitespace-nowrap",
-  "[&_td]:align-middle",
-].join(" ");
-
 export function FactoryShell({
   user,
   myAccess,
@@ -92,7 +87,6 @@ export function FactoryShell({
   useButtonClickFeedback(factoryContainerRef);
 
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
-  const isFactoryPosRoute = currentLocation === "/factory/pos" || currentLocation.startsWith("/factory/pos?");
   const isRawStockRecalculateRoute =
     currentLocation === "/factory/raw-stock/recalculate" ||
     currentLocation.startsWith("/factory/raw-stock/recalculate?");
@@ -101,6 +95,10 @@ export function FactoryShell({
     /^\/factory\/invoices\/\d+\/loading-scan(?:\?|$)/.test(currentLocation);
   useMainContentFocus(currentLocation);
   useWorkspaceWheelScroll(factoryContainerRef);
+  // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css),
+  // so the on-screen keyboard never hides their actions.
+  useDocumentAppShell("factory");
+  useVisualViewportMetrics();
   const hasAdminSearch = canUseAdminSearch(user);
 
   return (
@@ -121,19 +119,14 @@ export function FactoryShell({
             <main
               id="main-content"
               tabIndex={-1}
-              aria-label={isFactoryPosRoute ? "Factory point of sale workspace" : "Factory and inventory workspace"}
+              aria-label="Factory and inventory workspace"
               data-factory-workspace="true"
-              data-pos-workspace={isFactoryPosRoute ? "true" : undefined}
-              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses} ${isFactoryPosRoute ? factoryPosWorkspaceClasses : ""}`}
+              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses}`}
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}
-                loadingTitle={isFactoryPosRoute ? "Loading factory point of sale" : "Loading factory workspace"}
-                loadingDescription={
-                  isFactoryPosRoute
-                    ? "Preparing the latest sale-entry workspace."
-                    : "Preparing the latest factory and inventory information."
-                }
+                loadingTitle="Loading factory workspace"
+                loadingDescription="Preparing the latest factory and inventory information."
               >
                 <FactoryCatalogLanguageSwitch />
                 <Suspense fallback={null}>

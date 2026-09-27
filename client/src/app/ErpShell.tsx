@@ -22,6 +22,7 @@ import { canUseAdminSearch, type ShellUser } from "./shellUser";
 import { ErpAccessBoundary } from "./ErpAccessBoundary";
 import { MODULE_ACCENT } from "@/components/sidebar/sidebarPrimitives";
 import "@/erp-mobile-operations.css";
+import "@/mobile-shell-dialogs.css";
 
 interface ErpShellProps {
   user: ShellUser;

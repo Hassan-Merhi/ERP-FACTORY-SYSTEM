@@ -405,7 +405,7 @@ export default function FactoryProductionTargets() {
       </div>
 
       <div className="overflow-x-auto rounded-md border border-border/70">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow className="border-b border-border/80 bg-muted/60 hover:bg-muted/60">
               <TableHead className="min-w-[240px] border-r border-border/70 text-sm font-semibold">

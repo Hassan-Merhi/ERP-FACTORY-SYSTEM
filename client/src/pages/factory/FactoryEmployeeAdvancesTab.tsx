@@ -251,7 +251,7 @@ export default function FactoryEmployeeAdvancesTab() {
 
       {/* Table */}
       <div className="border rounded-xl overflow-x-auto">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs h-9 font-semibold">Employee</TableHead>

@@ -290,7 +290,7 @@ export default function FactorySheetsAndSacks() {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <Table>
+                  <Table mobileLayout="cards" data-testid="factory-sheets-sacks-table">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-6" />
@@ -336,7 +336,7 @@ export default function FactorySheetsAndSacks() {
                             </TableCell>
                             <TableCell className="text-right font-mono">${fmt(item.unitPrice)}</TableCell>
                             <TableCell className="text-right font-mono font-medium">${fmt(totalVal)}</TableCell>
-                            <TableCell className="text-muted-foreground text-sm max-w-xs truncate">
+                            <TableCell className="text-muted-foreground text-sm sm:max-w-xs sm:truncate">
                               {item.notes || "—"}
                             </TableCell>
                             {canEdit && (
@@ -347,6 +347,7 @@ export default function FactorySheetsAndSacks() {
                                     variant="ghost"
                                     onClick={() => setRestockItem(item)}
                                     title="Add Stock"
+                                    aria-label={`Add Stock ${item.name}`}
                                   >
                                     <PlusCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                                   </Button>
@@ -355,10 +356,17 @@ export default function FactorySheetsAndSacks() {
                                     variant="ghost"
                                     onClick={() => setDeductItem(item)}
                                     title="Deduct"
+                                    aria-label={`Deduct ${item.name}`}
                                   >
                                     <MinusCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" onClick={() => setEditItem(item)} title="Edit">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setEditItem(item)}
+                                    title="Edit"
+                                    aria-label={`Edit ${item.name}`}
+                                  >
                                     <Pencil className="h-4 w-4" />
                                   </Button>
                                   <Button
@@ -366,6 +374,7 @@ export default function FactorySheetsAndSacks() {
                                     variant="ghost"
                                     onClick={() => setDeleteItem(item)}
                                     title="Delete"
+                                    aria-label={`Delete ${item.name}`}
                                   >
                                     <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>

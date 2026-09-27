@@ -83,7 +83,7 @@ export function CurrencyPools({
       {!collapsedStmtSections.has("currencyPools") && (
         <div>
           <div className="table-responsive">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30">
                 <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                   <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">

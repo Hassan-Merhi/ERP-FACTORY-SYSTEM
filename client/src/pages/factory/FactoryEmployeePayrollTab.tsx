@@ -121,11 +121,14 @@ export default function FactoryEmployeePayrollTab() {
     setPayrollOpen(true);
   };
 
-  const getNet = useCallback((empId: number) => {
-    const sal = parseFloat(amounts[empId] || "0") || 0;
-    const ded = parseFloat(deductions[empId] || "0") || 0;
-    return Math.max(0, sal - ded);
-  }, [amounts, deductions]);
+  const getNet = useCallback(
+    (empId: number) => {
+      const sal = parseFloat(amounts[empId] || "0") || 0;
+      const ded = parseFloat(deductions[empId] || "0") || 0;
+      return Math.max(0, sal - ded);
+    },
+    [amounts, deductions]
+  );
 
   const totalNet = useMemo(() => employees.reduce((s, e) => s + getNet(e.id), 0), [employees, getNet]);
 
@@ -246,7 +249,7 @@ export default function FactoryEmployeePayrollTab() {
                 {isExpanded && (
                   <CardContent className="p-0 pb-2">
                     <div className="overflow-x-auto">
-                      <Table>
+                      <Table mobileLayout="cards">
                         <TableHeader className="sticky top-0 z-30 bg-background">
                           <TableRow>
                             <TableHead className="pl-6">Employee</TableHead>

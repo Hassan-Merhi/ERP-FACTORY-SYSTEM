@@ -28,6 +28,7 @@ import { AccountStatementCards } from "./AccountStatementCards";
 import { ErpMobileActionsMenu, ErpMobileSummaryGrid } from "@/components/ui/erp-mobile-records";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 
 interface AccountStatementRow extends Transaction {
@@ -109,6 +110,7 @@ export function AccountStatementView({
 }: AccountStatementViewProps) {
   const { formatTransactionAmount } = useCurrencyContext();
   const { selectedCompany } = useCompany();
+  const { language } = useApplicationLanguage();
   const queryClient = useQueryClient();
   const isFactorySupplierAccount = selectedAccount?.type === "factorySupplier";
   const [pdfLang, setPdfLang] = useState<"en" | "fr" | "ar">("en");
@@ -181,6 +183,8 @@ export function AccountStatementView({
     if (url) window.open(url, "_blank");
   };
   const showWhatsApp = appMode === "factory" || appMode === "erp";
+  // The phone header's one-tap PDF follows the interface language; other languages stay in the menu.
+  const phonePdfLanguage: "en" | "fr" | "ar" = language === "ar" || language === "fr" ? language : "en";
 
   const totalDebit = useMemo(
     () =>
@@ -321,6 +325,32 @@ export function AccountStatementView({
                 <span className="ms-1 text-sm font-normal opacity-70">{balSide(displayClosingBalance)}</span>
               </p>
             )}
+            {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
+                settings and deleted-voucher controls remain in the Actions menu. */}
+            <div className="mt-3 grid grid-cols-2 gap-2 [&>*]:min-h-11" data-testid="account-statement-phone-actions">
+              <Button
+                type="button"
+                variant="outline"
+                className={showWhatsApp && waRule?.enabled ? undefined : "col-span-2"}
+                onClick={() => openPdf(phonePdfLanguage)}
+                data-testid="button-pdf-phone"
+              >
+                <FileDown className="me-2 h-4 w-4" aria-hidden="true" />
+                PDF
+              </Button>
+              {showWhatsApp && waRule?.enabled && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={sendWaStatement}
+                  disabled={sendWaStatementMutation.isPending}
+                  data-testid="button-wa-send-phone"
+                >
+                  <Send className="me-2 h-4 w-4" aria-hidden="true" />
+                  WhatsApp
+                </Button>
+              )}
+            </div>
           </div>
           <div className="[&>*]:w-full">
             <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />

@@ -193,7 +193,7 @@ export default function FactoryEmployeeWithdrawalsTab() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="hidden sm:block">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Employee</TableHead>

@@ -1,4 +1,5 @@
-import { ChevronDown, Languages, LogOut } from "lucide-react";
+import { useState } from "react";
+import { ChevronDown, Languages, LogOut, NotebookPen } from "lucide-react";
 import { parseApplicationLanguage, type ApplicationLanguage } from "@shared/applicationLanguageContract";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useAppMode } from "@/contexts/AppModeContext";
 
 const languageOptions: Array<{
   value: ApplicationLanguage;
@@ -37,9 +39,14 @@ interface UserMenuProps {
 export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
   const { language, setLanguage, isSaving, t } = useApplicationLanguage();
   const roleLabel = user.role ?? "";
+  const appMode = useAppMode();
+  const [open, setOpen] = useState(false);
+  // Factory phones hide the floating notes button (it covered content in landscape), so the
+  // account menu opens the notes panel there; it is offered whenever notes are enabled.
+  const notesInMenu = appMode === "factory" && open && document.documentElement.dataset.userNotes === "available";
 
   return (
-    <DropdownMenu dir="ltr">
+    <DropdownMenu dir="ltr" open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
@@ -115,6 +122,16 @@ export function UserMenu({ accentColor, user, onLogout }: UserMenuProps) {
         )}
 
         <DropdownMenuSeparator />
+
+        {notesInMenu && (
+          <DropdownMenuItem
+            onSelect={() => window.dispatchEvent(new Event("user-notes:open"))}
+            data-testid="button-user-menu-notes"
+          >
+            <NotebookPen className="h-4 w-4" aria-hidden="true" />
+            {t("workspace.myNotes")}
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem
           onSelect={() => onLogout()}

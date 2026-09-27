@@ -107,7 +107,7 @@ export function BatchRow({
 
       {isExpanded && (
         <div className="overflow-x-auto">
-          <Table minimumWidth="76rem" scrollLabel="Payroll batch workers">
+          <Table mobileLayout="cards" minimumWidth="76rem" scrollLabel="Payroll batch workers">
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <TableHead className="h-9 w-10 pl-8 text-xs font-semibold" />

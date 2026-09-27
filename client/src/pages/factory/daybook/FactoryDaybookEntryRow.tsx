@@ -56,6 +56,7 @@ export function FactoryDaybookEntryRow({
       size="icon"
       variant="ghost"
       title="View details"
+      aria-label="View details"
       onClick={(e) => {
         e.stopPropagation();
         model.setViewEntry((de._source ?? entry) as DaybookEntry);
@@ -71,6 +72,7 @@ export function FactoryDaybookEntryRow({
       size="icon"
       variant="ghost"
       title="Go to container"
+      aria-label="Go to container"
       onClick={(e) => {
         e.stopPropagation();
         navigate(pencilTarget!);
@@ -85,12 +87,20 @@ export function FactoryDaybookEntryRow({
     <div
       data-testid={`row-expanded-${entry.id}`}
       onClick={isBaleTransfer ? (e) => model.handleEntryClick(entry, e) : undefined}
-      className={cn("grid w-full bg-muted/20 border-t items-center", colsClass, isBaleTransfer && "cursor-pointer")}
+      // Phones stack the description above its amount and actions; sm+ keeps the column grid.
+      className={cn(
+        "flex w-full flex-wrap items-center border-t bg-muted/20 sm:grid",
+        colsClass,
+        isBaleTransfer && "cursor-pointer"
+      )}
     >
       {/* Description — deep indent to align under badge */}
-      <div className="pl-14 pr-2 py-2 min-w-0">
+      <div className="min-w-0 basis-full py-2 pl-8 pr-3 sm:basis-auto sm:pl-14 sm:pr-2">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-sm text-foreground truncate" title={formatDaybookDescription(entry)}>
+          <span
+            className="min-w-0 break-words text-sm text-foreground sm:truncate"
+            title={formatDaybookDescription(entry)}
+          >
             {formatDaybookDescription(entry)}
           </span>
           {entry.optional && (
@@ -105,10 +115,10 @@ export function FactoryDaybookEntryRow({
         </div>
       </div>
       {/* Empty count cell */}
-      <div />
+      <div className="hidden sm:block" />
       {/* Amount + actions */}
       {showAmounts ? (
-        <div className="flex items-center justify-end gap-1 pr-2 py-2">
+        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1 py-1 pl-8 pr-2 sm:ml-0 sm:flex-nowrap sm:py-2 sm:pl-0">
           <span className="text-sm font-mono font-medium">
             {currencySymbol(entry.currencyCode)}
             {formatNumber(parseFloat(entry.amountCurrency))}
@@ -120,6 +130,7 @@ export function FactoryDaybookEntryRow({
               size="icon"
               variant="ghost"
               title="Edit"
+              aria-label="Edit"
               onClick={(e) => {
                 e.stopPropagation();
                 model.editSourceRecord(entry);
@@ -134,6 +145,7 @@ export function FactoryDaybookEntryRow({
               size="icon"
               variant="ghost"
               title="Void"
+              aria-label="Void"
               onClick={(e) => {
                 e.stopPropagation();
                 model.setVoidEntry(entry);
@@ -154,6 +166,7 @@ export function FactoryDaybookEntryRow({
                 size="icon"
                 variant="ghost"
                 title="Delete entry"
+                aria-label="Delete entry"
                 onClick={(e) => {
                   e.stopPropagation();
                   model.setDeleteEntry(de._source as DaybookEntry);
@@ -165,7 +178,7 @@ export function FactoryDaybookEntryRow({
             )}
         </div>
       ) : (
-        <div className="flex items-center justify-end gap-1 pr-2 py-2">
+        <div className="ml-auto flex items-center justify-end gap-1 py-1 pr-2 sm:ml-0 sm:py-2">
           {viewButton}
           {pencilButton}
         </div>

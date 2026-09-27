@@ -464,7 +464,7 @@ export default function FactoryDispatchBatchDetail() {
                     )}
                   </div>
                 ) : (
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">#</TableHead>
@@ -569,7 +569,7 @@ export default function FactoryDispatchBatchDetail() {
                   <p className="text-sm text-muted-foreground py-4 text-center">No active bale scans found.</p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader>
                         <TableRow>
                           <TableHead className="text-xs">Ride #</TableHead>
@@ -692,7 +692,7 @@ export default function FactoryDispatchBatchDetail() {
               {preview.proformaProgress.length > 0 && (
                 <div>
                   <p className="text-sm font-medium mb-2">Proforma Progress</p>
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Article</TableHead>
@@ -731,7 +731,7 @@ export default function FactoryDispatchBatchDetail() {
 
               <div>
                 <p className="text-sm font-medium mb-2">Article Breakdown</p>
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Article</TableHead>

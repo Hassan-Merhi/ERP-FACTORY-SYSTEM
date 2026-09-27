@@ -105,4 +105,34 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "يتم عرض الأشهر التي تحتوي على حركة فقط",
     fr: "Seuls les mois avec des mouvements sont affichés",
   },
+  {
+    en: "Other charge amount",
+    ar: "مبلغ الرسوم الأخرى",
+    fr: "Montant des autres frais",
+  },
+  {
+    en: "Other charge currency",
+    ar: "عملة الرسوم الأخرى",
+    fr: "Devise des autres frais",
+  },
+  {
+    en: "Other charge account",
+    ar: "حساب الرسوم الأخرى",
+    fr: "Compte des autres frais",
+  },
+  {
+    en: "Remove other charge",
+    ar: "إزالة الرسوم الأخرى",
+    fr: "Supprimer les autres frais",
+  },
+  {
+    en: "Comparison period",
+    ar: "فترة المقارنة",
+    fr: "Période de comparaison",
+  },
+  {
+    en: "Factory and inventory workspace",
+    ar: "مساحة عمل المصنع والمخزون",
+    fr: "Espace de travail usine et stock",
+  },
 ];

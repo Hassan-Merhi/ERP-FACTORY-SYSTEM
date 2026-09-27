@@ -264,7 +264,7 @@ export default function FactoryCustomers() {
 
       <div className="rounded-xl border overflow-hidden">
         <div className="table-responsive">
-          <Table>
+          <Table mobileLayout="cards">
             <TableHeader className="sticky top-0 z-30">
               <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                 <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">
@@ -368,7 +368,7 @@ export default function FactoryCustomers() {
             <p className="text-sm text-muted-foreground text-center py-8 px-4">No deleted customers found</p>
           ) : (
             <div className="table-responsive">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30">
                   <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                     <TableHead className="text-xs font-semibold uppercase tracking-wide text-muted-foreground py-2">

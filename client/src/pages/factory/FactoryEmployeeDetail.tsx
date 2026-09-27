@@ -386,7 +386,7 @@ export default function FactoryEmployeeDetail() {
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
         {/* Left Summary Card */}
         <div className="w-full lg:w-64 shrink-0 space-y-4">
           <Card>
@@ -523,7 +523,7 @@ export default function FactoryEmployeeDetail() {
               ) : !statement?.rows || statement.rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-8 text-center">No transactions yet</p>
               ) : (
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow>
                       <TableHead>Date</TableHead>

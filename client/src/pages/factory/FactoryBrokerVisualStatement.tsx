@@ -275,7 +275,7 @@ export default function FactoryBrokerVisualStatement() {
                   No containers found for this broker{from || to ? " in the selected date range" : ""}.
                 </p>
               ) : (
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow className="bg-muted/50 text-xs">
                       <TableHead className="h-8 whitespace-nowrap">Supplier</TableHead>
@@ -433,7 +433,7 @@ export default function FactoryBrokerVisualStatement() {
               {statement.payments?.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No payments recorded.</p>
               ) : (
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="sticky top-0 z-30 bg-background">
                     <TableRow className="bg-muted/50 text-xs">
                       <TableHead className="h-8">Date</TableHead>

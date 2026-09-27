@@ -256,7 +256,7 @@ export default function ProductionSummary() {
         <CardContent>
           {activeBatches.length > 0 ? (
             <div className="overflow-x-auto">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Batch</TableHead>
@@ -312,7 +312,7 @@ export default function ProductionSummary() {
         <CardContent>
           {allRawStock.length > 0 ? (
             <div className="overflow-x-auto">
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead>Container</TableHead>

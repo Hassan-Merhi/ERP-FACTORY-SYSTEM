@@ -300,7 +300,7 @@ export function FactoryWorkerAdvancesPanel({ model }: FactoryWorkerDetailModelPr
                   </div>
                 </div>
               )}
-              <Table>
+              <Table mobileLayout="cards">
                 <TableHeader className="sticky top-0 z-30 bg-background">
                   <TableRow>
                     <TableHead className="w-8"></TableHead>

@@ -246,7 +246,7 @@ export function FactoryDaybookDialogs({ model }: { model: FactoryDaybookModel })
         }}
       >
         <DialogContent
-          className="w-full max-w-[95vw] md:max-w-4xl max-h-[90vh] overflow-y-auto"
+          className="w-full max-w-[95vw] md:max-w-4xl max-h-[90dvh] overflow-y-auto"
           data-testid="dialog-view-entry"
         >
           {viewEntry && (

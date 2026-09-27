@@ -162,7 +162,7 @@ export default function FactoryStockItemDetail() {
                   </div>
                   {data.currentStock.locations.length > 0 && (
                     <div className="table-responsive">
-                      <Table>
+                      <Table mobileLayout="cards">
                         <TableHeader className="sticky top-0 z-30 bg-background">
                           <TableRow>
                             <TableHead>Location</TableHead>
@@ -207,7 +207,7 @@ export default function FactoryStockItemDetail() {
                 <div className="py-6 text-center text-muted-foreground text-sm">No stock entries yet</div>
               ) : (
                 <div className="table-responsive">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Date</TableHead>
@@ -256,7 +256,7 @@ export default function FactoryStockItemDetail() {
                 <div className="py-6 text-center text-muted-foreground text-sm">No sales recorded</div>
               ) : (
                 <div className="table-responsive">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Date</TableHead>
@@ -314,7 +314,7 @@ export default function FactoryStockItemDetail() {
                 <div className="py-6 text-center text-muted-foreground text-sm">No bales currently in loading</div>
               ) : (
                 <div className="table-responsive">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow>
                         <TableHead>Invoice</TableHead>

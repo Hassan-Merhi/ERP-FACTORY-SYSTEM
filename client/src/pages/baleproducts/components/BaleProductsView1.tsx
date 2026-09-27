@@ -260,7 +260,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
           </div>
         ) : condensedView ? (
           groupedProducts.length > 0 ? (
-            <Table wrapperClassName="max-h-[calc(100vh-320px)] overflow-auto">
+            <Table mobileLayout="cards" wrapperClassName="max-h-[calc(100vh-320px)] overflow-auto">
               <TableHeader className="sticky top-0 z-30">
                 <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                   <TableHead className="w-8"></TableHead>
@@ -391,7 +391,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
             <EmptyState onCreateClick={() => setCreateDialogOpen(true)} />
           )
         ) : activeProducts && activeProducts.length > 0 ? (
-          <Table wrapperClassName="max-h-[calc(100vh-320px)] overflow-auto">
+          <Table mobileLayout="cards" wrapperClassName="max-h-[calc(100vh-320px)] overflow-auto">
             <TableHeader className="sticky top-0 z-30">
               <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                 <TableHead className="w-8">
@@ -494,7 +494,7 @@ export function BaleProductsView1({ model }: { model: Model }) {
                 Hidden Products ({hiddenProducts.length})
               </span>
             </div>
-            <Table wrapperClassName="max-h-[400px] overflow-auto">
+            <Table mobileLayout="cards" wrapperClassName="max-h-[400px] overflow-auto">
               <TableHeader className="sticky top-0 z-30">
                 <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">
                   <TableHead className="w-8">

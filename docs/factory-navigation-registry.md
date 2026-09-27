@@ -24,7 +24,6 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | Raw Materials | `/factory/raw-materials` | `section` | none | canonical hub |
 | Waste Dispatch | `/factory/waste-dispatch` | component state | none | canonical |
 | Bale Explorer | `/factory/bales-hub` | `tab` or `section` | none | canonical hub |
-| Factory POS | `/factory/pos` | component state | none | canonical |
 | Invoicing | `/factory/invoicing` | `tab` | none | canonical hub |
 | Location Inventory | `/factory/location-inventory` | filters/query | none | canonical |
 | Containers | `/factory/containers-hub` | `section` | none | canonical hub |
@@ -58,7 +57,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/raw-stock` | Raw Materials | `/factory/raw-materials?section=stock` | unmapped centrally | fix in later phase |
 | `/factory/stock-query/:id` | Stock Query | `/factory/stock-query` | mapped | correct but origin context is not preserved |
 | `/factory/bale-product-history/:productId/:locationId` | Location Inventory | `/factory/location-inventory` | mapped | correct basic parent |
-| `/factory/bale-product-history/:productId/:locationId/:year` | Product history | base product/location route | mapped | correct |
+| `/factory/bale-product-history/:productId/:locationId/:year/all` | Product history | base product/location route | mapped | correct |
 | `/factory/bale-product-history/:productId/:locationId/:year/:month` | Product history | base product/location route | mapped | correct |
 | `/factory/bale-product-history/:productId/:locationId/:year/all` | Product history | base product/location route | mapped | correct |
 | `/factory/sales/new` | Invoicing | `/factory/invoicing?tab=invoices` | unresolved | add deterministic parent |
@@ -88,7 +87,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 
 | Legacy route | Current target | Canonical target | Finding |
 |---|---|---|---|
-| `/factory/finance` | `/factory/workers` | `/factory/payroll-hub?section=workers` | redirect chain; replace with direct target |
+| `/factory/finance` | `/factory/payroll-hub?section=workers` | same | correct (direct; former chain removed) |
 | `/factory/suppliers` | `/factory/parties?section=suppliers` | same | correct |
 | `/factory/containers` | `/factory/containers-hub?section=containers` | same | correct |
 | `/factory/pressing` | `/factory/stock-entry` | same | correct |
@@ -98,7 +97,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/customers` | `/factory/parties?section=customers` | same | correct |
 | `/factory/employees` | `/factory/payroll-hub?section=employees` | same | correct |
 | `/factory/workers` | `/factory/payroll-hub?section=workers` | same | correct |
-| `/factory/worker-payroll` | `/factory/workers?tab=payroll` | `/factory/payroll-hub?section=workers&tab=payroll` | redirect chain and tab-loss risk |
+| `/factory/worker-payroll` | `/factory/payroll-hub?section=workers&tab=payroll` | same | correct (direct; tab preserved) |
 | `/factory/supplier-report` | Supplier Intelligence report section | same | correct |
 | `/factory/supplier-statement` | Supplier Intelligence statement section | same | correct |
 | `/factory/users` | `/factory/settings` | same | correct |
@@ -110,6 +109,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 | `/factory/bale-ledger` | `/factory/production-report?tab=product-comparison` | same | legacy route redirected to Product Comparison |
 | `/factory/net-profit-analytics` | Financial Intelligence net-profit section | same | correct |
 | `/factory/net-position` | Financial Intelligence net-position section | same | correct |
+| `/factory/pos` | Factory default landing page | none (retired) | Factory POS is retired (confirmed by the product owner). The page and its components are removed; the route only redirects old bookmarks to the user's default Factory page. The `/api/factory/pos` endpoints stay so historical POS sales remain visible in analytics. |
 
 ## Duplicate or overlapping destinations
 
@@ -150,7 +150,7 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 - Sidebar navigation, route declarations, and parent mappings are maintained independently.
 - Query-string tab and section state is not governed by one history policy.
 - Several valid mappings omit the exact section or tab.
-- Two redirect chains should be removed first: Factory Finance and Worker Payroll.
+- Two redirect chains should be removed first: Factory Finance and Worker Payroll. (Done: both now redirect directly.)
 - Accounts and Vouchers currently provide the clearest parent hierarchy and should be used as the implementation model.
 
 ## Implementation order after Phase 1
@@ -160,3 +160,15 @@ This document is the authoritative inventory for Factory Mode navigation. It rec
 3. Complete deterministic Escape parents and close-layer priority.
 4. Normalize legacy redirects and page Back buttons.
 5. Run complete navigation regression coverage.
+
+## Route registry reconciliation (Factory mobile audit)
+
+Checked against `client/src/components/FactoryRoutes.tsx` and `shared/factoryAccessRegistry.ts`:
+
+- Every canonical top-level page above is a live page route (no redirect).
+- All 53 sidebar/access-registry destinations resolve to live page routes.
+- `/factory/pos` was listed as canonical but redirected to the default Factory page. Factory POS is confirmed retired: the frontend page is removed and the route remains only as a bookmark redirect.
+- `/factory/finance` and `/factory/worker-payroll` redirect directly (the documented chains no longer exist).
+- The year-level product history route is `/factory/bale-product-history/:productId/:locationId/:year/all`.
+
+`tests/ui/factory-mobile-route-registry.test.ts` keeps these in agreement.

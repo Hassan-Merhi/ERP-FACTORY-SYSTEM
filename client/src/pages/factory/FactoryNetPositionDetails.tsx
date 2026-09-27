@@ -81,7 +81,9 @@ function InsuranceSubGroup({
             {accounts.length}
           </Badge>
         </button>
-        <span className={`font-mono tabular-nums ${amountColor}`}>{formatAmount(total)}</span>
+        <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
+          {formatAmount(total)}
+        </span>
       </div>
       {open &&
         accounts.map((acc, i) => (
@@ -102,7 +104,9 @@ function InsuranceSubGroup({
             ) : (
               <span className="font-medium text-foreground">{acc.name.replace(/^Insurance\s*[-–]\s*/i, "")}</span>
             )}
-            <span className={`font-mono tabular-nums ${amountColor}`}>{formatAmount(Math.abs(acc.value))}</span>
+            <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
+              {formatAmount(Math.abs(acc.value))}
+            </span>
           </div>
         ))}
     </>
@@ -148,7 +152,7 @@ function CategoryGroup({
             {displayCount}
           </Badge>
         </div>
-        <span className={`font-mono font-bold ${accentColor}`}>{formatAmount(total)}</span>
+        <span className={`shrink-0 whitespace-nowrap font-mono font-bold ${accentColor}`}>{formatAmount(total)}</span>
       </button>
       {open && (
         <div className="divide-y divide-border">
@@ -170,7 +174,9 @@ function CategoryGroup({
               ) : (
                 <span className="font-medium text-foreground">{acc.name}</span>
               )}
-              <span className={`font-mono tabular-nums ${amountColor}`}>{formatAmount(Math.abs(acc.value))}</span>
+              <span className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${amountColor}`}>
+                {formatAmount(Math.abs(acc.value))}
+              </span>
             </div>
           ))}
           {insuranceAccounts.length > 0 && (
@@ -232,7 +238,9 @@ function CollapsibleSection({
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <span className={`text-2xl font-bold font-mono ${totalColor}`}>{formatAmount(total)}</span>
+            <span className={`shrink-0 whitespace-nowrap text-2xl font-bold font-mono ${totalColor}`}>
+              {formatAmount(total)}
+            </span>
             {open ? (
               <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
             ) : (
@@ -258,7 +266,7 @@ function CollapsibleSection({
               ))}
               <div className="flex justify-between items-center px-4 py-2.5 rounded-md bg-muted/60 font-bold text-sm mt-1">
                 <span>{totalLabel}</span>
-                <span className={`font-mono ${totalColor}`}>{formatAmount(total)}</span>
+                <span className={`shrink-0 whitespace-nowrap font-mono ${totalColor}`}>{formatAmount(total)}</span>
               </div>
             </>
           ) : (
@@ -443,7 +451,9 @@ function CustomNetPositionView({
                       </span>
                     )}
                   </div>
-                  <span className={`font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-green-600"}`}>
+                  <span
+                    className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-green-600"}`}
+                  >
                     {formatAmount(Math.abs(a.value))}
                   </span>
                 </button>
@@ -451,7 +461,9 @@ function CustomNetPositionView({
             })}
             <div className="flex justify-between items-center px-3 py-2 rounded-md bg-green-50 dark:bg-green-950/30 mt-1">
               <span className="text-xs font-semibold text-green-700 dark:text-green-300">Visible subtotal</span>
-              <span className="font-mono font-bold text-green-600">{formatAmount(visibleForUsTotal)}</span>
+              <span className="shrink-0 whitespace-nowrap font-mono font-bold text-green-600">
+                {formatAmount(visibleForUsTotal)}
+              </span>
             </div>
           </div>
 
@@ -494,7 +506,9 @@ function CustomNetPositionView({
                       </span>
                     )}
                   </div>
-                  <span className={`font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}>
+                  <span
+                    className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}
+                  >
                     {formatAmount(Math.abs(a.value))}
                   </span>
                 </button>
@@ -528,7 +542,9 @@ function CustomNetPositionView({
                           {emp.name}
                         </span>
                       </div>
-                      <span className={`font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}>
+                      <span
+                        className={`shrink-0 whitespace-nowrap font-mono tabular-nums ${hidden ? "text-muted-foreground" : "text-red-600"}`}
+                      >
                         {formatAmount(emp.balance)}
                       </span>
                     </button>
@@ -539,7 +555,9 @@ function CustomNetPositionView({
 
             <div className="flex justify-between items-center px-3 py-2 rounded-md bg-red-50 dark:bg-red-950/30 mt-1">
               <span className="text-xs font-semibold text-red-700 dark:text-red-300">Visible subtotal</span>
-              <span className="font-mono font-bold text-red-600">{formatAmount(visibleOnUsTotal)}</span>
+              <span className="shrink-0 whitespace-nowrap font-mono font-bold text-red-600">
+                {formatAmount(visibleOnUsTotal)}
+              </span>
             </div>
           </div>
         </div>
@@ -724,12 +742,16 @@ export default function FactoryNetPositionDetails() {
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 bg-green-50 dark:bg-green-950/40 px-4 py-2.5 rounded-md">
               <span className="text-sm font-medium text-green-700 dark:text-green-300">What We Have</span>
-              <span className="font-bold font-mono text-green-600">{formatAmount(data?.forUsTotal || 0)}</span>
+              <span className="shrink-0 whitespace-nowrap font-bold font-mono text-green-600">
+                {formatAmount(data?.forUsTotal || 0)}
+              </span>
             </div>
             <Minus className="h-4 w-4 text-muted-foreground shrink-0" />
             <div className="flex items-center gap-2 bg-red-50 dark:bg-red-950/40 px-4 py-2.5 rounded-md">
               <span className="text-sm font-medium text-red-700 dark:text-red-300">What We Owe</span>
-              <span className="font-bold font-mono text-red-600">{formatAmount(data?.onUsTotal || 0)}</span>
+              <span className="shrink-0 whitespace-nowrap font-bold font-mono text-red-600">
+                {formatAmount(data?.onUsTotal || 0)}
+              </span>
             </div>
             <Equal className="h-4 w-4 text-muted-foreground shrink-0" />
             <div
@@ -740,7 +762,9 @@ export default function FactoryNetPositionDetails() {
               >
                 Net Position
               </span>
-              <span className={`font-bold font-mono ${isPositive ? "text-green-600" : "text-red-600"}`}>
+              <span
+                className={`shrink-0 whitespace-nowrap font-bold font-mono ${isPositive ? "text-green-600" : "text-red-600"}`}
+              >
                 {formatAmount(net)}
               </span>
             </div>

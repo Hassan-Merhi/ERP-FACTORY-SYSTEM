@@ -3,18 +3,18 @@
  *
  * Extracted from FactoryAdvancesTab.tsx during the Phase 4 god-file split.
  */
-import {useState, useMemo} from "react";
-import {useQuery} from "@tanstack/react-query";
-import {useDateFormat} from "@/contexts/DateFormatContext";
-import {Banknote, RotateCcw} from "lucide-react";
-import {Card, CardContent} from "@/components/ui/card";
-import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue} from "@/components/ui/select";
-import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow} from "@/components/ui/table";
-import {Skeleton} from "@/components/ui/skeleton";
-import type {FactoryWorker} from "@shared/schema";
+import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useDateFormat } from "@/contexts/DateFormatContext";
+import { Banknote, RotateCcw } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { FactoryWorker } from "@shared/schema";
 
-import type {RepaymentRecord} from "../types";
-import {fmt} from "../utils";
+import type { RepaymentRecord } from "../types";
+import { fmt } from "../utils";
 
 export function RepaymentsView() {
   const { formatDisplayDate } = useDateFormat();
@@ -125,7 +125,7 @@ export function RepaymentsView() {
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader className="sticky top-0 z-30 bg-background">
                 <TableRow>
                   <TableHead>Worker</TableHead>

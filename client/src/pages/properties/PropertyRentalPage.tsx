@@ -150,8 +150,9 @@ export default function PropertyRentalPage({
   // ERP renders the shared ERP page-header contract; Properties keeps its established header.
   const isErp = appMode === "erp";
   const isPhoneLayout = useErpPhoneLayout();
-  // ERP phones: cards instead of the twelve-column table, and one primary action plus a menu.
-  const phoneCards = isErp && isPhoneLayout;
+  // ERP and Factory phones: cards instead of the twelve-column table, and one primary action plus
+  // a menu. Properties Mode keeps its established table.
+  const phoneCards = (isErp || appMode === "factory") && isPhoneLayout;
   const phoneHeaderActions = (
     <>
       {selectedContractIds.size > 0 && (
@@ -248,7 +249,7 @@ export default function PropertyRentalPage({
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">{headerActions}</div>
+            <div className="flex items-center gap-2 flex-wrap">{phoneCards ? phoneHeaderActions : headerActions}</div>
           </div>
         )}
 
@@ -336,7 +337,7 @@ export default function PropertyRentalPage({
             </Card>
             {/* Two metrics share this card; on ERP phones (portrait 2-column and landscape 3-column
               grids) it spans two columns so neither is clipped. */}
-            <Card className={isErp && isPhoneLayout ? "col-span-2" : undefined}>
+            <Card className={phoneCards ? "col-span-2" : undefined}>
               <CardContent className="p-0 flex h-full">
                 <div className="flex-1 px-3 pt-3 pb-3">
                   <p className="text-[10px] text-muted-foreground font-normal tracking-wide">OUTSTANDING</p>

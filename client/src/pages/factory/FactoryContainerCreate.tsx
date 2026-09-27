@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { ArrowLeft, Plus, Trash2, Info, Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FACTORY_MOBILE_ACTION_BAR_CLEARANCE, FactoryMobileActionBar } from "@/components/ui/factory-mobile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -220,7 +221,7 @@ export default function FactoryContainerCreate() {
     !commissionFxUnresolved;
 
   return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-6">
+    <div className={`mx-auto max-w-2xl space-y-6 ${FACTORY_MOBILE_ACTION_BAR_CLEARANCE} sm:p-6`}>
       <div className="flex items-center gap-3">
         <Button variant="ghost" size="icon" onClick={() => navigate("/factory/containers")} data-testid="button-back">
           <ArrowLeft className="h-4 w-4" />
@@ -304,7 +305,7 @@ export default function FactoryContainerCreate() {
           <CardTitle className="text-base">Money &amp; Commission</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <div>
               <Label>Total Kg</Label>
               <Input
@@ -328,7 +329,7 @@ export default function FactoryContainerCreate() {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <div>
               <Label>Currency</Label>
               <Select value={currency} onValueChange={(val) => setCurrency(val)}>
@@ -358,7 +359,7 @@ export default function FactoryContainerCreate() {
 
           <Separator />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <div>
               <Label>Commission Amount</Label>
               <Input
@@ -433,7 +434,7 @@ export default function FactoryContainerCreate() {
           <CardTitle className="text-base">Freight &amp; Other Charges</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2">
             <div>
               <Label>
                 Freight Amount <span className="text-muted-foreground text-xs font-normal">(optional)</span>
@@ -512,16 +513,24 @@ export default function FactoryContainerCreate() {
               <p className="text-xs text-muted-foreground py-1">No other charges. Click "Add Line" to add one.</p>
             )}
             {otherChargeLines.length > 0 && (
-              <div className="grid grid-cols-[1fr_auto_2fr_auto] gap-x-2 gap-y-1 items-center">
-                <div className="text-xs text-muted-foreground font-medium">Amount</div>
-                <div className="text-xs text-muted-foreground font-medium">CCY</div>
-                <div className="text-xs text-muted-foreground font-medium">Account</div>
-                <div />
+              // Phones give each charge line its own bordered row (amount, currency, remove; then the
+              // account underneath); sm+ keeps the four-column grid via `sm:contents`.
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_2fr_auto] sm:items-center sm:gap-x-2 sm:gap-y-1">
+                <div className="hidden text-xs font-medium text-muted-foreground sm:block">Amount</div>
+                <div className="hidden text-xs font-medium text-muted-foreground sm:block">CCY</div>
+                <div className="hidden text-xs font-medium text-muted-foreground sm:block">Account</div>
+                <div className="hidden sm:block" />
                 {otherChargeLines.map((line, idx) => (
-                  <>
+                  <div
+                    key={`line-${idx}`}
+                    className="grid grid-cols-[minmax(0,1fr)_5.5rem_auto] items-center gap-2 rounded-md border p-2 sm:contents"
+                    data-testid={`other-charge-line-${idx}`}
+                  >
                     <Input
                       key={`amt-${idx}`}
                       type="number"
+                      inputMode="decimal"
+                      aria-label="Other charge amount"
                       value={line.amount}
                       onChange={(e) => updateOtherChargeLine(idx, "amount", e.target.value)}
                       placeholder="0.00"
@@ -532,7 +541,11 @@ export default function FactoryContainerCreate() {
                       value={line.currencyCode || currency}
                       onValueChange={(val) => updateOtherChargeLine(idx, "currencyCode", val)}
                     >
-                      <SelectTrigger className="w-20" data-testid={`select-other-charge-currency-${idx}`}>
+                      <SelectTrigger
+                        className="w-full sm:w-20"
+                        aria-label="Other charge currency"
+                        data-testid={`select-other-charge-currency-${idx}`}
+                      >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -550,7 +563,11 @@ export default function FactoryContainerCreate() {
                         updateOtherChargeLine(idx, "ledgerAccountId", val === "__none__" ? "" : val)
                       }
                     >
-                      <SelectTrigger data-testid={`select-other-charge-account-${idx}`}>
+                      <SelectTrigger
+                        className="order-last col-span-3 sm:order-none sm:col-span-1"
+                        aria-label="Other charge account"
+                        data-testid={`select-other-charge-account-${idx}`}
+                      >
                         <SelectValue placeholder="No account" />
                       </SelectTrigger>
                       <SelectContent>
@@ -569,11 +586,12 @@ export default function FactoryContainerCreate() {
                       size="icon"
                       variant="ghost"
                       onClick={() => removeOtherChargeLine(idx)}
+                      aria-label="Remove other charge"
                       data-testid={`button-remove-other-charge-${idx}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </>
+                  </div>
                 ))}
               </div>
             )}
@@ -616,14 +634,15 @@ export default function FactoryContainerCreate() {
         );
       })()}
 
-      <div className="flex justify-end gap-3 pb-6">
+      {/* Phones pin Cancel / Create above the home indicator; sm+ keeps the right-aligned row. */}
+      <FactoryMobileActionBar className="sm:gap-3 sm:pb-6" data-testid="container-create-actions">
         <Button variant="outline" onClick={() => navigate("/factory/containers")} data-testid="button-cancel">
           Cancel
         </Button>
         <Button onClick={() => createMutation.mutate()} disabled={!canSubmit} data-testid="button-create-container">
           {createMutation.isPending ? "Creating..." : "Create Container"}
         </Button>
-      </div>
+      </FactoryMobileActionBar>
     </div>
   );
 }

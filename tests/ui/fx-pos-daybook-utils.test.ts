@@ -7,7 +7,6 @@ vi.mock("../../client/src/lib/db", () => ({
 }));
 
 import { cacheBulkFxData, computeBulkFxPreview, getCachedBulkFxData } from "../../client/src/lib/bulkFxOffline";
-import { emptyRow, formatNum } from "../../client/src/pages/factory/factorypos/utils";
 import { ALL_LOCATIONS_ID, formatQty } from "../../client/src/pages/pos/pospricelist/utils";
 import { txCurrencyLabel } from "../../client/src/pages/daybook/voucherdetailsdialog/utils";
 
@@ -59,10 +58,7 @@ describe("offline FX, POS, and Daybook presentation helpers", () => {
     expect(computeBulkFxPreview(suppliers, 0, 1.25, "oldest")).toBeNull();
   });
 
-  it("formats POS rows, price-list quantities, and original transaction currency consistently", () => {
-    expect(emptyRow("row-1")).toMatchObject({ id: "row-1", quantity: 1, productId: null });
-    expect(formatNum("1234.5")).toBe("1,234.50");
-    expect(formatNum("not-a-number")).toBe("0.00");
+  it("formats price-list quantities, and original transaction currency consistently", () => {
     expect(ALL_LOCATIONS_ID).toBe(-1);
     expect(formatQty(null)).toBe("—");
     expect(formatQty("0")).toBe("—");

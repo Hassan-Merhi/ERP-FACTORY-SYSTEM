@@ -2,15 +2,18 @@ import * as React from "react";
 
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import "@/mobile-card-table.css";
 
 /**
  * ERP phone card layout for record tables.
  *
- * On ERP-mode phone layouts a table marked `data-mobile-cards="true"` is restacked by
- * `erp-mobile-operations.css`: each body row becomes a card, the first cell with text is its
+ * On ERP and Factory phone layouts a table marked `data-mobile-cards="true"` is restacked by
+ * `mobile-card-table.css`: each body row becomes a card, the first cell with text is its
  * title and the other cells become label/value fields. Labels come from the column headers
  * through `labelMobileCardCells`, so pages keep a single table markup for every breakpoint.
  */
+
+const CARD_TABLE_MODES: ReadonlySet<string> = new Set(["erp", "factory"]);
 
 const normalise = (text: string | null | undefined) => (text ?? "").replace(/\s+/g, " ").trim();
 
@@ -75,7 +78,7 @@ function mobileCellRole(cell: HTMLTableCellElement, label: string, span: number,
  * `select` for a checkbox-only cell, `actions` for an unlabelled cell that only holds controls,
  * `hidden` for unlabelled decoration (row chevrons) and row ordinals, and `full` for a cell spanning every
  * column (empty and loading states). Author-provided `data-label` / `data-mobile-cell`
- * attributes are kept.
+ * attributes are kept; authors may also mark a long labelled field `wide` so it spans the card.
  */
 export function labelMobileCardCells(table: HTMLTableElement) {
   const labels = mobileCardColumnLabels(table);
@@ -115,13 +118,14 @@ export function labelMobileCardCells(table: HTMLTableElement) {
 /**
  * Opts a table into the ERP phone card layout. Spread `tableProps` on the `<table>`; `cards`
  * tells the caller when the card layout is active (for example to lift a scroll wrapper's
- * height cap). Outside ERP mode, and on tablet/desktop, the table is untouched.
+ * height cap). In other modes (Properties, Supplier Partner), and on tablet/desktop, the table is
+ * untouched.
  */
 export function useMobileCardTable(enabled = true) {
   const isPhone = useErpPhoneLayout();
   const appMode = useAppMode();
-  // Card styling ships with the ERP shell; other modes keep their established tables.
-  const cards = enabled && isPhone && appMode === "erp";
+  // ERP and Factory share the card presentation; other modes keep their established tables.
+  const cards = enabled && isPhone && CARD_TABLE_MODES.has(appMode);
   const [table, setTable] = React.useState<HTMLTableElement | null>(null);
 
   React.useLayoutEffect(() => {

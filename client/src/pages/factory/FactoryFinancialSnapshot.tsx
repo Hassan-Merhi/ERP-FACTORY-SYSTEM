@@ -343,7 +343,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "advance", accountId: acct.compositeId })
                                 }
@@ -454,7 +454,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "cashbank", accountId: acct.compositeId })
                                 }
@@ -557,7 +557,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "agent", accountId: acct.compositeId })
                                 }
@@ -660,7 +660,7 @@ export default function FactoryFinancialSnapshot() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
                                 onClick={() =>
                                   removeAccountMutation.mutate({ type: "freight", accountId: acct.compositeId })
                                 }

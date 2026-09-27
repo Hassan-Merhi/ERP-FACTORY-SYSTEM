@@ -143,8 +143,7 @@
         "server/lib/workerBalesPdfGenerator.ts",
         "client/src/pages/factory/FactoryInvoiceLoadingScan.tsx",
         "client/src/pages/factory/FactoryContainerLoadingScan.tsx",
-        "client/src/pages/factory/FactoryPendingLoadings.tsx",
-        "client/src/pages/factory/FactoryPOS.tsx"
+        "client/src/pages/factory/FactoryPendingLoadings.tsx"
       ]
     },
     {
