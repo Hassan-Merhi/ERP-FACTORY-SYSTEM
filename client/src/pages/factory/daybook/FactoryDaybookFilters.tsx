@@ -38,35 +38,43 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
   return (
     <Card>
       <CardContent className="pt-4 pb-3">
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Phones: search on its own row, the day stepper kept together, the two selects side by
+            side. sm+ keeps the single wrapping row (the stepper wrapper dissolves via sm:contents). */}
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-3">
           <Input
             placeholder="Search..."
             value={model.searchQuery}
             onChange={(e) => model.setSearchQuery(e.target.value)}
             data-testid="input-search"
-            className="w-44 h-8 text-sm"
+            className="col-span-2 h-8 w-full text-sm sm:w-44"
           />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => model.stepPeriod(-1)}
-            title="Previous day (−)"
-            data-testid="button-prev-day"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <PeriodFilter value={model.periodFilter} onChange={model.setPeriodFilter} data-testid="period-filter" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => model.stepPeriod(1)}
-            title="Next day (+)"
-            data-testid="button-next-day"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <div className="col-span-2 flex min-w-0 items-center gap-1 sm:contents">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => model.stepPeriod(-1)}
+              title="Previous day (−)"
+              aria-label="Previous day"
+              data-testid="button-prev-day"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="min-w-0 flex-1 sm:flex-none">
+              <PeriodFilter value={model.periodFilter} onChange={model.setPeriodFilter} data-testid="period-filter" />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => model.stepPeriod(1)}
+              title="Next day (+)"
+              aria-label="Next day"
+              data-testid="button-next-day"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
           <Select value={model.txTypeFilter} onValueChange={model.setTxTypeFilter}>
-            <SelectTrigger className="w-36 h-8 text-sm" data-testid="select-tx-type">
+            <SelectTrigger className="h-8 w-full text-sm sm:w-36" data-testid="select-tx-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -81,7 +89,7 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
             value={model.statusFilter}
             onValueChange={(v) => model.setStatusFilter(v as "all" | "exclude" | "only")}
           >
-            <SelectTrigger className="w-36 h-8 text-sm" data-testid="select-status-filter">
+            <SelectTrigger className="h-8 w-full text-sm sm:w-36" data-testid="select-status-filter">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -96,7 +104,7 @@ export function FactoryDaybookFilters({ model }: { model: FactoryDaybookModel })
               size="sm"
               onClick={model.clearFilters}
               data-testid="button-clear-filters"
-              className="gap-1 h-8 text-sm"
+              className="col-span-2 h-8 gap-1 text-sm sm:col-span-1"
             >
               <X className="w-3.5 h-3.5" />
               Clear

@@ -178,7 +178,7 @@ export function FactoryWorkerDetailView({ model }: FactoryWorkerDetailModelProps
         <ArrowLeft className="h-4 w-4" />
       </Button>
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
         <div className="w-full lg:w-72 shrink-0 space-y-4">
           <Card>
             <CardContent className="p-5 space-y-4">

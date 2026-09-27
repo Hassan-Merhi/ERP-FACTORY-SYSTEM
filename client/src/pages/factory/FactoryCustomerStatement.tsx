@@ -350,7 +350,7 @@ export default function FactoryCustomerStatement() {
   const hasOpeningBalance = Number(openingBalance || 0) !== 0;
 
   return (
-    <div className="flex flex-col h-full p-6 overflow-y-auto">
+    <div className="flex h-full flex-col overflow-y-auto sm:p-6">
       {/* Header */}
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <Button variant="ghost" size="icon" onClick={() => navigate("/factory/customers")} data-testid="button-back">
@@ -370,7 +370,8 @@ export default function FactoryCustomerStatement() {
           )}
         </div>
         {showStatementTab && (
-          <div className="flex items-center gap-2 flex-shrink-0">
+          // Phones give the exports their own full-width row so the customer name keeps the width.
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-shrink-0 sm:items-center">
             <Button
               variant="outline"
               size="sm"
