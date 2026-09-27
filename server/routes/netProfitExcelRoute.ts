@@ -5,7 +5,7 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { logAudit } from "./_helpers";
-import { computeEmployeeNetPositionWithManagedAdvances } from "../helpers/employeeNetPosition";
+import { computeEmployeeWorkerNetPosition } from "../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../helpers/salaryAdvanceNetPosition";
 import {
   inventory,
@@ -382,6 +382,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         const xlsxEmployees = await db
           .select({
             id: employees.id,
+            employeeType: employees.employeeType,
             openingBalance: employees.openingBalance,
             openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
           })
@@ -389,13 +390,13 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
           .execute();
         const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
-        const xlsxEmployeePosition = computeEmployeeNetPositionWithManagedAdvances(
+        const xlsxPayrollPosition = computeEmployeeWorkerNetPosition(
           xlsxEmployees,
           xlsxEmployeeBals,
           xlsxManagedAdvances
         );
-        npForUs += xlsxEmployeePosition.advances;
-        npOnUs += xlsxEmployeePosition.liabilities;
+        npForUs += xlsxPayrollPosition.employees.advances + xlsxPayrollPosition.workers.advances;
+        npOnUs += xlsxPayrollPosition.employees.liabilities + xlsxPayrollPosition.workers.liabilities;
 
         // Add OTW containers as assets
         const xlsxOtwContainers = await db
