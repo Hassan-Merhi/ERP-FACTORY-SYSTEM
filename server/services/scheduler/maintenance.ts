@@ -291,8 +291,10 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
     if (!settings?.scheduleEnabled || !settings?.groupChatId) return;
     if (!settings?.instanceId || !settings?.apiToken || !settings?.enabled) return;
 
-    const nowHour = new Date().getHours();
-    if (nowHour !== settings.scheduleHour) return;
+    const nowInNewYork = new Date(
+      new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+    );
+    if (nowInNewYork.getHours() !== settings.scheduleHour) return;
 
     // Skip if already sent within the last 12 hours
     if (settings.lastSentAt) {
