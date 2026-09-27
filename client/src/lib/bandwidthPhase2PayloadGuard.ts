@@ -29,11 +29,12 @@ function isInventoryOtwTab(): boolean {
 function isProfiledQuery(query: { queryKey: readonly unknown[] }): boolean {
   const first = query.queryKey[0];
   if (typeof first !== "string") return false;
+  const pathname = first.split("?")[0];
   return (
-    first === "/api/containers" ||
-    first === "/api/containers/otw-items" ||
-    first === "/api/inventory" ||
-    /^\/api\/containers\/\d+$/.test(first)
+    pathname === "/api/containers" ||
+    pathname === "/api/containers/otw-items" ||
+    pathname === "/api/inventory" ||
+    /^\/api\/containers\/\d+$/.test(pathname)
   );
 }
 
