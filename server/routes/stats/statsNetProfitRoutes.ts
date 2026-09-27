@@ -21,7 +21,7 @@ import { getNetPositionCurrencySummary } from "../../services/accounting/netPosi
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
-import { computeEmployeeNetPositionWithManagedAdvances } from "../../helpers/employeeNetPosition";
+import { computeEmployeeWorkerNetPosition } from "../../helpers/employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 
@@ -362,18 +362,13 @@ export function registerStatsNetProfitRoutes(app: Express) {
         .execute();
 
       const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-      const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
-      const payrollWorkers = companyEmployees.filter((employee) => employee.employeeType === "Worker");
-      const employeePosition = computeEmployeeNetPositionWithManagedAdvances(
-        payrollEmployees,
+      const payrollPosition = computeEmployeeWorkerNetPosition(
+        companyEmployees,
         employeeBalances,
         managedSalaryAdvances
       );
-      const workerPosition = computeEmployeeNetPositionWithManagedAdvances(
-        payrollWorkers,
-        employeeBalances,
-        managedSalaryAdvances
-      );
+      const employeePosition = payrollPosition.employees;
+      const workerPosition = payrollPosition.workers;
 
       // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
       // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
