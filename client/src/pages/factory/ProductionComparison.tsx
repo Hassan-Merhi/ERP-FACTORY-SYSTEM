@@ -5,7 +5,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import {} from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AlertTriangle, ChevronDown, Package, Scale } from "lucide-react";
@@ -31,6 +30,7 @@ import {
   yesterdayStr,
 } from "./productioncomparison/utils";
 import { MultiSelectFilter } from "./productioncomparison/components/MultiSelectFilter";
+import { BaleComparisonFilters } from "./productioncomparison/components/BaleComparisonFilters";
 import { DiffCell } from "./productioncomparison/components/DiffCell";
 import { StatCard } from "./productioncomparison/components/StatCard";
 import { ComparisonPresetPicker } from "./productioncomparison/components/ComparisonPresetPicker";
@@ -325,8 +325,6 @@ export default function ProductionComparison() {
   const totalSupKgDiff = totalSupAKg - totalSupBKg;
   const totalSupCostDiff = totalSupACost - totalSupBCost;
 
-  const hasActiveFilter =
-    filterCategories.length > 0 || filterGrades.length > 0 || filterProduct !== "" || filterWorkers.length > 0;
   const hasSupplierFilter = filterSuppliers.length > 0;
 
   return (
@@ -656,62 +654,21 @@ export default function ProductionComparison() {
           )}
 
           {/* ── Bale filters ── */}
-          <div className="flex flex-wrap gap-3 items-center">
-            <MultiSelectFilter
-              options={categories}
-              selected={filterCategories}
-              onChange={setFilterCategories}
-              placeholder="Categories"
-              allLabel="All Categories"
-              className="w-48"
-            />
-
-            <MultiSelectFilter
-              options={grades}
-              selected={filterGrades}
-              onChange={setFilterGrades}
-              placeholder="Grades"
-              allLabel="All Grades"
-              className="w-36"
-            />
-
-            <MultiSelectFilter
-              options={workerOptions}
-              selected={filterWorkers}
-              onChange={setFilterWorkers}
-              placeholder="Workers"
-              allLabel="All Workers"
-              className="w-44"
-            />
-
-            <Input
-              placeholder="Search product…"
-              className="w-52"
-              value={filterProduct}
-              onChange={(e) => setFilterProduct(e.target.value)}
-            />
-
-            {hasActiveFilter && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setFilterCategories([]);
-                  setFilterGrades([]);
-                  setFilterProduct("");
-                  setFilterWorkers([]);
-                }}
-              >
-                Clear filters
-              </Button>
-            )}
-
-            {hasActiveFilter && (
-              <span className="text-xs text-muted-foreground">
-                {filtered.length} of {mergedAll.length} products
-              </span>
-            )}
-          </div>
+          <BaleComparisonFilters
+            categories={categories}
+            grades={grades}
+            workerOptions={workerOptions}
+            filterCategories={filterCategories}
+            setFilterCategories={setFilterCategories}
+            filterGrades={filterGrades}
+            setFilterGrades={setFilterGrades}
+            filterWorkers={filterWorkers}
+            setFilterWorkers={setFilterWorkers}
+            filterProduct={filterProduct}
+            setFilterProduct={setFilterProduct}
+            shownCount={filtered.length}
+            totalCount={mergedAll.length}
+          />
 
           {/* ── Bale comparison table ── */}
           {filtered.length === 0 ? (

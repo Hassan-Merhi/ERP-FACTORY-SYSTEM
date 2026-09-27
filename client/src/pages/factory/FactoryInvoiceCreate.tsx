@@ -504,14 +504,19 @@ export default function FactoryInvoiceCreate() {
                           </span>
                         </div>
                       </div>
-                      <Table>
+                      {/* No header row: phone cards take their labels from the cells themselves. */}
+                      <Table mobileLayout="cards">
                         <TableBody>
                           {group.bales.map((bale) => (
                             <TableRow key={bale.id} data-testid={`row-bale-${bale.id}`}>
-                              <TableCell className="font-mono text-sm" data-testid={`text-bale-ref-${bale.id}`}>
+                              <TableCell
+                                className="font-mono text-sm"
+                                data-label="Reference"
+                                data-testid={`text-bale-ref-${bale.id}`}
+                              >
                                 {bale.referenceNumber}
                               </TableCell>
-                              <TableCell className="text-right text-sm text-muted-foreground">
+                              <TableCell className="text-right text-sm text-muted-foreground" data-label="Weight">
                                 {parseFloat(bale.weight || "0").toLocaleString(undefined, {
                                   minimumFractionDigits: 0,
                                   maximumFractionDigits: 2,
@@ -520,6 +525,7 @@ export default function FactoryInvoiceCreate() {
                               </TableCell>
                               <TableCell
                                 className="text-right font-mono text-sm"
+                                data-label="Price"
                                 data-testid={`text-bale-price-${bale.id}`}
                               >
                                 {parseFloat(bale.totalPrice || "0").toLocaleString(undefined, {

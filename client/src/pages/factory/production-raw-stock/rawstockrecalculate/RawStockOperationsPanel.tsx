@@ -148,7 +148,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                       : "."}
                   </div>
                   <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-                    <Table>
+                    <Table mobileLayout="cards">
                       <TableHeader className="bg-muted/50">
                         <TableRow>
                           <TableHead className="w-10">
@@ -220,7 +220,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
                     </div>
                   ) : (
                     <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-                      <Table>
+                      <Table mobileLayout="cards">
                         <TableHeader className="bg-muted/50">
                           <TableRow>
                             <TableHead className="w-6" />
@@ -359,7 +359,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
           ) : (
             <>
               <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead className="w-10">
@@ -543,7 +543,7 @@ export function RawStockOperationsPanel({ rawStock }: RawStockOperationsPanelPro
 
               {/* Audit rows table */}
               <div className="border rounded-md overflow-hidden bg-card shadow-sm">
-                <Table>
+                <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>
                       <TableHead>Container</TableHead>

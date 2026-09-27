@@ -126,16 +126,17 @@ const voucherTypeColors: Record<string, string> = {
 
 export default function VoucherDetail() {
   const [, navigate] = useLocation();
-  const [, params] = useRoute("/voucher-detail/:voucherId");
+  const appMode = useAppMode();
+  const modePrefix = appMode === "factory" ? "/factory" : appMode === "properties" ? "/properties" : "";
+  // Factory and Properties mount this page under their prefix (/factory/voucher-detail/:voucherId).
+  const [, params] = useRoute(`${modePrefix}/voucher-detail/:voucherId`);
   const { formatAmount } = useCurrencyContext();
   const { formatShortDate } = useDateFormat();
-  const appMode = useAppMode();
   const _modeApiRequest = getApiRequest(appMode);
 
   const voucherId = params?.voucherId ? parseInt(params.voucherId) : null;
   const fromDaybook = new URLSearchParams(window.location.search).get("from") === "daybook";
 
-  const modePrefix = appMode === "factory" ? "/factory" : appMode === "properties" ? "/properties" : "";
   const backTarget = fromDaybook ? `${modePrefix}/daybook` : `${modePrefix}/vouchers`;
   const handleBack = useBackToParent(backTarget);
   useEscapeBack(() => navigate(backTarget));

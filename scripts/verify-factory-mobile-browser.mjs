@@ -22,9 +22,9 @@
  *                                     "customer":4,"employee":2,"worker":9}; missing ids are resolved
  *                                     from the Factory list APIs, and routes without data are skipped
  *                                     (reported, and failing with ERP_FACTORY_MOBILE_REQUIRE_SEEDS=1).
- *   ERP_FACTORY_MOBILE_CREATE_SEEDS   1 creates the missing customer, employee, worker, draft order and
- *                                     dispatch batch/ride through the Factory APIs. Disposable fixture
- *                                     databases only (CI); never point this at real company data.
+ *   ERP_FACTORY_MOBILE_CREATE_SEEDS   1 creates the missing records (see scripts/lib/factory-mobile-fixture.mjs)
+ *                                     through the Factory APIs so detail routes and tables render with rows.
+ *                                     Disposable fixture databases only (CI); never use it on real data.
  *   ERP_FACTORY_MOBILE_STRICT_TABLES  1 fails phone routes whose ordinary tables still scroll sideways
  *                                     (default: reported as warnings; analytical matrices opt out
  *                                     with `data-mobile-matrix`).
@@ -35,6 +35,7 @@ import path from "node:path";
 import puppeteer from "puppeteer";
 
 import { awaitAuthenticatedShell, watchSignInResponses } from "./lib/browser-smoke-signin.mjs";
+import { resolveFactoryMobileSeeds } from "./lib/factory-mobile-fixture.mjs";
 
 const BASE_URL = (process.env.ERP_SMOKE_BASE_URL || "http://127.0.0.1:5000").replace(/\/$/, "");
 const USERNAME = process.env.ERP_SMOKE_USERNAME || "";
@@ -104,6 +105,88 @@ const STATIC_ROUTES = [
   "/factory/rental/payments",
   "/factory/settings",
   "/factory/containers/new",
+  "/factory/analytics",
+  "/factory/agents",
+  // Forms and admin tools (Phase 10)
+  "/factory/create",
+  "/factory/raw-stock/recalculate",
+  "/factory/customer-logos",
+  "/factory/label-banners",
+  "/factory/intelligence/settings",
+  "/factory/chatbot-settings",
+  "/factory/conflicts",
+  "/factory/deleted-items",
+  "/factory/import-cycle-diagnostics",
+  "/factory/inventory-repair",
+  "/factory/company-data-reset",
+  "/my-settings",
+  // Every hub section/tab, not only the default one
+  "/factory/production-report?tab=production",
+  "/factory/production-report?tab=comparison",
+  "/factory/production-report?tab=product-comparison",
+  "/factory/production-report?tab=shipping",
+  "/factory/production-report?tab=sheets",
+  "/factory/production-report?tab=container-tracking",
+  "/factory/bales-hub?tab=barcode",
+  "/factory/bales-hub?tab=products",
+  "/factory/bales-hub?tab=customer-loading",
+  "/factory/containers-hub?section=otw",
+  "/factory/invoicing?tab=loadings",
+  "/factory/invoicing?tab=pending",
+  "/factory/invoicing?tab=proformas",
+  "/factory/parties?section=suppliers",
+  "/factory/payroll-hub?section=employees",
+  "/factory/payroll-hub?section=insurance",
+  "/factory/intelligence/supplier-hub?section=statement",
+  "/factory/intelligence/supplier-hub?section=scores",
+  "/factory/intelligence/production-hub?section=waste",
+  "/factory/intelligence/production-hub?section=mix-optimizer",
+  "/factory/intelligence/production-hub?section=container-tracking",
+];
+
+/**
+ * Canonical top-level destinations, read from docs/factory-navigation-registry.md (the same list the
+ * route-registry test guards). Escape must never navigate away from these or their hub sections.
+ */
+const registryDoc = await fs.readFile(path.resolve("docs/factory-navigation-registry.md"), "utf8");
+const TOP_LEVEL_ROUTES = new Set(
+  Array.from(
+    (registryDoc.split("## Canonical top-level pages")[1] ?? "").split("\n## ")[0].matchAll(/\| `(\/factory\/[^`]+)` \|/g),
+    (match) => match[1],
+  ),
+);
+const isTopLevelRoute = (route) => TOP_LEVEL_ROUTES.has(route.split("?")[0]);
+
+/**
+ * A safe dialog or sheet per route (never a submit action). The regression opens it, checks it
+ * fits the viewport, scrolls internally, keeps its last action reachable and keeps a focused field
+ * in view, then closes it with Escape, which must not navigate.
+ */
+const DIALOG_TRIGGERS = [
+  { route: "/factory/contacts", selector: '[data-testid="button-add-contact"]' },
+  { route: "/factory/sheets-sacks", selector: '[data-testid="button-add-item"]' },
+  { route: "/factory/dispatch-batches", selector: '[data-testid="button-new-dispatch-batch"]', exact: true },
+  { route: "/factory/rental/shops", selector: '[data-testid="button-factory-rental-shops-add-unit"]' },
+  { route: "/factory/daybook", selector: '[data-testid="factory-daybook-filters-open"]', phoneOnly: true },
+  {
+    route: "/factory/production-comparison",
+    selector: '[data-testid="production-comparison-filters-open"]',
+    phoneOnly: true,
+  },
+  { route: "/factory/employees/", selector: '[data-testid="button-edit-employee"]' },
+  // Data-dependent: skipped (not failed) when the list has no matching row.
+  {
+    route: "/factory/containers-hub",
+    selector: '[data-testid^="button-view-container-"]',
+    exact: true,
+    optional: true,
+  },
+  {
+    route: "/factory/containers-hub?section=otw",
+    selector: '[data-testid^="button-otw-edit-"], [data-testid^="button-tracking-settings-"]',
+    exact: true,
+    optional: true,
+  },
 ];
 
 /** Detail/workflow routes that need an existing record; ids resolve at runtime. */
@@ -116,9 +199,25 @@ const SEEDED_ROUTES = [
   { key: "customer", path: (s) => `/factory/customers/${s.customer}` },
   { key: "employee", path: (s) => `/factory/employees/${s.employee}` },
   { key: "worker", path: (s) => `/factory/workers/${s.worker}` },
+  { key: "proforma", path: (s) => `/factory/sales/proformas/${s.proforma}/add-line` },
+  { key: "product", path: (s) => `/factory/stock-query/${s.product}` },
+  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}` },
+  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}/2026/all` },
+  { key: "productLocation", path: (s) => `/factory/bale-product-history/${s.product}/${s.location}/2026/9` },
+  { key: "account", path: (s) => `/factory/ledger-monthly/${s.account}` },
+  { key: "account", path: (s) => `/factory/ledger-vouchers/${s.account}/2026/9` },
+  { key: "voucher", path: (s) => `/factory/voucher-detail/${s.voucher}` },
+  { key: "voucher", path: (s) => `/factory/vouchers/${s.voucher}/edit` },
+  { key: "openingBalance", path: (s) => `/factory/raw-stock/opening-balance/${s.openingBalance}/edit` },
 ];
 
+/** Seed keys a seeded route needs (composite keys expand to their parts). */
+const SEED_KEYS = { ride: ["batch", "ride"], productLocation: ["product", "location"] };
+
 /** Scanner routes: input at least 44px, 16px text, focusable, status visible. */
+/** Escape navigation is a keyboard contract; it is checked on one phone and on desktop. */
+const ESCAPE_VIEWPORTS = new Set(["phone-390", "desktop-1440"]);
+
 const SCANNER_SELECTORS = ['[data-testid="input-scan-code"]', '[data-testid="input-barcode"]', '[data-testid="input-scan"]'];
 
 const routeFilter = (process.env.ERP_FACTORY_MOBILE_ROUTES || "")
@@ -242,82 +341,20 @@ async function selectFactoryCompany(page) {
 }
 
 /** Resolves ids for seeded routes from read-only Factory list endpoints. */
-async function resolveSeeds(page) {
+async function resolveSeeds(page, companyId) {
   let provided = {};
   try {
     provided = JSON.parse(process.env.ERP_FACTORY_MOBILE_SEEDS || "{}");
   } catch {
     throw new Error("ERP_FACTORY_MOBILE_SEEDS must be JSON");
   }
-  const resolved = await page.evaluate(async ({ seeds, createMissing }) => {
-    const readList = async (url) => {
-      try {
-        const response = await fetch(url, { credentials: "include", cache: "no-store" });
-        if (!response.ok) return [];
-        const body = await response.json();
-        if (Array.isArray(body)) return body;
-        for (const key of ["data", "items", "rows", "orders", "batches"]) {
-          if (Array.isArray(body?.[key])) return body[key];
-        }
-        return [];
-      } catch {
-        return [];
-      }
-    };
-    const firstId = (rows) => {
-      const id = Number(rows.find((row) => Number(row?.id) > 0)?.id);
-      return Number.isInteger(id) && id > 0 ? id : undefined;
-    };
-    const create = async (url, body) => {
-      if (!createMissing) return undefined;
-      const response = await fetch(url, {
-        method: "POST",
-        credentials: "include",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!response.ok) return undefined;
-      const created = await response.json();
-      return firstId([created?.batch ?? created]);
-    };
-    const out = { ...seeds };
-    out.customer ??=
-      firstId(await readList("/api/factory/customers")) ??
-      (await create("/api/factory/customers", { legalName: "Mobile Audit Textiles LLC", phone: "+961 1 000000" }));
-    out.order ??=
-      firstId(await readList("/api/factory/customer-orders")) ??
-      (out.customer
-        ? await create("/api/factory/customer-orders", { customerId: out.customer, orderDate: "2026-09-20", currency: "USD" })
-        : undefined);
-    out.employee ??=
-      firstId(await readList("/api/factory/employees")) ??
-      (await create("/api/factory/employees", { firstName: "Mobile", lastName: "Audit", joinDate: "2026-01-05", active: true }));
-    out.worker ??=
-      firstId(await readList("/api/factory/workers")) ??
-      (await create("/api/factory/workers", { fullName: "Mobile Audit Worker", active: true }));
-    out.batch ??=
-      firstId(await readList("/api/factory/dispatch-batches")) ??
-      (out.customer
-        ? await create("/api/factory/dispatch-batches", { customerId: out.customer, batchDate: "2026-09-20", currency: "USD" })
-        : undefined);
-    if (out.batch && !out.ride) {
-      try {
-        const response = await fetch(`/api/factory/dispatch-batches/${out.batch}`, { credentials: "include" });
-        if (response.ok) out.ride = firstId((await response.json())?.rides ?? []);
-      } catch {
-        // No ride yet; created below when allowed, otherwise the scan route is skipped and reported.
-      }
-      out.ride ??= await create(`/api/factory/dispatch-batches/${out.batch}/truck-rides`, { driverName: "Mobile Audit" });
-    }
-    return out;
-  }, { seeds: provided, createMissing: CREATE_SEEDS });
-  return resolved;
+  return resolveFactoryMobileSeeds(page, { seeds: provided, createMissing: CREATE_SEEDS, companyId });
 }
 
 function plannedRoutes(seeds) {
   const routes = STATIC_ROUTES.map((routePath) => ({ path: routePath, seeded: false }));
   for (const seeded of SEEDED_ROUTES) {
-    const needed = seeded.key === "ride" ? ["batch", "ride"] : [seeded.key];
+    const needed = SEED_KEYS[seeded.key] ?? [seeded.key];
     if (needed.every((key) => seeds[key])) {
       routes.push({ path: seeded.path(seeds), seeded: true });
     } else {
@@ -426,6 +463,111 @@ async function exerciseSafeControls(page) {
     break;
   }
   return interaction;
+}
+
+function dialogTriggerFor(route, viewport) {
+  return DIALOG_TRIGGERS.find(
+    (trigger) =>
+      (trigger.exact ? route === trigger.route : route.startsWith(trigger.route)) &&
+      (!trigger.phoneOnly || isPhoneClassViewport(viewport)),
+  );
+}
+
+/** Opens the route's safe dialog/sheet and checks the dialog contract. */
+async function exerciseDialog(page, route, viewport) {
+  const trigger = dialogTriggerFor(route, viewport);
+  if (!trigger) return null;
+  const handle = await page.$(trigger.selector);
+  const visible = handle && (await handle.evaluate((element) => element.getBoundingClientRect().height > 0));
+  if (!visible) {
+    return trigger.optional ? null : { trigger: trigger.selector, opened: false, reason: "trigger not visible" };
+  }
+  await handle.click();
+  const layerSelector = '[role="dialog"]:not([data-sidebar]), [role="alertdialog"]';
+  const opened = await page
+    .waitForSelector(layerSelector, { visible: true, timeout: 5_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) return { trigger: trigger.selector, opened: false, reason: "no dialog opened" };
+  await settle(page);
+
+  const measured = await page.evaluate(
+    ({ selector, viewportWidth }) => {
+      const dialog = [...document.querySelectorAll(selector)].find((element) => {
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      });
+      const visibleHeight = window.visualViewport?.height ?? window.innerHeight;
+      const rect = dialog.getBoundingClientRect();
+      const scrollers = [dialog, ...dialog.querySelectorAll("*")].filter((element) => {
+        const style = getComputedStyle(element);
+        return /auto|scroll/.test(style.overflowY) && element.scrollHeight > element.clientHeight + 2;
+      });
+      const contentOverflows = dialog.scrollHeight > dialog.clientHeight + 2 || scrollers.length > 0;
+      // Scroll every internal scroller to its end: the last action must then be reachable.
+      for (const scroller of [dialog, ...scrollers]) scroller.scrollTop = scroller.scrollHeight;
+      const actions = [...dialog.querySelectorAll("button")].filter((button) => {
+        const box = button.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && !button.closest('[data-slot="dialog-close"]');
+      });
+      const lastAction = actions[actions.length - 1];
+      let lastActionReachable = null;
+      if (lastAction) {
+        const box = lastAction.getBoundingClientRect();
+        const x = Math.min(Math.max(box.left + box.width / 2, 1), viewportWidth - 1);
+        const y = Math.min(Math.max(box.top + box.height / 2, 1), visibleHeight - 1);
+        const hit = document.elementFromPoint(x, y);
+        lastActionReachable =
+          box.top >= -1 &&
+          box.bottom <= visibleHeight + 1 &&
+          Boolean(hit) &&
+          // Disabled buttons ignore pointer hits, so the hit lands on their row instead.
+          (lastAction.contains(hit) || (lastAction.disabled && hit.contains(lastAction)));
+      }
+      // A focused field must end up inside the visible viewport (browsers scroll it into view).
+      const field = [...dialog.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), textarea')].find(
+        (element) => element.getBoundingClientRect().height > 0 && !element.disabled,
+      );
+      let focusedFieldVisible = null;
+      if (field) {
+        field.focus();
+        field.scrollIntoView({ block: "nearest" });
+        const box = field.getBoundingClientRect();
+        focusedFieldVisible = document.activeElement === field && box.top >= -1 && box.bottom <= visibleHeight + 1;
+        field.blur();
+      }
+      return {
+        width: rect.width,
+        height: rect.height,
+        withinViewport: rect.left >= -2 && rect.right <= viewportWidth + 2 && rect.top >= -2 && rect.bottom <= visibleHeight + 2,
+        contentOverflows,
+        scrollsInternally: !contentOverflows || scrollers.length > 0 || dialog.scrollHeight > dialog.clientHeight,
+        lastActionReachable,
+        focusedFieldVisible,
+      };
+    },
+    { selector: layerSelector, viewportWidth: viewport.width },
+  );
+
+  const before = await page.evaluate(() => location.pathname + location.search);
+  await page.keyboard.press("Escape");
+  const closed = await page
+    .waitForFunction((selector) => ![...document.querySelectorAll(selector)].some((element) => element.getBoundingClientRect().height > 0), { timeout: 5_000 }, layerSelector)
+    .then(() => true)
+    .catch(() => false);
+  await settle(page);
+  const after = await page.evaluate(() => location.pathname + location.search);
+  return { trigger: trigger.selector, opened: true, ...measured, closedByEscape: closed, escapeKeptRoute: before === after };
+}
+
+/** Escape with no open layer: top-level pages stay, child pages go to a Factory parent. */
+async function exerciseEscape(page, route) {
+  await page.evaluate(() => document.activeElement instanceof HTMLElement && document.activeElement.blur());
+  const before = await page.evaluate(() => location.pathname);
+  await page.keyboard.press("Escape");
+  await settle(page);
+  const after = await page.evaluate(() => location.pathname);
+  return { before, after, topLevel: isTopLevelRoute(route) };
 }
 
 async function readState(page, route, viewport) {
@@ -588,6 +730,30 @@ async function readState(page, route, viewport) {
   );
 }
 
+function assertDialogAndEscape(label, dialog, escape) {
+  const failures = [];
+  if (dialog) {
+    if (!dialog.opened) failures.push(`${label}: dialog ${dialog.trigger} did not open (${dialog.reason})`);
+    else {
+      if (!dialog.withinViewport) failures.push(`${label}: dialog outside the viewport (${Math.round(dialog.width)}x${Math.round(dialog.height)})`);
+      if (!dialog.scrollsInternally) failures.push(`${label}: dialog content overflows without an internal scroller`);
+      if (dialog.lastActionReachable === false) failures.push(`${label}: dialog's last action is not reachable`);
+      if (dialog.focusedFieldVisible === false) failures.push(`${label}: focused dialog field is outside the visible viewport`);
+      if (!dialog.closedByEscape) failures.push(`${label}: Escape did not close the dialog`);
+      if (!dialog.escapeKeptRoute) failures.push(`${label}: Escape on an open dialog navigated away`);
+    }
+  }
+  if (escape) {
+    if (escape.topLevel && escape.after !== escape.before) {
+      failures.push(`${label}: Escape on a top-level page navigated to ${escape.after}`);
+    }
+    if (!escape.after.startsWith("/factory") && !escape.after.startsWith("/my-settings")) {
+      failures.push(`${label}: Escape left Factory Mode (${escape.after})`);
+    }
+  }
+  return failures;
+}
+
 function assertCase(state, viewport, route, interaction, sidebar) {
   const failures = [];
   const warnings = [];
@@ -659,41 +825,57 @@ try {
       const companyId = await selectFactoryCompany(page);
       if (!routes) {
         stage = "resolve seeded records";
-        report.seeds = await resolveSeeds(page);
+        report.seeds = await resolveSeeds(page, companyId);
         routes = plannedRoutes(report.seeds);
       }
       for (const [index, route] of routes.entries()) {
         currentRoute = route.path;
-        stage = `open ${route.path}`;
-        const status = await openRoute(page, route.path);
-        stage = `exercise ${route.path}`;
-        const interaction = await exerciseSafeControls(page);
-        stage = `inspect ${route.path}`;
-        const state = await readState(page, route.path, viewport);
-        // The drawer is exercised on a sample of routes per viewport to keep the run bounded.
-        const sidebar = index % 6 === 0 ? await exerciseSidebar(page, viewport) : null;
-        const { failures, warnings } = assertCase(state, viewport, route.path, interaction, sidebar);
-        const directory = path.join(OUTPUT_DIR, viewport.name);
-        await fs.mkdir(directory, { recursive: true });
-        const screenshot = path.join(directory, `${safeName(route.path)}.png`);
-        stage = `screenshot ${route.path}`;
-        await page.screenshot({ path: screenshot, fullPage: true });
-        report.cases.push({
-          viewport: viewport.name,
-          companyId,
-          route: route.path,
-          seeded: route.seeded,
-          status,
-          interaction,
-          sidebar,
-          state,
-          screenshot: path.relative(process.cwd(), screenshot),
-          failures,
-          warnings,
-        });
-        report.failures.push(...failures);
-        report.warnings.push(...warnings);
+        try {
+          stage = `open ${route.path}`;
+          const status = await openRoute(page, route.path);
+          stage = `exercise ${route.path}`;
+          const interaction = await exerciseSafeControls(page);
+          stage = `inspect ${route.path}`;
+          const state = await readState(page, route.path, viewport);
+          const directory = path.join(OUTPUT_DIR, viewport.name);
+          await fs.mkdir(directory, { recursive: true });
+          const screenshot = path.join(directory, `${safeName(route.path)}.png`);
+          stage = `screenshot ${route.path}`;
+          await page.screenshot({ path: screenshot, fullPage: true });
+          // The drawer is exercised on a sample of routes per viewport to keep the run bounded.
+          stage = `sidebar ${route.path}`;
+          const sidebar = index % 6 === 0 ? await exerciseSidebar(page, viewport) : null;
+          stage = `dialog ${route.path}`;
+          const dialog = await exerciseDialog(page, route.path, viewport);
+          // Escape may navigate, so it runs last; the next route opens fresh.
+          stage = `escape ${route.path}`;
+          const escape = ESCAPE_VIEWPORTS.has(viewport.name) ? await exerciseEscape(page, route.path) : null;
+          const { failures, warnings } = assertCase(state, viewport, route.path, interaction, sidebar);
+          failures.push(...assertDialogAndEscape(`${viewport.name} ${route.path}`, dialog, escape));
+          report.cases.push({
+            viewport: viewport.name,
+            companyId,
+            route: route.path,
+            seeded: route.seeded,
+            status,
+            interaction,
+            sidebar,
+            dialog,
+            escape,
+            state,
+            screenshot: path.relative(process.cwd(), screenshot),
+            failures,
+            warnings,
+          });
+          report.failures.push(...failures);
+          report.warnings.push(...warnings);
+        } catch (error) {
+          report.failures.push(
+            `${viewport.name} ${route.path} [${stage}]: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
       }
+      currentRoute = null;
     } catch (error) {
       const routeLabel = currentRoute ? ` ${currentRoute}` : "";
       report.failures.push(`${viewport.name}${routeLabel} [${stage}]: ${error instanceof Error ? error.message : String(error)}`);

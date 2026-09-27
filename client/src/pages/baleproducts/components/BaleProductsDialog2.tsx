@@ -28,7 +28,7 @@ export function BaleProductsDialog2({ model }: { model: Model }) {
 
         {importError && <div className="text-destructive text-sm p-2 rounded-md bg-destructive/10">{importError}</div>}
 
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader className="sticky top-0 z-30 bg-background">
             <TableRow>
               <TableHead>Article Code</TableHead>

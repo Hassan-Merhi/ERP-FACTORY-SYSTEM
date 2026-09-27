@@ -2,14 +2,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 
@@ -257,14 +250,19 @@ export function HistoricalReplaySafetyPanel() {
           </div>
           <div className="space-y-1 text-xs">
             {preview.missingSupplierTimelineRows?.map((row) => (
-              <div key={row.supplierId} className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5">
+              <div
+                key={row.supplierId}
+                className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5"
+              >
                 <span className="font-medium">{row.supplierName}</span>
                 <span className="text-red-700 dark:text-red-400">
                   {[
                     row.hasRawStock ? "raw stock" : null,
                     row.hasAdjustment ? "adjustment" : null,
                     row.hasOwnedSource ? "owned source" : null,
-                  ].filter(Boolean).join(", ")}
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
                 </span>
               </div>
             ))}
@@ -284,7 +282,7 @@ export function HistoricalReplaySafetyPanel() {
             established starting stock.
           </p>
           <div className="overflow-x-auto rounded-md border bg-card">
-            <Table>
+            <Table mobileLayout="cards">
               <TableHeader>
                 <TableRow>
                   <TableHead>Supplier / reference</TableHead>
@@ -344,7 +342,10 @@ export function HistoricalReplaySafetyPanel() {
           <div className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Blocked batches</div>
           <div className="space-y-1 text-xs">
             {preview.blockedBatches?.map((batch) => (
-              <div key={batch.batchId} className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5">
+              <div
+                key={batch.batchId}
+                className="flex flex-wrap justify-between gap-2 rounded border bg-card px-2 py-1.5"
+              >
                 <span className="font-mono">{batch.batchCode}</span>
                 <span className="text-red-700 dark:text-red-400">{batch.reasons.join(", ")}</span>
               </div>
@@ -354,7 +355,7 @@ export function HistoricalReplaySafetyPanel() {
       )}
 
       <div className="overflow-x-auto rounded-lg border">
-        <Table>
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow>
               <TableHead>Supplier</TableHead>
@@ -375,7 +376,9 @@ export function HistoricalReplaySafetyPanel() {
                 <TableCell className="text-right font-mono">${row.endingExpectedRate.toFixed(8)}</TableCell>
                 <TableCell className="text-right tabular-nums">{money(row.currentValue)}</TableCell>
                 <TableCell className="text-right tabular-nums">{money(row.projectedValue)}</TableCell>
-                <TableCell className={`text-right font-semibold tabular-nums ${row.valueDifference < 0 ? "text-red-600" : "text-emerald-600"}`}>
+                <TableCell
+                  className={`text-right font-semibold tabular-nums ${row.valueDifference < 0 ? "text-red-600" : "text-emerald-600"}`}
+                >
                   {money(row.valueDifference)}
                 </TableCell>
               </TableRow>

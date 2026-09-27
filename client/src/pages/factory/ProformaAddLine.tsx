@@ -251,81 +251,85 @@ export default function ProformaAddLine() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="sticky top-0 z-20 bg-background border-b px-4 py-3 flex items-center gap-3">
-        <Button size="icon" variant="ghost" onClick={goBack} data-testid="button-back">
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs text-muted-foreground">Adding line to</p>
-          <PageHeader title={proformaName} />
-        </div>
-        {/* Autosave toggle */}
-        <button
-          onClick={toggleAutoSave}
-          className={`flex items-center gap-1.5 px-3 h-9 rounded-md border text-sm font-medium transition-colors ${
-            autoSave
-              ? "bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400"
-              : "bg-background border-border text-muted-foreground"
-          }`}
-          data-testid="button-autosave-toggle"
-          title={autoSave ? "Autosave ON — items added automatically" : "Autosave OFF — press Add manually"}
-        >
-          <Zap className={`h-4 w-4 ${autoSave ? "fill-green-500 text-green-500" : ""}`} />
-          <span className="hidden sm:inline">Autosave</span>
-          <span
-            className={`w-8 h-4 rounded-full relative transition-colors ${autoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
+      {/* Header and search stick together, so the header may wrap on phones without the search bar
+          (previously pinned 57px down) sliding underneath it. */}
+      <div className="sticky top-0 z-20 bg-background">
+        <div className="flex flex-wrap items-center gap-3 border-b px-4 py-3">
+          <Button size="icon" variant="ghost" onClick={goBack} data-testid="button-back">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="min-w-[10rem] flex-1">
+            <p className="text-xs text-muted-foreground">Adding line to</p>
+            <PageHeader title={proformaName} />
+          </div>
+          {/* Autosave toggle */}
+          <button
+            onClick={toggleAutoSave}
+            className={`flex items-center gap-1.5 px-3 h-9 rounded-md border text-sm font-medium transition-colors ${
+              autoSave
+                ? "bg-green-500/10 border-green-500/50 text-green-600 dark:text-green-400"
+                : "bg-background border-border text-muted-foreground"
+            }`}
+            data-testid="button-autosave-toggle"
+            title={autoSave ? "Autosave ON — items added automatically" : "Autosave OFF — press Add manually"}
           >
+            <Zap className={`h-4 w-4 ${autoSave ? "fill-green-500 text-green-500" : ""}`} />
+            <span className="hidden sm:inline">Autosave</span>
             <span
-              className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoSave ? "translate-x-4" : "translate-x-0.5"}`}
-            />
-          </span>
-        </button>
-        <Button variant="outline" size="sm" onClick={goBack} data-testid="button-done">
-          Done
-        </Button>
-      </div>
-
-      {/* Search + Group filters */}
-      <div className="sticky top-[57px] z-10 bg-background border-b px-4 py-2 space-y-2">
-        <div className="relative">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input
-            placeholder="Search by name or article code..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-            autoFocus
-            data-testid="input-search"
-          />
-          {search && (
-            <button
-              className="absolute right-3 top-2.5"
-              onClick={() => setSearch("")}
-              data-testid="button-clear-search"
+              className={`w-8 h-4 rounded-full relative transition-colors ${autoSave ? "bg-green-500" : "bg-muted-foreground/30"}`}
             >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
+              <span
+                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${autoSave ? "translate-x-4" : "translate-x-0.5"}`}
+              />
+            </span>
+          </button>
+          <Button variant="outline" size="sm" onClick={goBack} data-testid="button-done">
+            Done
+          </Button>
+        </div>
+
+        {/* Search + Group filters */}
+        <div className="border-b px-4 py-2 space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <Input
+              placeholder="Search by name or article code..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+              autoFocus
+              data-testid="input-search"
+            />
+            {search && (
+              <button
+                className="absolute right-3 top-2.5"
+                onClick={() => setSearch("")}
+                data-testid="button-clear-search"
+              >
+                <X className="h-4 w-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          {groups.length > 1 && (
+            <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+              {groups.map((g) => (
+                <button
+                  key={g}
+                  onClick={() => setGroupFilter(g)}
+                  className={`shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    groupFilter === g
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-border hover-elevate"
+                  }`}
+                  data-testid={`button-group-${g}`}
+                >
+                  {g === "all" ? "All" : g}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-
-        {groups.length > 1 && (
-          <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
-            {groups.map((g) => (
-              <button
-                key={g}
-                onClick={() => setGroupFilter(g)}
-                className={`shrink-0 text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  groupFilter === g
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-border hover-elevate"
-                }`}
-                data-testid={`button-group-${g}`}
-              >
-                {g === "all" ? "All" : g}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {/* Item count */}

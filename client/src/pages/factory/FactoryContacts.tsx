@@ -172,7 +172,7 @@ export default function FactoryContacts() {
   return (
     <div className="flex flex-col h-full min-h-0">
       <PageHeader title="Contacts" subtitle="Personal reference — names, numbers, and notes" showBackButton>
-        <Button size="sm" onClick={openNew}>
+        <Button size="sm" onClick={openNew} data-testid="button-add-contact">
           <Plus className="h-4 w-4 mr-1" />
           Add Contact
         </Button>

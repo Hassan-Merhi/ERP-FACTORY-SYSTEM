@@ -208,7 +208,7 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
                       </div>
                     ) : null;
                   })()}
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow className="text-xs">
                         <TableHead className="w-8 pl-3"></TableHead>
@@ -574,7 +574,7 @@ export function RawStockReplayPanel({ rawStock }: RawStockReplayPanelProps) {
                   <div className="bg-muted/50 px-3 py-1.5 text-xs font-medium text-muted-foreground">
                     Would update ({recomputePreviewRows.filter((r) => !r.skipped).length} suppliers)
                   </div>
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Supplier</TableHead>

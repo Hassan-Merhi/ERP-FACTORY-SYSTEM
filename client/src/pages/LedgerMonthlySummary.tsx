@@ -176,7 +176,7 @@ export default function LedgerMonthlySummary() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="border rounded-lg overflow-hidden">
-                  <Table>
+                  <Table mobileLayout="cards">
                     <TableHeader className="sticky top-0 z-30 bg-background">
                       <TableRow className="bg-muted/50">
                         <TableHead>Particulars</TableHead>
@@ -303,7 +303,7 @@ export default function LedgerMonthlySummary() {
             </Card>
 
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-3 sm:gap-4">
               <Card>
                 <CardContent className="p-4 text-center">
                   <p className="text-sm text-muted-foreground">Opening Balance</p>
