@@ -130,4 +130,9 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "فترة المقارنة",
     fr: "Période de comparaison",
   },
+  {
+    en: "Factory and inventory workspace",
+    ar: "مساحة عمل المصنع والمخزون",
+    fr: "Espace de travail usine et stock",
+  },
 ];
