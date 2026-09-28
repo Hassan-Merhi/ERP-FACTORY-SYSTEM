@@ -61,6 +61,9 @@ const harness = vi.hoisted(() => {
       from: vi.fn(() => ({ where: vi.fn(async () => [{ name: "Main Warehouse" }]) })),
     })),
     getLocationById: vi.fn(),
+    applyStockTransferInventoryTx: vi.fn(),
+    assertTransferCompanyScopeTx: vi.fn(),
+    lockInventoryRow: vi.fn(),
     postStockMovementTx: vi.fn(),
     adjustInventory: vi.fn(),
     getActiveCompanyPermissionContext: vi.fn(),
@@ -73,6 +76,28 @@ vi.mock("../server/db", () => ({
   db: { transaction: harness.transaction, select: harness.select },
 }));
 vi.mock("../server/storage", () => ({ storage: { getLocationById: harness.getLocationById } }));
+vi.mock("../server/storage/stock-ops/transfers-create", () => {
+  class DuplicateStockTransferError extends Error {
+    readonly code = "STOCK_TRANSFER_ALREADY_EXISTS";
+  }
+  class StockTransferPolicyError extends Error {
+    constructor(
+      readonly code: "STOCK_TRANSFER_SCOPE_INVALID" | "STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED",
+      message: string
+    ) {
+      super(message);
+    }
+  }
+  return {
+    applyStockTransferInventoryTx: harness.applyStockTransferInventoryTx,
+    assertTransferCompanyScopeTx: harness.assertTransferCompanyScopeTx,
+    DuplicateStockTransferError,
+    StockTransferPolicyError,
+  };
+});
+vi.mock("../server/storage/inventoryRowLock", () => ({
+  lockInventoryRow: harness.lockInventoryRow,
+}));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: unknown, _res: unknown, next: () => void) => next() }));
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: () => "2026-08-11" }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
@@ -109,6 +134,14 @@ describe("stock transfer route POS notification behavior", () => {
     harness.txInsertValues.splice(0);
     vi.clearAllMocks();
     harness.getLocationById.mockResolvedValue({ id: 23, name: "Riverside Shop" });
+    harness.assertTransferCompanyScopeTx.mockResolvedValue(undefined);
+    harness.applyStockTransferInventoryTx.mockResolvedValue(undefined);
+    harness.lockInventoryRow.mockResolvedValue({
+      id: 1,
+      quantity: "20",
+      average_rate: "12.50",
+      total_value: "250.00",
+    });
     harness.adjustInventory.mockResolvedValue(undefined);
     harness.getActiveCompanyPermissionContext.mockResolvedValue({
       role: "POS",
@@ -145,27 +178,35 @@ describe("stock transfer route POS notification behavior", () => {
     await flushImmediate();
 
     expect(res.status).toHaveBeenCalledWith(201);
-    expect(harness.adjustInventory).toHaveBeenNthCalledWith(1, harness.tx, 11, 5, -3, 4);
-    expect(harness.adjustInventory).toHaveBeenNthCalledWith(2, harness.tx, 23, 5, 3, 4, 12.5);
-
-    // A POS transfer records canonical evidence on the same transaction that
-    // applied the inventory, keyed to the transfer it came from.
-    expect(harness.postStockMovementTx).toHaveBeenCalledTimes(1);
-    expect(harness.postStockMovementTx).toHaveBeenCalledWith(
+    expect(harness.assertTransferCompanyScopeTx).toHaveBeenCalledWith(
+      harness.tx,
+      4,
+      23,
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceLocationId: 11,
+          stockItemId: 5,
+          quantity: "3",
+        }),
+      ])
+    );
+    expect(harness.applyStockTransferInventoryTx).toHaveBeenCalledWith(
       harness.tx,
       expect.objectContaining({
         companyId: 4,
-        stockItemId: 5,
-        kind: "transfer",
-        fromLocationId: 11,
-        toLocationId: 23,
-        source: expect.objectContaining({
-          sourceType: "stock-transfer",
-          sourceId: "202",
-          idempotencyKey: "stock-transfer:202:5",
-        }),
-      }),
-      expect.anything()
+        transferId: 202,
+        sourceVoucherId: 101,
+        destinationLocationId: 23,
+        allowNegativeInventory: true,
+        items: [
+          expect.objectContaining({
+            stockItemId: 5,
+            sourceLocationId: 11,
+            quantity: "3",
+            rate: "12.50",
+          }),
+        ],
+      })
     );
     expect(harness.getActiveCompanyPermissionContext).toHaveBeenCalledWith(req);
     expect(harness.sendTransferWhatsApp).toHaveBeenCalledWith(
