@@ -30,7 +30,9 @@ describe("ExportCenterHelpers behavioral formatting", () => {
     expect(runTypeBadgeClass("manual_email")).toContain("bg-violet-100");
     expect(runTypeBadgeClass("manual_whatsapp")).toContain("bg-green-100");
     expect(runTypeBadgeClass("manual_download")).toContain("bg-slate-100");
-    expect(runTypeBadgeClass("future_mode")).toBe("bg-muted text-muted-foreground");
+    expect(runTypeBadgeClass("future_mode")).toBe(
+      "bg-muted text-muted-foreground",
+    );
   });
 
   it("formats midnight, morning, noon, and evening schedule hours", () => {
@@ -54,10 +56,20 @@ describe("ExportCenterHelpers behavioral formatting", () => {
     expect(scheduleLabel(undefined)).toBe("");
     expect(scheduleLabel({ enabled: true, autoSend: false } as any)).toBe("");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "daily", sendHour: 0 } as any),
+      scheduleLabel({
+        enabled: true,
+        autoSend: true,
+        frequency: "daily",
+        sendHour: 0,
+      } as any),
     ).toBe("Daily at 12:00 AM EST");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "monthly", sendHour: 12 } as any),
+      scheduleLabel({
+        enabled: true,
+        autoSend: true,
+        frequency: "monthly",
+        sendHour: 12,
+      } as any),
     ).toBe("Monthly (1st) at 12:00 PM EST");
     expect(
       scheduleLabel({
@@ -78,7 +90,12 @@ describe("ExportCenterHelpers behavioral formatting", () => {
       } as any),
     ).toBe("Every Monday at 6:00 PM EST");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "yearly", sendHour: 18 } as any),
+      scheduleLabel({
+        enabled: true,
+        autoSend: true,
+        frequency: "yearly",
+        sendHour: 18,
+      } as any),
     ).toBe("Auto-Send On");
   });
 
@@ -89,7 +106,10 @@ describe("ExportCenterHelpers behavioral formatting", () => {
 
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-28T04:30:00.000Z"));
-    expect(currentYearDateRange()).toEqual({ start: "2026-01-01", end: "2026-09-28" });
+    expect(currentYearDateRange()).toEqual({
+      start: "2026-01-01",
+      end: "2026-09-28",
+    });
     vi.useRealTimers();
   });
 });
