@@ -17,7 +17,6 @@ import { postStockMovementTx } from "../../services/inventory/stockMovementInteg
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
-import { journalStockTransferLeg, nextStockTransferRevision } from "../../services/inventory/stockTransferJournal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -166,6 +165,7 @@ export async function applyStockTransferInventoryTx(
   input: {
     companyId: number;
     transferId: number;
+    sourceVoucherId: number;
     destinationLocationId: number;
     items: TransferMovementItem[];
     allowNegativeInventory: boolean;
@@ -208,7 +208,6 @@ export async function applyStockTransferInventoryTx(
     }
   }
 
-  const revision = await nextStockTransferRevision(tx, input.companyId, input.transferId);
   for (const item of movementItems) {
     const quantity = toInventoryDecimal(item.quantity);
     const rate = toInventoryDecimal(item.rate);
@@ -227,7 +226,7 @@ export async function applyStockTransferInventoryTx(
       input.companyId,
       rate.toNumber(),
       "Stock Transfer",
-      input.transferId
+      input.sourceVoucherId
     );
     if (sourceWasMissing) {
       await tx
@@ -254,22 +253,29 @@ export async function applyStockTransferInventoryTx(
       input.companyId,
       rate.toNumber(),
       "Stock Transfer",
-      input.transferId
+      input.sourceVoucherId
     );
 
-    await journalStockTransferLeg(tx, {
-      companyId: input.companyId,
-      transferId: input.transferId,
-      revision,
-      phase: "issue",
-      fromLocationId: item.sourceLocationId,
-      toLocationId: input.destinationLocationId,
-      leg: {
+    await postStockMovementTx(
+      tx,
+      {
+        companyId: input.companyId,
         stockItemId: item.stockItemId,
-        quantity: quantity.toNumber(),
-        rate: rate.toNumber(),
+        kind: "transfer",
+        quantity: inventoryQuantity(quantity),
+        unitCost: inventoryUnitCost(rate),
+        fromLocationId: item.sourceLocationId,
+        toLocationId: input.destinationLocationId,
+        occurredAt: new Date().toISOString(),
+        source: {
+          sourceType: "stock-transfer",
+          sourceId: String(input.transferId),
+          idempotencyKey: `stock-transfer:${input.transferId}:${item.stockItemId}:${item.sourceLocationId}:${input.destinationLocationId}`,
+        },
+        allowNegativeStock: true,
       },
-    });
+      canonicalStockMovementAdapter
+    );
   }
 }
 
@@ -363,6 +369,7 @@ export async function createStockTransfer(
       await applyStockTransferInventoryTx(tx, {
         companyId: voucher.companyId,
         transferId: transfer.id,
+        sourceVoucherId: voucherId,
         destinationLocationId,
         items: transferItems.map((item) => ({
           sourceLocationId: item.sourceLocationId!,
