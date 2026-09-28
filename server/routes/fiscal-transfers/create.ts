@@ -75,7 +75,8 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Branch: Create new transfer from scratch (sourceLocationId provided, no voucherId)
       if (
         !voucherId &&
-        (sourceLocationId || (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
+        (sourceLocationId ||
+          (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
       ) {
         if (!companyId) {
           return res.status(400).json({ message: "No company selected" });
@@ -402,16 +403,10 @@ export function registerStockTransferCreateRoutes(app: Express) {
         })
       );
 
-      const transfer = await storage.createStockTransfer(
-        voucherId,
-        destinationLocationId,
-        notes || "",
-        itemsWithRate,
-        {
-          allowNegativeInventory: allowNegativeInventory !== false,
-          activeCompanyId: companyId,
-        }
-      );
+      const transfer = await storage.createStockTransfer(voucherId, destinationLocationId, notes || "", itemsWithRate, {
+        allowNegativeInventory: allowNegativeInventory !== false,
+        activeCompanyId: companyId,
+      });
 
       logger.info("[Stock Transfer] Transfer created successfully:", {
         transferId: transfer.transfer.id,
