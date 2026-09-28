@@ -30,7 +30,6 @@ import {
   StockDocumentIdempotencyError,
 } from "../../services/inventory/stockDocumentIdempotency";
 
-
 async function resolvePosTransferRecipientLocationId(req: Request): Promise<number | null> {
   const context = await getActiveCompanyPermissionContext(req);
   if (context.role !== "POS" || !context.assignedLocationId) {
@@ -187,9 +186,16 @@ export function registerStockTransferCreateRoutes(app: Express) {
               quantity: String(item.quantity),
               rate: item.rate == null ? "0" : String(item.rate),
             }))
-            .sort((a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId);
+            .sort(
+              (a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId
+            );
 
-          await assertTransferCompanyScopeTx(tx, companyId, Number(destinationLocationId), normalizedMovementItems);
+          await assertTransferCompanyScopeTx(
+            tx,
+            companyId,
+            Number(destinationLocationId),
+            normalizedMovementItems
+          );
 
           const [newVoucher] = await tx
             .insert(vouchers)
