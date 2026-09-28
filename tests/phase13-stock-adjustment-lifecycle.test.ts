@@ -262,4 +262,51 @@ describe("Phase 13 — stock adjustment quantity/value lifecycle", () => {
     },
     120000
   );
+  it(
+    "reactivates a soft-deleted STOCK_ADJUSTMENT account instead of inserting a duplicate",
+    async () => {
+      const [existingAccount] = await db
+        .select()
+        .from(schema.ledgerAccounts)
+        .where(
+          and(
+            eq(schema.ledgerAccounts.companyId, ctx.companyId),
+            eq(schema.ledgerAccounts.code, "STOCK_ADJUSTMENT")
+          )
+        )
+        .limit(1);
+      expect(existingAccount).toBeDefined();
+
+      await db
+        .update(schema.ledgerAccounts)
+        .set({ active: false, deletedAt: new Date("2026-09-20T00:00:00Z") })
+        .where(eq(schema.ledgerAccounts.id, existingAccount!.id));
+
+      const stockItemId = ctx.stockItemIds[0];
+      await setInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+      const voucherId = await createVoucher("Production");
+
+      const created = await agent
+        .post("/api/stock-adjustments")
+        .send(adjustmentBody(voucherId, "Production", stockItemId, 1, 20));
+      expect(created.status).toBe(201);
+
+      const matchingAccounts = await db
+        .select()
+        .from(schema.ledgerAccounts)
+        .where(
+          and(
+            eq(schema.ledgerAccounts.companyId, ctx.companyId),
+            eq(schema.ledgerAccounts.code, "STOCK_ADJUSTMENT")
+          )
+        );
+      expect(matchingAccounts).toHaveLength(1);
+      expect(matchingAccounts[0].id).toBe(existingAccount!.id);
+      expect(matchingAccounts[0].active).toBe(true);
+      expect(matchingAccounts[0].deletedAt).toBeNull();
+    },
+    120000
+  );
+
+
 });
