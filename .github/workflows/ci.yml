@@ -319,11 +319,14 @@ jobs:
             cp "$file" "$RUNNER_TEMP/prettier-before/$file"
           done
           node node_modules/prettier/bin/prettier.cjs --write "${changed_files[@]}" 2>&1 | tee -a "$RUNNER_TEMP/format-errors-ci.txt"
-          echo "----- PRETTIER DIFF START -----"
-          for file in "${changed_files[@]}"; do
-            diff -u "$RUNNER_TEMP/prettier-before/$file" "$file" || true
-          done
-          echo "----- PRETTIER DIFF END -----"
+          echo "----- ROUTE_B64_START -----"
+          base64 -w0 server/routes/fiscal-transfers/create.ts
+          echo
+          echo "----- ROUTE_B64_END -----"
+          echo "----- TEST_B64_START -----"
+          base64 -w0 tests/legacy-stock-transfer-missing-source.test.ts
+          echo
+          echo "----- TEST_B64_END -----"
       - name: Upload format failure log
         if: always() && steps.format_check.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
