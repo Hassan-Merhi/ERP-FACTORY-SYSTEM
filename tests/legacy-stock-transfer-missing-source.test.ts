@@ -322,6 +322,13 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     const stockItemId = ctx.stockItemIds[1];
     const voucherId = await createVoucher();
     const beforeDestination = await inventoryRow(ctx.location2Id, stockItemId);
+    const { rows: journalBeforeRows } = await pool.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count
+         FROM canonical_stock_movements
+        WHERE company_id = $1 AND source_type = 'stock-transfer'`,
+      [ctx.companyId]
+    );
+    const journalBefore = Number(journalBeforeRows[0].count);
 
     const res = await agent.post("/api/stock-transfers").send(
       legacyBody(voucherId, [
@@ -340,8 +347,6 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
         WHERE company_id = $1 AND source_type = 'stock-transfer'`,
       [ctx.companyId]
     );
-    // Earlier tests may have journal rows, but the rejected voucher must have no
-    // transfer id and therefore cannot have added journal evidence.
-    expect(Number(rows[0].count)).toBeGreaterThanOrEqual(0);
+    expect(Number(rows[0].count)).toBe(journalBefore);
   }, 60000);
 });
