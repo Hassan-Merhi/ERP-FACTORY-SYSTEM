@@ -208,9 +208,12 @@ export async function applyStockTransferInventoryTx(
     const quantity = toInventoryDecimal(item.quantity);
     const rate = toInventoryDecimal(item.rate);
 
-    // Passing the historical transfer rate into the source adjustment matters
-    // when the source row does not exist yet: adjustInventory creates the
-    // negative source row with that cost memory instead of a zero/rounded rate.
+    const sourceWasMissing = !lockedRows.get(`${item.sourceLocationId}:${item.stockItemId}`);
+
+    // Passing the historical transfer rate creates the negative layer with the
+    // correct valuation basis. adjustInventory intentionally seeds a first-touch
+    // negative inventory row at a zero average rate, so for transfers only we
+    // restore the transfer's historical rate as the row's cost memory as well.
     await adjustInventory(
       tx,
       item.sourceLocationId,
@@ -221,6 +224,23 @@ export async function applyStockTransferInventoryTx(
       "Stock Transfer",
       input.transferId
     );
+    if (sourceWasMissing) {
+      await tx
+        .update(schema.inventory)
+        .set({
+          averageRate: inventoryUnitCost(rate),
+          totalValue: inventoryMoney(toInventoryDecimal(0)),
+          lastUpdated: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.inventory.companyId, input.companyId),
+            eq(schema.inventory.locationId, item.sourceLocationId),
+            eq(schema.inventory.stockItemId, item.stockItemId)
+          )
+        );
+    }
+
     await adjustInventory(
       tx,
       input.destinationLocationId,
