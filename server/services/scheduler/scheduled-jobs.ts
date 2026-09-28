@@ -69,10 +69,17 @@ async function hasRetryableWhatsAppOccurrence(jobType: string): Promise<boolean>
         WHERE o.job_type = $1
           AND o.created_at >= now() - interval '36 hours'
           AND (
-            o.status IN ('partial', 'failed')
+            (
+              o.status IN ('partial', 'failed')
+              AND (o.claim_token IS NULL OR o.claim_expires_at < now())
+            )
             OR (
               o.status = 'claimed'
               AND o.delivery_started_at IS NULL
+              AND o.claim_expires_at < now()
+            )
+            OR (
+              o.status = 'delivering'
               AND o.claim_expires_at < now()
             )
           )
