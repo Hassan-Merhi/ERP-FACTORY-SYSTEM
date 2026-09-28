@@ -35,7 +35,10 @@ function getNewYorkLocalDate(now = new Date()): string {
 async function withSchedulerPreflightTimeout<T>(label: string, operation: Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms`)), SCHEDULER_PREFLIGHT_TIMEOUT_MS);
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms`)),
+      SCHEDULER_PREFLIGHT_TIMEOUT_MS
+    );
     timer.unref();
   });
 
@@ -69,10 +72,9 @@ export async function checkAndRunStockReport(): Promise<void> {
       lastSentAt: row.last_sent_at ? new Date(row.last_sent_at) : null,
     };
 
-    const rq = await pool.query(
-      "SELECT chat_id FROM whatsapp_recipients WHERE id = $1 AND active = true",
-      [row.recipient_id]
-    );
+    const rq = await pool.query("SELECT chat_id FROM whatsapp_recipients WHERE id = $1 AND active = true", [
+      row.recipient_id,
+    ]);
     if (!rq.rows.length) {
       logger.info("[StockReport] Recipient inactive — skipping.");
       return;
@@ -158,8 +160,7 @@ export async function checkAndRunStockReport(): Promise<void> {
         if (pdfBuf && generated) {
           const maxAllowedPages = Math.ceil(generated.rowCount / 20) + 5;
           if (generated.pageCount > maxAllowedPages) {
-            const error =
-              `PDF safety guard rejected ${generated.pageCount} pages for ${generated.rowCount} rows`;
+            const error = `PDF safety guard rejected ${generated.pageCount} pages for ${generated.rowCount} rows`;
             const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
               claim,
               attachmentKey: "pdf",
@@ -180,13 +181,7 @@ export async function checkAndRunStockReport(): Promise<void> {
             if (attempt) {
               const pdfName = `Stock_${company.name.replace(/[^a-z0-9]/gi, "_")}_${reportDate}.pdf`;
               try {
-                const pdfRes = await sendWhatsAppFileToChatId(
-                  chatId,
-                  pdfBuf,
-                  pdfName,
-                  "",
-                  "application/pdf"
-                );
+                const pdfRes = await sendWhatsAppFileToChatId(chatId, pdfBuf, pdfName, "", "application/pdf");
                 await finishScheduledWhatsAppAttachmentAttempt({
                   claim,
                   attachmentKey: "pdf",

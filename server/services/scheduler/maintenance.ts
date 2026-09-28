@@ -308,9 +308,7 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
     });
 
     if (!claim) {
-      const nowInNewYork = new Date(
-        new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
-      );
+      const nowInNewYork = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
       if (nowInNewYork.getHours() !== settings.scheduleHour) return;
 
       // Preserve the existing 12-hour duplicate-suppression rule for successful sends.
@@ -351,8 +349,9 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
 
     const pdfState = claim.attachments.find((attachment) => attachment.key === "pdf");
     if (pdfState?.status !== "sent") {
-      let generated: Awaited<ReturnType<(typeof import("../../helpers/generateContainersPdf"))["generateContainersPdf"]>> | null =
-        null;
+      let generated: Awaited<
+        ReturnType<(typeof import("../../helpers/generateContainersPdf"))["generateContainersPdf"]>
+      > | null = null;
       try {
         const { generateContainersPdf } = await import("../../helpers/generateContainersPdf");
         generated = await generateContainersPdf();

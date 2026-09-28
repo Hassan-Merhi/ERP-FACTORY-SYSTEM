@@ -91,8 +91,7 @@ function createClient() {
         const attachmentKey = String(params[1]);
         if (
           !db.attachments.some(
-            (attachment) =>
-              attachment.occurrence_id === occurrenceId && attachment.attachment_key === attachmentKey
+            (attachment) => attachment.occurrence_id === occurrenceId && attachment.attachment_key === attachmentKey
           )
         ) {
           db.attachments.push({
@@ -133,9 +132,7 @@ function createClient() {
         const retryable =
           occurrence.status === "partial" ||
           occurrence.status === "failed" ||
-          (occurrence.status === "claimed" &&
-            occurrence.delivery_started_at === null &&
-            occurrence.claimExpired);
+          (occurrence.status === "claimed" && occurrence.delivery_started_at === null && occurrence.claimExpired);
         if (!retryable || hasSending) return { rows: [], rowCount: 0 };
 
         occurrence.claim_token = String(params[1]);

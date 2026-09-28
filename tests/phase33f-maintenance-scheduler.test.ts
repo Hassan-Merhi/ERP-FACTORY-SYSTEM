@@ -98,9 +98,7 @@ describe("Phase 33F maintenance scheduler", () => {
   });
 
   it("preserves the 12-hour duplicate-suppression window for successful container sends", async () => {
-    const nowInNewYork = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
+    const nowInNewYork = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
     harness.getContainersWaSettings.mockResolvedValue({
       scheduleEnabled: true,
       groupChatId: "120000@g.us",

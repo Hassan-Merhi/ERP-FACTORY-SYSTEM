@@ -4,12 +4,7 @@ import { pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 
-export type ScheduledWhatsAppOccurrenceStatus =
-  | "claimed"
-  | "delivering"
-  | "partial"
-  | "failed"
-  | "sent";
+export type ScheduledWhatsAppOccurrenceStatus = "claimed" | "delivering" | "partial" | "failed" | "sent";
 
 export type ScheduledWhatsAppAttachmentStatus = "pending" | "sending" | "failed" | "sent";
 
@@ -47,7 +42,10 @@ const CLAIM_LEASE_MINUTES = 15;
 const RETRY_LOOKBACK_HOURS = 36;
 
 function normalizeKeyPart(value: string): string {
-  return value.trim().replace(/\s+/g, "_").replace(/[^a-zA-Z0-9_.:@-]/g, "_");
+  return value
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_.:@-]/g, "_");
 }
 
 export function buildScheduledWhatsAppOccurrenceKey(input: {

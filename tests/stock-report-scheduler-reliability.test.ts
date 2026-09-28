@@ -154,9 +154,7 @@ describe("scheduled stock WhatsApp reliability", () => {
   });
 
   it("updates last_sent_at only after both PDF and Excel succeed", async () => {
-    harness.sendWhatsAppFileToChatId
-      .mockResolvedValueOnce({ success: true })
-      .mockResolvedValueOnce({ success: true });
+    harness.sendWhatsAppFileToChatId.mockResolvedValueOnce({ success: true }).mockResolvedValueOnce({ success: true });
     harness.finalizeScheduledWhatsAppOccurrence.mockResolvedValue({
       allSent: true,
       status: "sent",

@@ -41,16 +41,10 @@ function scheduledReportIsDue(row: {
 
   const frequency = row.frequency ?? "daily";
   if (row.last_sent_at) {
-    const last = new Date(
-      new Date(row.last_sent_at).toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
+    const last = new Date(new Date(row.last_sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }));
     if (frequency === "daily" && last.toDateString() === now.toDateString()) return false;
     if (frequency === "weekly" && sameIsoWeek(last, now)) return false;
-    if (
-      frequency === "monthly" &&
-      last.getFullYear() === now.getFullYear() &&
-      last.getMonth() === now.getMonth()
-    ) {
+    if (frequency === "monthly" && last.getFullYear() === now.getFullYear() && last.getMonth() === now.getMonth()) {
       return false;
     }
   }
@@ -160,13 +154,7 @@ async function shouldLoadContainersWhatsAppModule(): Promise<boolean> {
       WHERE id = 1`
   );
   const row = rows[0];
-  if (
-    !row?.enabled ||
-    !row.instance_id ||
-    !row.api_token ||
-    !row.group_chat_id ||
-    !row.schedule_enabled
-  ) {
+  if (!row?.enabled || !row.instance_id || !row.api_token || !row.group_chat_id || !row.schedule_enabled) {
     return false;
   }
 
