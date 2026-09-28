@@ -102,7 +102,7 @@ function groupTransferMovementItems(items: TransferMovementItem[]): TransferMove
     }));
 }
 
-async function assertTransferCompanyScopeTx(
+export async function assertTransferCompanyScopeTx(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   companyId: number,
   destinationLocationId: number,
