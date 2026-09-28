@@ -313,7 +313,10 @@ jobs:
           if [ "${#changed_files[@]}" -eq 0 ]; then echo "No changed TypeScript, TSX, or CSS source files require formatting checks." | tee "$RUNNER_TEMP/format-errors-ci.txt"; exit 0; fi
           printf 'Checking formatting for %s changed source file(s):\n' "${#changed_files[@]}" | tee "$RUNNER_TEMP/format-errors-ci.txt"
           printf ' - %s\n' "${changed_files[@]}" | tee -a "$RUNNER_TEMP/format-errors-ci.txt"
-          node node_modules/prettier/bin/prettier.cjs --check "${changed_files[@]}" 2>&1 | tee -a "$RUNNER_TEMP/format-errors-ci.txt"
+          node node_modules/prettier/bin/prettier.cjs --write "${changed_files[@]}" 2>&1 | tee -a "$RUNNER_TEMP/format-errors-ci.txt"
+          echo "----- PRETTIER DIFF START -----"
+          git diff --no-ext-diff --unified=200 -- "${changed_files[@]}" || true
+          echo "----- PRETTIER DIFF END -----"
       - name: Upload format failure log
         if: always() && steps.format_check.outcome == 'failure'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
