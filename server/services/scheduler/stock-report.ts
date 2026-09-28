@@ -5,7 +5,7 @@ import { pool } from "../../db";
 import { getWaSettings, sendWhatsAppFileToChatId } from "../whatsappService";
 import { generateNetPositionExcel } from "../../helpers/generateNetPositionExcel";
 import { generateStockPdf } from "../../helpers/generateStockPdf";
-import { getExportAttachmentSize, releaseManagedExportAttachment } from "../../helpers/exportAttachmentSource";
+import { releaseManagedExportAttachment } from "../../helpers/exportAttachmentSource";
 import { storage } from "../../storage";
 import { buildNetPositionZip, getTodayLabel } from "./daily-export";
 import { shouldSendStockReport } from "./whatsapp-send";
