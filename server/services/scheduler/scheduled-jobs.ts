@@ -41,16 +41,10 @@ function scheduledReportIsDue(row: {
 
   const frequency = row.frequency ?? "daily";
   if (row.last_sent_at) {
-    const last = new Date(
-      new Date(row.last_sent_at).toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
+    const last = new Date(new Date(row.last_sent_at).toLocaleString("en-US", { timeZone: "America/New_York" }));
     if (frequency === "daily" && last.toDateString() === now.toDateString()) return false;
     if (frequency === "weekly" && sameIsoWeek(last, now)) return false;
-    if (
-      frequency === "monthly" &&
-      last.getFullYear() === now.getFullYear() &&
-      last.getMonth() === now.getMonth()
-    ) {
+    if (frequency === "monthly" && last.getFullYear() === now.getFullYear() && last.getMonth() === now.getMonth()) {
       return false;
     }
   }
@@ -59,6 +53,47 @@ function scheduledReportIsDue(row: {
   if (frequency === "weekly") return now.getDay() === (row.send_day_of_week ?? 1);
   if (frequency === "monthly") return now.getDate() === 1;
   return false;
+}
+
+async function hasRetryableWhatsAppOccurrence(jobType: string): Promise<boolean> {
+  try {
+    const result = await pool.query(
+      `SELECT 1
+         FROM scheduled_whatsapp_occurrences o
+        WHERE o.job_type = $1
+          AND o.created_at >= now() - interval '36 hours'
+          AND (
+            (
+              o.status IN ('partial', 'failed')
+              AND (o.claim_token IS NULL OR o.claim_expires_at < now())
+            )
+            OR (
+              o.status = 'claimed'
+              AND o.delivery_started_at IS NULL
+              AND o.claim_expires_at < now()
+            )
+            OR (
+              o.status = 'delivering'
+              AND o.claim_expires_at < now()
+            )
+          )
+          AND NOT EXISTS (
+            SELECT 1
+              FROM scheduled_whatsapp_attachments a
+             WHERE a.occurrence_id = o.id
+               AND a.status = 'sending'
+          )
+        LIMIT 1`,
+      [jobType]
+    );
+    return Boolean(result.rowCount);
+  } catch (error: unknown) {
+    // During a rolling deployment the code can briefly run before the startup
+    // migration has created the durable delivery tables. Fall back to the
+    // existing due-time check for that short window.
+    if ((error as { code?: string })?.code === "42P01") return false;
+    throw error;
+  }
 }
 
 async function shouldLoadStockReportModule(): Promise<boolean> {
@@ -78,7 +113,9 @@ async function shouldLoadStockReportModule(): Promise<boolean> {
       WHERE id = 1`
   );
   const row = rows[0];
-  return Boolean(row?.company_id && row?.recipient_id && scheduledReportIsDue(row));
+  if (!row?.company_id || !row?.recipient_id || !row.enabled || !row.auto_send) return false;
+  if (await hasRetryableWhatsAppOccurrence("stock_report")) return true;
+  return scheduledReportIsDue(row);
 }
 
 async function shouldLoadNetPositionExportModule(): Promise<boolean> {
@@ -117,15 +154,11 @@ async function shouldLoadContainersWhatsAppModule(): Promise<boolean> {
       WHERE id = 1`
   );
   const row = rows[0];
-  if (
-    !row?.enabled ||
-    !row.instance_id ||
-    !row.api_token ||
-    !row.group_chat_id ||
-    !row.schedule_enabled
-  ) {
+  if (!row?.enabled || !row.instance_id || !row.api_token || !row.group_chat_id || !row.schedule_enabled) {
     return false;
   }
+
+  if (await hasRetryableWhatsAppOccurrence("containers_report")) return true;
 
   const now = nowInNewYork();
   if (now.getHours() !== (row.schedule_hour ?? 8)) return false;

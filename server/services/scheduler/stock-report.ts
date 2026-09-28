@@ -5,17 +5,40 @@ import { pool } from "../../db";
 import { getWaSettings, sendWhatsAppFileToChatId } from "../whatsappService";
 import { generateNetPositionExcel } from "../../helpers/generateNetPositionExcel";
 import { generateStockPdf } from "../../helpers/generateStockPdf";
-import { getExportAttachmentSize, releaseManagedExportAttachment } from "../../helpers/exportAttachmentSource";
+import { releaseManagedExportAttachment } from "../../helpers/exportAttachmentSource";
 import { storage } from "../../storage";
 import { buildNetPositionZip, getTodayLabel } from "./daily-export";
 import { shouldSendStockReport } from "./whatsapp-send";
+import {
+  beginScheduledWhatsAppAttachmentAttempt,
+  claimRetryableScheduledWhatsAppOccurrence,
+  claimScheduledWhatsAppOccurrence,
+  finalizeScheduledWhatsAppOccurrence,
+  finishScheduledWhatsAppAttachmentAttempt,
+  logScheduledWhatsAppAttachmentResult,
+  recordScheduledWhatsAppAttachmentPreparationFailure,
+} from "./scheduledWhatsAppDelivery";
 
 const SCHEDULER_PREFLIGHT_TIMEOUT_MS = 20_000;
+
+function getNewYorkLocalDate(now = new Date()): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const values = new Map(parts.map((part) => [part.type, part.value]));
+  return `${values.get("year")}-${values.get("month")}-${values.get("day")}`;
+}
 
 async function withSchedulerPreflightTimeout<T>(label: string, operation: Promise<T>): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms`)), SCHEDULER_PREFLIGHT_TIMEOUT_MS);
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${SCHEDULER_PREFLIGHT_TIMEOUT_MS}ms`)),
+      SCHEDULER_PREFLIGHT_TIMEOUT_MS
+    );
     timer.unref();
   });
 
@@ -49,8 +72,6 @@ export async function checkAndRunStockReport(): Promise<void> {
       lastSentAt: row.last_sent_at ? new Date(row.last_sent_at) : null,
     };
 
-    if (!shouldSendStockReport(cfg)) return;
-
     const rq = await pool.query("SELECT chat_id FROM whatsapp_recipients WHERE id = $1 AND active = true", [
       row.recipient_id,
     ]);
@@ -67,63 +88,227 @@ export async function checkAndRunStockReport(): Promise<void> {
       return;
     }
 
-    const today = getTodayLabel();
-    const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+    const recipientKey = `recipient:${row.recipient_id}:chat:${chatId}`;
+    let claim = await claimRetryableScheduledWhatsAppOccurrence({
+      jobType: "stock_report",
+      companyId: row.company_id,
+      recipientKey,
+      recipientChatId: chatId,
+    });
 
-    logger.info(`[StockReport] Sending to ${company.name} → ${chatId} (${cfg.frequency})…`);
-
-    const {
-      buffer: pdfBuf,
-      pageCount: pdfPageCount,
-      rowCount: pdfRowCount,
-    } = await generateStockPdf(row.company_id, company.name, undefined, undefined, true);
-
-    try {
-      const maxAllowedPages = Math.ceil(pdfRowCount / 20) + 5;
-      if (pdfPageCount > maxAllowedPages) {
-        logger.error(
-          `[StockReport] SAFETY GUARD: PDF has ${pdfPageCount} pages for ${pdfRowCount} rows ` +
-            `(max allowed: ${maxAllowedPages}). company="${company.name}". Skipping WhatsApp send.`
-        );
-        return;
-      }
-
-      const pdfName = `Stock_${company.name.replace(/[^a-z0-9]/gi, "_")}_${today}.pdf`;
-      logger.info(
-        `[StockReport] Uploading stock PDF — chatId=${chatId} file=${pdfName} ` +
-          `size=${getExportAttachmentSize(pdfBuf)} pageCount=${pdfPageCount} rowCount=${pdfRowCount}`
-      );
-      const pdfRes = await sendWhatsAppFileToChatId(chatId, pdfBuf, pdfName, "", "application/pdf");
-      if (pdfRes.success) {
-        logger.info(`[StockReport] PDF sent — chatId=${chatId} file=${pdfName}`);
-      } else {
-        logger.error(
-          `[StockReport] PDF upload failed — chatId=${chatId} file=${pdfName} ` +
-            `size=${getExportAttachmentSize(pdfBuf)} pageCount=${pdfPageCount} rowCount=${pdfRowCount} ` +
-            `greenApiError="${pdfRes.error}"`
-        );
-      }
-    } finally {
-      await releaseManagedExportAttachment(pdfBuf);
+    if (!claim) {
+      if (!shouldSendStockReport(cfg)) return;
+      claim = await claimScheduledWhatsAppOccurrence({
+        jobType: "stock_report",
+        companyId: row.company_id,
+        recipientKey,
+        recipientChatId: chatId,
+        scheduledLocalDate: getNewYorkLocalDate(),
+        scheduledLocalHour: cfg.sendHour,
+        attachmentKeys: ["pdf", "excel"],
+      });
     }
 
-    const xlsBuf = await generateNetPositionExcel(row.company_id, company.name, yearStart, today);
-    try {
-      const xlsName = `NetPosition_${company.name.replace(/[^a-z0-9]/gi, "_")}_${today}.xlsx`;
-      const xlsRes = await sendWhatsAppFileToChatId(
-        chatId,
-        xlsBuf,
-        xlsName,
-        "",
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      logger.info(`[StockReport] Net Position Excel: ${xlsRes.success ? "sent" : xlsRes.error}`);
-    } finally {
-      await releaseManagedExportAttachment(xlsBuf);
+    if (!claim?.acquired) {
+      if (claim) {
+        logger.info("[StockReport] Occurrence already owned or completed — skipping.", {
+          occurrenceKey: claim.occurrenceKey,
+          recipient: recipientKey,
+          result: claim.status,
+        });
+      }
+      return;
     }
 
-    await pool.query(`UPDATE whatsapp_stock_settings SET last_sent_at = now() WHERE id = 1`);
-    logger.info("[StockReport] Done — last_sent_at updated.");
+    const reportDate = claim.scheduledLocalDate;
+    const yearStart = `${reportDate.slice(0, 4)}-01-01`;
+    logger.info("[StockReport] Scheduled occurrence claimed.", {
+      occurrenceKey: claim.occurrenceKey,
+      recipient: recipientKey,
+      companyId: row.company_id,
+      localScheduledDate: claim.scheduledLocalDate,
+      localScheduledHour: claim.scheduledLocalHour,
+    });
+
+    const pdfState = claim.attachments.find((attachment) => attachment.key === "pdf");
+    if (pdfState?.status !== "sent") {
+      let pdfBuf: Awaited<ReturnType<typeof generateStockPdf>>["buffer"] | null = null;
+      try {
+        let generated: Awaited<ReturnType<typeof generateStockPdf>>;
+        try {
+          generated = await generateStockPdf(row.company_id, company.name, undefined, undefined, true);
+          pdfBuf = generated.buffer;
+        } catch (error) {
+          const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
+            claim,
+            attachmentKey: "pdf",
+            error,
+          });
+          if (attempt) {
+            await logScheduledWhatsAppAttachmentResult({
+              claim,
+              recipient: recipientKey,
+              attachment: "pdf",
+              attempt,
+              success: false,
+              error,
+            });
+          }
+          generated = null as never;
+        }
+
+        if (pdfBuf && generated) {
+          const maxAllowedPages = Math.ceil(generated.rowCount / 20) + 5;
+          if (generated.pageCount > maxAllowedPages) {
+            const error = `PDF safety guard rejected ${generated.pageCount} pages for ${generated.rowCount} rows`;
+            const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
+              claim,
+              attachmentKey: "pdf",
+              error,
+            });
+            if (attempt) {
+              await logScheduledWhatsAppAttachmentResult({
+                claim,
+                recipient: recipientKey,
+                attachment: "pdf",
+                attempt,
+                success: false,
+                error,
+              });
+            }
+          } else {
+            const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "pdf");
+            if (attempt) {
+              const pdfName = `Stock_${company.name.replace(/[^a-z0-9]/gi, "_")}_${reportDate}.pdf`;
+              try {
+                const pdfRes = await sendWhatsAppFileToChatId(chatId, pdfBuf, pdfName, "", "application/pdf");
+                await finishScheduledWhatsAppAttachmentAttempt({
+                  claim,
+                  attachmentKey: "pdf",
+                  success: pdfRes.success,
+                  error: pdfRes.error,
+                });
+                await logScheduledWhatsAppAttachmentResult({
+                  claim,
+                  recipient: recipientKey,
+                  attachment: "pdf",
+                  attempt,
+                  success: pdfRes.success,
+                  error: pdfRes.error,
+                });
+              } catch (error) {
+                await finishScheduledWhatsAppAttachmentAttempt({
+                  claim,
+                  attachmentKey: "pdf",
+                  success: false,
+                  error: getErrorMessage(error),
+                });
+                await logScheduledWhatsAppAttachmentResult({
+                  claim,
+                  recipient: recipientKey,
+                  attachment: "pdf",
+                  attempt,
+                  success: false,
+                  error,
+                });
+              }
+            }
+          }
+        }
+      } finally {
+        if (pdfBuf) await releaseManagedExportAttachment(pdfBuf);
+      }
+    }
+
+    const excelState = claim.attachments.find((attachment) => attachment.key === "excel");
+    if (excelState?.status !== "sent") {
+      let xlsBuf: Awaited<ReturnType<typeof generateNetPositionExcel>> | null = null;
+      try {
+        try {
+          xlsBuf = await generateNetPositionExcel(row.company_id, company.name, yearStart, reportDate);
+        } catch (error) {
+          const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
+            claim,
+            attachmentKey: "excel",
+            error,
+          });
+          if (attempt) {
+            await logScheduledWhatsAppAttachmentResult({
+              claim,
+              recipient: recipientKey,
+              attachment: "excel",
+              attempt,
+              success: false,
+              error,
+            });
+          }
+        }
+
+        if (xlsBuf) {
+          const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "excel");
+          if (attempt) {
+            const xlsName = `NetPosition_${company.name.replace(/[^a-z0-9]/gi, "_")}_${reportDate}.xlsx`;
+            try {
+              const xlsRes = await sendWhatsAppFileToChatId(
+                chatId,
+                xlsBuf,
+                xlsName,
+                "",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              );
+              await finishScheduledWhatsAppAttachmentAttempt({
+                claim,
+                attachmentKey: "excel",
+                success: xlsRes.success,
+                error: xlsRes.error,
+              });
+              await logScheduledWhatsAppAttachmentResult({
+                claim,
+                recipient: recipientKey,
+                attachment: "excel",
+                attempt,
+                success: xlsRes.success,
+                error: xlsRes.error,
+              });
+            } catch (error) {
+              await finishScheduledWhatsAppAttachmentAttempt({
+                claim,
+                attachmentKey: "excel",
+                success: false,
+                error: getErrorMessage(error),
+              });
+              await logScheduledWhatsAppAttachmentResult({
+                claim,
+                recipient: recipientKey,
+                attachment: "excel",
+                attempt,
+                success: false,
+                error,
+              });
+            }
+          }
+        }
+      } finally {
+        if (xlsBuf) await releaseManagedExportAttachment(xlsBuf);
+      }
+    }
+
+    const final = await finalizeScheduledWhatsAppOccurrence(claim);
+    if (final.allSent) {
+      await pool.query(`UPDATE whatsapp_stock_settings SET last_sent_at = now() WHERE id = 1`);
+      logger.info("[StockReport] Occurrence complete — last_sent_at updated.", {
+        occurrenceKey: claim.occurrenceKey,
+        recipient: recipientKey,
+        result: "sent",
+      });
+    } else {
+      logger.warn("[StockReport] Occurrence incomplete — failed attachments remain retryable.", {
+        occurrenceKey: claim.occurrenceKey,
+        recipient: recipientKey,
+        result: final.status,
+        error: final.error,
+      });
+    }
   } catch (err: unknown) {
     logger.error("[StockReport] Error:", { error: getErrorMessage(err) || err });
   }
