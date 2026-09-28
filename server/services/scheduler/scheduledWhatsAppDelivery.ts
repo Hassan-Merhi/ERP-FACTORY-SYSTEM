@@ -37,6 +37,8 @@ export interface ScheduledWhatsAppClaim {
   acquired: boolean;
   status: ScheduledWhatsAppOccurrenceStatus;
   recipientChatId: string;
+  scheduledLocalDate: string;
+  scheduledLocalHour: number;
   claimToken: string | null;
   attachments: ScheduledWhatsAppAttachmentState[];
 }
@@ -94,6 +96,8 @@ async function loadClaim(
     occurrence_key: string;
     status: ScheduledWhatsAppOccurrenceStatus;
     recipient_chat_id: string;
+    scheduled_local_date: string | Date;
+    scheduled_local_hour: number;
     claim_token: string | null;
   },
   acquired: boolean
@@ -104,6 +108,11 @@ async function loadClaim(
     acquired,
     status: row.status,
     recipientChatId: row.recipient_chat_id,
+    scheduledLocalDate:
+      typeof row.scheduled_local_date === "string"
+        ? row.scheduled_local_date.slice(0, 10)
+        : row.scheduled_local_date.toISOString().slice(0, 10),
+    scheduledLocalHour: Number(row.scheduled_local_hour),
     claimToken: row.claim_token,
     attachments: await loadAttachments(client, Number(row.id)),
   };
@@ -161,7 +170,7 @@ export async function claimScheduledWhatsAppOccurrence(
       recipient_chat_id: string;
       claim_token: string | null;
     }>(
-      `SELECT id, occurrence_key, status, recipient_chat_id, claim_token
+      `SELECT id, occurrence_key, status, recipient_chat_id, scheduled_local_date, scheduled_local_hour, claim_token
          FROM scheduled_whatsapp_occurrences
         WHERE occurrence_key = $1
         FOR UPDATE`,
@@ -176,7 +185,7 @@ export async function claimScheduledWhatsAppOccurrence(
             status, claim_token, claim_expires_at
           ) VALUES ($1,$2,$3,$4,$5::date,$6,$7,'claimed',$8,now() + interval '${CLAIM_LEASE_MINUTES} minutes')
           ON CONFLICT (occurrence_key) DO NOTHING
-          RETURNING id, occurrence_key, status, recipient_chat_id, claim_token`,
+          RETURNING id, occurrence_key, status, recipient_chat_id, scheduled_local_date, scheduled_local_hour, claim_token`,
         [
           input.jobType,
           input.companyId ?? null,
@@ -211,7 +220,7 @@ export async function claimScheduledWhatsAppOccurrence(
       }
 
       occurrence = await client.query(
-        `SELECT id, occurrence_key, status, recipient_chat_id, claim_token
+        `SELECT id, occurrence_key, status, recipient_chat_id, scheduled_local_date, scheduled_local_hour, claim_token
            FROM scheduled_whatsapp_occurrences
           WHERE occurrence_key = $1
           FOR UPDATE`,
