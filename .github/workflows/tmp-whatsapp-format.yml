@@ -1,0 +1,57 @@
+name: Temporary WhatsApp Formatter
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  format-whatsapp-files:
+    if: github.head_ref == 'fix/scheduled-whatsapp-delivery-claims'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download repository source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" |
+            tar --extract --gzip --strip-components=1
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24.21.0"
+          cache: npm
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+      - name: Format WhatsApp scheduler files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            server/services/scheduler/maintenance.ts \
+            server/services/scheduler/scheduled-jobs.ts \
+            server/services/scheduler/scheduledWhatsAppDelivery.ts \
+            server/services/scheduler/stock-report.ts \
+            tests/phase33f-maintenance-scheduler.test.ts \
+            tests/scheduled-whatsapp-delivery-claims.test.ts \
+            tests/stock-report-scheduler-reliability.test.ts
+          tar -czf /tmp/formatted-whatsapp-files.tgz \
+            server/services/scheduler/maintenance.ts \
+            server/services/scheduler/scheduled-jobs.ts \
+            server/services/scheduler/scheduledWhatsAppDelivery.ts \
+            server/services/scheduler/stock-report.ts \
+            tests/phase33f-maintenance-scheduler.test.ts \
+            tests/scheduled-whatsapp-delivery-claims.test.ts \
+            tests/stock-report-scheduler-reliability.test.ts
+      - name: Upload formatted files
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: formatted-whatsapp-files
+          path: /tmp/formatted-whatsapp-files.tgz
+          if-no-files-found: error
+          retention-days: 1
