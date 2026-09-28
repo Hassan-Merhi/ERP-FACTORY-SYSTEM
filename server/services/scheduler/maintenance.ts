@@ -11,6 +11,15 @@ import { getExportAttachmentSize } from "../../helpers/exportAttachmentSource";
 
 import { getTodayLabel, runDailyExport } from "./daily-export";
 import { runDailyWhatsAppSend } from "./whatsapp-send";
+import {
+  beginScheduledWhatsAppAttachmentAttempt,
+  claimRetryableScheduledWhatsAppOccurrence,
+  claimScheduledWhatsAppOccurrence,
+  finalizeScheduledWhatsAppOccurrence,
+  finishScheduledWhatsAppAttachmentAttempt,
+  logScheduledWhatsAppAttachmentResult,
+  recordScheduledWhatsAppAttachmentPreparationFailure,
+} from "./scheduledWhatsAppDelivery";
 
 type MixBatchPurgeCandidate = {
   id: number;
@@ -291,35 +300,151 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
     if (!settings?.scheduleEnabled || !settings?.groupChatId) return;
     if (!settings?.instanceId || !settings?.apiToken || !settings?.enabled) return;
 
-    const nowInNewYork = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
-    if (nowInNewYork.getHours() !== settings.scheduleHour) return;
+    const recipientKey = `group:${settings.groupChatId}`;
+    let claim = await claimRetryableScheduledWhatsAppOccurrence({
+      jobType: "containers_report",
+      recipientKey,
+      recipientChatId: settings.groupChatId,
+    });
 
-    // Skip if already sent within the last 12 hours
-    if (settings.lastSentAt) {
-      const hoursSince = (Date.now() - new Date(settings.lastSentAt).getTime()) / (1000 * 60 * 60);
-      if (hoursSince < 12) {
-        logger.info("[ContainersWA] Already sent within 12 h — skipping.");
-        return;
+    if (!claim) {
+      const nowInNewYork = new Date(
+        new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+      );
+      if (nowInNewYork.getHours() !== settings.scheduleHour) return;
+
+      // Preserve the existing 12-hour duplicate-suppression rule for successful sends.
+      if (settings.lastSentAt) {
+        const hoursSince = (Date.now() - new Date(settings.lastSentAt).getTime()) / (1000 * 60 * 60);
+        if (hoursSince < 12) {
+          logger.info("[ContainersWA] Already sent within 12 h — skipping.");
+          return;
+        }
+      }
+
+      const localDate = [
+        nowInNewYork.getFullYear(),
+        String(nowInNewYork.getMonth() + 1).padStart(2, "0"),
+        String(nowInNewYork.getDate()).padStart(2, "0"),
+      ].join("-");
+
+      claim = await claimScheduledWhatsAppOccurrence({
+        jobType: "containers_report",
+        recipientKey,
+        recipientChatId: settings.groupChatId,
+        scheduledLocalDate: localDate,
+        scheduledLocalHour: settings.scheduleHour,
+        attachmentKeys: ["pdf"],
+      });
+    }
+
+    if (!claim?.acquired) {
+      if (claim) {
+        logger.info("[ContainersWA] Occurrence already owned or completed — skipping.", {
+          occurrenceKey: claim.occurrenceKey,
+          recipient: recipientKey,
+          result: claim.status,
+        });
+      }
+      return;
+    }
+
+    const pdfState = claim.attachments.find((attachment) => attachment.key === "pdf");
+    if (pdfState?.status !== "sent") {
+      let generated: Awaited<ReturnType<(typeof import("../../helpers/generateContainersPdf"))["generateContainersPdf"]>> | null =
+        null;
+      try {
+        const { generateContainersPdf } = await import("../../helpers/generateContainersPdf");
+        generated = await generateContainersPdf();
+      } catch (error) {
+        const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
+          claim,
+          attachmentKey: "pdf",
+          error,
+        });
+        if (attempt) {
+          await logScheduledWhatsAppAttachmentResult({
+            claim,
+            recipient: recipientKey,
+            attachment: "pdf",
+            attempt,
+            success: false,
+            error,
+          });
+        }
+      }
+
+      if (generated) {
+        const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "pdf");
+        if (attempt) {
+          const fileName = `Containers_${claim.scheduledLocalDate}.pdf`;
+          try {
+            const result = await sendWhatsAppFileToChatId(
+              settings.groupChatId,
+              generated.buffer,
+              fileName,
+              "",
+              "application/pdf"
+            );
+            await finishScheduledWhatsAppAttachmentAttempt({
+              claim,
+              attachmentKey: "pdf",
+              success: result.success,
+              error: result.error,
+            });
+            await logScheduledWhatsAppAttachmentResult({
+              claim,
+              recipient: recipientKey,
+              attachment: "pdf",
+              attempt,
+              success: result.success,
+              error: result.error,
+            });
+            if (result.success) {
+              logger.info("[ContainersWA] PDF sent.", {
+                occurrenceKey: claim.occurrenceKey,
+                recipient: recipientKey,
+                attachment: "pdf",
+                attempt,
+                result: "sent",
+                rowCount: generated.rowCount,
+              });
+            }
+          } catch (error) {
+            await finishScheduledWhatsAppAttachmentAttempt({
+              claim,
+              attachmentKey: "pdf",
+              success: false,
+              error: getErrorMessage(error),
+            });
+            await logScheduledWhatsAppAttachmentResult({
+              claim,
+              recipient: recipientKey,
+              attachment: "pdf",
+              attempt,
+              success: false,
+              error,
+            });
+          }
+        }
       }
     }
 
-    logger.info("[ContainersWA] Scheduled send triggered.");
-    const { generateContainersPdf } = await import("../../helpers/generateContainersPdf");
-    const { buffer, rowCount } = await generateContainersPdf();
-
-    const today = new Date().toISOString().substring(0, 10);
-    const caption = "";
-    const fileName = `Containers_${today}.pdf`;
-
-    const result = await sendWhatsAppFileToChatId(settings.groupChatId, buffer, fileName, caption, "application/pdf");
-
-    if (result.success) {
+    const final = await finalizeScheduledWhatsAppOccurrence(claim);
+    if (final.allSent) {
       await markContainersWaSent();
-      logger.info(`[ContainersWA] PDF sent to ${settings.groupChatId} — ${rowCount} containers.`);
+      logger.info("[ContainersWA] Occurrence complete — last sent timestamp updated.", {
+        occurrenceKey: claim.occurrenceKey,
+        recipient: recipientKey,
+        result: "sent",
+      });
     } else {
-      logger.error("[ContainersWA] Scheduled send failed:", { error: result.error });
+      logger.warn("[ContainersWA] Occurrence incomplete — retry will target only failed attachments.", {
+        occurrenceKey: claim.occurrenceKey,
+        recipient: recipientKey,
+        result: final.status,
+        error: final.error,
+      });
     }
   } catch (err: unknown) {
     logger.error("[ContainersWA] Error:", { error: getErrorMessage(err) });
