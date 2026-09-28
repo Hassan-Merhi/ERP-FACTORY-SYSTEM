@@ -113,7 +113,7 @@ import { startupMigrations } from "../server/startup-schema";
  * / (user_id, last_seen), appended after stage 028, taking the count from 1363
  * to 1366. Nothing before them moved.
  *
- * Re-pinned for the per-user hidden All Daybook rows (2eb4ffd): one
+ * Re-pinned for stage 030, durable scheduled WhatsApp occurrence and attachment\n * tracking: two tables plus three indexes, appended after stage 029. This takes\n * the composed array from 1371 to 1376 without moving any earlier statement.\n *\n * Re-pinned for the per-user hidden All Daybook rows (2eb4ffd): one
  * ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS
  * hidden_transaction_journal_voucher_ids, added to 001-core-tables-and-columns
  * next to the other user columns, taking the count from 1366 to 1367.
@@ -128,8 +128,8 @@ import { startupMigrations } from "../server/startup-schema";
  * count from 1367 to 1371. Nothing else moved; the rows these statements leave
  * are asserted in tests/factory-permission-canonicalization-migration.test.ts.
  */
-const EXPECTED_STATEMENT_COUNT = 1371;
-const EXPECTED_CONTENT_HASH = "2b91fef354770d28098e7d4fc966a3b01b71f16890f2a9d30055953c58b4f969";
+const EXPECTED_STATEMENT_COUNT = 1376;
+const EXPECTED_CONTENT_HASH = "0d4c56f73919ef79affe3e468eceeda0cdc9a39320748d0ac47cb3c5d88ef3f0";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
