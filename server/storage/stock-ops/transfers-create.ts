@@ -1,4 +1,4 @@
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import {
   addInventoryValues,
@@ -238,17 +238,38 @@ export async function createStockAdjustment(
       accountType: string,
       openingBalanceSide: "Dr" | "Cr"
     ): Promise<number> => {
+      // System adjustment accounts are unique by (company_id, code). A soft-deleted
+      // row still owns that unique key, so filtering deleted rows out and inserting
+      // a replacement raises a unique-constraint error. Reuse/reactivate the
+      // canonical row instead. The upsert also closes the race where two different
+      // vouchers create the system account at the same time.
       let [account] = await tx
         .select()
         .from(schema.ledgerAccounts)
         .where(
           and(
             eq(schema.ledgerAccounts.companyId, location.companyId),
-            eq(schema.ledgerAccounts.code, code),
-            isNull(schema.ledgerAccounts.deletedAt)
+            eq(schema.ledgerAccounts.code, code)
           )
         )
         .limit(1);
+
+      if (account?.deletedAt || account?.active === false) {
+        [account] = await tx
+          .update(schema.ledgerAccounts)
+          .set({
+            name,
+            accountType,
+            subType: accountType,
+            openingBalanceSide,
+            active: true,
+            isHidden: false,
+            deletedAt: null,
+          })
+          .where(eq(schema.ledgerAccounts.id, account.id))
+          .returning();
+      }
+
       if (!account) {
         [account] = await tx
           .insert(schema.ledgerAccounts)
@@ -260,6 +281,18 @@ export async function createStockAdjustment(
             subType: accountType,
             openingBalance: "0",
             openingBalanceSide,
+          })
+          .onConflictDoUpdate({
+            target: [schema.ledgerAccounts.companyId, schema.ledgerAccounts.code],
+            set: {
+              name,
+              accountType,
+              subType: accountType,
+              openingBalanceSide,
+              active: true,
+              isHidden: false,
+              deletedAt: null,
+            },
           })
           .returning();
       }
