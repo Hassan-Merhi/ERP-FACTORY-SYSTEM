@@ -269,9 +269,12 @@ export async function claimRetryableScheduledWhatsAppOccurrence(input: {
       occurrence_key: string;
       status: ScheduledWhatsAppOccurrenceStatus;
       recipient_chat_id: string;
+      scheduled_local_date: string | Date;
+      scheduled_local_hour: number;
       claim_token: string | null;
     }>(
-      `SELECT o.id, o.occurrence_key, o.status, o.recipient_chat_id, o.claim_token
+      `SELECT o.id, o.occurrence_key, o.status, o.recipient_chat_id,
+              o.scheduled_local_date, o.scheduled_local_hour, o.claim_token
          FROM scheduled_whatsapp_occurrences o
         WHERE o.job_type = $1
           AND o.company_id IS NOT DISTINCT FROM $2::integer
