@@ -158,9 +158,8 @@ export async function checkAndRunStockReport(): Promise<void> {
         if (pdfBuf && generated) {
           const maxAllowedPages = Math.ceil(generated.rowCount / 20) + 5;
           if (generated.pageCount > maxAllowedPages) {
-            const error = new Error(
-              `PDF safety guard rejected ${generated.pageCount} pages for ${generated.rowCount} rows`
-            );
+            const error =
+              `PDF safety guard rejected ${generated.pageCount} pages for ${generated.rowCount} rows`;
             const attempt = await recordScheduledWhatsAppAttachmentPreparationFailure({
               claim,
               attachmentKey: "pdf",
