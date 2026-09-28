@@ -252,7 +252,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
                 quantity: item.quantity,
                 rate: item.rate,
               })),
-              allowNegativeInventory: allowNegativeInventory === true,
+              allowNegativeInventory: allowNegativeInventory !== false,
             });
           }
 
@@ -326,6 +326,9 @@ export function registerStockTransferCreateRoutes(app: Express) {
       }
 
       // Original flow: Use existing voucher (voucherId required)
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
       if (!voucherId) {
         return res.status(400).json({ message: "Either voucherId or sourceLocationId is required" });
       }
@@ -406,8 +409,8 @@ export function registerStockTransferCreateRoutes(app: Express) {
         notes || "",
         itemsWithRate,
         {
-          allowNegativeInventory: allowNegativeInventory === true,
-          activeCompanyId: companyId ?? undefined,
+          allowNegativeInventory: allowNegativeInventory !== false,
+          activeCompanyId: companyId,
         }
       );
 
