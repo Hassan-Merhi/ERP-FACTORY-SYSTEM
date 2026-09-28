@@ -1,7 +1,9 @@
 name: Temporary PR 1890 formatter
-# trigger formatter
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - tmp/format-pr1890
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   format:
+    if: github.head_ref == 'tmp/format-pr1890' || github.ref == 'refs/heads/tmp/format-pr1890'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +22,9 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 24.19.0
+          node-version: 24.21.0
           cache: npm
-      - run: npm ci --ignore-scripts
+      - run: npm ci --no-audit --bin-links=true
       - name: Format PR files
         run: |
           node node_modules/prettier/bin/prettier.cjs --write \
