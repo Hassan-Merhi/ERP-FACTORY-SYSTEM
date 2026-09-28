@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import {
   addInventoryValues,
@@ -16,6 +16,7 @@ import { createDatabaseStockMovementAdapter } from "../../services/inventory/dat
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
 import { lockInventoryRow } from "../inventoryRowLock";
+import { adjustInventory } from "../../inventoryHelper";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -51,17 +52,248 @@ export class DuplicateStockTransferError extends Error {
   }
 }
 
+export class StockTransferPolicyError extends Error {
+  constructor(
+    readonly code: "STOCK_TRANSFER_SCOPE_INVALID" | "STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED",
+    message: string
+  ) {
+    super(message);
+    this.name = "StockTransferPolicyError";
+  }
+}
+
+type TransferMovementItem = {
+  sourceLocationId: number;
+  stockItemId: number;
+  quantity: string;
+  rate: string;
+};
+
+function groupTransferMovementItems(items: TransferMovementItem[]): TransferMovementItem[] {
+  const grouped = new Map<
+    string,
+    {
+      sourceLocationId: number;
+      stockItemId: number;
+      quantity: ReturnType<typeof toInventoryDecimal>;
+      value: ReturnType<typeof toInventoryDecimal>;
+    }
+  >();
+
+  for (const item of items) {
+    const quantity = toInventoryDecimal(item.quantity);
+    const rate = toInventoryDecimal(item.rate);
+    const key = `${item.sourceLocationId}:${item.stockItemId}`;
+    const existing = grouped.get(key);
+    const value = multiplyInventoryValues(quantity, rate);
+    if (existing) {
+      existing.quantity = addInventoryValues(existing.quantity, quantity);
+      existing.value = addInventoryValues(existing.value, value);
+    } else {
+      grouped.set(key, {
+        sourceLocationId: item.sourceLocationId,
+        stockItemId: item.stockItemId,
+        quantity,
+        value,
+      });
+    }
+  }
+
+  return Array.from(grouped.values())
+    .sort((a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId)
+    .map((item) => ({
+      sourceLocationId: item.sourceLocationId,
+      stockItemId: item.stockItemId,
+      quantity: inventoryQuantity(item.quantity),
+      rate: inventoryUnitCost(item.quantity.isZero() ? toInventoryDecimal(0) : item.value.dividedBy(item.quantity)),
+    }));
+}
+
+export async function assertTransferCompanyScopeTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  companyId: number,
+  destinationLocationId: number,
+  items: TransferMovementItem[]
+): Promise<void> {
+  const locationIds = Array.from(new Set([destinationLocationId, ...items.map((item) => item.sourceLocationId)]));
+  const validLocations = await tx
+    .select({ id: schema.locations.id })
+    .from(schema.locations)
+    .where(
+      and(
+        eq(schema.locations.companyId, companyId),
+        inArray(schema.locations.id, locationIds),
+        isNull(schema.locations.deletedAt)
+      )
+    );
+  if (validLocations.length !== locationIds.length) {
+    throw new StockTransferPolicyError(
+      "STOCK_TRANSFER_SCOPE_INVALID",
+      "One or more transfer locations do not belong to the active company"
+    );
+  }
+
+  const stockItemIds = Array.from(new Set(items.map((item) => item.stockItemId)));
+  const validItems = await tx
+    .select({ id: schema.stockItems.id })
+    .from(schema.stockItems)
+    .where(
+      and(
+        eq(schema.stockItems.companyId, companyId),
+        inArray(schema.stockItems.id, stockItemIds),
+        isNull(schema.stockItems.deletedAt)
+      )
+    );
+  if (validItems.length !== stockItemIds.length) {
+    throw new StockTransferPolicyError(
+      "STOCK_TRANSFER_SCOPE_INVALID",
+      "One or more stock items do not belong to the active company"
+    );
+  }
+}
+
+/**
+ * Canonical stock-transfer movement path shared by both create routes.
+ *
+ * Every existing inventory row is locked before the first mutation. A missing
+ * source is treated as a zero balance: it can become a negative row only when
+ * the caller explicitly permits negative stock, otherwise the whole transaction
+ * is rejected before either side changes.
+ */
+export async function applyStockTransferInventoryTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: {
+    companyId: number;
+    transferId: number;
+    sourceVoucherId: number;
+    destinationLocationId: number;
+    items: TransferMovementItem[];
+    allowNegativeInventory: boolean;
+  }
+): Promise<void> {
+  const movementItems = groupTransferMovementItems(input.items);
+  await assertTransferCompanyScopeTx(tx, input.companyId, input.destinationLocationId, movementItems);
+
+  const lockKeys = new Map<string, { locationId: number; stockItemId: number }>();
+  for (const item of movementItems) {
+    lockKeys.set(`${item.sourceLocationId}:${item.stockItemId}`, {
+      locationId: item.sourceLocationId,
+      stockItemId: item.stockItemId,
+    });
+    lockKeys.set(`${input.destinationLocationId}:${item.stockItemId}`, {
+      locationId: input.destinationLocationId,
+      stockItemId: item.stockItemId,
+    });
+  }
+
+  const lockedRows = new Map<string, Awaited<ReturnType<typeof lockInventoryRow>>>();
+  const orderedLocks = Array.from(lockKeys.values()).sort(
+    (a, b) => a.locationId - b.locationId || a.stockItemId - b.stockItemId
+  );
+  for (const key of orderedLocks) {
+    lockedRows.set(`${key.locationId}:${key.stockItemId}`, await lockInventoryRow(tx, key.locationId, key.stockItemId));
+  }
+
+  if (!input.allowNegativeInventory) {
+    for (const item of movementItems) {
+      const source = lockedRows.get(`${item.sourceLocationId}:${item.stockItemId}`);
+      const available = toInventoryDecimal(source?.quantity ?? "0");
+      const required = toInventoryDecimal(item.quantity);
+      if (available.lessThan(required)) {
+        throw new StockTransferPolicyError(
+          "STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED",
+          `Location ${item.sourceLocationId} has ${inventoryQuantity(available)} available for stock item ${item.stockItemId}, but ${inventoryQuantity(required)} is required`
+        );
+      }
+    }
+  }
+
+  for (const item of movementItems) {
+    const quantity = toInventoryDecimal(item.quantity);
+    const rate = toInventoryDecimal(item.rate);
+
+    const sourceWasMissing = !lockedRows.get(`${item.sourceLocationId}:${item.stockItemId}`);
+
+    // Passing the historical transfer rate creates the negative layer with the
+    // correct valuation basis. adjustInventory intentionally seeds a first-touch
+    // negative inventory row at a zero average rate, so for transfers only we
+    // restore the transfer's historical rate as the row's cost memory as well.
+    await adjustInventory(
+      tx,
+      item.sourceLocationId,
+      item.stockItemId,
+      quantity.negated().toNumber(),
+      input.companyId,
+      rate.toNumber(),
+      "Stock Transfer",
+      input.sourceVoucherId
+    );
+    if (sourceWasMissing) {
+      await tx
+        .update(schema.inventory)
+        .set({
+          averageRate: inventoryUnitCost(rate),
+          totalValue: inventoryMoney(toInventoryDecimal(0)),
+          lastUpdated: new Date(),
+        })
+        .where(
+          and(
+            eq(schema.inventory.companyId, input.companyId),
+            eq(schema.inventory.locationId, item.sourceLocationId),
+            eq(schema.inventory.stockItemId, item.stockItemId)
+          )
+        );
+    }
+
+    await adjustInventory(
+      tx,
+      input.destinationLocationId,
+      item.stockItemId,
+      quantity.toNumber(),
+      input.companyId,
+      rate.toNumber(),
+      "Stock Transfer",
+      input.sourceVoucherId
+    );
+
+    await postStockMovementTx(
+      tx,
+      {
+        companyId: input.companyId,
+        stockItemId: item.stockItemId,
+        kind: "transfer",
+        quantity: inventoryQuantity(quantity),
+        unitCost: inventoryUnitCost(rate),
+        fromLocationId: item.sourceLocationId,
+        toLocationId: input.destinationLocationId,
+        occurredAt: new Date().toISOString(),
+        source: {
+          sourceType: "stock-transfer",
+          sourceId: String(input.transferId),
+          idempotencyKey: `stock-transfer:${input.transferId}:${item.stockItemId}:${item.sourceLocationId}:${input.destinationLocationId}`,
+        },
+        allowNegativeStock: true,
+      },
+      canonicalStockMovementAdapter
+    );
+  }
+}
+
 export async function createStockTransfer(
   voucherId: number,
   destinationLocationId: number,
   notes: string,
-  items: Array<{ sourceLocationId: number; stockItemId: number; quantity: string; rate: string }>
+  items: TransferMovementItem[],
+  options: { allowNegativeInventory?: boolean; activeCompanyId?: number } = {}
 ) {
   return await db.transaction(async (tx) => {
     // The lock makes the duplicate check below decisive: two submissions for the
     // same voucher are ordered, and the second one finds the first one's row.
     const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, voucherId)).for("update");
     if (!voucher) throw new Error(`Voucher ${voucherId} not found`);
+    if (options.activeCompanyId !== undefined && voucher.companyId !== options.activeCompanyId) {
+      throw new StockTransferPolicyError("STOCK_TRANSFER_SCOPE_INVALID", "Voucher belongs to a different company");
+    }
     const isOptional = voucher.optional;
 
     const [duplicate] = await tx
@@ -73,13 +305,37 @@ export async function createStockTransfer(
 
     if (!items || items.length === 0) throw new Error("No items provided for stock transfer");
 
-    const sortedTransferItems = [...items].sort((a, b) => a.stockItemId - b.stockItemId);
+    const sortedTransferItems = [...items].sort(
+      (a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId
+    );
+
+    // Resolve historical transfer cost from the locked source row whenever it
+    // exists. The browser can display/submit a rounded rate, but that must not
+    // become the accounting source of truth. A genuinely missing source has no
+    // inventory cost to read, so its submitted rate is retained as the cost
+    // memory used when an explicitly permitted negative row is created.
+    const costedTransferItems: TransferMovementItem[] = [];
+    for (const item of sortedTransferItems) {
+      const sourceInventory = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
+      costedTransferItems.push({
+        ...item,
+        rate: String(sourceInventory?.average_rate ?? item.rate ?? "0"),
+      });
+    }
+
+    // Validate tenant ownership before writing the transfer header. This is
+    // repeated by the movement helper immediately before applying stock so both
+    // document-only (optional) and posted transfers share the same boundary.
+    await assertTransferCompanyScopeTx(tx, voucher.companyId, destinationLocationId, costedTransferItems);
 
     const [transfer] = await tx
       .insert(schema.stockTransferVouchers)
       .values({
         voucherId,
-        sourceLocationId: items[0].sourceLocationId,
+        sourceLocationId:
+          new Set(costedTransferItems.map((item) => item.sourceLocationId)).size === 1
+            ? costedTransferItems[0].sourceLocationId
+            : null,
         destinationLocationId,
         notes,
         inventoryApplied: !isOptional,
@@ -87,10 +343,12 @@ export async function createStockTransfer(
       .returning();
 
     const transferItems: StockTransferItem[] = [];
-    for (const item of sortedTransferItems) {
+    let totalAmount = toInventoryDecimal(0);
+    for (const item of costedTransferItems) {
       const quantity = toInventoryDecimal(item.quantity);
       const rate = toInventoryDecimal(item.rate);
-      const totalAmount = multiplyInventoryValues(quantity, rate);
+      const lineTotal = multiplyInventoryValues(quantity, rate);
+      totalAmount = addInventoryValues(totalAmount, lineTotal);
 
       const [transferItem] = await tx
         .insert(schema.stockTransferItems)
@@ -100,103 +358,39 @@ export async function createStockTransfer(
           sourceLocationId: item.sourceLocationId,
           quantity: inventoryQuantity(quantity),
           rate: inventoryUnitCost(rate),
-          totalAmount: inventoryMoney(totalAmount),
+          totalAmount: inventoryMoney(lineTotal),
         })
         .returning();
 
       transferItems.push(transferItem);
-
-      if (!isOptional) {
-        const sourceInventory = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
-
-        if (sourceInventory) {
-          const currentQty = toInventoryDecimal(sourceInventory.quantity);
-          const currentRate = toInventoryDecimal(sourceInventory.average_rate);
-          const newQty = subtractInventoryValues(currentQty, quantity);
-          const newValue = newQty.isPositive() ? multiplyInventoryValues(newQty, currentRate) : toInventoryDecimal(0);
-
-          await tx
-            .update(schema.inventory)
-            .set({
-              quantity: inventoryQuantity(newQty),
-              averageRate: inventoryUnitCost(currentRate),
-              totalValue: inventoryMoney(newValue),
-              lastUpdated: new Date(),
-            })
-            .where(eq(schema.inventory.id, sourceInventory.id));
-        }
-
-        const destInventory = await lockInventoryRow(tx, destinationLocationId, item.stockItemId);
-
-        if (destInventory) {
-          const currentQty = toInventoryDecimal(destInventory.quantity);
-          const currentRate = toInventoryDecimal(destInventory.average_rate);
-          const newQty = addInventoryValues(currentQty, quantity);
-          const newRate = weightedAverageInventoryCost(currentQty, currentRate, quantity, rate);
-          const newValue = multiplyInventoryValues(newQty, newRate);
-
-          await tx
-            .update(schema.inventory)
-            .set({
-              quantity: inventoryQuantity(newQty),
-              averageRate: inventoryUnitCost(newRate),
-              totalValue: inventoryMoney(newValue),
-              lastUpdated: new Date(),
-            })
-            .where(eq(schema.inventory.id, destInventory.id));
-        } else {
-          const [destLocation] = await tx
-            .select()
-            .from(schema.locations)
-            .where(eq(schema.locations.id, destinationLocationId));
-          if (!destLocation) throw new Error(`Destination location ${destinationLocationId} not found`);
-
-          await tx.insert(schema.inventory).values({
-            companyId: destLocation.companyId,
-            locationId: destinationLocationId,
-            stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(quantity),
-            averageRate: inventoryUnitCost(rate),
-            totalValue: inventoryMoney(totalAmount),
-            lastUpdated: new Date(),
-          });
-        }
-
-        // Canonical evidence for this leg, written inside the same transaction
-        // that applied the inventory above. Reconciliation compares the transfer
-        // document against these rows, so evidence and effect commit or roll
-        // back together — a transfer can never appear in one and not the other.
-        //
-        // A leg whose source and destination are the same location moves no
-        // stock between locations and has no balanced issue/receipt pair to
-        // record; reconciliation surfaces such a document as unevidenced rather
-        // than this path inventing a movement that did not happen.
-        if (item.sourceLocationId !== destinationLocationId) {
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: voucher.companyId,
-              stockItemId: item.stockItemId,
-              kind: "transfer",
-              quantity: inventoryQuantity(quantity),
-              unitCost: inventoryUnitCost(rate),
-              fromLocationId: item.sourceLocationId,
-              toLocationId: destinationLocationId,
-              occurredAt: new Date().toISOString(),
-              source: {
-                sourceType: "stock-transfer",
-                sourceId: String(transfer.id),
-                idempotencyKey: `stock-transfer:${transfer.id}:${item.stockItemId}`,
-              },
-              // The journal records what the transfer did; it does not add a
-              // negative-stock rule the transfer itself does not enforce.
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
-      }
     }
+
+    if (!isOptional) {
+      await applyStockTransferInventoryTx(tx, {
+        companyId: voucher.companyId,
+        transferId: transfer.id,
+        sourceVoucherId: voucherId,
+        destinationLocationId,
+        items: transferItems.map((item) => ({
+          sourceLocationId: item.sourceLocationId!,
+          stockItemId: item.stockItemId,
+          quantity: item.quantity,
+          rate: item.rate,
+        })),
+        // Internal callers historically permitted negative stock. HTTP callers
+        // pass the explicit UI policy through options, so this default preserves
+        // old storage-level behavior without weakening the route.
+        allowNegativeInventory: options.allowNegativeInventory ?? true,
+      });
+    }
+
+    await tx
+      .update(schema.vouchers)
+      .set({
+        description: notes || null,
+        totalAmount: inventoryMoney(totalAmount),
+      })
+      .where(eq(schema.vouchers.id, voucherId));
 
     return { transfer, items: transferItems };
   });
