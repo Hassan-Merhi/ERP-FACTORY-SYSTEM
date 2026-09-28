@@ -75,10 +75,9 @@ function legacyBody(
 }
 
 async function transferForVoucher(voucherId: number): Promise<{ id: number } | null> {
-  const { rows } = await pool.query<{ id: number }>(
-    "SELECT id FROM stock_transfer_vouchers WHERE voucher_id = $1",
-    [voucherId]
-  );
+  const { rows } = await pool.query<{ id: number }>("SELECT id FROM stock_transfer_vouchers WHERE voucher_id = $1", [
+    voucherId,
+  ]);
   return rows[0] ?? null;
 }
 
@@ -156,13 +155,13 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     ]);
 
     const voucherId = await createVoucher();
-    const res = await agent.post("/api/stock-transfers").send(
-      legacyBody(
-        voucherId,
-        [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "4.000", rate: "12.34" }],
-        { allowNegativeInventory: true }
-      )
-    );
+    const res = await agent
+      .post("/api/stock-transfers")
+      .send(
+        legacyBody(voucherId, [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "4.000", rate: "12.34" }], {
+          allowNegativeInventory: true,
+        })
+      );
 
     expect(res.status).toBe(201);
     const source = await inventoryRow(ctx.locationId, stockItemId);
@@ -194,13 +193,13 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     const voucherId = await createVoucher("unchanged before rejection");
     const beforeVoucher = await voucherState(voucherId);
 
-    const res = await agent.post("/api/stock-transfers").send(
-      legacyBody(
-        voucherId,
-        [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "1.000", rate: "8.75" }],
-        { allowNegativeInventory: false }
-      )
-    );
+    const res = await agent
+      .post("/api/stock-transfers")
+      .send(
+        legacyBody(voucherId, [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "1.000", rate: "8.75" }], {
+          allowNegativeInventory: false,
+        })
+      );
 
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED");
@@ -294,11 +293,11 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
   it("writes balanced canonical source and destination journal rows in the same transfer", async () => {
     const stockItemId = ctx.stockItemIds[0];
     const voucherId = await createVoucher();
-    const res = await agent.post("/api/stock-transfers").send(
-      legacyBody(voucherId, [
-        { stockItemId, sourceLocationId: ctx.locationId, quantity: "7.000", rate: "10.00" },
-      ])
-    );
+    const res = await agent
+      .post("/api/stock-transfers")
+      .send(
+        legacyBody(voucherId, [{ stockItemId, sourceLocationId: ctx.locationId, quantity: "7.000", rate: "10.00" }])
+      );
 
     expect(res.status).toBe(201);
     const transferId = Number(res.body.transfer.id);
@@ -330,11 +329,11 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     );
     const journalBefore = Number(journalBeforeRows[0].count);
 
-    const res = await agent.post("/api/stock-transfers").send(
-      legacyBody(voucherId, [
-        { stockItemId, sourceLocationId: foreignLocationId, quantity: "1.000", rate: "10.00" },
-      ])
-    );
+    const res = await agent
+      .post("/api/stock-transfers")
+      .send(
+        legacyBody(voucherId, [{ stockItemId, sourceLocationId: foreignLocationId, quantity: "1.000", rate: "10.00" }])
+      );
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("STOCK_TRANSFER_SCOPE_INVALID");
