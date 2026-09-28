@@ -381,12 +381,7 @@ export async function updateStockAdjustment(
       let [account] = await tx
         .select()
         .from(schema.ledgerAccounts)
-        .where(
-          and(
-            eq(schema.ledgerAccounts.companyId, newLocation.companyId),
-            eq(schema.ledgerAccounts.code, code)
-          )
-        )
+        .where(and(eq(schema.ledgerAccounts.companyId, newLocation.companyId), eq(schema.ledgerAccounts.code, code)))
         .limit(1);
 
       if (account?.deletedAt || account?.active === false) {
