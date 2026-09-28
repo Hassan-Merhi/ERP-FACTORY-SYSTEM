@@ -291,10 +291,17 @@ export async function claimRetryableScheduledWhatsAppOccurrence(input: {
           AND o.recipient_chat_id = $4
           AND o.created_at >= now() - interval '${RETRY_LOOKBACK_HOURS} hours'
           AND (
-            o.status IN ('partial', 'failed')
+            (
+              o.status IN ('partial', 'failed')
+              AND (o.claim_token IS NULL OR o.claim_expires_at < now())
+            )
             OR (
               o.status = 'claimed'
               AND o.delivery_started_at IS NULL
+              AND o.claim_expires_at < now()
+            )
+            OR (
+              o.status = 'delivering'
               AND o.claim_expires_at < now()
             )
           )
