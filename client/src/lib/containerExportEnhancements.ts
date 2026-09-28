@@ -11,6 +11,12 @@ interface ContainerExportLineItem {
 }
 
 interface ContainerExportPurchaseOrder {
+  freight?: string | number | null;
+  surcharge?: string | number | null;
+  fumigation?: string | number | null;
+  documentCharges?: string | number | null;
+  discount?: string | number | null;
+  otherCharges?: string | number | null;
   lineItems?: ContainerExportLineItem[] | null;
 }
 
@@ -44,6 +50,35 @@ let workbookEnhancementInstalled = false;
 function parseNumber(value: unknown): number {
   const parsed = Number.parseFloat(String(value ?? "0").replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function collectFullExportCharges(
+  data: ContainerExportPayload | null
+): Array<{ label: string; amount: number }> {
+  let freight = 0;
+  let surcharge = 0;
+  let fumigation = 0;
+  let documentCharges = 0;
+  let discount = 0;
+  let otherCharges = 0;
+
+  for (const purchaseOrder of data?.purchaseOrders || []) {
+    freight += parseNumber(purchaseOrder.freight);
+    surcharge += parseNumber(purchaseOrder.surcharge);
+    fumigation += parseNumber(purchaseOrder.fumigation);
+    documentCharges += parseNumber(purchaseOrder.documentCharges);
+    discount += parseNumber(purchaseOrder.discount);
+    otherCharges += parseNumber(purchaseOrder.otherCharges);
+  }
+
+  return [
+    { label: "FREIGHT", amount: freight },
+    { label: "SURCHARGE", amount: surcharge },
+    { label: "FUMIGATION", amount: fumigation },
+    { label: "DOCUMENT CHARGES", amount: documentCharges },
+    { label: "OTHER CHARGES", amount: otherCharges },
+    { label: "DISCOUNT", amount: -discount },
+  ].filter((charge) => Math.abs(charge.amount) > 0.0000001);
 }
 
 function currentContainerId(): string | null {
@@ -202,8 +237,8 @@ function prepareFullExportSheet(
       applyBorder(cell);
     });
     row.getCell(4).numFmt = "#,##0.###";
-    row.getCell(5).numFmt = "#,##0.00####";
-    row.getCell(6).numFmt = "#,##0.00";
+    row.getCell(5).numFmt = "#,##0.##";
+    row.getCell(6).numFmt = "#,##0.##";
   });
 
   const totalRowNumber = 4 + rows.length;
@@ -221,7 +256,52 @@ function prepareFullExportSheet(
     applyBorder(cell);
   });
   totalRow.getCell(4).numFmt = "#,##0.###";
-  totalRow.getCell(6).numFmt = "#,##0.00";
+  totalRow.getCell(6).numFmt = "#,##0.##";
+
+  const charges = collectFullExportCharges(metadata);
+  let finalRowNumber = totalRowNumber;
+  if (charges.length > 0) {
+    finalRowNumber += 1;
+    const chargesHeaderRow = worksheet.getRow(finalRowNumber);
+    chargesHeaderRow.getCell(4).value = "EXTRA CHARGES";
+    worksheet.mergeCells(`D${finalRowNumber}:F${finalRowNumber}`);
+    styleHeaderRow(chargesHeaderRow);
+
+    for (const charge of charges) {
+      finalRowNumber += 1;
+      const row = worksheet.getRow(finalRowNumber);
+      row.getCell(4).value = charge.label;
+      worksheet.mergeCells(`D${finalRowNumber}:E${finalRowNumber}`);
+      row.getCell(6).value = charge.amount;
+      row.height = 21;
+      row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+        cell.font = { size: 10, color: { argb: "FF172033" } };
+        cell.alignment = {
+          horizontal: columnNumber === 4 ? "left" : columnNumber === 6 ? "right" : "center",
+          vertical: "middle",
+        };
+        applyBorder(cell);
+      });
+      row.getCell(6).numFmt = "#,##0.##";
+    }
+
+    finalRowNumber += 1;
+    const chargesTotalRow = worksheet.getRow(finalRowNumber);
+    chargesTotalRow.getCell(4).value = "TOTAL EXTRA CHARGES";
+    worksheet.mergeCells(`D${finalRowNumber}:E${finalRowNumber}`);
+    chargesTotalRow.getCell(6).value = charges.reduce((sum, charge) => sum + charge.amount, 0);
+    chargesTotalRow.height = 23;
+    chargesTotalRow.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFBDD7EE" } };
+      cell.font = { bold: true, color: { argb: "FF172033" }, size: 10 };
+      cell.alignment = {
+        horizontal: columnNumber === 4 ? "left" : columnNumber === 6 ? "right" : "center",
+        vertical: "middle",
+      };
+      applyBorder(cell);
+    });
+    chargesTotalRow.getCell(6).numFmt = "#,##0.##";
+  }
 
   worksheet.views = [{ state: "frozen", xSplit: 0, ySplit: 3 }];
   worksheet.pageSetup.orientation = "portrait";
@@ -229,7 +309,7 @@ function prepareFullExportSheet(
   worksheet.pageSetup.fitToWidth = 1;
   worksheet.pageSetup.fitToHeight = 0;
   worksheet.pageSetup.horizontalCentered = true;
-  worksheet.pageSetup.printArea = `A1:F${totalRowNumber}`;
+  worksheet.pageSetup.printArea = `A1:F${finalRowNumber}`;
   worksheet.pageSetup.printTitlesRow = "1:3";
   worksheet.pageSetup.margins = {
     left: 0.2,
