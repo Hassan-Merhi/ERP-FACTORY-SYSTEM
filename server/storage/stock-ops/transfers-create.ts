@@ -284,7 +284,7 @@ export async function createStockTransfer(
     // inventory cost to read, so its submitted rate is retained as the cost
     // memory used when an explicitly permitted negative row is created.
     const costedTransferItems: TransferMovementItem[] = [];
-    for (const item of costedTransferItems) {
+    for (const item of sortedTransferItems) {
       const sourceInventory = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
       costedTransferItems.push({
         ...item,
@@ -313,7 +313,7 @@ export async function createStockTransfer(
 
     const transferItems: StockTransferItem[] = [];
     let totalAmount = toInventoryDecimal(0);
-    for (const item of sortedTransferItems) {
+    for (const item of costedTransferItems) {
       const quantity = toInventoryDecimal(item.quantity);
       const rate = toInventoryDecimal(item.rate);
       const lineTotal = multiplyInventoryValues(quantity, rate);
