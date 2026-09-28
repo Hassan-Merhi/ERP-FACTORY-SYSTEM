@@ -61,7 +61,7 @@ export async function journalStockTransferLeg(
       source: {
         sourceType: STOCK_TRANSFER_SOURCE_TYPE,
         sourceId: String(input.transferId),
-        idempotencyKey: `${STOCK_TRANSFER_SOURCE_TYPE}:${input.transferId}:rev${input.revision}:${input.phase}:${input.leg.stockItemId}`,
+        idempotencyKey: `${STOCK_TRANSFER_SOURCE_TYPE}:${input.transferId}:rev${input.revision}:${input.phase}:${input.leg.stockItemId}:${input.fromLocationId}:${input.toLocationId}`,
       },
       // The journal records what the transfer did. Stock transfers deliberately
       // permit negative inventory, and evidence must not impose a rule the
