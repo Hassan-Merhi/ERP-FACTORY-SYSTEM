@@ -53,16 +53,33 @@ describe("ExportCenterHelpers behavioral formatting", () => {
   it("describes disabled, daily, monthly, weekly, and future schedules", () => {
     expect(scheduleLabel(undefined)).toBe("");
     expect(scheduleLabel({ enabled: true, autoSend: false } as any)).toBe("");
-    expect(scheduleLabel({ enabled: true, autoSend: true, frequency: "daily", sendHour: 0 } as any))
-      .toBe("Daily at 12:00 AM EST");
-    expect(scheduleLabel({ enabled: true, autoSend: true, frequency: "monthly", sendHour: 12 } as any))
-      .toBe("Monthly (1st) at 12:00 PM EST");
-    expect(scheduleLabel({ enabled: true, autoSend: true, frequency: "weekly", sendHour: 18, sendDayOfWeek: 5 } as any))
-      .toBe("Every Friday at 6:00 PM EST");
-    expect(scheduleLabel({ enabled: true, autoSend: true, frequency: "weekly", sendHour: 18, sendDayOfWeek: 99 } as any))
-      .toBe("Every Monday at 6:00 PM EST");
-    expect(scheduleLabel({ enabled: true, autoSend: true, frequency: "yearly", sendHour: 18 } as any))
-      .toBe("Auto-Send On");
+    expect(
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "daily", sendHour: 0 } as any)
+    ).toBe("Daily at 12:00 AM EST");
+    expect(
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "monthly", sendHour: 12 } as any)
+    ).toBe("Monthly (1st) at 12:00 PM EST");
+    expect(
+      scheduleLabel({
+        enabled: true,
+        autoSend: true,
+        frequency: "weekly",
+        sendHour: 18,
+        sendDayOfWeek: 5,
+      } as any)
+    ).toBe("Every Friday at 6:00 PM EST");
+    expect(
+      scheduleLabel({
+        enabled: true,
+        autoSend: true,
+        frequency: "weekly",
+        sendHour: 18,
+        sendDayOfWeek: 99,
+      } as any)
+    ).toBe("Every Monday at 6:00 PM EST");
+    expect(
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "yearly", sendHour: 18 } as any)
+    ).toBe("Auto-Send On");
   });
 
   it("returns a parseable localized timestamp and the current-year export range", () => {
