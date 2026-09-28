@@ -292,9 +292,45 @@ describe("supplier proforma route behavior", () => {
     expect(res.body).toMatchObject({ id: 10, reference: "PF-NEW", lines: expect.any(Array) });
   });
 
-  it("answers 404 when the supplier does not exist in the active company", async () => {
-    // No supplier row queued, so the lookup finds nothing. Before this check
-    // the insert went ahead and failed its foreign key as a 500.
+  it("allows a child company to create a proforma for a supplier owned by its linked parent", async () => {
+    // Zambia-style child-company flow: the supplier master belongs to the
+    // explicitly linked parent, while the proforma itself belongs to the child.
+    harness.executeResults.push([{ id: 23 }]);
+    harness.insertResults.push([
+      { id: 11, companyId: 19, supplierId: 23, reference: "RV", notes: null },
+    ]);
+    harness.selectResults.push([]);
+    const res = resHarness();
+
+    await routes.get("POST /api/suppliers/:supplierId/proformas")!(
+      req({
+        session: { currentCompanyId: 19, userId: "admin-1", username: "admin" },
+        params: { supplierId: "23" },
+        body: { reference: "RV" },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toMatchObject({ id: 11, companyId: 19, supplierId: 23, reference: "RV" });
+    expect(harness.insertedValues).toContainEqual(
+      expect.objectContaining({
+        values: expect.objectContaining({ companyId: 19, supplierId: 23, reference: "RV" }),
+      })
+    );
+
+    const supplierLookup = harness.db.execute.mock.calls[0]?.[0] as {
+      strings?: string[];
+      values?: unknown[];
+    };
+    expect(supplierLookup.strings?.join(" ")).toContain("active_company.parent_company_id");
+    expect(supplierLookup.strings?.join(" ")).toContain("s.deleted_at IS NULL");
+    expect(supplierLookup.values).toEqual([19, 23, 19]);
+  });
+
+  it("answers 404 when the supplier is outside the active company and linked parent scope", async () => {
+    // No supplier row queued, so neither the active company nor its explicit
+    // parent owns the supplier. The insert must not run.
     const res = resHarness();
     await routes.get("POST /api/suppliers/:supplierId/proformas")!(
       req({ params: { supplierId: "2" }, body: { reference: "PF-NEW" } }),
