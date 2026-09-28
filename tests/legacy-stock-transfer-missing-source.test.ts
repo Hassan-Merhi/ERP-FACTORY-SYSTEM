@@ -210,7 +210,7 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     expect(await voucherState(voucherId)).toEqual(beforeVoucher);
   }, 60000);
 
-  it("creates a missing destination and uses the locked source historical cost, not a submitted display rate", async () => {
+  it("uses locked source cost when destination inventory is missing", async () => {
     const stockItemId = ctx.stockItemIds[1];
     const voucherId = await createVoucher();
 
