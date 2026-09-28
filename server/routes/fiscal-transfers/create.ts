@@ -245,6 +245,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
             await applyStockTransferInventoryTx(tx, {
               companyId,
               transferId: transfer.id,
+              sourceVoucherId: newVoucher.id,
               destinationLocationId: Number(destinationLocationId),
               items: transferItems.map((item) => ({
                 sourceLocationId: item.sourceLocationId!,
