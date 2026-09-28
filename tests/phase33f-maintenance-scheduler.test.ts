@@ -5,6 +5,13 @@ const harness = vi.hoisted(() => ({
   getContainersWaSettings: vi.fn(),
   sendWhatsAppFileToChatId: vi.fn(),
   markContainersWaSent: vi.fn(),
+  claimRetryableScheduledWhatsAppOccurrence: vi.fn(),
+  claimScheduledWhatsAppOccurrence: vi.fn(),
+  beginScheduledWhatsAppAttachmentAttempt: vi.fn(),
+  finishScheduledWhatsAppAttachmentAttempt: vi.fn(),
+  finalizeScheduledWhatsAppOccurrence: vi.fn(),
+  logScheduledWhatsAppAttachmentResult: vi.fn(),
+  recordScheduledWhatsAppAttachmentPreparationFailure: vi.fn(),
 }));
 
 vi.mock("../server/db", () => ({
@@ -27,6 +34,15 @@ vi.mock("../server/services/scheduler/daily-export", () => ({
   runDailyExport: vi.fn(),
 }));
 vi.mock("../server/services/scheduler/whatsapp-send", () => ({ runDailyWhatsAppSend: vi.fn() }));
+vi.mock("../server/services/scheduler/scheduledWhatsAppDelivery", () => ({
+  claimRetryableScheduledWhatsAppOccurrence: harness.claimRetryableScheduledWhatsAppOccurrence,
+  claimScheduledWhatsAppOccurrence: harness.claimScheduledWhatsAppOccurrence,
+  beginScheduledWhatsAppAttachmentAttempt: harness.beginScheduledWhatsAppAttachmentAttempt,
+  finishScheduledWhatsAppAttachmentAttempt: harness.finishScheduledWhatsAppAttachmentAttempt,
+  finalizeScheduledWhatsAppOccurrence: harness.finalizeScheduledWhatsAppOccurrence,
+  logScheduledWhatsAppAttachmentResult: harness.logScheduledWhatsAppAttachmentResult,
+  recordScheduledWhatsAppAttachmentPreparationFailure: harness.recordScheduledWhatsAppAttachmentPreparationFailure,
+}));
 vi.mock("../server/services/whatsappService", () => ({
   getContainersWaSettings: harness.getContainersWaSettings,
   sendWhatsAppFileToChatId: harness.sendWhatsAppFileToChatId,
@@ -48,6 +64,7 @@ function healthyClient() {
 describe("Phase 33F maintenance scheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.claimRetryableScheduledWhatsAppOccurrence.mockResolvedValue(null);
   });
 
   it("commits and releases a no-op 30-day purge safely", async () => {
@@ -78,6 +95,28 @@ describe("Phase 33F maintenance scheduler", () => {
     await expect(purgeOldSoftDeletes()).rejects.toThrow("begin failed");
     expect(client.query).toHaveBeenCalledWith("ROLLBACK");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the 12-hour duplicate-suppression window for successful container sends", async () => {
+    const nowInNewYork = new Date(
+      new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+    );
+    harness.getContainersWaSettings.mockResolvedValue({
+      scheduleEnabled: true,
+      groupChatId: "120000@g.us",
+      instanceId: "instance",
+      apiToken: "token",
+      enabled: true,
+      scheduleHour: nowInNewYork.getHours(),
+      lastSentAt: new Date().toISOString(),
+    });
+
+    await expect(checkAndRunContainersWhatsApp()).resolves.toBeUndefined();
+
+    expect(harness.claimRetryableScheduledWhatsAppOccurrence).toHaveBeenCalledOnce();
+    expect(harness.claimScheduledWhatsAppOccurrence).not.toHaveBeenCalled();
+    expect(harness.sendWhatsAppFileToChatId).not.toHaveBeenCalled();
+    expect(harness.markContainersWaSent).not.toHaveBeenCalled();
   });
 
   it("skips scheduled container WhatsApp work when scheduling is disabled", async () => {
