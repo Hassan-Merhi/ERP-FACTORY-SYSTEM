@@ -17,10 +17,7 @@ import { postStockMovementTx } from "../../services/inventory/stockMovementInteg
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
-import {
-  journalStockTransferLeg,
-  nextStockTransferRevision,
-} from "../../services/inventory/stockTransferJournal";
+import { journalStockTransferLeg, nextStockTransferRevision } from "../../services/inventory/stockTransferJournal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -109,9 +106,7 @@ function groupTransferMovementItems(items: TransferMovementItem[]): TransferMove
       sourceLocationId: item.sourceLocationId,
       stockItemId: item.stockItemId,
       quantity: inventoryQuantity(item.quantity),
-      rate: inventoryUnitCost(
-        item.quantity.isZero() ? toInventoryDecimal(0) : item.value.dividedBy(item.quantity)
-      ),
+      rate: inventoryUnitCost(item.quantity.isZero() ? toInventoryDecimal(0) : item.value.dividedBy(item.quantity)),
     }));
 }
 
@@ -121,9 +116,7 @@ export async function assertTransferCompanyScopeTx(
   destinationLocationId: number,
   items: TransferMovementItem[]
 ): Promise<void> {
-  const locationIds = Array.from(
-    new Set([destinationLocationId, ...items.map((item) => item.sourceLocationId)])
-  );
+  const locationIds = Array.from(new Set([destinationLocationId, ...items.map((item) => item.sourceLocationId)]));
   const validLocations = await tx
     .select({ id: schema.locations.id })
     .from(schema.locations)
@@ -179,12 +172,7 @@ export async function applyStockTransferInventoryTx(
   }
 ): Promise<void> {
   const movementItems = groupTransferMovementItems(input.items);
-  await assertTransferCompanyScopeTx(
-    tx,
-    input.companyId,
-    input.destinationLocationId,
-    movementItems
-  );
+  await assertTransferCompanyScopeTx(tx, input.companyId, input.destinationLocationId, movementItems);
 
   const lockKeys = new Map<string, { locationId: number; stockItemId: number }>();
   for (const item of movementItems) {
@@ -298,11 +286,7 @@ export async function createStockTransfer(
   return await db.transaction(async (tx) => {
     // The lock makes the duplicate check below decisive: two submissions for the
     // same voucher are ordered, and the second one finds the first one's row.
-    const [voucher] = await tx
-      .select()
-      .from(schema.vouchers)
-      .where(eq(schema.vouchers.id, voucherId))
-      .for("update");
+    const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, voucherId)).for("update");
     if (!voucher) throw new Error(`Voucher ${voucherId} not found`);
     if (options.activeCompanyId !== undefined && voucher.companyId !== options.activeCompanyId) {
       throw new StockTransferPolicyError("STOCK_TRANSFER_SCOPE_INVALID", "Voucher belongs to a different company");
@@ -339,12 +323,7 @@ export async function createStockTransfer(
     // Validate tenant ownership before writing the transfer header. This is
     // repeated by the movement helper immediately before applying stock so both
     // document-only (optional) and posted transfers share the same boundary.
-    await assertTransferCompanyScopeTx(
-      tx,
-      voucher.companyId,
-      destinationLocationId,
-      costedTransferItems
-    );
+    await assertTransferCompanyScopeTx(tx, voucher.companyId, destinationLocationId, costedTransferItems);
 
     const [transfer] = await tx
       .insert(schema.stockTransferVouchers)
