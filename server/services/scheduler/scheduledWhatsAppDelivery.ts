@@ -132,10 +132,17 @@ async function acquireExistingOccurrence(
             updated_at = now()
       WHERE o.id = $1
         AND (
-          o.status IN ('partial', 'failed')
+          (
+            o.status IN ('partial', 'failed')
+            AND (o.claim_token IS NULL OR o.claim_expires_at < now())
+          )
           OR (
             o.status = 'claimed'
             AND o.delivery_started_at IS NULL
+            AND o.claim_expires_at < now()
+          )
+          OR (
+            o.status = 'delivering'
             AND o.claim_expires_at < now()
           )
         )
@@ -168,6 +175,8 @@ export async function claimScheduledWhatsAppOccurrence(
       occurrence_key: string;
       status: ScheduledWhatsAppOccurrenceStatus;
       recipient_chat_id: string;
+      scheduled_local_date: string | Date;
+      scheduled_local_hour: number;
       claim_token: string | null;
     }>(
       `SELECT id, occurrence_key, status, recipient_chat_id, scheduled_local_date, scheduled_local_hour, claim_token
@@ -338,10 +347,17 @@ export async function hasRetryableScheduledWhatsAppOccurrence(jobType: string): 
       WHERE o.job_type = $1
         AND o.created_at >= now() - interval '${RETRY_LOOKBACK_HOURS} hours'
         AND (
-          o.status IN ('partial', 'failed')
+          (
+            o.status IN ('partial', 'failed')
+            AND (o.claim_token IS NULL OR o.claim_expires_at < now())
+          )
           OR (
             o.status = 'claimed'
             AND o.delivery_started_at IS NULL
+            AND o.claim_expires_at < now()
+          )
+          OR (
+            o.status = 'delivering'
             AND o.claim_expires_at < now()
           )
         )
@@ -439,6 +455,18 @@ export async function finishScheduledWhatsAppAttachmentAttempt(input: {
         AND o.claim_token = $3
         AND a.status = 'sending'`,
     [claim.id, attachmentKey, claim.claimToken, success ? "sent" : "failed", error]
+  );
+
+  // Keep the active owner lease fresh after a completed external call. If the
+  // process dies after persisting the attachment result, a later scheduler can
+  // safely recover the expired "delivering" occurrence because no attachment
+  // remains in the ambiguous "sending" state.
+  await pool.query(
+    `UPDATE scheduled_whatsapp_occurrences
+        SET claim_expires_at = now() + interval '${CLAIM_LEASE_MINUTES} minutes',
+            updated_at = now()
+      WHERE id = $1 AND claim_token = $2`,
+    [claim.id, claim.claimToken]
   );
 }
 
