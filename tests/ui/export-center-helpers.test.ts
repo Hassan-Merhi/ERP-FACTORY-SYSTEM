@@ -54,10 +54,10 @@ describe("ExportCenterHelpers behavioral formatting", () => {
     expect(scheduleLabel(undefined)).toBe("");
     expect(scheduleLabel({ enabled: true, autoSend: false } as any)).toBe("");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "daily", sendHour: 0 } as any)
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "daily", sendHour: 0 } as any),
     ).toBe("Daily at 12:00 AM EST");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "monthly", sendHour: 12 } as any)
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "monthly", sendHour: 12 } as any),
     ).toBe("Monthly (1st) at 12:00 PM EST");
     expect(
       scheduleLabel({
@@ -66,7 +66,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         frequency: "weekly",
         sendHour: 18,
         sendDayOfWeek: 5,
-      } as any)
+      } as any),
     ).toBe("Every Friday at 6:00 PM EST");
     expect(
       scheduleLabel({
@@ -75,10 +75,10 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         frequency: "weekly",
         sendHour: 18,
         sendDayOfWeek: 99,
-      } as any)
+      } as any),
     ).toBe("Every Monday at 6:00 PM EST");
     expect(
-      scheduleLabel({ enabled: true, autoSend: true, frequency: "yearly", sendHour: 18 } as any)
+      scheduleLabel({ enabled: true, autoSend: true, frequency: "yearly", sendHour: 18 } as any),
     ).toBe("Auto-Send On");
   });
 
