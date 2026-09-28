@@ -278,18 +278,32 @@ export async function createStockTransfer(
       (a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId
     );
 
+    // Resolve historical transfer cost from the locked source row whenever it
+    // exists. The browser can display/submit a rounded rate, but that must not
+    // become the accounting source of truth. A genuinely missing source has no
+    // inventory cost to read, so its submitted rate is retained as the cost
+    // memory used when an explicitly permitted negative row is created.
+    const costedTransferItems: TransferMovementItem[] = [];
+    for (const item of costedTransferItems) {
+      const sourceInventory = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
+      costedTransferItems.push({
+        ...item,
+        rate: String(sourceInventory?.average_rate ?? item.rate ?? "0"),
+      });
+    }
+
     // Validate tenant ownership before writing the transfer header. This is
     // repeated by the movement helper immediately before applying stock so both
     // document-only (optional) and posted transfers share the same boundary.
-    await assertTransferCompanyScopeTx(tx, voucher.companyId, destinationLocationId, sortedTransferItems);
+    await assertTransferCompanyScopeTx(tx, voucher.companyId, destinationLocationId, costedTransferItems);
 
     const [transfer] = await tx
       .insert(schema.stockTransferVouchers)
       .values({
         voucherId,
         sourceLocationId:
-          new Set(sortedTransferItems.map((item) => item.sourceLocationId)).size === 1
-            ? sortedTransferItems[0].sourceLocationId
+          new Set(costedTransferItems.map((item) => item.sourceLocationId)).size === 1
+            ? costedTransferItems[0].sourceLocationId
             : null,
         destinationLocationId,
         notes,
