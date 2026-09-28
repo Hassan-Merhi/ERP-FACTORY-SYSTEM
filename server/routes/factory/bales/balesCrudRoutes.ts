@@ -237,11 +237,28 @@ export function registerBalesCrudRoutes(app: Express) {
         return res.status(400).json({ message: "stockEntryDate must be YYYY-MM-DD" });
 
       const now = new Date();
-      const result = await db
-        .update(factoryBales)
-        .set({ stockEntryDate, updatedAt: now })
-        .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
-        .returning({ id: factoryBales.id });
+      const result = await db.transaction(async (tx) => {
+        const updatedBales = await tx
+          .update(factoryBales)
+          .set({ stockEntryDate, updatedAt: now })
+          .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
+          .returning({ id: factoryBales.id });
+
+        const updatedIds = updatedBales.map((bale) => bale.id);
+        if (updatedIds.length > 0) {
+          await tx
+            .update(factoryBaleProductionAttributions)
+            .set({ stockEntryDate })
+            .where(
+              and(
+                eq(factoryBaleProductionAttributions.companyId, companyId),
+                inArray(factoryBaleProductionAttributions.baleId, updatedIds)
+              )
+            );
+        }
+
+        return updatedBales;
+      });
 
       res.json({ updated: result.length });
     } catch (error: unknown) {

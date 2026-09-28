@@ -47,8 +47,8 @@ async function createBale(overrides: { weightKg?: string; costPerKg?: string; st
   const code = `${TEST_PREFIX}-B${baleSeq}`;
   const result = await pool.query<{ id: number }>(
     `INSERT INTO factory_bales
-       (company_id, bale_code, reference_number, weight_kg, cost_per_kg, total_cost, status, product_name)
-     VALUES ($1, $2, $2, $3, $4, $5, $6, $7) RETURNING id`,
+       (company_id, bale_code, reference_number, article_code, weight_kg, cost_per_kg, total_cost, status, product_name)
+     VALUES ($1, $2, $2, $2, $3, $4, $5, $6, $7) RETURNING id`,
     [
       ctx.companyId,
       code,
@@ -94,8 +94,9 @@ async function attributionRow(baleId: number) {
     worker_id: number | null;
     worker_name_snapshot: string | null;
     production_position_id: number | null;
+    stock_entry_date: string | null;
   }>(
-    `SELECT worker_id, worker_name_snapshot, production_position_id
+    `SELECT worker_id, worker_name_snapshot, production_position_id, stock_entry_date
      FROM factory_bale_production_attributions WHERE bale_id = $1`,
     [baleId]
   );
@@ -311,8 +312,9 @@ describe("PATCH /api/factory/bales/bulk-status", () => {
 });
 
 describe("PATCH /api/factory/bales/bulk-date", () => {
-  it("sets the stock entry date for the listed bales", async () => {
+  it("sets the stock entry date for the listed bales and keeps production attribution synchronized", async () => {
     const ids = [await createBale(), await createBale()];
+    await attributeBale(ids[0], activeWorkerId, `${TEST_PREFIX} Active`);
 
     const response = await agent.patch("/api/factory/bales/bulk-date").send({ ids, stockEntryDate: "2026-03-04" });
 
@@ -324,6 +326,9 @@ describe("PATCH /api/factory/bales/bulk-date", () => {
       const stored = (await baleRow(id))?.stock_entry_date;
       expect(new Date(stored as unknown as string).toISOString().slice(0, 10)).toBe("2026-03-04");
     }
+
+    const attribution = await attributionRow(ids[0]);
+    expect(new Date(attribution?.stock_entry_date as unknown as string).toISOString().slice(0, 10)).toBe("2026-03-04");
   });
 
   it("requires an ISO date rather than accepting any string", async () => {
@@ -345,6 +350,33 @@ describe("PATCH /api/factory/bales/bulk-date", () => {
     expect(response.status).toBe(200);
     expect(response.body.updated).toBe(0);
     expect((await baleRow(foreignBaleId))?.stock_entry_date).toBeNull();
+  });
+});
+
+describe("GET /api/factory/bale-stock-list", () => {
+  it("uses the production date instead of the later finalization timestamp", async () => {
+    const id = await createBale();
+    await pool.query(
+      `UPDATE factory_bales
+       SET stock_entry_date = '2026-09-26',
+           pressed_at = '2026-09-28 05:00:00',
+           finalized_at = '2026-09-28 05:01:00'
+       WHERE id = $1`,
+      [id]
+    );
+    const codeResult = await pool.query<{ article_code: string }>(
+      `SELECT article_code FROM factory_bales WHERE id = $1`,
+      [id]
+    );
+
+    const response = await agent.get(
+      `/api/factory/bale-stock-list?articleCode=${encodeURIComponent(codeResult.rows[0].article_code)}`
+    );
+
+    expect(response.status).toBe(200);
+    const returned = response.body.find((row: { id: number }) => row.id === id);
+    expect(returned).toBeDefined();
+    expect(returned.productionDate).toBe("2026-09-26");
   });
 });
 

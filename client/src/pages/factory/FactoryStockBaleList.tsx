@@ -133,7 +133,9 @@ export default function FactoryStockBaleList() {
                       <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-60 group-focus-visible:opacity-60 shrink-0" />
                     </button>
                   </td>
-                  <td className="px-3 py-2 text-xs tabular-nums">{fmtDate(bale.productionDate ?? bale.finalizedAt)}</td>
+                  <td className="px-3 py-2 text-xs tabular-nums">
+                    {fmtDate(bale.productionDate ?? bale.stockEntryDate ?? bale.finalizedAt)}
+                  </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{bale.workerName || "—"}</td>
                   <td className="px-3 py-2 text-center">
                     {bale.lockedInLoading ? (
