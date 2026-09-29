@@ -196,7 +196,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         }
       }
 
-      let adjustmentVoucher = await db
+      const adjustmentVoucher = await db
         .select()
         .from(stockAdjustmentVouchers)
         .where(eq(stockAdjustmentVouchers.voucherId, id))
