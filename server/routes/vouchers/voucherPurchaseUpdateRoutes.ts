@@ -209,14 +209,62 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
             .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id))
         : [];
       if (!adjustmentVoucher) {
-        let adjustmentType = "production";
-        if (existingVoucher.voucherType === "Consumption") adjustmentType = "consumption";
-        else if (existingVoucher.voucherType === "Mixed") adjustmentType = "mixed";
-        const [newAdjustment] = await db
-          .insert(stockAdjustmentVouchers)
-          .values({ voucherId: id, locationId: parseInt(locationId), adjustmentType, notes: description || "" })
-          .returning();
-        adjustmentVoucher = newAdjustment;
+        const adjustmentType = existingVoucher.voucherType as "Consumption" | "Production" | "Mixed";
+        const created = await storage.createStockAdjustment(
+          id,
+          parseInt(locationId),
+          adjustmentType,
+          description || "",
+          items.map((item) => ({
+            stockItemId: Number(item.stockItemId),
+            quantity: String(item.quantity),
+            rate: String(item.rate),
+          })),
+          undefined,
+          {
+            ...(voucherDate !== undefined ? { voucherDate } : {}),
+            ...(description !== undefined ? { description } : {}),
+          }
+        );
+
+        try {
+          const _resolveAdjName = async (itemId: number) =>
+            (await storage.getStockItemById(itemId))?.name ?? `Item #${itemId}`;
+          const _adjItemDiff = await buildItemLevelChanges(
+            [],
+            created.items.map((item) => ({
+              stockItemId: item.stockItemId,
+              quantity: item.quantity,
+              rate: item.rate,
+              totalAmount: item.totalAmount,
+            })),
+            _resolveAdjName
+          );
+          await logAudit({
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "vouchers",
+            recordId: created.voucher.id,
+            recordIdentifier: created.voucher.voucherNumber,
+            changes: {
+              totalAmount: { old: existingVoucher.totalAmount, new: created.voucher.totalAmount },
+              location: { old: existingVoucher.locationId, new: created.voucher.locationId },
+              ...(voucherDate !== undefined
+                ? { date: { old: existingVoucher.voucherDate, new: created.voucher.voucherDate } }
+                : {}),
+              ...(description !== undefined
+                ? { description: { old: existingVoucher.description ?? "", new: created.voucher.description ?? "" } }
+                : {}),
+              ..._adjItemDiff,
+            },
+          });
+        } catch {
+          /* non-fatal */
+        }
+
+        return res.json(created.voucher);
       }
 
       let signedTotal = 0;
