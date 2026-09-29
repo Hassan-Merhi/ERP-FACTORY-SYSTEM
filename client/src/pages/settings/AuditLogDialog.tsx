@@ -30,6 +30,110 @@ type AuditEntry = {
   [key: string]: unknown;
 };
 
+type AuditItem = {
+  stockItemId?: unknown;
+  stockItemName?: unknown;
+  itemName?: unknown;
+  code?: unknown;
+  sourceLocationId?: unknown;
+  sourceLocationName?: unknown;
+  originalQuantity?: unknown;
+  quantity?: unknown;
+  newQuantity?: unknown;
+  delta?: unknown;
+  rate?: unknown;
+  unitPrice?: unknown;
+  totalAmount?: unknown;
+  [key: string]: unknown;
+};
+
+function asAuditItems(value: unknown): AuditItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is AuditItem => Boolean(item) && typeof item === "object" && !Array.isArray(item));
+}
+
+function fmtItemNumber(field: string, value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  return fmtBusinessValue(field, value);
+}
+
+function RevisionItemsTable({ items, label }: { items: AuditItem[]; label?: string }) {
+  if (items.length === 0) return null;
+  const showRate = items.some((item) => item.rate !== undefined || item.unitPrice !== undefined);
+  const showTotal = items.some((item) => item.totalAmount !== undefined);
+
+  return (
+    <div className="space-y-1.5">
+      {label && <p className="text-xs font-medium text-muted-foreground">{label}</p>}
+      <div className="overflow-x-auto rounded-md border">
+        <div
+          className={`grid min-w-[680px] ${
+            showRate && showTotal
+              ? "grid-cols-[minmax(180px,1.4fr)_minmax(150px,1fr)_90px_90px_90px_90px_100px]"
+              : showRate || showTotal
+                ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_100px]"
+                : "grid-cols-[minmax(220px,1.5fr)_minmax(180px,1fr)_100px_100px_100px]"
+          } gap-2 bg-muted/40 px-3 py-2 text-[11px] font-medium text-muted-foreground`}
+        >
+          <span>Item</span>
+          <span>Source</span>
+          <span className="text-right">Before</span>
+          <span className="text-right">After</span>
+          <span className="text-right">Change</span>
+          {showRate && <span className="text-right">Rate</span>}
+          {showTotal && <span className="text-right">Total</span>}
+        </div>
+        {items.map((item, index) => {
+          const itemName = String(item.stockItemName ?? item.itemName ?? item.code ?? `Item ${index + 1}`);
+          const sourceName = String(item.sourceLocationName ?? "—");
+          const before = item.originalQuantity;
+          const after = item.newQuantity ?? item.quantity;
+          const delta =
+            item.delta !== undefined
+              ? item.delta
+              : Number.isFinite(Number(after)) && Number.isFinite(Number(before))
+                ? Number(after) - Number(before)
+                : undefined;
+          const rate = item.rate ?? item.unitPrice;
+
+          return (
+            <div
+              key={`${item.stockItemId ?? item.code ?? itemName}-${item.sourceLocationId ?? "source"}-${index}`}
+              className={`grid min-w-[680px] ${
+                showRate && showTotal
+                  ? "grid-cols-[minmax(180px,1.4fr)_minmax(150px,1fr)_90px_90px_90px_90px_100px]"
+                  : showRate || showTotal
+                    ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_100px]"
+                    : "grid-cols-[minmax(220px,1.5fr)_minmax(180px,1fr)_100px_100px_100px]"
+              } gap-2 border-t px-3 py-2.5 text-xs items-start`}
+            >
+              <div className="min-w-0">
+                <div className="font-medium break-words">{itemName}</div>
+                {item.stockItemId !== undefined && (
+                  <div className="text-[11px] text-muted-foreground">ID {String(item.stockItemId)}</div>
+                )}
+              </div>
+              <div className="min-w-0">
+                <div className="break-words">{sourceName}</div>
+                {item.sourceLocationId !== undefined && (
+                  <div className="text-[11px] text-muted-foreground">ID {String(item.sourceLocationId)}</div>
+                )}
+              </div>
+              <span className="text-right tabular-nums">{fmtItemNumber("quantity", before)}</span>
+              <span className="text-right tabular-nums font-medium">{fmtItemNumber("quantity", after)}</span>
+              <span className="text-right tabular-nums">{fmtItemNumber("quantity", delta)}</span>
+              {showRate && <span className="text-right tabular-nums">{fmtItemNumber("rate", rate)}</span>}
+              {showTotal && (
+                <span className="text-right tabular-nums">{fmtItemNumber("totalAmount", item.totalAmount)}</span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function compareEntries(oldArr: AuditEntry[], newArr: AuditEntry[]) {
   const oldMap = new Map(oldArr.map((entry) => [String(entry.account || "Unknown account"), entry]));
   const newMap = new Map(newArr.map((entry) => [String(entry.account || "Unknown account"), entry]));
@@ -224,9 +328,19 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
   const isSecurity = log.tableName === "security_events" || actionKey.startsWith("security:");
 
   const entriesChange = changes.entries;
-  const scalarChanges = Object.fromEntries(Object.entries(changes).filter(([key]) => key !== "entries"));
+  const structuredItemKey = ["items", "lines", "lineItems", "affectedItems"].find((key) => changes[key]);
+  const itemsChange = structuredItemKey ? changes[structuredItemKey] : undefined;
+  const scalarChanges = Object.fromEntries(
+    Object.entries(changes).filter(
+      ([key]) => key !== "entries" && !["items", "lines", "lineItems", "affectedItems"].includes(key)
+    )
+  );
   const oldEntries: AuditEntry[] = Array.isArray(entriesChange?.old) ? (entriesChange.old as AuditEntry[]) : [];
   const newEntries: AuditEntry[] = Array.isArray(entriesChange?.new) ? (entriesChange.new as AuditEntry[]) : [];
+  const oldItems = asAuditItems(itemsChange?.old);
+  const newItems = asAuditItems(itemsChange?.new);
+  const hasItems = oldItems.length > 0 || newItems.length > 0;
+  const itemSnapshotsChanged = oldItems.length > 0 && newItems.length > 0 && !valuesEqual(oldItems, newItems);
   const hasEntries = oldEntries.length > 0 || newEntries.length > 0;
   const entryDiff = compareEntries(oldEntries, newEntries);
 
@@ -330,10 +444,12 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
   };
 
   const renderedRows = readableFields.map(([field, vals]) => renderRow(field, vals)).filter(Boolean);
-  const hasBeforeAfter = readableFields.some(([, pair]) => {
-    const normalized = isChangePair(pair) ? pair : { new: pair };
-    return normalized.old !== undefined && normalized.new !== undefined && !valuesEqual(normalized.old, normalized.new);
-  });
+  const hasBeforeAfter =
+    itemSnapshotsChanged ||
+    readableFields.some(([, pair]) => {
+      const normalized = isChangePair(pair) ? pair : { new: pair };
+      return normalized.old !== undefined && normalized.new !== undefined && !valuesEqual(normalized.old, normalized.new);
+    });
 
   return (
     <Dialog
@@ -392,9 +508,22 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
                     ? "What changed"
                     : "Activity details"}
           </p>
-          {renderedRows.length > 0 ? (
+          {renderedRows.length > 0 && (
             <div className="rounded-md border px-3 divide-y min-w-0">{renderedRows}</div>
-          ) : (
+          )}
+          {hasItems && (
+            <div className="space-y-2 pt-1">
+              {itemSnapshotsChanged ? (
+                <>
+                  <RevisionItemsTable items={oldItems} label="Before items" />
+                  <RevisionItemsTable items={newItems} label="After items" />
+                </>
+              ) : (
+                <RevisionItemsTable items={newItems.length > 0 ? newItems : oldItems} label="Items" />
+              )}
+            </div>
+          )}
+          {renderedRows.length === 0 && !hasItems && (
             <p className="text-sm text-muted-foreground">No additional details were captured for this activity.</p>
           )}
         </div>

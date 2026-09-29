@@ -378,6 +378,16 @@ export async function createPosSale(
         totalAmount: { old: undefined, new: grandTotal.toFixed(2) },
         date: { old: undefined, new: voucherDate },
         itemCount: { old: undefined, new: saleItems.length },
+        items: {
+          new: saleItems.map((item) => ({
+            stockItemId: item.stockItemId,
+            stockItemName: "stockItemName" in item ? item.stockItemName : undefined,
+            code: "stockItemCode" in item ? item.stockItemCode : undefined,
+            quantity: item.quantity,
+            rate: "rate" in item ? item.rate : item.sellingPrice,
+            totalAmount: "amount" in item ? item.amount : item.totalSales,
+          })),
+        },
         customer: { old: undefined, new: customerAccount ? customerAccount.name : null },
       },
     });
