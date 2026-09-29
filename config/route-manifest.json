@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2013,
+  "routeCount": 2014,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -137,6 +137,7 @@
     "POST /api/factory/container-tracking/:id/track-now [requireAuth > <anonymous>]",
     "PATCH /api/factory/container-tracking/:id/settings [requireAuth > <anonymous>]",
     "GET /api/factory/containers [requireAuth > <anonymous>]",
+    "GET /api/factory/containers/account-options [requireAuth > <anonymous>]",
     "GET /api/factory/containers/:id [requireAuth > <anonymous>]",
     "POST /api/factory/containers [requireAuth > <anonymous>]",
     "PATCH /api/factory/containers/:id [requireAuth > <anonymous>]",
