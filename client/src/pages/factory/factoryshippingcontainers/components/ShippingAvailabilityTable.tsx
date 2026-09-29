@@ -10,7 +10,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Check, X, Loader2 } from "lucide-react";
+import { Plus, Trash2, Check, X, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { AvailRow, EditingAvail } from "../types";
 import { AVAIL_KEY } from "../utils";
@@ -19,6 +19,7 @@ export function ShippingAvailabilityTable() {
   const { toast } = useToast();
   const [editing, setEditing] = useState<EditingAvail | null>(null);
   const [adding, setAdding] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const [newRow, setNewRow] = useState({ date: "", shippingCompany: "", availableContainers: "", note: "" });
 
   const { data: rows = [], isLoading } = useQuery<AvailRow[]>({
@@ -93,14 +94,32 @@ export function ShippingAvailabilityTable() {
 
   return (
     <div className="rounded-md border overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 bg-muted/20 border-b">
-        <span className="text-sm font-medium">Container Availability</span>
-        <Button size="sm" onClick={() => setAdding(true)} disabled={adding} data-testid="button-add-availability">
+      <div className={`flex items-center justify-between px-4 py-3 bg-muted/20 ${expanded ? "border-b" : ""}`}>
+        <button
+          type="button"
+          className="flex flex-1 items-center gap-2 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+          data-testid="button-toggle-availability"
+        >
+          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          <span>Container Availability</span>
+          <span className="text-xs text-muted-foreground">({rows.length})</span>
+        </button>
+        <Button
+          size="sm"
+          onClick={() => {
+            setExpanded(true);
+            setAdding(true);
+          }}
+          disabled={adding}
+          data-testid="button-add-availability"
+        >
           <Plus className="h-3.5 w-3.5 mr-1" /> Add Row
         </Button>
       </div>
 
-      <div className="overflow-x-auto">
+      {expanded && <div className="overflow-x-auto">
         <Table mobileLayout="cards" className="text-xs">
           <TableHeader>
             <TableRow>
@@ -296,7 +315,7 @@ export function ShippingAvailabilityTable() {
             )}
           </TableBody>
         </Table>
-      </div>
+      </div>}
     </div>
   );
 }
