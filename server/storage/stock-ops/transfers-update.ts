@@ -20,6 +20,7 @@ import {
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
+import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -612,6 +613,12 @@ export async function updateStockAdjustment(
         });
       }
     }
+
+    const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
+    await tx
+      .update(schema.vouchers)
+      .set({ totalAmount: headerTotal, locationId })
+      .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
 
     return { adjustment: updatedAdjustment, items: adjustmentItems };
   });
