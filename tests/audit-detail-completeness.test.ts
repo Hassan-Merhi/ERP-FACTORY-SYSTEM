@@ -65,7 +65,10 @@ describe("audit detail completeness", () => {
 
     expect(posCreate).toContain("items: {");
     expect(posCreate).toContain('"stockItemName" in item ? item.stockItemName : undefined');
+    expect(posUpdate).toContain("auditOldItems");
     expect(posUpdate).toContain("changes.items = {");
+    expect(posUpdate).toContain("old: oldAuditRows.map");
+    expect(posUpdate).toContain("new: updatedSalesItems.map");
     expect(posUpdate).toContain("totalAmount: item.totalSales");
     expect(creditNotes).toContain("const auditItems = await db");
     expect(creditNotes).toContain("items: { new: auditItems }");
