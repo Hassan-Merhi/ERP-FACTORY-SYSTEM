@@ -47,6 +47,7 @@ export interface SubsequentReceiptContext {
   reqDestination?: string;
   idempotencyKey?: string | null;
   userId: string | null;
+  supplierName?: string | null;
 }
 
 export async function applySubsequentReceipt(
@@ -66,6 +67,7 @@ export async function applySubsequentReceipt(
     reqDestination,
     idempotencyKey,
     userId,
+    supplierName,
   } = ctx;
 
   // ── Concurrency-safe continuation receipt ─────────────────────────────
@@ -208,7 +210,7 @@ export async function applySubsequentReceipt(
     txType: "OFFLOAD_RAW_STOCK",
     referenceId: lockedRawStock.id,
     referenceTable: "factory_raw_stock",
-    description: `Continuation receipt — container ${container.containerNumber}: ${dReceivedKg.toDecimalPlaces(3).toFixed(3)} kg at ${new Decimal(fixedCostPerKg).toDecimalPlaces(6).toFixed(6)}/kg (fixed landed rate)`,
+    description: `Continuation receipt — container ${container.containerNumber}${supplierName?.trim() ? ` - ${supplierName.trim()}` : ""}: ${dReceivedKg.toDecimalPlaces(3).toFixed(3)} kg at ${new Decimal(fixedCostPerKg).toDecimalPlaces(6).toFixed(6)}/kg (fixed landed rate)`,
     currencyCode,
     amountCurrency: dReceivedKg.times(new Decimal(fixedCostPerKg)).toDecimalPlaces(6).toNumber(),
     fxRateToUsd: fxRate,

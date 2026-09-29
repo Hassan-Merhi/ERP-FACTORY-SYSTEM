@@ -28,6 +28,7 @@ import {
   vouchers,
   factoryWorkerAdvances,
   factoryAdvanceRepayments,
+  factorySuppliers,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -287,6 +288,21 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         .where(and(eq(factoryContainers.id, containerId), eq(factoryContainers.companyId, companyId)));
       if (!container) return res.status(404).json({ message: "Container not found" });
 
+      const [materialSupplier] = container.supplierId
+        ? await db
+            .select({ name: factorySuppliers.name })
+            .from(factorySuppliers)
+            .where(
+              and(
+                eq(factorySuppliers.id, container.supplierId),
+                eq(factorySuppliers.companyId, companyId)
+              )
+            )
+        : [];
+      const supplierNarrationSuffix = materialSupplier?.name?.trim()
+        ? ` - ${materialSupplier.name.trim()}`
+        : "";
+
       const beforeJson = JSON.stringify(entry);
       const sourceType: string = isNonEmptyString(meta.sourceType) ? meta.sourceType : entry.txType;
 
@@ -434,7 +450,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
               .set({
                 amountCurrency: String(totalCost.toFixed(4)),
                 amountUsd: String(totalUsd.toFixed(4)),
-                description: `Offloaded container ${container.containerNumber}: ${container.actualReceivedKg} kg at ${inclusiveCostPerKg.toFixed(4)}/kg (inclusive) [edited]`,
+                description: `Offloaded container ${container.containerNumber}${supplierNarrationSuffix}: ${container.actualReceivedKg} kg at ${inclusiveCostPerKg.toFixed(4)}/kg (inclusive) [edited]`,
               })
               .where(
                 and(
