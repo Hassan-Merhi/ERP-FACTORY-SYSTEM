@@ -40,6 +40,19 @@ describe("audit detail completeness", () => {
     expect(utils).toContain('newQuantity: "After Qty"');
   });
 
+  it("captures item detail for POS sales and credit notes", () => {
+    const posCreate = read("server/services/pos/createSaleService.ts");
+    const posUpdate = read("server/services/pos/edit/updateSaleService.ts");
+    const creditNotes = read("server/routes/creditNoteRoutes.ts");
+
+    expect(posCreate).toContain("items: {");
+    expect(posCreate).toContain('"stockItemName" in item ? item.stockItemName : undefined');
+    expect(posUpdate).toContain("changes.items = {");
+    expect(posUpdate).toContain("totalAmount: item.totalSales");
+    expect(creditNotes).toContain("const auditItems = await db");
+    expect(creditNotes).toContain("items: { new: auditItems }");
+  });
+
   it("preserves bounded structured item arrays in generic activity audits", () => {
     const middleware = read("server/middleware/activityAudit.ts");
 
