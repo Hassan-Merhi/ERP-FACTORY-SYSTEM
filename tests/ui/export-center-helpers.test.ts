@@ -30,9 +30,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
     expect(runTypeBadgeClass("manual_email")).toContain("bg-violet-100");
     expect(runTypeBadgeClass("manual_whatsapp")).toContain("bg-green-100");
     expect(runTypeBadgeClass("manual_download")).toContain("bg-slate-100");
-    expect(runTypeBadgeClass("future_mode")).toBe(
-      "bg-muted text-muted-foreground",
-    );
+    expect(runTypeBadgeClass("future_mode")).toBe("bg-muted text-muted-foreground");
   });
 
   it("formats midnight, morning, noon, and evening schedule hours", () => {
