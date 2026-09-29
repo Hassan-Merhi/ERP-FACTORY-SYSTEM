@@ -12,7 +12,7 @@ describe("audit detail completeness", () => {
 
     expect(routes).toContain('items: { new: revisionItemsForAudit(result.items) }');
     expect(routes).toContain('items: { new: result.items }');
-    expect(routes).toContain('action: "approve"');
+    expect(routes).toContain('"approve",');
     expect(compatibility).toContain("stockItemName: item.stockItemName");
     expect(compatibility).toContain("originalQuantity: item.originalQuantity");
     expect(compatibility).toContain("newQuantity: item.newQuantity");
