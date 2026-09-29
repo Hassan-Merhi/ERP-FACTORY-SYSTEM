@@ -38,7 +38,7 @@ describe("scheduled WhatsApp runtime schema", () => {
     const { pool } = poolWithTrackingVerification(false);
 
     await expect(ensureScheduledWhatsAppDeliveryTrackingSchema(pool)).rejects.toThrow(
-      "Scheduled WhatsApp delivery tracking schema is unavailable after startup repair"
+      "SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE"
     );
   });
 });
