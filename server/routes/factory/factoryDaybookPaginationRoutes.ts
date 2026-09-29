@@ -268,6 +268,14 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
               CASE
                 WHEN f.reference_table = 'vouchers' AND live_voucher.id IS NOT NULL
                   THEN COALESCE(live_voucher.description, live_voucher.voucher_type || ' voucher #' || live_voucher.voucher_number)
+                WHEN f.tx_type = 'OFFLOAD_RAW_STOCK'
+                  AND offload_container.id IS NOT NULL
+                  AND NULLIF(BTRIM(offload_supplier.name), '') IS NOT NULL
+                  AND POSITION(':' IN f.description) > 0
+                  THEN
+                    'Offloaded container ' || offload_container.container_number ||
+                    ' - ' || BTRIM(offload_supplier.name) ||
+                    SUBSTRING(f.description FROM POSITION(':' IN f.description))
                 ELSE f.description
               END AS description,
               f.meta_json AS "metaJson",
@@ -313,6 +321,16 @@ export function registerFactoryDaybookPaginationRoutes(app: Express): void {
               ON f.reference_table = 'vouchers'
              AND live_voucher.id = f.reference_id
              AND live_voucher.deleted_at IS NULL
+            LEFT JOIN factory_raw_stock offload_raw_stock
+              ON f.tx_type = 'OFFLOAD_RAW_STOCK'
+             AND offload_raw_stock.id = f.reference_id
+             AND offload_raw_stock.company_id = f.company_id
+            LEFT JOIN factory_containers offload_container
+              ON offload_container.id = offload_raw_stock.container_id
+             AND offload_container.company_id = f.company_id
+            LEFT JOIN factory_suppliers offload_supplier
+              ON offload_supplier.id = offload_container.supplier_id
+             AND offload_supplier.company_id = f.company_id
             WHERE ${realConditions.join(" AND ")}
           ),
           synthetic_rows AS (
