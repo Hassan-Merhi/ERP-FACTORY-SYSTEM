@@ -15,6 +15,7 @@ import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
+import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
 
@@ -402,7 +403,8 @@ export async function createStockAdjustment(
   adjustmentType: "Production" | "Consumption" | "Mixed",
   notes: string,
   items: Array<{ stockItemId: number; quantity: string; rate: string }>,
-  _consumptionAccountOverride?: { code: string; name: string }
+  _consumptionAccountOverride?: { code: string; name: string },
+  voucherHeader?: { currency?: string }
 ) {
   return await db.transaction(async (tx) => {
     // Locking the voucher row serialises everyone who wants to adjust it, so the
@@ -649,6 +651,16 @@ export async function createStockAdjustment(
         });
       }
     }
+
+    const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
+    await tx
+      .update(schema.vouchers)
+      .set({
+        totalAmount: headerTotal,
+        locationId,
+        ...(voucherHeader?.currency ? { currency: voucherHeader.currency } : {}),
+      })
+      .where(eq(schema.vouchers.id, voucherId));
 
     return { adjustment, items: adjustmentItems };
   });
