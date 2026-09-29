@@ -143,6 +143,26 @@ describe("Wave 3 exact-value transfer and adjustment edits", () => {
     expect(await readVoucherTotal(voucherId)).toBeCloseTo(200, 2);
   });
 
+  it("nets mixed headers from the saved production and consumption values", async () => {
+    const productionItemId = ctx.stockItemIds[0];
+    const consumptionItemId = ctx.stockItemIds[2];
+    await seedInventory(ctx.locationId, consumptionItemId, 100, 10, 1000);
+
+    const voucherId = await createVoucher("Mixed", ctx.locationId);
+    const created = await createStockAdjustment(voucherId, ctx.locationId, "Mixed", "mixed totals", [
+      { stockItemId: productionItemId, quantity: "2.000", rate: "20.00" },
+      // Submitted rate is intentionally stale; saved consumption value resolves
+      // from inventory at 10.00, so the authoritative net is 40 - 30 = 10.
+      { stockItemId: consumptionItemId, quantity: "-3.000", rate: "1.00" },
+    ]);
+
+    const productionLine = created.items.find((item) => item.stockItemId === productionItemId);
+    const consumptionLine = created.items.find((item) => item.stockItemId === consumptionItemId);
+    expect(Number(productionLine?.totalAmount ?? 0)).toBeCloseTo(40, 2);
+    expect(Number(consumptionLine?.totalAmount ?? 0)).toBeCloseTo(30, 2);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(10, 2);
+  });
+
   it("rolls back stock and adjustment rows when the atomic header write fails", async () => {
     const stockItemId = ctx.stockItemIds[1];
     await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);
