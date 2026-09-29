@@ -18,6 +18,8 @@ export interface ReportData {
     statusValue: number;
     costValue: number;
     sellingValue: number;
+    remainingMaterialValue: number;
+    consumedMaterialCost: number;
     profitValue: number;
     profitMarginPct: number;
     missingSelectedPriceBales: number;
