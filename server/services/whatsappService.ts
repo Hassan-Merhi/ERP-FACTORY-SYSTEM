@@ -39,6 +39,13 @@ export interface WaRecipient {
 
 type GreenApiCredentials = Pick<WaSettings, "instanceId" | "apiToken">;
 
+export type WhatsAppDeliveryOutcome = "sent" | "failed" | "uncertain";
+export interface WhatsAppSendResult {
+  success: boolean;
+  error?: string;
+  deliveryOutcome?: WhatsAppDeliveryOutcome;
+}
+
 const GREEN_API_REQUEST_TIMEOUT_MS = 30_000;
 
 function greenApiRequestInit(init: RequestInit): RequestInit {
@@ -230,7 +237,7 @@ async function sendGreenApiFileUpload({
   fileName: string;
   caption: string;
   mimeType: string;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<WhatsAppSendResult> {
   const sizeBytes = getExportAttachmentSize(buffer);
 
   return withSerializedExportAttachmentBuffer(buffer, async (materializedBuffer) => {
@@ -243,11 +250,23 @@ async function sendGreenApiFileUpload({
     form.append("file", materializedBuffer, { filename: fileName, contentType: mimeType });
 
     const multipartBody = form.getBuffer();
-    const response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUpload", {
-      method: "POST",
-      body: toArrayBuffer(multipartBody),
-      headers: form.getHeaders(),
-    });
+    let response: Response;
+    try {
+      response = await fetchGreenApiWithAuthFallback(settings, "sendFileByUpload", {
+        method: "POST",
+        body: toArrayBuffer(multipartBody),
+        headers: form.getHeaders(),
+      });
+    } catch (error) {
+      const message = getErrorMessage(error) || "Green API request outcome is uncertain";
+      logger.error("[WA upload] Green API request outcome uncertain", {
+        error: message,
+        chatId,
+        fileName,
+        size: sizeBytes,
+      });
+      return { success: false, error: message, deliveryOutcome: "uncertain" };
+    }
 
     if (!response.ok) {
       const body = await response.text();
@@ -258,7 +277,7 @@ async function sendGreenApiFileUpload({
         fileName,
         size: sizeBytes,
       });
-      return { success: false, error: `Green API ${response.status}: ${body}` };
+      return { success: false, error: `Green API ${response.status}: ${body}`, deliveryOutcome: "failed" };
     }
 
     const json = (await response.json().catch(() => ({}))) as unknown;
@@ -268,7 +287,7 @@ async function sendGreenApiFileUpload({
       fileName,
       size: sizeBytes,
     });
-    return { success: true };
+    return { success: true, deliveryOutcome: "sent" };
   });
 }
 
@@ -465,7 +484,7 @@ export async function sendWhatsAppFileToChatId(
   fileName: string,
   caption: string,
   mimeType = "application/octet-stream"
-): Promise<{ success: boolean; error?: string }> {
+): Promise<WhatsAppSendResult> {
   const settings = await getWaSettings();
   if (!settings?.instanceId || !settings?.apiToken) {
     return { success: false, error: "WhatsApp credentials not configured" };

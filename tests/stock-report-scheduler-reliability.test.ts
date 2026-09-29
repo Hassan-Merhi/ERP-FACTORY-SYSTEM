@@ -15,6 +15,7 @@ const harness = vi.hoisted(() => ({
   finalizeScheduledWhatsAppOccurrence: vi.fn(),
   logScheduledWhatsAppAttachmentResult: vi.fn(),
   recordScheduledWhatsAppAttachmentPreparationFailure: vi.fn(),
+  recordScheduledWhatsAppAttachmentUncertain: vi.fn(),
 }));
 
 vi.mock("../server/db", () => ({
@@ -68,6 +69,7 @@ vi.mock("../server/services/scheduler/scheduledWhatsAppDelivery", () => ({
   finalizeScheduledWhatsAppOccurrence: harness.finalizeScheduledWhatsAppOccurrence,
   logScheduledWhatsAppAttachmentResult: harness.logScheduledWhatsAppAttachmentResult,
   recordScheduledWhatsAppAttachmentPreparationFailure: harness.recordScheduledWhatsAppAttachmentPreparationFailure,
+  recordScheduledWhatsAppAttachmentUncertain: harness.recordScheduledWhatsAppAttachmentUncertain,
 }));
 
 import { checkAndRunStockReport } from "../server/services/scheduler/stock-report";
@@ -144,6 +146,7 @@ describe("scheduled stock WhatsApp reliability", () => {
     harness.finishScheduledWhatsAppAttachmentAttempt.mockResolvedValue(undefined);
     harness.logScheduledWhatsAppAttachmentResult.mockResolvedValue(undefined);
     harness.recordScheduledWhatsAppAttachmentPreparationFailure.mockResolvedValue(1);
+    harness.recordScheduledWhatsAppAttachmentUncertain.mockResolvedValue(undefined);
     harness.releaseManagedExportAttachment.mockResolvedValue(undefined);
     harness.generateStockPdf.mockResolvedValue({
       buffer: Buffer.from("pdf"),
@@ -201,6 +204,54 @@ describe("scheduled stock WhatsApp reliability", () => {
     expect(harness.finishScheduledWhatsAppAttachmentAttempt).toHaveBeenCalledWith(
       expect.objectContaining({ attachmentKey: "excel", success: false, error: "excel failed" })
     );
+  });
+
+  it("blocks automatic retry when Green API times out after the upload may have been accepted", async () => {
+    harness.sendWhatsAppFileToChatId
+      .mockResolvedValueOnce({
+        success: false,
+        error: "Green API request timed out",
+        deliveryOutcome: "uncertain",
+      })
+      .mockResolvedValueOnce({ success: true, deliveryOutcome: "sent" });
+    harness.finalizeScheduledWhatsAppOccurrence.mockResolvedValue({
+      allSent: false,
+      status: "delivering",
+      error: "Green API request timed out",
+    });
+
+    await checkAndRunStockReport();
+
+    expect(harness.recordScheduledWhatsAppAttachmentUncertain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachmentKey: "pdf",
+        error: "Green API request timed out",
+      })
+    );
+    expect(
+      harness.finishScheduledWhatsAppAttachmentAttempt.mock.calls.some(
+        ([input]) => input?.attachmentKey === "pdf" && input?.success === false
+      )
+    ).toBe(false);
+    expect(lastSentUpdateCalls()).toHaveLength(0);
+  });
+
+  it("does not convert a provider success into a retryable failure when the database write fails", async () => {
+    harness.sendWhatsAppFileToChatId.mockResolvedValueOnce({
+      success: true,
+      deliveryOutcome: "sent",
+    });
+    harness.finishScheduledWhatsAppAttachmentAttempt.mockRejectedValueOnce(new Error("database unavailable"));
+
+    await checkAndRunStockReport();
+
+    expect(harness.finishScheduledWhatsAppAttachmentAttempt).toHaveBeenCalledTimes(1);
+    expect(harness.finishScheduledWhatsAppAttachmentAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({ attachmentKey: "pdf", success: true })
+    );
+    expect(harness.recordScheduledWhatsAppAttachmentUncertain).not.toHaveBeenCalled();
+    expect(harness.sendWhatsAppFileToChatId).toHaveBeenCalledTimes(1);
+    expect(lastSentUpdateCalls()).toHaveLength(0);
   });
 
   it("retries only Excel after PDF already succeeded", async () => {
