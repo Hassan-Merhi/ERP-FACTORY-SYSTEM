@@ -25,7 +25,7 @@ export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool):
 
   const row = verification.rows[0];
   if (!row?.occurrences_table || !row?.attachments_table) {
-    throw new Error("Scheduled WhatsApp delivery tracking schema is unavailable after startup repair");
+    throw new Error("SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE");
   }
 
   logger.info("[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured");
