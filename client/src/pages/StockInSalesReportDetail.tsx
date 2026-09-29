@@ -67,6 +67,21 @@ interface StockOutRow {
   avgProfitPerBale: number;
 }
 
+interface StockAdjustmentRow {
+  id: number;
+  activityDate: string;
+  voucherId: number;
+  voucherNumber: string;
+  locationName: string;
+  adjustmentType: string;
+  direction: "In" | "Out";
+  stockItemId?: number;
+  stockItemName: string;
+  quantity: number;
+  unitRate: number;
+  totalValue: number;
+}
+
 interface PagedRows<T> {
   rows: T[];
   total: number;
@@ -82,6 +97,7 @@ interface DetailResponse {
   summary: Metrics;
   stockIn: PagedRows<StockInRow>;
   stockOut: PagedRows<StockOutRow>;
+  adjustments?: PagedRows<StockAdjustmentRow>;
 }
 
 interface GroupedStockInRow {
@@ -278,6 +294,7 @@ export default function StockInSalesReportDetail() {
 
   const groupedStockIn = useMemo(() => groupStockInRows(data?.stockIn.rows || []), [data?.stockIn.rows]);
   const groupedSales = useMemo(() => groupSalesRows(data?.stockOut.rows || []), [data?.stockOut.rows]);
+  const adjustmentRows = data?.adjustments?.rows || [];
   const stockInTotals = useMemo(
     () =>
       groupedStockIn.reduce(
@@ -300,6 +317,23 @@ export default function StockInSalesReportDetail() {
         { quantity: 0, value: 0, totalProfit: 0 }
       ),
     [groupedSales]
+  );
+  const adjustmentTotals = useMemo(
+    () =>
+      adjustmentRows.reduce(
+        (totals, row) => {
+          if (row.direction === "In") {
+            totals.inQty += Number(row.quantity || 0);
+            totals.inValue += Number(row.totalValue || 0);
+          } else {
+            totals.outQty += Number(row.quantity || 0);
+            totals.outValue += Number(row.totalValue || 0);
+          }
+          return totals;
+        },
+        { inQty: 0, inValue: 0, outQty: 0, outValue: 0 }
+      ),
+    [adjustmentRows]
   );
 
   const summary = data?.summary ?? EMPTY_METRICS;
@@ -329,6 +363,7 @@ export default function StockInSalesReportDetail() {
       const exportData = (await detailResponse.json()) as DetailResponse;
       const exportStockIn = groupStockInRows(exportData.stockIn.rows);
       const exportSales = groupSalesRows(exportData.stockOut.rows);
+      const exportAdjustments = exportData.adjustments?.rows || [];
 
       const summarySheet = workbook.addWorksheet("Summary");
       summarySheet.columns = [
@@ -341,7 +376,7 @@ export default function StockInSalesReportDetail() {
         ["Opening Stock Value", exportData.summary.openingStockValue],
         ["Stock In Qty", exportData.summary.stockInQty],
         ["Stock In Value", exportData.summary.stockInValue],
-        ["Stock Adjustments", exportData.summary.stockAdjustmentQty],
+        ["Stock Adjustments Net Qty", exportData.summary.stockAdjustmentQty],
         ["Total Available Qty", exportData.summary.totalAvailableQty],
         ["Stock Out Qty", exportData.summary.stockOutQty],
         ["Closing Stock Qty", exportData.summary.closingStockQty],
@@ -376,6 +411,33 @@ export default function StockInSalesReportDetail() {
       );
       stockInSheet.getRow(1).font = { bold: true };
 
+      const adjustmentSheet = workbook.addWorksheet("Stock Adjustments");
+      adjustmentSheet.columns = [
+        { header: "Date", key: "date", width: 14 },
+        { header: "Voucher", key: "voucher", width: 18 },
+        { header: "Type", key: "type", width: 18 },
+        { header: "Direction", key: "direction", width: 14 },
+        { header: "Location", key: "location", width: 24 },
+        { header: "Item", key: "item", width: 34 },
+        { header: "Qty", key: "qty", width: 14 },
+        { header: "Rate", key: "rate", width: 16 },
+        { header: "Value", key: "value", width: 18 },
+      ];
+      exportAdjustments.forEach((row) =>
+        adjustmentSheet.addRow({
+          date: row.activityDate,
+          voucher: row.voucherNumber,
+          type: row.adjustmentType,
+          direction: row.direction === "In" ? "Stock In" : "Stock Out",
+          location: row.locationName,
+          item: row.stockItemName,
+          qty: row.quantity,
+          rate: row.unitRate,
+          value: row.totalValue,
+        })
+      );
+      adjustmentSheet.getRow(1).font = { bold: true };
+
       const salesSheet = workbook.addWorksheet("Sales");
       salesSheet.columns = [
         { header: "Date", key: "date", width: 14 },
@@ -403,7 +465,7 @@ export default function StockInSalesReportDetail() {
 
       const safeLabel = periodLabel.replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-|-$/g, "");
       await writeFile(workbook, `stock-flow-detail-${safeLabel || format(new Date(), "yyyy-MM-dd")}.xlsx`);
-      if (exportData.stockIn.truncated || exportData.stockOut.truncated) {
+      if (exportData.stockIn.truncated || exportData.stockOut.truncated || exportData.adjustments?.truncated) {
         toast({
           title: "Export capped",
           description: "At least one section reached the 20,000-row safety limit.",
@@ -645,6 +707,67 @@ export default function StockInSalesReportDetail() {
           </section>
 
           <section className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <PackagePlus className="h-5 w-5" />
+              <h2 className="text-lg font-semibold">Stock Adjustments</h2>
+              <span className="text-xs text-muted-foreground">
+                {formatNumber(adjustmentRows.length, 0)} lines · In {formatNumber(adjustmentTotals.inQty, 0)} · Out{" "}
+                {formatNumber(adjustmentTotals.outQty, 0)}
+              </span>
+            </div>
+            <div className="overflow-hidden rounded-xl border">
+              <div className="max-h-[420px] overflow-auto">
+                <Table className="min-w-[1050px]" mobileLayout="cards">
+                  <TableHeader>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableHead>Date</TableHead>
+                      <TableHead>Voucher</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Direction</TableHead>
+                      <TableHead>Location</TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="text-right">Qty</TableHead>
+                      <TableHead className="text-right">Rate</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      Array.from({ length: 3 }).map((_, i) => (
+                        <TableRow key={i}>
+                          <TableCell colSpan={9}>
+                            <Skeleton className="h-5 w-full" />
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : adjustmentRows.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
+                          No stock adjustments found.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      adjustmentRows.map((row) => (
+                        <TableRow key={row.id}>
+                          <TableCell>{displayDate(row.activityDate)}</TableCell>
+                          <TableCell className="font-mono">{row.voucherNumber}</TableCell>
+                          <TableCell>{row.adjustmentType}</TableCell>
+                          <TableCell className="font-medium">{row.direction === "In" ? "Stock In" : "Stock Out"}</TableCell>
+                          <TableCell>{row.locationName}</TableCell>
+                          <TableCell className="font-medium">{row.stockItemName}</TableCell>
+                          <TableCell className="text-right font-mono">{formatNumber(row.quantity, 0)}</TableCell>
+                          <TableCell className="text-right font-mono">{rate(row.unitRate)}</TableCell>
+                          <TableCell className="text-right font-mono">{formatAmount(row.totalValue)}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-2">
             <div className="flex items-center gap-2">
               <PackageMinus className="h-5 w-5" />
               <h2 className="text-lg font-semibold">Sales</h2>
@@ -743,7 +866,7 @@ export default function StockInSalesReportDetail() {
         </>
       )}
 
-      {(data?.stockIn.truncated || data?.stockOut.truncated) && (
+      {(data?.stockIn.truncated || data?.stockOut.truncated || data?.adjustments?.truncated) && (
         <p className="text-xs text-amber-600">
           Detail data reached the 20,000-line safety limit; totals above remain based on the report summary.
         </p>

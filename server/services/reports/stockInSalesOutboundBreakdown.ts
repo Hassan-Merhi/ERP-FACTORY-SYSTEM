@@ -6,6 +6,8 @@ import { db } from "../../db";
 import {
   creditNoteItems,
   salesItems,
+  stockAdjustmentItems,
+  stockAdjustmentVouchers,
   stockGroups,
   stockItems,
   stockTransferItems,
@@ -157,6 +159,49 @@ async function loadSalesNoteAdjustments(filters: StockInSalesReportFilters): Pro
     .execute();
 }
 
+async function loadAdjustmentOut(filters: StockInSalesReportFilters): Promise<AggregateRow[]> {
+  const key = periodKey(sql<string>`${vouchers.voucherDate}`, filters.grouping);
+  const conditions: SQL[] = [
+    eq(vouchers.companyId, filters.companyId),
+    eq(vouchers.optional, false),
+    isNull(vouchers.deletedAt),
+    eq(stockItems.companyId, filters.companyId),
+  ];
+  if (filters.startDate) conditions.push(gte(vouchers.voucherDate, filters.startDate));
+  if (filters.endDate) conditions.push(lte(vouchers.voucherDate, filters.endDate));
+  addItemFilters(
+    conditions,
+    filters,
+    filters.locationIds.length > 0 ? inArray(stockAdjustmentVouchers.locationId, filters.locationIds) : undefined,
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
+  );
+
+  return db
+    .select({
+      periodKey: key,
+      quantity: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.quantity})
+      END), 0)`,
+      value: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.totalAmount})
+      END), 0)`,
+    })
+    .from(stockAdjustmentItems)
+    .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+    .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+    .innerJoin(stockItems, eq(stockAdjustmentItems.stockItemId, stockItems.id))
+    .leftJoin(stockGroups, eq(stockItems.stockGroupId, stockGroups.id))
+    .where(and(...conditions))
+    .groupBy(key)
+    .execute();
+}
+
 async function loadTransferOut(filters: StockInSalesReportFilters): Promise<AggregateRow[]> {
   const key = periodKey(sql<string>`${vouchers.voucherDate}`, filters.grouping);
   const conditions: SQL[] = [
@@ -218,15 +263,17 @@ function publicMetrics(value: MutableBreakdown): StockInSalesOutboundMetrics {
 export async function getStockInSalesOutboundBreakdown(
   filters: StockInSalesReportFilters
 ): Promise<{ summary: StockInSalesOutboundMetrics; rows: Map<string, StockInSalesOutboundMetrics> }> {
-  const [salesRows, noteRows, transferRows] = await Promise.all([
+  const [salesRows, noteRows, transferRows, adjustmentOutRows] = await Promise.all([
     loadSalesOut(filters),
     loadSalesNoteAdjustments(filters),
     loadTransferOut(filters),
+    loadAdjustmentOut(filters),
   ]);
   const buckets = new Map<string, MutableBreakdown>();
   addRows(buckets, salesRows, "salesOutQty", "salesOutValue");
   addRows(buckets, noteRows, "salesOutQty", "salesOutValue");
   addRows(buckets, transferRows, "transferOutQty", "transferOutValue");
+  addRows(buckets, adjustmentOutRows, "otherStockOutQty", "otherStockOutValue");
   const total = emptyBreakdown();
   for (const bucket of buckets.values()) {
     total.salesOutQty = total.salesOutQty.plus(bucket.salesOutQty);
