@@ -98,6 +98,15 @@ async function countStockAdjustmentsForVoucher(voucherId: number): Promise<numbe
   return Number(firstRow<CountRow>(result)?.count ?? 0);
 }
 
+async function countStockAdjustmentItems(adjustmentId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int AS count
+    FROM stock_adjustment_items
+    WHERE adjustment_id = ${adjustmentId}
+  `);
+  return Number(firstRow<CountRow>(result)?.count ?? 0);
+}
+
 function expectSameInventory(before: InventorySnapshot, after: InventorySnapshot): void {
   expect(Number(after.quantity)).toBeCloseTo(Number(before.quantity), 3);
   expect(Number(after.total_value)).toBeCloseTo(Number(before.total_value), 2);
@@ -185,6 +194,33 @@ describe("Wave 3 exact-value transfer and adjustment edits", () => {
     expectSameInventory(before, after);
     expect(await countStockAdjustmentsForVoucher(voucherId)).toBe(0);
     expect(await readVoucherTotal(voucherId)).toBeCloseTo(0, 2);
+  });
+
+  it("rolls back a partially-started edit when the replacement header/location cannot be saved", async () => {
+    const stockItemId = ctx.stockItemIds[2];
+    await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+
+    const voucherId = await createVoucher("Production", ctx.locationId);
+    const created = await createStockAdjustment(voucherId, ctx.locationId, "Production", "original", [
+      { stockItemId, quantity: "5.000", rate: "20.00" },
+    ]);
+    const before = await readInventory(ctx.locationId, stockItemId);
+    const headerBefore = await readVoucherTotal(voucherId);
+    const itemCountBefore = await countStockAdjustmentItems(created.adjustment.id);
+
+    // This fails after the transaction has begun reversing the historical
+    // adjustment. The FK-invalid replacement location proves every reversal,
+    // item delete, ledger rewrite, and header change is rolled back together.
+    await expect(
+      updateStockAdjustment(created.adjustment.id, 2_147_483_647, "Production", "invalid replacement", [
+        { stockItemId, quantity: "10.000", rate: "30.00" },
+      ])
+    ).rejects.toThrow();
+
+    const after = await readInventory(ctx.locationId, stockItemId);
+    expectSameInventory(before, after);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(headerBefore, 2);
+    expect(await countStockAdjustmentItems(created.adjustment.id)).toBe(itemCountBefore);
   });
 
   it("keeps a production adjustment no-op edit valuation-neutral after later stock changes", async () => {
