@@ -454,6 +454,7 @@ export async function approveImmutableStockTransferRevision(
         revisionNumber,
         transition: "no-op",
         changedItemCount: 0,
+        appliedRevisionCount: 0,
         inventoryApplied,
         totalAmount: currentItems
           .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
