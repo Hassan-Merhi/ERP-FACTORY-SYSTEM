@@ -271,9 +271,22 @@ export function registerAdminPostUpdateStockTransferRevisionRoute(app: Express) 
             recordId: result.revisionId,
             recordIdentifier: `transfer-${transferId}-revision-${result.revisionNumber}`,
             changes: {
-              status: { old: null, new: "approved" },
-              itemCount: { old: 0, new: result.itemCount },
-              compatibilityMode: { old: null, new: "post-update-baseline" },
+              revisionNumber: { new: result.revisionNumber },
+              status: { new: "approved" },
+              note: { new: note },
+              itemCount: { new: result.itemCount },
+              compatibilityMode: { new: "post-update-baseline" },
+              items: {
+                new: normalized.map((item) => ({
+                  stockItemId: item.stockItemId,
+                  stockItemName: item.stockItemName,
+                  sourceLocationId: item.sourceLocationId,
+                  sourceLocationName: item.sourceLocationName ?? null,
+                  originalQuantity: item.originalQuantity,
+                  newQuantity: item.newQuantity,
+                  delta: item.delta,
+                })),
+              },
             },
           });
         } catch {

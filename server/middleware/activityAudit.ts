@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import { logger } from "../lib/logger";
-import { logAudit, type AuditAction } from "../routes/helpers/auditHelpers";
+import { logAudit } from "../routes/helpers/auditWriteAdapter";
+import type { AuditAction } from "../services/audit";
 import { asRecord } from "@shared/typeGuards";
 
 interface ActivityAuditMatch {
@@ -24,6 +25,40 @@ function parseRouteId(path: string): number | null {
  * The body is whatever the client sent, so it stays `unknown` and is narrowed
  * to an indexable record here; a non-object body simply contributes no fields.
  */
+const SAFE_ITEM_FIELDS = [
+  "stockItemId",
+  "stockItemName",
+  "itemName",
+  "code",
+  "sourceLocationId",
+  "sourceLocationName",
+  "destinationLocationId",
+  "destinationLocationName",
+  "originalQuantity",
+  "quantity",
+  "newQuantity",
+  "delta",
+  "rate",
+  "unitPrice",
+  "totalAmount",
+] as const;
+
+function compactStructuredItems(value: unknown): Array<Record<string, unknown>> | null {
+  if (!Array.isArray(value)) return null;
+  const compacted = value.slice(0, 100).flatMap((raw) => {
+    const item = asRecord(raw);
+    if (!item) return [];
+    const safe: Record<string, unknown> = {};
+    for (const field of SAFE_ITEM_FIELDS) {
+      const fieldValue = item[field];
+      if (fieldValue === undefined || fieldValue === null || typeof fieldValue === "object") continue;
+      safe[field] = typeof fieldValue === "string" ? fieldValue.slice(0, 200) : fieldValue;
+    }
+    return Object.keys(safe).length > 0 ? [safe] : [];
+  });
+  return compacted.length > 0 ? compacted : null;
+}
+
 function compactChanges(
   body: unknown,
   extra?: Record<string, unknown>
@@ -54,6 +89,10 @@ function compactChanges(
     const value = source?.[key];
     if (value === undefined || value === null || typeof value === "object") continue;
     changes[key] = { old: null, new: typeof value === "string" ? value.slice(0, 160) : value };
+  }
+  for (const key of ["items", "lines", "lineItems", "affectedItems"] as const) {
+    const compacted = compactStructuredItems(source?.[key]);
+    if (compacted) changes[key] = { old: null, new: compacted };
   }
   for (const [key, value] of Object.entries(extra || {})) {
     if (value !== undefined && value !== null) changes[key] = { old: null, new: value };

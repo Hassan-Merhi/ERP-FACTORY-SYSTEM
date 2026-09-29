@@ -290,6 +290,22 @@ export function registerCreditNoteRoutes(app: Express) {
       });
 
       try {
+        const auditItems = await db
+          .select({
+            stockItemId: creditNoteItems.stockItemId,
+            stockItemName: stockItems.name,
+            code: stockItems.code,
+            sourceLocationId: creditNoteItems.locationId,
+            sourceLocationName: locations.name,
+            quantity: creditNoteItems.quantity,
+            rate: creditNoteItems.rate,
+            totalAmount: creditNoteItems.totalValue,
+          })
+          .from(creditNoteItems)
+          .leftJoin(stockItems, eq(creditNoteItems.stockItemId, stockItems.id))
+          .leftJoin(locations, eq(creditNoteItems.locationId, locations.id))
+          .where(eq(creditNoteItems.voucherId, voucher.id));
+
         await logAudit({
           userId: req.session.userId!,
           username: req.session.username || "unknown",
@@ -302,7 +318,8 @@ export function registerCreditNoteRoutes(app: Express) {
             voucherType: { old: null, new: noteType },
             date: { old: null, new: voucherDate },
             totalAmount: { old: null, new: inventoryMoney(totalRefundAmount) },
-            itemCount: { old: null, new: items.length },
+            itemCount: { old: null, new: auditItems.length },
+            items: { new: auditItems },
             cashAccount: { old: null, new: cashAccountId },
           },
         });
