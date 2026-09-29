@@ -48,7 +48,7 @@ describe("Factory production value report math", () => {
 
     expect(result.weightCost).toBe(10123.39);
     expect(result.profitValue).toBe(-440.39);
-    expect(result.profitMarginPct).toBeCloseTo(-4.5487, 4);
+    expect(result.profitMarginPct).toBeCloseTo(-4.5481, 4);
   });
 
   it("calculates selling-mode profit as selling value minus Weight Cost", () => {
