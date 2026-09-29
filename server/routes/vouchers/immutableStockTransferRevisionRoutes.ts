@@ -286,7 +286,9 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
             revisionNumber: { new: result.revisionNumber },
             status: { old: "pending", new: result.transition },
             changedItemCount: { new: result.changedItemCount },
-            appliedRevisionCount: { new: result.appliedRevisionCount ?? 1 },
+            appliedRevisionCount: {
+              new: result.transition === "no-op" ? 0 : result.appliedRevisionCount ?? 1,
+            },
             totalAmount: { new: result.totalAmount },
             items: { new: result.items },
           }
