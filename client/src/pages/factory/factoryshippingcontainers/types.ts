@@ -100,6 +100,8 @@ export interface AvailRow {
   shippingCompany: string;
   availableContainers: number;
   note: string | null;
+  isArchived: boolean;
+  archivedAt: string | null;
 }
 
 export interface EditingAvail {

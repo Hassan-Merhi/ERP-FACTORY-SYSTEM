@@ -5,6 +5,15 @@ const harness = vi.hoisted(() => ({
   getContainersWaSettings: vi.fn(),
   sendWhatsAppFileToChatId: vi.fn(),
   markContainersWaSent: vi.fn(),
+  claimRetryableScheduledWhatsAppOccurrence: vi.fn(),
+  claimScheduledWhatsAppOccurrence: vi.fn(),
+  beginScheduledWhatsAppAttachmentAttempt: vi.fn(),
+  finishScheduledWhatsAppAttachmentAttempt: vi.fn(),
+  finalizeScheduledWhatsAppOccurrence: vi.fn(),
+  logScheduledWhatsAppAttachmentResult: vi.fn(),
+  recordScheduledWhatsAppAttachmentPreparationFailure: vi.fn(),
+  recordScheduledWhatsAppAttachmentUncertain: vi.fn(),
+  generateContainersPdf: vi.fn(),
 }));
 
 vi.mock("../server/db", () => ({
@@ -27,10 +36,23 @@ vi.mock("../server/services/scheduler/daily-export", () => ({
   runDailyExport: vi.fn(),
 }));
 vi.mock("../server/services/scheduler/whatsapp-send", () => ({ runDailyWhatsAppSend: vi.fn() }));
+vi.mock("../server/services/scheduler/scheduledWhatsAppDelivery", () => ({
+  claimRetryableScheduledWhatsAppOccurrence: harness.claimRetryableScheduledWhatsAppOccurrence,
+  claimScheduledWhatsAppOccurrence: harness.claimScheduledWhatsAppOccurrence,
+  beginScheduledWhatsAppAttachmentAttempt: harness.beginScheduledWhatsAppAttachmentAttempt,
+  finishScheduledWhatsAppAttachmentAttempt: harness.finishScheduledWhatsAppAttachmentAttempt,
+  finalizeScheduledWhatsAppOccurrence: harness.finalizeScheduledWhatsAppOccurrence,
+  logScheduledWhatsAppAttachmentResult: harness.logScheduledWhatsAppAttachmentResult,
+  recordScheduledWhatsAppAttachmentPreparationFailure: harness.recordScheduledWhatsAppAttachmentPreparationFailure,
+  recordScheduledWhatsAppAttachmentUncertain: harness.recordScheduledWhatsAppAttachmentUncertain,
+}));
 vi.mock("../server/services/whatsappService", () => ({
   getContainersWaSettings: harness.getContainersWaSettings,
   sendWhatsAppFileToChatId: harness.sendWhatsAppFileToChatId,
   markContainersWaSent: harness.markContainersWaSent,
+}));
+vi.mock("../server/helpers/generateContainersPdf", () => ({
+  generateContainersPdf: harness.generateContainersPdf,
 }));
 
 import { checkAndRunContainersWhatsApp, purgeOldSoftDeletes } from "../server/services/scheduler/maintenance";
@@ -48,6 +70,12 @@ function healthyClient() {
 describe("Phase 33F maintenance scheduler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.claimRetryableScheduledWhatsAppOccurrence.mockResolvedValue(null);
+    harness.generateContainersPdf.mockResolvedValue({
+      buffer: Buffer.from("containers-pdf"),
+      rowCount: 1,
+      pageCount: 1,
+    });
   });
 
   it("commits and releases a no-op 30-day purge safely", async () => {
@@ -78,6 +106,71 @@ describe("Phase 33F maintenance scheduler", () => {
     await expect(purgeOldSoftDeletes()).rejects.toThrow("begin failed");
     expect(client.query).toHaveBeenCalledWith("ROLLBACK");
     expect(client.release).toHaveBeenCalledOnce();
+  });
+
+  it("preserves the 12-hour duplicate-suppression window for successful container sends", async () => {
+    const nowInNewYork = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    harness.getContainersWaSettings.mockResolvedValue({
+      scheduleEnabled: true,
+      groupChatId: "120000@g.us",
+      instanceId: "instance",
+      apiToken: "token",
+      enabled: true,
+      scheduleHour: nowInNewYork.getHours(),
+      lastSentAt: new Date().toISOString(),
+    });
+
+    await expect(checkAndRunContainersWhatsApp()).resolves.toBeUndefined();
+
+    expect(harness.claimRetryableScheduledWhatsAppOccurrence).toHaveBeenCalledOnce();
+    expect(harness.claimScheduledWhatsAppOccurrence).not.toHaveBeenCalled();
+    expect(harness.sendWhatsAppFileToChatId).not.toHaveBeenCalled();
+    expect(harness.markContainersWaSent).not.toHaveBeenCalled();
+  });
+
+  it("keeps an uncertain container upload blocked from automatic resend", async () => {
+    const nowInNewYork = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+    harness.getContainersWaSettings.mockResolvedValue({
+      scheduleEnabled: true,
+      groupChatId: "120000@g.us",
+      instanceId: "instance",
+      apiToken: "token",
+      enabled: true,
+      scheduleHour: nowInNewYork.getHours(),
+      lastSentAt: null,
+    });
+    harness.claimScheduledWhatsAppOccurrence.mockResolvedValue({
+      id: 77,
+      occurrenceKey: "containers_report:global:group:120000@g.us:2026-09-29:08",
+      acquired: true,
+      status: "claimed",
+      recipientChatId: "120000@g.us",
+      scheduledLocalDate: "2026-09-29",
+      scheduledLocalHour: nowInNewYork.getHours(),
+      claimToken: "claim-token",
+      attachments: [{ key: "pdf", status: "pending", attemptCount: 0, lastError: null, sentAt: null }],
+    });
+    harness.beginScheduledWhatsAppAttachmentAttempt.mockResolvedValue(1);
+    harness.sendWhatsAppFileToChatId.mockResolvedValue({
+      success: false,
+      error: "request timed out",
+      deliveryOutcome: "uncertain",
+    });
+    harness.recordScheduledWhatsAppAttachmentUncertain.mockResolvedValue(undefined);
+    harness.logScheduledWhatsAppAttachmentResult.mockResolvedValue(undefined);
+    harness.finalizeScheduledWhatsAppOccurrence.mockResolvedValue({
+      allSent: false,
+      status: "delivering",
+      error: "request timed out",
+    });
+
+    await expect(checkAndRunContainersWhatsApp()).resolves.toBeUndefined();
+
+    expect(harness.recordScheduledWhatsAppAttachmentUncertain).toHaveBeenCalledWith(
+      expect.objectContaining({ attachmentKey: "pdf", error: "request timed out" })
+    );
+    expect(harness.finishScheduledWhatsAppAttachmentAttempt).not.toHaveBeenCalled();
+    expect(harness.markContainersWaSent).not.toHaveBeenCalled();
   });
 
   it("skips scheduled container WhatsApp work when scheduling is disabled", async () => {

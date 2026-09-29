@@ -374,17 +374,32 @@ export async function updateStockAdjustment(
       accountType: string,
       openingBalanceSide: "Dr" | "Cr"
     ): Promise<number> => {
+      // A soft-deleted system account still owns the unique (company_id, code)
+      // key. Editing an adjustment must therefore restore that row instead of
+      // trying to insert a duplicate. The upsert also makes concurrent account
+      // creation from different vouchers safe.
       let [account] = await tx
         .select()
         .from(schema.ledgerAccounts)
-        .where(
-          and(
-            eq(schema.ledgerAccounts.companyId, newLocation.companyId),
-            eq(schema.ledgerAccounts.code, code),
-            isNull(schema.ledgerAccounts.deletedAt)
-          )
-        )
+        .where(and(eq(schema.ledgerAccounts.companyId, newLocation.companyId), eq(schema.ledgerAccounts.code, code)))
         .limit(1);
+
+      if (account?.deletedAt || account?.active === false) {
+        [account] = await tx
+          .update(schema.ledgerAccounts)
+          .set({
+            name,
+            accountType,
+            subType: accountType,
+            openingBalanceSide,
+            active: true,
+            isHidden: false,
+            deletedAt: null,
+          })
+          .where(eq(schema.ledgerAccounts.id, account.id))
+          .returning();
+      }
+
       if (!account) {
         [account] = await tx
           .insert(schema.ledgerAccounts)
@@ -396,6 +411,18 @@ export async function updateStockAdjustment(
             subType: accountType,
             openingBalance: "0",
             openingBalanceSide,
+          })
+          .onConflictDoUpdate({
+            target: [schema.ledgerAccounts.companyId, schema.ledgerAccounts.code],
+            set: {
+              name,
+              accountType,
+              subType: accountType,
+              openingBalanceSide,
+              active: true,
+              isHidden: false,
+              deletedAt: null,
+            },
           })
           .returning();
       }

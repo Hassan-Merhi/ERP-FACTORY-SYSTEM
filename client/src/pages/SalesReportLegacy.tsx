@@ -283,6 +283,13 @@ export default function SalesReport() {
     { totalSales: 0, totalCost: 0, totalConfiguredCost: 0, costProfit: 0, configuredProfit: 0, totalQty: 0 }
   );
 
+  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
+  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
+  const displayedCostProfit =
+    isAllTimeReconciliationView && cogsReconciliation
+      ? cogsReconciliation.adjustedCostProfit
+      : totals.costProfit;
+
   const handleClearFilters = () => {
     setPeriodFilter(getDefaultPeriodValue("today"));
     setSelectedLocations([]);
@@ -465,55 +472,21 @@ export default function SalesReport() {
               </span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-              {totals.costProfit >= 0 ? (
+              {displayedCostProfit >= 0 ? (
                 <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
               ) : (
                 <TrendingDown className="h-3.5 w-3.5 text-red-500" />
               )}
               <span className="text-muted-foreground text-xs">Cost Profit</span>
               <span
-                className={`font-semibold font-mono text-sm ${totals.costProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
+                className={`font-semibold font-mono text-sm ${displayedCostProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                 data-testid="text-cost-profit"
+                title={isAllTimeReconciliationView ? cogsReconciliation?.formula : undefined}
               >
-                {totals.costProfit < 0 ? "-" : ""}
-                {formatAmount(Math.abs(totals.costProfit))}
+                {displayedCostProfit < 0 ? "-" : ""}
+                {formatAmount(Math.abs(displayedCostProfit))}
               </span>
             </div>
-            {isAllTimeReconciliationView && cogsReconciliation && (
-              <>
-                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-                  {cogsReconciliation.reconciliation >= 0 ? (
-                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-                  )}
-                  <span className="text-muted-foreground text-xs">COGS Reconciliation</span>
-                  <span
-                    className={`font-semibold font-mono text-sm ${cogsReconciliation.reconciliation >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
-                    data-testid="text-cogs-reconciliation"
-                  >
-                    {cogsReconciliation.reconciliation < 0 ? "-" : "+"}
-                    {formatAmount(Math.abs(cogsReconciliation.reconciliation))}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-                  {cogsReconciliation.adjustedCostProfit >= 0 ? (
-                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500" />
-                  ) : (
-                    <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-                  )}
-                  <span className="text-muted-foreground text-xs">Adjusted Cost Profit</span>
-                  <span
-                    className={`font-semibold font-mono text-sm ${cogsReconciliation.adjustedCostProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
-                    data-testid="text-adjusted-cost-profit"
-                    title={cogsReconciliation.formula}
-                  >
-                    {cogsReconciliation.adjustedCostProfit < 0 ? "-" : ""}
-                    {formatAmount(Math.abs(cogsReconciliation.adjustedCostProfit))}
-                  </span>
-                </div>
-              </>
-            )}
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
               <span className="text-muted-foreground text-xs">Hassan's Price</span>
               <span className="font-semibold font-mono text-sm" data-testid="text-configured-cost">

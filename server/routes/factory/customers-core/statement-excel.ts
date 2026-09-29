@@ -9,6 +9,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { buildSafeFilename, contentDisposition } from "../../../lib/contentDisposition";
+import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerOrders, customerBalances, customers, voucherEntries, companies, vouchers } from "@shared/schema";
@@ -375,7 +376,9 @@ export function registerFactoryCustomerStatementExcelRoutes(app: Express) {
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader(
         "Content-Disposition",
-        contentDisposition(buildSafeFilename([customer.legalName || "customer"], "") + "_Statement.xlsx")
+        contentDisposition(
+          buildSafeFilename([customer.legalName || customer.code || String(customerId), getClientDate(req)], "xlsx")
+        )
       );
       res.setHeader("Content-Length", xlsBuffer.byteLength);
       res.end(xlsBuffer);

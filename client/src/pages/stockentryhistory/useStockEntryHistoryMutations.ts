@@ -35,6 +35,9 @@ export function useStockEntryHistoryMutations({
       toast({ title: "Date updated", description: `Updated date for ${variables.ids.length} bale(s).` });
       setEditingDateKey(null);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/stock-entry-history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-stock-list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
     },
     onError: (error: unknown) => {
       toast({ title: "Update failed", description: errorMessage(error, "Update failed"), variant: "destructive" });
