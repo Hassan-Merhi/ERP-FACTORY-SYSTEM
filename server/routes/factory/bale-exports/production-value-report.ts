@@ -13,6 +13,7 @@ import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/ra
 import {
   BatchRateDecimal,
   calculateProductionProfit,
+  calculateProductionWeightCost,
   resolveProductionBalanceWeight,
 } from "./production-value-math";
 import {
@@ -404,12 +405,13 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // All Time keeps the factory-wide physical balance. Date-filtered Production reports
-      // must instead use the remaining material from the batches in that filter. Mixing the
-      // all-time quantity with a daily blended rate made a normal ~11k batch show ~73k profit.
+      // Balance on Table is a factory-wide snapshot. Its weight, rate and value are frozen
+      // to All Time and must not move when the Production date filter changes.
       const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
         db.execute(sql`
-          SELECT COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg
+          SELECT
+            COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
+            COALESCE(SUM(total_cost::numeric), 0) AS mix_cost
           FROM factory_mix_batches
           WHERE company_id        = ${companyId}
             AND carry_forward_from_id IS NULL
@@ -426,45 +428,39 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
       const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
       const allTimeMixKgDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_kg ?? "0"));
+      const allTimeMixCostDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_cost ?? "0"));
       const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
 
-      // Batch rates are calculation values, not display values. Keep up to 10 digits
-      // after the decimal point in the backend. The frontend still formats these rates
-      // to a maximum of 4 decimal places for display.
+      // Original Batches in the selected period keep their own historical blended rate.
+      // This remains useful in the filtered detail cards/table.
       const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
         ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
         : new BatchRateDecimal(0);
-
-      // Convert the visible rate to a JSON number only at the response boundary;
-      // backend calculations below continue to use Decimal.
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
+      // Balance on Table always uses the All Time physical balance and All Time historical
+      // blended batch rate, so changing Today/Week/Month/Custom never changes this card.
+      const allTimeBatchRateDecimal = allTimeMixKgDecimal.gt(0)
+        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
+        : new BatchRateDecimal(0);
       const balanceWeightDecimal = resolveProductionBalanceWeight({
-        isAllTime: !from && !to,
         allTimeMixWeightKg: allTimeMixKgDecimal,
         allTimeBaleWeightKg: allTimeBaleKgDecimal,
-        periodOnTableKg,
       });
       const balanceWeightKg = balanceWeightDecimal.toNumber();
-
-      // Keep the Balance on Table rate identical to Original Batches for every filter.
-      // Only the quantity changes between a filtered period and All Time.
-      const balanceCostPerKg = blendedCostPerKg;
-      const balanceValueDecimal = balanceWeightDecimal.times(blendedCostPerKgDecimal);
+      const balanceCostPerKg = allTimeBatchRateDecimal.toNumber();
+      const balanceValueDecimal = balanceWeightDecimal.times(allTimeBatchRateDecimal);
       const balanceValue = balanceValueDecimal.toDecimalPlaces(2).toNumber();
 
-      // Profit is authoritative on the backend:
-      // selling value - (selected batch cost - selected remaining material value).
-      // Never reconstruct this from a global Balance on Table value in the client.
-      const {
-        remainingMaterialValue,
-        consumedMaterialCost,
-        profitValue,
-        profitMarginPct,
-      } = calculateProductionProfit({
+      // Weight Cost is period-sensitive only through produced bale weight:
+      // bales produced weight × frozen All Time batch rate.
+      const weightCostDecimal = calculateProductionWeightCost({
+        producedWeightKg: totalBaleWeightKg,
+        batchRateCost: allTimeBatchRateDecimal,
+      });
+      const { weightCost, profitValue, profitMarginPct } = calculateProductionProfit({
         sellingValue: totalSellingValue,
-        batchCost: totalMixCostDecimal,
-        remainingMaterialValue: balanceValueDecimal,
+        weightCost: weightCostDecimal,
       });
       const statusValue = profitValue;
 
@@ -662,13 +658,16 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           value: hideReportCosts ? 0 : balanceValue,
         },
         summary: {
-          batchCost: hideReportCosts ? 0 : totalMixCost,
+          // Keep batchCost as a compatibility alias for older clients. It now carries the
+          // same value as Weight Cost; new clients should read weightCost.
+          batchCost: hideReportCosts ? 0 : weightCost,
+          weightCost: hideReportCosts ? 0 : weightCost,
           productionValue: hideReportCosts ? 0 : totalProductionValue,
           statusValue: hideReportCosts ? 0 : statusValue,
           costValue: hideReportCosts ? 0 : totalProductionCostValue,
           sellingValue: hideReportCosts ? 0 : totalSellingValue,
-          remainingMaterialValue: hideReportCosts ? 0 : remainingMaterialValue,
-          consumedMaterialCost: hideReportCosts ? 0 : consumedMaterialCost,
+          remainingMaterialValue: hideReportCosts ? 0 : balanceValue,
+          consumedMaterialCost: hideReportCosts ? 0 : weightCost,
           profitValue: hideReportCosts ? 0 : profitValue,
           profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
           missingSelectedPriceBales: hideReportCosts ? 0 : missingSelectedPriceBales,
