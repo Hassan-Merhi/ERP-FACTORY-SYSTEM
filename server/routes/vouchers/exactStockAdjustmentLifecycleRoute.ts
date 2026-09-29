@@ -97,27 +97,14 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
             stockItemId: item.stockItemId,
             quantity: item.quantity.toFixed(3),
             rate: item.rate.toFixed(2),
-          }))
+          })),
+          {
+            voucherDate: parsed.voucherDate,
+            description: parsed.description,
+          }
         );
 
-        const totalAmount = updated.items.reduce((sum, item) => {
-          const amount = Math.abs(Number(item.totalAmount || 0));
-          if (parsed.adjustmentType !== "Mixed") return sum + amount;
-          return sum + (Number(item.quantity) >= 0 ? amount : -amount);
-        }, 0);
-
-        const [updatedVoucher] = await db
-          .update(vouchers)
-          .set({
-            locationId: parsed.locationId,
-            totalAmount: totalAmount.toFixed(2),
-            description: parsed.description,
-            ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
-          })
-          .where(eq(vouchers.id, voucherId))
-          .returning();
-
-        return res.json(updatedVoucher);
+        return res.json(updated.voucher);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock adjustment data", errors: error.issues });
