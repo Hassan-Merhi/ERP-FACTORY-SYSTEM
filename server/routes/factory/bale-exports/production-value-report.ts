@@ -12,6 +12,7 @@ import { requireAuth } from "../../../auth";
 import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   BatchRateDecimal,
+  calculateCumulativeBatchRate,
   calculateProductionProfit,
   calculateProductionWeightCost,
   resolveProductionBalanceWeight,
@@ -406,9 +407,10 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // Balance on Table is a factory-wide snapshot. Its weight, rate and value are frozen
-      // to All Time and must not move when the Production date filter changes.
-      const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
+      // Balance on Table is an "as-of" snapshot. The report's start date never limits
+      // this card: we cumulatively include factory history through the selected END date.
+      // With no end date (All Time), the queries naturally include all available history.
+      const [mixAsOfResult, baleAsOfResult] = await Promise.all([
         db.execute(sql`
           SELECT
             COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
@@ -417,20 +419,22 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
           WHERE company_id        = ${companyId}
             AND carry_forward_from_id IS NULL
             AND deleted_at        IS NULL
+            ${to ? sql`AND COALESCE(batch_date, DATE(created_at)) <= ${to}` : sql``}
         `),
         db.execute(sql`
           SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
           FROM factory_bales b
           WHERE b.company_id = ${companyId}
             AND b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
+            ${to ? sql`AND COALESCE(DATE(b.stock_entry_date), DATE(b.created_at)) <= ${to}` : sql``}
         `),
       ]);
 
-      const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
-      const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
-      const allTimeMixKgDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_kg ?? "0"));
-      const allTimeMixCostDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_cost ?? "0"));
-      const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
+      const mixAsOfRow = resultRows(mixAsOfResult)[0] ?? {};
+      const baleAsOfRow = resultRows(baleAsOfResult)[0] ?? {};
+      const mixAsOfKgDecimal = new BatchRateDecimal(String(mixAsOfRow.mix_kg ?? "0"));
+      const mixAsOfCostDecimal = new BatchRateDecimal(String(mixAsOfRow.mix_cost ?? "0"));
+      const baleAsOfKgDecimal = new BatchRateDecimal(String(baleAsOfRow.bale_kg ?? "0"));
 
       // Original Batches in the selected period keep their own historical blended rate.
       // This remains useful in the filtered detail cards/table.
@@ -439,25 +443,26 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         : new BatchRateDecimal(0);
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
-      // Balance on Table always uses the All Time physical balance and All Time historical
-      // blended batch rate, so changing Today/Week/Month/Custom never changes this card.
-      const allTimeBatchRateDecimal = allTimeMixKgDecimal.gt(0)
-        ? allTimeMixCostDecimal.dividedBy(allTimeMixKgDecimal).toDecimalPlaces(10)
-        : new BatchRateDecimal(0);
+      // Balance on Table uses the cumulative historical batch rate through the selected
+      // end date, not merely the batches inside the visible period.
+      const balanceBatchRateDecimal = calculateCumulativeBatchRate({
+        cumulativeMixCost: mixAsOfCostDecimal,
+        cumulativeMixWeightKg: mixAsOfKgDecimal,
+      });
       const balanceWeightDecimal = resolveProductionBalanceWeight({
-        allTimeMixWeightKg: allTimeMixKgDecimal,
-        allTimeBaleWeightKg: allTimeBaleKgDecimal,
+        cumulativeMixWeightKg: mixAsOfKgDecimal,
+        cumulativeBaleWeightKg: baleAsOfKgDecimal,
       });
       const balanceWeightKg = balanceWeightDecimal.toNumber();
-      const balanceCostPerKg = allTimeBatchRateDecimal.toNumber();
-      const balanceValueDecimal = balanceWeightDecimal.times(allTimeBatchRateDecimal);
+      const balanceCostPerKg = balanceBatchRateDecimal.toNumber();
+      const balanceValueDecimal = balanceWeightDecimal.times(balanceBatchRateDecimal);
       const balanceValue = balanceValueDecimal.toDecimalPlaces(2).toNumber();
 
-      // Weight Cost is period-sensitive only through produced bale weight:
-      // bales produced weight × frozen All Time batch rate.
+      // Weight Cost follows the same historical batch-rate cutoff shown in Balance on Table:
+      // bales produced in the selected period × cumulative batch rate through that period's end.
       const weightCostDecimal = calculateProductionWeightCost({
         producedWeightKg: totalBaleWeightKg,
-        batchRateCost: allTimeBatchRateDecimal,
+        batchRateCost: balanceBatchRateDecimal,
       });
       // Profit follows the active valuation mode:
       // Cost Price: cost production value - Weight Cost
@@ -656,8 +661,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Must match the Original Batches blended rate; only the remaining quantity changes.
-          // The Selling / Cost toggle only changes finished-production valuation.
+          // Historical as-of snapshot through the selected end date. The Selling / Cost
+          // toggle only changes finished-production valuation; table material stays at cost.
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
         },
