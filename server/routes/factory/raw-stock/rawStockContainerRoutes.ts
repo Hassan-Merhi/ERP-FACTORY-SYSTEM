@@ -22,7 +22,7 @@ import {
   factoryDutyAuditLog,
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
-import { eq, and, asc, desc, isNull } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 const ADMIN_ROLES = ["Admin", "Developer"] as const;
 
@@ -73,40 +73,6 @@ async function resolvePostOffloadChargeFx(opts: {
 }
 
 export function registerRawStockContainerRoutes(app: Express) {
-  // Container screens need a small, Factory-owned ledger picker. Using the shared
-  // /api/ledger-accounts endpoint here is incorrect because Factory-only users and
-  // Containers users without Accounting access are intentionally blocked from that
-  // shared ERP surface. Keep this picker company-scoped and aligned with the
-  // post-offload ownership guard so every selectable account can also be posted.
-  app.get("/api/factory/container-account-options", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const rows = await db
-        .select({
-          id: ledgerAccounts.id,
-          code: ledgerAccounts.code,
-          name: ledgerAccounts.name,
-          accountType: ledgerAccounts.accountType,
-        })
-        .from(ledgerAccounts)
-        .where(
-          and(
-            eq(ledgerAccounts.companyId, companyId),
-            eq(ledgerAccounts.active, true),
-            isNull(ledgerAccounts.deletedAt)
-          )
-        )
-        .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.name));
-
-      res.json(rows);
-    } catch (error: unknown) {
-      logger.error("Error fetching Factory container account options:", { error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
   app.patch("/api/factory/containers/:id/confirm-duty", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
