@@ -404,7 +404,8 @@ export async function createStockAdjustment(
   notes: string,
   items: Array<{ stockItemId: number; quantity: string; rate: string }>,
   _consumptionAccountOverride?: { code: string; name: string },
-  voucherHeader?: { currency?: string; voucherDate?: string; description?: string }
+  voucherHeader?: { currency?: string; voucherDate?: string; description?: string },
+  storedAdjustmentType?: string
 ) {
   return await db.transaction(async (tx) => {
     // Locking the voucher row serialises everyone who wants to adjust it, so the
@@ -422,7 +423,7 @@ export async function createStockAdjustment(
 
     const [adjustment] = await tx
       .insert(schema.stockAdjustmentVouchers)
-      .values({ voucherId, locationId, adjustmentType, notes })
+      .values({ voucherId, locationId, adjustmentType: storedAdjustmentType ?? adjustmentType, notes })
       .returning();
 
     const [location] = await tx.select().from(schema.locations).where(eq(schema.locations.id, locationId));
