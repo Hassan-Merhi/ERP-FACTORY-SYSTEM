@@ -328,6 +328,16 @@ export async function updatePosSale(
     if (existingVoucher.locationId !== updatedVoucher.locationId)
       changes.locationId = { old: existingVoucher.locationId, new: updatedVoucher.locationId };
     changes.itemCount = { new: updatedSalesItems.length };
+    changes.items = {
+      new: updatedSalesItems.map((item) => ({
+        stockItemId: item.stockItemId,
+        stockItemName: item.stockItemName,
+        code: item.stockItemCode,
+        quantity: item.quantity,
+        rate: item.sellingPrice,
+        totalAmount: item.totalSales,
+      })),
+    };
     await logAudit({
       userId,
       username,
