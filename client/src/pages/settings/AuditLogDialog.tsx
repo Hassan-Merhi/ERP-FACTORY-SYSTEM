@@ -328,9 +328,12 @@ export function AuditLogDialog({ log, onClose }: { log: Record<string, unknown>;
   const isSecurity = log.tableName === "security_events" || actionKey.startsWith("security:");
 
   const entriesChange = changes.entries;
-  const itemsChange = changes.items;
+  const structuredItemKey = ["items", "lines", "lineItems", "affectedItems"].find((key) => changes[key]);
+  const itemsChange = structuredItemKey ? changes[structuredItemKey] : undefined;
   const scalarChanges = Object.fromEntries(
-    Object.entries(changes).filter(([key]) => key !== "entries" && key !== "items")
+    Object.entries(changes).filter(
+      ([key]) => key !== "entries" && !["items", "lines", "lineItems", "affectedItems"].includes(key)
+    )
   );
   const oldEntries: AuditEntry[] = Array.isArray(entriesChange?.old) ? (entriesChange.old as AuditEntry[]) : [];
   const newEntries: AuditEntry[] = Array.isArray(entriesChange?.new) ? (entriesChange.new as AuditEntry[]) : [];
