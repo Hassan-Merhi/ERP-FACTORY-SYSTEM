@@ -76,19 +76,6 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       // Update the stock adjustment using the storage method
       const updated = await storage.updateStockAdjustment(id, locationId, adjustmentType, notes || "", itemsForStorage);
 
-      // Recalculate voucher totalAmount based on updated items
-      // For Mixed: net = production (positive qty) - consumption (negative qty)
-      // For Production/Consumption only: use absolute value sum
-      const { adjustmentType: updatedAdjType } = parseResult.data;
-      const newTotalAmount =
-        updatedAdjType === "Mixed"
-          ? items.reduce((sum, item) => sum + item.quantity * item.rate, 0)
-          : items.reduce((sum, item) => sum + Math.abs(item.quantity) * item.rate, 0);
-      await db
-        .update(vouchers)
-        .set({ totalAmount: newTotalAmount.toFixed(2) })
-        .where(eq(vouchers.id, updated.adjustment.voucherId));
-
       res.json(updated);
     } catch (error: unknown) {
       logger.error("[Stock Adjustment PUT] Error:", { error: getErrorMessage(error) });
@@ -237,12 +224,6 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
 
       // Calculate total from actual rates used
       const totalAmount = adjResult.items.reduce((sum: number, item: { totalAmount: string }) => sum + parseFloat(item.totalAmount), 0);
-
-      // Update voucher with actual total
-      await db
-        .update(vouchers)
-        .set({ totalAmount: totalAmount.toFixed(2) })
-        .where(eq(vouchers.id, voucher.id));
 
       // Create waste dispatch record
       const [dispatch] = await db
