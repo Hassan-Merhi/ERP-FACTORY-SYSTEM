@@ -231,6 +231,30 @@ describe("immutable transfer revision approval across POS locations", () => {
     expect(result.transition).toBe("approved");
     expect(result.appliedRevisionCount).toBe(2);
     expect(result.changedItemCount).toBe(2);
+    expect(result.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          stockItemId: itemAId,
+          stockItemName: "Bale A",
+          sourceLocationId: sourceAId,
+          sourceLocationName: "POS Source A",
+          originalQuantity: 10,
+          newQuantity: 14,
+          delta: 4,
+          rate: 10,
+        }),
+        expect.objectContaining({
+          stockItemId: itemBId,
+          stockItemName: "Bale B",
+          sourceLocationId: sourceBId,
+          sourceLocationName: "POS Source B",
+          originalQuantity: 10,
+          newQuantity: 7,
+          delta: -3,
+          rate: 10,
+        }),
+      ])
+    );
 
     expect(await transferQty(itemAId, sourceAId)).toBe(14);
     expect(await transferQty(itemBId, sourceBId)).toBe(7);
@@ -256,6 +280,8 @@ describe("immutable transfer revision approval across POS locations", () => {
     const before = [await inventoryQty(sourceAId, itemAId), await inventoryQty(destinationId, itemAId)];
     const repeat = await approveImmutableStockTransferRevision(companyId, alreadyApproved.id, `${PREFIX}-admin`);
     expect(repeat.transition).toBe("no-op");
+    expect(repeat.items.length).toBeGreaterThan(0);
+    expect(repeat.items[0]).toEqual(expect.objectContaining({ stockItemName: expect.any(String) }));
     expect([await inventoryQty(sourceAId, itemAId), await inventoryQty(destinationId, itemAId)]).toEqual(before);
   });
 });
