@@ -43,6 +43,7 @@ const actionLabels: Record<string, string> = {
   restore: "Restored",
   reverse: "Reversed",
   void: "Voided",
+  return: "Returned",
   recalculate: "Recalculated",
   repair: "Repaired",
   import: "Imported",
@@ -179,18 +180,11 @@ export function registerAuthAuditLogRoutes(app: Express) {
       const resolvedTable = query.tableName || query.module || "";
       const resolvedFrom = query.dateFrom || query.from || "";
       const resolvedTo = query.dateTo || query.to || "";
-      const excludedActions = [
-        "create",
-        "delete",
-        "login",
-        "import",
-        "export",
-        "send_whatsapp",
-        "send_email",
-        "permission_change",
-        "settings_change",
-        "approve",
-      ];
+      // Daybook exposes filters for create/delete/import/export/approval/etc.
+      // Those actions must stay in the result set or the corresponding filters
+      // are dead controls. Login noise remains outside the business activity
+      // stream; security events and Developer activity are excluded separately.
+      const excludedActions = ["login"];
       const baseConditions = [
         sql`${auditLog.userId} NOT IN (SELECT user_id FROM user_company_roles WHERE role = 'Developer')`,
         sql`${auditLog.tableName} != 'security_events'`,
