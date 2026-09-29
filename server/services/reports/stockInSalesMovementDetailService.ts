@@ -210,24 +210,29 @@ export async function getStockInSalesMovementDetails(filters: StockInSalesMoveme
       value: -Math.abs(number(row.value, 2)),
       adjustmentType: null,
     })),
-    ...adjustments.map((row) => ({
-      key: `adjustment-${row.id}-${row.locationId}`,
-      activityDate: String(row.activityDate),
-      movementType: "Adjustment" as const,
-      voucherId: row.voucherId,
-      voucherNumber: row.voucherNumber,
-      locationId: row.locationId,
-      counterpartyLocationId: null,
-      stockItemId: row.stockItemId,
-      stockItemCode: row.stockItemCode,
-      stockItemName: row.stockItemName,
-      stockGroupId: row.stockGroupId,
-      stockGroupName: row.stockGroupName || "Unassigned",
-      quantity: number(row.quantity, 3),
-      unitRate: number(row.rate, 6),
-      value: number(row.value, 2),
-      adjustmentType: row.adjustmentType,
-    })),
+    ...adjustments.map((row) => {
+      const rawQuantity = number(row.quantity, 3);
+      const isStockIn =
+        row.adjustmentType === "Production" || (row.adjustmentType === "Mixed" && rawQuantity > 0);
+      return {
+        key: `adjustment-${row.id}-${row.locationId}`,
+        activityDate: String(row.activityDate),
+        movementType: "Adjustment" as const,
+        voucherId: row.voucherId,
+        voucherNumber: row.voucherNumber,
+        locationId: row.locationId,
+        counterpartyLocationId: null,
+        stockItemId: row.stockItemId,
+        stockItemCode: row.stockItemCode,
+        stockItemName: row.stockItemName,
+        stockGroupId: row.stockGroupId,
+        stockGroupName: row.stockGroupName || "Unassigned",
+        quantity: isStockIn ? Math.abs(rawQuantity) : -Math.abs(rawQuantity),
+        unitRate: number(row.rate, 6),
+        value: isStockIn ? Math.abs(number(row.value, 2)) : -Math.abs(number(row.value, 2)),
+        adjustmentType: row.adjustmentType,
+      };
+    }),
   ].sort((a, b) => {
     const date = b.activityDate.localeCompare(a.activityDate);
     if (date !== 0) return date;

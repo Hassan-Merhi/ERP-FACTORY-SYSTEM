@@ -10,6 +10,8 @@ import {
   creditNoteItems,
   locations,
   salesItems,
+  stockAdjustmentItems,
+  stockAdjustmentVouchers,
   stockGroups,
   stockItems,
   vouchers,
@@ -70,6 +72,25 @@ export interface StockOutDetailRow {
   avgProfitPerBale: number;
 }
 
+export interface StockAdjustmentDetailRow {
+  id: number;
+  activityDate: string;
+  voucherId: number;
+  voucherNumber: string;
+  locationId: number;
+  locationName: string;
+  adjustmentType: string;
+  direction: "In" | "Out";
+  stockGroupId: number | null;
+  stockGroupName: string;
+  stockItemId: number;
+  stockItemCode: string;
+  stockItemName: string;
+  quantity: number;
+  unitRate: number;
+  totalValue: number;
+}
+
 interface PaginationResult<T> {
   rows: T[];
   total: number;
@@ -86,6 +107,7 @@ export interface StockInSalesDetailResult {
   summary: StockInSalesReportMetrics;
   stockIn: PaginationResult<StockInDetailRow>;
   stockOut: PaginationResult<StockOutDetailRow>;
+  adjustments: PaginationResult<StockAdjustmentDetailRow>;
 }
 
 const EXPORT_LIMIT = 20_000;
@@ -229,6 +251,105 @@ async function loadStockIn(filters: StockInSalesDetailFilters): Promise<Paginati
     rows,
     total,
     page: requestedPage,
+    limit: requestedLimit,
+    totalPages: Math.max(1, Math.ceil(total / requestedLimit)),
+    truncated: filters.exportAll ? total > rows.length : false,
+  };
+}
+
+function isAdjustmentStockIn(adjustmentType: string, quantity: number): boolean {
+  return adjustmentType === "Production" || (adjustmentType === "Mixed" && quantity > 0);
+}
+
+async function loadAdjustments(
+  filters: StockInSalesDetailFilters
+): Promise<PaginationResult<StockAdjustmentDetailRow>> {
+  const conditions: SQL[] = [
+    eq(vouchers.companyId, filters.companyId),
+    eq(vouchers.optional, false),
+    isNull(vouchers.deletedAt),
+    eq(stockItems.companyId, filters.companyId),
+    eq(locations.companyId, filters.companyId),
+    gte(vouchers.voucherDate, filters.startDate),
+    lte(vouchers.voucherDate, filters.endDate),
+  ];
+  addItemFilters(
+    conditions,
+    filters,
+    filters.locationIds.length > 0 ? inArray(stockAdjustmentVouchers.locationId, filters.locationIds) : undefined,
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
+  );
+
+  const where = and(...conditions);
+  const requestedLimit = filters.exportAll ? EXPORT_LIMIT : filters.limit;
+
+  const [countResult, rawRows] = await Promise.all([
+    db
+      .select({ total: sql<number>`COUNT(*)::int` })
+      .from(stockAdjustmentItems)
+      .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+      .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+      .innerJoin(stockItems, eq(stockAdjustmentItems.stockItemId, stockItems.id))
+      .innerJoin(locations, eq(stockAdjustmentVouchers.locationId, locations.id))
+      .leftJoin(stockGroups, eq(stockItems.stockGroupId, stockGroups.id))
+      .where(where),
+    db
+      .select({
+        id: stockAdjustmentItems.id,
+        activityDate: vouchers.voucherDate,
+        voucherId: vouchers.id,
+        voucherNumber: vouchers.voucherNumber,
+        locationId: locations.id,
+        locationName: locations.name,
+        adjustmentType: stockAdjustmentVouchers.adjustmentType,
+        stockGroupId: stockGroups.id,
+        stockGroupName: stockGroups.name,
+        stockItemId: stockItems.id,
+        stockItemCode: stockItems.code,
+        stockItemName: stockItems.name,
+        quantity: stockAdjustmentItems.quantity,
+        rate: stockAdjustmentItems.rate,
+        totalValue: stockAdjustmentItems.totalAmount,
+      })
+      .from(stockAdjustmentItems)
+      .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+      .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+      .innerJoin(stockItems, eq(stockAdjustmentItems.stockItemId, stockItems.id))
+      .innerJoin(locations, eq(stockAdjustmentVouchers.locationId, locations.id))
+      .leftJoin(stockGroups, eq(stockItems.stockGroupId, stockGroups.id))
+      .where(where)
+      .orderBy(desc(vouchers.voucherDate), desc(vouchers.voucherNumber), desc(stockAdjustmentItems.id))
+      .limit(requestedLimit),
+  ]);
+
+  const total = Number(countResult[0]?.total || 0);
+  const rows: StockAdjustmentDetailRow[] = rawRows.map((row) => {
+    const rawQuantity = toNumber(row.quantity, 3);
+    const direction = isAdjustmentStockIn(row.adjustmentType, rawQuantity) ? "In" : "Out";
+    return {
+      id: row.id,
+      activityDate: String(row.activityDate),
+      voucherId: row.voucherId,
+      voucherNumber: row.voucherNumber,
+      locationId: row.locationId,
+      locationName: row.locationName,
+      adjustmentType: row.adjustmentType,
+      direction,
+      stockGroupId: row.stockGroupId,
+      stockGroupName: row.stockGroupName || "Unassigned",
+      stockItemId: row.stockItemId,
+      stockItemCode: row.stockItemCode,
+      stockItemName: row.stockItemName,
+      quantity: Math.abs(rawQuantity),
+      unitRate: toNumber(row.rate, 6),
+      totalValue: Math.abs(toNumber(row.totalValue, 2)),
+    };
+  });
+
+  return {
+    rows,
+    total,
+    page: 1,
     limit: requestedLimit,
     totalPages: Math.max(1, Math.ceil(total / requestedLimit)),
     truncated: filters.exportAll ? total > rows.length : false,
@@ -437,7 +558,7 @@ async function loadStockOut(filters: StockInSalesDetailFilters): Promise<Paginat
 }
 
 export async function getStockInSalesDetail(filters: StockInSalesDetailFilters): Promise<StockInSalesDetailResult> {
-  const [summaryReport, stockIn, stockOut] = await Promise.all([
+  const [summaryReport, stockIn, stockOut, adjustments] = await Promise.all([
     getStockInSalesReport({
       companyId: filters.companyId,
       startDate: filters.startDate,
@@ -450,6 +571,7 @@ export async function getStockInSalesDetail(filters: StockInSalesDetailFilters):
     }),
     loadStockIn(filters),
     loadStockOut(filters),
+    loadAdjustments(filters),
   ]);
 
   return {
@@ -465,5 +587,6 @@ export async function getStockInSalesDetail(filters: StockInSalesDetailFilters):
     summary: summaryReport.summary,
     stockIn,
     stockOut,
+    adjustments,
   };
 }
