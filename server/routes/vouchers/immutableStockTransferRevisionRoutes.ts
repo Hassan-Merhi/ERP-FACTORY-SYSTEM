@@ -80,6 +80,18 @@ function sendError(res: Response, error: unknown, context: string) {
  * Fire-and-forget: a WhatsApp outage must never fail the revision that was
  * already committed.
  */
+function revisionItemsForAudit(items: ImmutableRevisionResult["items"]) {
+  return items.map((item) => ({
+    stockItemId: Number(item.stockItemId),
+    stockItemName: String(item.stockItemName || `Item #${item.stockItemId}`),
+    sourceLocationId: Number(item.sourceLocationId || 0),
+    sourceLocationName: item.sourceLocationName ? String(item.sourceLocationName) : null,
+    originalQuantity: Number(item.originalQuantity || 0),
+    newQuantity: Number(item.newQuantity || 0),
+    delta: Number(item.delta || 0),
+  }));
+}
+
 function queueRevisedTransferWhatsApp(result: ImmutableRevisionResult) {
   // Only revisions submitted for review (POS adjustments) are broadcast, the
   // same set the legacy handler sent before the immutable routes took over.
@@ -120,13 +132,14 @@ async function auditRevision(
   companyId: number,
   revisionId: number,
   identifier: string,
-  changes: Record<string, { old: unknown; new: unknown }>
+  action: "create" | "update" | "approve",
+  changes: Record<string, { old?: unknown; new?: unknown }>
 ) {
   await logAudit({
     userId: userId(req) || "unknown",
     username: req.session.username || req.user?.username || "unknown",
     companyId,
-    action: "update",
+    action,
     tableName: "stock_transfer_revisions",
     recordId: revisionId,
     recordIdentifier: identifier,
@@ -183,13 +196,16 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
         companyId,
         result.revisionId,
         `transfer-${result.transferId}-revision-${result.revisionNumber}`,
+        "create",
         {
-          status: { old: null, new: result.status },
-          itemCount: { old: 0, new: result.itemCount },
+          revisionNumber: { new: result.revisionNumber },
+          status: { new: result.status },
+          note: { new: parsed.note?.trim() || null },
+          itemCount: { new: result.itemCount },
           route: {
-            old: null,
             new: `${result.sourceLocationName} -> ${result.destinationLocationName}`,
           },
+          items: { new: revisionItemsForAudit(result.items) },
         }
       );
 
@@ -265,10 +281,14 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
           companyId,
           revisionId,
           `transfer-${result.transferId}-revision-${result.revisionNumber}`,
+          "approve",
           {
+            revisionNumber: { new: result.revisionNumber },
             status: { old: "pending", new: result.transition },
-            changedItemCount: { old: 0, new: result.changedItemCount },
-            totalAmount: { old: null, new: result.totalAmount },
+            changedItemCount: { new: result.changedItemCount },
+            appliedRevisionCount: { new: result.appliedRevisionCount ?? 1 },
+            totalAmount: { new: result.totalAmount },
+            items: { new: result.items },
           }
         );
         return res.json({ success: true, ...result });
@@ -301,9 +321,12 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
           companyId,
           revisionId,
           `transfer-${result.transferId}-revision-${result.revisionNumber}`,
+          "update",
           {
+            revisionNumber: { new: result.revisionNumber },
             status: { old: "pending", new: result.transition },
-            reason: { old: null, new: parsed.reason || null },
+            reason: { new: parsed.reason || null },
+            items: { new: result.items },
           }
         );
         return res.json({ success: true, ...result });
