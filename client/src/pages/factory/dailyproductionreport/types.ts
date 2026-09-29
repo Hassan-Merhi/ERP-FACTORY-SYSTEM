@@ -14,6 +14,7 @@ export interface ReportData {
   valuationMode: ProductionValuationMode;
   summary: {
     batchCost: number;
+    weightCost: number;
     productionValue: number;
     statusValue: number;
     costValue: number;

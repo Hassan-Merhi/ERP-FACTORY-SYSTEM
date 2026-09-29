@@ -4,58 +4,57 @@ import Decimal from "decimal.js";
 export const BatchRateDecimal = Decimal.clone({ precision: 80, rounding: Decimal.ROUND_HALF_UP });
 
 type BalanceWeightArgs = {
-  isAllTime: boolean;
   allTimeMixWeightKg: Decimal.Value;
   allTimeBaleWeightKg: Decimal.Value;
-  periodOnTableKg: Decimal.Value;
 };
 
+/**
+ * Balance on Table is a factory-wide physical snapshot, not a period metric.
+ * Date filters must never change it.
+ */
 export function resolveProductionBalanceWeight({
-  isAllTime,
   allTimeMixWeightKg,
   allTimeBaleWeightKg,
-  periodOnTableKg,
 }: BalanceWeightArgs) {
-  if (isAllTime) {
-    return BatchRateDecimal.max(
-      0,
-      new BatchRateDecimal(allTimeMixWeightKg).minus(new BatchRateDecimal(allTimeBaleWeightKg))
-    );
-  }
+  return BatchRateDecimal.max(
+    0,
+    new BatchRateDecimal(allTimeMixWeightKg).minus(new BatchRateDecimal(allTimeBaleWeightKg))
+  );
+}
 
-  return BatchRateDecimal.max(0, new BatchRateDecimal(periodOnTableKg));
+type WeightCostArgs = {
+  producedWeightKg: Decimal.Value;
+  batchRateCost: Decimal.Value;
+};
+
+/**
+ * Weight Cost = bales produced weight × the frozen all-time batch rate.
+ */
+export function calculateProductionWeightCost({
+  producedWeightKg,
+  batchRateCost,
+}: WeightCostArgs) {
+  return new BatchRateDecimal(producedWeightKg).times(new BatchRateDecimal(batchRateCost));
 }
 
 type ProfitArgs = {
   sellingValue: Decimal.Value;
-  batchCost: Decimal.Value;
-  remainingMaterialValue: Decimal.Value;
+  weightCost: Decimal.Value;
 };
 
 export function calculateProductionProfit({
   sellingValue,
-  batchCost,
-  remainingMaterialValue,
+  weightCost,
 }: ProfitArgs) {
   const sellingValueDecimal = new BatchRateDecimal(sellingValue);
-  const batchCostDecimal = new BatchRateDecimal(batchCost);
-  const remainingMaterialValueDecimal = BatchRateDecimal.max(
-    0,
-    BatchRateDecimal.min(batchCostDecimal, new BatchRateDecimal(remainingMaterialValue))
-  );
-
-  const consumedMaterialCostDecimal = BatchRateDecimal.max(
-    0,
-    batchCostDecimal.minus(remainingMaterialValueDecimal)
-  );
-  const profitValueDecimal = sellingValueDecimal.minus(consumedMaterialCostDecimal);
+  const weightCostDecimal = new BatchRateDecimal(weightCost);
+  const profitValueDecimal = sellingValueDecimal.minus(weightCostDecimal);
   const profitMarginPctDecimal = sellingValueDecimal.gt(0)
     ? profitValueDecimal.dividedBy(sellingValueDecimal).times(100)
     : new BatchRateDecimal(0);
 
   return {
-    remainingMaterialValue: remainingMaterialValueDecimal.toDecimalPlaces(2).toNumber(),
-    consumedMaterialCost: consumedMaterialCostDecimal.toDecimalPlaces(2).toNumber(),
+    weightCost: weightCostDecimal.toDecimalPlaces(2).toNumber(),
     profitValue: profitValueDecimal.toDecimalPlaces(2).toNumber(),
     profitMarginPct: profitMarginPctDecimal.toNumber(),
   };
