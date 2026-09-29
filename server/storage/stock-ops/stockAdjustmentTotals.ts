@@ -15,10 +15,7 @@ export type StockAdjustmentTotalItem = {
  * stock-adjustment lines. Consumption lines can be re-costed by the storage
  * layer, so submitted qty × rate is not authoritative.
  */
-export function stockAdjustmentHeaderTotal(
-  adjustmentType: string,
-  items: StockAdjustmentTotalItem[]
-): string {
+export function stockAdjustmentHeaderTotal(adjustmentType: string, items: StockAdjustmentTotalItem[]): string {
   const isMixed = adjustmentType.trim().toLowerCase() === "mixed";
   let total = toInventoryDecimal(0);
 
