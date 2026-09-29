@@ -17,6 +17,7 @@ import {
   finishScheduledWhatsAppAttachmentAttempt,
   logScheduledWhatsAppAttachmentResult,
   recordScheduledWhatsAppAttachmentPreparationFailure,
+  recordScheduledWhatsAppAttachmentUncertain,
 } from "./scheduledWhatsAppDelivery";
 
 const SCHEDULER_PREFLIGHT_TIMEOUT_MS = 20_000;
@@ -180,23 +181,12 @@ export async function checkAndRunStockReport(): Promise<void> {
             const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "pdf");
             if (attempt) {
               const pdfName = `Stock_${company.name.replace(/[^a-z0-9]/gi, "_")}_${reportDate}.pdf`;
+              let pdfRes: Awaited<ReturnType<typeof sendWhatsAppFileToChatId>> | null = null;
               try {
-                const pdfRes = await sendWhatsAppFileToChatId(chatId, pdfBuf, pdfName, "", "application/pdf");
-                await finishScheduledWhatsAppAttachmentAttempt({
-                  claim,
-                  attachmentKey: "pdf",
-                  success: pdfRes.success,
-                  error: pdfRes.error,
-                });
-                await logScheduledWhatsAppAttachmentResult({
-                  claim,
-                  recipient: recipientKey,
-                  attachment: "pdf",
-                  attempt,
-                  success: pdfRes.success,
-                  error: pdfRes.error,
-                });
+                pdfRes = await sendWhatsAppFileToChatId(chatId, pdfBuf, pdfName, "", "application/pdf");
               } catch (error) {
+                // Exceptions here occur before the upload helper can classify a
+                // provider response, so this is a known local/pre-dispatch failure.
                 await finishScheduledWhatsAppAttachmentAttempt({
                   claim,
                   attachmentKey: "pdf",
@@ -211,6 +201,42 @@ export async function checkAndRunStockReport(): Promise<void> {
                   success: false,
                   error,
                 });
+              }
+
+              if (pdfRes) {
+                if (pdfRes.deliveryOutcome === "uncertain") {
+                  await recordScheduledWhatsAppAttachmentUncertain({
+                    claim,
+                    attachmentKey: "pdf",
+                    error: pdfRes.error,
+                  });
+                  await logScheduledWhatsAppAttachmentResult({
+                    claim,
+                    recipient: recipientKey,
+                    attachment: "pdf",
+                    attempt,
+                    success: false,
+                    error: pdfRes.error,
+                  });
+                } else {
+                  // Do not wrap persistence after a provider success in the
+                  // send-failure catch. If this write fails, leaving "sending"
+                  // is safer than converting an accepted file into a retryable failure.
+                  await finishScheduledWhatsAppAttachmentAttempt({
+                    claim,
+                    attachmentKey: "pdf",
+                    success: pdfRes.success,
+                    error: pdfRes.error,
+                  });
+                  await logScheduledWhatsAppAttachmentResult({
+                    claim,
+                    recipient: recipientKey,
+                    attachment: "pdf",
+                    attempt,
+                    success: pdfRes.success,
+                    error: pdfRes.error,
+                  });
+                }
               }
             }
           }
@@ -248,28 +274,15 @@ export async function checkAndRunStockReport(): Promise<void> {
           const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "excel");
           if (attempt) {
             const xlsName = `NetPosition_${company.name.replace(/[^a-z0-9]/gi, "_")}_${reportDate}.xlsx`;
+            let xlsRes: Awaited<ReturnType<typeof sendWhatsAppFileToChatId>> | null = null;
             try {
-              const xlsRes = await sendWhatsAppFileToChatId(
+              xlsRes = await sendWhatsAppFileToChatId(
                 chatId,
                 xlsBuf,
                 xlsName,
                 "",
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
               );
-              await finishScheduledWhatsAppAttachmentAttempt({
-                claim,
-                attachmentKey: "excel",
-                success: xlsRes.success,
-                error: xlsRes.error,
-              });
-              await logScheduledWhatsAppAttachmentResult({
-                claim,
-                recipient: recipientKey,
-                attachment: "excel",
-                attempt,
-                success: xlsRes.success,
-                error: xlsRes.error,
-              });
             } catch (error) {
               await finishScheduledWhatsAppAttachmentAttempt({
                 claim,
@@ -285,6 +298,39 @@ export async function checkAndRunStockReport(): Promise<void> {
                 success: false,
                 error,
               });
+            }
+
+            if (xlsRes) {
+              if (xlsRes.deliveryOutcome === "uncertain") {
+                await recordScheduledWhatsAppAttachmentUncertain({
+                  claim,
+                  attachmentKey: "excel",
+                  error: xlsRes.error,
+                });
+                await logScheduledWhatsAppAttachmentResult({
+                  claim,
+                  recipient: recipientKey,
+                  attachment: "excel",
+                  attempt,
+                  success: false,
+                  error: xlsRes.error,
+                });
+              } else {
+                await finishScheduledWhatsAppAttachmentAttempt({
+                  claim,
+                  attachmentKey: "excel",
+                  success: xlsRes.success,
+                  error: xlsRes.error,
+                });
+                await logScheduledWhatsAppAttachmentResult({
+                  claim,
+                  recipient: recipientKey,
+                  attachment: "excel",
+                  attempt,
+                  success: xlsRes.success,
+                  error: xlsRes.error,
+                });
+              }
             }
           }
         }
@@ -302,12 +348,15 @@ export async function checkAndRunStockReport(): Promise<void> {
         result: "sent",
       });
     } else {
-      logger.warn("[StockReport] Occurrence incomplete — failed attachments remain retryable.", {
-        occurrenceKey: claim.occurrenceKey,
-        recipient: recipientKey,
-        result: final.status,
-        error: final.error,
-      });
+      logger.warn(
+        "[StockReport] Occurrence incomplete — known failures remain retryable; uncertain sends stay blocked.",
+        {
+          occurrenceKey: claim.occurrenceKey,
+          recipient: recipientKey,
+          result: final.status,
+          error: final.error,
+        }
+      );
     }
   } catch (err: unknown) {
     logger.error("[StockReport] Error:", { error: getErrorMessage(err) || err });

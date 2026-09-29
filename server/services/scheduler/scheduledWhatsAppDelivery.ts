@@ -475,6 +475,40 @@ export async function finishScheduledWhatsAppAttachmentAttempt(input: {
   );
 }
 
+export async function recordScheduledWhatsAppAttachmentUncertain(input: {
+  claim: ScheduledWhatsAppClaim;
+  attachmentKey: string;
+  error: unknown;
+}): Promise<void> {
+  const { claim, attachmentKey } = input;
+  if (!claim.acquired || !claim.claimToken) return;
+  const message = getErrorMessage(input.error) || "WhatsApp delivery outcome is uncertain";
+
+  // Keep the attachment in "sending". That state is intentionally excluded
+  // from automatic recovery because the provider may already have accepted the
+  // file even though our request timed out or lost its response.
+  await pool.query(
+    `UPDATE scheduled_whatsapp_attachments a
+        SET last_error = $4,
+            updated_at = now()
+       FROM scheduled_whatsapp_occurrences o
+      WHERE a.occurrence_id = $1
+        AND a.attachment_key = $2
+        AND o.id = a.occurrence_id
+        AND o.claim_token = $3
+        AND a.status = 'sending'`,
+    [claim.id, attachmentKey, claim.claimToken, message.slice(0, 2000)]
+  );
+
+  await pool.query(
+    `UPDATE scheduled_whatsapp_occurrences
+        SET last_error = $3,
+            updated_at = now()
+      WHERE id = $1 AND claim_token = $2`,
+    [claim.id, claim.claimToken, message.slice(0, 2000)]
+  );
+}
+
 export async function finalizeScheduledWhatsAppOccurrence(
   claim: ScheduledWhatsAppClaim
 ): Promise<{ allSent: boolean; status: ScheduledWhatsAppOccurrenceStatus; error: string | null }> {

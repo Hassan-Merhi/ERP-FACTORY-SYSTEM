@@ -19,6 +19,7 @@ import {
   finishScheduledWhatsAppAttachmentAttempt,
   logScheduledWhatsAppAttachmentResult,
   recordScheduledWhatsAppAttachmentPreparationFailure,
+  recordScheduledWhatsAppAttachmentUncertain,
 } from "./scheduledWhatsAppDelivery";
 
 type MixBatchPurgeCandidate = {
@@ -377,38 +378,15 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
         const attempt = await beginScheduledWhatsAppAttachmentAttempt(claim, "pdf");
         if (attempt) {
           const fileName = `Containers_${claim.scheduledLocalDate}.pdf`;
+          let result: Awaited<ReturnType<typeof sendWhatsAppFileToChatId>> | null = null;
           try {
-            const result = await sendWhatsAppFileToChatId(
+            result = await sendWhatsAppFileToChatId(
               settings.groupChatId,
               generated.buffer,
               fileName,
               "",
               "application/pdf"
             );
-            await finishScheduledWhatsAppAttachmentAttempt({
-              claim,
-              attachmentKey: "pdf",
-              success: result.success,
-              error: result.error,
-            });
-            await logScheduledWhatsAppAttachmentResult({
-              claim,
-              recipient: recipientKey,
-              attachment: "pdf",
-              attempt,
-              success: result.success,
-              error: result.error,
-            });
-            if (result.success) {
-              logger.info("[ContainersWA] PDF sent.", {
-                occurrenceKey: claim.occurrenceKey,
-                recipient: recipientKey,
-                attachment: "pdf",
-                attempt,
-                result: "sent",
-                rowCount: generated.rowCount,
-              });
-            }
           } catch (error) {
             await finishScheduledWhatsAppAttachmentAttempt({
               claim,
@@ -425,6 +403,49 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
               error,
             });
           }
+
+          if (result) {
+            if (result.deliveryOutcome === "uncertain") {
+              await recordScheduledWhatsAppAttachmentUncertain({
+                claim,
+                attachmentKey: "pdf",
+                error: result.error,
+              });
+              await logScheduledWhatsAppAttachmentResult({
+                claim,
+                recipient: recipientKey,
+                attachment: "pdf",
+                attempt,
+                success: false,
+                error: result.error,
+              });
+            } else {
+              await finishScheduledWhatsAppAttachmentAttempt({
+                claim,
+                attachmentKey: "pdf",
+                success: result.success,
+                error: result.error,
+              });
+              await logScheduledWhatsAppAttachmentResult({
+                claim,
+                recipient: recipientKey,
+                attachment: "pdf",
+                attempt,
+                success: result.success,
+                error: result.error,
+              });
+              if (result.success) {
+                logger.info("[ContainersWA] PDF sent.", {
+                  occurrenceKey: claim.occurrenceKey,
+                  recipient: recipientKey,
+                  attachment: "pdf",
+                  attempt,
+                  result: "sent",
+                  rowCount: generated.rowCount,
+                });
+              }
+            }
+          }
         }
       }
     }
@@ -438,7 +459,7 @@ export async function checkAndRunContainersWhatsApp(): Promise<void> {
         result: "sent",
       });
     } else {
-      logger.warn("[ContainersWA] Occurrence incomplete — retry will target only failed attachments.", {
+      logger.warn("[ContainersWA] Occurrence incomplete — known failures may retry; uncertain sends stay blocked.", {
         occurrenceKey: claim.occurrenceKey,
         recipient: recipientKey,
         result: final.status,
