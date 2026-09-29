@@ -3,22 +3,41 @@ import Decimal from "decimal.js";
 // Keep report arithmetic out of binary floating-point space until the API boundary.
 export const BatchRateDecimal = Decimal.clone({ precision: 80, rounding: Decimal.ROUND_HALF_UP });
 
-type BalanceWeightArgs = {
-  allTimeMixWeightKg: Decimal.Value;
-  allTimeBaleWeightKg: Decimal.Value;
+type CumulativeBatchRateArgs = {
+  cumulativeMixCost: Decimal.Value;
+  cumulativeMixWeightKg: Decimal.Value;
 };
 
 /**
- * Balance on Table is a factory-wide physical snapshot, not a period metric.
- * Date filters must never change it.
+ * Historical weighted-average batch rate through a caller-supplied cutoff date.
+ * The route is responsible for supplying cumulative totals from factory history
+ * through that cutoff; with no cutoff this naturally becomes All Time.
+ */
+export function calculateCumulativeBatchRate({
+  cumulativeMixCost,
+  cumulativeMixWeightKg,
+}: CumulativeBatchRateArgs) {
+  const weight = new BatchRateDecimal(cumulativeMixWeightKg);
+  if (!weight.gt(0)) return new BatchRateDecimal(0);
+  return new BatchRateDecimal(cumulativeMixCost).dividedBy(weight).toDecimalPlaces(10);
+}
+
+type BalanceWeightArgs = {
+  cumulativeMixWeightKg: Decimal.Value;
+  cumulativeBaleWeightKg: Decimal.Value;
+};
+
+/**
+ * Balance on Table is an as-of physical snapshot:
+ * cumulative mixed weight minus cumulative produced-bale weight through the cutoff.
  */
 export function resolveProductionBalanceWeight({
-  allTimeMixWeightKg,
-  allTimeBaleWeightKg,
+  cumulativeMixWeightKg,
+  cumulativeBaleWeightKg,
 }: BalanceWeightArgs) {
   return BatchRateDecimal.max(
     0,
-    new BatchRateDecimal(allTimeMixWeightKg).minus(new BatchRateDecimal(allTimeBaleWeightKg))
+    new BatchRateDecimal(cumulativeMixWeightKg).minus(new BatchRateDecimal(cumulativeBaleWeightKg))
   );
 }
 
@@ -28,7 +47,7 @@ type WeightCostArgs = {
 };
 
 /**
- * Weight Cost = bales produced weight × the frozen all-time batch rate.
+ * Weight Cost = bales produced weight × the applicable historical batch rate.
  */
 export function calculateProductionWeightCost({
   producedWeightKg,
