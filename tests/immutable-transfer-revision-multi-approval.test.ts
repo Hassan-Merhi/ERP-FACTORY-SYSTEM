@@ -280,6 +280,7 @@ describe("immutable transfer revision approval across POS locations", () => {
     const before = [await inventoryQty(sourceAId, itemAId), await inventoryQty(destinationId, itemAId)];
     const repeat = await approveImmutableStockTransferRevision(companyId, alreadyApproved.id, `${PREFIX}-admin`);
     expect(repeat.transition).toBe("no-op");
+    expect(repeat.appliedRevisionCount).toBe(0);
     expect(repeat.items.length).toBeGreaterThan(0);
     expect(repeat.items[0]).toEqual(expect.objectContaining({ stockItemName: expect.any(String) }));
     expect([await inventoryQty(sourceAId, itemAId), await inventoryQty(destinationId, itemAId)]).toEqual(before);
