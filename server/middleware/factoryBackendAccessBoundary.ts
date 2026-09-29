@@ -225,6 +225,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   if (hasPrefix(path, "/bale-import-batches")) {
     return requirement("factory/import", ["hide_tab_import_bales"]);
   }
+  if (path === "/container-account-options") {
+    return requirement("factory/containers-hub");
+  }
   if (path === "/containers/import-excel" || path === "/containers/backfill-import-credits") {
     return requirement("factory/containers-hub");
   }
