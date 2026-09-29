@@ -43,7 +43,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     data,
     isLoading,
     presets,
-    profitValue,
     valuationMode,
     setValuationMode,
   } = report;
@@ -524,25 +523,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <>
                       <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                      {!isOwner && (
-                        <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                            Production Profit
-                          </span>
-                          <span
-                            className={`text-sm font-extrabold tabular-nums ${
-                              profitValue > 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : profitValue < 0
-                                  ? "text-red-500 dark:text-red-400"
-                                  : "text-muted-foreground"
-                            }`}
-                          >
-                            {profitValue > 0 ? "+" : ""}
-                            {fmtMoney(profitValue)}
-                          </span>
-                        </div>
-                      )}
                     </>
                   )}
                 </>
