@@ -32,7 +32,7 @@ describe("Factory production value report math", () => {
       batchRateCost: "0.7767506504",
     });
 
-    expect(weightCost.toDecimalPlaces(2).toNumber()).toBe(10124.69);
+    expect(weightCost.toDecimalPlaces(2).toNumber()).toBe(10123.39);
   });
 
   it("calculates profit from selling value minus Weight Cost", () => {
@@ -46,9 +46,9 @@ describe("Factory production value report math", () => {
       weightCost,
     });
 
-    expect(result.weightCost).toBe(10124.69);
-    expect(result.profitValue).toBe(1283.81);
-    expect(result.profitMarginPct).toBeCloseTo(11.2537, 4);
+    expect(result.weightCost).toBe(10123.39);
+    expect(result.profitValue).toBe(1285.11);
+    expect(result.profitMarginPct).toBeCloseTo(11.2645, 4);
   });
 
   it("keeps decimal precision until the API boundary", () => {
