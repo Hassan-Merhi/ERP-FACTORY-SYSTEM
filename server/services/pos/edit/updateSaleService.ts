@@ -13,7 +13,7 @@ import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { logAudit, recalculateIntercompanyForDate } from "../../../routes/_helpers";
 import { salesItems, voucherEntries, stockItems, vouchers } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type {
   HandlerErrorResult,
   PosEditSaleItemInput,
@@ -55,6 +55,12 @@ export interface PosSaleUpdateTransactionResult {
   grandTotal?: number;
   totalQtySoldEdit?: number;
   isGoldenCoastEdit?: boolean;
+  auditOldItems?: Array<{
+    stockItemId: number;
+    quantity: string;
+    rate: string;
+    totalAmount: string;
+  }>;
 }
 
 /**
@@ -237,6 +243,12 @@ export async function applyPosSaleUpdateTx(
     grandTotal: rebuildResult.grandTotal,
     totalQtySoldEdit: rebuildResult.totalQtySoldEdit,
     isGoldenCoastEdit,
+    auditOldItems: oldSalesItems.map((item) => ({
+      stockItemId: item.stockItemId,
+      quantity: item.quantity,
+      rate: item.sellingPrice,
+      totalAmount: item.totalSales,
+    })),
   };
 }
 
@@ -320,6 +332,17 @@ export async function updatePosSale(
   }
 
   try {
+    const oldAuditRows = transactionResult.auditOldItems ?? [];
+    const oldItemIds = Array.from(new Set(oldAuditRows.map((item) => item.stockItemId)));
+    const oldItemNames =
+      oldItemIds.length > 0
+        ? await db
+            .select({ id: stockItems.id, name: stockItems.name, code: stockItems.code })
+            .from(stockItems)
+            .where(inArray(stockItems.id, oldItemIds))
+        : [];
+    const oldItemNameMap = new Map(oldItemNames.map((item) => [item.id, item] as const));
+
     const changes: Record<string, { old?: unknown; new?: unknown }> = {};
     if (existingVoucher.totalAmount !== updatedVoucher.totalAmount)
       changes.totalAmount = { old: existingVoucher.totalAmount, new: updatedVoucher.totalAmount };
@@ -329,6 +352,14 @@ export async function updatePosSale(
       changes.locationId = { old: existingVoucher.locationId, new: updatedVoucher.locationId };
     changes.itemCount = { new: updatedSalesItems.length };
     changes.items = {
+      old: oldAuditRows.map((item) => ({
+        stockItemId: item.stockItemId,
+        stockItemName: oldItemNameMap.get(item.stockItemId)?.name ?? `Item #${item.stockItemId}`,
+        code: oldItemNameMap.get(item.stockItemId)?.code ?? null,
+        quantity: item.quantity,
+        rate: item.rate,
+        totalAmount: item.totalAmount,
+      })),
       new: updatedSalesItems.map((item) => ({
         stockItemId: item.stockItemId,
         stockItemName: item.stockItemName,
