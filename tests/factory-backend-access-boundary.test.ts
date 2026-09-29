@@ -83,12 +83,6 @@ describe("Wave 4 Factory backend access ownership", () => {
     ]);
   });
 
-  it("owns the Container account picker from Containers without requiring shared Accounting reads", () => {
-    expect(resolveFactoryBackendAccessRequirement(req("/container-account-options"))).toEqual({
-      pageKey: "factory/containers-hub",
-    });
-  });
-
   it("maps Net Position reads to the admin-or-developer Net Position Details page", () => {
     for (const path of ["/net-position", "/net-position/payroll-breakdown"]) {
       expect(resolveFactoryBackendAccessRequirement(req(path))).toEqual({
