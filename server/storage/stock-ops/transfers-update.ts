@@ -20,6 +20,7 @@ import {
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
+import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -243,7 +244,10 @@ export async function updateStockAdjustment(
   items: Array<{ stockItemId: number; quantity: string; rate: string }>
 ) {
   return await db.transaction(async (tx) => {
-    const [existingAdjustment] = await tx
+    // Follow the same lock order as stock-adjustment deletion: voucher first,
+    // then the adjustment row. This serializes concurrent edit/delete requests
+    // without creating a voucher<->adjustment deadlock.
+    let [existingAdjustment] = await tx
       .select()
       .from(schema.stockAdjustmentVouchers)
       .where(eq(schema.stockAdjustmentVouchers.id, id));
@@ -252,8 +256,17 @@ export async function updateStockAdjustment(
     const [voucher] = await tx
       .select()
       .from(schema.vouchers)
-      .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
+      .where(eq(schema.vouchers.id, existingAdjustment.voucherId))
+      .for("update");
     if (!voucher) throw new Error(`Voucher ${existingAdjustment.voucherId} not found`);
+
+    const [lockedAdjustment] = await tx
+      .select()
+      .from(schema.stockAdjustmentVouchers)
+      .where(eq(schema.stockAdjustmentVouchers.id, id))
+      .for("update");
+    if (!lockedAdjustment) throw new Error(`Stock adjustment ${id} not found`);
+    existingAdjustment = lockedAdjustment;
     const isOptional = voucher.optional;
 
     const existingItems = await tx
@@ -612,6 +625,12 @@ export async function updateStockAdjustment(
         });
       }
     }
+
+    const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
+    await tx
+      .update(schema.vouchers)
+      .set({ totalAmount: headerTotal, locationId })
+      .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
 
     return { adjustment: updatedAdjustment, items: adjustmentItems };
   });
