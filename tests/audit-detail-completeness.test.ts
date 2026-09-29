@@ -40,6 +40,16 @@ describe("audit detail completeness", () => {
     expect(utils).toContain('newQuantity: "After Qty"');
   });
 
+  it("backfills historical immutable revision details on detail reads", () => {
+    const route = read("server/routes/auth/auditLogRoutes.ts");
+
+    expect(route).toContain("async function enrichHistoricalAuditDetail");
+    expect(route).toContain('detail.tableName !== "stock_transfer_revisions"');
+    expect(route).toContain(".from(stockTransferRevisionItems)");
+    expect(route).toContain("await enrichHistoricalAuditDetail(formatAuditRow(rawDetail))");
+    expect(route).toContain('stock_transfer_revisions: "Stock Transfer Revisions"');
+  });
+
   it("captures item detail for POS sales and credit notes", () => {
     const posCreate = read("server/services/pos/createSaleService.ts");
     const posUpdate = read("server/services/pos/edit/updateSaleService.ts");
