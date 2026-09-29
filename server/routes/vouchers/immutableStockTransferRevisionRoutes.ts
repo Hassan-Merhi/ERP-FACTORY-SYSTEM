@@ -284,7 +284,10 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
           "approve",
           {
             revisionNumber: { new: result.revisionNumber },
-            status: { old: "pending", new: result.transition },
+            status:
+              result.transition === "no-op"
+                ? { old: "approved", new: "approved" }
+                : { old: "pending", new: "approved" },
             changedItemCount: { new: result.changedItemCount },
             appliedRevisionCount: {
               new: result.transition === "no-op" ? 0 : result.appliedRevisionCount ?? 1,
@@ -326,8 +329,11 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
           "update",
           {
             revisionNumber: { new: result.revisionNumber },
-            status: { old: "pending", new: result.transition },
-            reason: { new: parsed.reason || null },
+            status:
+              result.transition === "no-op"
+                ? { old: "rejected", new: "rejected" }
+                : { old: "pending", new: "rejected" },
+            reason: { new: result.transition === "no-op" ? null : parsed.reason || null },
             items: { new: result.items },
           }
         );
