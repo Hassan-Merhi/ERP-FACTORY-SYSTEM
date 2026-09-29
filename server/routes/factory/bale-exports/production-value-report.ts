@@ -450,8 +450,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       // Keep the Balance on Table rate identical to Original Batches for every filter.
       // Only the quantity changes between a filtered period and All Time.
       const balanceCostPerKg = blendedCostPerKg;
-      const balanceValueDecimal = balanceWeightDecimal.times(blendedCostPerKgDecimal).toDecimalPlaces(2);
-      const balanceValue = balanceValueDecimal.toNumber();
+      const balanceValueDecimal = balanceWeightDecimal.times(blendedCostPerKgDecimal);
+      const balanceValue = balanceValueDecimal.toDecimalPlaces(2).toNumber();
 
       // Profit is authoritative on the backend:
       // selling value - (selected batch cost - selected remaining material value).
