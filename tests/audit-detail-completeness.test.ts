@@ -40,6 +40,14 @@ describe("audit detail completeness", () => {
     expect(utils).toContain('newQuantity: "After Qty"');
   });
 
+  it("keeps Daybook action filters backed by the API", () => {
+    const route = read("server/routes/auth/auditLogRoutes.ts");
+
+    expect(route).toContain('const excludedActions = ["login"]');
+    expect(route).not.toContain('"create",\n        "delete",\n        "login"');
+    expect(route).toContain('return: "Returned"');
+  });
+
   it("backfills historical immutable revision details on detail reads", () => {
     const route = read("server/routes/auth/auditLogRoutes.ts");
 
