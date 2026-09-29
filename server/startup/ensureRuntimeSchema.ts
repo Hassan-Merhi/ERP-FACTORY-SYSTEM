@@ -7,6 +7,29 @@
 import type { Pool } from "pg";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { scheduledWhatsAppDeliveryTracking } from "../startup-schema/030-scheduled-whatsapp-delivery-tracking";
+
+export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool): Promise<void> {
+  for (const statement of scheduledWhatsAppDeliveryTracking) {
+    await pool.query(statement);
+  }
+
+  const verification = await pool.query<{
+    occurrences_table: string | null;
+    attachments_table: string | null;
+  }>(
+    `SELECT
+       to_regclass('public.scheduled_whatsapp_occurrences')::text AS occurrences_table,
+       to_regclass('public.scheduled_whatsapp_attachments')::text AS attachments_table`
+  );
+
+  const row = verification.rows[0];
+  if (!row?.occurrences_table || !row?.attachments_table) {
+    throw new Error("Scheduled WhatsApp delivery tracking schema is unavailable after startup repair");
+  }
+
+  logger.info("[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured");
+}
 
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
@@ -151,6 +174,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   } catch (colErr: unknown) {
     logger.error("[startup] ✗ Could not ensure multi-currency columns:", { error: getErrorMessage(colErr) });
   }
+
+  // Scheduled WhatsApp claims are a correctness boundary: production disables
+  // the bulk startup migration pass, so these tables must be guaranteed by the
+  // always-on pre-listen schema guard.
+  await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
 
   // Phase 3 historical repairs are part of the blocking pre-listen path. Both
   // passes are idempotent and evidence-gated; ambiguous accounting causes a
