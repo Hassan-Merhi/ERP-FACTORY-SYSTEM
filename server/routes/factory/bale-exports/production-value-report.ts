@@ -27,7 +27,6 @@ import {
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
 
-
 export function registerFactoryProductionValueReportRoutes(app: Express) {
   // ───────────────────────────────────────────────
   // 8. Daily Production Value Report
