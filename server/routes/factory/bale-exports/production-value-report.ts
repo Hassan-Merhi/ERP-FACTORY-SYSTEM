@@ -271,7 +271,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             wgMap.set(catName, { subType, qty: 1, totalWeightKg: wt, totalValue: value });
           }
         } else {
-          // Regular bale. Profit always uses selling value, even when the report is viewing cost price.
+          // Track both catalog values; the active valuation mode decides which one
+          // becomes Production Value and therefore which one drives Profit.
           totalSellingValue += sellingPrice;
           totalProductionCostValue += costPrice;
           if (!(price > 0)) missingSelectedPriceBales += 1;
@@ -458,8 +459,11 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         producedWeightKg: totalBaleWeightKg,
         batchRateCost: allTimeBatchRateDecimal,
       });
+      // Profit follows the active valuation mode:
+      // Cost Price: cost production value - Weight Cost
+      // Selling Price: selling production value - Weight Cost
       const { weightCost, profitValue, profitMarginPct } = calculateProductionProfit({
-        sellingValue: totalSellingValue,
+        productionValue: totalProductionValue,
         weightCost: weightCostDecimal,
       });
       const statusValue = profitValue;

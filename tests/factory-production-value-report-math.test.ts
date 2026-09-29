@@ -35,14 +35,30 @@ describe("Factory production value report math", () => {
     expect(weightCost.toDecimalPlaces(2).toNumber()).toBe(10123.39);
   });
 
-  it("calculates profit from selling value minus Weight Cost", () => {
+  it("calculates cost-mode profit as cost value minus Weight Cost", () => {
     const weightCost = calculateProductionWeightCost({
       producedWeightKg: "13033",
       batchRateCost: "0.7767506504",
     });
 
     const result = calculateProductionProfit({
-      sellingValue: "11408.50",
+      productionValue: "9683.00",
+      weightCost,
+    });
+
+    expect(result.weightCost).toBe(10123.39);
+    expect(result.profitValue).toBe(-440.39);
+    expect(result.profitMarginPct).toBeCloseTo(-4.5481, 4);
+  });
+
+  it("calculates selling-mode profit as selling value minus Weight Cost", () => {
+    const weightCost = calculateProductionWeightCost({
+      producedWeightKg: "13033",
+      batchRateCost: "0.7767506504",
+    });
+
+    const result = calculateProductionProfit({
+      productionValue: "11408.50",
       weightCost,
     });
 

@@ -38,19 +38,19 @@ export function calculateProductionWeightCost({
 }
 
 type ProfitArgs = {
-  sellingValue: Decimal.Value;
+  productionValue: Decimal.Value;
   weightCost: Decimal.Value;
 };
 
 export function calculateProductionProfit({
-  sellingValue,
+  productionValue,
   weightCost,
 }: ProfitArgs) {
-  const sellingValueDecimal = new BatchRateDecimal(sellingValue);
+  const productionValueDecimal = new BatchRateDecimal(productionValue);
   const weightCostDecimal = new BatchRateDecimal(weightCost);
-  const profitValueDecimal = sellingValueDecimal.minus(weightCostDecimal);
-  const profitMarginPctDecimal = sellingValueDecimal.gt(0)
-    ? profitValueDecimal.dividedBy(sellingValueDecimal).times(100)
+  const profitValueDecimal = productionValueDecimal.minus(weightCostDecimal);
+  const profitMarginPctDecimal = productionValueDecimal.gt(0)
+    ? profitValueDecimal.dividedBy(productionValueDecimal).times(100)
     : new BatchRateDecimal(0);
 
   return {
