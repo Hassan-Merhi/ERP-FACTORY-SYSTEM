@@ -244,17 +244,28 @@ export async function updateStockAdjustment(
   items: Array<{ stockItemId: number; quantity: string; rate: string }>
 ) {
   return await db.transaction(async (tx) => {
-    const [existingAdjustment] = await tx
-      .select()
+    // Follow the same lock order as stock-adjustment deletion: voucher first,
+    // then the adjustment row. This serializes concurrent edit/delete requests
+    // without creating a voucher<->adjustment deadlock.
+    const [adjustmentRef] = await tx
+      .select({ voucherId: schema.stockAdjustmentVouchers.voucherId })
       .from(schema.stockAdjustmentVouchers)
       .where(eq(schema.stockAdjustmentVouchers.id, id));
-    if (!existingAdjustment) throw new Error(`Stock adjustment ${id} not found`);
+    if (!adjustmentRef) throw new Error(`Stock adjustment ${id} not found`);
 
     const [voucher] = await tx
       .select()
       .from(schema.vouchers)
-      .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
-    if (!voucher) throw new Error(`Voucher ${existingAdjustment.voucherId} not found`);
+      .where(eq(schema.vouchers.id, adjustmentRef.voucherId))
+      .for("update");
+    if (!voucher) throw new Error(`Voucher ${adjustmentRef.voucherId} not found`);
+
+    const [existingAdjustment] = await tx
+      .select()
+      .from(schema.stockAdjustmentVouchers)
+      .where(eq(schema.stockAdjustmentVouchers.id, id))
+      .for("update");
+    if (!existingAdjustment) throw new Error(`Stock adjustment ${id} not found`);
     const isOptional = voucher.optional;
 
     const existingItems = await tx
