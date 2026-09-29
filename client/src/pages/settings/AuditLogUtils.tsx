@@ -77,6 +77,9 @@ export const BUSINESS_FIELD_LABELS: Record<string, string> = {
   route: "Route",
   note: "Note",
   items: "Items",
+  lines: "Items",
+  lineItems: "Items",
+  affectedItems: "Affected Items",
   stockItemId: "Item ID",
   stockItemName: "Item",
   sourceLocationId: "Source Location ID",
@@ -483,9 +486,12 @@ export function getDetailsSentence(log: Record<string, unknown> | null | undefin
   const allKeys = Object.keys(changes);
   if (allKeys.length === 0) return fallbackDetails(String(log?.action ?? ""));
 
-  const scalarKeys = allKeys.filter((key) => key !== "entries" && key !== "items" && !isItemDiffKey(key));
+  const structuredItemKey = ["items", "lines", "lineItems", "affectedItems"].find((key) => changes[key]);
+  const scalarKeys = allKeys.filter(
+    (key) => key !== "entries" && !["items", "lines", "lineItems", "affectedItems"].includes(key) && !isItemDiffKey(key)
+  );
   const itemKeys = allKeys.filter((key) => isItemDiffKey(key));
-  const structuredItems = changes.items;
+  const structuredItems = structuredItemKey ? changes[structuredItemKey] : undefined;
   const structuredItemCount = Array.isArray(structuredItems?.new)
     ? structuredItems.new.length
     : Array.isArray(structuredItems?.old)
