@@ -14,16 +14,10 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { adjustInventory } from "../../inventoryHelper";
-import { nextCanonicalSourceRevision } from "../../services/inventory/canonicalSourceRevision";
-import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
-
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -202,181 +196,45 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         .where(eq(stockAdjustmentVouchers.voucherId, id))
         .limit(1)
         .then((rows) => rows[0]);
-      const _oldAdjItems = adjustmentVoucher
+      const oldAdjustmentItems = adjustmentVoucher
         ? await db
             .select()
             .from(stockAdjustmentItems)
             .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id))
         : [];
-      if (!adjustmentVoucher) {
-        const adjustmentType = existingVoucher.voucherType as "Consumption" | "Production" | "Mixed";
-        const created = await storage.createStockAdjustment(
-          id,
-          parseInt(locationId),
-          adjustmentType,
-          description || "",
-          items.map((item) => ({
-            stockItemId: Number(item.stockItemId),
-            quantity: String(item.quantity),
-            rate: String(item.rate),
-          })),
-          undefined,
-          {
-            ...(voucherDate !== undefined ? { voucherDate } : {}),
-            ...(description !== undefined ? { description } : {}),
-          },
-          adjustmentType.toLowerCase()
-        );
 
-        try {
-          const _resolveAdjName = async (itemId: number) =>
-            (await storage.getStockItemById(itemId))?.name ?? `Item #${itemId}`;
-          const _adjItemDiff = await buildItemLevelChanges(
-            [],
-            created.items.map((item) => ({
-              stockItemId: item.stockItemId,
-              quantity: item.quantity,
-              rate: item.rate,
-              totalAmount: item.totalAmount,
-            })),
-            _resolveAdjName
+      const parsedLocationId = parseInt(locationId);
+      const adjustmentType = existingVoucher.voucherType as "Consumption" | "Production" | "Mixed";
+      const normalizedItems = items.map((item) => ({
+        stockItemId: Number(item.stockItemId),
+        quantity: String(item.quantity),
+        rate: String(item.rate),
+      }));
+      const voucherHeader = {
+        ...(voucherDate !== undefined ? { voucherDate } : {}),
+        ...(description !== undefined ? { description } : {}),
+      };
+
+      const result = adjustmentVoucher
+        ? await storage.updateStockAdjustment(
+            adjustmentVoucher.id,
+            parsedLocationId,
+            adjustmentVoucher.adjustmentType,
+            description || "",
+            normalizedItems,
+            voucherHeader
+          )
+        : await storage.createStockAdjustment(
+            id,
+            parsedLocationId,
+            adjustmentType,
+            description || "",
+            normalizedItems,
+            undefined,
+            voucherHeader,
+            adjustmentType.toLowerCase()
           );
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "update",
-            tableName: "vouchers",
-            recordId: created.voucher.id,
-            recordIdentifier: created.voucher.voucherNumber,
-            changes: {
-              totalAmount: { old: existingVoucher.totalAmount, new: created.voucher.totalAmount },
-              location: { old: existingVoucher.locationId, new: created.voucher.locationId },
-              ...(voucherDate !== undefined
-                ? { date: { old: existingVoucher.voucherDate, new: created.voucher.voucherDate } }
-                : {}),
-              ...(description !== undefined
-                ? { description: { old: existingVoucher.description ?? "", new: created.voucher.description ?? "" } }
-                : {}),
-              ..._adjItemDiff,
-            },
-          });
-        } catch {
-          /* non-fatal */
-        }
-
-        return res.json(created.voucher);
-      }
-
-      let signedTotal = 0;
-      const adjustmentItemsData = items.map((item) => {
-        const quantity = parseFloat(item.quantity);
-        const rate = parseFloat(item.rate);
-        const absItemTotal = Math.abs(quantity) * rate;
-        signedTotal += quantity * rate;
-        return {
-          adjustmentId: adjustmentVoucher.id,
-          stockItemId: item.stockItemId,
-          quantity: item.quantity,
-          rate: item.rate,
-          totalAmount: absItemTotal.toFixed(2),
-        };
-      });
-      const totalAmount = existingVoucher.voucherType === "Mixed" ? signedTotal : Math.abs(signedTotal);
-
-      const updated = await db.transaction(async (tx) => {
-        const oldAdjustmentItems = await tx
-          .select()
-          .from(stockAdjustmentItems)
-          .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id));
-        const oldLocationId = adjustmentVoucher.locationId;
-        const revision = await nextCanonicalSourceRevision(
-          tx,
-          existingVoucher.companyId,
-          "voucher-adjustment-edit",
-          String(id)
-        );
-        const occurredAt = new Date().toISOString();
-        const actor = {
-          userId: req.session.userId,
-          username: req.session.username,
-          reason: `Edit adjustment voucher ${existingVoucher.voucherNumber}`,
-        };
-
-        for (const oldItem of oldAdjustmentItems) {
-          const quantity = parseFloat(oldItem.quantity);
-          const rate = parseFloat(oldItem.rate);
-          await adjustInventory(tx, oldLocationId, oldItem.stockItemId, -quantity, existingVoucher.companyId);
-          const reversalDelta = -quantity;
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: existingVoucher.companyId,
-              stockItemId: oldItem.stockItemId,
-              kind: "adjustment",
-              quantity: String(Math.abs(quantity)),
-              unitCost: String(Math.max(rate || 0, 0)),
-              fromLocationId: reversalDelta < 0 ? oldLocationId : undefined,
-              toLocationId: reversalDelta > 0 ? oldLocationId : undefined,
-              occurredAt,
-              source: {
-                sourceType: "voucher-adjustment-edit-reverse",
-                sourceId: String(id),
-                idempotencyKey: `voucher-adjustment-edit:rev${revision}:reverse:${oldItem.id}`,
-              },
-              actor,
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
-
-        await tx.delete(stockAdjustmentItems).where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id));
-        const newLocationId = parseInt(locationId);
-
-        for (let index = 0; index < adjustmentItemsData.length; index += 1) {
-          const newItem = adjustmentItemsData[index];
-          const quantity = parseFloat(newItem.quantity);
-          const rate = parseFloat(newItem.rate);
-          await adjustInventory(tx, newLocationId, newItem.stockItemId, quantity, existingVoucher.companyId, rate);
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: existingVoucher.companyId,
-              stockItemId: newItem.stockItemId,
-              kind: "adjustment",
-              quantity: String(Math.abs(quantity)),
-              unitCost: String(Math.max(rate || 0, 0)),
-              fromLocationId: quantity < 0 ? newLocationId : undefined,
-              toLocationId: quantity > 0 ? newLocationId : undefined,
-              occurredAt,
-              source: {
-                sourceType: "voucher-adjustment-edit-apply",
-                sourceId: String(id),
-                idempotencyKey: `voucher-adjustment-edit:rev${revision}:apply:${index}:${newItem.stockItemId}`,
-              },
-              actor,
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
-
-        await tx.insert(stockAdjustmentItems).values(adjustmentItemsData);
-        await tx
-          .update(stockAdjustmentVouchers)
-          .set({ locationId: newLocationId, notes: description || "" })
-          .where(eq(stockAdjustmentVouchers.id, adjustmentVoucher.id));
-
-        const parsedLocationId = newLocationId;
-        const voucherUpdates: VoucherUpdate = { totalAmount: totalAmount.toFixed(2), locationId: parsedLocationId };
-        const location = await storage.getLocationById(parsedLocationId);
-        if (location) voucherUpdates.locationName = location.name;
-        if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
-        if (description !== undefined) voucherUpdates.description = description;
-        const [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
-        return updatedVoucher;
-      });
+      const updated = result.voucher;
 
       try {
         const _adjChanges: Record<string, { old: unknown; new: unknown }> = {};
@@ -391,17 +249,17 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         const _resolveAdjName = async (itemId: number) =>
           (await storage.getStockItemById(itemId))?.name ?? `Item #${itemId}`;
         const _adjItemDiff = await buildItemLevelChanges(
-          _oldAdjItems.map((it) => ({
-            stockItemId: it.stockItemId,
-            quantity: it.quantity,
-            rate: it.rate,
-            totalAmount: it.totalAmount,
+          oldAdjustmentItems.map((item) => ({
+            stockItemId: item.stockItemId,
+            quantity: item.quantity,
+            rate: item.rate,
+            totalAmount: item.totalAmount,
           })),
-          adjustmentItemsData.map((it) => ({
-            stockItemId: it.stockItemId,
-            quantity: it.quantity,
-            rate: it.rate,
-            totalAmount: it.totalAmount,
+          result.items.map((item) => ({
+            stockItemId: item.stockItemId,
+            quantity: item.quantity,
+            rate: item.rate,
+            totalAmount: item.totalAmount,
           })),
           _resolveAdjName
         );
@@ -418,6 +276,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       } catch {
         /* non-fatal */
       }
+
       res.json(updated);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
