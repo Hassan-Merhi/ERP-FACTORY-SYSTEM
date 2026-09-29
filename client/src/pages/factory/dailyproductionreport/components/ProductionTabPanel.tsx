@@ -51,13 +51,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
   const isOwner = effectiveRole === "Owner";
   const costsHidden = Boolean(data?.costsHidden);
   const showMoneySummary = !costsHidden && (!isOwner || valuationMode === "cost");
-  // Top Profit KPI only:
-  // selected bales value - (mix-batch value - remaining-on-table value).
-  // The selected bales value follows the active Cost/Selling toggle.
-  const selectedBalesValue = data?.production.totalValue ?? 0;
-  const consumedMixValue = (data?.rawMaterial.totalCost ?? 0) - (data?.balanceOnTable.value ?? 0);
-  const productionProfitValue = selectedBalesValue - consumedMixValue;
-  const productionProfitMarginPct = selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
+  // Profit is calculated once on the backend from the period-scoped remaining
+  // material value. Do not rebuild it from the Balance on Table card here.
+  const productionProfitValue = data?.summary.profitValue ?? 0;
+  const productionProfitMarginPct = data?.summary.profitMarginPct ?? 0;
   return (
     <>
       {/* ── Production tab ── */}
