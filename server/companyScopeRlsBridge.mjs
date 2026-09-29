@@ -231,6 +231,10 @@ if (!globalThis[INSTALL_KEY]) {
   await ensureCompanyScopeRlsReadiness();
 }
 
+// Stock-adjustment header repair must run after the RLS helper functions above
+// exist so its dedicated transaction can enter explicit maintenance scope.
+await import("./stockAdjustmentHeaderRepairBridge.mjs");
+
 // Historical worker-bonus account repair must run after the RLS helper functions
 // above exist so its dedicated transaction can enter explicit maintenance scope.
 await import("./workerBonusExpenseRepairBridge.mjs");
