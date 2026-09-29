@@ -70,8 +70,8 @@ function RevisionItemsTable({ items, label }: { items: AuditItem[]; label?: stri
           className={`grid min-w-[680px] ${
             showRate && showTotal
               ? "grid-cols-[minmax(180px,1.4fr)_minmax(150px,1fr)_90px_90px_90px_90px_100px]"
-              : showRate
-                ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_95px]"
+              : showRate || showTotal
+                ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_100px]"
                 : "grid-cols-[minmax(220px,1.5fr)_minmax(180px,1fr)_100px_100px_100px]"
           } gap-2 bg-muted/40 px-3 py-2 text-[11px] font-medium text-muted-foreground`}
         >
@@ -102,8 +102,8 @@ function RevisionItemsTable({ items, label }: { items: AuditItem[]; label?: stri
               className={`grid min-w-[680px] ${
                 showRate && showTotal
                   ? "grid-cols-[minmax(180px,1.4fr)_minmax(150px,1fr)_90px_90px_90px_90px_100px]"
-                  : showRate
-                    ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_95px]"
+                  : showRate || showTotal
+                    ? "grid-cols-[minmax(200px,1.5fr)_minmax(170px,1fr)_95px_95px_95px_100px]"
                     : "grid-cols-[minmax(220px,1.5fr)_minmax(180px,1fr)_100px_100px_100px]"
               } gap-2 border-t px-3 py-2.5 text-xs items-start`}
             >
