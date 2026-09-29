@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Download, FileCheck, List, Star } from "lucide-react";
+import { Download, ExternalLink, FileCheck, List, Star } from "lucide-react";
 import * as XLSX from "@/lib/excelHelper";
 import { PageHeader } from "@/components/PageHeader";
 
@@ -248,6 +248,15 @@ export default function ContainerVerification() {
     [selectedSupplierId, selectedProformaId, containerId, toast, syncLoadedItemsFromContainer]
   );
 
+  const openSelectedProforma = () => {
+    if (!selectedSupplierId || !selectedProformaId) return;
+    window.open(
+      `/suppliers/${selectedSupplierId}/proformas?proformaId=${selectedProformaId}`,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  };
+
   const exportToExcel = () => {
     if (!selectedSupplierId || !selectedProformaId) return;
     if (!navigator.onLine) {
@@ -407,21 +416,37 @@ export default function ContainerVerification() {
             </div>
             <div>
               <label className="text-xs font-medium mb-1 block">Proforma</label>
-              <Select value={selectedProformaId} onValueChange={setSelectedProformaId} disabled={!selectedSupplierId}>
-                <SelectTrigger data-testid="select-proforma">
-                  <SelectValue placeholder={selectedSupplierId ? "Select proforma" : "Select a supplier first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {proformas.map((p) => (
-                    <SelectItem key={p.id} value={String(p.id)}>
-                      <span className="flex items-center gap-1.5">
-                        {p.isStarred && <Star className="h-3 w-3 fill-amber-400 text-amber-400 shrink-0" />}
-                        {p.reference}
-                      </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedProformaId}
+                  onValueChange={setSelectedProformaId}
+                  disabled={!selectedSupplierId}
+                >
+                  <SelectTrigger className="flex-1" data-testid="select-proforma">
+                    <SelectValue placeholder={selectedSupplierId ? "Select proforma" : "Select a supplier first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {proformas.map((p) => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        <span className="flex items-center gap-1.5">
+                          {p.isStarred && <Star className="h-3 w-3 fill-amber-400 text-amber-400 shrink-0" />}
+                          {p.reference}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  onClick={openSelectedProforma}
+                  disabled={!selectedSupplierId || !selectedProformaId}
+                  className="shrink-0"
+                  data-testid="button-view-proforma"
+                >
+                  <ExternalLink className="mr-1.5 h-4 w-4" />
+                  View Proforma
+                </Button>
+              </div>
               {proformas.length > 0 && !proformas.some((p) => p.isStarred) && (
                 <p className="text-xs text-muted-foreground mt-1">
                   Tip: star a proforma on the supplier page to auto-select it here
