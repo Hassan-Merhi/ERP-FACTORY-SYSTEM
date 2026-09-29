@@ -224,7 +224,8 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
           {
             ...(voucherDate !== undefined ? { voucherDate } : {}),
             ...(description !== undefined ? { description } : {}),
-          }
+          },
+          adjustmentType.toLowerCase()
         );
 
         try {
