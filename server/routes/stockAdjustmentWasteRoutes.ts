@@ -15,7 +15,6 @@ import { logger } from "../lib/logger";
 import {
   locations,
   stockItems,
-  vouchers,
   wasteDispatches,
   wasteDispatchItems,
   updateStockAdjustmentSchema,
