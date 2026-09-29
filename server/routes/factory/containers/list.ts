@@ -9,8 +9,8 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { factorySuppliers, factoryContainers } from "@shared/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { factorySuppliers, factoryContainers, ledgerAccounts } from "@shared/schema";
+import { eq, and, asc, desc, sql, isNull } from "drizzle-orm";
 
 export function registerFactoryContainerListRoutes(app: Express) {
   app.get("/api/factory/containers", requireAuth, async (req: Request, res: Response) => {
@@ -138,6 +138,37 @@ export function registerFactoryContainerListRoutes(app: Express) {
       res.json(results);
     } catch (error: unknown) {
       logger.error("Error fetching factory containers:", { error: error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Factory-owned ledger picker for container workflows such as post-offload charges.
+  // It intentionally avoids the shared ERP /api/ledger-accounts permission surface.
+  app.get("/api/factory/containers/account-options", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      const rows = await db
+        .select({
+          id: ledgerAccounts.id,
+          code: ledgerAccounts.code,
+          name: ledgerAccounts.name,
+          accountType: ledgerAccounts.accountType,
+        })
+        .from(ledgerAccounts)
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            eq(ledgerAccounts.active, true),
+            isNull(ledgerAccounts.deletedAt)
+          )
+        )
+        .orderBy(asc(ledgerAccounts.code), asc(ledgerAccounts.name));
+
+      res.json(rows);
+    } catch (error: unknown) {
+      logger.error("Error fetching Factory container account options:", { error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });
