@@ -71,6 +71,21 @@ export const BUSINESS_FIELD_LABELS: Record<string, string> = {
   unitPrice: "Unit Price",
   total: "Total",
   itemCount: "Number of Items",
+  changedItemCount: "Items Changed",
+  appliedRevisionCount: "Revisions Applied",
+  revisionNumber: "Revision Number",
+  route: "Route",
+  note: "Note",
+  items: "Items",
+  stockItemId: "Item ID",
+  stockItemName: "Item",
+  sourceLocationId: "Source Location ID",
+  sourceLocationName: "Source Location",
+  originalQuantity: "Before Qty",
+  newQuantity: "After Qty",
+  delta: "Change",
+  rate: "Rate",
+  compatibilityMode: "Compatibility Mode",
   affectedRows: "Records Affected",
   updated: "Records Updated",
   skipped: "Records Skipped",
@@ -252,6 +267,7 @@ const MODULE_LABEL_MAP: Record<string, string> = {
   stock_items: "Stock Items",
   inventory: "Inventory",
   stock_transfers: "Stock Transfers",
+  stock_transfer_revisions: "Stock Transfer Revisions",
   containers: "Containers",
   factory_containers: "Factory Containers",
   factory_offload_charges: "Post-Offload Charges",
@@ -467,8 +483,14 @@ export function getDetailsSentence(log: Record<string, unknown> | null | undefin
   const allKeys = Object.keys(changes);
   if (allKeys.length === 0) return fallbackDetails(String(log?.action ?? ""));
 
-  const scalarKeys = allKeys.filter((key) => key !== "entries" && !isItemDiffKey(key));
+  const scalarKeys = allKeys.filter((key) => key !== "entries" && key !== "items" && !isItemDiffKey(key));
   const itemKeys = allKeys.filter((key) => isItemDiffKey(key));
+  const structuredItems = changes.items;
+  const structuredItemCount = Array.isArray(structuredItems?.new)
+    ? structuredItems.new.length
+    : Array.isArray(structuredItems?.old)
+      ? structuredItems.old.length
+      : 0;
   const parts: string[] = [];
 
   if (scalarKeys.length > 0) {
@@ -488,6 +510,9 @@ export function getDetailsSentence(log: Record<string, unknown> | null | undefin
 
   if (itemKeys.length > 0) {
     parts.push(`${itemKeys.length} item change${itemKeys.length !== 1 ? "s" : ""}`);
+  }
+  if (structuredItemCount > 0) {
+    parts.push(`${structuredItemCount} item${structuredItemCount !== 1 ? "s" : ""}`);
   }
 
   const entries = changes.entries;
