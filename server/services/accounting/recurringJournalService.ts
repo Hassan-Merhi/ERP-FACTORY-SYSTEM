@@ -114,8 +114,10 @@ export function firstRecurringRunDate(sourceVoucherDate: string, timeZone: strin
   return nextMonthEndIso(anchor);
 }
 
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function replaceFirstIgnoreCase(value: string, search: string, replacement: string): string | null {
+  const index = value.toLocaleLowerCase("en-US").indexOf(search.toLocaleLowerCase("en-US"));
+  if (index < 0) return null;
+  return value.slice(0, index) + replacement + value.slice(index + search.length);
 }
 
 export function deriveRecurringDescriptionTemplate(description: string | null, voucherDate: string): string {
@@ -127,13 +129,11 @@ export function deriveRecurringDescriptionTemplate(description: string | null, v
   const fullMonth = new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(date);
   const shortMonth = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(date);
 
-  if (new RegExp(escapeRegex(fullMonth), "i").test(trimmed)) {
-    return trimmed.replace(new RegExp(escapeRegex(fullMonth), "i"), "{{month}}");
-  }
-  if (new RegExp(`\\b${escapeRegex(shortMonth)}\\b`, "i").test(trimmed)) {
-    return trimmed.replace(new RegExp(`\\b${escapeRegex(shortMonth)}\\b`, "i"), "{{month_short}}");
-  }
-  return trimmed;
+  const withFullMonth = replaceFirstIgnoreCase(trimmed, fullMonth, "{{month}}");
+  if (withFullMonth !== null) return withFullMonth;
+
+  const withShortMonth = replaceFirstIgnoreCase(trimmed, shortMonth, "{{month_short}}");
+  return withShortMonth ?? trimmed;
 }
 
 export function renderRecurringDescription(template: string | null, scheduledFor: string): string {
