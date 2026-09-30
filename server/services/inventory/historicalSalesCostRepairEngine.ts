@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v22-lifecycle-correction-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v23-pos-reversal-rate-only";
 
 const ZERO = new Decimal(0);
 
@@ -592,6 +592,44 @@ function canonicalRateOnlyRecovery(
     );
   } else if (
     delta.gt(ZERO) &&
+    movement.sourceType === "pos-sale"
+  ) {
+    // Historical POS edit/delete reversals restored quantity without passing
+    // the old sale-line cost to adjustInventory(). V19 proved that replacing
+    // every POS receipt inverse globally is not monotonic, so V23 only reaches
+    // this branch after the primary V22 inverse has already failed.
+    //
+    // Search the narrow 2dp rate neighborhood for a UNIQUE self-consistent
+    // pre-state whose unpriced replay reproduces quantity and total value
+    // exactly. The post-state average-rate field is allowed to disagree because
+    // this helper is invoked only when stateRateDisagreesWithValue() already
+    // proved that the reconstructed intermediate rate is stale.
+    const candidates: HistoricalInventoryState[] = [];
+    for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
+      const beforeValue = repairMoney(
+        stateAfter.totalValue.minus(delta.times(candidateRate))
+      );
+      if (beforeValue.lt(ZERO)) continue;
+      const candidate = rawHistoricalInventoryState(
+        previousQty,
+        candidateRate,
+        beforeValue
+      );
+      if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+        continue;
+      }
+      const replayed = applyHistoricalInventoryMovement(candidate, {
+        quantityDelta: delta,
+        unitCost: null,
+      });
+      if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+        candidates.push(candidate);
+      }
+    }
+    if (candidates.length !== 1) return null;
+    stateBefore = candidates[0];
+  } else if (
+    delta.gt(ZERO) &&
     movement.sourceType !== "pos-sale" &&
     movementSuppliesIncomingRate(movement)
   ) {
@@ -629,7 +667,13 @@ function canonicalRateOnlyRecovery(
     return null;
   }
 
-  const replayed = applyHistoricalSalesRepairMovement(stateBefore, movement);
+  const replayed =
+    movement.sourceType === "pos-sale" && delta.gt(ZERO)
+      ? applyHistoricalInventoryMovement(stateBefore, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: null,
+        })
+      : applyHistoricalSalesRepairMovement(stateBefore, movement);
   if (!statesEqualQuantityAndValue(replayed, stateAfter)) return null;
   if (repairRate(replayed.averageRate).eq(repairRate(stateAfter.averageRate))) return null;
 
