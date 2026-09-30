@@ -896,7 +896,7 @@ async function persistProposalRows(
         blocked?.code ?? null,
         blocked?.detail ?? null
       );
-      const p = Array.from({ length: 20 }, (_, i) => `${base + i + 1}`);
+      const p = Array.from({ length: 20 }, (_, i) => "$" + (base + i + 1));
       return `(${p.join(",")})`;
     });
     await client.query(
