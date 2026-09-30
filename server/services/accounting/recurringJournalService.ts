@@ -569,11 +569,13 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
 export async function runDueRecurringJournals(): Promise<void> {
   // This is only a broad prefilter. Each row is re-checked against its own
   // timezone before posting, so month-end boundaries remain correct worldwide.
-  const todayUtc = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date();
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const tomorrowUtc = tomorrow.toISOString().slice(0, 10);
   const candidates = await db
     .select()
     .from(recurringJournals)
-    .where(and(eq(recurringJournals.active, true), lte(recurringJournals.nextRunDate, todayUtc)))
+    .where(and(eq(recurringJournals.active, true), lte(recurringJournals.nextRunDate, tomorrowUtc)))
     .orderBy(asc(recurringJournals.nextRunDate), asc(recurringJournals.id));
 
   let posted = 0;
