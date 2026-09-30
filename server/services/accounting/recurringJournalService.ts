@@ -445,6 +445,7 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
       // The scheduler candidate can become stale while waiting to run. Lock and
       // reload the recurrence so a concurrent Pause/Resume/settings change or a
       // second scheduler instance cannot post against stale state.
+      // This row lock is also the cross-instance serialization point for month-end posting.
       const [locked] = await tx
         .select()
         .from(recurringJournals)
