@@ -34,6 +34,38 @@ const entries: Entry[] = [
   { en: "Reverse Voucher", ar: "عكس السند", fr: "Contrepasser la pièce" },
   { en: "Voucher Number", ar: "رقم السند", fr: "Numéro de pièce" },
 
+  // Recurring journals
+  { en: "Recurring Journal", ar: "قيد يومية متكرر", fr: "Écriture récurrente" },
+  { en: "Timezone", ar: "المنطقة الزمنية", fr: "Fuseau horaire" },
+  { en: "End date (optional)", ar: "تاريخ الانتهاء (اختياري)", fr: "Date de fin (facultatif)" },
+  { en: "Description template", ar: "قالب الوصف", fr: "Modèle de description" },
+  { en: "Generated vouchers", ar: "السندات المُنشأة", fr: "Pièces générées" },
+  { en: "Save Settings", ar: "حفظ الإعدادات", fr: "Enregistrer les paramètres" },
+  {
+    en: "Could not load recurring journal settings.",
+    ar: "تعذر تحميل إعدادات القيد المتكرر.",
+    fr: "Impossible de charger les paramètres de l’écriture récurrente.",
+  },
+  {
+    en: "Copy the current voucher's accounts and amounts into the recurring template",
+    ar: "نسخ حسابات ومبالغ السند الحالي إلى القالب المتكرر",
+    fr: "Copier les comptes et montants de la pièce actuelle dans le modèle récurrent",
+  },
+  { en: "Savings Kinshasa {{month}}", ar: "مدخرات كينشاسا {{month}}", fr: "Épargne Kinshasa {{month}}" },
+  {
+    en: 'Next automatic posting: ${data.recurring?.nextRunDate || "month-end"}.',
+    ar: "الترحيل التلقائي التالي: {0}.",
+    fr: "Prochaine comptabilisation automatique : {0}.",
+  },
+  { en: "Recurring journal failed", ar: "فشل القيد المتكرر", fr: "Échec de l’écriture récurrente" },
+  { en: "Recurring journal not found", ar: "القيد المتكرر غير موجود", fr: "Écriture récurrente introuvable" },
+  { en: "Invalid voucher id", ar: "معرّف السند غير صالح", fr: "Identifiant de pièce invalide" },
+  {
+    en: "Invalid recurring journal id",
+    ar: "معرّف القيد المتكرر غير صالح",
+    fr: "Identifiant d’écriture récurrente invalide",
+  },
+
   // Historical documents and exports
   { en: "Invoice", ar: "فاتورة", fr: "Facture" },
   { en: "Proforma Invoice", ar: "فاتورة أولية", fr: "Facture proforma" },
