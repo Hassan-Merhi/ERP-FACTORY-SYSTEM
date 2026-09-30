@@ -7,12 +7,16 @@ import { logger } from "../../lib/logger";
 import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
+  applyHistoricalInventoryMovement,
+  createHistoricalInventoryStateFromSnapshot,
   historicalInventoryKey,
+  historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
-  replayHistoricalSalesCosts,
+  repairRate,
+  reverseHistoricalInventoryMovement,
+  type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
-  type HistoricalSalesRepairOpening,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
 
@@ -35,12 +39,39 @@ type InventoryRow = {
   total_value: string;
 };
 
+type ValuationCheckpoint = {
+  movementCutoffId: number;
+  createdAt: Date;
+  rows: InventoryRow[];
+};
+
 type StockItemRow = {
   id: number;
   code: string | null;
   opening_qty: string;
   opening_rate: string;
   opening_value: string;
+  active: boolean;
+  deleted_at: Date | null;
+  created_at: Date;
+};
+
+type HistoricalMergeRow = {
+  alias_id: number;
+  alias_code: string;
+  alias_created_at: Date;
+  source_item_id: number;
+  source_code: string;
+  source_opening_qty: string;
+  source_opening_rate: string;
+  source_opening_value: string;
+  source_deleted_at: Date | null;
+  kept_item_id: number;
+  kept_code: string;
+  kept_opening_qty: string;
+  kept_opening_rate: string;
+  kept_opening_value: string;
+  merge_at: Date;
 };
 
 type CanonicalRow = {
@@ -48,11 +79,12 @@ type CanonicalRow = {
   location_id: number;
   stock_item_id: number;
   quantity_delta: string;
-  unit_cost: string;
+  unit_cost: string | null;
   source_type: string;
   source_id: string;
   occurred_at: Date;
   created_at: Date;
+  reversal_of_movement_id: number | null;
 };
 
 type SaleRow = {
@@ -161,7 +193,7 @@ async function loadCanonicalMovements(
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
     `SELECT id,location_id,stock_item_id,quantity_delta::text,unit_cost::text,
-            source_type,source_id,occurred_at,created_at
+            source_type,source_id,occurred_at,created_at,reversal_of_movement_id
        FROM canonical_stock_movements
       WHERE company_id=$1
         AND created_at >= $2
@@ -175,13 +207,384 @@ async function loadCanonicalMovements(
     locationId: Number(row.location_id),
     stockItemId: Number(row.stock_item_id),
     occurredAt: iso(row.occurred_at),
+    createdAt: iso(row.created_at),
     sequence: Number(row.id) * 10 + 5,
     quantityDelta: String(row.quantity_delta),
-    unitCost: String(row.unit_cost),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
     sourceType: row.source_type,
     sourceId: row.source_id,
     evidence: "canonical" as const,
+    reversalOfMovementId: row.reversal_of_movement_id === null ? null : Number(row.reversal_of_movement_id),
   }));
+}
+
+async function loadValuationCheckpoint(client: PoolClient, companyId: number): Promise<ValuationCheckpoint | null> {
+  const cutover = await client.query<{ movement_cutoff_id: number; created_at: Date }>(
+    `SELECT movement_cutoff_id,created_at
+       FROM phase3_inventory_valuation_cutovers
+      WHERE company_id=$1
+      LIMIT 1`,
+    [companyId]
+  );
+  const row = cutover.rows[0];
+  if (!row) return null;
+
+  const baseline = await client.query<InventoryRow>(
+    `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
+       FROM phase3_inventory_valuation_baselines
+      WHERE company_id=$1
+      ORDER BY location_id,stock_item_id`,
+    [companyId]
+  );
+  return {
+    movementCutoffId: Number(row.movement_cutoff_id),
+    createdAt: row.created_at,
+    rows: baseline.rows,
+  };
+}
+
+async function loadHistoricalMerges(client: PoolClient, companyId: number): Promise<HistoricalMergeRow[]> {
+  const result = await client.query<HistoricalMergeRow>(
+    `SELECT
+        a.id AS alias_id,
+        a.alias_code,
+        a.created_at AS alias_created_at,
+        source.id AS source_item_id,
+        source.code AS source_code,
+        source.opening_qty::text AS source_opening_qty,
+        source.opening_rate::text AS source_opening_rate,
+        source.opening_value::text AS source_opening_value,
+        source.deleted_at AS source_deleted_at,
+        kept.id AS kept_item_id,
+        kept.code AS kept_code,
+        kept.opening_qty::text AS kept_opening_qty,
+        kept.opening_rate::text AS kept_opening_rate,
+        kept.opening_value::text AS kept_opening_value,
+        COALESCE(source.deleted_at,a.created_at) AS merge_at
+       FROM stock_item_code_aliases a
+       JOIN stock_items kept
+         ON kept.company_id=a.company_id
+        AND kept.id=a.stock_item_id
+       JOIN stock_items source
+         ON source.company_id=a.company_id
+        AND source.code=a.alias_code
+        AND source.id<>a.stock_item_id
+      WHERE a.company_id=$1
+        AND a.description LIKE 'Merged from:%'
+      ORDER BY COALESCE(source.deleted_at,a.created_at),a.id`,
+    [companyId]
+  );
+  return result.rows;
+}
+
+function proposalFromRecordedRate(
+  companyId: number,
+  sale: SaleRow,
+  proposedRate: Decimal.Value,
+  sourceType: string,
+  sourceId: string,
+  evidence: "canonical" | "legacy"
+): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  const proposedCostPrice = repairRate(proposedRate);
+  const proposedTotalCost = repairMoney(repairQuantity(sale.quantity).abs().times(proposedCostPrice));
+  const proposedProfit = repairMoney(d(sale.total_sales).minus(proposedTotalCost));
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType,
+    sourceId,
+    evidence,
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: proposedCostPrice.toFixed(2),
+    proposedTotalCost: proposedTotalCost.toFixed(2),
+    proposedProfit: proposedProfit.toFixed(2),
+    changed:
+      !originalCostPrice.eq(proposedCostPrice) ||
+      !originalTotalCost.eq(proposedTotalCost) ||
+      !originalProfit.eq(proposedProfit),
+  };
+}
+
+function originalProposalForSale(companyId: number, sale: SaleRow): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType: "legacy-sale",
+    sourceId: String(sale.voucher_id),
+    evidence: "legacy",
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: originalCostPrice.toFixed(2),
+    proposedTotalCost: originalTotalCost.toFixed(2),
+    proposedProfit: originalProfit.toFixed(2),
+    changed: false,
+  };
+}
+
+function movementKey(
+  movement: Pick<HistoricalSalesRepairMovement, "companyId" | "locationId" | "stockItemId">
+): string {
+  return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
+}
+
+function compareLegacyMovementDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  const time = Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
+  if (time !== 0) return time;
+  if (a.sequence !== b.sequence) return b.sequence - a.sequence;
+  return b.movementId.localeCompare(a.movementId);
+}
+
+function movementMutationTime(movement: HistoricalSalesRepairMovement): number {
+  return Date.parse(movement.createdAt ?? movement.occurredAt);
+}
+
+function compareMovementMutationAscending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  const time = movementMutationTime(a) - movementMutationTime(b);
+  if (time !== 0) return time;
+  if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+  return a.movementId.localeCompare(b.movementId);
+}
+
+function compareMovementMutationDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  return -compareMovementMutationAscending(a, b);
+}
+
+function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
+  if (!movement.movementId.startsWith("canonical:")) return null;
+  const id = Number(movement.movementId.slice("canonical:".length));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+type CanonicalSaleEvidence = {
+  movements: HistoricalSalesRepairMovement[];
+  rates: Set<string>;
+  totalQuantity: Decimal;
+};
+
+function activeCanonicalSaleEvidence(
+  movements: HistoricalSalesRepairMovement[]
+): Map<string, CanonicalSaleEvidence> {
+  const reversedIds = new Set<number>();
+  for (const movement of movements) {
+    const reversal = movement.reversalOfMovementId;
+    if (typeof reversal === "number" && Number.isInteger(reversal) && reversal > 0) reversedIds.add(reversal);
+  }
+
+  const result = new Map<string, CanonicalSaleEvidence>();
+  for (const movement of movements) {
+    const id = canonicalMovementNumericId(movement);
+    if (id !== null && reversedIds.has(id)) continue;
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    if (d(movement.quantityDelta).gte(0)) continue;
+    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
+    const current = result.get(key) ?? {
+      movements: [],
+      rates: new Set<string>(),
+      totalQuantity: new Decimal(0),
+    };
+    current.movements.push(movement);
+    if (movement.unitCost !== null && movement.unitCost !== undefined) {
+      current.rates.add(repairRate(movement.unitCost).toFixed(2));
+    }
+    current.totalQuantity = repairQuantity(current.totalQuantity.plus(d(movement.quantityDelta).abs()));
+    result.set(key, current);
+  }
+  return result;
+}
+
+
+function historicalSalesCompanyEvidenceHash(input: {
+  companyId: number;
+  canonicalStart: Date | null;
+  checkpoint: ValuationCheckpoint | null;
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  manual: { movements: LegacyRow[]; checks: RepairCheck[] };
+  sales: SaleRow[];
+  historicalMerges: HistoricalMergeRow[];
+}): string {
+  const payload = {
+    companyId: input.companyId,
+    canonicalStart: input.canonicalStart ? input.canonicalStart.toISOString() : null,
+    checkpoint: input.checkpoint
+      ? {
+          movementCutoffId: input.checkpoint.movementCutoffId,
+          createdAt: input.checkpoint.createdAt.toISOString(),
+          rows: input.checkpoint.rows.map((row) => ({
+            locationId: Number(row.location_id),
+            stockItemId: Number(row.stock_item_id),
+            quantity: String(row.quantity),
+            averageRate: String(row.average_rate),
+            totalValue: String(row.total_value),
+          })),
+        }
+      : null,
+    canonical: input.canonical.map((movement) => ({
+      movementId: movement.movementId,
+      locationId: movement.locationId,
+      stockItemId: movement.stockItemId,
+      occurredAt: movement.occurredAt,
+      createdAt: movement.createdAt ?? null,
+      reversalOfMovementId: movement.reversalOfMovementId ?? null,
+      sequence: movement.sequence,
+      quantityDelta: movement.quantityDelta,
+      unitCost: movement.unitCost,
+      sourceType: movement.sourceType,
+      sourceId: movement.sourceId,
+    })),
+    legacy: input.legacy.map((row) => ({
+      movementId: row.movement_id,
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      quantityDelta: String(row.quantity_delta),
+      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+      occurredAt: iso(row.occurred_at),
+      sequence: Number(row.sequence),
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+    })),
+    manualMovements: input.manual.movements.map((row) => ({
+      movementId: row.movement_id,
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      quantityDelta: String(row.quantity_delta),
+      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+      occurredAt: iso(row.occurred_at),
+      sequence: Number(row.sequence),
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+    })),
+    manualChecks: [...input.manual.checks].sort((a, b) =>
+      [a.locationId ?? 0, a.stockItemId ?? 0, a.code, a.detail ?? ""]
+        .join(":")
+        .localeCompare([b.locationId ?? 0, b.stockItemId ?? 0, b.code, b.detail ?? ""].join(":"))
+    ),
+    sales: input.sales.map((sale) => ({
+      salesItemId: Number(sale.sales_item_id),
+      voucherId: Number(sale.voucher_id),
+      locationId: sale.location_id === null ? null : Number(sale.location_id),
+      stockItemId: Number(sale.stock_item_id),
+      quantity: String(sale.quantity),
+      totalSales: String(sale.total_sales),
+      costPrice: String(sale.cost_price),
+      totalCost: String(sale.total_cost),
+      profit: String(sale.profit),
+      createdAt: iso(sale.created_at),
+    })),
+    historicalMerges: input.historicalMerges.map((merge) => ({
+      aliasId: Number(merge.alias_id),
+      aliasCode: merge.alias_code,
+      aliasCreatedAt: iso(merge.alias_created_at),
+      sourceItemId: Number(merge.source_item_id),
+      sourceCode: merge.source_code,
+      sourceOpeningQty: String(merge.source_opening_qty),
+      sourceOpeningRate: String(merge.source_opening_rate),
+      sourceOpeningValue: String(merge.source_opening_value),
+      sourceDeletedAt: merge.source_deleted_at ? iso(merge.source_deleted_at) : null,
+      keptItemId: Number(merge.kept_item_id),
+      keptCode: merge.kept_code,
+      keptOpeningQty: String(merge.kept_opening_qty),
+      keptOpeningRate: String(merge.kept_opening_rate),
+      keptOpeningValue: String(merge.kept_opening_value),
+      mergeAt: iso(merge.merge_at),
+    })),
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+async function recomputeHistoricalSalesCompanyEvidenceHash(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<string> {
+  const [canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+    loadCanonicalStart(client, companyId, sourceCutoff),
+    loadSales(client, companyId, sourceCutoff),
+    loadValuationCheckpoint(client, companyId),
+    loadHistoricalMerges(client, companyId),
+  ]);
+  const [canonical, legacy, manual] = await Promise.all([
+    loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
+    loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
+    loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+  ]);
+  return historicalSalesCompanyEvidenceHash({
+    companyId,
+    canonicalStart,
+    checkpoint,
+    canonical,
+    legacy,
+    manual,
+    sales,
+    historicalMerges,
+  });
+}
+
+async function inventoryEvidenceFingerprint(
+  client: PoolClient,
+  companyIds: number[]
+): Promise<{ hash: string; rowCount: number }> {
+  const result = await client.query<{
+    company_id: number;
+    location_id: number;
+    stock_item_id: number;
+    quantity: string;
+    average_rate: string;
+    total_value: string;
+  }>(
+    `SELECT company_id,location_id,stock_item_id,
+            quantity::text,average_rate::text,total_value::text
+       FROM inventory
+      WHERE company_id = ANY($1::int[])
+      ORDER BY company_id,location_id,stock_item_id`,
+    [companyIds]
+  );
+  const hash = createHash("sha256");
+  for (const row of result.rows) {
+    hash.update(
+      `${row.company_id}|${row.location_id}|${row.stock_item_id}|${row.quantity}|${row.average_rate}|${row.total_value}\n`
+    );
+  }
+  return { hash: hash.digest("hex"), rowCount: result.rows.length };
+}
+
+async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
+  const triggers = await client.query<{ trigger_name: string }>(
+    `SELECT tg.tgname AS trigger_name
+       FROM pg_trigger tg
+       JOIN pg_class c ON c.oid=tg.tgrelid
+       JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public'
+        AND c.relname='sales_items'
+        AND NOT tg.tgisinternal
+      ORDER BY tg.tgname`
+  );
+  if (triggers.rows.length > 0) {
+    throw new Error(
+      `Historical sales cost repair refused because sales_items has unreviewed side-effect trigger(s): ${triggers.rows
+        .map((row) => row.trigger_name)
+        .join(", ")}`
+    );
+  }
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -232,7 +635,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=c.company_id
       WHERE COALESCE(co.optional,false)=false
         AND co.offloaded_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR co.offloaded_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -266,7 +668,6 @@ async function loadLegacyMovements(
       WHERE v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sai.created_at,sav.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sai.created_at,sav.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -298,7 +699,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -329,7 +729,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -347,7 +746,7 @@ async function loadLegacyMovements(
         cni.location_id,
         cni.stock_item_id,
         (CASE WHEN v.voucher_type='Credit Note' THEN ABS(cni.quantity) ELSE -ABS(cni.quantity) END)::text,
-        NULL::text,
+        cni.inventory_cost::text,
         GREATEST(cni.created_at,v.created_at),
         cni.id*10+6,
         CASE WHEN v.voucher_type='Credit Note' THEN 'legacy-credit-note' ELSE 'legacy-debit-note' END,
@@ -359,7 +758,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(cni.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(cni.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -386,7 +784,6 @@ async function loadLegacyMovements(
       JOIN stock_group_location_archives a ON a.id=ai.archive_id
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.archived_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.archived_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -414,7 +811,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.restored_at IS NOT NULL
         AND a.restored_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.restored_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -458,10 +854,9 @@ async function loadLegacyManualAdjustments(
         AND action='update'
         AND changes ? 'adjustmentType'
         AND changes ? 'quantity'
-        AND created_at <= $3
-        AND ($2::timestamptz IS NULL OR created_at < $2)
+        AND created_at <= $2
       ORDER BY created_at,id`,
-    [companyId, canonicalStart, sourceCutoff]
+    [companyId, sourceCutoff]
   );
 
   const movements: LegacyRow[] = [];
@@ -521,162 +916,6 @@ async function loadLegacyManualAdjustments(
   return { movements, checks };
 }
 
-function addMovementNet(
-  net: Map<string, Decimal>,
-  companyId: number,
-  movement: Pick<HistoricalSalesRepairMovement, "locationId" | "stockItemId" | "quantityDelta">
-): void {
-  const key = historicalInventoryKey(companyId, movement.locationId, movement.stockItemId);
-  net.set(key, (net.get(key) ?? new Decimal(0)).plus(d(movement.quantityDelta)));
-}
-
-function buildOpeningStates(input: {
-  companyId: number;
-  stockItems: StockItemRow[];
-  liveInventory: InventoryRow[];
-  movements: HistoricalSalesRepairMovement[];
-}): {
-  openings: HistoricalSalesRepairOpening[];
-  checks: RepairCheck[];
-  derivedOpeningByKey: Map<string, Decimal>;
-} {
-  const { companyId, stockItems, liveInventory, movements } = input;
-  const checks: RepairCheck[] = [];
-  const movementNet = new Map<string, Decimal>();
-  for (const movement of movements) addMovementNet(movementNet, companyId, movement);
-
-  const liveByKey = new Map<string, Decimal>();
-  for (const row of liveInventory) {
-    liveByKey.set(
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      repairQuantity(row.quantity)
-    );
-  }
-
-  const allKeys = new Set([...liveByKey.keys(), ...movementNet.keys()]);
-  const derivedOpeningByKey = new Map<string, Decimal>();
-  for (const key of allKeys) {
-    derivedOpeningByKey.set(
-      key,
-      repairQuantity((liveByKey.get(key) ?? new Decimal(0)).minus(movementNet.get(key) ?? new Decimal(0)))
-    );
-  }
-
-  const itemMap = new Map(stockItems.map((item) => [Number(item.id), item]));
-  const keysByItem = new Map<number, string[]>();
-  for (const key of allKeys) {
-    const stockItemId = Number(key.split(":")[2]);
-    const keys = keysByItem.get(stockItemId) ?? [];
-    keys.push(key);
-    keysByItem.set(stockItemId, keys);
-  }
-
-  const openings: HistoricalSalesRepairOpening[] = [];
-  for (const [stockItemId, keys] of keysByItem) {
-    const item = itemMap.get(stockItemId);
-    if (!item) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "STOCK_ITEM_MISSING",
-        status: "block",
-        detail: "Movement/inventory references a stock item that is missing from the stock master",
-      });
-      continue;
-    }
-
-    const derivedTotal = keys.reduce((sum, key) => sum.plus(derivedOpeningByKey.get(key) ?? 0), new Decimal(0));
-    const masterOpeningQty = repairQuantity(item.opening_qty ?? "0");
-    if (derivedTotal.minus(masterOpeningQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: masterOpeningQty.toFixed(3),
-        actual: derivedTotal.toFixed(3),
-        detail: `Derived location openings do not sum to stock master opening for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    const openingRate = repairMoney(item.opening_rate ?? "0");
-    const openingValue = repairMoney(item.opening_value ?? "0");
-    const calculatedOpeningValue = repairMoney(masterOpeningQty.times(openingRate));
-    if (calculatedOpeningValue.minus(openingValue).abs().gt(MONEY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_VALUE_MISMATCH",
-        status: "block",
-        expected: openingValue.toFixed(2),
-        actual: calculatedOpeningValue.toFixed(2),
-        detail: `Opening quantity × rate does not reconcile to opening value for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    for (const key of keys) {
-      const parts = key.split(":");
-      const locationId = Number(parts[1]);
-      const quantity = derivedOpeningByKey.get(key) ?? new Decimal(0);
-      if (quantity.lt(new Decimal(0).minus(QTY_TOLERANCE))) {
-        checks.push({
-          companyId,
-          locationId,
-          stockItemId,
-          code: "NEGATIVE_DERIVED_OPENING",
-          status: "block",
-          expected: ">=0.000",
-          actual: quantity.toFixed(3),
-          detail: "Location opening reconstructed from quantity history is negative",
-        });
-        continue;
-      }
-      openings.push({
-        companyId,
-        locationId,
-        stockItemId,
-        quantity: repairQuantity(Decimal.max(quantity, 0)).toFixed(3),
-        averageRate: openingRate.toFixed(2),
-      });
-    }
-
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_QUANTITY_RECONCILED",
-      status: "pass",
-      expected: masterOpeningQty.toFixed(3),
-      actual: derivedTotal.toFixed(3),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_RATE_PINNED",
-      status: "pass",
-      expected: openingRate.toFixed(2),
-      actual: openingRate.toFixed(2),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_VALUE_RECONCILED",
-      status: "pass",
-      expected: openingValue.toFixed(2),
-      actual: calculatedOpeningValue.toFixed(2),
-    });
-  }
-
-  return { openings, checks, derivedOpeningByKey };
-}
-
 type RepairBlockerIndex = {
   itemWide: Map<string, RepairCheck>;
   locationSpecific: Map<string, RepairCheck>;
@@ -723,15 +962,6 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
 
-function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
-  const keys = new Set<string>();
-  for (const movement of movements) {
-    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    if (d(movement.quantityDelta).gte(0)) continue;
-    keys.add(`${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`);
-  }
-  return keys;
-}
 
 function markAmbiguousTimestampTies(
   companyId: number,
@@ -765,19 +995,550 @@ function markAmbiguousTimestampTies(
   return checks;
 }
 
+type MergedRecoveryResult = {
+  recoveredKeys: Set<string>;
+  proposals: HistoricalSalesRepairProposal[];
+  checks: RepairCheck[];
+};
+
+function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
+  return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
+}
+
+function stateQuantityValueMatches(
+  actual: HistoricalInventoryState,
+  expected: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(actual.quantity).minus(repairQuantity(expected.quantity)).abs().lte(QTY_TOLERANCE) &&
+    repairMoney(actual.totalValue).minus(repairMoney(expected.totalValue)).abs().lte(MONEY_TOLERANCE)
+  );
+}
+
+function checkpointContainsMovement(
+  movement: HistoricalSalesRepairMovement,
+  checkpoint: ValuationCheckpoint
+): boolean {
+  const canonicalId = canonicalMovementNumericId(movement);
+  if (canonicalId !== null) return canonicalId <= checkpoint.movementCutoffId;
+  return movementMutationTime(movement) <= checkpoint.createdAt.getTime();
+}
+
+function replayMergedSourceLocationForward(input: {
+  companyId: number;
+  sourceItemId: number;
+  locationId: number;
+  opening: HistoricalInventoryState;
+  movements: HistoricalSalesRepairMovement[];
+  mergeAtMs: number;
+}): { stateAtMerge: HistoricalInventoryState; proposals: HistoricalSalesRepairProposal[] } {
+  let state = createHistoricalInventoryStateFromSnapshot(
+    input.opening.quantity,
+    input.opening.averageRate,
+    input.opening.totalValue
+  );
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const movements = input.movements
+    .filter(
+      (movement) =>
+        movement.stockItemId === input.sourceItemId &&
+        movement.locationId === input.locationId &&
+        movementMutationTime(movement) < input.mergeAtMs
+    )
+    .sort(compareMovementMutationAscending);
+
+  for (const movement of movements) {
+    if (movement.sale) proposals.push(historicalSaleProposalFromState(movement, state));
+    state = applyHistoricalInventoryMovement(state, {
+      quantityDelta: movement.quantityDelta,
+      unitCost: movement.unitCost,
+    });
+  }
+  return { stateAtMerge: state, proposals };
+}
+
+function recoverHistoricalMergedSales(input: {
+  companyId: number;
+  targetKeys: Set<string>;
+  checkpoint: ValuationCheckpoint;
+  checkpointStates: Map<string, HistoricalInventoryState>;
+  historicalMerges: HistoricalMergeRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacyMovements: HistoricalSalesRepairMovement[];
+}): MergedRecoveryResult {
+  const recoveredKeys = new Set<string>();
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const checks: RepairCheck[] = [];
+  const allMovements = [...input.legacyMovements, ...input.canonical];
+  const mergeBySource = new Map(input.historicalMerges.map((merge) => [Number(merge.source_item_id), merge]));
+  const missingKeys = [...input.targetKeys].filter((key) => !input.checkpointStates.has(key));
+  const sourceIds = [...new Set(missingKeys.map((key) => Number(key.split(":")[2])))];
+
+  const blockSourceKeys = (sourceItemId: number, code: string, detail: string) => {
+    const sourceKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    for (const key of sourceKeys) {
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code,
+        status: "block",
+        detail,
+      });
+    }
+  };
+
+  for (const sourceItemId of sourceIds) {
+    const merge = mergeBySource.get(sourceItemId);
+    if (!merge) continue;
+
+    const mergeAtMs = merge.merge_at.getTime();
+    if (!Number.isFinite(mergeAtMs) || mergeAtMs > input.checkpoint.createdAt.getTime()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_MERGE_TIMESTAMP_INVALID",
+        `Historical merge timestamp is not before the valuation checkpoint (alias ${merge.alias_id})`
+      );
+      continue;
+    }
+
+    const sourceMovements = allMovements.filter((movement) => movement.stockItemId === sourceItemId);
+    const postMergeSource = sourceMovements.filter((movement) => movementMutationTime(movement) >= mergeAtMs);
+    if (postMergeSource.length > 0) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SOURCE_MOVEMENT_AFTER_MERGE",
+        `Historical source item has ${postMergeSource.length} inventory movement(s) at/after merge; identity transition is not clean`
+      );
+      continue;
+    }
+
+    const sourceOpeningQty = repairQuantity(merge.source_opening_qty);
+    const sourceOpeningRate = repairRate(merge.source_opening_rate);
+    const sourceOpeningValue = repairMoney(merge.source_opening_value);
+    const sourceTargetKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    const sourceTargetLocations = sourceTargetKeys.map((key) => Number(key.split(":")[1]));
+
+    if (sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+      const locations = new Set<number>([
+        ...sourceTargetLocations,
+        ...sourceMovements.map((movement) => movement.locationId),
+      ]);
+      const sourceProposals: HistoricalSalesRepairProposal[] = [];
+      for (const locationId of locations) {
+        const replay = replayMergedSourceLocationForward({
+          companyId: input.companyId,
+          sourceItemId,
+          locationId,
+          opening: stateForZeroOpening(sourceOpeningRate),
+          movements: allMovements,
+          mergeAtMs,
+        });
+        sourceProposals.push(...replay.proposals);
+      }
+
+      const proposedSaleIds = new Set(sourceProposals.map((proposal) => proposal.salesItemId));
+      const missingProposal = input.legacyMovements.find(
+        (movement) =>
+          movement.stockItemId === sourceItemId &&
+          movement.sale &&
+          sourceTargetLocations.includes(movement.locationId) &&
+          !proposedSaleIds.has(movement.sale.salesItemId)
+      );
+      if (missingProposal) {
+        blockSourceKeys(
+          sourceItemId,
+          "MERGED_ITEM_ZERO_OPENING_REPLAY_INCOMPLETE",
+          `Could not replay sale item ${missingProposal.sale?.salesItemId ?? "unknown"} from exact zero opening`
+        );
+        continue;
+      }
+
+      proposals.push(...sourceProposals);
+      for (const key of sourceTargetKeys) {
+        recoveredKeys.add(key);
+        const [, locationIdText] = key.split(":");
+        checks.push({
+          companyId: input.companyId,
+          locationId: Number(locationIdText),
+          stockItemId: sourceItemId,
+          code: "MERGED_ITEM_ZERO_OPENING_REPLAY",
+          status: "pass",
+          expected: "0.000|0.00",
+          actual: "0.000|0.00",
+          detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merged at ${iso(merge.merge_at)}; source opening is exact zero`,
+        });
+      }
+      continue;
+    }
+
+    const keptOpeningQty = repairQuantity(merge.kept_opening_qty);
+    const keptOpeningValue = repairMoney(merge.kept_opening_value);
+    if (!keptOpeningQty.isZero() || !keptOpeningValue.isZero()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SPLIT_UNPROVEN",
+        `Source opening is nonzero and kept item ${merge.kept_item_id} also has a nonzero opening; merge split cannot be uniquely separated`
+      );
+      continue;
+    }
+
+    const keptItemId = Number(merge.kept_item_id);
+    const keptMovements = allMovements.filter((movement) => movement.stockItemId === keptItemId);
+    const sourcePreMovements = sourceMovements.filter((movement) => movementMutationTime(movement) < mergeAtMs);
+    const keptPreMovements = keptMovements
+      .filter((movement) => movementMutationTime(movement) < mergeAtMs)
+      .sort(compareMovementMutationAscending);
+    const keptPostMovements = keptMovements
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) > mergeAtMs && checkpointContainsMovement(movement, input.checkpoint)
+      )
+      .sort(compareMovementMutationDescending);
+
+    const relevantLocations = new Set<number>([
+      ...sourceTargetLocations,
+      ...sourcePreMovements.map((movement) => movement.locationId),
+      ...input.checkpoint.rows
+        .filter((row) => Number(row.stock_item_id) === keptItemId)
+        .map((row) => Number(row.location_id)),
+    ]);
+
+    const keptBeforeByLocation = new Map<number, HistoricalInventoryState>();
+    for (const locationId of relevantLocations) {
+      keptBeforeByLocation.set(locationId, stateForZeroOpening(merge.kept_opening_rate));
+    }
+    for (const movement of keptPreMovements) {
+      if (!relevantLocations.has(movement.locationId)) continue;
+      const current =
+        keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      keptBeforeByLocation.set(
+        movement.locationId,
+        applyHistoricalInventoryMovement(current, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        })
+      );
+    }
+
+    const combinedAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let keptRewindFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const checkpointKey = historicalInventoryKey(input.companyId, locationId, keptItemId);
+      const checkpointState = input.checkpointStates.get(checkpointKey);
+      if (!checkpointState) {
+        keptRewindFailure = {
+          locationId,
+          detail: `Kept item ${keptItemId} has no checkpoint row at location ${locationId}`,
+        };
+        break;
+      }
+      combinedAtMergeByLocation.set(
+        locationId,
+        createHistoricalInventoryStateFromSnapshot(
+          checkpointState.quantity,
+          checkpointState.averageRate,
+          checkpointState.totalValue
+        )
+      );
+    }
+
+    if (!keptRewindFailure) {
+      for (const movement of keptPostMovements) {
+        if (!relevantLocations.has(movement.locationId)) continue;
+        const stateAfter = combinedAtMergeByLocation.get(movement.locationId);
+        if (!stateAfter) continue;
+        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        });
+        if (!reversed.reversible) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: `Cannot rewind kept item movement ${movement.movementId}: ${reversed.reason}`,
+          };
+          break;
+        }
+        if (
+          movement.evidence === "canonical" &&
+          CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+          d(movement.quantityDelta).lt(0) &&
+          movement.unitCost !== null &&
+          !repairRate(movement.unitCost).eq(repairRate(reversed.stateBefore.averageRate))
+        ) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: `Canonical kept-item sale ${movement.movementId} disagrees with checkpoint rewind`,
+          };
+          break;
+        }
+        combinedAtMergeByLocation.set(movement.locationId, reversed.stateBefore);
+      }
+    }
+
+    if (keptRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_KEPT_REWIND_FAILED", keptRewindFailure.detail);
+      continue;
+    }
+
+    const sourceAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let subtractionFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const combined = combinedAtMergeByLocation.get(locationId)!;
+      const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      const sourceQty = repairQuantity(combined.quantity.minus(keptBefore.quantity));
+      const sourceValue = repairMoney(combined.totalValue.minus(keptBefore.totalValue));
+      if (sourceValue.lt(MONEY_TOLERANCE.negated())) {
+        subtractionFailure = {
+          locationId,
+          detail: `Merge subtraction produced negative source value ${sourceValue.toFixed(2)}`,
+        };
+        break;
+      }
+      const normalizedValue = sourceValue.abs().lte(MONEY_TOLERANCE) ? new Decimal(0) : sourceValue;
+      const sourceRate = sourceQty.gt(0)
+        ? repairRate(normalizedValue.dividedBy(sourceQty))
+        : sourceOpeningRate;
+      const sourceState = createHistoricalInventoryStateFromSnapshot(
+        sourceQty,
+        sourceRate,
+        normalizedValue
+      );
+
+      const combinedQty = repairQuantity(keptBefore.quantity.plus(sourceState.quantity));
+      const combinedValue = repairMoney(keptBefore.totalValue.plus(sourceState.totalValue));
+      const combinedRate = combinedQty.gt(0) ? repairRate(combinedValue.dividedBy(combinedQty)) : new Decimal(0);
+      if (
+        !combinedQty.eq(repairQuantity(combined.quantity)) ||
+        !combinedValue.eq(repairMoney(combined.totalValue)) ||
+        !combinedRate.eq(repairRate(combined.averageRate))
+      ) {
+        subtractionFailure = {
+          locationId,
+          detail: "Source/kept split does not replay the exact post-merge checkpoint-rewound state",
+        };
+        break;
+      }
+      sourceAtMergeByLocation.set(locationId, sourceState);
+    }
+
+    if (subtractionFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_VALUE_SPLIT_FAILED", subtractionFailure.detail);
+      continue;
+    }
+
+    const tempProposals: HistoricalSalesRepairProposal[] = [];
+    const openingByLocation = new Map<number, HistoricalInventoryState>();
+    const unresolvedLocations: number[] = [];
+    let sourceRewindFailure: { locationId: number; detail: string } | null = null;
+
+    for (const locationId of relevantLocations) {
+      const sourceAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      const movements = sourcePreMovements
+        .filter((movement) => movement.locationId === locationId)
+        .sort(compareMovementMutationDescending);
+
+      if (sourceAtMerge.quantity.lte(0)) {
+        unresolvedLocations.push(locationId);
+        continue;
+      }
+
+      let stateAfter = sourceAtMerge;
+      const locationProposals: HistoricalSalesRepairProposal[] = [];
+      for (const movement of movements) {
+        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        });
+        if (!reversed.reversible) {
+          sourceRewindFailure = {
+            locationId,
+            detail: `Cannot rewind source movement ${movement.movementId}: ${reversed.reason}`,
+          };
+          break;
+        }
+        if (movement.sale) {
+          locationProposals.push(historicalSaleProposalFromState(movement, reversed.stateBefore));
+        }
+        stateAfter = reversed.stateBefore;
+      }
+      if (sourceRewindFailure) break;
+      openingByLocation.set(locationId, stateAfter);
+      tempProposals.push(...locationProposals);
+    }
+
+    if (sourceRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_SOURCE_REWIND_FAILED", sourceRewindFailure.detail);
+      continue;
+    }
+
+    let recoveredOpeningQty = new Decimal(0);
+    let recoveredOpeningValue = new Decimal(0);
+    for (const opening of openingByLocation.values()) {
+      recoveredOpeningQty = repairQuantity(recoveredOpeningQty.plus(opening.quantity));
+      recoveredOpeningValue = repairMoney(recoveredOpeningValue.plus(opening.totalValue));
+    }
+    const remainingOpeningQty = repairQuantity(sourceOpeningQty.minus(recoveredOpeningQty));
+    const remainingOpeningValue = repairMoney(sourceOpeningValue.minus(recoveredOpeningValue));
+
+    if (
+      remainingOpeningQty.lt(QTY_TOLERANCE.negated()) ||
+      remainingOpeningValue.lt(MONEY_TOLERANCE.negated())
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Rewind exceeded source opening: remaining ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const unresolvedWithActivity = unresolvedLocations.filter(
+      (locationId) =>
+        sourcePreMovements.some((movement) => movement.locationId === locationId) ||
+        sourceTargetLocations.includes(locationId)
+    );
+    if (
+      (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) &&
+      unresolvedWithActivity.length !== 1
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_LOCATION_AMBIGUOUS",
+        `Remaining source opening ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(
+          2
+        )} cannot be assigned uniquely across ${unresolvedWithActivity.length} unresolved locations`
+      );
+      continue;
+    }
+
+    let forwardFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of unresolvedWithActivity) {
+      const getsRemainder =
+        unresolvedWithActivity.length === 1 &&
+        (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
+      const opening = getsRemainder
+        ? createHistoricalInventoryStateFromSnapshot(
+            remainingOpeningQty,
+            sourceOpeningRate,
+            remainingOpeningValue
+          )
+        : stateForZeroOpening(sourceOpeningRate);
+      const replay = replayMergedSourceLocationForward({
+        companyId: input.companyId,
+        sourceItemId,
+        locationId,
+        opening,
+        movements: allMovements,
+        mergeAtMs,
+      });
+      const expectedAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      if (!stateQuantityValueMatches(replay.stateAtMerge, expectedAtMerge)) {
+        forwardFailure = {
+          locationId,
+          detail: `Forward replay reaches ${replay.stateAtMerge.quantity.toFixed(3)} / ${replay.stateAtMerge.totalValue.toFixed(
+            2
+          )}, expected merge contribution ${expectedAtMerge.quantity.toFixed(3)} / ${expectedAtMerge.totalValue.toFixed(2)}`,
+        };
+        break;
+      }
+      openingByLocation.set(locationId, opening);
+      tempProposals.push(...replay.proposals);
+    }
+
+    if (forwardFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_FORWARD_PROOF_FAILED", forwardFailure.detail);
+      continue;
+    }
+
+    let finalOpeningQty = new Decimal(0);
+    let finalOpeningValue = new Decimal(0);
+    let openingRateMismatch = false;
+    for (const opening of openingByLocation.values()) {
+      finalOpeningQty = repairQuantity(finalOpeningQty.plus(opening.quantity));
+      finalOpeningValue = repairMoney(finalOpeningValue.plus(opening.totalValue));
+      if (opening.quantity.gt(0) && !repairRate(opening.averageRate).eq(sourceOpeningRate)) {
+        openingRateMismatch = true;
+      }
+    }
+    if (
+      finalOpeningQty.minus(sourceOpeningQty).abs().gt(QTY_TOLERANCE) ||
+      finalOpeningValue.minus(sourceOpeningValue).abs().gt(MONEY_TOLERANCE) ||
+      openingRateMismatch
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Recovered opening ${finalOpeningQty.toFixed(3)} @ ${sourceOpeningRate.toFixed(
+          2
+        )} / ${finalOpeningValue.toFixed(2)} does not reproduce stock master ${sourceOpeningQty.toFixed(
+          3
+        )} / ${sourceOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const targetSaleIds = new Set(
+      input.legacyMovements
+        .filter(
+          (movement) =>
+            movement.stockItemId === sourceItemId &&
+            movement.sale &&
+            sourceTargetLocations.includes(movement.locationId)
+        )
+        .map((movement) => movement.sale!.salesItemId)
+    );
+    const recoveredSaleIds = new Set(tempProposals.map((proposal) => proposal.salesItemId));
+    if ([...targetSaleIds].some((saleId) => !recoveredSaleIds.has(saleId))) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SALE_PROPOSAL_INCOMPLETE",
+        "At least one historical sale did not receive a proposal from the proven merge rewind"
+      );
+      continue;
+    }
+
+    proposals.push(...tempProposals);
+    for (const key of sourceTargetKeys) {
+      recoveredKeys.add(key);
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code: "MERGED_ITEM_IDENTITY_RECONCILED",
+        status: "pass",
+        expected: `${sourceOpeningQty.toFixed(3)}|${sourceOpeningValue.toFixed(2)}`,
+        actual: `${finalOpeningQty.toFixed(3)}|${finalOpeningValue.toFixed(2)}`,
+        detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merge ${iso(
+          merge.merge_at
+        )}; kept checkpoint rewound and exact source opening recovered`,
+      });
+    }
+  }
+
+  return { recoveredKeys, proposals, checks };
+}
+
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales] = await Promise.all([
+  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
-      `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
-         FROM inventory
-        WHERE company_id=$1
-        ORDER BY location_id,stock_item_id`,
+      `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
+         FROM inventory i
+         JOIN locations l
+           ON l.id=i.location_id
+          AND l.company_id=i.company_id
+          AND l.deleted_at IS NULL
+        WHERE i.company_id=$1
+        ORDER BY i.location_id,i.stock_item_id`,
       [companyId]
     ),
     client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text
+      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
+              active,deleted_at,created_at
          FROM stock_items
         WHERE company_id=$1
         ORDER BY id`,
@@ -785,6 +1546,8 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     ),
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
+    loadValuationCheckpoint(client, companyId),
+    loadHistoricalMerges(client, companyId),
   ]);
 
   const [canonical, legacy, manual] = await Promise.all([
@@ -793,11 +1556,33 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
   ]);
 
-  const checks: RepairCheck[] = [...manual.checks];
-  const canonicalSaleKeys = canonicalSaleEvidenceKeys(canonical);
-
-  const movements: HistoricalSalesRepairMovement[] = [
-    ...canonical,
+  const sourceEvidenceHash = historicalSalesCompanyEvidenceHash({
+    companyId,
+    canonicalStart,
+    checkpoint,
+    canonical,
+    legacy,
+    manual,
+    sales,
+    historicalMerges,
+  });
+  const checks: RepairCheck[] = [
+    ...manual.checks,
+    {
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "V2_SOURCE_EVIDENCE_HASH",
+      status: "pass",
+      expected: sourceEvidenceHash,
+      actual: sourceEvidenceHash,
+      detail:
+        "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
+    },
+  ];
+  const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
+  const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
+  const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy.map((row) => ({
       movementId: row.movement_id,
       companyId,
@@ -826,6 +1611,47 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     })),
   ];
 
+  const directCanonicalProposals = new Map<number, HistoricalSalesRepairProposal>();
+  const saleQuantityByEvidenceKey = new Map<string, Decimal>();
+  for (const sale of sales) {
+    if (!sale.location_id) continue;
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    saleQuantityByEvidenceKey.set(
+      key,
+      repairQuantity((saleQuantityByEvidenceKey.get(key) ?? new Decimal(0)).plus(d(sale.quantity).abs()))
+    );
+  }
+
+  for (const [key, evidence] of canonicalSaleEvidence) {
+    const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
+    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
+    if (!expectedQuantity) continue;
+    if (evidence.rates.size !== 1) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_RATE_AMBIGUOUS",
+        status: "block",
+        actual: [...evidence.rates].sort().join(","),
+        detail: `Voucher ${voucherIdText} has ${evidence.rates.size} active canonical sale rates for one item/location`,
+      });
+    }
+    if (!evidence.totalQuantity.eq(expectedQuantity)) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_QUANTITY_MISMATCH",
+        status: "block",
+        expected: expectedQuantity.toFixed(3),
+        actual: evidence.totalQuantity.toFixed(3),
+        detail: `Voucher ${voucherIdText} active canonical issue quantity does not match current sale lines`,
+      });
+    }
+  }
+
+  const legacySales: SaleRow[] = [];
   for (const sale of sales) {
     if (!sale.location_id) {
       checks.push({
@@ -840,10 +1666,28 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
-    if (canonicalSaleKeys.has(saleEvidenceKey)) continue;
-
-    const legacySale = beforeCutoff(sale.created_at, canonicalStart);
-    if (!legacySale) {
+    const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
+    if (canonicalEvidence) {
+      const rate = canonicalEvidence.rates.size === 1 ? [...canonicalEvidence.rates][0] : null;
+      if (rate !== null && canonicalEvidence.totalQuantity.eq(saleQuantityByEvidenceKey.get(saleEvidenceKey) ?? -1)) {
+        const evidenceMovement = canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
+        directCanonicalProposals.set(
+          Number(sale.sales_item_id),
+          proposalFromRecordedRate(
+            companyId,
+            sale,
+            rate,
+            evidenceMovement.sourceType,
+            evidenceMovement.sourceId,
+            "canonical"
+          )
+        );
+      } else {
+        directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+      continue;
+    }
+    if (!beforeCutoff(sale.created_at, canonicalStart)) {
       checks.push({
         companyId,
         locationId: Number(sale.location_id),
@@ -854,7 +1698,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       });
       continue;
     }
-    movements.push({
+
+    legacySales.push(sale);
+    legacyMovements.push({
       movementId: `sale-marker:${sale.sales_item_id}`,
       companyId,
       locationId: Number(sale.location_id),
@@ -878,83 +1724,283 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     });
   }
 
-  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart, canonicalSaleKeys));
+  checks.push(...markAmbiguousTimestampTies(companyId, legacyMovements, sales, canonicalStart, canonicalSaleKeys));
 
-  const opening = buildOpeningStates({
-    companyId,
-    stockItems: stockItemResult.rows,
-    liveInventory: inventoryResult.rows,
-    movements,
-  });
-  checks.push(...opening.checks);
-
-  const replay = replayHistoricalSalesCosts({
-    openings: opening.openings,
-    movements,
-  });
-  const proposals = replay.proposals;
-  const liveByKey = new Map(
-    inventoryResult.rows.map((row) => [
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      row,
-    ])
+  const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
+  const targetKeys = new Set(
+    legacySales
+      .filter((sale) => sale.location_id !== null)
+      .map((sale) => historicalInventoryKey(companyId, Number(sale.location_id), Number(sale.stock_item_id)))
   );
-  const replayKeys = new Set([...liveByKey.keys(), ...replay.closingStates.keys()]);
-  for (const key of replayKeys) {
-    const state = replay.closingStates.get(key);
-    const live = liveByKey.get(key);
-    const [, locationIdText, stockItemIdText] = key.split(":");
-    const expectedQty = repairQuantity(live?.quantity ?? "0");
-    const actualQty = repairQuantity(state?.quantity ?? "0");
-    if (actualQty.minus(expectedQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: expectedQty.toFixed(3),
-        actual: actualQty.toFixed(3),
-        detail: "Forward replay does not reproduce live closing quantity",
-      });
-      continue;
+
+  if (!checkpoint || checkpoint.rows.length === 0) {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_MISSING",
+      status: "block",
+      detail: "Phase 3 inventory valuation checkpoint is missing for this company",
+    });
+    for (const sale of legacySales) {
+      if (sale.location_id) proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+    }
+  } else {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_PRESENT",
+      status: "pass",
+      expected: String(checkpoint.movementCutoffId),
+      actual: String(checkpoint.movementCutoffId),
+      detail: checkpoint.createdAt.toISOString(),
+    });
+
+    const checkpointByKey = new Map<string, InventoryRow>();
+    const checkpointStates = new Map<string, HistoricalInventoryState>();
+    for (const row of checkpoint.rows) {
+      const key = historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id));
+      checkpointByKey.set(key, row);
+      checkpointStates.set(
+        key,
+        createHistoricalInventoryStateFromSnapshot(row.quantity, row.average_rate, row.total_value)
+      );
     }
 
-    const expectedValue = repairMoney(live?.total_value ?? "0");
-    const actualValue = repairMoney(state?.totalValue ?? "0");
-    if (actualValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_VALUE_MISMATCH",
-        status: "block",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
-        detail: "Forward weighted-average replay does not reproduce live closing inventory value",
-      });
-    } else {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_INVENTORY_RECONCILED",
-        status: "pass",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
-      });
+    const mergedRecovery = recoverHistoricalMergedSales({
+      companyId,
+      targetKeys,
+      checkpoint,
+      checkpointStates,
+      historicalMerges,
+      canonical,
+      legacyMovements,
+    });
+    checks.push(...mergedRecovery.checks);
+    for (const proposal of mergedRecovery.proposals) {
+      proposalsBySaleId.set(proposal.salesItemId, proposal);
     }
+
+    const mergedSourceIds = new Set(historicalMerges.map((merge) => Number(merge.source_item_id)));
+    const unavailableKeys = new Set<string>();
+    for (const key of targetKeys) {
+      if (checkpointStates.has(key) || mergedRecovery.recoveredKeys.has(key)) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      const locationId = Number(locationIdText);
+      const stockItemId = Number(stockItemIdText);
+      unavailableKeys.add(key);
+      const alreadyBlocked = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.companyId === companyId &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null || check.locationId === locationId)
+      );
+      if (!alreadyBlocked) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: mergedSourceIds.has(stockItemId)
+            ? "MERGED_ITEM_RECOVERY_FAILED"
+            : "VALUATION_CHECKPOINT_KEY_MISSING",
+          status: "block",
+          detail: mergedSourceIds.has(stockItemId)
+            ? "Historical merged item could not be reconstructed uniquely"
+            : "Legacy sale item/location has no row in the immutable Phase 3 valuation checkpoint",
+        });
+      }
+    }
+    const checkpointTargetKeys = new Set(
+      [...targetKeys].filter((key) => checkpointStates.has(key) && !unavailableKeys.has(key))
+    );
+
+    // Prove the immutable checkpoint still reaches today's active-location
+    // inventory using every durable movement after the checkpoint. Canonical
+    // rows use the exact checkpoint movement-id boundary; noncanonical durable
+    // rows use the checkpoint timestamp.
+    const liveReplayStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (checkpointTargetKeys.has(key)) {
+        liveReplayStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+
+    const postCheckpointMovements = [
+      ...canonical.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id > checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) > checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationAscending);
+
+    for (const movement of postCheckpointMovements) {
+      const key = movementKey(movement);
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const current =
+        liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
+      liveReplayStates.set(
+        key,
+        applyHistoricalInventoryMovement(current, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        })
+      );
+    }
+
+    const liveByKey = new Map(
+      inventoryResult.rows.map((row) => [
+        historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
+        row,
+      ])
+    );
+    for (const key of checkpointTargetKeys) {
+      if (unavailableKeys.has(key)) continue;
+      const actual = liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", "0", "0");
+      const live = liveByKey.get(key);
+      const expectedQty = repairQuantity(live?.quantity ?? "0");
+      const expectedValue = repairMoney(live?.total_value ?? "0");
+      if (
+        actual.quantity.minus(expectedQty).abs().gt(QTY_TOLERANCE) ||
+        actual.totalValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)
+      ) {
+        const [, locationIdText, stockItemIdText] = key.split(":");
+        unavailableKeys.add(key);
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CHECKPOINT_TO_LIVE_RECONCILIATION_MISMATCH",
+          status: "block",
+          expected: `${expectedQty.toFixed(3)}|${expectedValue.toFixed(2)}`,
+          actual: `${actual.quantity.toFixed(3)}|${actual.totalValue.toFixed(2)}`,
+          detail: "Checkpoint plus post-cutoff canonical journal does not reproduce live active inventory",
+        });
+      }
+    }
+
+    const rewindStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (checkpointTargetKeys.has(key) && !unavailableKeys.has(key)) {
+        rewindStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+
+    // Rewind every durable movement represented in the checkpoint in actual
+    // mutation order. This includes durable legacy rows that never received a
+    // canonical journal counterpart after canonical journaling began.
+    const movementsInCheckpoint = [
+      ...canonical.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id <= checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationDescending);
+
+    for (const movement of movementsInCheckpoint) {
+      const key = movementKey(movement);
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const stateAfter = rewindStates.get(key);
+      if (!stateAfter) continue;
+      const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+        quantityDelta: movement.quantityDelta,
+        unitCost: movement.unitCost,
+      });
+      if (!reversed.reversible) {
+        unavailableKeys.add(key);
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: `${movement.evidence === "canonical" ? "CHECKPOINT" : "LEGACY"}_REWIND_${reversed.reason}`,
+          status: "block",
+          detail: `Cannot uniquely rewind ${movement.evidence} movement ${movement.movementId}`,
+        });
+        continue;
+      }
+
+      if (
+        movement.evidence === "canonical" &&
+        CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+        d(movement.quantityDelta).lt(0)
+      ) {
+        const recorded = repairRate(movement.unitCost ?? "0");
+        const inferred = repairRate(reversed.stateBefore.averageRate);
+        if (!recorded.eq(inferred)) {
+          unavailableKeys.add(key);
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+            status: "block",
+            expected: recorded.toFixed(2),
+            actual: inferred.toFixed(2),
+            detail: `Canonical movement ${movement.movementId} disagrees with checkpoint rewind`,
+          });
+          continue;
+        }
+      }
+
+      if (movement.sale) {
+        proposalsBySaleId.set(
+          movement.sale.salesItemId,
+          historicalSaleProposalFromState(movement, reversed.stateBefore)
+        );
+      }
+      rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const sale of legacySales) {
+      if (!sale.location_id) continue;
+      if (!proposalsBySaleId.has(Number(sale.sales_item_id))) {
+        proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+    }
+
+    const rewindReadyKeys =
+      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length +
+      mergedRecovery.recoveredKeys.size;
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "CHECKPOINT_REWIND_COVERAGE",
+      status: rewindReadyKeys === targetKeys.size ? "pass" : "warning",
+      expected: String(targetKeys.size),
+      actual: String(rewindReadyKeys),
+      detail: "Legacy sale item/location keys with a fully provable checkpoint rewind",
+    });
   }
 
+  const proposals = [
+    ...directCanonicalProposals.values(),
+    ...proposalsBySaleId.values(),
+  ].sort((a, b) => a.salesItemId - b.salesItemId);
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
     sourceCutoff: sourceCutoff.toISOString(),
-    inventoryRows: inventoryResult.rows.length,
+    checkpointAt: checkpoint?.createdAt.toISOString() ?? null,
+    checkpointMovementCutoffId: checkpoint?.movementCutoffId ?? null,
+    sourceEvidenceHash,
+    activeInventoryRows: inventoryResult.rows.length,
+    checkpointRows: checkpoint?.rows.length ?? 0,
     stockItems: stockItemResult.rows.length,
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
+    canonicalSaleRows: directCanonicalProposals.size,
+    legacySaleRows: legacySales.length,
+    historicalMerges: historicalMerges.length,
+    proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
   };
@@ -1361,40 +2407,38 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_RUN_SCOPE_EMPTY");
     }
 
-    // Fail closed if a source document was edited after the reviewed dry run.
-    // Normal new stock activity is allowed; only backdated canonical evidence or
-    // audited mutations of source-bearing records invalidate the reviewed run.
-    const openingDrift = await client.query<{
-      stock_item_id: number;
-      check_code: string;
-    }>(
-      `SELECT c.stock_item_id,c.check_code
-         FROM historical_sales_cost_repair_checks c
-         JOIN stock_items si
-           ON si.company_id=c.company_id
-          AND si.id=c.stock_item_id
-        WHERE c.run_id=$1
-          AND c.status='pass'
-          AND c.check_code IN ('OPENING_QUANTITY_RECONCILED','OPENING_RATE_PINNED','OPENING_VALUE_RECONCILED')
-          AND (
-            (c.check_code='OPENING_QUANTITY_RECONCILED' AND si.opening_qty::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_RATE_PINNED' AND si.opening_rate::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_VALUE_RECONCILED' AND si.opening_value::numeric IS DISTINCT FROM c.expected_value::numeric)
-          )
-        ORDER BY c.stock_item_id,c.check_code
-        LIMIT 25`,
+    // Recompute the exact V2 evidence bundle that was reviewed during dry-run.
+    // This pins the immutable checkpoint/cutoff, canonical + legacy movements,
+    // merge aliases/source openings, and every target sale original.
+    const evidenceChecks = await client.query<{ company_id: number; expected_value: string }>(
+      `SELECT company_id,expected_value
+         FROM historical_sales_cost_repair_checks
+        WHERE run_id=$1
+          AND check_code='V2_SOURCE_EVIDENCE_HASH'
+          AND status='pass'
+        ORDER BY company_id`,
       [input.runId]
     );
-    if (openingDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair opening evidence changed after dry run: ${openingDrift.rows
-          .map((row) => `${row.stock_item_id}/${row.check_code}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
+    const expectedEvidenceByCompany = new Map(
+      evidenceChecks.rows.map((row) => [Number(row.company_id), String(row.expected_value)])
+    );
+    if (expectedEvidenceByCompany.size !== targetCompanyIds.length) {
+      throw hscrError("HSCR_V2_EVIDENCE_HASH_SCOPE_MISMATCH");
+    }
+    for (const companyId of targetCompanyIds) {
+      const expected = expectedEvidenceByCompany.get(companyId);
+      if (!expected) throw hscrError(`HSCR_V2_EVIDENCE_HASH_MISSING:${companyId}`);
+      const actual = await recomputeHistoricalSalesCompanyEvidenceHash(client, companyId, run.source_cutoff_at);
+      if (actual !== expected) {
+        throw hscrError(`HSCR_V2_SOURCE_EVIDENCE_DRIFT:${companyId}`);
+      }
     }
 
+    await assertSalesItemsUpdateHasNoSideEffectTriggers(client);
+    const inventoryBeforeApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+
+    // Keep targeted "changed-after-cutoff" checks as a second line of defense.
+    // Normal new stock activity after the source cutoff is allowed.
     const sourceDrift = await client.query<{
       kind: string;
       evidence_id: string;
@@ -1517,11 +2561,30 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_POST_APPLY_VERIFY_FAILED");
     }
 
+    const inventoryAfterApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+    if (
+      inventoryAfterApply.hash !== inventoryBeforeApply.hash ||
+      inventoryAfterApply.rowCount !== inventoryBeforeApply.rowCount
+    ) {
+      throw hscrError("HSCR_INVENTORY_CHANGED_DURING_APPLY");
+    }
+
     await client.query(
       `UPDATE historical_sales_cost_repair_runs
-          SET status='applied',applied_at=NOW(),completed_at=NOW()
+          SET status='applied',
+              applied_at=NOW(),
+              completed_at=NOW(),
+              report=COALESCE(report,'{}'::jsonb) || jsonb_build_object(
+                'applyInventorySnapshot',
+                jsonb_build_object(
+                  'beforeHash',$2::text,
+                  'afterHash',$3::text,
+                  'rowCount',$4::int,
+                  'unchanged',true
+                )
+              )
         WHERE id=$1`,
-      [input.runId]
+      [input.runId, inventoryBeforeApply.hash, inventoryAfterApply.hash, inventoryAfterApply.rowCount]
     );
 
     await client.query("COMMIT");

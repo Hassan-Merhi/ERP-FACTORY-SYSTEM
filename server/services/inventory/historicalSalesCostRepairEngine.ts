@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v1";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v2-checkpoint-rewind-merged";
 
 const ZERO = new Decimal(0);
 
@@ -44,6 +44,8 @@ export type HistoricalSalesRepairMovement = {
   locationId: number;
   stockItemId: number;
   occurredAt: string;
+  createdAt?: string;
+  reversalOfMovementId?: number | null;
   sequence: number;
   quantityDelta: string;
   unitCost: string | null;
@@ -105,6 +107,191 @@ export function createHistoricalInventoryState(
   const averageRate = repairRate(Decimal.max(decimal(rateValue, "opening rate"), ZERO));
   const totalValue = quantity.gt(ZERO) ? repairMoney(quantity.times(averageRate)) : ZERO;
   return { quantity, averageRate, totalValue };
+}
+
+export function createHistoricalInventoryStateFromSnapshot(
+  quantityValue: Decimal.Value,
+  rateValue: Decimal.Value,
+  totalValueInput: Decimal.Value
+): HistoricalInventoryState {
+  const quantity = repairQuantity(quantityValue);
+  const averageRate = repairRate(Decimal.max(decimal(rateValue, "snapshot rate"), ZERO));
+  const totalValue = quantity.gt(ZERO)
+    ? repairMoney(Decimal.max(decimal(totalValueInput, "snapshot total value"), ZERO))
+    : ZERO;
+  return { quantity, averageRate, totalValue };
+}
+
+function statesEqual(left: HistoricalInventoryState, right: HistoricalInventoryState): boolean {
+  return (
+    repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
+    repairRate(left.averageRate).eq(repairRate(right.averageRate)) &&
+    repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
+  );
+}
+
+function candidateRatesAround(rate: Decimal): Decimal[] {
+  const center = repairRate(Decimal.max(rate, ZERO));
+  const values: Decimal[] = [];
+  for (let cents = -10; cents <= 10; cents += 1) {
+    const candidate = center.plus(new Decimal(cents).dividedBy(100));
+    if (candidate.gte(ZERO)) values.push(repairRate(candidate));
+  }
+  return values;
+}
+
+export type HistoricalInventoryReverseResult =
+  | { reversible: true; stateBefore: HistoricalInventoryState }
+  | {
+      reversible: false;
+      reason: "COST_MEMORY_IRREVERSIBLE" | "MOVEMENT_INVERSE_NOT_UNIQUE" | "MOVEMENT_INVERSE_INVALID";
+    };
+
+/**
+ * Inverts one inventory movement using the same rounded quantity/value/rate
+ * semantics as applyHistoricalInventoryMovement().
+ *
+ * A priced receipt that starts at zero/negative stock overwrites the previous
+ * cost-memory rate. That earlier rate is mathematically unrecoverable from the
+ * post-receipt state alone, so callers must quarantine the key instead of
+ * guessing.
+ */
+export function reverseHistoricalInventoryMovement(
+  stateAfterInput: HistoricalInventoryState,
+  input: { quantityDelta: Decimal.Value; unitCost?: Decimal.Value | null }
+): HistoricalInventoryReverseResult {
+  const stateAfter = createHistoricalInventoryStateFromSnapshot(
+    stateAfterInput.quantity,
+    stateAfterInput.averageRate,
+    stateAfterInput.totalValue
+  );
+  const delta = repairQuantity(input.quantityDelta);
+  const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+
+  if (delta.isZero()) {
+    return { reversible: true, stateBefore: stateAfter };
+  }
+
+  if (delta.gt(ZERO)) {
+    if (input.unitCost !== null && input.unitCost !== undefined && previousQty.lte(ZERO)) {
+      return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
+    }
+
+    if (input.unitCost !== null && input.unitCost !== undefined) {
+      const incomingRate = repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
+      if (previousQty.lte(ZERO)) {
+        return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
+      }
+      const beforeValue = repairMoney(stateAfter.totalValue.minus(delta.times(incomingRate)));
+      if (beforeValue.lt(ZERO)) {
+        return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+      }
+      const beforeRate = repairRate(beforeValue.dividedBy(previousQty));
+      const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, beforeRate, beforeValue);
+      const replayed = applyHistoricalInventoryMovement(stateBefore, {
+        quantityDelta: delta,
+        unitCost: incomingRate,
+      });
+      return statesEqual(replayed, stateAfter)
+        ? { reversible: true, stateBefore }
+        : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+    }
+
+    if (previousQty.lte(ZERO)) {
+      const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, stateAfter.averageRate, ZERO);
+      const replayed = applyHistoricalInventoryMovement(stateBefore, { quantityDelta: delta, unitCost: null });
+      return statesEqual(replayed, stateAfter)
+        ? { reversible: true, stateBefore }
+        : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+    }
+
+    const candidates: HistoricalInventoryState[] = [];
+    for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
+      const beforeValue = repairMoney(stateAfter.totalValue.minus(delta.times(candidateRate)));
+      if (beforeValue.lt(ZERO)) continue;
+      const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, candidateRate, beforeValue);
+      if (!repairRate(stateBefore.totalValue.dividedBy(previousQty)).eq(candidateRate)) continue;
+      const replayed = applyHistoricalInventoryMovement(stateBefore, { quantityDelta: delta, unitCost: null });
+      if (statesEqual(replayed, stateAfter)) candidates.push(stateBefore);
+    }
+    return candidates.length === 1
+      ? { reversible: true, stateBefore: candidates[0] }
+      : {
+          reversible: false,
+          reason: candidates.length === 0 ? "MOVEMENT_INVERSE_INVALID" : "MOVEMENT_INVERSE_NOT_UNIQUE",
+        };
+  }
+
+  const issueQty = delta.abs();
+  if (previousQty.lte(ZERO)) {
+    return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+  }
+
+  if (stateAfter.quantity.lte(ZERO)) {
+    const stateBefore = createHistoricalInventoryState(previousQty, stateAfter.averageRate);
+    const replayed = applyHistoricalInventoryMovement(stateBefore, {
+      quantityDelta: delta,
+      unitCost: input.unitCost,
+    });
+    return statesEqual(replayed, stateAfter)
+      ? { reversible: true, stateBefore }
+      : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+  }
+
+  const candidates: HistoricalInventoryState[] = [];
+  for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
+    const beforeValue = repairMoney(stateAfter.totalValue.plus(issueQty.times(candidateRate)));
+    const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, candidateRate, beforeValue);
+    if (!repairRate(stateBefore.totalValue.dividedBy(previousQty)).eq(candidateRate)) continue;
+    const replayed = applyHistoricalInventoryMovement(stateBefore, {
+      quantityDelta: delta,
+      unitCost: input.unitCost,
+    });
+    if (statesEqual(replayed, stateAfter)) candidates.push(stateBefore);
+  }
+
+  return candidates.length === 1
+    ? { reversible: true, stateBefore: candidates[0] }
+    : {
+        reversible: false,
+        reason: candidates.length === 0 ? "MOVEMENT_INVERSE_INVALID" : "MOVEMENT_INVERSE_NOT_UNIQUE",
+      };
+}
+
+export function historicalSaleProposalFromState(
+  movement: HistoricalSalesRepairMovement,
+  stateBefore: HistoricalInventoryState
+): HistoricalSalesRepairProposal {
+  if (!movement.sale) throw hscrEngineError("HSCR_SALE_PROPOSAL_REQUIRES_SALE_MOVEMENT");
+  const saleQty = repairQuantity(movement.sale.quantity).abs();
+  const proposedCostPrice = repairRate(stateBefore.averageRate);
+  const proposedTotalCost = repairMoney(saleQty.times(proposedCostPrice));
+  const proposedProfit = repairMoney(decimal(movement.sale.totalSales, "sale total").minus(proposedTotalCost));
+  const originalCostPrice = repairRate(movement.sale.originalCostPrice);
+  const originalTotalCost = repairMoney(movement.sale.originalTotalCost);
+  const originalProfit = repairMoney(movement.sale.originalProfit);
+
+  return {
+    salesItemId: movement.sale.salesItemId,
+    voucherId: movement.sale.voucherId,
+    companyId: movement.companyId,
+    locationId: movement.locationId,
+    stockItemId: movement.stockItemId,
+    occurredAt: movement.occurredAt,
+    sourceType: movement.sourceType,
+    sourceId: movement.sourceId,
+    evidence: movement.evidence,
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: proposedCostPrice.toFixed(2),
+    proposedTotalCost: proposedTotalCost.toFixed(2),
+    proposedProfit: proposedProfit.toFixed(2),
+    changed:
+      !originalCostPrice.eq(proposedCostPrice) ||
+      !originalTotalCost.eq(proposedTotalCost) ||
+      !originalProfit.eq(proposedProfit),
+  };
 }
 
 /**
