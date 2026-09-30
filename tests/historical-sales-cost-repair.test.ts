@@ -975,4 +975,29 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("67.92");
   });
 
+
+  it("prefers the canonical recorded sale rate when a generic inverse picks a conflicting rate but recorded-rate replay is exact", () => {
+    const after = createHistoricalInventoryStateFromSnapshot(
+      "9",
+      "72.56",
+      "653.04"
+    );
+    const sale = movement({
+      movementId: "canonical:recorded-rate-priority",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "-1",
+      unitCost: "72.55",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, sale);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RECORDED_ISSUE_RATE");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("725.59");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("72.55");
+  });
+
 });
