@@ -28,10 +28,10 @@ function actor(req: Request): string {
 
 function parseCompanyIds(value: unknown): number[] | undefined {
   if (value === undefined || value === null) return undefined;
-  if (!Array.isArray(value)) throw new Error("companyIds must be an array");
+  if (!Array.isArray(value)) throw new Error("HSCR_COMPANY_IDS_NOT_ARRAY");
   const companyIds = [...new Set(value.map((id) => Number(id)))];
   if (companyIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-    throw new Error("companyIds must contain only positive integer company IDs");
+    throw new Error("HSCR_COMPANY_IDS_INVALID");
   }
   return companyIds;
 }
@@ -48,7 +48,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         if (req.body?.confirmation !== "BUILD-HISTORICAL-SALES-COST-DRY-RUN") {
           return res.status(400).json({
-            message: 'Dry run requires confirmation="BUILD-HISTORICAL-SALES-COST-DRY-RUN"',
+            message: 'HSCR_DRY_RUN_CONFIRMATION_REQUIRED',
           });
         }
 
@@ -77,10 +77,10 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
         if (!Number.isInteger(runId) || runId <= 0) {
-          return res.status(400).json({ message: "Invalid historical sales cost repair run ID" });
+          return res.status(400).json({ message: "HSCR_RUN_ID_INVALID" });
         }
         const run = await getHistoricalSalesCostRepairRun(runId);
-        if (!run) return res.status(404).json({ message: "Historical sales cost repair run not found" });
+        if (!run) return res.status(404).json({ message: "HSCR_RUN_NOT_FOUND" });
         return res.json(run);
       } catch (error: unknown) {
         logger.error("Historical sales cost repair report failed", {
@@ -105,18 +105,18 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
         if (!Number.isInteger(runId) || runId <= 0) {
-          return res.status(400).json({ message: "Invalid historical sales cost repair run ID" });
+          return res.status(400).json({ message: "HSCR_RUN_ID_INVALID" });
         }
 
         const auditHash = String(req.body?.auditHash || "").trim();
         if (!/^[a-f0-9]{64}$/i.test(auditHash)) {
-          return res.status(400).json({ message: "A valid 64-character auditHash is required" });
+          return res.status(400).json({ message: "HSCR_AUDIT_HASH_INVALID" });
         }
 
         const requiredConfirmation = `APPLY-HISTORICAL-SALES-COST:${runId}:${auditHash.slice(0, 12)}`;
         if (req.body?.confirmation !== requiredConfirmation) {
           return res.status(400).json({
-            message: "Apply confirmation does not match the reviewed repair run",
+            message: "HSCR_APPLY_CONFIRMATION_MISMATCH",
             requiredConfirmation,
           });
         }
