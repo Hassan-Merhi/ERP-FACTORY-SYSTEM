@@ -261,7 +261,7 @@ export function RecurringJournalsTab() {
         endDate: endDate || null,
         descriptionTemplate: descriptionTemplate.trim() || undefined,
       });
-      return responseJson(res, "Failed to create recurring journal");
+      return responseJson<{ recurring?: RecurringJournalRecord }>(res, "Failed to create recurring journal");
     },
     onSuccess: async (data: { recurring?: RecurringJournalRecord }) => {
       setVoucherNumber("");
