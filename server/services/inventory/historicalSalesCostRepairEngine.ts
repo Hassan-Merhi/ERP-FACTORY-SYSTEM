@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v21-canonical-rate-only-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v22-lifecycle-correction-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -608,13 +608,16 @@ function canonicalRateOnlyRecovery(
     );
   } else if (
     delta.lt(ZERO) &&
-    movement.sourceType === "pos-sale" &&
+    (movement.sourceType === "pos-sale" ||
+      movement.sourceType === "canonical-sale-lifecycle-correction") &&
     movement.unitCost !== null &&
     movement.unitCost !== undefined
   ) {
     // Canonical POS issue unit_cost is the locked pre-sale inventory average
-    // recorded in the same transaction as the deduction. Unlike transfer
-    // issue rates, it is authoritative evidence of the pre-movement cost memory.
+    // recorded in the same transaction as the deduction. A negative lifecycle
+    // correction is synthesized from latestNegativeRate, the quantity-weighted
+    // canonical issue rate pinned to that sale's latest mutation. Both are
+    // direct canonical evidence of the cost basis used for the missing issue.
     const recordedRate = repairRate(
       Decimal.max(decimal(movement.unitCost, "canonical POS issue cost"), ZERO)
     );
