@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v5-scoped-boundaries";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v6-sale-lifecycle-replay";
 
 const ZERO = new Decimal(0);
 
