@@ -2277,6 +2277,13 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }),
       ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
     ].sort(compareMovementMutationDescending);
+    const normalizedMovementsAscending = [
+      ...normalizedCanonicalPosReplay.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id <= checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationAscending);
     const priorCostMemoryRateHints =
       buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
     const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
