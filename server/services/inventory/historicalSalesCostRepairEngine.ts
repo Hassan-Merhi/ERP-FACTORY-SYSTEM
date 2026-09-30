@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v12-pos-lifecycle-normalization";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v13-epoch-negative-layer-replay";
 
 const ZERO = new Decimal(0);
 
@@ -36,6 +36,11 @@ export type HistoricalInventoryState = {
   quantity: Decimal;
   averageRate: Decimal;
   totalValue: Decimal;
+};
+
+export type HistoricalForwardReplayState = {
+  inventory: HistoricalInventoryState;
+  negativeLayerQuantity: Decimal;
 };
 
 export type HistoricalSalesRepairMovement = {
@@ -253,6 +258,253 @@ export function applyHistoricalSalesRepairMovement(
     quantityDelta: movement.quantityDelta,
     unitCost: movement.unitCost,
   });
+}
+
+
+const INVENTORY_SAFETY_CLAMP_AT = Date.parse("2026-03-13T06:57:11.066958Z");
+const NEGATIVE_LAYER_ENGINE_AT = Date.parse("2026-03-14T08:23:03.665494Z");
+const INCREMENTAL_SHORTAGE_FIX_AT = Date.parse("2026-07-12T18:27:04.885046Z");
+const STALE_LAYER_SETTLEMENT_FIX_AT = Date.parse("2026-09-11T19:58:31.453168Z");
+
+function rawUnclampedHistoricalInventoryState(
+  quantityValue: Decimal.Value,
+  rateValue: Decimal.Value,
+  totalValueInput: Decimal.Value
+): HistoricalInventoryState {
+  return {
+    quantity: repairQuantity(quantityValue),
+    averageRate: repairRate(decimal(rateValue, "legacy raw state rate")),
+    totalValue: repairMoney(decimal(totalValueInput, "legacy raw state total value")),
+  };
+}
+
+function movementSuppliesIncomingRate(movement: HistoricalSalesRepairMovement): boolean {
+  const delta = repairQuantity(movement.quantityDelta);
+  if (!delta.gt(ZERO)) return false;
+  // POS reversal/edit receipts historically restored quantity without passing
+  // the old line cost into adjustInventory(). The canonical journal still
+  // recorded that old cost, so treating unit_cost as an incoming receipt rate
+  // would replay a valuation path production never used.
+  if (movement.sourceType === "pos-sale") return false;
+  return movement.unitCost !== null && movement.unitCost !== undefined;
+}
+
+function historicalIncomingRate(
+  movement: HistoricalSalesRepairMovement,
+  previousRate: Decimal
+): Decimal {
+  if (!movementSuppliesIncomingRate(movement)) return previousRate;
+  return Decimal.max(decimal(movement.unitCost, "historical incoming rate"), ZERO);
+}
+
+function incrementalShortageQuantity(previousQty: Decimal, newQty: Decimal): Decimal {
+  const previousShortage = previousQty.lt(ZERO) ? previousQty.abs() : ZERO;
+  const newShortage = newQty.lt(ZERO) ? newQty.abs() : ZERO;
+  return repairQuantity(Decimal.max(newShortage.minus(previousShortage), ZERO));
+}
+
+function addNegativeLayerQuantity(
+  layerQty: Decimal,
+  previousQty: Decimal,
+  newQty: Decimal,
+  mutationAt: number
+): Decimal {
+  if (!newQty.lt(ZERO)) return repairQuantity(layerQty);
+  const created =
+    mutationAt < INCREMENTAL_SHORTAGE_FIX_AT
+      ? newQty.abs()
+      : incrementalShortageQuantity(previousQty, newQty);
+  return repairQuantity(layerQty.plus(created));
+}
+
+function applyPreSafetyInventoryMovement(
+  state: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryState {
+  const delta = repairQuantity(movement.quantityDelta);
+  const previousQty = repairQuantity(state.quantity);
+  const previousRate = repairRate(state.averageRate);
+  const previousValue = repairMoney(state.totalValue);
+  const newQty = repairQuantity(previousQty.plus(delta));
+
+  if (delta.gt(ZERO) && movementSuppliesIncomingRate(movement)) {
+    const incomingRate = historicalIncomingRate(movement, previousRate);
+    const newValue = repairMoney(previousValue.plus(delta.times(incomingRate)));
+    const newRate = newQty.gt(ZERO)
+      ? repairRate(newValue.dividedBy(newQty))
+      : repairRate(incomingRate);
+    return rawUnclampedHistoricalInventoryState(newQty, newRate, newValue);
+  }
+
+  if (delta.lt(ZERO)) {
+    const newValue = repairMoney(previousValue.minus(delta.abs().times(previousRate)));
+    const newRate = newQty.gt(ZERO)
+      ? repairRate(newValue.dividedBy(newQty))
+      : previousRate;
+    return rawUnclampedHistoricalInventoryState(newQty, newRate, newValue);
+  }
+
+  return rawUnclampedHistoricalInventoryState(newQty, previousRate, previousValue);
+}
+
+function applySafetyClampInventoryMovement(
+  state: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryState {
+  const delta = repairQuantity(movement.quantityDelta);
+  const previousQty = repairQuantity(state.quantity);
+  const previousRate = repairRate(state.averageRate);
+  const previousValue = repairMoney(state.totalValue);
+  const newQty = repairQuantity(previousQty.plus(delta));
+
+  let newValue = previousValue;
+  let newRate = previousRate;
+
+  if (delta.gt(ZERO) && movementSuppliesIncomingRate(movement)) {
+    const incomingRate = historicalIncomingRate(movement, previousRate);
+    newValue = repairMoney(previousValue.plus(delta.times(incomingRate)));
+    newRate = newQty.gt(ZERO)
+      ? repairRate(newValue.dividedBy(newQty))
+      : repairRate(incomingRate);
+  } else if (delta.lt(ZERO)) {
+    const effectiveRate = repairRate(Decimal.max(previousRate, ZERO));
+    newValue = repairMoney(previousValue.minus(delta.abs().times(effectiveRate)));
+    if (newQty.gt(ZERO)) {
+      if (newValue.lt(ZERO)) newValue = ZERO;
+      newRate = repairRate(newValue.dividedBy(newQty));
+    } else {
+      newValue = ZERO;
+      newRate = ZERO;
+    }
+  }
+
+  if (newQty.gt(ZERO) && newValue.lt(ZERO)) {
+    newValue = ZERO;
+    newRate = ZERO;
+  } else if (newQty.lte(ZERO)) {
+    newValue = ZERO;
+  }
+  if (newRate.lt(ZERO)) newRate = ZERO;
+
+  return rawUnclampedHistoricalInventoryState(newQty, newRate, newValue);
+}
+
+export function createHistoricalForwardReplayState(
+  inventory: HistoricalInventoryState,
+  negativeLayerQuantity: Decimal.Value = 0
+): HistoricalForwardReplayState {
+  return {
+    inventory: rawUnclampedHistoricalInventoryState(
+      inventory.quantity,
+      inventory.averageRate,
+      inventory.totalValue
+    ),
+    negativeLayerQuantity: repairQuantity(Decimal.max(decimal(negativeLayerQuantity, "negative layer quantity"), ZERO)),
+  };
+}
+
+export function applyHistoricalForwardReplayMovement(
+  state: HistoricalForwardReplayState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalForwardReplayState {
+  const mutationAt = movementTimeMs(movement);
+  const delta = repairQuantity(movement.quantityDelta);
+  const previousQty = repairQuantity(state.inventory.quantity);
+  let layerQty = repairQuantity(state.negativeLayerQuantity);
+
+  if (INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType)) {
+    return {
+      inventory: applyHistoricalSalesRepairMovement(state.inventory, movement),
+      // Initial container offloads always used their own valuation path. After
+      // negative layers were introduced they also bypassed layer settlement,
+      // which is how stale layers could survive after stock crossed positive.
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  if (EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)) {
+    const inventory = applyHistoricalSalesRepairMovement(state.inventory, movement);
+    if (mutationAt >= NEGATIVE_LAYER_ENGINE_AT && delta.lt(ZERO)) {
+      layerQty = addNegativeLayerQuantity(
+        layerQty,
+        previousQty,
+        repairQuantity(inventory.quantity),
+        mutationAt
+      );
+    }
+    return { inventory, negativeLayerQuantity: layerQty };
+  }
+
+  if (mutationAt < INVENTORY_SAFETY_CLAMP_AT) {
+    return {
+      inventory: applyPreSafetyInventoryMovement(state.inventory, movement),
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  if (mutationAt < NEGATIVE_LAYER_ENGINE_AT) {
+    return {
+      inventory: applySafetyClampInventoryMovement(state.inventory, movement),
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  const previousRate = repairRate(Decimal.max(state.inventory.averageRate, ZERO));
+  const previousValue = repairMoney(Decimal.max(state.inventory.totalValue, ZERO));
+  const newQty = repairQuantity(previousQty.plus(delta));
+
+  if (delta.gt(ZERO)) {
+    const effectiveRate = historicalIncomingRate(movement, previousRate);
+    const shouldSettleLayers =
+      mutationAt < STALE_LAYER_SETTLEMENT_FIX_AT || previousQty.lt(ZERO);
+    const settled = shouldSettleLayers
+      ? Decimal.min(layerQty, delta)
+      : ZERO;
+    layerQty = repairQuantity(Decimal.max(layerQty.minus(settled), ZERO));
+    const remaining = repairQuantity(delta.minus(settled));
+    let newValue = repairMoney(
+      Decimal.max(previousValue.plus(remaining.times(effectiveRate)), ZERO)
+    );
+    let newRate: Decimal;
+    if (newQty.gt(ZERO)) {
+      newRate = repairRate(newValue.dividedBy(newQty));
+    } else {
+      newValue = ZERO;
+      newRate = repairRate(effectiveRate);
+    }
+    return {
+      inventory: rawHistoricalInventoryState(newQty, newRate, newValue),
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  if (delta.lt(ZERO)) {
+    const effectiveRate = repairRate(Decimal.max(previousRate, ZERO));
+    if (newQty.gt(ZERO)) {
+      const newValue = repairMoney(
+        Decimal.max(previousValue.minus(delta.abs().times(effectiveRate)), ZERO)
+      );
+      return {
+        inventory: rawHistoricalInventoryState(
+          newQty,
+          repairRate(newValue.dividedBy(newQty)),
+          newValue
+        ),
+        negativeLayerQuantity: layerQty,
+      };
+    }
+
+    layerQty = addNegativeLayerQuantity(layerQty, previousQty, newQty, mutationAt);
+    return {
+      inventory: rawHistoricalInventoryState(newQty, effectiveRate, ZERO),
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  return {
+    inventory: rawHistoricalInventoryState(previousQty, previousRate, previousValue),
+    negativeLayerQuantity: layerQty,
+  };
 }
 
 function statesEqual(left: HistoricalInventoryState, right: HistoricalInventoryState): boolean {

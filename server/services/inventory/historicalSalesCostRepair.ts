@@ -7,7 +7,9 @@ import { logger } from "../../lib/logger";
 import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
+  applyHistoricalForwardReplayMovement,
   applyHistoricalSalesRepairMovement,
+  createHistoricalForwardReplayState,
   createHistoricalInventoryStateFromSnapshot,
   historicalInventoryKey,
   historicalSaleProposalFromState,
@@ -15,6 +17,7 @@ import {
   repairQuantity,
   repairRate,
   reverseHistoricalSalesRepairMovement,
+  type HistoricalForwardReplayState,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairProposal,
@@ -2499,42 +2502,50 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
 
       const replayToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
-        const replayStates = new Map<number, HistoricalInventoryState>();
+        const replayStates = new Map<number, HistoricalForwardReplayState>();
         for (const [locationId, opening] of openingStates) {
           replayStates.set(
             locationId,
-            createHistoricalInventoryStateFromSnapshot(
-              opening.quantity,
-              opening.averageRate,
-              opening.totalValue
+            createHistoricalForwardReplayState(
+              createHistoricalInventoryStateFromSnapshot(
+                opening.quantity,
+                opening.averageRate,
+                opening.totalValue
+              )
             )
           );
         }
 
         const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+        let peakNegativeLayerQuantity = new Decimal(0);
         for (const movement of candidateMovements) {
           const current =
-            replayStates.get(movement.locationId) ?? stateForZeroOpening(openingRate);
+            replayStates.get(movement.locationId) ??
+            createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
           if (movement.sale) {
             const key = movementKey(movement);
             if (checkpointTargetKeys.has(key)) {
               replayProposals.set(
                 movement.sale.salesItemId,
-                historicalSaleProposalFromState(movement, current)
+                historicalSaleProposalFromState(movement, current.inventory)
               );
             }
           }
-          replayStates.set(
-            movement.locationId,
-            applyHistoricalSalesRepairMovement(current, movement)
-          );
+          const next = applyHistoricalForwardReplayMovement(current, movement);
+          if (next.negativeLayerQuantity.gt(peakNegativeLayerQuantity)) {
+            peakNegativeLayerQuantity = next.negativeLayerQuantity;
+          }
+          replayStates.set(movement.locationId, next);
         }
 
         let exact = true;
         let detail: string | null = null;
         for (const locationId of locationIds) {
           const key = historicalInventoryKey(companyId, locationId, stockItemId);
-          const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
+          const actualReplay =
+            replayStates.get(locationId) ??
+            createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+          const actual = actualReplay.inventory;
           const expected = checkpointStates.get(key);
           if (expected) {
             if (!historicalInventoryStatesEqual(actual, expected)) {
@@ -2553,7 +2564,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
                 "|" +
                 repairRate(actual.averageRate).toFixed(2) +
                 "|" +
-                repairMoney(actual.totalValue).toFixed(2);
+                repairMoney(actual.totalValue).toFixed(2) +
+                " peakLayerQty " +
+                peakNegativeLayerQuantity.toFixed(3);
               break;
             }
           } else if (
@@ -2569,12 +2582,14 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
               "|" +
               repairRate(actual.averageRate).toFixed(2) +
               "|" +
-              repairMoney(actual.totalValue).toFixed(2);
+              repairMoney(actual.totalValue).toFixed(2) +
+              " peakLayerQty " +
+              peakNegativeLayerQuantity.toFixed(3);
             break;
           }
         }
 
-        return { exact, detail, replayProposals };
+        return { exact, detail, replayProposals, peakNegativeLayerQuantity };
       };
 
       const rawReplay = replayToCheckpoint(itemMovements);
@@ -2609,6 +2624,19 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
             "Forward replay did not reproduce the immutable checkpoint.",
         });
         continue;
+      }
+
+      if (acceptedReplay.peakNegativeLayerQuantity.gt(0)) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_EPOCH_LAYER_REPLAY",
+          status: "pass",
+          actual: acceptedReplay.peakNegativeLayerQuantity.toFixed(3),
+          detail:
+            "Forward proof reproduced the checkpoint while simulating the historical negative-layer engine and its production epoch boundaries.",
+        });
       }
 
       if (proofMode === "normalized-pos-lifecycle") {
