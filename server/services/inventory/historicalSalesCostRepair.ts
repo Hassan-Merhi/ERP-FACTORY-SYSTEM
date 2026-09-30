@@ -1897,14 +1897,18 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
     }
 
-    // The checkpoint was taken at an exact canonical movement id. Rewind by id,
-    // not business timestamp, so backdated documents are inverted in the same
-    // order in which they actually mutated inventory.
-    const canonicalBeforeCheckpoint = [...canonical]
-      .filter((movement) => Math.floor((movement.sequence - 5) / 10) <= checkpoint.movementCutoffId)
-      .sort((a, b) => b.sequence - a.sequence);
+    // Rewind every durable movement represented in the checkpoint in actual
+    // mutation order. This includes durable legacy rows that never received a
+    // canonical journal counterpart after canonical journaling began.
+    const movementsInCheckpoint = [
+      ...canonical.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id <= checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationDescending);
 
-    for (const movement of canonicalBeforeCheckpoint) {
+    for (const movement of movementsInCheckpoint) {
       const key = movementKey(movement);
       if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const stateAfter = rewindStates.get(key);
@@ -1919,14 +1923,18 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           companyId,
           locationId: movement.locationId,
           stockItemId: movement.stockItemId,
-          code: `CHECKPOINT_REWIND_${reversed.reason}`,
+          code: `${movement.evidence === "canonical" ? "CHECKPOINT" : "LEGACY"}_REWIND_${reversed.reason}`,
           status: "block",
-          detail: `Cannot uniquely rewind canonical movement ${movement.movementId}`,
+          detail: `Cannot uniquely rewind ${movement.evidence} movement ${movement.movementId}`,
         });
         continue;
       }
 
-      if (CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) && d(movement.quantityDelta).lt(0)) {
+      if (
+        movement.evidence === "canonical" &&
+        CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+        d(movement.quantityDelta).lt(0)
+      ) {
         const recorded = repairRate(movement.unitCost ?? "0");
         const inferred = repairRate(reversed.stateBefore.averageRate);
         if (!recorded.eq(inferred)) {
@@ -1943,31 +1951,6 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           });
           continue;
         }
-      }
-      rewindStates.set(key, reversed.stateBefore);
-    }
-
-    for (const movement of [...legacyMovements].sort(compareLegacyMovementDescending)) {
-      const key = movementKey(movement);
-      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
-      const stateAfter = rewindStates.get(key);
-      if (!stateAfter) continue;
-
-      const reversed = reverseHistoricalInventoryMovement(stateAfter, {
-        quantityDelta: movement.quantityDelta,
-        unitCost: movement.unitCost,
-      });
-      if (!reversed.reversible) {
-        unavailableKeys.add(key);
-        checks.push({
-          companyId,
-          locationId: movement.locationId,
-          stockItemId: movement.stockItemId,
-          code: `LEGACY_REWIND_${reversed.reason}`,
-          status: "block",
-          detail: `Cannot uniquely rewind legacy movement ${movement.movementId}`,
-        });
-        continue;
       }
 
       if (movement.sale) {
