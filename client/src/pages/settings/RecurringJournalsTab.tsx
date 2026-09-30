@@ -58,12 +58,14 @@ function RecurringJournalCard({
   const [timeZone, setTimeZone] = useState(recurring.timezone);
   const [endDate, setEndDate] = useState(recurring.endDate || "");
   const [descriptionTemplate, setDescriptionTemplate] = useState(recurring.descriptionTemplate || "");
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
+    if (isDirty) return;
     setTimeZone(recurring.timezone);
     setEndDate(recurring.endDate || "");
     setDescriptionTemplate(recurring.descriptionTemplate || "");
-  }, [recurring]);
+  }, [isDirty, recurring.descriptionTemplate, recurring.endDate, recurring.id, recurring.timezone]);
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey });
@@ -77,7 +79,10 @@ function RecurringJournalCard({
       const res = await apiRequest("PATCH", `/api/recurring-journals/${recurring.id}`, patch);
       return responseJson(res, "Failed to update recurring journal");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, patch) => {
+      if ("timezone" in patch || "endDate" in patch || "descriptionTemplate" in patch) {
+        setIsDirty(false);
+      }
       await invalidate();
       toast({ title: "Recurring journal updated" });
     },
@@ -97,6 +102,7 @@ function RecurringJournalCard({
       return responseJson(res, "Failed to refresh recurring journal");
     },
     onSuccess: async () => {
+      setIsDirty(false);
       await invalidate();
       toast({
         title: "Accounts and amounts refreshed",
@@ -176,7 +182,10 @@ function RecurringJournalCard({
           <Input
             id={`recurring-timezone-${recurring.id}`}
             value={timeZone}
-            onChange={(event) => setTimeZone(event.target.value)}
+            onChange={(event) => {
+              setTimeZone(event.target.value);
+              setIsDirty(true);
+            }}
             placeholder="UTC"
           />
         </div>
@@ -186,7 +195,10 @@ function RecurringJournalCard({
             id={`recurring-end-date-${recurring.id}`}
             type="date"
             value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
+            onChange={(event) => {
+              setEndDate(event.target.value);
+              setIsDirty(true);
+            }}
           />
         </div>
         <div className="space-y-1.5 md:col-span-2">
@@ -194,7 +206,10 @@ function RecurringJournalCard({
           <Input
             id={`recurring-description-${recurring.id}`}
             value={descriptionTemplate}
-            onChange={(event) => setDescriptionTemplate(event.target.value)}
+            onChange={(event) => {
+              setDescriptionTemplate(event.target.value);
+              setIsDirty(true);
+            }}
             placeholder="Savings Kinshasa {{month}}"
           />
           <p className="text-xs text-muted-foreground">
