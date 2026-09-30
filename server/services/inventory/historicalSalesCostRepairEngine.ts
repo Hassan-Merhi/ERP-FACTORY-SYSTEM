@@ -461,6 +461,13 @@ export function applyHistoricalForwardReplayMovement(
   state: HistoricalForwardReplayState,
   movement: HistoricalSalesRepairMovement
 ): HistoricalForwardReplayState {
+  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+    return {
+      inventory: applyHistoricalSalesRepairMovement(state.inventory, movement),
+      negativeLayerQuantity: repairQuantity(state.negativeLayerQuantity),
+    };
+  }
+
   const mutationAt = movementTimeMs(movement);
   const delta = repairQuantity(movement.quantityDelta);
   const previousQty = repairQuantity(state.inventory.quantity);
