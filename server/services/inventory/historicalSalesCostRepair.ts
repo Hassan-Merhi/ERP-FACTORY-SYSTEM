@@ -1581,26 +1581,59 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       );
     }
 
+    const mergedRecovery = recoverHistoricalMergedSales({
+      companyId,
+      targetKeys,
+      checkpoint,
+      checkpointStates,
+      historicalMerges,
+      canonical,
+      legacyMovements,
+    });
+    checks.push(...mergedRecovery.checks);
+    for (const proposal of mergedRecovery.proposals) {
+      proposalsBySaleId.set(proposal.salesItemId, proposal);
+    }
+
+    const mergedSourceIds = new Set(historicalMerges.map((merge) => Number(merge.source_item_id)));
     const unavailableKeys = new Set<string>();
     for (const key of targetKeys) {
-      if (checkpointStates.has(key)) continue;
+      if (checkpointStates.has(key) || mergedRecovery.recoveredKeys.has(key)) continue;
       const [, locationIdText, stockItemIdText] = key.split(":");
+      const locationId = Number(locationIdText);
+      const stockItemId = Number(stockItemIdText);
       unavailableKeys.add(key);
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "VALUATION_CHECKPOINT_KEY_MISSING",
-        status: "block",
-        detail: "Legacy sale item/location has no row in the immutable Phase 3 valuation checkpoint",
-      });
+      const alreadyBlocked = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.companyId === companyId &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null || check.locationId === locationId)
+      );
+      if (!alreadyBlocked) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: mergedSourceIds.has(stockItemId)
+            ? "MERGED_ITEM_RECOVERY_FAILED"
+            : "VALUATION_CHECKPOINT_KEY_MISSING",
+          status: "block",
+          detail: mergedSourceIds.has(stockItemId)
+            ? "Historical merged item could not be reconstructed uniquely"
+            : "Legacy sale item/location has no row in the immutable Phase 3 valuation checkpoint",
+        });
+      }
     }
+    const checkpointTargetKeys = new Set(
+      [...targetKeys].filter((key) => checkpointStates.has(key) && !unavailableKeys.has(key))
+    );
 
     // Prove the immutable checkpoint still reaches today's active-location
     // inventory using only canonical movements after its movement-id boundary.
     const liveReplayStates = new Map<string, HistoricalInventoryState>();
     for (const [key, state] of checkpointStates) {
-      if (targetKeys.has(key)) {
+      if (checkpointTargetKeys.has(key)) {
         liveReplayStates.set(
           key,
           createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
@@ -1611,7 +1644,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const canonicalId = Math.floor((movement.sequence - 5) / 10);
       if (canonicalId <= checkpoint.movementCutoffId) continue;
       const key = movementKey(movement);
-      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const current =
         liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
       liveReplayStates.set(
@@ -1629,7 +1662,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         row,
       ])
     );
-    for (const key of targetKeys) {
+    for (const key of checkpointTargetKeys) {
       if (unavailableKeys.has(key)) continue;
       const actual = liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", "0", "0");
       const live = liveByKey.get(key);
@@ -1656,7 +1689,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     const rewindStates = new Map<string, HistoricalInventoryState>();
     for (const [key, state] of checkpointStates) {
-      if (targetKeys.has(key) && !unavailableKeys.has(key)) {
+      if (checkpointTargetKeys.has(key) && !unavailableKeys.has(key)) {
         rewindStates.set(
           key,
           createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
@@ -1673,7 +1706,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     for (const movement of canonicalBeforeCheckpoint) {
       const key = movementKey(movement);
-      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
       const reversed = reverseHistoricalInventoryMovement(stateAfter, {
@@ -1716,7 +1749,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     for (const movement of [...legacyMovements].sort(compareLegacyMovementDescending)) {
       const key = movementKey(movement);
-      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
 
@@ -1753,7 +1786,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
     }
 
-    const rewindReadyKeys = [...targetKeys].filter((key) => !unavailableKeys.has(key)).length;
+    const rewindReadyKeys =
+      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length +
+      mergedRecovery.recoveredKeys.size;
     checks.push({
       companyId,
       locationId: null,
