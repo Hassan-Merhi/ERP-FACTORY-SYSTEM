@@ -643,7 +643,7 @@ describe("historical sales cost repair replay", () => {
     expect(next.inventory.averageRate.toFixed(2)).toBe("100.00");
   });
 
-  it("reverses a POS reversal journal with the same unpriced semantics used in production", () => {
+  it("does not replace a previously reversible POS receipt inverse with a locally ambiguous branch", () => {
     const start = createHistoricalInventoryStateFromSnapshot("5", "100.00", "500.00");
     const posReversal = movement({
       movementId: "canonical:pos-reverse-inverse",
@@ -661,9 +661,13 @@ describe("historical sales cost repair replay", () => {
     const reversed = reverseHistoricalSalesRepairMovement(after, posReversal);
     expect(reversed.reversible).toBe(true);
     if (!reversed.reversible) return;
+
+    // The one-step inverse has two plausible histories. V20 keeps the prior
+    // V18 branch here; an unpriced POS-reversal branch must only replace it
+    // after a complete checkpoint proof, never from local reversibility alone.
     expect(reversed.stateBefore.quantity.toFixed(3)).toBe("5.000");
-    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("500.00");
-    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("540.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("108.00");
   });
 
 });
