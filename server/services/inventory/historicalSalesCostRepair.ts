@@ -11,6 +11,7 @@ import {
   applyHistoricalSalesRepairMovement,
   createHistoricalForwardReplayState,
   createHistoricalInventoryStateFromSnapshot,
+  createHistoricalSignedLocationImportState,
   historicalInventoryKey,
   historicalSaleProposalFromState,
   repairMoney,
@@ -2393,7 +2394,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
       const inferredOpeningQtyByLocation = new Map<number, Decimal>();
       let inferredOpeningTotal = new Decimal(0);
-      let openingQuantityInvalid = false;
+      let hasNegativeInferredOpening = false;
       for (const locationId of locationIds) {
         const checkpointState = checkpointStates.get(
           historicalInventoryKey(companyId, locationId, stockItemId)
@@ -2404,32 +2405,35 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           )
         );
         if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
-        if (inferred.lt(0)) {
-          openingQuantityInvalid = true;
-          break;
-        }
+        if (inferred.lt(0)) hasNegativeInferredOpening = true;
         inferredOpeningQtyByLocation.set(locationId, inferred);
         inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
-      }
-      if (openingQuantityInvalid) {
-        checks.push({
-          companyId,
-          locationId: null,
-          stockItemId,
-          code: "OPENING_FORWARD_NEGATIVE_INFERRED_QTY",
-          status: "warning",
-          detail: "Checkpoint minus durable movement deltas implies a negative opening quantity at one or more locations.",
-        });
-        continue;
       }
 
       const openingQty = repairQuantity(stockItem.opening_qty);
       const openingRate = repairRate(stockItem.opening_rate);
       const openingValue = repairMoney(stockItem.opening_value);
       const pinnedOpeningQuantityMatches = inferredOpeningTotal.eq(openingQty);
-      let openingProofBasis: "stock-opening" | "location-import-inferred" = "stock-opening";
+      let openingProofBasis:
+        | "stock-opening"
+        | "location-import-inferred"
+        | "signed-location-import-inferred" = "stock-opening";
 
-      if (!pinnedOpeningQuantityMatches) {
+      if (hasNegativeInferredOpening) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_NEGATIVE_INFERRED_QTY",
+          status: "warning",
+          expected: openingQty.toFixed(3),
+          actual: inferredOpeningTotal.toFixed(3),
+          detail:
+            "Checkpoint minus durable movement deltas implies a signed per-location opening. V15 will try the historical signed location-import shape only when a pinned nonzero opening rate exists, and will accept it only on an exact checkpoint replay.",
+        });
+        if (!openingRate.gt(0)) continue;
+        openingProofBasis = "signed-location-import-inferred";
+      } else if (!pinnedOpeningQuantityMatches) {
         checks.push({
           companyId,
           locationId: null,
@@ -2450,7 +2454,19 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       );
       const openingStates = new Map<number, HistoricalInventoryState>();
 
-      if (openingProofBasis === "location-import-inferred") {
+      if (openingProofBasis === "signed-location-import-inferred") {
+        // The historical location-import route accepted signed quantities and
+        // defaulted value to quantity × rate before writing the inventory row
+        // directly. Preserve that exact signed shape as a candidate. The
+        // candidate remains untrusted unless the complete historical replay
+        // reproduces the immutable checkpoint quantity, rate and value.
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          openingStates.set(
+            locationId,
+            createHistoricalSignedLocationImportState(quantity, openingRate)
+          );
+        }
+      } else if (openingProofBasis === "location-import-inferred") {
         // Historical /api/locations/:locationId/import-inventory writes location
         // quantity/value directly and does not update the item-level frozen
         // opening quantity. Reconstruct those per-location quantities from the
@@ -2530,13 +2546,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         for (const [locationId, opening] of openingStates) {
           replayStates.set(
             locationId,
-            createHistoricalForwardReplayState(
-              createHistoricalInventoryStateFromSnapshot(
-                opening.quantity,
-                opening.averageRate,
-                opening.totalValue
-              )
-            )
+            createHistoricalForwardReplayState(opening)
           );
         }
 
@@ -2650,6 +2660,20 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         continue;
       }
 
+      if (openingProofBasis === "signed-location-import-inferred") {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_SIGNED_LOCATION_IMPORT_RECONCILED",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "@" + openingRate.toFixed(2),
+          actual: inferredOpeningTotal.toFixed(3) + "@" + openingRate.toFixed(2),
+          detail:
+            "Checkpoint-implied signed per-location openings seeded at the separately pinned item rate replay exactly to the immutable Phase 3 checkpoint, consistent with the historical signed location-inventory import path.",
+        });
+      }
+
       if (openingProofBasis === "location-import-inferred") {
         checks.push({
           companyId,
@@ -2702,13 +2726,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           actual:
             inferredOpeningTotal.toFixed(3) +
             "|" +
-            (openingProofBasis === "location-import-inferred"
+            (openingProofBasis === "location-import-inferred" ||
+            openingProofBasis === "signed-location-import-inferred"
               ? repairMoney(inferredOpeningTotal.times(openingRate)).toFixed(2)
               : openingValue.toFixed(2)),
           detail:
-            openingProofBasis === "location-import-inferred"
-              ? "Checkpoint-implied location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
-              : proofMode === "normalized-pos-lifecycle"
+            openingProofBasis === "signed-location-import-inferred"
+              ? "Checkpoint-implied signed location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
+              : openingProofBasis === "location-import-inferred"
+                ? "Checkpoint-implied location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
+                : proofMode === "normalized-pos-lifecycle"
                 ? "Pinned stock opening balance and normalized final POS lifecycle replay exactly to the immutable Phase 3 checkpoint"
                 : "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
         });

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v14-location-import-openings";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v15-signed-location-import-openings";
 
 const ZERO = new Decimal(0);
 
@@ -277,6 +277,23 @@ function rawUnclampedHistoricalInventoryState(
     totalValue: repairMoney(decimal(totalValueInput, "legacy raw state total value")),
   };
 }
+
+/**
+ * Historical location imports wrote the uploaded quantity/rate/value directly,
+ * including signed quantity/value before the later inventory safety clamps.
+ * V15 uses the endpoint's default value shape (quantity × pinned rate) only as
+ * a checkpoint-gated candidate; it is never accepted without an exact replay.
+ */
+export function createHistoricalSignedLocationImportState(
+  quantityValue: Decimal.Value,
+  rateValue: Decimal.Value
+): HistoricalInventoryState {
+  const quantity = repairQuantity(quantityValue);
+  const averageRate = repairRate(Decimal.max(decimal(rateValue, "signed import rate"), ZERO));
+  const totalValue = repairMoney(quantity.times(averageRate));
+  return rawUnclampedHistoricalInventoryState(quantity, averageRate, totalValue);
+}
+
 
 function movementSuppliesIncomingRate(movement: HistoricalSalesRepairMovement): boolean {
   const delta = repairQuantity(movement.quantityDelta);
