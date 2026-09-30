@@ -718,6 +718,49 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("59.64");
   });
 
+  it("recovers a legacy sale issue only when the pre-sale rate is uniquely implied by quantity and value", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "62",
+      "94.62",
+      "5872.89"
+    );
+    const legacySale = movement({
+      movementId: "sale-marker:88647",
+      occurredAt: "2026-08-11T12:52:21.673Z",
+      quantityDelta: "-1",
+      unitCost: null,
+      sourceType: "legacy-sale",
+      evidence: "legacy",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, legacySale);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("LEGACY_ISSUE_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("63.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("5967.61");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("94.72");
+  });
+
+  it("keeps an ambiguous legacy sale rate blocked", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "7",
+      "57.62",
+      "403.72"
+    );
+    const ambiguousSale = movement({
+      movementId: "sale-marker:89383",
+      occurredAt: "2026-08-13T10:41:29.724Z",
+      quantityDelta: "-2",
+      unitCost: null,
+      sourceType: "legacy-sale",
+      evidence: "legacy",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, ambiguousSale);
+    expect(reversed.reversible).toBe(false);
+  });
+
   it("recovers a canonical POS issue when quantity and value invert exactly but the reconstructed rate is stale", () => {
     const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
     const saleIssue = movement({
