@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v23-pos-reversal-rate-only";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v24-transfer-source-rate-only";
 
 const ZERO = new Decimal(0);
 
@@ -644,6 +644,38 @@ function canonicalRateOnlyRecovery(
       repairRate(beforeValue.dividedBy(previousQty)),
       beforeValue
     );
+  } else if (
+    delta.lt(ZERO) &&
+    movement.sourceType === "stock-transfer"
+  ) {
+    // The transfer document rate is recorded in the canonical journal, but the
+    // source-side deduction in adjustInventory() consumes stock at the source
+    // inventory average rate. When the reconstructed intermediate rate is stale,
+    // recover only a UNIQUE self-consistent source-rate candidate whose issue
+    // replay preserves quantity and total value exactly.
+    const candidates: HistoricalInventoryState[] = [];
+    for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
+      const beforeValue = repairMoney(
+        stateAfter.totalValue.plus(delta.abs().times(candidateRate))
+      );
+      const candidate = rawHistoricalInventoryState(
+        previousQty,
+        candidateRate,
+        beforeValue
+      );
+      if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+        continue;
+      }
+      const replayed = applyHistoricalInventoryMovement(candidate, {
+        quantityDelta: delta,
+        unitCost: movement.unitCost,
+      });
+      if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+        candidates.push(candidate);
+      }
+    }
+    if (candidates.length !== 1) return null;
+    stateBefore = candidates[0];
   } else if (
     delta.lt(ZERO) &&
     (movement.sourceType === "pos-sale" ||
