@@ -1837,23 +1837,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
   ];
   const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
   const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
+  const toLegacyMovement = (row: LegacyRow): HistoricalSalesRepairMovement => ({
+    movementId: row.movement_id,
+    companyId,
+    locationId: Number(row.location_id),
+    stockItemId: Number(row.stock_item_id),
+    occurredAt: iso(row.occurred_at),
+    sequence: Number(row.sequence),
+    quantityDelta: String(row.quantity_delta),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+    exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
+      ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
+      : null,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    evidence: "legacy" as const,
+  });
+  const legacyTransferFallbackMovements = legacy
+    .filter((row) => row.source_type.endsWith("-flag-fallback"))
+    .map(toLegacyMovement);
   const legacyMovements: HistoricalSalesRepairMovement[] = [
-    ...legacy.map((row) => ({
-      movementId: row.movement_id,
-      companyId,
-      locationId: Number(row.location_id),
-      stockItemId: Number(row.stock_item_id),
-      occurredAt: iso(row.occurred_at),
-      sequence: Number(row.sequence),
-      quantityDelta: String(row.quantity_delta),
-      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
-      exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
-        ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
-        : null,
-      sourceType: row.source_type,
-      sourceId: row.source_id,
-      evidence: "legacy" as const,
-    })),
+    ...legacy
+      .filter((row) => !row.source_type.endsWith("-flag-fallback"))
+      .map(toLegacyMovement),
     ...manual.movements.map((row) => ({
       movementId: row.movement_id,
       companyId,
@@ -2294,10 +2300,11 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     ].sort(compareMovementMutationAscending);
     const priorCostMemoryRateHints =
       buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
+    const fallbackMovementsInCheckpoint = legacyTransferFallbackMovements
+      .filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime())
+      .sort(compareMovementMutationAscending);
     const legacyTransferFallbackItemIds = new Set(
-      legacyMovements
-        .filter((movement) => movement.sourceType.endsWith("-flag-fallback"))
-        .map((movement) => movement.stockItemId)
+      fallbackMovementsInCheckpoint.map((movement) => movement.stockItemId)
     );
     const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
     for (const movement of legacyMovements) {
@@ -2313,6 +2320,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     // reconcile them to the pinned stock-item opening balance, replay every
     // durable movement forward, and accept only an exact checkpoint match.
     const forwardReplayResolvedKeys = new Set<string>();
+    const fallbackProvenItemIds = new Set<number>();
     const movementsAscending = [...movementsInCheckpoint].sort(compareMovementMutationAscending);
     const stockItemById = new Map(stockItems.map((item) => [Number(item.id), item]));
     const targetKeysByItem = new Map<number, string[]>();
@@ -2352,6 +2360,297 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const normalizedItemMovements = normalizedMovementsAscending.filter(
         (movement) => movement.stockItemId === stockItemId
       );
+      const openingQty = repairQuantity(stockItem.opening_qty);
+      const openingRate = repairRate(stockItem.opening_rate);
+      const openingValue = repairMoney(stockItem.opening_value);
+      const fallbackItemMovements = fallbackMovementsInCheckpoint.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
+      let fallbackProofCandidate:
+        | {
+            replay: {
+              exact: boolean;
+              detail: string | null;
+              replayProposals: Map<number, HistoricalSalesRepairProposal>;
+              peakNegativeLayerQuantity: Decimal;
+            };
+            openingTotal: Decimal;
+            openingProofBasis:
+              | "stock-opening"
+              | "location-import-inferred"
+              | "signed-location-import-inferred";
+            usedNormalizedPos: boolean;
+            movementCount: number;
+          }
+        | null = null;
+
+      if (fallbackItemMovements.length > 0) {
+        const fallbackRawMovements = [...itemMovements, ...fallbackItemMovements].sort(
+          compareMovementMutationAscending
+        );
+        const fallbackNormalizedMovements = [
+          ...normalizedItemMovements,
+          ...fallbackItemMovements,
+        ].sort(compareMovementMutationAscending);
+        const fallbackLocationIds = new Set<number>([
+          ...checkpoint.rows
+            .filter((row) => Number(row.stock_item_id) === stockItemId)
+            .map((row) => Number(row.location_id)),
+          ...fallbackRawMovements.map((movement) => movement.locationId),
+          ...fallbackNormalizedMovements.map((movement) => movement.locationId),
+        ]);
+
+        const rawFallbackDeltaByLocation = new Map<number, Decimal>();
+        for (const movement of fallbackRawMovements) {
+          rawFallbackDeltaByLocation.set(
+            movement.locationId,
+            repairQuantity(
+              (rawFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+                d(movement.quantityDelta)
+              )
+            )
+          );
+        }
+        const normalizedFallbackDeltaByLocation = new Map<number, Decimal>();
+        for (const movement of fallbackNormalizedMovements) {
+          normalizedFallbackDeltaByLocation.set(
+            movement.locationId,
+            repairQuantity(
+              (normalizedFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+                d(movement.quantityDelta)
+              )
+            )
+          );
+        }
+        const fallbackNormalizedQuantityCompatible = [...fallbackLocationIds].every(
+          (locationId) =>
+            (normalizedFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
+              rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
+            )
+        );
+
+        const fallbackOpeningQtyByLocation = new Map<number, Decimal>();
+        let fallbackOpeningTotal = new Decimal(0);
+        let fallbackHasNegativeOpening = false;
+        for (const locationId of fallbackLocationIds) {
+          const checkpointState = checkpointStates.get(
+            historicalInventoryKey(companyId, locationId, stockItemId)
+          );
+          let inferred = repairQuantity(
+            (checkpointState?.quantity ?? new Decimal(0)).minus(
+              rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
+            )
+          );
+          if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
+          if (inferred.lt(0)) fallbackHasNegativeOpening = true;
+          fallbackOpeningQtyByLocation.set(locationId, inferred);
+          fallbackOpeningTotal = repairQuantity(fallbackOpeningTotal.plus(inferred));
+        }
+
+        let fallbackOpeningProofBasis:
+          | "stock-opening"
+          | "location-import-inferred"
+          | "signed-location-import-inferred" = "stock-opening";
+        let fallbackOpeningStates: Map<number, HistoricalInventoryState> | null =
+          new Map<number, HistoricalInventoryState>();
+
+        if (fallbackHasNegativeOpening) {
+          if (!openingRate.gt(0)) {
+            fallbackOpeningStates = null;
+          } else {
+            fallbackOpeningProofBasis = "signed-location-import-inferred";
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              fallbackOpeningStates.set(
+                locationId,
+                createHistoricalSignedLocationImportState(quantity, openingRate)
+              );
+            }
+          }
+        } else if (!fallbackOpeningTotal.eq(openingQty)) {
+          if (!openingRate.gt(0)) {
+            fallbackOpeningStates = null;
+          } else {
+            fallbackOpeningProofBasis = "location-import-inferred";
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              fallbackOpeningStates.set(
+                locationId,
+                quantity.gt(0)
+                  ? createHistoricalInventoryStateFromSnapshot(
+                      quantity,
+                      openingRate,
+                      repairMoney(quantity.times(openingRate))
+                    )
+                  : stateForZeroOpening(openingRate)
+              );
+            }
+          }
+        } else if (openingQty.isZero()) {
+          if (openingValue.abs().gt(MONEY_TOLERANCE)) {
+            fallbackOpeningStates = null;
+          } else {
+            for (const locationId of fallbackLocationIds) {
+              fallbackOpeningStates.set(locationId, stateForZeroOpening(openingRate));
+            }
+          }
+        } else {
+          const positiveLocations = [...fallbackOpeningQtyByLocation.entries()].filter(
+            ([, quantity]) => quantity.gt(0)
+          );
+          if (positiveLocations.length === 1 && positiveLocations[0][1].eq(openingQty)) {
+            const openingLocationId = positiveLocations[0][0];
+            for (const locationId of fallbackLocationIds) {
+              fallbackOpeningStates.set(
+                locationId,
+                locationId === openingLocationId
+                  ? createHistoricalInventoryStateFromSnapshot(
+                      openingQty,
+                      openingRate,
+                      openingValue
+                    )
+                  : stateForZeroOpening(openingRate)
+              );
+            }
+          } else {
+            let allocatedValue = new Decimal(0);
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              const value = repairMoney(quantity.times(openingRate));
+              fallbackOpeningStates.set(
+                locationId,
+                createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
+              );
+              allocatedValue = repairMoney(allocatedValue.plus(value));
+            }
+            if (!allocatedValue.eq(openingValue)) fallbackOpeningStates = null;
+          }
+        }
+
+        if (fallbackOpeningStates) {
+          const replayFallbackToCheckpoint = (
+            candidateMovements: HistoricalSalesRepairMovement[]
+          ) => {
+            const replayStates = new Map<number, HistoricalForwardReplayState>();
+            for (const [locationId, opening] of fallbackOpeningStates!) {
+              replayStates.set(
+                locationId,
+                createHistoricalForwardReplayState(opening)
+              );
+            }
+
+            const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+            let peakNegativeLayerQuantity = new Decimal(0);
+            for (const movement of candidateMovements) {
+              const current =
+                replayStates.get(movement.locationId) ??
+                createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+              if (movement.sale && checkpointTargetKeys.has(movementKey(movement))) {
+                replayProposals.set(
+                  movement.sale.salesItemId,
+                  historicalSaleProposalFromState(movement, current.inventory)
+                );
+              }
+              const next = applyHistoricalForwardReplayMovement(current, movement);
+              if (next.negativeLayerQuantity.gt(peakNegativeLayerQuantity)) {
+                peakNegativeLayerQuantity = next.negativeLayerQuantity;
+              }
+              replayStates.set(movement.locationId, next);
+            }
+
+            let exact = true;
+            let detail: string | null = null;
+            for (const locationId of fallbackLocationIds) {
+              const key = historicalInventoryKey(companyId, locationId, stockItemId);
+              const actual =
+                replayStates.get(locationId)?.inventory ??
+                stateForZeroOpening(openingRate);
+              const expected = checkpointStates.get(key);
+              if (expected) {
+                if (!historicalInventoryStatesEqual(actual, expected)) {
+                  exact = false;
+                  detail =
+                    "location " +
+                    locationId +
+                    " expected " +
+                    repairQuantity(expected.quantity).toFixed(3) +
+                    "|" +
+                    repairRate(expected.averageRate).toFixed(2) +
+                    "|" +
+                    repairMoney(expected.totalValue).toFixed(2) +
+                    " actual " +
+                    repairQuantity(actual.quantity).toFixed(3) +
+                    "|" +
+                    repairRate(actual.averageRate).toFixed(2) +
+                    "|" +
+                    repairMoney(actual.totalValue).toFixed(2);
+                  break;
+                }
+              } else if (
+                !repairQuantity(actual.quantity).isZero() ||
+                repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+              ) {
+                exact = false;
+                detail =
+                  "location " +
+                  locationId +
+                  " has no checkpoint row but replay ends " +
+                  repairQuantity(actual.quantity).toFixed(3) +
+                  "|" +
+                  repairRate(actual.averageRate).toFixed(2) +
+                  "|" +
+                  repairMoney(actual.totalValue).toFixed(2);
+                break;
+              }
+            }
+            return { exact, detail, replayProposals, peakNegativeLayerQuantity };
+          };
+
+          const fallbackRawReplay = replayFallbackToCheckpoint(fallbackRawMovements);
+          let fallbackAcceptedReplay = fallbackRawReplay;
+          let fallbackUsedNormalizedPos = false;
+          const fallbackRawPosFingerprint = fallbackRawMovements
+            .filter((movement) => movement.sourceType === "pos-sale")
+            .map(
+              (movement) =>
+                `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`
+            )
+            .join("|");
+          const fallbackNormalizedPosFingerprint = fallbackNormalizedMovements
+            .filter(
+              (movement) =>
+                movement.sourceType === "pos-sale" ||
+                movement.sourceType === "pos-sale-normalized"
+            )
+            .map(
+              (movement) =>
+                `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`
+            )
+            .join("|");
+
+          if (
+            !fallbackAcceptedReplay.exact &&
+            fallbackNormalizedQuantityCompatible &&
+            fallbackRawPosFingerprint !== fallbackNormalizedPosFingerprint
+          ) {
+            const normalizedFallbackReplay = replayFallbackToCheckpoint(
+              fallbackNormalizedMovements
+            );
+            if (normalizedFallbackReplay.exact) {
+              fallbackAcceptedReplay = normalizedFallbackReplay;
+              fallbackUsedNormalizedPos = true;
+            }
+          }
+
+          if (fallbackAcceptedReplay.exact) {
+            fallbackProofCandidate = {
+              replay: fallbackAcceptedReplay,
+              openingTotal: fallbackOpeningTotal,
+              openingProofBasis: fallbackOpeningProofBasis,
+              usedNormalizedPos: fallbackUsedNormalizedPos,
+              movementCount: fallbackItemMovements.length,
+            };
+          }
+        }
+      }
+
       const locationIds = new Set<number>([
         ...checkpoint.rows
           .filter((row) => Number(row.stock_item_id) === stockItemId)
@@ -2419,9 +2718,6 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
       }
 
-      const openingQty = repairQuantity(stockItem.opening_qty);
-      const openingRate = repairRate(stockItem.opening_rate);
-      const openingValue = repairMoney(stockItem.opening_value);
       const pinnedOpeningQuantityMatches = inferredOpeningTotal.eq(openingQty);
       let openingProofBasis:
         | "stock-opening"
@@ -2655,18 +2951,38 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
 
       if (!acceptedReplay.exact) {
-        checks.push({
-          companyId,
-          locationId: null,
-          stockItemId,
-          code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
-          status: "warning",
-          detail:
-            rawReplay.detail ??
-            normalizedReplay?.detail ??
-            "Forward replay did not reproduce the immutable checkpoint.",
-        });
-        continue;
+        if (fallbackProofCandidate) {
+          acceptedReplay = fallbackProofCandidate.replay;
+          inferredOpeningTotal = fallbackProofCandidate.openingTotal;
+          openingProofBasis = fallbackProofCandidate.openingProofBasis;
+          proofMode = fallbackProofCandidate.usedNormalizedPos
+            ? "normalized-pos-lifecycle"
+            : "raw";
+          fallbackProvenItemIds.add(stockItemId);
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN",
+            status: "pass",
+            actual: String(fallbackProofCandidate.movementCount),
+            detail:
+              "Trusted V15 replay failed, but adding the false inventory_applied legacy transfer rows reproduced the immutable Phase 3 checkpoint exactly; only this proven item history uses the fallback.",
+          });
+        } else {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
+            status: "warning",
+            detail:
+              rawReplay.detail ??
+              normalizedReplay?.detail ??
+              "Forward replay did not reproduce the immutable checkpoint.",
+          });
+          continue;
+        }
       }
 
       if (openingProofBasis === "signed-location-import-inferred") {
@@ -2756,20 +3072,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     for (const stockItemId of legacyTransferFallbackItemIds) {
       const itemKeys = targetKeysByItem.get(stockItemId) ?? [];
-      if (itemKeys.length === 0) continue;
-      const proven = itemKeys.every((key) => forwardReplayResolvedKeys.has(key));
+      if (itemKeys.length === 0 || fallbackProvenItemIds.has(stockItemId)) continue;
       checks.push({
         companyId,
         locationId: null,
         stockItemId,
-        code: proven
-          ? "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN"
-          : "LEGACY_TRANSFER_FLAG_FALLBACK_UNPROVEN",
-        status: proven ? "pass" : "block",
+        code: "LEGACY_TRANSFER_FLAG_FALLBACK_IGNORED",
+        status: "warning",
         actual: String(itemKeys.length),
-        detail: proven
-          ? "Non-optional legacy transfer rows with inventory_applied=false replay exactly with the full item history to the immutable Phase 3 checkpoint."
-          : "Non-optional transfer rows predate or conflict with reliable inventory_applied ownership; legacy sales remain quarantined until the full item history reproduces the immutable Phase 3 checkpoint.",
+        detail:
+          "False inventory_applied legacy transfer rows did not reproduce the immutable checkpoint, so V17 ignores them and retains the trusted V15 movement history for this item.",
       });
     }
 
