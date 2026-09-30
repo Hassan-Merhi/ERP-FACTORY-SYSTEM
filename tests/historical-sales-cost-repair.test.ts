@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyHistoricalForwardReplayMovement,
   applyHistoricalInventoryMovement,
   applyHistoricalSalesRepairMovement,
+  createHistoricalForwardReplayState,
   createHistoricalInventoryState,
   createHistoricalInventoryStateFromSnapshot,
   historicalSaleProposalFromState,
@@ -485,6 +487,160 @@ describe("historical sales cost repair replay", () => {
     const after = applyHistoricalSalesRepairMovement(before, restore);
     expect(after.quantity.toFixed(3)).toBe("10.000");
     expect(after.totalValue.toFixed(2)).toBe("1000.01");
+  });
+
+
+  it("replays the pre-March-13 signed-value inventory bug exactly", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00")
+    );
+    const issue = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "legacy-issue",
+        occurredAt: "2026-03-01T10:00:00.000Z",
+        quantityDelta: "-2",
+      })
+    );
+
+    expect(issue.inventory.quantity.toFixed(3)).toBe("-1.000");
+    expect(issue.inventory.averageRate.toFixed(2)).toBe("10.00");
+    expect(issue.inventory.totalValue.toFixed(2)).toBe("-10.00");
+
+    const receipt = applyHistoricalForwardReplayMovement(
+      issue,
+      movement({
+        movementId: "legacy-receipt",
+        occurredAt: "2026-03-02T10:00:00.000Z",
+        quantityDelta: "2",
+        unitCost: "20.00",
+      })
+    );
+
+    expect(receipt.inventory.quantity.toFixed(3)).toBe("1.000");
+    expect(receipt.inventory.totalValue.toFixed(2)).toBe("30.00");
+    expect(receipt.inventory.averageRate.toFixed(2)).toBe("30.00");
+  });
+
+  it("replays the March-13 safety clamp before negative layers existed", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00")
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "post-safety-issue",
+        occurredAt: "2026-03-13T12:00:00.000Z",
+        quantityDelta: "-2",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("-1.000");
+    expect(next.inventory.averageRate.toFixed(2)).toBe("0.00");
+    expect(next.inventory.totalValue.toFixed(2)).toBe("0.00");
+    expect(next.negativeLayerQuantity.toFixed(3)).toBe("0.000");
+  });
+
+  it("replays the pre-July full-shortage negative-layer overcount", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("-2", "100.00", "0.00"),
+      "2"
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "april-shortage",
+        occurredAt: "2026-04-01T10:00:00.000Z",
+        quantityDelta: "-1",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("-3.000");
+    // Old engine added the full 3-unit shortage again instead of only +1.
+    expect(next.negativeLayerQuantity.toFixed(3)).toBe("5.000");
+  });
+
+  it("uses incremental shortage creation after the July hardening", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("-3", "100.00", "0.00"),
+      "3"
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "july-shortage",
+        occurredAt: "2026-07-13T10:00:00.000Z",
+        quantityDelta: "-1",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("-4.000");
+    expect(next.negativeLayerQuantity.toFixed(3)).toBe("4.000");
+  });
+
+  it("consumes stale layers from positive stock before the September-11 fix", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("10", "100.00", "1000.00"),
+      "5"
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "pre-fix-receipt",
+        occurredAt: "2026-09-10T10:00:00.000Z",
+        quantityDelta: "5",
+        unitCost: "100.00",
+        sourceType: "legacy-stock-transfer-in",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("15.000");
+    expect(next.inventory.totalValue.toFixed(2)).toBe("1000.00");
+    expect(next.inventory.averageRate.toFixed(2)).toBe("66.67");
+    expect(next.negativeLayerQuantity.toFixed(3)).toBe("0.000");
+  });
+
+  it("preserves stale layers when live stock is positive after the September-11 fix", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("10", "100.00", "1000.00"),
+      "5"
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "post-fix-receipt",
+        occurredAt: "2026-09-12T10:00:00.000Z",
+        quantityDelta: "5",
+        unitCost: "100.00",
+        sourceType: "legacy-stock-transfer-in",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("15.000");
+    expect(next.inventory.totalValue.toFixed(2)).toBe("1500.00");
+    expect(next.inventory.averageRate.toFixed(2)).toBe("100.00");
+    expect(next.negativeLayerQuantity.toFixed(3)).toBe("5.000");
+  });
+
+  it("does not treat a POS reversal journal cost as a receipt rate", () => {
+    const start = createHistoricalForwardReplayState(
+      createHistoricalInventoryStateFromSnapshot("5", "100.00", "500.00")
+    );
+    const next = applyHistoricalForwardReplayMovement(
+      start,
+      movement({
+        movementId: "canonical:pos-reverse",
+        occurredAt: "2026-09-01T10:00:00.000Z",
+        quantityDelta: "2",
+        unitCost: "80.00",
+        sourceType: "pos-sale",
+        evidence: "canonical",
+      })
+    );
+
+    expect(next.inventory.quantity.toFixed(3)).toBe("7.000");
+    expect(next.inventory.totalValue.toFixed(2)).toBe("700.00");
+    expect(next.inventory.averageRate.toFixed(2)).toBe("100.00");
   });
 
 });
