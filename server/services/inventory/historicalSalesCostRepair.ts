@@ -210,7 +210,7 @@ async function loadCanonicalMovements(
     createdAt: iso(row.created_at),
     sequence: Number(row.id) * 10 + 5,
     quantityDelta: String(row.quantity_delta),
-    unitCost: String(row.unit_cost),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
     sourceType: row.source_type,
     sourceId: row.source_id,
     evidence: "canonical" as const,
