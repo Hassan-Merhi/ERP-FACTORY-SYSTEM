@@ -26,12 +26,18 @@ function actor(req: Request): string {
   return String(req.session.username || req.session.userId || "developer");
 }
 
+function repairRequestError(code: string): Error {
+  const error = new Error();
+  error.message = code;
+  return error;
+}
+
 function parseCompanyIds(value: unknown): number[] | undefined {
   if (value === undefined || value === null) return undefined;
-  if (!Array.isArray(value)) throw new Error("HSCR_COMPANY_IDS_NOT_ARRAY");
+  if (!Array.isArray(value)) throw repairRequestError("HSCR_COMPANY_IDS_NOT_ARRAY");
   const companyIds = [...new Set(value.map((id) => Number(id)))];
   if (companyIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-    throw new Error("HSCR_COMPANY_IDS_INVALID");
+    throw repairRequestError("HSCR_COMPANY_IDS_INVALID");
   }
   return companyIds;
 }
@@ -48,7 +54,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         if (req.body?.confirmation !== "BUILD-HISTORICAL-SALES-COST-DRY-RUN") {
           return res.status(400).json({
-            message: 'HSCR_DRY_RUN_CONFIRMATION_REQUIRED',
+            code: 'HSCR_DRY_RUN_CONFIRMATION_REQUIRED',
           });
         }
 
@@ -63,7 +69,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
           action: "dry-run-route",
           error,
         });
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(500).json({ code: getErrorMessage(error) });
       }
     }
   );
@@ -77,10 +83,10 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
         if (!Number.isInteger(runId) || runId <= 0) {
-          return res.status(400).json({ message: "HSCR_RUN_ID_INVALID" });
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
         }
         const run = await getHistoricalSalesCostRepairRun(runId);
-        if (!run) return res.status(404).json({ message: "HSCR_RUN_NOT_FOUND" });
+        if (!run) return res.status(404).json({ code: "HSCR_RUN_NOT_FOUND" });
         return res.json(run);
       } catch (error: unknown) {
         logger.error("Historical sales cost repair report failed", {
@@ -88,7 +94,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
           action: "report-route",
           error,
         });
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(500).json({ code: getErrorMessage(error) });
       }
     }
   );
@@ -105,12 +111,12 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         const runId = Number.parseInt(req.params.runId, 10);
         if (!Number.isInteger(runId) || runId <= 0) {
-          return res.status(400).json({ message: "HSCR_RUN_ID_INVALID" });
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
         }
 
         const auditHash = String(req.body?.auditHash || "").trim();
         if (!/^[a-f0-9]{64}$/i.test(auditHash)) {
-          return res.status(400).json({ message: "HSCR_AUDIT_HASH_INVALID" });
+          return res.status(400).json({ code: "HSCR_AUDIT_HASH_INVALID" });
         }
 
         const requiredConfirmation = `APPLY-HISTORICAL-SALES-COST:${runId}:${auditHash.slice(0, 12)}`;
@@ -134,7 +140,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
           runId: req.params.runId,
           error,
         });
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(500).json({ code: getErrorMessage(error) });
       }
     }
   );
