@@ -14,6 +14,7 @@ import {
   repairMoney,
   repairQuantity,
   repairRate,
+  resolveCanonicalSaleCostEvidence,
   reverseHistoricalInventoryMovement,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
@@ -82,6 +83,7 @@ type CanonicalRow = {
   unit_cost: string | null;
   source_type: string;
   source_id: string;
+  idempotency_key: string | null;
   occurred_at: Date;
   created_at: Date;
   reversal_of_movement_id: number | null;
@@ -193,7 +195,7 @@ async function loadCanonicalMovements(
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
     `SELECT id,location_id,stock_item_id,quantity_delta::text,unit_cost::text,
-            source_type,source_id,occurred_at,created_at,reversal_of_movement_id
+            source_type,source_id,idempotency_key,occurred_at,created_at,reversal_of_movement_id
        FROM canonical_stock_movements
       WHERE company_id=$1
         AND created_at >= $2
@@ -213,6 +215,7 @@ async function loadCanonicalMovements(
     unitCost: row.unit_cost === null ? null : String(row.unit_cost),
     sourceType: row.source_type,
     sourceId: row.source_id,
+    idempotencyKey: row.idempotency_key,
     evidence: "canonical" as const,
     reversalOfMovementId: row.reversal_of_movement_id === null ? null : Number(row.reversal_of_movement_id),
   }));
@@ -367,41 +370,6 @@ function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): nu
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-type CanonicalSaleEvidence = {
-  movements: HistoricalSalesRepairMovement[];
-  rates: Set<string>;
-  totalQuantity: Decimal;
-};
-
-function activeCanonicalSaleEvidence(movements: HistoricalSalesRepairMovement[]): Map<string, CanonicalSaleEvidence> {
-  const reversedIds = new Set<number>();
-  for (const movement of movements) {
-    const reversal = movement.reversalOfMovementId;
-    if (typeof reversal === "number" && Number.isInteger(reversal) && reversal > 0) reversedIds.add(reversal);
-  }
-
-  const result = new Map<string, CanonicalSaleEvidence>();
-  for (const movement of movements) {
-    const id = canonicalMovementNumericId(movement);
-    if (id !== null && reversedIds.has(id)) continue;
-    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    if (d(movement.quantityDelta).gte(0)) continue;
-    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
-    const current = result.get(key) ?? {
-      movements: [],
-      rates: new Set<string>(),
-      totalQuantity: new Decimal(0),
-    };
-    current.movements.push(movement);
-    if (movement.unitCost !== null && movement.unitCost !== undefined) {
-      current.rates.add(repairRate(movement.unitCost).toFixed(2));
-    }
-    current.totalQuantity = repairQuantity(current.totalQuantity.plus(d(movement.quantityDelta).abs()));
-    result.set(key, current);
-  }
-  return result;
-}
-
 function historicalSalesCompanyEvidenceHash(input: {
   companyId: number;
   canonicalStart: Date | null;
@@ -440,6 +408,7 @@ function historicalSalesCompanyEvidenceHash(input: {
       unitCost: movement.unitCost,
       sourceType: movement.sourceType,
       sourceId: movement.sourceId,
+      idempotencyKey: movement.idempotencyKey ?? null,
     })),
     legacy: input.legacy.map((row) => ({
       movementId: row.movement_id,
@@ -1545,8 +1514,35 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
     },
   ];
-  const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
-  const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
+  const canonicalSaleKeys = new Set(
+    canonical
+      .filter((movement) => CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType))
+      .map((movement) => `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`)
+  );
+  const canonicalResolution = resolveCanonicalSaleCostEvidence({
+    sales: sales
+      .filter((sale) => sale.location_id !== null)
+      .map((sale) => ({
+        salesItemId: Number(sale.sales_item_id),
+        voucherId: Number(sale.voucher_id),
+        locationId: Number(sale.location_id),
+        stockItemId: Number(sale.stock_item_id),
+        quantity: String(sale.quantity),
+      })),
+    movements: canonical,
+  });
+  for (const blocker of canonicalResolution.blockers) {
+    checks.push({
+      companyId,
+      locationId: blocker.locationId,
+      stockItemId: blocker.stockItemId,
+      code: blocker.code,
+      status: "block",
+      expected: blocker.expected ?? null,
+      actual: blocker.actual ?? null,
+      detail: blocker.detail,
+    });
+  }
   const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy.map((row) => ({
       movementId: row.movement_id,
@@ -1577,44 +1573,6 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
   ];
 
   const directCanonicalProposals = new Map<number, HistoricalSalesRepairProposal>();
-  const saleQuantityByEvidenceKey = new Map<string, Decimal>();
-  for (const sale of sales) {
-    if (!sale.location_id) continue;
-    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
-    saleQuantityByEvidenceKey.set(
-      key,
-      repairQuantity((saleQuantityByEvidenceKey.get(key) ?? new Decimal(0)).plus(d(sale.quantity).abs()))
-    );
-  }
-
-  for (const [key, evidence] of canonicalSaleEvidence) {
-    const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
-    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
-    if (!expectedQuantity) continue;
-    if (evidence.rates.size !== 1) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CANONICAL_SALE_RATE_AMBIGUOUS",
-        status: "block",
-        actual: [...evidence.rates].sort().join(","),
-        detail: `Voucher ${voucherIdText} has ${evidence.rates.size} active canonical sale rates for one item/location`,
-      });
-    }
-    if (!evidence.totalQuantity.eq(expectedQuantity)) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CANONICAL_SALE_QUANTITY_MISMATCH",
-        status: "block",
-        expected: expectedQuantity.toFixed(3),
-        actual: evidence.totalQuantity.toFixed(3),
-        detail: `Voucher ${voucherIdText} active canonical issue quantity does not match current sale lines`,
-      });
-    }
-  }
 
   const legacySales: SaleRow[] = [];
   for (const sale of sales) {
@@ -1631,25 +1589,23 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
-    const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
+    const canonicalEvidence = canonicalResolution.evidenceBySalesItemId.get(Number(sale.sales_item_id));
     if (canonicalEvidence) {
-      const rate = canonicalEvidence.rates.size === 1 ? [...canonicalEvidence.rates][0] : null;
-      if (rate !== null && canonicalEvidence.totalQuantity.eq(saleQuantityByEvidenceKey.get(saleEvidenceKey) ?? -1)) {
-        const evidenceMovement = canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
-        directCanonicalProposals.set(
-          Number(sale.sales_item_id),
-          proposalFromRecordedRate(
-            companyId,
-            sale,
-            rate,
-            evidenceMovement.sourceType,
-            evidenceMovement.sourceId,
-            "canonical"
-          )
-        );
-      } else {
-        directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
-      }
+      directCanonicalProposals.set(
+        Number(sale.sales_item_id),
+        proposalFromRecordedRate(
+          companyId,
+          sale,
+          canonicalEvidence.unitCost,
+          canonicalEvidence.sourceType,
+          canonicalEvidence.sourceId,
+          "canonical"
+        )
+      );
+      continue;
+    }
+    if (canonicalSaleKeys.has(saleEvidenceKey)) {
+      directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
       continue;
     }
     if (!beforeCutoff(sale.created_at, canonicalStart)) {
@@ -1661,6 +1617,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         status: "block",
         detail: `Sale item ${sale.sales_item_id} is after canonical cutover but has no canonical sale issue evidence`,
       });
+      directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
       continue;
     }
 
