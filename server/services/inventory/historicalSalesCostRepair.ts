@@ -1680,6 +1680,157 @@ function recoverHistoricalMergedSales(input: {
   return { recoveredKeys, proposals, checks };
 }
 
+
+type ForwardAnchorRecoveryResult = {
+  proposals: HistoricalSalesRepairProposal[];
+  provenSaleIds: Set<number>;
+  checks: RepairCheck[];
+};
+
+function recoverZeroOpeningSalesFromForwardAnchors(input: {
+  companyId: number;
+  targetKeys: Set<string>;
+  checkpoint: ValuationCheckpoint;
+  checkpointStates: Map<string, HistoricalInventoryState>;
+  stockItems: StockItemRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacyMovements: HistoricalSalesRepairMovement[];
+}): ForwardAnchorRecoveryResult {
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const provenSaleIds = new Set<number>();
+  const checks: RepairCheck[] = [];
+  const stockById = new Map(input.stockItems.map((item) => [Number(item.id), item]));
+  const movementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
+
+  for (const movement of [...input.legacyMovements, ...input.canonical]) {
+    if (!checkpointContainsMovement(movement, input.checkpoint)) continue;
+    const key = movementKey(movement);
+    if (!input.targetKeys.has(key)) continue;
+    const rows = movementsByKey.get(key) ?? [];
+    rows.push(movement);
+    movementsByKey.set(key, rows);
+  }
+  for (const rows of movementsByKey.values()) rows.sort(compareMovementMutationAscending);
+
+  for (const key of input.targetKeys) {
+    const [, locationIdText, stockItemIdText] = key.split(":");
+    const locationId = Number(locationIdText);
+    const stockItemId = Number(stockItemIdText);
+    const item = stockById.get(stockItemId);
+    const checkpointState = input.checkpointStates.get(key);
+    if (!item || !checkpointState) continue;
+
+    const openingQty = repairQuantity(item.opening_qty);
+    const openingValue = repairMoney(item.opening_value);
+    if (!openingQty.isZero() || !openingValue.isZero()) continue;
+
+    const movements = movementsByKey.get(key) ?? [];
+    if (movements.length === 0) continue;
+
+    const targetSaleIds = new Set(
+      input.legacyMovements
+        .filter((movement) => movementKey(movement) === key && movement.sale)
+        .map((movement) => movement.sale!.salesItemId)
+    );
+    if (targetSaleIds.size === 0) continue;
+
+    let runningQty = new Decimal(0);
+    const candidateAnchors: Array<{ index: number; previousQty: Decimal }> = [];
+    for (let index = 0; index < movements.length; index += 1) {
+      const movement = movements[index];
+      const delta = repairQuantity(movement.quantityDelta);
+      const nextQty = repairQuantity(runningQty.plus(delta));
+      if (
+        delta.gt(0) &&
+        movement.unitCost !== null &&
+        movement.unitCost !== undefined &&
+        runningQty.lte(0) &&
+        nextQty.gt(0)
+      ) {
+        candidateAnchors.push({ index, previousQty: runningQty });
+      }
+      runningQty = nextQty;
+    }
+
+    let recovered:
+      | {
+          anchor: HistoricalSalesRepairMovement;
+          stateAtCheckpoint: HistoricalInventoryState;
+          proposals: HistoricalSalesRepairProposal[];
+        }
+      | undefined;
+
+    for (const candidate of candidateAnchors) {
+      const anchor = movements[candidate.index];
+      let state = applyHistoricalInventoryMovement(
+        createHistoricalInventoryStateFromSnapshot(candidate.previousQty, "0", "0"),
+        {
+          quantityDelta: anchor.quantityDelta,
+          unitCost: anchor.unitCost,
+        }
+      );
+      const candidateProposals: HistoricalSalesRepairProposal[] = [];
+
+      for (let index = candidate.index + 1; index < movements.length; index += 1) {
+        const movement = movements[index];
+        if (movement.sale) {
+          candidateProposals.push(historicalSaleProposalFromState(movement, state));
+        }
+        state = applyHistoricalInventoryMovement(state, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        });
+      }
+
+      const checkpointMatches =
+        stateQuantityValueMatches(state, checkpointState) &&
+        repairRate(state.averageRate).eq(repairRate(checkpointState.averageRate));
+      if (!checkpointMatches) continue;
+
+      const recoveredTargetCount = candidateProposals.filter((proposal) =>
+        targetSaleIds.has(proposal.salesItemId)
+      ).length;
+      if (recoveredTargetCount === 0) continue;
+
+      recovered = {
+        anchor,
+        stateAtCheckpoint: state,
+        proposals: candidateProposals,
+      };
+      break;
+    }
+
+    if (!recovered) continue;
+
+    let recoveredCount = 0;
+    for (const proposal of recovered.proposals) {
+      if (!targetSaleIds.has(proposal.salesItemId)) continue;
+      proposals.push(proposal);
+      provenSaleIds.add(proposal.salesItemId);
+      recoveredCount += 1;
+    }
+
+    checks.push({
+      companyId: input.companyId,
+      locationId,
+      stockItemId,
+      code: "ZERO_OPENING_FORWARD_RESET_RECONCILED",
+      status: "pass",
+      expected: `${repairQuantity(checkpointState.quantity).toFixed(3)}|${repairMoney(
+        checkpointState.totalValue
+      ).toFixed(2)}|${repairRate(checkpointState.averageRate).toFixed(2)}`,
+      actual: `${repairQuantity(recovered.stateAtCheckpoint.quantity).toFixed(
+        3
+      )}|${repairMoney(recovered.stateAtCheckpoint.totalValue).toFixed(
+        2
+      )}|${repairRate(recovered.stateAtCheckpoint.averageRate).toFixed(2)}`,
+      detail: `Exact zero opening; forward reset anchor ${recovered.anchor.movementId} proves ${recoveredCount} legacy sale(s) through the immutable checkpoint`,
+    });
+  }
+
+  return { proposals, provenSaleIds, checks };
+}
+
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
@@ -1997,6 +2148,20 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       );
     }
 
+    const forwardAnchorRecovery = recoverZeroOpeningSalesFromForwardAnchors({
+      companyId,
+      targetKeys,
+      checkpoint,
+      checkpointStates,
+      stockItems: stockItemResult.rows,
+      canonical: canonicalForReplay,
+      legacyMovements,
+    });
+    checks.push(...forwardAnchorRecovery.checks);
+    for (const proposal of forwardAnchorRecovery.proposals) {
+      proposalsBySaleId.set(proposal.salesItemId, proposal);
+    }
+
     const mergedRecovery = recoverHistoricalMergedSales({
       companyId,
       targetKeys,
@@ -2162,7 +2327,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       });
       if (!reversed.reversible) {
         const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
-          (saleMovement) => compareMovementMutationAscending(saleMovement, movement) <= 0
+          (saleMovement) =>
+            compareMovementMutationAscending(saleMovement, movement) <= 0 &&
+            !forwardAnchorRecovery.provenSaleIds.has(saleMovement.sale!.salesItemId)
         );
         rewindBoundaryReached.add(key);
 
@@ -2201,7 +2368,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         const inferred = repairRate(reversed.stateBefore.averageRate);
         if (!recorded.eq(inferred)) {
           const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
-            (saleMovement) => compareMovementMutationAscending(saleMovement, movement) < 0
+            (saleMovement) =>
+              compareMovementMutationAscending(saleMovement, movement) < 0 &&
+              !forwardAnchorRecovery.provenSaleIds.has(saleMovement.sale!.salesItemId)
           );
           rewindBoundaryReached.add(key);
           if (unresolvedSales.length === 0) {
@@ -2234,7 +2403,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         }
       }
 
-      if (movement.sale) {
+      if (movement.sale && !forwardAnchorRecovery.provenSaleIds.has(movement.sale.salesItemId)) {
         proposalsBySaleId.set(
           movement.sale.salesItemId,
           historicalSaleProposalFromState(movement, reversed.stateBefore)
