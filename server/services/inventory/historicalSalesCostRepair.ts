@@ -51,6 +51,27 @@ type StockItemRow = {
   opening_qty: string;
   opening_rate: string;
   opening_value: string;
+  active: boolean;
+  deleted_at: Date | null;
+  created_at: Date;
+};
+
+type HistoricalMergeRow = {
+  alias_id: number;
+  alias_code: string;
+  alias_created_at: Date;
+  source_item_id: number;
+  source_code: string;
+  source_opening_qty: string;
+  source_opening_rate: string;
+  source_opening_value: string;
+  source_deleted_at: Date | null;
+  kept_item_id: number;
+  kept_code: string;
+  kept_opening_qty: string;
+  kept_opening_rate: string;
+  kept_opening_value: string;
+  merge_at: Date;
 };
 
 type CanonicalRow = {
@@ -63,6 +84,7 @@ type CanonicalRow = {
   source_id: string;
   occurred_at: Date;
   created_at: Date;
+  reversal_of_movement_id: number | null;
 };
 
 type SaleRow = {
@@ -171,7 +193,7 @@ async function loadCanonicalMovements(
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
     `SELECT id,location_id,stock_item_id,quantity_delta::text,unit_cost::text,
-            source_type,source_id,occurred_at,created_at
+            source_type,source_id,occurred_at,created_at,reversal_of_movement_id
        FROM canonical_stock_movements
       WHERE company_id=$1
         AND created_at >= $2
@@ -185,12 +207,14 @@ async function loadCanonicalMovements(
     locationId: Number(row.location_id),
     stockItemId: Number(row.stock_item_id),
     occurredAt: iso(row.occurred_at),
+    createdAt: iso(row.created_at),
     sequence: Number(row.id) * 10 + 5,
     quantityDelta: String(row.quantity_delta),
     unitCost: String(row.unit_cost),
     sourceType: row.source_type,
     sourceId: row.source_id,
     evidence: "canonical" as const,
+    reversalOfMovementId: row.reversal_of_movement_id === null ? null : Number(row.reversal_of_movement_id),
   }));
 }
 
@@ -216,6 +240,78 @@ async function loadValuationCheckpoint(client: PoolClient, companyId: number): P
     movementCutoffId: Number(row.movement_cutoff_id),
     createdAt: row.created_at,
     rows: baseline.rows,
+  };
+}
+
+async function loadHistoricalMerges(client: PoolClient, companyId: number): Promise<HistoricalMergeRow[]> {
+  const result = await client.query<HistoricalMergeRow>(
+    `SELECT
+        a.id AS alias_id,
+        a.alias_code,
+        a.created_at AS alias_created_at,
+        source.id AS source_item_id,
+        source.code AS source_code,
+        source.opening_qty::text AS source_opening_qty,
+        source.opening_rate::text AS source_opening_rate,
+        source.opening_value::text AS source_opening_value,
+        source.deleted_at AS source_deleted_at,
+        kept.id AS kept_item_id,
+        kept.code AS kept_code,
+        kept.opening_qty::text AS kept_opening_qty,
+        kept.opening_rate::text AS kept_opening_rate,
+        kept.opening_value::text AS kept_opening_value,
+        COALESCE(source.deleted_at,a.created_at) AS merge_at
+       FROM stock_item_code_aliases a
+       JOIN stock_items kept
+         ON kept.company_id=a.company_id
+        AND kept.id=a.stock_item_id
+       JOIN stock_items source
+         ON source.company_id=a.company_id
+        AND source.code=a.alias_code
+        AND source.id<>a.stock_item_id
+      WHERE a.company_id=$1
+        AND a.description LIKE 'Merged from:%'
+      ORDER BY COALESCE(source.deleted_at,a.created_at),a.id`,
+    [companyId]
+  );
+  return result.rows;
+}
+
+function proposalFromRecordedRate(
+  companyId: number,
+  sale: SaleRow,
+  proposedRate: Decimal.Value,
+  sourceType: string,
+  sourceId: string,
+  evidence: "canonical" | "legacy"
+): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  const proposedCostPrice = repairRate(proposedRate);
+  const proposedTotalCost = repairMoney(repairQuantity(sale.quantity).abs().times(proposedCostPrice));
+  const proposedProfit = repairMoney(d(sale.total_sales).minus(proposedTotalCost));
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType,
+    sourceId,
+    evidence,
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: proposedCostPrice.toFixed(2),
+    proposedTotalCost: proposedTotalCost.toFixed(2),
+    proposedProfit: proposedProfit.toFixed(2),
+    changed:
+      !originalCostPrice.eq(proposedCostPrice) ||
+      !originalTotalCost.eq(proposedTotalCost) ||
+      !originalProfit.eq(proposedProfit),
   };
 }
 
@@ -255,6 +351,64 @@ function compareLegacyMovementDescending(a: HistoricalSalesRepairMovement, b: Hi
   if (time !== 0) return time;
   if (a.sequence !== b.sequence) return b.sequence - a.sequence;
   return b.movementId.localeCompare(a.movementId);
+}
+
+function movementMutationTime(movement: HistoricalSalesRepairMovement): number {
+  return Date.parse(movement.createdAt ?? movement.occurredAt);
+}
+
+function compareMovementMutationAscending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  const time = movementMutationTime(a) - movementMutationTime(b);
+  if (time !== 0) return time;
+  if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+  return a.movementId.localeCompare(b.movementId);
+}
+
+function compareMovementMutationDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  return -compareMovementMutationAscending(a, b);
+}
+
+function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
+  if (!movement.movementId.startsWith("canonical:")) return null;
+  const id = Number(movement.movementId.slice("canonical:".length));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+type CanonicalSaleEvidence = {
+  movements: HistoricalSalesRepairMovement[];
+  rates: Set<string>;
+  totalQuantity: Decimal;
+};
+
+function activeCanonicalSaleEvidence(
+  movements: HistoricalSalesRepairMovement[]
+): Map<string, CanonicalSaleEvidence> {
+  const reversedIds = new Set<number>();
+  for (const movement of movements) {
+    const reversal = movement.reversalOfMovementId;
+    if (typeof reversal === "number" && Number.isInteger(reversal) && reversal > 0) reversedIds.add(reversal);
+  }
+
+  const result = new Map<string, CanonicalSaleEvidence>();
+  for (const movement of movements) {
+    const id = canonicalMovementNumericId(movement);
+    if (id !== null && reversedIds.has(id)) continue;
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    if (d(movement.quantityDelta).gte(0)) continue;
+    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
+    const current = result.get(key) ?? {
+      movements: [],
+      rates: new Set<string>(),
+      totalQuantity: new Decimal(0),
+    };
+    current.movements.push(movement);
+    if (movement.unitCost !== null && movement.unitCost !== undefined) {
+      current.rates.add(repairRate(movement.unitCost).toFixed(2));
+    }
+    current.totalQuantity = repairQuantity(current.totalQuantity.plus(d(movement.quantityDelta).abs()));
+    result.set(key, current);
+  }
+  return result;
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -698,7 +852,8 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       [companyId]
     ),
     client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text
+      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
+              active,deleted_at,created_at
          FROM stock_items
         WHERE company_id=$1
         ORDER BY id`,
