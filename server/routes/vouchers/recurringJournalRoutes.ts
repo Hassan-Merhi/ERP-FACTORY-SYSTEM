@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { requireAuth, requireRole("Admin", "Developer"), requireNonPOS, requireRole } from "../../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
   RecurringJournalError,
