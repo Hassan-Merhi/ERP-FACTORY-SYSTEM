@@ -6,12 +6,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ArrowLeftRight,
   Boxes,
-  Calculator,
   Database,
   Edit,
   FileSpreadsheet,
   Package,
-  RefreshCw,
   ShieldCheck,
   Sparkles,
   Upload,
@@ -115,7 +113,6 @@ export function DataToolsView({ model }: Props) {
     setSilentImportPreview,
     setSilentProdOpen,
     setBulkRenameOpen,
-    recalculateCostsMutation,
   } = model;
 
   if (!selectedCompany) {
@@ -335,27 +332,6 @@ export function DataToolsView({ model }: Props) {
           {appMode !== "factory" && canManageData && <MergeStockItemsLauncher />}
 
           {appMode !== "factory" && canManageData && <ReconcileOTWNamesCard />}
-
-          {isDeveloperWorkspace && (
-            <ToolCard
-              icon={Calculator}
-              title="Fix Cost Prices"
-              description="Recalculate sales cost prices based on inventory records."
-              accent="amber"
-              action={
-                <Button
-                  variant="outline"
-                  className="h-10 w-full"
-                  onClick={() => recalculateCostsMutation.mutate()}
-                  disabled={recalculateCostsMutation.isPending}
-                  data-testid="button-fix-cost-prices"
-                >
-                  <RefreshCw className={`mr-2 h-4 w-4 ${recalculateCostsMutation.isPending ? "animate-spin" : ""}`} />
-                  {recalculateCostsMutation.isPending ? "Updating..." : "Fix Cost Prices"}
-                </Button>
-              }
-            />
-          )}
 
           {appMode === "factory" && canManageData && (
             <ToolCard
