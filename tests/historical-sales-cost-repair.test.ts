@@ -1000,4 +1000,53 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("72.55");
   });
 
+
+  it("replays and rewinds the exact guarded Wave 6 valuation reset only on a matching state", () => {
+    const reset = movement({
+      movementId: "valuation-reset:wave6-sh-mix3",
+      occurredAt: "2026-09-11T19:58:31.453Z",
+      createdAt: "2026-09-11T19:58:31.453Z",
+      quantityDelta: "0.000",
+      unitCost: null,
+      sourceType: "inventory-valuation-wave6-reset",
+      evidence: "legacy",
+      valuationReset: {
+        beforeQuantity: "17.000",
+        beforeAverageRate: "33.92",
+        beforeTotalValue: "576.56",
+        afterQuantity: "17.000",
+        afterAverageRate: "66.65",
+        afterTotalValue: "1133.05",
+      },
+    });
+
+    const before = createHistoricalInventoryStateFromSnapshot(
+      "17",
+      "33.92",
+      "576.56"
+    );
+    const after = applyHistoricalSalesRepairMovement(before, reset);
+    expect(after.quantity.toFixed(3)).toBe("17.000");
+    expect(after.averageRate.toFixed(2)).toBe("66.65");
+    expect(after.totalValue.toFixed(2)).toBe("1133.05");
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, reset);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("17.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("33.92");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("576.56");
+
+    const wrong = createHistoricalInventoryStateFromSnapshot(
+      "17",
+      "66.65",
+      "1133.04"
+    );
+    const rejected = reverseHistoricalSalesRepairMovement(wrong, reset);
+    expect(rejected).toEqual({
+      reversible: false,
+      reason: "MOVEMENT_INVERSE_INVALID",
+    });
+  });
+
 });
