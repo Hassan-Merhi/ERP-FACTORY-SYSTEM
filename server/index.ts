@@ -41,6 +41,7 @@ import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrat
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
+import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -256,6 +257,7 @@ let migrationsDone = false;
       await ensureRuntimeSchema(pool);
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
+      await bootstrapRecurringJournalFromEnvironment();
       try {
         // Factory Production Targets and Attendance Register must be available
         // even when production skips the bulk startup migration pass.
