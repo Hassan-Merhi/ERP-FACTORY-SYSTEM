@@ -2546,13 +2546,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         for (const [locationId, opening] of openingStates) {
           replayStates.set(
             locationId,
-            createHistoricalForwardReplayState(
-              createHistoricalInventoryStateFromSnapshot(
-                opening.quantity,
-                opening.averageRate,
-                opening.totalValue
-              )
-            )
+            createHistoricalForwardReplayState(opening)
           );
         }
 
