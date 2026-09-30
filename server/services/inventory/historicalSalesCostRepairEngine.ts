@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v24-transfer-source-rate-only";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v25-legacy-sale-rate-only";
 
 const ZERO = new Decimal(0);
 
@@ -726,11 +726,68 @@ function candidateRatesAround(rate: Decimal): Decimal[] {
   return values;
 }
 
+function legacyIssueRateOnlyRecovery(
+  stateAfter: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryReverseResult | null {
+  if (movement.evidence !== "legacy" || movement.sourceType !== "legacy-sale") {
+    return null;
+  }
+  if (!stateRateDisagreesWithValue(stateAfter)) return null;
+
+  const delta = repairQuantity(movement.quantityDelta);
+  if (!delta.lt(ZERO)) return null;
+  const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+  if (!repairQuantity(stateAfter.quantity).gt(ZERO) || !previousQty.gt(ZERO)) {
+    return null;
+  }
+
+  const candidates: HistoricalInventoryState[] = [];
+  for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
+    const beforeValue = repairMoney(
+      stateAfter.totalValue.plus(delta.abs().times(candidateRate))
+    );
+    if (beforeValue.lt(ZERO)) continue;
+    const candidate = rawHistoricalInventoryState(
+      previousQty,
+      candidateRate,
+      beforeValue
+    );
+    if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+      continue;
+    }
+    const replayed = applyHistoricalInventoryMovement(candidate, {
+      quantityDelta: delta,
+      unitCost: null,
+    });
+    if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+      candidates.push(candidate);
+    }
+  }
+
+  if (candidates.length !== 1) return null;
+  const stateBefore = candidates[0];
+  const replayed = applyHistoricalInventoryMovement(stateBefore, {
+    quantityDelta: delta,
+    unitCost: null,
+  });
+  if (!statesEqualQuantityAndValue(replayed, stateAfter)) return null;
+  if (repairRate(replayed.averageRate).eq(repairRate(stateAfter.averageRate))) {
+    return null;
+  }
+
+  return {
+    reversible: true,
+    stateBefore,
+    recovery: "LEGACY_ISSUE_RATE_ONLY",
+  };
+}
+
 export type HistoricalInventoryReverseResult =
   | {
       reversible: true;
       stateBefore: HistoricalInventoryState;
-      recovery?: "CANONICAL_RATE_ONLY";
+      recovery?: "CANONICAL_RATE_ONLY" | "LEGACY_ISSUE_RATE_ONLY";
     }
   | {
       reversible: false;
@@ -994,7 +1051,11 @@ export function reverseHistoricalSalesRepairMovement(
     return primary;
   }
 
-  return canonicalRateOnlyRecovery(stateAfter, movement) ?? primary;
+  return (
+    legacyIssueRateOnlyRecovery(stateAfter, movement) ??
+    canonicalRateOnlyRecovery(stateAfter, movement) ??
+    primary
+  );
 }
 
 export function historicalSaleProposalFromState(
