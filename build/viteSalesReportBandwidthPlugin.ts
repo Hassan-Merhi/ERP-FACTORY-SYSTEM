@@ -29,14 +29,14 @@ function transformSalesReport(source: string): string {
 
   code = replaceExactly(
     code,
-    `import { format, parseISO, startOfDay, startOfMonth, startOfYear } from "date-fns";`,
+    `import {\n  format,\n  parseISO,\n  startOfDay,\n  startOfMonth,\n  startOfYear,\n} from "date-fns";`,
     `import { format, parseISO } from "date-fns";`,
     "remove browser-side grouping date helpers"
   );
 
   code = replaceExactly(
     code,
-    `import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";`,
+    `import type {\n  DailySummary,\n  GroupingType,\n  ProfitFilter,\n  SalesReportItem,\n} from "./salesreportlegacy/types";`,
     `import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";\nimport {\n  EMPTY_SALES_REPORT_TOTALS,\n  fetchSalesReportRows,\n  fetchSalesReportSummary,\n  type SalesReportSummaryResponse,\n} from "@/lib/salesReportBandwidthClient";`,
     "sales report compact client import"
   );
@@ -79,7 +79,7 @@ function transformSalesReport(source: string): string {
 
   code = replaceExactly(
     code,
-    `    if (selectedStockGroups.length === 1) params.set("stockGroupId", selectedStockGroups[0]);`,
+    `    if (selectedStockGroups.length === 1)\n      params.set("stockGroupId", selectedStockGroups[0]);`,
     `    if (selectedStockGroups.length === 1) {\n      if (isMultiCompanyMode && selectedStockGroupNames.length === 1) {\n        params.set("stockGroupName", selectedStockGroupNames[0]);\n      } else {\n        params.set("stockGroupId", selectedStockGroups[0]);\n      }\n    }`,
     "sales report drill-down stock group scope"
   );
