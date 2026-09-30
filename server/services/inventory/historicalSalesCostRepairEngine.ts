@@ -10,7 +10,7 @@ function decimal(value: Decimal.Value | null | undefined, field: string): Decima
     if (!parsed.isFinite()) throw new Error("not finite");
     return parsed;
   } catch {
-    throw new Error(`Historical sales cost repair: ${field} is not a finite decimal`);
+    throw new Error(`HSCR_NON_FINITE_DECIMAL:${field}`);
   }
 }
 
