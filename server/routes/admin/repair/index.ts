@@ -13,6 +13,7 @@ import { registerAdminNegativeInventoryRoutes } from "./negative-inventory";
 import { registerAdminRepairMiscRoutes } from "./misc";
 import { registerAdminInventoryValueRepairRoutes } from "./inventory-values";
 import { registerAdminOrphanedBaleRoutes } from "./orphaned-bales";
+import { registerAdminHistoricalSalesCostRepairRoutes } from "./historical-sales-costs";
 import { registerHistoricalSalesCostRepairRoutes } from "./historical-sales-cost";
 
 export function registerAdminRepairRoutes(app: Express) {
