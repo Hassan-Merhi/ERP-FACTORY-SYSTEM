@@ -874,18 +874,19 @@ async function dryRunCompany(
     }
 
     const legacySale = beforeCutoff(sale.created_at, canonicalStart);
+    if (!legacySale) continue;
     movements.push({
       movementId: `sale-marker:${sale.sales_item_id}`,
       companyId,
       locationId: Number(sale.location_id),
       stockItemId: Number(sale.stock_item_id),
       occurredAt: iso(sale.created_at),
-      sequence: Number(sale.sales_item_id) * 10 + (legacySale ? 5 : 6),
-      quantityDelta: legacySale ? repairQuantity(d(sale.quantity).negated()).toFixed(3) : "0.000",
+      sequence: Number(sale.sales_item_id) * 10 + 5,
+      quantityDelta: repairQuantity(d(sale.quantity).negated()).toFixed(3),
       unitCost: null,
-      sourceType: legacySale ? "legacy-sale" : "canonical-era-sale-marker",
+      sourceType: "legacy-sale",
       sourceId: String(sale.voucher_id),
-      evidence: legacySale ? "legacy" : "canonical",
+      evidence: "legacy",
       sale: {
         salesItemId: Number(sale.sales_item_id),
         voucherId: Number(sale.voucher_id),
