@@ -7,10 +7,15 @@ import { logger } from "../../lib/logger";
 import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
+  applyHistoricalInventoryMovement,
+  createHistoricalInventoryStateFromSnapshot,
   historicalInventoryKey,
+  historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
-  replayHistoricalSalesCosts,
+  repairRate,
+  reverseHistoricalInventoryMovement,
+  type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairOpening,
   type HistoricalSalesRepairProposal,
@@ -33,6 +38,12 @@ type InventoryRow = {
   quantity: string;
   average_rate: string;
   total_value: string;
+};
+
+type ValuationCheckpoint = {
+  movementCutoffId: number;
+  createdAt: Date;
+  rows: InventoryRow[];
 };
 
 type StockItemRow = {
@@ -182,6 +193,68 @@ async function loadCanonicalMovements(
     sourceId: row.source_id,
     evidence: "canonical" as const,
   }));
+}
+
+
+async function loadValuationCheckpoint(client: PoolClient, companyId: number): Promise<ValuationCheckpoint | null> {
+  const cutover = await client.query<{ movement_cutoff_id: number; created_at: Date }>(
+    `SELECT movement_cutoff_id,created_at
+       FROM phase3_inventory_valuation_cutovers
+      WHERE company_id=$1
+      LIMIT 1`,
+    [companyId]
+  );
+  const row = cutover.rows[0];
+  if (!row) return null;
+
+  const baseline = await client.query<InventoryRow>(
+    `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
+       FROM phase3_inventory_valuation_baselines
+      WHERE company_id=$1
+      ORDER BY location_id,stock_item_id`,
+    [companyId]
+  );
+  return {
+    movementCutoffId: Number(row.movement_cutoff_id),
+    createdAt: row.created_at,
+    rows: baseline.rows,
+  };
+}
+
+function originalProposalForSale(companyId: number, sale: SaleRow): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType: "legacy-sale",
+    sourceId: String(sale.voucher_id),
+    evidence: "legacy",
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: originalCostPrice.toFixed(2),
+    proposedTotalCost: originalTotalCost.toFixed(2),
+    proposedProfit: originalProfit.toFixed(2),
+    changed: false,
+  };
+}
+
+function movementKey(movement: Pick<HistoricalSalesRepairMovement, "companyId" | "locationId" | "stockItemId">): string {
+  return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
+}
+
+function compareLegacyMovementDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  const time = Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
+  if (time !== 0) return time;
+  if (a.sequence !== b.sequence) return b.sequence - a.sequence;
+  return b.movementId.localeCompare(a.movementId);
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -347,7 +420,7 @@ async function loadLegacyMovements(
         cni.location_id,
         cni.stock_item_id,
         (CASE WHEN v.voucher_type='Credit Note' THEN ABS(cni.quantity) ELSE -ABS(cni.quantity) END)::text,
-        NULL::text,
+        cni.inventory_cost::text,
         GREATEST(cni.created_at,v.created_at),
         cni.id*10+6,
         CASE WHEN v.voucher_type='Credit Note' THEN 'legacy-credit-note' ELSE 'legacy-debit-note' END,
@@ -768,12 +841,16 @@ function markAmbiguousTimestampTies(
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales] = await Promise.all([
+  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint] = await Promise.all([
     client.query<InventoryRow>(
-      `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
-         FROM inventory
-        WHERE company_id=$1
-        ORDER BY location_id,stock_item_id`,
+      `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
+         FROM inventory i
+         JOIN locations l
+           ON l.id=i.location_id
+          AND l.company_id=i.company_id
+          AND l.deleted_at IS NULL
+        WHERE i.company_id=$1
+        ORDER BY i.location_id,i.stock_item_id`,
       [companyId]
     ),
     client.query<StockItemRow>(
@@ -785,6 +862,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     ),
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
+    loadValuationCheckpoint(client, companyId),
   ]);
 
   const [canonical, legacy, manual] = await Promise.all([
@@ -795,9 +873,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
   const checks: RepairCheck[] = [...manual.checks];
   const canonicalSaleKeys = canonicalSaleEvidenceKeys(canonical);
-
-  const movements: HistoricalSalesRepairMovement[] = [
-    ...canonical,
+  const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy.map((row) => ({
       movementId: row.movement_id,
       companyId,
@@ -826,6 +902,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     })),
   ];
 
+  const legacySales: SaleRow[] = [];
   for (const sale of sales) {
     if (!sale.location_id) {
       checks.push({
@@ -841,9 +918,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
     if (canonicalSaleKeys.has(saleEvidenceKey)) continue;
-
-    const legacySale = beforeCutoff(sale.created_at, canonicalStart);
-    if (!legacySale) {
+    if (!beforeCutoff(sale.created_at, canonicalStart)) {
       checks.push({
         companyId,
         locationId: Number(sale.location_id),
@@ -854,7 +929,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       });
       continue;
     }
-    movements.push({
+
+    legacySales.push(sale);
+    legacyMovements.push({
       movementId: `sale-marker:${sale.sales_item_id}`,
       companyId,
       locationId: Number(sale.location_id),
@@ -878,83 +955,251 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     });
   }
 
-  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart, canonicalSaleKeys));
+  checks.push(...markAmbiguousTimestampTies(companyId, legacyMovements, sales, canonicalStart, canonicalSaleKeys));
 
-  const opening = buildOpeningStates({
-    companyId,
-    stockItems: stockItemResult.rows,
-    liveInventory: inventoryResult.rows,
-    movements,
-  });
-  checks.push(...opening.checks);
-
-  const replay = replayHistoricalSalesCosts({
-    openings: opening.openings,
-    movements,
-  });
-  const proposals = replay.proposals;
-  const liveByKey = new Map(
-    inventoryResult.rows.map((row) => [
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      row,
-    ])
+  const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
+  const targetKeys = new Set(
+    legacySales
+      .filter((sale) => sale.location_id !== null)
+      .map((sale) => historicalInventoryKey(companyId, Number(sale.location_id), Number(sale.stock_item_id)))
   );
-  const replayKeys = new Set([...liveByKey.keys(), ...replay.closingStates.keys()]);
-  for (const key of replayKeys) {
-    const state = replay.closingStates.get(key);
-    const live = liveByKey.get(key);
-    const [, locationIdText, stockItemIdText] = key.split(":");
-    const expectedQty = repairQuantity(live?.quantity ?? "0");
-    const actualQty = repairQuantity(state?.quantity ?? "0");
-    if (actualQty.minus(expectedQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: expectedQty.toFixed(3),
-        actual: actualQty.toFixed(3),
-        detail: "Forward replay does not reproduce live closing quantity",
-      });
-      continue;
+
+  if (!checkpoint || checkpoint.rows.length === 0) {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_MISSING",
+      status: "block",
+      detail: "Phase 3 inventory valuation checkpoint is missing for this company",
+    });
+    for (const sale of legacySales) {
+      if (sale.location_id) proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+    }
+  } else {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_PRESENT",
+      status: "pass",
+      expected: String(checkpoint.movementCutoffId),
+      actual: String(checkpoint.movementCutoffId),
+      detail: checkpoint.createdAt.toISOString(),
+    });
+
+    const checkpointByKey = new Map<string, InventoryRow>();
+    const checkpointStates = new Map<string, HistoricalInventoryState>();
+    for (const row of checkpoint.rows) {
+      const key = historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id));
+      checkpointByKey.set(key, row);
+      checkpointStates.set(
+        key,
+        createHistoricalInventoryStateFromSnapshot(row.quantity, row.average_rate, row.total_value)
+      );
     }
 
-    const expectedValue = repairMoney(live?.total_value ?? "0");
-    const actualValue = repairMoney(state?.totalValue ?? "0");
-    if (actualValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)) {
+    const unavailableKeys = new Set<string>();
+    for (const key of targetKeys) {
+      if (checkpointStates.has(key)) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      unavailableKeys.add(key);
       checks.push({
         companyId,
         locationId: Number(locationIdText),
         stockItemId: Number(stockItemIdText),
-        code: "CLOSING_VALUE_MISMATCH",
+        code: "VALUATION_CHECKPOINT_KEY_MISSING",
         status: "block",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
-        detail: "Forward weighted-average replay does not reproduce live closing inventory value",
-      });
-    } else {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_INVENTORY_RECONCILED",
-        status: "pass",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
+        detail: "Legacy sale item/location has no row in the immutable Phase 3 valuation checkpoint",
       });
     }
+
+    // Prove the immutable checkpoint still reaches today's active-location
+    // inventory using only canonical movements after its movement-id boundary.
+    const liveReplayStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (targetKeys.has(key)) {
+        liveReplayStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+    for (const movement of [...canonical].sort((a, b) => a.sequence - b.sequence)) {
+      const canonicalId = Math.floor((movement.sequence - 5) / 10);
+      if (canonicalId <= checkpoint.movementCutoffId) continue;
+      const key = movementKey(movement);
+      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const current =
+        liveReplayStates.get(key) ??
+        createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
+      liveReplayStates.set(
+        key,
+        applyHistoricalInventoryMovement(current, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        })
+      );
+    }
+
+    const liveByKey = new Map(
+      inventoryResult.rows.map((row) => [
+        historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
+        row,
+      ])
+    );
+    for (const key of targetKeys) {
+      if (unavailableKeys.has(key)) continue;
+      const actual = liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", "0", "0");
+      const live = liveByKey.get(key);
+      const expectedQty = repairQuantity(live?.quantity ?? "0");
+      const expectedValue = repairMoney(live?.total_value ?? "0");
+      if (
+        actual.quantity.minus(expectedQty).abs().gt(QTY_TOLERANCE) ||
+        actual.totalValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)
+      ) {
+        const [, locationIdText, stockItemIdText] = key.split(":");
+        unavailableKeys.add(key);
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CHECKPOINT_TO_LIVE_RECONCILIATION_MISMATCH",
+          status: "block",
+          expected: `${expectedQty.toFixed(3)}|${expectedValue.toFixed(2)}`,
+          actual: `${actual.quantity.toFixed(3)}|${actual.totalValue.toFixed(2)}`,
+          detail: "Checkpoint plus post-cutoff canonical journal does not reproduce live active inventory",
+        });
+      }
+    }
+
+    const rewindStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (targetKeys.has(key) && !unavailableKeys.has(key)) {
+        rewindStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+
+    // The checkpoint was taken at an exact canonical movement id. Rewind by id,
+    // not business timestamp, so backdated documents are inverted in the same
+    // order in which they actually mutated inventory.
+    const canonicalBeforeCheckpoint = [...canonical]
+      .filter((movement) => Math.floor((movement.sequence - 5) / 10) <= checkpoint.movementCutoffId)
+      .sort((a, b) => b.sequence - a.sequence);
+
+    for (const movement of canonicalBeforeCheckpoint) {
+      const key = movementKey(movement);
+      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const stateAfter = rewindStates.get(key);
+      if (!stateAfter) continue;
+      const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+        quantityDelta: movement.quantityDelta,
+        unitCost: movement.unitCost,
+      });
+      if (!reversed.reversible) {
+        unavailableKeys.add(key);
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: `CHECKPOINT_REWIND_${reversed.reason}`,
+          status: "block",
+          detail: `Cannot uniquely rewind canonical movement ${movement.movementId}`,
+        });
+        continue;
+      }
+
+      if (CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) && d(movement.quantityDelta).lt(0)) {
+        const recorded = repairRate(movement.unitCost ?? "0");
+        const inferred = repairRate(reversed.stateBefore.averageRate);
+        if (!recorded.eq(inferred)) {
+          unavailableKeys.add(key);
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+            status: "block",
+            expected: recorded.toFixed(2),
+            actual: inferred.toFixed(2),
+            detail: `Canonical movement ${movement.movementId} disagrees with checkpoint rewind`,
+          });
+          continue;
+        }
+      }
+      rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const movement of [...legacyMovements].sort(compareLegacyMovementDescending)) {
+      const key = movementKey(movement);
+      if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const stateAfter = rewindStates.get(key);
+      if (!stateAfter) continue;
+
+      const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+        quantityDelta: movement.quantityDelta,
+        unitCost: movement.unitCost,
+      });
+      if (!reversed.reversible) {
+        unavailableKeys.add(key);
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: `LEGACY_REWIND_${reversed.reason}`,
+          status: "block",
+          detail: `Cannot uniquely rewind legacy movement ${movement.movementId}`,
+        });
+        continue;
+      }
+
+      if (movement.sale) {
+        proposalsBySaleId.set(
+          movement.sale.salesItemId,
+          historicalSaleProposalFromState(movement, reversed.stateBefore)
+        );
+      }
+      rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const sale of legacySales) {
+      if (!sale.location_id) continue;
+      if (!proposalsBySaleId.has(Number(sale.sales_item_id))) {
+        proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+    }
+
+    const rewindReadyKeys = [...targetKeys].filter((key) => !unavailableKeys.has(key)).length;
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "CHECKPOINT_REWIND_COVERAGE",
+      status: rewindReadyKeys === targetKeys.size ? "pass" : "warning",
+      expected: String(targetKeys.size),
+      actual: String(rewindReadyKeys),
+      detail: "Legacy sale item/location keys with a fully provable checkpoint rewind",
+    });
   }
 
+  const proposals = [...proposalsBySaleId.values()].sort((a, b) => a.salesItemId - b.salesItemId);
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
     sourceCutoff: sourceCutoff.toISOString(),
-    inventoryRows: inventoryResult.rows.length,
+    checkpointAt: checkpoint?.createdAt.toISOString() ?? null,
+    checkpointMovementCutoffId: checkpoint?.movementCutoffId ?? null,
+    activeInventoryRows: inventoryResult.rows.length,
+    checkpointRows: checkpoint?.rows.length ?? 0,
     stockItems: stockItemResult.rows.length,
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
+    legacySaleRows: legacySales.length,
+    proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
   };
