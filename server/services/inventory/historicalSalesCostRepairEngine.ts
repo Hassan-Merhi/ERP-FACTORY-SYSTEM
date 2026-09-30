@@ -108,14 +108,14 @@ export function createHistoricalInventoryState(
 }
 
 /**
- * Replays the inventory value rules used by adjustInventory()/Phase 3:
+ * Replays the inventory value rules used by the production inventory valuation path:
  * - receipts into positive stock are weighted average,
  * - a receipt first fills a negative shortage before carrying asset value,
  * - issues leave the average rate unchanged and consume at the pre-issue rate,
  * - negative/zero on-hand carries zero asset value but keeps cost memory.
  *
  * When unitCost is null (legacy manual add / credit-note stock return), the
- * existing average is used, matching adjustInventory() when no incoming rate
+ * existing average is used, matching the production valuation behavior when no incoming rate
  * was supplied.
  */
 export function applyHistoricalInventoryMovement(
