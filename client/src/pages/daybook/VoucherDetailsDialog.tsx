@@ -29,6 +29,7 @@ import { PurchaseVoucherEntries } from "./voucherdetailsdialog/PurchaseVoucherEn
 import { SalesVoucherEntries } from "./voucherdetailsdialog/SalesVoucherEntries";
 import { LedgerVoucherEntries } from "./voucherdetailsdialog/LedgerVoucherEntries";
 import { VoucherRevisionHistory } from "./voucherdetailsdialog/VoucherRevisionHistory";
+import { RecurringJournalPanel } from "./RecurringJournalPanel";
 
 const PROFIT_FILTERS = ["all", "gain", "loss", "even"] as const;
 const GC_OWNER_WITHDRAWAL_CLEARING_NAME = "gc owner withdrawal clearing";
@@ -191,6 +192,10 @@ export function VoucherDetailsDialog({
                 </p>
               </div>
             </div>
+          )}
+
+          {selectedVoucher.voucherType === "Journal" && !isPOSUser && (
+            <RecurringJournalPanel voucherId={selectedVoucher.id} enabled={open} />
           )}
 
           <div className="space-y-4">
