@@ -259,4 +259,80 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
   });
+
+  it("proves a merged source by rewinding the kept checkpoint and conserving merge value", () => {
+    const sourceOpening = createHistoricalInventoryStateFromSnapshot("10", "112.77", "1127.70");
+    const sourceAfterReceipt = applyHistoricalInventoryMovement(sourceOpening, {
+      quantityDelta: "6",
+      unitCost: "117.56",
+    });
+    const sourceAtMerge = applyHistoricalInventoryMovement(sourceAfterReceipt, {
+      quantityDelta: "-5",
+      unitCost: sourceAfterReceipt.averageRate,
+    });
+
+    const keptOpening = createHistoricalInventoryStateFromSnapshot("0", "0", "0");
+    const keptAtMerge = applyHistoricalInventoryMovement(keptOpening, {
+      quantityDelta: "3",
+      unitCost: "130.30",
+    });
+
+    const combinedQty = sourceAtMerge.quantity.plus(keptAtMerge.quantity);
+    const combinedValue = sourceAtMerge.totalValue.plus(keptAtMerge.totalValue);
+    const combinedAtMerge = createHistoricalInventoryStateFromSnapshot(
+      combinedQty,
+      combinedValue.dividedBy(combinedQty),
+      combinedValue
+    );
+
+    const afterSale = applyHistoricalInventoryMovement(combinedAtMerge, {
+      quantityDelta: "-4",
+      unitCost: combinedAtMerge.averageRate,
+    });
+    const checkpoint = applyHistoricalInventoryMovement(afterSale, {
+      quantityDelta: "6",
+      unitCost: "127.79",
+    });
+
+    const undoReceipt = reverseHistoricalInventoryMovement(checkpoint, {
+      quantityDelta: "6",
+      unitCost: "127.79",
+    });
+    expect(undoReceipt.reversible).toBe(true);
+    if (!undoReceipt.reversible) return;
+    const undoSale = reverseHistoricalInventoryMovement(undoReceipt.stateBefore, {
+      quantityDelta: "-4",
+      unitCost: combinedAtMerge.averageRate,
+    });
+    expect(undoSale.reversible).toBe(true);
+    if (!undoSale.reversible) return;
+    expect(undoSale.stateBefore.quantity.toFixed(3)).toBe(combinedAtMerge.quantity.toFixed(3));
+    expect(undoSale.stateBefore.totalValue.toFixed(2)).toBe(combinedAtMerge.totalValue.toFixed(2));
+
+    const recoveredSourceQty = undoSale.stateBefore.quantity.minus(keptAtMerge.quantity);
+    const recoveredSourceValue = undoSale.stateBefore.totalValue.minus(keptAtMerge.totalValue);
+    const recoveredSourceAtMerge = createHistoricalInventoryStateFromSnapshot(
+      recoveredSourceQty,
+      recoveredSourceValue.dividedBy(recoveredSourceQty),
+      recoveredSourceValue
+    );
+    expect(recoveredSourceAtMerge.quantity.toFixed(3)).toBe(sourceAtMerge.quantity.toFixed(3));
+    expect(recoveredSourceAtMerge.totalValue.toFixed(2)).toBe(sourceAtMerge.totalValue.toFixed(2));
+
+    const undoSourceSale = reverseHistoricalInventoryMovement(recoveredSourceAtMerge, {
+      quantityDelta: "-5",
+      unitCost: sourceAfterReceipt.averageRate,
+    });
+    expect(undoSourceSale.reversible).toBe(true);
+    if (!undoSourceSale.reversible) return;
+    const undoSourceReceipt = reverseHistoricalInventoryMovement(undoSourceSale.stateBefore, {
+      quantityDelta: "6",
+      unitCost: "117.56",
+    });
+    expect(undoSourceReceipt.reversible).toBe(true);
+    if (!undoSourceReceipt.reversible) return;
+    expect(undoSourceReceipt.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(undoSourceReceipt.stateBefore.averageRate.toFixed(2)).toBe("112.77");
+    expect(undoSourceReceipt.stateBefore.totalValue.toFixed(2)).toBe("1127.70");
+  });
 });
