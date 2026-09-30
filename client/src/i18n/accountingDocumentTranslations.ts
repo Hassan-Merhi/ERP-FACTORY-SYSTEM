@@ -34,7 +34,6 @@ const entries: Entry[] = [
   { en: "Reverse Voucher", ar: "عكس السند", fr: "Contrepasser la pièce" },
   { en: "Voucher Number", ar: "رقم السند", fr: "Numéro de pièce" },
 
-
   // Recurring journals
   { en: "Recurring Journal", ar: "قيد يومية متكرر", fr: "Écriture récurrente" },
   { en: "Timezone", ar: "المنطقة الزمنية", fr: "Fuseau horaire" },
@@ -54,7 +53,7 @@ const entries: Entry[] = [
   },
   { en: "Savings Kinshasa {{month}}", ar: "مدخرات كينشاسا {{month}}", fr: "Épargne Kinshasa {{month}}" },
   {
-    en: "Next automatic posting: ${data.recurring?.nextRunDate || \"month-end\"}.",
+    en: 'Next automatic posting: ${data.recurring?.nextRunDate || "month-end"}.',
     ar: "الترحيل التلقائي التالي: {0}.",
     fr: "Prochaine comptabilisation automatique : {0}.",
   },

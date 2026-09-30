@@ -60,11 +60,7 @@ function parseIsoDate(value: string): { year: number; month: number; day: number
   }
   const [year, month, day] = value.split("-").map(Number);
   const probe = new Date(Date.UTC(year, month - 1, day));
-  if (
-    probe.getUTCFullYear() !== year ||
-    probe.getUTCMonth() !== month - 1 ||
-    probe.getUTCDate() !== day
-  ) {
+  if (probe.getUTCFullYear() !== year || probe.getUTCMonth() !== month - 1 || probe.getUTCDate() !== day) {
     throw new RecurringJournalError("RECURRING_DATE_INVALID", `Invalid date: ${value}`);
   }
   return { year, month, day };
@@ -150,10 +146,7 @@ export function renderRecurringDescription(template: string | null, scheduledFor
     .replaceAll("{{date}}", scheduledFor);
 }
 
-function persistedEntryAmount(
-  entry: typeof voucherEntries.$inferSelect,
-  side: "DR" | "CR"
-): string {
+function persistedEntryAmount(entry: typeof voucherEntries.$inferSelect, side: "DR" | "CR"): string {
   const candidates =
     side === "DR"
       ? [entry.transactionDebitAmount, entry.baseDebitAmount, entry.debitAmount]
@@ -181,7 +174,7 @@ function entryToTemplate(entry: typeof voucherEntries.$inferSelect): RecurringJo
 
   const debit = Number(entry.transactionDebitAmount ?? entry.baseDebitAmount ?? entry.debitAmount ?? 0);
   const credit = Number(entry.transactionCreditAmount ?? entry.baseCreditAmount ?? entry.creditAmount ?? 0);
-  if ((debit > 0) === (credit > 0)) {
+  if (debit > 0 === credit > 0) {
     throw new RecurringJournalError(
       "RECURRING_ENTRY_SIDE_INVALID",
       `Voucher entry ${entry.id} must contain exactly one debit or credit amount`
@@ -232,22 +225,14 @@ export async function upsertRecurringJournalFromVoucher(
     const [voucher] = await tx
       .select()
       .from(vouchers)
-      .where(
-        and(
-          eq(vouchers.id, input.sourceVoucherId),
-          eq(vouchers.companyId, input.companyId)
-        )
-      )
+      .where(and(eq(vouchers.id, input.sourceVoucherId), eq(vouchers.companyId, input.companyId)))
       .limit(1);
 
     if (!voucher || voucher.deletedAt) {
       throw new RecurringJournalError("RECURRING_SOURCE_NOT_FOUND", "Journal voucher not found", 404);
     }
     if (voucher.voucherType !== "Journal") {
-      throw new RecurringJournalError(
-        "RECURRING_SOURCE_NOT_JOURNAL",
-        "Only Journal vouchers can be made recurring"
-      );
+      throw new RecurringJournalError("RECURRING_SOURCE_NOT_JOURNAL", "Only Journal vouchers can be made recurring");
     }
     if (voucher.optional) {
       throw new RecurringJournalError(
@@ -285,12 +270,7 @@ export async function upsertRecurringJournalFromVoucher(
     const [existing] = await tx
       .select()
       .from(recurringJournals)
-      .where(
-        and(
-          eq(recurringJournals.companyId, input.companyId),
-          eq(recurringJournals.sourceVoucherId, voucher.id)
-        )
-      )
+      .where(and(eq(recurringJournals.companyId, input.companyId), eq(recurringJournals.sourceVoucherId, voucher.id)))
       .limit(1);
 
     const descriptionTemplate =
@@ -371,12 +351,7 @@ export async function updateRecurringJournal(
   const [existing] = await db
     .select()
     .from(recurringJournals)
-    .where(
-      and(
-        eq(recurringJournals.id, recurringJournalId),
-        eq(recurringJournals.companyId, companyId)
-      )
-    )
+    .where(and(eq(recurringJournals.id, recurringJournalId), eq(recurringJournals.companyId, companyId)))
     .limit(1);
   if (!existing) throw new RecurringJournalError("RECURRING_NOT_FOUND", "Recurring journal not found", 404);
 
@@ -419,12 +394,7 @@ export async function getRecurringJournalForSource(companyId: number, sourceVouc
   const [recurring] = await db
     .select()
     .from(recurringJournals)
-    .where(
-      and(
-        eq(recurringJournals.companyId, companyId),
-        eq(recurringJournals.sourceVoucherId, sourceVoucherId)
-      )
-    )
+    .where(and(eq(recurringJournals.companyId, companyId), eq(recurringJournals.sourceVoucherId, sourceVoucherId)))
     .limit(1);
   if (!recurring) return { recurring: null, history: [] };
 

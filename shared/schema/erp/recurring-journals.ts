@@ -17,13 +17,7 @@ import { users } from "../users";
 import { vouchers } from "./vouchers";
 
 export type RecurringJournalAccountType =
-  | "ledger"
-  | "bank"
-  | "supplier"
-  | "factorySupplier"
-  | "employee"
-  | "fixedAsset"
-  | "customer";
+  "ledger" | "bank" | "supplier" | "factorySupplier" | "employee" | "fixedAsset" | "customer";
 
 export interface RecurringJournalEntryTemplate {
   type: "DR" | "CR";

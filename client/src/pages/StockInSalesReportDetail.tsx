@@ -294,7 +294,7 @@ export default function StockInSalesReportDetail() {
 
   const groupedStockIn = useMemo(() => groupStockInRows(data?.stockIn.rows || []), [data?.stockIn.rows]);
   const groupedSales = useMemo(() => groupSalesRows(data?.stockOut.rows || []), [data?.stockOut.rows]);
-  const adjustmentRows = data?.adjustments?.rows || [];
+  const adjustmentRows = useMemo(() => data?.adjustments?.rows || [], [data?.adjustments?.rows]);
   const stockInTotals = useMemo(
     () =>
       groupedStockIn.reduce(
@@ -752,7 +752,9 @@ export default function StockInSalesReportDetail() {
                           <TableCell>{displayDate(row.activityDate)}</TableCell>
                           <TableCell className="font-mono">{row.voucherNumber}</TableCell>
                           <TableCell>{row.adjustmentType}</TableCell>
-                          <TableCell className="font-medium">{row.direction === "In" ? "Stock In" : "Stock Out"}</TableCell>
+                          <TableCell className="font-medium">
+                            {row.direction === "In" ? "Stock In" : "Stock Out"}
+                          </TableCell>
                           <TableCell>{row.locationName}</TableCell>
                           <TableCell className="font-medium">{row.stockItemName}</TableCell>
                           <TableCell className="text-right font-mono">{formatNumber(row.quantity, 0)}</TableCell>

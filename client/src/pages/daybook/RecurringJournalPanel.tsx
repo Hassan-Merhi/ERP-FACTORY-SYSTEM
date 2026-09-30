@@ -53,13 +53,7 @@ async function responseJson<T>(res: Response, fallback: string): Promise<T> {
   return data as T;
 }
 
-export function RecurringJournalPanel({
-  voucherId,
-  enabled,
-}: {
-  voucherId: number;
-  enabled: boolean;
-}) {
+export function RecurringJournalPanel({ voucherId, enabled }: { voucherId: number; enabled: boolean }) {
   const { toast } = useToast();
   const queryKey = useMemo(() => ["/api/recurring-journals/by-voucher", voucherId], [voucherId]);
   const [showSettings, setShowSettings] = useState(false);
@@ -90,7 +84,7 @@ export function RecurringJournalPanel({
     setTimeZone(recurring.timezone || browserTimeZone());
     setEndDate(recurring.endDate || "");
     setDescriptionTemplate(recurring.descriptionTemplate || "");
-  }, [recurring?.id, recurring?.timezone, recurring?.endDate, recurring?.descriptionTemplate]);
+  }, [recurring]);
 
   const refreshData = async () => {
     await queryClient.invalidateQueries({ queryKey });
@@ -199,12 +193,7 @@ export function RecurringJournalPanel({
           </Button>
         ) : (
           <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setShowSettings((value) => !value)}
-              disabled={busy}
-            >
+            <Button size="sm" variant="outline" onClick={() => setShowSettings((value) => !value)} disabled={busy}>
               <Settings2 className="h-4 w-4 mr-2" />
               Settings
             </Button>
@@ -231,7 +220,9 @@ export function RecurringJournalPanel({
       {(showSettings || !recurring) && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t">
           <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor={`recurring-timezone-${voucherId}`}>Timezone</Label>
+            <Label className="text-xs" htmlFor={`recurring-timezone-${voucherId}`}>
+              Timezone
+            </Label>
             <Input
               id={`recurring-timezone-${voucherId}`}
               value={timeZone}
@@ -241,7 +232,9 @@ export function RecurringJournalPanel({
             />
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs" htmlFor={`recurring-end-date-${voucherId}`}>End date (optional)</Label>
+            <Label className="text-xs" htmlFor={`recurring-end-date-${voucherId}`}>
+              End date (optional)
+            </Label>
             <Input
               id={`recurring-end-date-${voucherId}`}
               type="date"
@@ -251,7 +244,9 @@ export function RecurringJournalPanel({
             />
           </div>
           <div className="space-y-1.5 md:col-span-3">
-            <Label className="text-xs" htmlFor={`recurring-description-${voucherId}`}>Description template</Label>
+            <Label className="text-xs" htmlFor={`recurring-description-${voucherId}`}>
+              Description template
+            </Label>
             <Input
               id={`recurring-description-${voucherId}`}
               value={descriptionTemplate}
@@ -298,11 +293,14 @@ export function RecurringJournalPanel({
         <div className="pt-2 border-t">
           <p className="text-xs font-medium mb-1.5">Generated vouchers</p>
           <div className="flex flex-wrap gap-2">
-            {history.slice(-5).reverse().map((item) => (
-              <Badge key={item.id} variant="outline" className="font-normal">
-                {item.voucherDate} · {item.voucherNumber}
-              </Badge>
-            ))}
+            {history
+              .slice(-5)
+              .reverse()
+              .map((item) => (
+                <Badge key={item.id} variant="outline" className="font-normal">
+                  {item.voucherDate} · {item.voucherNumber}
+                </Badge>
+              ))}
           </div>
         </div>
       )}
