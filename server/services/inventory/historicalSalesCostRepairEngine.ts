@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v9-reset-segment-proof";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v10-receipt-precision";
 
 const ZERO = new Decimal(0);
 
@@ -196,7 +196,11 @@ export function reverseHistoricalInventoryMovement(
     }
 
     if (input.unitCost !== null && input.unitCost !== undefined) {
-      const incomingRate = repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
+      // Production multiplies receipt quantity by the full incoming cost
+      // precision and only rounds the stored inventory value/rate afterwards.
+      // Canonical movement unit_cost is 6dp, so do not round it to the 2dp
+      // inventory-rate scale before reconstructing value.
+      const incomingRate = Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO);
       if (previousQty.lte(ZERO)) {
         return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
       }
@@ -208,7 +212,7 @@ export function reverseHistoricalInventoryMovement(
       const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, beforeRate, beforeValue);
       const replayed = applyHistoricalInventoryMovement(stateBefore, {
         quantityDelta: delta,
-        unitCost: incomingRate,
+        unitCost: input.unitCost,
       });
       return statesEqual(replayed, stateAfter)
         ? { reversible: true, stateBefore }
@@ -364,10 +368,13 @@ export function applyHistoricalInventoryMovement(
   const previousQty = repairQuantity(state.quantity);
   const previousRate = repairRate(Decimal.max(state.averageRate, ZERO));
   const previousValue = repairMoney(Decimal.max(state.totalValue, ZERO));
+  // Match production adjustInventory(): receipt value uses the full
+  // transaction-time incoming rate (canonical unit_cost is 6dp). Only the
+  // persisted inventory average is rounded to RATE_DP/2dp.
   const incomingRate =
     input.unitCost === null || input.unitCost === undefined
       ? previousRate
-      : repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
+      : Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO);
   const newQty = repairQuantity(previousQty.plus(delta));
 
   if (delta.gt(ZERO)) {
@@ -375,7 +382,7 @@ export function applyHistoricalInventoryMovement(
     if (newQty.lte(ZERO)) {
       return {
         quantity: newQty,
-        averageRate: incomingRate,
+        averageRate: repairRate(incomingRate),
         totalValue: ZERO,
       };
     }
