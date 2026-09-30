@@ -1,6 +1,8 @@
 import { and, asc, eq, lte } from "drizzle-orm";
 import {
   accountingPostingRequests,
+  factoryDaybookEntries,
+  factorySettings,
   recurringJournals,
   voucherEntries,
   vouchers,
@@ -10,6 +12,7 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { erpRateToDaybookFxRateToUsd } from "./currencyAmounts";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
 import { buildManualJournalPostingRequest } from "./manualJournalPosting";
 import { postBalancedVoucherTx } from "./centralPostingEngine";
@@ -130,10 +133,12 @@ export function deriveRecurringDescriptionTemplate(description: string | null, v
   const shortMonth = new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(date);
 
   const withFullMonth = replaceFirstIgnoreCase(trimmed, fullMonth, "{{month}}");
-  if (withFullMonth !== null) return withFullMonth;
+  const withMonth =
+    withFullMonth !== null
+      ? withFullMonth
+      : (replaceFirstIgnoreCase(trimmed, shortMonth, "{{month_short}}") ?? trimmed);
 
-  const withShortMonth = replaceFirstIgnoreCase(trimmed, shortMonth, "{{month_short}}");
-  return withShortMonth ?? trimmed;
+  return replaceFirstIgnoreCase(withMonth, String(year), "{{year}}") ?? withMonth;
 }
 
 export function renderRecurringDescription(template: string | null, scheduledFor: string): string {
@@ -293,7 +298,6 @@ export async function upsertRecurringJournalFromVoucher(
           exchangeRate: voucher.exchangeRate,
           entryTemplate,
           endDate,
-          lastError: null,
           updatedAt: new Date(),
         })
         .where(eq(recurringJournals.id, existing.id))
@@ -435,62 +439,122 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
   scheduledFor: string;
 }> {
   const scheduledFor = recurring.nextRunDate;
-  const localToday = localIsoDate(recurring.timezone);
-  if (!recurring.active || scheduledFor > localToday) {
-    return { posted: false, replayed: false, voucherId: null, scheduledFor };
-  }
-
-  if (recurring.endDate && scheduledFor > recurring.endDate) {
-    await db
-      .update(recurringJournals)
-      .set({ active: false, updatedAt: new Date() })
-      .where(eq(recurringJournals.id, recurring.id));
-    return { posted: false, replayed: false, voucherId: null, scheduledFor };
-  }
-
-  const entries = recurring.entryTemplate as RecurringJournalEntryTemplate[];
-  const description = renderRecurringDescription(recurring.descriptionTemplate, scheduledFor);
-  const requestKey = `recurring-journal:${recurring.id}:${scheduledFor}`;
-  const built = buildManualJournalPostingRequest({
-    companyId: recurring.companyId,
-    voucherNumber: `RJ-${recurring.id}-${scheduledFor.replaceAll("-", "")}`,
-    voucherDate: scheduledFor,
-    entries,
-    notes: description,
-    currency: recurring.currency,
-    exchangeRate: recurring.exchangeRate,
-    clientRequestId: `recurring-${recurring.id}-${scheduledFor}`,
-    actor: {
-      userId: recurring.createdByUserId ?? "system",
-      username: "recurring-journal-scheduler",
-      reason: `Recurring journal #${recurring.id} scheduled for ${scheduledFor}`,
-    },
-  });
-
-  built.request.source = {
-    sourceType: "recurring-journal",
-    sourceId: `${recurring.id}:${scheduledFor}`,
-    idempotencyKey: requestKey,
-  };
-
-  const nextRunDate = nextMonthEndIso(scheduledFor);
-  const shouldRemainActive = !recurring.endDate || nextRunDate <= recurring.endDate;
 
   try {
     const result = await db.transaction(async (tx) => {
+      // The scheduler candidate can become stale while waiting to run. Lock and
+      // reload the recurrence so a concurrent Pause/Resume/settings change or a
+      // second scheduler instance cannot post against stale state.
+      // This row lock is also the cross-instance serialization point for month-end posting.
+      const [locked] = await tx
+        .select()
+        .from(recurringJournals)
+        .where(and(eq(recurringJournals.id, recurring.id), eq(recurringJournals.companyId, recurring.companyId)))
+        .for("update");
+
+      if (!locked || !locked.active || locked.nextRunDate !== scheduledFor) {
+        return {
+          posted: false as const,
+          replayed: false,
+          voucherId: null,
+          scheduledFor,
+        };
+      }
+
+      const localToday = localIsoDate(locked.timezone);
+      if (scheduledFor > localToday) {
+        return {
+          posted: false as const,
+          replayed: false,
+          voucherId: null,
+          scheduledFor,
+        };
+      }
+
+      if (locked.endDate && scheduledFor > locked.endDate) {
+        await tx
+          .update(recurringJournals)
+          .set({ active: false, updatedAt: new Date() })
+          .where(eq(recurringJournals.id, locked.id));
+        return {
+          posted: false as const,
+          replayed: false,
+          voucherId: null,
+          scheduledFor,
+        };
+      }
+
+      const entries = locked.entryTemplate as RecurringJournalEntryTemplate[];
+      const description = renderRecurringDescription(locked.descriptionTemplate, scheduledFor);
+      const requestKey = `recurring-journal:${locked.id}:${scheduledFor}`;
+      const built = buildManualJournalPostingRequest({
+        companyId: locked.companyId,
+        voucherNumber: `RJ-${locked.id}-${scheduledFor.replaceAll("-", "")}`,
+        voucherDate: scheduledFor,
+        entries,
+        notes: description,
+        currency: locked.currency,
+        exchangeRate: locked.exchangeRate,
+        clientRequestId: `recurring-${locked.id}-${scheduledFor}`,
+        actor: {
+          userId: locked.createdByUserId ?? "system",
+          username: "recurring-journal-scheduler",
+          reason: `Recurring journal #${locked.id} scheduled for ${scheduledFor}`,
+        },
+      });
+
+      built.request.source = {
+        sourceType: "recurring-journal",
+        sourceId: `${locked.id}:${scheduledFor}`,
+        idempotencyKey: requestKey,
+      };
+
       await tx
         .update(recurringJournals)
         .set({ lastAttemptAt: new Date(), lastError: null, updatedAt: new Date() })
-        .where(eq(recurringJournals.id, recurring.id));
+        .where(eq(recurringJournals.id, locked.id));
 
       const posted = await postBalancedVoucherTx(tx, built.request, postingDependencies);
       if (!posted.replayed) {
         await applyEmployeeBalanceDeltasTx({
           tx,
-          companyId: recurring.companyId,
+          companyId: locked.companyId,
           entries: posted.entries,
         });
+
+        // Match normal journal posting behavior for Factory Mode. Keeping the
+        // mirror in this transaction prevents the fallback daybook path from
+        // misinterpreting a base-currency total as transaction currency.
+        const [factorySetting] = await tx
+          .select({ companyId: factorySettings.companyId })
+          .from(factorySettings)
+          .where(eq(factorySettings.companyId, locked.companyId))
+          .limit(1);
+
+        if (factorySetting) {
+          const currency = posted.voucher.currency || "USD";
+          const baseTotal = Number(posted.voucher.totalAmount || 0);
+          const rate = posted.voucher.exchangeRate ? Number(posted.voucher.exchangeRate) : 1;
+          const transactionTotal = currency !== "USD" && rate > 0 ? baseTotal * rate : baseTotal;
+
+          await tx.insert(factoryDaybookEntries).values({
+            companyId: locked.companyId,
+            txDate: posted.voucher.voucherDate,
+            txType: "JOURNAL",
+            referenceId: posted.voucher.id,
+            referenceTable: "vouchers",
+            description: posted.voucher.description || `Journal voucher #${posted.voucher.voucherNumber}`,
+            currencyCode: currency,
+            amountCurrency: String(transactionTotal),
+            fxRateToUsd: erpRateToDaybookFxRateToUsd(currency, "USD", posted.voucher.exchangeRate),
+            amountUsd: String(baseTotal),
+            createdBy: null,
+          });
+        }
       }
+
+      const nextRunDate = nextMonthEndIso(scheduledFor);
+      const shouldRemainActive = !locked.endDate || nextRunDate <= locked.endDate;
 
       await tx
         .update(recurringJournals)
@@ -502,10 +566,17 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
           lastError: null,
           updatedAt: new Date(),
         })
-        .where(eq(recurringJournals.id, recurring.id));
+        .where(eq(recurringJournals.id, locked.id));
 
-      return posted;
+      return {
+        posted: true as const,
+        replayed: posted.replayed,
+        voucherId: posted.voucher.id,
+        scheduledFor,
+      };
     });
+
+    if (!result.posted) return result;
 
     logger.info("Recurring journal posted", {
       module: "accounting",
@@ -513,16 +584,11 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
       recurringJournalId: recurring.id,
       companyId: recurring.companyId,
       scheduledFor,
-      voucherId: result.voucher.id,
+      voucherId: result.voucherId,
       replayed: result.replayed,
     });
 
-    return {
-      posted: true,
-      replayed: result.replayed,
-      voucherId: result.voucher.id,
-      scheduledFor,
-    };
+    return result;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     await db
