@@ -670,6 +670,30 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("108.00");
   });
 
+  it("recovers a failed positive POS reversal only when the unique unpriced rate-only inverse preserves quantity and value", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "455",
+      "59.63",
+      "27135.99"
+    );
+    const posReversal = movement({
+      movementId: "canonical:13396",
+      occurredAt: "2026-08-27T09:53:43.552Z",
+      quantityDelta: "4",
+      unitCost: "59.630000",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, posReversal);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("451.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("26897.43");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("59.64");
+  });
+
   it("recovers a canonical POS issue when quantity and value invert exactly but the reconstructed rate is stale", () => {
     const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
     const saleIssue = movement({
