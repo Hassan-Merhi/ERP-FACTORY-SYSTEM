@@ -970,7 +970,6 @@ async function dryRunCompany(
     }
   }
 
-  const blockers = buildRepairBlockerIndex(checks);
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
@@ -1275,15 +1274,45 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
   );
   if (!run.rows[0]) return null;
 
-  const blockers = await pool.query(
-    `SELECT company_id,location_id,stock_item_id,check_code,status,expected_value,actual_value,detail
-       FROM historical_sales_cost_repair_checks
-      WHERE run_id=$1 AND status IN ('block','warning')
-      ORDER BY company_id,stock_item_id,location_id NULLS FIRST,check_code
-      LIMIT 500`,
-    [runId]
-  );
-  return { ...run.rows[0], blockers: blockers.rows };
+  const [blockers, monthly, rowStatus] = await Promise.all([
+    pool.query(
+      `SELECT company_id,location_id,stock_item_id,check_code,status,expected_value,actual_value,detail
+         FROM historical_sales_cost_repair_checks
+        WHERE run_id=$1 AND status IN ('block','warning')
+        ORDER BY company_id,stock_item_id,location_id NULLS FIRST,check_code
+        LIMIT 500`,
+      [runId]
+    ),
+    pool.query(
+      `SELECT company_id,
+              to_char(date_trunc('month',occurred_at),'YYYY-MM') AS month,
+              COUNT(*)::int AS sale_lines,
+              COUNT(*) FILTER (WHERE changed)::int AS changed_lines,
+              SUM(original_total_cost)::text AS original_cogs,
+              SUM(proposed_total_cost)::text AS proposed_cogs,
+              SUM(original_profit)::text AS original_profit,
+              SUM(proposed_profit)::text AS proposed_profit
+         FROM historical_sales_cost_repair_rows
+        WHERE run_id=$1
+        GROUP BY company_id,date_trunc('month',occurred_at)
+        ORDER BY company_id,month`,
+      [runId]
+    ),
+    pool.query(
+      `SELECT status,COUNT(*)::int AS rows
+         FROM historical_sales_cost_repair_rows
+        WHERE run_id=$1
+        GROUP BY status
+        ORDER BY status`,
+      [runId]
+    ),
+  ]);
+  return {
+    ...run.rows[0],
+    blockers: blockers.rows,
+    monthlyReconciliation: monthly.rows,
+    rowStatus: rowStatus.rows,
+  };
 }
 
 export async function applyHistoricalSalesCostRepair(input: {
