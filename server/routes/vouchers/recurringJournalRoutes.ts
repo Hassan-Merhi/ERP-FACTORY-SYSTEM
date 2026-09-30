@@ -29,6 +29,7 @@ function currentCompanyId(req: Request): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Recurring journals are managed from ERP Settings, so API access intentionally matches the Admin/Developer Settings route.
 export function registerRecurringJournalRoutes(app: Express): void {
   app.get(
     "/api/recurring-journals",
