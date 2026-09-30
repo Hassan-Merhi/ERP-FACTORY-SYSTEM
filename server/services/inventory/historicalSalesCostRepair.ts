@@ -830,6 +830,533 @@ function markAmbiguousTimestampTies(
   return checks;
 }
 
+
+type MergedRecoveryResult = {
+  recoveredKeys: Set<string>;
+  proposals: HistoricalSalesRepairProposal[];
+  checks: RepairCheck[];
+};
+
+function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
+  return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
+}
+
+function stateQuantityValueMatches(
+  actual: HistoricalInventoryState,
+  expected: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(actual.quantity).minus(repairQuantity(expected.quantity)).abs().lte(QTY_TOLERANCE) &&
+    repairMoney(actual.totalValue).minus(repairMoney(expected.totalValue)).abs().lte(MONEY_TOLERANCE)
+  );
+}
+
+function checkpointContainsMovement(
+  movement: HistoricalSalesRepairMovement,
+  checkpoint: ValuationCheckpoint
+): boolean {
+  const canonicalId = canonicalMovementNumericId(movement);
+  if (canonicalId !== null) return canonicalId <= checkpoint.movementCutoffId;
+  return movementMutationTime(movement) <= checkpoint.createdAt.getTime();
+}
+
+function replayMergedSourceLocationForward(input: {
+  companyId: number;
+  sourceItemId: number;
+  locationId: number;
+  opening: HistoricalInventoryState;
+  movements: HistoricalSalesRepairMovement[];
+  mergeAtMs: number;
+}): { stateAtMerge: HistoricalInventoryState; proposals: HistoricalSalesRepairProposal[] } {
+  let state = createHistoricalInventoryStateFromSnapshot(
+    input.opening.quantity,
+    input.opening.averageRate,
+    input.opening.totalValue
+  );
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const movements = input.movements
+    .filter(
+      (movement) =>
+        movement.stockItemId === input.sourceItemId &&
+        movement.locationId === input.locationId &&
+        movementMutationTime(movement) < input.mergeAtMs
+    )
+    .sort(compareMovementMutationAscending);
+
+  for (const movement of movements) {
+    if (movement.sale) proposals.push(historicalSaleProposalFromState(movement, state));
+    state = applyHistoricalInventoryMovement(state, {
+      quantityDelta: movement.quantityDelta,
+      unitCost: movement.unitCost,
+    });
+  }
+  return { stateAtMerge: state, proposals };
+}
+
+function recoverHistoricalMergedSales(input: {
+  companyId: number;
+  targetKeys: Set<string>;
+  checkpoint: ValuationCheckpoint;
+  checkpointStates: Map<string, HistoricalInventoryState>;
+  historicalMerges: HistoricalMergeRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacyMovements: HistoricalSalesRepairMovement[];
+}): MergedRecoveryResult {
+  const recoveredKeys = new Set<string>();
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const checks: RepairCheck[] = [];
+  const allMovements = [...input.legacyMovements, ...input.canonical];
+  const mergeBySource = new Map(input.historicalMerges.map((merge) => [Number(merge.source_item_id), merge]));
+  const missingKeys = [...input.targetKeys].filter((key) => !input.checkpointStates.has(key));
+  const sourceIds = [...new Set(missingKeys.map((key) => Number(key.split(":")[2])))];
+
+  const blockSourceKeys = (sourceItemId: number, code: string, detail: string) => {
+    const sourceKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    for (const key of sourceKeys) {
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code,
+        status: "block",
+        detail,
+      });
+    }
+  };
+
+  for (const sourceItemId of sourceIds) {
+    const merge = mergeBySource.get(sourceItemId);
+    if (!merge) continue;
+
+    const mergeAtMs = merge.merge_at.getTime();
+    if (!Number.isFinite(mergeAtMs) || mergeAtMs > input.checkpoint.createdAt.getTime()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_MERGE_TIMESTAMP_INVALID",
+        `Historical merge timestamp is not before the valuation checkpoint (alias ${merge.alias_id})`
+      );
+      continue;
+    }
+
+    const sourceMovements = allMovements.filter((movement) => movement.stockItemId === sourceItemId);
+    const postMergeSource = sourceMovements.filter((movement) => movementMutationTime(movement) >= mergeAtMs);
+    if (postMergeSource.length > 0) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SOURCE_MOVEMENT_AFTER_MERGE",
+        `Historical source item has ${postMergeSource.length} inventory movement(s) at/after merge; identity transition is not clean`
+      );
+      continue;
+    }
+
+    const sourceOpeningQty = repairQuantity(merge.source_opening_qty);
+    const sourceOpeningRate = repairRate(merge.source_opening_rate);
+    const sourceOpeningValue = repairMoney(merge.source_opening_value);
+    const sourceTargetKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    const sourceTargetLocations = sourceTargetKeys.map((key) => Number(key.split(":")[1]));
+
+    if (sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+      const locations = new Set<number>([
+        ...sourceTargetLocations,
+        ...sourceMovements.map((movement) => movement.locationId),
+      ]);
+      const sourceProposals: HistoricalSalesRepairProposal[] = [];
+      for (const locationId of locations) {
+        const replay = replayMergedSourceLocationForward({
+          companyId: input.companyId,
+          sourceItemId,
+          locationId,
+          opening: stateForZeroOpening(sourceOpeningRate),
+          movements: allMovements,
+          mergeAtMs,
+        });
+        sourceProposals.push(...replay.proposals);
+      }
+
+      const proposedSaleIds = new Set(sourceProposals.map((proposal) => proposal.salesItemId));
+      const missingProposal = input.legacyMovements.find(
+        (movement) =>
+          movement.stockItemId === sourceItemId &&
+          movement.sale &&
+          sourceTargetLocations.includes(movement.locationId) &&
+          !proposedSaleIds.has(movement.sale.salesItemId)
+      );
+      if (missingProposal) {
+        blockSourceKeys(
+          sourceItemId,
+          "MERGED_ITEM_ZERO_OPENING_REPLAY_INCOMPLETE",
+          `Could not replay sale item ${missingProposal.sale?.salesItemId ?? "unknown"} from exact zero opening`
+        );
+        continue;
+      }
+
+      proposals.push(...sourceProposals);
+      for (const key of sourceTargetKeys) {
+        recoveredKeys.add(key);
+        const [, locationIdText] = key.split(":");
+        checks.push({
+          companyId: input.companyId,
+          locationId: Number(locationIdText),
+          stockItemId: sourceItemId,
+          code: "MERGED_ITEM_ZERO_OPENING_REPLAY",
+          status: "pass",
+          expected: "0.000|0.00",
+          actual: "0.000|0.00",
+          detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merged at ${iso(merge.merge_at)}; source opening is exact zero`,
+        });
+      }
+      continue;
+    }
+
+    const keptOpeningQty = repairQuantity(merge.kept_opening_qty);
+    const keptOpeningValue = repairMoney(merge.kept_opening_value);
+    if (!keptOpeningQty.isZero() || !keptOpeningValue.isZero()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SPLIT_UNPROVEN",
+        `Source opening is nonzero and kept item ${merge.kept_item_id} also has a nonzero opening; merge split cannot be uniquely separated`
+      );
+      continue;
+    }
+
+    const keptItemId = Number(merge.kept_item_id);
+    const keptMovements = allMovements.filter((movement) => movement.stockItemId === keptItemId);
+    const sourcePreMovements = sourceMovements.filter((movement) => movementMutationTime(movement) < mergeAtMs);
+    const keptPreMovements = keptMovements
+      .filter((movement) => movementMutationTime(movement) < mergeAtMs)
+      .sort(compareMovementMutationAscending);
+    const keptPostMovements = keptMovements
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) > mergeAtMs && checkpointContainsMovement(movement, input.checkpoint)
+      )
+      .sort(compareMovementMutationDescending);
+
+    const relevantLocations = new Set<number>([
+      ...sourceTargetLocations,
+      ...sourcePreMovements.map((movement) => movement.locationId),
+      ...input.checkpoint.rows
+        .filter((row) => Number(row.stock_item_id) === keptItemId)
+        .map((row) => Number(row.location_id)),
+    ]);
+
+    const keptBeforeByLocation = new Map<number, HistoricalInventoryState>();
+    for (const locationId of relevantLocations) {
+      keptBeforeByLocation.set(locationId, stateForZeroOpening(merge.kept_opening_rate));
+    }
+    for (const movement of keptPreMovements) {
+      if (!relevantLocations.has(movement.locationId)) continue;
+      const current =
+        keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      keptBeforeByLocation.set(
+        movement.locationId,
+        applyHistoricalInventoryMovement(current, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        })
+      );
+    }
+
+    const combinedAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let keptRewindFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const checkpointKey = historicalInventoryKey(input.companyId, locationId, keptItemId);
+      const checkpointState = input.checkpointStates.get(checkpointKey);
+      if (!checkpointState) {
+        keptRewindFailure = {
+          locationId,
+          detail: `Kept item ${keptItemId} has no checkpoint row at location ${locationId}`,
+        };
+        break;
+      }
+      combinedAtMergeByLocation.set(
+        locationId,
+        createHistoricalInventoryStateFromSnapshot(
+          checkpointState.quantity,
+          checkpointState.averageRate,
+          checkpointState.totalValue
+        )
+      );
+    }
+
+    if (!keptRewindFailure) {
+      for (const movement of keptPostMovements) {
+        if (!relevantLocations.has(movement.locationId)) continue;
+        const stateAfter = combinedAtMergeByLocation.get(movement.locationId);
+        if (!stateAfter) continue;
+        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        });
+        if (!reversed.reversible) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: `Cannot rewind kept item movement ${movement.movementId}: ${reversed.reason}`,
+          };
+          break;
+        }
+        if (
+          movement.evidence === "canonical" &&
+          CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+          d(movement.quantityDelta).lt(0) &&
+          movement.unitCost !== null &&
+          !repairRate(movement.unitCost).eq(repairRate(reversed.stateBefore.averageRate))
+        ) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: `Canonical kept-item sale ${movement.movementId} disagrees with checkpoint rewind`,
+          };
+          break;
+        }
+        combinedAtMergeByLocation.set(movement.locationId, reversed.stateBefore);
+      }
+    }
+
+    if (keptRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_KEPT_REWIND_FAILED", keptRewindFailure.detail);
+      continue;
+    }
+
+    const sourceAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let subtractionFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const combined = combinedAtMergeByLocation.get(locationId)!;
+      const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      const sourceQty = repairQuantity(combined.quantity.minus(keptBefore.quantity));
+      const sourceValue = repairMoney(combined.totalValue.minus(keptBefore.totalValue));
+      if (sourceValue.lt(MONEY_TOLERANCE.negated())) {
+        subtractionFailure = {
+          locationId,
+          detail: `Merge subtraction produced negative source value ${sourceValue.toFixed(2)}`,
+        };
+        break;
+      }
+      const normalizedValue = sourceValue.abs().lte(MONEY_TOLERANCE) ? new Decimal(0) : sourceValue;
+      const sourceRate = sourceQty.gt(0)
+        ? repairRate(normalizedValue.dividedBy(sourceQty))
+        : sourceOpeningRate;
+      const sourceState = createHistoricalInventoryStateFromSnapshot(
+        sourceQty,
+        sourceRate,
+        normalizedValue
+      );
+
+      const combinedQty = repairQuantity(keptBefore.quantity.plus(sourceState.quantity));
+      const combinedValue = repairMoney(keptBefore.totalValue.plus(sourceState.totalValue));
+      const combinedRate = combinedQty.gt(0) ? repairRate(combinedValue.dividedBy(combinedQty)) : new Decimal(0);
+      if (
+        !combinedQty.eq(repairQuantity(combined.quantity)) ||
+        !combinedValue.eq(repairMoney(combined.totalValue)) ||
+        !combinedRate.eq(repairRate(combined.averageRate))
+      ) {
+        subtractionFailure = {
+          locationId,
+          detail: "Source/kept split does not replay the exact post-merge checkpoint-rewound state",
+        };
+        break;
+      }
+      sourceAtMergeByLocation.set(locationId, sourceState);
+    }
+
+    if (subtractionFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_VALUE_SPLIT_FAILED", subtractionFailure.detail);
+      continue;
+    }
+
+    const tempProposals: HistoricalSalesRepairProposal[] = [];
+    const openingByLocation = new Map<number, HistoricalInventoryState>();
+    const unresolvedLocations: number[] = [];
+    let sourceRewindFailure: { locationId: number; detail: string } | null = null;
+
+    for (const locationId of relevantLocations) {
+      const sourceAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      const movements = sourcePreMovements
+        .filter((movement) => movement.locationId === locationId)
+        .sort(compareMovementMutationDescending);
+
+      if (sourceAtMerge.quantity.lte(0)) {
+        unresolvedLocations.push(locationId);
+        continue;
+      }
+
+      let stateAfter = sourceAtMerge;
+      const locationProposals: HistoricalSalesRepairProposal[] = [];
+      for (const movement of movements) {
+        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
+          quantityDelta: movement.quantityDelta,
+          unitCost: movement.unitCost,
+        });
+        if (!reversed.reversible) {
+          sourceRewindFailure = {
+            locationId,
+            detail: `Cannot rewind source movement ${movement.movementId}: ${reversed.reason}`,
+          };
+          break;
+        }
+        if (movement.sale) {
+          locationProposals.push(historicalSaleProposalFromState(movement, reversed.stateBefore));
+        }
+        stateAfter = reversed.stateBefore;
+      }
+      if (sourceRewindFailure) break;
+      openingByLocation.set(locationId, stateAfter);
+      tempProposals.push(...locationProposals);
+    }
+
+    if (sourceRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_SOURCE_REWIND_FAILED", sourceRewindFailure.detail);
+      continue;
+    }
+
+    let recoveredOpeningQty = new Decimal(0);
+    let recoveredOpeningValue = new Decimal(0);
+    for (const opening of openingByLocation.values()) {
+      recoveredOpeningQty = repairQuantity(recoveredOpeningQty.plus(opening.quantity));
+      recoveredOpeningValue = repairMoney(recoveredOpeningValue.plus(opening.totalValue));
+    }
+    const remainingOpeningQty = repairQuantity(sourceOpeningQty.minus(recoveredOpeningQty));
+    const remainingOpeningValue = repairMoney(sourceOpeningValue.minus(recoveredOpeningValue));
+
+    if (
+      remainingOpeningQty.lt(QTY_TOLERANCE.negated()) ||
+      remainingOpeningValue.lt(MONEY_TOLERANCE.negated())
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Rewind exceeded source opening: remaining ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const unresolvedWithActivity = unresolvedLocations.filter(
+      (locationId) =>
+        sourcePreMovements.some((movement) => movement.locationId === locationId) ||
+        sourceTargetLocations.includes(locationId)
+    );
+    if (
+      (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) &&
+      unresolvedWithActivity.length !== 1
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_LOCATION_AMBIGUOUS",
+        `Remaining source opening ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(
+          2
+        )} cannot be assigned uniquely across ${unresolvedWithActivity.length} unresolved locations`
+      );
+      continue;
+    }
+
+    let forwardFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of unresolvedWithActivity) {
+      const getsRemainder =
+        unresolvedWithActivity.length === 1 &&
+        (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
+      const opening = getsRemainder
+        ? createHistoricalInventoryStateFromSnapshot(
+            remainingOpeningQty,
+            sourceOpeningRate,
+            remainingOpeningValue
+          )
+        : stateForZeroOpening(sourceOpeningRate);
+      const replay = replayMergedSourceLocationForward({
+        companyId: input.companyId,
+        sourceItemId,
+        locationId,
+        opening,
+        movements: allMovements,
+        mergeAtMs,
+      });
+      const expectedAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      if (!stateQuantityValueMatches(replay.stateAtMerge, expectedAtMerge)) {
+        forwardFailure = {
+          locationId,
+          detail: `Forward replay reaches ${replay.stateAtMerge.quantity.toFixed(3)} / ${replay.stateAtMerge.totalValue.toFixed(
+            2
+          )}, expected merge contribution ${expectedAtMerge.quantity.toFixed(3)} / ${expectedAtMerge.totalValue.toFixed(2)}`,
+        };
+        break;
+      }
+      openingByLocation.set(locationId, opening);
+      tempProposals.push(...replay.proposals);
+    }
+
+    if (forwardFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_FORWARD_PROOF_FAILED", forwardFailure.detail);
+      continue;
+    }
+
+    let finalOpeningQty = new Decimal(0);
+    let finalOpeningValue = new Decimal(0);
+    let openingRateMismatch = false;
+    for (const opening of openingByLocation.values()) {
+      finalOpeningQty = repairQuantity(finalOpeningQty.plus(opening.quantity));
+      finalOpeningValue = repairMoney(finalOpeningValue.plus(opening.totalValue));
+      if (opening.quantity.gt(0) && !repairRate(opening.averageRate).eq(sourceOpeningRate)) {
+        openingRateMismatch = true;
+      }
+    }
+    if (
+      finalOpeningQty.minus(sourceOpeningQty).abs().gt(QTY_TOLERANCE) ||
+      finalOpeningValue.minus(sourceOpeningValue).abs().gt(MONEY_TOLERANCE) ||
+      openingRateMismatch
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Recovered opening ${finalOpeningQty.toFixed(3)} @ ${sourceOpeningRate.toFixed(
+          2
+        )} / ${finalOpeningValue.toFixed(2)} does not reproduce stock master ${sourceOpeningQty.toFixed(
+          3
+        )} / ${sourceOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const targetSaleIds = new Set(
+      input.legacyMovements
+        .filter(
+          (movement) =>
+            movement.stockItemId === sourceItemId &&
+            movement.sale &&
+            sourceTargetLocations.includes(movement.locationId)
+        )
+        .map((movement) => movement.sale!.salesItemId)
+    );
+    const recoveredSaleIds = new Set(tempProposals.map((proposal) => proposal.salesItemId));
+    if ([...targetSaleIds].some((saleId) => !recoveredSaleIds.has(saleId))) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SALE_PROPOSAL_INCOMPLETE",
+        "At least one historical sale did not receive a proposal from the proven merge rewind"
+      );
+      continue;
+    }
+
+    proposals.push(...tempProposals);
+    for (const key of sourceTargetKeys) {
+      recoveredKeys.add(key);
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code: "MERGED_ITEM_IDENTITY_RECONCILED",
+        status: "pass",
+        expected: `${sourceOpeningQty.toFixed(3)}|${sourceOpeningValue.toFixed(2)}`,
+        actual: `${finalOpeningQty.toFixed(3)}|${finalOpeningValue.toFixed(2)}`,
+        detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merge ${iso(
+          merge.merge_at
+        )}; kept checkpoint rewound and exact source opening recovered`,
+      });
+    }
+  }
+
+  return { recoveredKeys, proposals, checks };
+}
+
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
