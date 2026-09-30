@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { requireAuth, requireNonPOS } from "../../auth";
+import { requireAuth, requireRole("Admin", "Developer"), requireNonPOS, requireRole } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
   RecurringJournalError,
@@ -30,7 +30,7 @@ function currentCompanyId(req: Request): number | null {
 }
 
 export function registerRecurringJournalRoutes(app: Express): void {
-  app.get("/api/recurring-journals", requireAuth, requireNonPOS, async (req, res) => {
+  app.get("/api/recurring-journals", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
 
@@ -41,7 +41,7 @@ export function registerRecurringJournalRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/recurring-journals/from-voucher-number", requireAuth, requireNonPOS, async (req, res) => {
+  app.post("/api/recurring-journals/from-voucher-number", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
 
@@ -61,7 +61,7 @@ export function registerRecurringJournalRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/recurring-journals/by-voucher/:voucherId", requireAuth, requireNonPOS, async (req, res) => {
+  app.get("/api/recurring-journals/by-voucher/:voucherId", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     const voucherId = positiveId(req.params.voucherId);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -74,7 +74,7 @@ export function registerRecurringJournalRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/recurring-journals/from-voucher/:voucherId", requireAuth, requireNonPOS, async (req, res) => {
+  app.post("/api/recurring-journals/from-voucher/:voucherId", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     const voucherId = positiveId(req.params.voucherId);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -96,7 +96,7 @@ export function registerRecurringJournalRoutes(app: Express): void {
     }
   });
 
-  app.patch("/api/recurring-journals/:id", requireAuth, requireNonPOS, async (req, res) => {
+  app.patch("/api/recurring-journals/:id", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     const recurringId = positiveId(req.params.id);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
@@ -116,7 +116,7 @@ export function registerRecurringJournalRoutes(app: Express): void {
     }
   });
 
-  app.get("/api/recurring-journals/:id/history", requireAuth, requireNonPOS, async (req, res) => {
+  app.get("/api/recurring-journals/:id/history", requireAuth, requireRole("Admin", "Developer"), requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     const recurringId = positiveId(req.params.id);
     if (!companyId) return res.status(400).json({ message: "No company selected" });
