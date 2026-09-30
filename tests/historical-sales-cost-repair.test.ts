@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   applyHistoricalInventoryMovement,
+  applyHistoricalSalesRepairMovement,
   createHistoricalInventoryState,
   createHistoricalInventoryStateFromSnapshot,
   historicalSaleProposalFromState,
   replayHistoricalSalesCosts,
   reverseHistoricalInventoryMovement,
+  reverseHistoricalSalesRepairMovement,
   type HistoricalSalesRepairMovement,
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
 
@@ -18,10 +20,12 @@ function movement(
     companyId: 1,
     locationId: 10,
     stockItemId: 100,
-    occurredAt: "2026-01-01T00:00:00.000Z",
-    sequence: 1,
+    occurredAt: overrides.occurredAt ?? "2026-01-01T00:00:00.000Z",
+    createdAt: overrides.createdAt,
+    sequence: overrides.sequence ?? 1,
     quantityDelta: overrides.quantityDelta,
     unitCost: overrides.unitCost ?? null,
+    exactValue: overrides.exactValue ?? null,
     sourceType: overrides.sourceType ?? "test",
     sourceId: overrides.sourceId ?? overrides.movementId,
     evidence: overrides.evidence ?? "legacy",
@@ -383,4 +387,104 @@ describe("historical sales cost repair replay", () => {
     expect(undoSourceReceipt.stateBefore.averageRate.toFixed(2)).toBe("112.77");
     expect(undoSourceReceipt.stateBefore.totalValue.toFixed(2)).toBe("1127.70");
   });
+
+  it("replays and rewinds a positive-stock offload from its exact stored value", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("5", "100.00", "500.00");
+    const offload = movement({
+      movementId: "offload:500",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "3",
+      unitCost: "83.33",
+      exactValue: "250.01",
+      sourceType: "legacy-container-offload",
+      sourceId: "500",
+    });
+
+    const after = applyHistoricalSalesRepairMovement(before, offload);
+    expect(after.quantity.toFixed(3)).toBe("8.000");
+    expect(after.totalValue.toFixed(2)).toBe("750.01");
+    expect(after.averageRate.toFixed(2)).toBe("93.75");
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, offload);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("5.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("500.00");
+  });
+
+  it("treats a post-hotfix negative-to-positive offload as a cost-memory reset", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("-2", "10.00", "0.00");
+    const offload = movement({
+      movementId: "offload:501",
+      occurredAt: "2026-04-01T10:00:00.000Z",
+      quantityDelta: "5",
+      unitCost: "12.00",
+      exactValue: "60.00",
+      sourceType: "legacy-container-offload",
+      sourceId: "501",
+    });
+
+    const after = applyHistoricalSalesRepairMovement(before, offload);
+    expect(after.quantity.toFixed(3)).toBe("3.000");
+    expect(after.averageRate.toFixed(2)).toBe("12.00");
+    expect(after.totalValue.toFixed(2)).toBe("36.00");
+
+    expect(reverseHistoricalSalesRepairMovement(after, offload)).toEqual({
+      reversible: false,
+      reason: "COST_MEMORY_IRREVERSIBLE",
+    });
+
+    const anchored = reverseHistoricalSalesRepairMovement(after, offload, {
+      priorCostMemoryRate: "10.00",
+    });
+    expect(anchored.reversible).toBe(true);
+    if (!anchored.reversible) return;
+    expect(anchored.stateBefore.quantity.toFixed(3)).toBe("-2.000");
+    expect(anchored.stateBefore.averageRate.toFixed(2)).toBe("10.00");
+  });
+
+  it("replays and rewinds offload suspension by exact stored value", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("10", "100.00", "1000.00");
+    const suspend = movement({
+      movementId: "canonical:9001",
+      occurredAt: "2026-09-10T10:00:00.000Z",
+      quantityDelta: "-3",
+      unitCost: "100.00",
+      exactValue: "299.99",
+      sourceType: "offload_optional_suspend",
+      sourceId: "501",
+      evidence: "canonical",
+    });
+
+    const after = applyHistoricalSalesRepairMovement(before, suspend);
+    expect(after.quantity.toFixed(3)).toBe("7.000");
+    expect(after.totalValue.toFixed(2)).toBe("700.01");
+    expect(after.averageRate.toFixed(2)).toBe("100.00");
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, suspend);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1000.00");
+  });
+
+  it("keeps offload restore on the generic receipt path", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("7", "100.00", "700.01");
+    const restore = movement({
+      movementId: "canonical:9002",
+      occurredAt: "2026-09-10T11:00:00.000Z",
+      quantityDelta: "3",
+      unitCost: "100.00",
+      exactValue: "299.99",
+      sourceType: "offload_optional_restore",
+      sourceId: "501",
+      evidence: "canonical",
+    });
+
+    const after = applyHistoricalSalesRepairMovement(before, restore);
+    expect(after.quantity.toFixed(3)).toBe("10.000");
+    expect(after.totalValue.toFixed(2)).toBe("1000.01");
+  });
+
 });

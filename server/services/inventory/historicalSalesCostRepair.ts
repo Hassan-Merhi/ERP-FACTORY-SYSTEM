@@ -7,14 +7,14 @@ import { logger } from "../../lib/logger";
 import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
-  applyHistoricalInventoryMovement,
+  applyHistoricalSalesRepairMovement,
   createHistoricalInventoryStateFromSnapshot,
   historicalInventoryKey,
   historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
   repairRate,
-  reverseHistoricalInventoryMovement,
+  reverseHistoricalSalesRepairMovement,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairProposal,
@@ -113,6 +113,15 @@ type LegacyRow = {
   source_id: string;
 };
 
+type OffloadValueEvidenceRow = {
+  offload_id: number;
+  stock_item_id: number;
+  quantity: string;
+  rate: string;
+  total_value: string;
+  offloaded_at: Date;
+};
+
 type AuditInventoryRow = {
   id: number;
   stock_item_id: number | null;
@@ -130,6 +139,18 @@ type CompanyDryRun = {
 
 const QTY_TOLERANCE = new Decimal("0.001");
 const MONEY_TOLERANCE = new Decimal("0.02");
+const OFFLOAD_EVIDENCE_SOURCE_TYPES = new Set([
+  "container-offload",
+  "legacy-container-offload",
+  "offload_optional_suspend",
+  "offload_optional_restore",
+  "container-reverse-offload",
+  "container-reverse-offload-legacy",
+]);
+
+function offloadEvidenceKey(offloadId: string | number, stockItemId: string | number): string {
+  return `${String(offloadId)}:${Number(stockItemId)}`;
+}
 
 function hscrError(code: string): Error {
   const error = new Error();
@@ -242,6 +263,26 @@ async function loadValuationCheckpoint(client: PoolClient, companyId: number): P
     createdAt: row.created_at,
     rows: baseline.rows,
   };
+}
+
+async function loadOffloadValueEvidence(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<OffloadValueEvidenceRow[]> {
+  const result = await client.query<OffloadValueEvidenceRow>(
+    `SELECT co.id AS offload_id,coi.stock_item_id,
+            coi.quantity::text,coi.rate::text,coi.total_value::text,
+            co.offloaded_at
+       FROM container_offload_items coi
+       JOIN container_offloads co ON co.id=coi.offload_id
+       JOIN containers c ON c.id=co.container_id
+      WHERE c.company_id=$1
+        AND co.offloaded_at <= $2
+      ORDER BY co.id,coi.stock_item_id`,
+    [companyId, sourceCutoff]
+  );
+  return result.rows;
 }
 
 async function loadHistoricalMerges(client: PoolClient, companyId: number): Promise<HistoricalMergeRow[]> {
@@ -524,6 +565,7 @@ function historicalSalesCompanyEvidenceHash(input: {
   manual: { movements: LegacyRow[]; checks: RepairCheck[] };
   sales: SaleRow[];
   stockItems: StockItemRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
   historicalMerges: HistoricalMergeRow[];
 }): string {
   const payload = {
@@ -606,6 +648,14 @@ function historicalSalesCompanyEvidenceHash(input: {
       deletedAt: item.deleted_at ? iso(item.deleted_at) : null,
       createdAt: iso(item.created_at),
     })),
+    offloadEvidence: input.offloadEvidence.map((row) => ({
+      offloadId: Number(row.offload_id),
+      stockItemId: Number(row.stock_item_id),
+      quantity: String(row.quantity),
+      rate: String(row.rate),
+      totalValue: String(row.total_value),
+      offloadedAt: iso(row.offloaded_at),
+    })),
     historicalMerges: input.historicalMerges.map((merge) => ({
       aliasId: Number(merge.alias_id),
       aliasCode: merge.alias_code,
@@ -632,11 +682,12 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
   companyId: number,
   sourceCutoff: Date
 ): Promise<string> {
-  const [canonicalStart, sales, stockItems, checkpoint, historicalMerges] = await Promise.all([
+  const [canonicalStart, sales, stockItems, checkpoint, offloadEvidence, historicalMerges] = await Promise.all([
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
     loadStockItems(client, companyId),
     loadValuationCheckpoint(client, companyId),
+    loadOffloadValueEvidence(client, companyId, sourceCutoff),
     loadHistoricalMerges(client, companyId),
   ]);
   const [canonical, legacy, manual] = await Promise.all([
@@ -653,6 +704,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     manual,
     sales,
     stockItems,
+    offloadEvidence,
     historicalMerges,
   });
 }
@@ -1241,10 +1293,7 @@ function replayMergedSourceLocationForward(input: {
 
   for (const movement of movements) {
     if (movement.sale) proposals.push(historicalSaleProposalFromState(movement, state));
-    state = applyHistoricalInventoryMovement(state, {
-      quantityDelta: movement.quantityDelta,
-      unitCost: movement.unitCost,
-    });
+    state = applyHistoricalSalesRepairMovement(state, movement);
   }
   return { stateAtMerge: state, proposals };
 }
@@ -1408,10 +1457,7 @@ function recoverHistoricalMergedSales(input: {
         keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
       keptBeforeByLocation.set(
         movement.locationId,
-        applyHistoricalInventoryMovement(current, {
-          quantityDelta: movement.quantityDelta,
-          unitCost: movement.unitCost,
-        })
+        applyHistoricalSalesRepairMovement(current, movement)
       );
     }
 
@@ -1442,9 +1488,7 @@ function recoverHistoricalMergedSales(input: {
         if (!relevantLocations.has(movement.locationId)) continue;
         const stateAfter = combinedAtMergeByLocation.get(movement.locationId);
         if (!stateAfter) continue;
-        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
-          quantityDelta: movement.quantityDelta,
-          unitCost: movement.unitCost,
+        const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
           priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
         if (!reversed.reversible) {
@@ -1541,9 +1585,7 @@ function recoverHistoricalMergedSales(input: {
       let stateAfter = sourceAtMerge;
       const locationProposals: HistoricalSalesRepairProposal[] = [];
       for (const movement of movements) {
-        const reversed = reverseHistoricalInventoryMovement(stateAfter, {
-          quantityDelta: movement.quantityDelta,
-          unitCost: movement.unitCost,
+        const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
           priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
         if (!reversed.reversible) {
@@ -1719,7 +1761,7 @@ function recoverHistoricalMergedSales(input: {
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, offloadEvidence, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
       `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
          FROM inventory i
@@ -1735,6 +1777,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
     loadValuationCheckpoint(client, companyId),
+    loadOffloadValueEvidence(client, companyId, sourceCutoff),
     loadHistoricalMerges(client, companyId),
   ]);
 
@@ -1753,8 +1796,23 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     manual,
     sales,
     stockItems,
+    offloadEvidence,
     historicalMerges,
   });
+  const offloadEvidenceByKey = new Map(
+    offloadEvidence.map((row) => [
+      offloadEvidenceKey(row.offload_id, row.stock_item_id),
+      row,
+    ])
+  );
+  for (const movement of canonical) {
+    if (!OFFLOAD_EVIDENCE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    const evidence = offloadEvidenceByKey.get(
+      offloadEvidenceKey(movement.sourceId, movement.stockItemId)
+    );
+    if (evidence) movement.exactValue = String(evidence.total_value);
+  }
+
   const checks: RepairCheck[] = [
     ...manual.checks,
     {
@@ -1781,6 +1839,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       sequence: Number(row.sequence),
       quantityDelta: String(row.quantity_delta),
       unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+      exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
+        ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
+        : null,
       sourceType: row.source_type,
       sourceId: row.source_id,
       evidence: "legacy" as const,
@@ -2104,10 +2165,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
       liveReplayStates.set(
         key,
-        applyHistoricalInventoryMovement(current, {
-          quantityDelta: movement.quantityDelta,
-          unitCost: movement.unitCost,
-        })
+        applyHistoricalSalesRepairMovement(current, movement)
       );
     }
 
@@ -2370,10 +2428,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         }
         replayStates.set(
           movement.locationId,
-          applyHistoricalInventoryMovement(current, {
-            quantityDelta: movement.quantityDelta,
-            unitCost: movement.unitCost,
-          })
+          applyHistoricalSalesRepairMovement(current, movement)
         );
       }
 
@@ -2508,23 +2563,14 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           continue;
         }
 
-        let state = applyHistoricalInventoryMovement(
-          createHistoricalInventoryStateFromSnapshot(beforeQty, "0", "0"),
-          {
-            quantityDelta: anchor.quantityDelta,
-            unitCost: anchor.unitCost,
-          }
-        );
+        let state = applyHistoricalSalesRepairMovement(createHistoricalInventoryStateFromSnapshot(beforeQty, "0", "0"), anchor);
         const candidateProposals: HistoricalSalesRepairProposal[] = [];
         for (let index = anchorIndex + 1; index < movements.length; index += 1) {
           const movement = movements[index];
           if (movement.sale) {
             candidateProposals.push(historicalSaleProposalFromState(movement, state));
           }
-          state = applyHistoricalInventoryMovement(state, {
-            quantityDelta: movement.quantityDelta,
-            unitCost: movement.unitCost,
-          });
+          state = applyHistoricalSalesRepairMovement(state, movement);
         }
 
         if (!historicalInventoryStatesEqual(state, checkpointState)) continue;
@@ -2579,11 +2625,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
-      const reversed = reverseHistoricalInventoryMovement(stateAfter, {
-        quantityDelta: movement.quantityDelta,
-        unitCost: movement.unitCost,
-        priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
-      });
+      const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+        });
       if (!reversed.reversible) {
         const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
           (saleMovement) =>
@@ -2713,6 +2757,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     canonicalSaleRows: directCanonicalProposals.size,
     legacySaleRows: legacySales.length,
     historicalMerges: historicalMerges.length,
+    exactOffloadEvidenceRows: offloadEvidence.length,
     proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
