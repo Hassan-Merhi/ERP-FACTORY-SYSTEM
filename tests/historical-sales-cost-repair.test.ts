@@ -259,5 +259,4 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
   });
-
 });
