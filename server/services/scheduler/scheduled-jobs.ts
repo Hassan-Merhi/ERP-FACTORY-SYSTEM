@@ -298,6 +298,19 @@ export function startScheduler() {
     }
   );
 
+  // Recurring journal catch-up. Run hourly so month-end posting follows each
+  // template's own timezone and a deploy/restart cannot permanently miss the
+  // boundary. The posting key is deterministic per recurrence + scheduled date,
+  // so retries or overlapping instances cannot create a duplicate voucher.
+  cron.schedule(
+    "20 * * * *",
+    createSchedulerTick("recurringJournals", async () => {
+      const { runDueRecurringJournals } = await import("../accounting/recurringJournalService");
+      await runDueRecurringJournals();
+    }),
+    { timezone: "UTC" }
+  );
+
   // Run every day at 6:00 AM ET. Rental contracts can bill on the 1st, 20th,
   // or any other day, so daily catch-up is required for correct monthly expense
   // recognition. The posting functions are idempotent and skip completed rows.
@@ -427,6 +440,7 @@ export function startScheduler() {
     jobs: [
       "monthlyNetPositionWhatsApp(1st 07:00 EST)",
       "dailyRentalAccrual(daily 06:00 ET)",
+      "recurringJournals(hourly :20 UTC; per-template timezone)",
       "hourlyStockReport(hourly :00 ET)",
       "hourlyNetPositionExport(hourly :05 ET)",
       "scheduledDailyExport(:10/:25/:40/:55 ET; active only in configured hour)",
