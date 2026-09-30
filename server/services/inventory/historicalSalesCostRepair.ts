@@ -231,13 +231,27 @@ async function loadLegacyMovements(
       WHERE COALESCE(co.optional,false)=false
         AND co.offloaded_at <= b.source_cutoff
         AND (b.canonical_start IS NULL OR co.offloaded_at < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=coi.stock_item_id
+             AND csm.location_id=co.location_id
+             AND csm.source_type IN ('legacy-container-offload','container-offload')
+             AND csm.source_id=co.id::text
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     adjustments AS (
       SELECT
         'adjustment:'||sai.id::text,
         sav.location_id,
         sai.stock_item_id,
-        sai.quantity::text,
+        (CASE
+           WHEN lower(sav.adjustment_type)='production' THEN ABS(sai.quantity)
+           WHEN lower(sav.adjustment_type)='consumption' THEN -ABS(sai.quantity)
+           ELSE sai.quantity
+         END)::text,
         sai.rate::text,
         GREATEST(sai.created_at,sav.created_at,v.created_at),
         sai.id*10+2,
@@ -251,6 +265,16 @@ async function loadLegacyMovements(
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sai.created_at,sav.created_at,v.created_at) <= b.source_cutoff
         AND (b.canonical_start IS NULL OR GREATEST(sai.created_at,sav.created_at,v.created_at) < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=sai.stock_item_id
+             AND csm.location_id=sav.location_id
+             AND csm.source_type='stock-adjustment'
+             AND csm.source_id=sav.id::text
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     transfer_source AS (
       SELECT
@@ -273,6 +297,16 @@ async function loadLegacyMovements(
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
         AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=sti.stock_item_id
+             AND csm.location_id=COALESCE(sti.source_location_id,stv.source_location_id)
+             AND csm.source_type IN ('stock-transfer','stock-transfer-import','stock-transfer-import-multi-source')
+             AND csm.source_id IN (stv.id::text,v.id::text)
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     transfer_destination AS (
       SELECT
@@ -294,6 +328,16 @@ async function loadLegacyMovements(
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
         AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=sti.stock_item_id
+             AND csm.location_id=stv.destination_location_id
+             AND csm.source_type IN ('stock-transfer','stock-transfer-import','stock-transfer-import-multi-source')
+             AND csm.source_id IN (stv.id::text,v.id::text)
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     notes AS (
       SELECT
@@ -314,6 +358,16 @@ async function loadLegacyMovements(
         AND COALESCE(v.optional,false)=false
         AND GREATEST(cni.created_at,v.created_at) <= b.source_cutoff
         AND (b.canonical_start IS NULL OR GREATEST(cni.created_at,v.created_at) < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=cni.stock_item_id
+             AND csm.location_id=cni.location_id
+             AND csm.source_type IN ('credit-note','debit-note')
+             AND csm.source_id=v.id::text
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     archive_out AS (
       SELECT
@@ -331,6 +385,16 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.archived_at <= b.source_cutoff
         AND (b.canonical_start IS NULL OR a.archived_at < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=ai.stock_item_id
+             AND csm.location_id=a.location_id
+             AND csm.source_type='stock_group_location_archive'
+             AND csm.source_id=a.id::text
+             AND csm.created_at <= b.source_cutoff
+        )
     ),
     archive_in AS (
       SELECT
@@ -349,6 +413,16 @@ async function loadLegacyMovements(
       WHERE a.restored_at IS NOT NULL
         AND a.restored_at <= b.source_cutoff
         AND (b.canonical_start IS NULL OR a.restored_at < b.canonical_start)
+        AND NOT EXISTS (
+          SELECT 1
+            FROM canonical_stock_movements csm
+           WHERE csm.company_id=b.company_id
+             AND csm.stock_item_id=ai.stock_item_id
+             AND csm.location_id=a.location_id
+             AND csm.source_type='stock_group_location_archive_restore'
+             AND csm.source_id=a.id::text
+             AND csm.created_at <= b.source_cutoff
+        )
     )
     SELECT * FROM offloads
     UNION ALL SELECT * FROM adjustments
@@ -644,11 +718,24 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
   return keys.size;
 }
 
+const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
+
+function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
+  const keys = new Set<string>();
+  for (const movement of movements) {
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    if (d(movement.quantityDelta).gte(0)) continue;
+    keys.add(`${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`);
+  }
+  return keys;
+}
+
 function markAmbiguousTimestampTies(
   companyId: number,
   movements: HistoricalSalesRepairMovement[],
   sales: SaleRow[],
-  canonicalStart: Date | null
+  canonicalStart: Date | null,
+  canonicalSaleKeys: Set<string>
 ): RepairCheck[] {
   const checks: RepairCheck[] = [];
   const inboundByKeyTime = new Set<string>();
@@ -661,6 +748,7 @@ function markAmbiguousTimestampTies(
   }
   for (const sale of sales) {
     if (!sale.location_id || !beforeCutoff(sale.created_at, canonicalStart)) continue;
+    if (canonicalSaleKeys.has(`${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`)) continue;
     const key = `${sale.location_id}:${sale.stock_item_id}:${iso(sale.created_at)}`;
     if (inboundByKeyTime.has(key)) {
       checks.push({
@@ -710,6 +798,8 @@ async function dryRunCompany(
   ]);
 
   const checks: RepairCheck[] = [...manual.checks];
+  const canonicalSaleKeys = canonicalSaleEvidenceKeys(canonical);
+
   const movements: HistoricalSalesRepairMovement[] = [
     ...canonical,
     ...legacy.map((row) => ({
@@ -753,8 +843,21 @@ async function dryRunCompany(
       continue;
     }
 
+    const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    if (canonicalSaleKeys.has(saleEvidenceKey)) continue;
+
     const legacySale = beforeCutoff(sale.created_at, canonicalStart);
-    if (!legacySale) continue;
+    if (!legacySale) {
+      checks.push({
+        companyId,
+        locationId: Number(sale.location_id),
+        stockItemId: Number(sale.stock_item_id),
+        code: "CANONICAL_SALE_EVIDENCE_MISSING",
+        status: "block",
+        detail: `Sale item ${sale.sales_item_id} is after canonical cutover but has no canonical sale issue evidence`,
+      });
+      continue;
+    }
     movements.push({
       movementId: `sale-marker:${sale.sales_item_id}`,
       companyId,
@@ -779,7 +882,7 @@ async function dryRunCompany(
     });
   }
 
-  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart));
+  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart, canonicalSaleKeys));
 
   const opening = buildOpeningStates({
     companyId,
