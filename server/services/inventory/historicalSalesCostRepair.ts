@@ -795,13 +795,7 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
 
 function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
-  const keys = new Set<string>();
-  for (const movement of movements) {
-    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    if (d(movement.quantityDelta).gte(0)) continue;
-    keys.add(`${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`);
-  }
-  return keys;
+  return new Set(activeCanonicalSaleEvidence(movements).keys());
 }
 
 function markAmbiguousTimestampTies(
@@ -839,7 +833,7 @@ function markAmbiguousTimestampTies(
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint] = await Promise.all([
+  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
       `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
          FROM inventory i
@@ -862,6 +856,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
     loadValuationCheckpoint(client, companyId),
+    loadHistoricalMerges(client, companyId),
   ]);
 
   const [canonical, legacy, manual] = await Promise.all([
@@ -871,7 +866,8 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
   ]);
 
   const checks: RepairCheck[] = [...manual.checks];
-  const canonicalSaleKeys = canonicalSaleEvidenceKeys(canonical);
+  const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
+  const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
   const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy.map((row) => ({
       movementId: row.movement_id,
@@ -901,6 +897,46 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     })),
   ];
 
+  const directCanonicalProposals = new Map<number, HistoricalSalesRepairProposal>();
+  const saleQuantityByEvidenceKey = new Map<string, Decimal>();
+  for (const sale of sales) {
+    if (!sale.location_id) continue;
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    saleQuantityByEvidenceKey.set(
+      key,
+      repairQuantity((saleQuantityByEvidenceKey.get(key) ?? new Decimal(0)).plus(d(sale.quantity).abs()))
+    );
+  }
+
+  for (const [key, evidence] of canonicalSaleEvidence) {
+    const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
+    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
+    if (!expectedQuantity) continue;
+    if (evidence.rates.size !== 1) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_RATE_AMBIGUOUS",
+        status: "block",
+        actual: [...evidence.rates].sort().join(","),
+        detail: `Voucher ${voucherIdText} has ${evidence.rates.size} active canonical sale rates for one item/location`,
+      });
+    }
+    if (!evidence.totalQuantity.eq(expectedQuantity)) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_QUANTITY_MISMATCH",
+        status: "block",
+        expected: expectedQuantity.toFixed(3),
+        actual: evidence.totalQuantity.toFixed(3),
+        detail: `Voucher ${voucherIdText} active canonical issue quantity does not match current sale lines`,
+      });
+    }
+  }
+
   const legacySales: SaleRow[] = [];
   for (const sale of sales) {
     if (!sale.location_id) {
@@ -916,7 +952,27 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
-    if (canonicalSaleKeys.has(saleEvidenceKey)) continue;
+    const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
+    if (canonicalEvidence) {
+      const rate = canonicalEvidence.rates.size === 1 ? [...canonicalEvidence.rates][0] : null;
+      if (rate !== null && canonicalEvidence.totalQuantity.eq(saleQuantityByEvidenceKey.get(saleEvidenceKey) ?? -1)) {
+        const evidenceMovement = canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
+        directCanonicalProposals.set(
+          Number(sale.sales_item_id),
+          proposalFromRecordedRate(
+            companyId,
+            sale,
+            rate,
+            evidenceMovement.sourceType,
+            evidenceMovement.sourceId,
+            "canonical"
+          )
+        );
+      } else {
+        directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+      continue;
+    }
     if (!beforeCutoff(sale.created_at, canonicalStart)) {
       checks.push({
         companyId,
@@ -1183,7 +1239,10 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     });
   }
 
-  const proposals = [...proposalsBySaleId.values()].sort((a, b) => a.salesItemId - b.salesItemId);
+  const proposals = [
+    ...directCanonicalProposals.values(),
+    ...proposalsBySaleId.values(),
+  ].sort((a, b) => a.salesItemId - b.salesItemId);
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
@@ -1196,7 +1255,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
+    canonicalSaleRows: directCanonicalProposals.size,
     legacySaleRows: legacySales.length,
+    historicalMerges: historicalMerges.length,
     proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
