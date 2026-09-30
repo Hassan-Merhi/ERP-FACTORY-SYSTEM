@@ -45,6 +45,7 @@ export type HistoricalSalesRepairMovement = {
   stockItemId: number;
   occurredAt: string;
   createdAt?: string;
+  reversalOfMovementId?: number | null;
   sequence: number;
   quantityDelta: string;
   unitCost: string | null;
