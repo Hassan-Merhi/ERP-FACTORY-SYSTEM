@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v20-monotonic-rewind-restore";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v21-canonical-rate-only-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -532,6 +532,111 @@ function statesEqual(left: HistoricalInventoryState, right: HistoricalInventoryS
   );
 }
 
+function statesEqualQuantityAndValue(
+  left: HistoricalInventoryState,
+  right: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
+    repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
+  );
+}
+
+function stateRateDisagreesWithValue(state: HistoricalInventoryState): boolean {
+  const quantity = repairQuantity(state.quantity);
+  if (!quantity.gt(ZERO)) return false;
+  return !repairRate(state.totalValue.dividedBy(quantity)).eq(repairRate(state.averageRate));
+}
+
+function canonicalRateOnlyRecovery(
+  stateAfter: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryReverseResult | null {
+  if (movement.evidence !== "canonical") return null;
+  if (!repairQuantity(stateAfter.quantity).gt(ZERO)) return null;
+  if (!stateRateDisagreesWithValue(stateAfter)) return null;
+
+  const delta = repairQuantity(movement.quantityDelta);
+  if (delta.isZero()) return null;
+  const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+  if (!previousQty.gt(ZERO)) return null;
+
+  let stateBefore: HistoricalInventoryState | null = null;
+
+  if (
+    INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) &&
+    delta.gt(ZERO) &&
+    movement.exactValue !== null &&
+    movement.exactValue !== undefined
+  ) {
+    const beforeValue = repairMoney(stateAfter.totalValue.minus(repairMoney(movement.exactValue)));
+    if (beforeValue.lt(ZERO)) return null;
+    stateBefore = rawHistoricalInventoryState(
+      previousQty,
+      repairRate(beforeValue.dividedBy(previousQty)),
+      beforeValue
+    );
+  } else if (
+    EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType) &&
+    delta.lt(ZERO) &&
+    movement.exactValue !== null &&
+    movement.exactValue !== undefined
+  ) {
+    const beforeValue = repairMoney(
+      stateAfter.totalValue.plus(repairMoney(movement.exactValue))
+    );
+    stateBefore = rawHistoricalInventoryState(
+      previousQty,
+      repairRate(beforeValue.dividedBy(previousQty)),
+      beforeValue
+    );
+  } else if (
+    delta.gt(ZERO) &&
+    movement.sourceType !== "pos-sale" &&
+    movementSuppliesIncomingRate(movement)
+  ) {
+    const incomingRate = Decimal.max(
+      decimal(movement.unitCost, "canonical incoming movement cost"),
+      ZERO
+    );
+    const beforeValue = repairMoney(stateAfter.totalValue.minus(delta.times(incomingRate)));
+    if (beforeValue.lt(ZERO)) return null;
+    stateBefore = rawHistoricalInventoryState(
+      previousQty,
+      repairRate(beforeValue.dividedBy(previousQty)),
+      beforeValue
+    );
+  } else if (
+    delta.lt(ZERO) &&
+    movement.sourceType === "pos-sale" &&
+    movement.unitCost !== null &&
+    movement.unitCost !== undefined
+  ) {
+    // Canonical POS issue unit_cost is the locked pre-sale inventory average
+    // recorded in the same transaction as the deduction. Unlike transfer
+    // issue rates, it is authoritative evidence of the pre-movement cost memory.
+    const recordedRate = repairRate(
+      Decimal.max(decimal(movement.unitCost, "canonical POS issue cost"), ZERO)
+    );
+    const beforeValue = repairMoney(
+      stateAfter.totalValue.plus(delta.abs().times(recordedRate))
+    );
+    stateBefore = rawHistoricalInventoryState(previousQty, recordedRate, beforeValue);
+  } else {
+    return null;
+  }
+
+  const replayed = applyHistoricalSalesRepairMovement(stateBefore, movement);
+  if (!statesEqualQuantityAndValue(replayed, stateAfter)) return null;
+  if (repairRate(replayed.averageRate).eq(repairRate(stateAfter.averageRate))) return null;
+
+  return {
+    reversible: true,
+    stateBefore,
+    recovery: "CANONICAL_RATE_ONLY",
+  };
+}
+
 function candidateRatesAround(rate: Decimal): Decimal[] {
   const center = repairRate(Decimal.max(rate, ZERO));
   const values: Decimal[] = [];
@@ -543,7 +648,11 @@ function candidateRatesAround(rate: Decimal): Decimal[] {
 }
 
 export type HistoricalInventoryReverseResult =
-  | { reversible: true; stateBefore: HistoricalInventoryState }
+  | {
+      reversible: true;
+      stateBefore: HistoricalInventoryState;
+      recovery?: "CANONICAL_RATE_ONLY";
+    }
   | {
       reversible: false;
       reason: "COST_MEMORY_IRREVERSIBLE" | "MOVEMENT_INVERSE_NOT_UNIQUE" | "MOVEMENT_INVERSE_INVALID";
@@ -779,7 +888,7 @@ export function reverseHistoricalSalesRepairMovement(
       : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
   }
 
-  return reverseHistoricalInventoryMovement(stateAfter, {
+  const primary = reverseHistoricalInventoryMovement(stateAfter, {
     quantityDelta: movement.quantityDelta,
     // Positive POS reversal rows are locally ambiguous: production restored
     // quantity without passing the old line cost, while the canonical journal
@@ -790,6 +899,11 @@ export function reverseHistoricalSalesRepairMovement(
     unitCost: movement.unitCost,
     priorCostMemoryRate: input?.priorCostMemoryRate,
   });
+  if (primary.reversible || primary.reason !== "MOVEMENT_INVERSE_INVALID") {
+    return primary;
+  }
+
+  return canonicalRateOnlyRecovery(stateAfter, movement) ?? primary;
 }
 
 export function historicalSaleProposalFromState(
