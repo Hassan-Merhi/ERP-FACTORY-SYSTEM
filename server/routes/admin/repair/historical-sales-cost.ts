@@ -54,7 +54,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
       try {
         if (req.body?.confirmation !== "BUILD-HISTORICAL-SALES-COST-DRY-RUN") {
           return res.status(400).json({
-            code: 'HSCR_DRY_RUN_CONFIRMATION_REQUIRED',
+            code: "HSCR_DRY_RUN_CONFIRMATION_REQUIRED",
           });
         }
 
