@@ -43,9 +43,11 @@ function removeRecoveryMarkersAfterStableLoad() {
     const url = new URL(window.location.href);
     const hadRecoveryParam = url.searchParams.has("_asset_recovery");
     const hadServiceWorkerParam = url.searchParams.has("_sw");
+    const hadPwaUpdateParam = url.searchParams.has("_pwa_update");
     url.searchParams.delete("_asset_recovery");
     url.searchParams.delete("_sw");
-    if (hadRecoveryParam || hadServiceWorkerParam) {
+    url.searchParams.delete("_pwa_update");
+    if (hadRecoveryParam || hadServiceWorkerParam || hadPwaUpdateParam) {
       window.history.replaceState(window.history.state, "", `${url.pathname}${url.search}${url.hash}`);
     }
   }, RECOVERY_STABLE_MS);
