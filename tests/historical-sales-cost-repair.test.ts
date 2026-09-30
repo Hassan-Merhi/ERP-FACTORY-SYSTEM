@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   applyHistoricalInventoryMovement,
   createHistoricalInventoryState,
+  createHistoricalInventoryStateFromSnapshot,
+  historicalSaleProposalFromState,
   replayHistoricalSalesCosts,
+  reverseHistoricalInventoryMovement,
   type HistoricalSalesRepairMovement,
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
 
@@ -189,4 +192,72 @@ describe("historical sales cost repair replay", () => {
     });
     expect(result.proposals[0].proposedCostPrice).toBe("15.00");
   });
+  it("preserves exact checkpoint value instead of regenerating it from the rounded rate", () => {
+    const checkpoint = createHistoricalInventoryStateFromSnapshot("7", "10.01", "70.05");
+    expect(checkpoint.quantity.toFixed(3)).toBe("7.000");
+    expect(checkpoint.averageRate.toFixed(2)).toBe("10.01");
+    expect(checkpoint.totalValue.toFixed(2)).toBe("70.05");
+  });
+
+  it("rewinds an outbound sale and derives the pre-sale transaction-time cost", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("10", "100.65", "1006.50");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "-1", unitCost: "100.65" });
+    const reversed = reverseHistoricalInventoryMovement(after, { quantityDelta: "-1", unitCost: "100.65" });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.65");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1006.50");
+
+    const proposal = historicalSaleProposalFromState(
+      movement({
+        movementId: "sale-rewind",
+        quantityDelta: "-1",
+        unitCost: null,
+        sale: {
+          salesItemId: 91,
+          voucherId: 92,
+          quantity: "1",
+          totalSales: "150",
+          originalCostPrice: "195.05",
+          originalTotalCost: "195.05",
+          originalProfit: "-45.05",
+        },
+      }),
+      reversed.stateBefore
+    );
+    expect(proposal.proposedCostPrice).toBe("100.65");
+    expect(proposal.proposedTotalCost).toBe("100.65");
+    expect(proposal.proposedProfit).toBe("49.35");
+  });
+
+  it("rewinds a priced receipt while prior stock was positive", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("8", "10", "80");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "8", unitCost: "20" });
+    const reversed = reverseHistoricalInventoryMovement(after, { quantityDelta: "8", unitCost: "20" });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("8.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("80.00");
+  });
+
+  it("blocks rewind across a priced receipt that overwrote zero/negative cost memory", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: "12" });
+    const reversed = reverseHistoricalInventoryMovement(after, { quantityDelta: "5", unitCost: "12" });
+    expect(reversed).toEqual({ reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" });
+  });
+
+  it("can rewind an unpriced receipt across zero because cost memory is retained", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: null });
+    const reversed = reverseHistoricalInventoryMovement(after, { quantityDelta: "5", unitCost: null });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("-2.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
+  });
+
 });
