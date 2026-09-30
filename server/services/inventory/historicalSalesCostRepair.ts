@@ -874,14 +874,16 @@ async function loadLegacyMovements(
         sti.rate::text,
         GREATEST(sti.created_at,stv.created_at,v.created_at),
         sti.id*10+3,
-        'legacy-stock-transfer-out',
+        CASE
+          WHEN COALESCE(stv.inventory_applied,false)=true THEN 'legacy-stock-transfer-out'
+          ELSE 'legacy-stock-transfer-out-flag-fallback'
+        END,
         stv.id::text
       FROM stock_transfer_items sti
       JOIN stock_transfer_vouchers stv ON stv.id=sti.transfer_id
       JOIN vouchers v ON v.id=stv.voucher_id
       JOIN boundary b ON b.company_id=v.company_id
-      WHERE stv.inventory_applied=true
-        AND COALESCE(sti.source_location_id,stv.source_location_id) IS NOT NULL
+      WHERE COALESCE(sti.source_location_id,stv.source_location_id) IS NOT NULL
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
@@ -905,14 +907,16 @@ async function loadLegacyMovements(
         sti.rate::text,
         GREATEST(sti.created_at,stv.created_at,v.created_at),
         sti.id*10+4,
-        'legacy-stock-transfer-in',
+        CASE
+          WHEN COALESCE(stv.inventory_applied,false)=true THEN 'legacy-stock-transfer-in'
+          ELSE 'legacy-stock-transfer-in-flag-fallback'
+        END,
         stv.id::text
       FROM stock_transfer_items sti
       JOIN stock_transfer_vouchers stv ON stv.id=sti.transfer_id
       JOIN vouchers v ON v.id=stv.voucher_id
       JOIN boundary b ON b.company_id=v.company_id
-      WHERE stv.inventory_applied=true
-        AND v.deleted_at IS NULL
+      WHERE v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
         AND NOT EXISTS (
@@ -2290,6 +2294,11 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     ].sort(compareMovementMutationAscending);
     const priorCostMemoryRateHints =
       buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
+    const legacyTransferFallbackItemIds = new Set(
+      legacyMovements
+        .filter((movement) => movement.sourceType.endsWith("-flag-fallback"))
+        .map((movement) => movement.stockItemId)
+    );
     const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
     for (const movement of legacyMovements) {
       if (!movement.sale) continue;
@@ -2743,6 +2752,25 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       for (const proposal of acceptedReplay.replayProposals.values()) {
         proposalsBySaleId.set(proposal.salesItemId, proposal);
       }
+    }
+
+    for (const stockItemId of legacyTransferFallbackItemIds) {
+      const itemKeys = targetKeysByItem.get(stockItemId) ?? [];
+      if (itemKeys.length === 0) continue;
+      const proven = itemKeys.every((key) => forwardReplayResolvedKeys.has(key));
+      checks.push({
+        companyId,
+        locationId: null,
+        stockItemId,
+        code: proven
+          ? "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN"
+          : "LEGACY_TRANSFER_FLAG_FALLBACK_UNPROVEN",
+        status: proven ? "pass" : "block",
+        actual: String(itemKeys.length),
+        detail: proven
+          ? "Non-optional legacy transfer rows with inventory_applied=false replay exactly with the full item history to the immutable Phase 3 checkpoint."
+          : "Non-optional transfer rows predate or conflict with reliable inventory_applied ownership; legacy sales remain quarantined until the full item history reproduces the immutable Phase 3 checkpoint.",
+      });
     }
 
     // A priced receipt that crosses an item/location from zero or negative
