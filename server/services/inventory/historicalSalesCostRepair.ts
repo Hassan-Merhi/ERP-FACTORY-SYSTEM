@@ -376,37 +376,64 @@ function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): nu
 
 type CanonicalSaleEvidence = {
   movements: HistoricalSalesRepairMovement[];
-  rates: Set<string>;
-  totalQuantity: Decimal;
+  latestMutationAt: number;
+  latestNegativeMovements: HistoricalSalesRepairMovement[];
+  latestNegativeRates: Set<string>;
+  latestNegativeQuantity: Decimal;
+  latestNegativeValue: Decimal;
+  latestNegativeRate: Decimal | null;
 };
 
 function activeCanonicalSaleEvidence(
   movements: HistoricalSalesRepairMovement[]
 ): Map<string, CanonicalSaleEvidence> {
-  const reversedIds = new Set<number>();
+  const grouped = new Map<string, HistoricalSalesRepairMovement[]>();
   for (const movement of movements) {
-    const reversal = movement.reversalOfMovementId;
-    if (typeof reversal === "number" && Number.isInteger(reversal) && reversal > 0) reversedIds.add(reversal);
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
+    const rows = grouped.get(key) ?? [];
+    rows.push(movement);
+    grouped.set(key, rows);
   }
 
   const result = new Map<string, CanonicalSaleEvidence>();
-  for (const movement of movements) {
-    const id = canonicalMovementNumericId(movement);
-    if (id !== null && reversedIds.has(id)) continue;
-    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    if (d(movement.quantityDelta).gte(0)) continue;
-    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
-    const current = result.get(key) ?? {
-      movements: [],
-      rates: new Set<string>(),
-      totalQuantity: new Decimal(0),
-    };
-    current.movements.push(movement);
-    if (movement.unitCost !== null && movement.unitCost !== undefined) {
-      current.rates.add(repairRate(movement.unitCost).toFixed(2));
+  for (const [key, rows] of grouped) {
+    const latestMutationAt = Math.max(...rows.map(movementMutationTime));
+    const latestNegativeMovements = rows
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) === latestMutationAt &&
+          d(movement.quantityDelta).lt(0)
+      )
+      .sort(compareMovementMutationAscending);
+    const latestNegativeRates = new Set<string>();
+    let latestNegativeQuantity = new Decimal(0);
+    let latestNegativeValue = new Decimal(0);
+    let hasMissingCost = false;
+    for (const movement of latestNegativeMovements) {
+      const quantity = d(movement.quantityDelta).abs();
+      latestNegativeQuantity = repairQuantity(latestNegativeQuantity.plus(quantity));
+      if (movement.unitCost === null || movement.unitCost === undefined) {
+        hasMissingCost = true;
+        continue;
+      }
+      latestNegativeRates.add(repairRate(movement.unitCost).toFixed(2));
+      latestNegativeValue = latestNegativeValue.plus(quantity.times(d(movement.unitCost)));
     }
-    current.totalQuantity = repairQuantity(current.totalQuantity.plus(d(movement.quantityDelta).abs()));
-    result.set(key, current);
+    const latestNegativeRate =
+      !hasMissingCost && latestNegativeQuantity.gt(0)
+        ? repairRate(latestNegativeValue.dividedBy(latestNegativeQuantity))
+        : null;
+
+    result.set(key, {
+      movements: rows.sort(compareMovementMutationAscending),
+      latestMutationAt,
+      latestNegativeMovements,
+      latestNegativeRates,
+      latestNegativeQuantity,
+      latestNegativeValue: repairMoney(latestNegativeValue),
+      latestNegativeRate,
+    });
   }
   return result;
 }
@@ -1626,27 +1653,39 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
     const expectedQuantity = saleQuantityByEvidenceKey.get(key);
     if (!expectedQuantity) continue;
-    if (evidence.rates.size !== 1) {
+    if (evidence.latestNegativeRate === null) {
       checks.push({
         companyId,
         locationId: Number(locationIdText),
         stockItemId: Number(stockItemIdText),
-        code: "CANONICAL_SALE_RATE_AMBIGUOUS",
+        code: "CANONICAL_SALE_RATE_MISSING",
         status: "block",
-        actual: [...evidence.rates].sort().join(","),
-        detail: `Voucher ${voucherIdText} has ${evidence.rates.size} active canonical sale rates for one item/location`,
+        detail: `Voucher ${voucherIdText} latest canonical sale mutation has no priced outbound issue`,
+      });
+      continue;
+    }
+    if (!evidence.latestNegativeQuantity.eq(expectedQuantity)) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_QUANTITY_DRIFT",
+        status: "warning",
+        expected: expectedQuantity.toFixed(3),
+        actual: evidence.latestNegativeQuantity.toFixed(3),
+        detail: `Voucher ${voucherIdText} quantity differs from its latest canonical issue batch; the exact transaction-time cost rate is still pinned by the matching latest mutation timestamp`,
       });
     }
-    if (!evidence.totalQuantity.eq(expectedQuantity)) {
+    if (evidence.latestNegativeRates.size > 1) {
       checks.push({
         companyId,
         locationId: Number(locationIdText),
         stockItemId: Number(stockItemIdText),
-        code: "CANONICAL_SALE_QUANTITY_MISMATCH",
-        status: "block",
-        expected: expectedQuantity.toFixed(3),
-        actual: evidence.totalQuantity.toFixed(3),
-        detail: `Voucher ${voucherIdText} active canonical issue quantity does not match current sale lines`,
+        code: "CANONICAL_SALE_MULTI_RATE_RECONCILED",
+        status: "warning",
+        expected: evidence.latestNegativeRate.toFixed(2),
+        actual: [...evidence.latestNegativeRates].sort().join(","),
+        detail: `Voucher ${voucherIdText} latest canonical issue batch contains multiple recorded rates; using its quantity-weighted recorded cost`,
       });
     }
   }
@@ -1668,15 +1707,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
     const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
     if (canonicalEvidence) {
-      const rate = canonicalEvidence.rates.size === 1 ? [...canonicalEvidence.rates][0] : null;
-      if (rate !== null && canonicalEvidence.totalQuantity.eq(saleQuantityByEvidenceKey.get(saleEvidenceKey) ?? -1)) {
-        const evidenceMovement = canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
+      if (canonicalEvidence.latestNegativeRate !== null) {
+        const evidenceMovement =
+          canonicalEvidence.latestNegativeMovements[canonicalEvidence.latestNegativeMovements.length - 1] ??
+          canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
         directCanonicalProposals.set(
           Number(sale.sales_item_id),
           proposalFromRecordedRate(
             companyId,
             sale,
-            rate,
+            canonicalEvidence.latestNegativeRate,
             evidenceMovement.sourceType,
             evidenceMovement.sourceId,
             "canonical"
@@ -1903,10 +1943,25 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }),
       ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
     ].sort(compareMovementMutationDescending);
+    const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
+    for (const movement of legacyMovements) {
+      if (!movement.sale) continue;
+      const key = movementKey(movement);
+      const rows = targetLegacySaleMovementsByKey.get(key) ?? [];
+      rows.push(movement);
+      targetLegacySaleMovementsByKey.set(key, rows);
+    }
+    const rewindBoundaryReached = new Set<string>();
 
     for (const movement of movementsInCheckpoint) {
       const key = movementKey(movement);
-      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
+      if (
+        !checkpointTargetKeys.has(key) ||
+        unavailableKeys.has(key) ||
+        rewindBoundaryReached.has(key)
+      ) {
+        continue;
+      }
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
       const reversed = reverseHistoricalInventoryMovement(stateAfter, {
@@ -1914,6 +1969,24 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         unitCost: movement.unitCost,
       });
       if (!reversed.reversible) {
+        const hasTargetSaleAtOrBeforeBoundary =
+          Boolean(movement.sale) ||
+          (targetLegacySaleMovementsByKey.get(key) ?? []).some(
+            (saleMovement) => compareMovementMutationAscending(saleMovement, movement) < 0
+          );
+        if (!hasTargetSaleAtOrBeforeBoundary) {
+          rewindBoundaryReached.add(key);
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "REWIND_RESET_BOUNDARY_REACHED",
+            status: "pass",
+            detail: `Stopped safely at ${movement.movementId} because no target historical sale exists before the irreversible valuation boundary`,
+          });
+          continue;
+        }
+
         unavailableKeys.add(key);
         checks.push({
           companyId,
