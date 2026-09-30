@@ -1970,6 +1970,63 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
   const canonicalForReplay = [...canonical, ...canonicalSaleLifecycleCorrections];
 
+  // POS edits/deletes before the 2026-09-11 valuation hardening wrote a
+  // reversal receipt followed by a replacement issue. Those canonical rows are
+  // excellent lifecycle evidence but not exact valuation evidence: the
+  // reversal used the then-live inventory average, while the journal unit_cost
+  // stored the old sale-line cost. Build an alternate replay that collapses
+  // each POS lifecycle to the final active sale state. It is never trusted on
+  // its own: later forward proof accepts it only when it reproduces the
+  // immutable Phase 3 checkpoint exactly.
+  const normalizedCanonicalPosReplay: HistoricalSalesRepairMovement[] = canonical.filter(
+    (movement) => movement.sourceType !== "pos-sale"
+  );
+  for (const [key, evidence] of canonicalSaleEvidence) {
+    const posMovements = evidence.movements.filter((movement) => movement.sourceType === "pos-sale");
+    if (posMovements.length === 0) continue;
+
+    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
+    if (!expectedQuantity) {
+      // The sale no longer exists. Its edit/delete lifecycle has a normalized
+      // net stock effect of zero.
+      continue;
+    }
+
+    const latestPosMutationAt = Math.max(...posMovements.map(movementMutationTime));
+    const latestNegative = posMovements
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) === latestPosMutationAt &&
+          d(movement.quantityDelta).lt(0) &&
+          movement.unitCost !== null &&
+          movement.unitCost !== undefined
+      )
+      .sort(compareMovementMutationAscending);
+
+    let weightedQuantity = new Decimal(0);
+    let weightedValue = new Decimal(0);
+    for (const movement of latestNegative) {
+      const quantity = d(movement.quantityDelta).abs();
+      weightedQuantity = weightedQuantity.plus(quantity);
+      weightedValue = weightedValue.plus(quantity.times(d(movement.unitCost)));
+    }
+
+    if (latestNegative.length === 0 || !weightedQuantity.gt(0)) {
+      // Without a latest priced issue, do not normalize this lifecycle.
+      normalizedCanonicalPosReplay.push(...posMovements);
+      continue;
+    }
+
+    const anchor = latestNegative[latestNegative.length - 1];
+    normalizedCanonicalPosReplay.push({
+      ...anchor,
+      quantityDelta: repairQuantity(expectedQuantity.negated()).toFixed(3),
+      unitCost: repairRate(weightedValue.dividedBy(weightedQuantity)).toFixed(2),
+      sourceType: "pos-sale-normalized",
+      sourceId: key.split(":")[0],
+    });
+  }
+
   const legacySales: SaleRow[] = [];
   for (const sale of sales) {
     if (!sale.location_id) {
