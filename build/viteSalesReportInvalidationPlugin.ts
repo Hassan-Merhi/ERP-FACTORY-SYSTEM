@@ -7,7 +7,6 @@ import {
 } from "./viteSalesReportBandwidthPlugin.ts";
 
 const ORPHANED_RECORDS_SUFFIX = "/client/src/pages/OrphanedRecords.tsx";
-const DATA_TOOLS_SUFFIX = "/client/src/pages/settings/datatoolstab/useDataToolsModel.ts";
 
 const LEGACY_INVALIDATION = `queryClient.invalidateQueries({ queryKey: ["/api/sales-report"] });`;
 const BANDWIDTH_SAFE_INVALIDATION = `queryClient.invalidateQueries({
@@ -72,18 +71,6 @@ export function salesReportInvalidationPlugin(): Plugin {
             BANDWIDTH_SAFE_INVALIDATION,
             2,
             "Orphaned Records sales-report invalidation"
-          ),
-          map: null,
-        };
-      }
-      if (normalizedId.endsWith(DATA_TOOLS_SUFFIX)) {
-        return {
-          code: replaceExpected(
-            source,
-            LEGACY_INVALIDATION,
-            BANDWIDTH_SAFE_INVALIDATION,
-            1,
-            "Data Tools sales-report invalidation"
           ),
           map: null,
         };
