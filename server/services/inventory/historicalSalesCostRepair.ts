@@ -3294,6 +3294,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         });
       }
 
+      if (reversed.recovery === "LEGACY_ISSUE_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "LEGACY_REWIND_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Legacy sale boundary " +
+            movement.movementId +
+            " recovered from the unique self-consistent pre-issue rate because replay reproduced quantity and total value exactly; no ambiguous rate candidate was accepted. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
       if (
         movement.evidence === "canonical" &&
         CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
