@@ -4,13 +4,19 @@ export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v1";
 
 const ZERO = new Decimal(0);
 
+function hscrEngineError(code: string): Error {
+  const error = new Error();
+  error.message = code;
+  return error;
+}
+
 function decimal(value: Decimal.Value | null | undefined, field: string): Decimal {
   try {
     const parsed = new Decimal(value ?? 0);
     if (!parsed.isFinite()) throw new Error("not finite");
     return parsed;
   } catch {
-    throw new Error(`HSCR_NON_FINITE_DECIMAL:${field}`);
+    throw hscrEngineError(`HSCR_NON_FINITE_DECIMAL:${field}`);
   }
 }
 
