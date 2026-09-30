@@ -3086,20 +3086,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     for (const stockItemId of legacyTransferFallbackItemIds) {
       const itemKeys = targetKeysByItem.get(stockItemId) ?? [];
-      if (itemKeys.length === 0) continue;
-      const proven = itemKeys.every((key) => forwardReplayResolvedKeys.has(key));
+      if (itemKeys.length === 0 || fallbackProvenItemIds.has(stockItemId)) continue;
       checks.push({
         companyId,
         locationId: null,
         stockItemId,
-        code: proven
-          ? "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN"
-          : "LEGACY_TRANSFER_FLAG_FALLBACK_UNPROVEN",
-        status: proven ? "pass" : "block",
+        code: "LEGACY_TRANSFER_FLAG_FALLBACK_IGNORED",
+        status: "warning",
         actual: String(itemKeys.length),
-        detail: proven
-          ? "Non-optional legacy transfer rows with inventory_applied=false replay exactly with the full item history to the immutable Phase 3 checkpoint."
-          : "Non-optional transfer rows predate or conflict with reliable inventory_applied ownership; legacy sales remain quarantined until the full item history reproduces the immutable Phase 3 checkpoint.",
+        detail:
+          "False inventory_applied legacy transfer rows did not reproduce the immutable checkpoint, so V17 ignores them and retains the trusted V15 movement history for this item.",
       });
     }
 
