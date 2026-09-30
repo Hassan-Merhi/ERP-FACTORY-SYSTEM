@@ -852,9 +852,15 @@ export function reverseHistoricalSalesRepairMovement(
       }
       const beforeRate = repairRate(beforeValue.dividedBy(previousQty));
       const stateBefore = rawHistoricalInventoryState(previousQty, beforeRate, beforeValue);
-      return statesEqual(applyHistoricalSalesRepairMovement(stateBefore, movement), stateAfter)
-        ? { reversible: true, stateBefore }
-        : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+      if (statesEqual(applyHistoricalSalesRepairMovement(stateBefore, movement), stateAfter)) {
+        return { reversible: true, stateBefore };
+      }
+      return (
+        canonicalRateOnlyRecovery(stateAfter, movement) ?? {
+          reversible: false,
+          reason: "MOVEMENT_INVERSE_INVALID",
+        }
+      );
     }
 
     if (input?.priorCostMemoryRate !== null && input?.priorCostMemoryRate !== undefined) {
@@ -883,9 +889,15 @@ export function reverseHistoricalSalesRepairMovement(
     const beforeValue = repairMoney(stateAfter.totalValue.plus(repairMoney(movement.exactValue)));
     const beforeRate = repairRate(beforeValue.dividedBy(previousQty));
     const stateBefore = rawHistoricalInventoryState(previousQty, beforeRate, beforeValue);
-    return statesEqual(applyHistoricalSalesRepairMovement(stateBefore, movement), stateAfter)
-      ? { reversible: true, stateBefore }
-      : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+    if (statesEqual(applyHistoricalSalesRepairMovement(stateBefore, movement), stateAfter)) {
+      return { reversible: true, stateBefore };
+    }
+    return (
+      canonicalRateOnlyRecovery(stateAfter, movement) ?? {
+        reversible: false,
+        reason: "MOVEMENT_INVERSE_INVALID",
+      }
+    );
   }
 
   const primary = reverseHistoricalInventoryMovement(stateAfter, {
