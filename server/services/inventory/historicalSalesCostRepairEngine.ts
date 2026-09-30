@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v26-derived-rate-fallback";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v27-legacy-offload-rate-only";
 
 const ZERO = new Decimal(0);
 
@@ -829,11 +829,58 @@ function legacyIssueRateOnlyRecovery(
   };
 }
 
+function legacyExactReceiptRateOnlyRecovery(
+  stateAfter: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryReverseResult | null {
+  if (
+    movement.evidence !== "legacy" ||
+    movement.sourceType !== "legacy-container-offload" ||
+    movement.exactValue === null ||
+    movement.exactValue === undefined
+  ) {
+    return null;
+  }
+  if (!stateRateDisagreesWithValue(stateAfter)) return null;
+
+  const delta = repairQuantity(movement.quantityDelta);
+  if (!delta.gt(ZERO)) return null;
+  const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+  if (!repairQuantity(stateAfter.quantity).gt(ZERO) || !previousQty.gt(ZERO)) {
+    return null;
+  }
+
+  const beforeValue = repairMoney(
+    stateAfter.totalValue.minus(repairMoney(movement.exactValue))
+  );
+  if (beforeValue.lt(ZERO)) return null;
+
+  const stateBefore = rawHistoricalInventoryState(
+    previousQty,
+    repairRate(beforeValue.dividedBy(previousQty)),
+    beforeValue
+  );
+  const replayed = applyHistoricalSalesRepairMovement(stateBefore, movement);
+  if (!statesEqualQuantityAndValue(replayed, stateAfter)) return null;
+  if (repairRate(replayed.averageRate).eq(repairRate(stateAfter.averageRate))) {
+    return null;
+  }
+
+  return {
+    reversible: true,
+    stateBefore,
+    recovery: "LEGACY_RECEIPT_RATE_ONLY",
+  };
+}
+
 export type HistoricalInventoryReverseResult =
   | {
       reversible: true;
       stateBefore: HistoricalInventoryState;
-      recovery?: "CANONICAL_RATE_ONLY" | "LEGACY_ISSUE_RATE_ONLY";
+      recovery?:
+        | "CANONICAL_RATE_ONLY"
+        | "LEGACY_ISSUE_RATE_ONLY"
+        | "LEGACY_RECEIPT_RATE_ONLY";
     }
   | {
       reversible: false;
@@ -1038,6 +1085,7 @@ export function reverseHistoricalSalesRepairMovement(
         return { reversible: true, stateBefore };
       }
       return (
+        legacyExactReceiptRateOnlyRecovery(stateAfter, movement) ??
         canonicalRateOnlyRecovery(stateAfter, movement) ?? {
           reversible: false,
           reason: "MOVEMENT_INVERSE_INVALID",
