@@ -17,7 +17,6 @@ import {
   reverseHistoricalInventoryMovement,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
-  type HistoricalSalesRepairOpening,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
 
@@ -195,7 +194,6 @@ async function loadCanonicalMovements(
   }));
 }
 
-
 async function loadValuationCheckpoint(client: PoolClient, companyId: number): Promise<ValuationCheckpoint | null> {
   const cutover = await client.query<{ movement_cutoff_id: number; created_at: Date }>(
     `SELECT movement_cutoff_id,created_at
@@ -246,7 +244,9 @@ function originalProposalForSale(companyId: number, sale: SaleRow): HistoricalSa
   };
 }
 
-function movementKey(movement: Pick<HistoricalSalesRepairMovement, "companyId" | "locationId" | "stockItemId">): string {
+function movementKey(
+  movement: Pick<HistoricalSalesRepairMovement, "companyId" | "locationId" | "stockItemId">
+): string {
   return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
 }
 
@@ -594,162 +594,6 @@ async function loadLegacyManualAdjustments(
   return { movements, checks };
 }
 
-function addMovementNet(
-  net: Map<string, Decimal>,
-  companyId: number,
-  movement: Pick<HistoricalSalesRepairMovement, "locationId" | "stockItemId" | "quantityDelta">
-): void {
-  const key = historicalInventoryKey(companyId, movement.locationId, movement.stockItemId);
-  net.set(key, (net.get(key) ?? new Decimal(0)).plus(d(movement.quantityDelta)));
-}
-
-function buildOpeningStates(input: {
-  companyId: number;
-  stockItems: StockItemRow[];
-  liveInventory: InventoryRow[];
-  movements: HistoricalSalesRepairMovement[];
-}): {
-  openings: HistoricalSalesRepairOpening[];
-  checks: RepairCheck[];
-  derivedOpeningByKey: Map<string, Decimal>;
-} {
-  const { companyId, stockItems, liveInventory, movements } = input;
-  const checks: RepairCheck[] = [];
-  const movementNet = new Map<string, Decimal>();
-  for (const movement of movements) addMovementNet(movementNet, companyId, movement);
-
-  const liveByKey = new Map<string, Decimal>();
-  for (const row of liveInventory) {
-    liveByKey.set(
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      repairQuantity(row.quantity)
-    );
-  }
-
-  const allKeys = new Set([...liveByKey.keys(), ...movementNet.keys()]);
-  const derivedOpeningByKey = new Map<string, Decimal>();
-  for (const key of allKeys) {
-    derivedOpeningByKey.set(
-      key,
-      repairQuantity((liveByKey.get(key) ?? new Decimal(0)).minus(movementNet.get(key) ?? new Decimal(0)))
-    );
-  }
-
-  const itemMap = new Map(stockItems.map((item) => [Number(item.id), item]));
-  const keysByItem = new Map<number, string[]>();
-  for (const key of allKeys) {
-    const stockItemId = Number(key.split(":")[2]);
-    const keys = keysByItem.get(stockItemId) ?? [];
-    keys.push(key);
-    keysByItem.set(stockItemId, keys);
-  }
-
-  const openings: HistoricalSalesRepairOpening[] = [];
-  for (const [stockItemId, keys] of keysByItem) {
-    const item = itemMap.get(stockItemId);
-    if (!item) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "STOCK_ITEM_MISSING",
-        status: "block",
-        detail: "Movement/inventory references a stock item that is missing from the stock master",
-      });
-      continue;
-    }
-
-    const derivedTotal = keys.reduce((sum, key) => sum.plus(derivedOpeningByKey.get(key) ?? 0), new Decimal(0));
-    const masterOpeningQty = repairQuantity(item.opening_qty ?? "0");
-    if (derivedTotal.minus(masterOpeningQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: masterOpeningQty.toFixed(3),
-        actual: derivedTotal.toFixed(3),
-        detail: `Derived location openings do not sum to stock master opening for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    const openingRate = repairMoney(item.opening_rate ?? "0");
-    const openingValue = repairMoney(item.opening_value ?? "0");
-    const calculatedOpeningValue = repairMoney(masterOpeningQty.times(openingRate));
-    if (calculatedOpeningValue.minus(openingValue).abs().gt(MONEY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_VALUE_MISMATCH",
-        status: "block",
-        expected: openingValue.toFixed(2),
-        actual: calculatedOpeningValue.toFixed(2),
-        detail: `Opening quantity × rate does not reconcile to opening value for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    for (const key of keys) {
-      const parts = key.split(":");
-      const locationId = Number(parts[1]);
-      const quantity = derivedOpeningByKey.get(key) ?? new Decimal(0);
-      if (quantity.lt(new Decimal(0).minus(QTY_TOLERANCE))) {
-        checks.push({
-          companyId,
-          locationId,
-          stockItemId,
-          code: "NEGATIVE_DERIVED_OPENING",
-          status: "block",
-          expected: ">=0.000",
-          actual: quantity.toFixed(3),
-          detail: "Location opening reconstructed from quantity history is negative",
-        });
-        continue;
-      }
-      openings.push({
-        companyId,
-        locationId,
-        stockItemId,
-        quantity: repairQuantity(Decimal.max(quantity, 0)).toFixed(3),
-        averageRate: openingRate.toFixed(2),
-      });
-    }
-
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_QUANTITY_RECONCILED",
-      status: "pass",
-      expected: masterOpeningQty.toFixed(3),
-      actual: derivedTotal.toFixed(3),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_RATE_PINNED",
-      status: "pass",
-      expected: openingRate.toFixed(2),
-      actual: openingRate.toFixed(2),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_VALUE_RECONCILED",
-      status: "pass",
-      expected: openingValue.toFixed(2),
-      actual: calculatedOpeningValue.toFixed(2),
-    });
-  }
-
-  return { openings, checks, derivedOpeningByKey };
-}
-
 type RepairBlockerIndex = {
   itemWide: Map<string, RepairCheck>;
   locationSpecific: Map<string, RepairCheck>;
@@ -1031,8 +875,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const key = movementKey(movement);
       if (!targetKeys.has(key) || unavailableKeys.has(key)) continue;
       const current =
-        liveReplayStates.get(key) ??
-        createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
+        liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
       liveReplayStates.set(
         key,
         applyHistoricalInventoryMovement(current, {
