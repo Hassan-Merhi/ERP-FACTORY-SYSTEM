@@ -2172,6 +2172,195 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       rows.push(movement);
       targetLegacySaleMovementsByKey.set(key, rows);
     }
+
+    // Reverse replay can lose pre-reset cost memory. Before blocking older
+    // sales, derive location opening quantities from the immutable checkpoint,
+    // reconcile them to the pinned stock-item opening balance, replay every
+    // durable movement forward, and accept only an exact checkpoint match.
+    const forwardReplayResolvedKeys = new Set<string>();
+    const movementsAscending = [...movementsInCheckpoint].sort(compareMovementMutationAscending);
+    const stockItemById = new Map(stockItems.map((item) => [Number(item.id), item]));
+    const targetKeysByItem = new Map<number, string[]>();
+    for (const key of checkpointTargetKeys) {
+      const stockItemId = Number(key.split(":")[2]);
+      const rows = targetKeysByItem.get(stockItemId) ?? [];
+      rows.push(key);
+      targetKeysByItem.set(stockItemId, rows);
+    }
+
+    for (const [stockItemId, itemTargetKeys] of targetKeysByItem) {
+      const stockItem = stockItemById.get(stockItemId);
+      if (!stockItem) continue;
+
+      const hasPreexistingEvidenceBlock = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null ||
+            itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
+      );
+      if (hasPreexistingEvidenceBlock) continue;
+
+      const itemMovements = movementsAscending.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
+      const locationIds = new Set<number>([
+        ...checkpoint.rows
+          .filter((row) => Number(row.stock_item_id) === stockItemId)
+          .map((row) => Number(row.location_id)),
+        ...itemMovements.map((movement) => movement.locationId),
+      ]);
+      if (locationIds.size === 0) continue;
+
+      const movementDeltaByLocation = new Map<number, Decimal>();
+      for (const movement of itemMovements) {
+        movementDeltaByLocation.set(
+          movement.locationId,
+          repairQuantity(
+            (movementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+              d(movement.quantityDelta)
+            )
+          )
+        );
+      }
+
+      const inferredOpeningQtyByLocation = new Map<number, Decimal>();
+      let inferredOpeningTotal = new Decimal(0);
+      let openingQuantityInvalid = false;
+      for (const locationId of locationIds) {
+        const checkpointState = checkpointStates.get(
+          historicalInventoryKey(companyId, locationId, stockItemId)
+        );
+        let inferred = repairQuantity(
+          (checkpointState?.quantity ?? new Decimal(0)).minus(
+            movementDeltaByLocation.get(locationId) ?? new Decimal(0)
+          )
+        );
+        if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
+        if (inferred.lt(0)) {
+          openingQuantityInvalid = true;
+          break;
+        }
+        inferredOpeningQtyByLocation.set(locationId, inferred);
+        inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
+      }
+      if (openingQuantityInvalid) continue;
+
+      const openingQty = repairQuantity(stockItem.opening_qty);
+      const openingRate = repairRate(stockItem.opening_rate);
+      const openingValue = repairMoney(stockItem.opening_value);
+      if (!inferredOpeningTotal.eq(openingQty)) continue;
+
+      const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(
+        ([, quantity]) => quantity.gt(0)
+      );
+      const openingStates = new Map<number, HistoricalInventoryState>();
+      if (openingQty.isZero()) {
+        if (openingValue.abs().gt(MONEY_TOLERANCE)) continue;
+        for (const locationId of locationIds) {
+          openingStates.set(locationId, stateForZeroOpening(openingRate));
+        }
+      } else if (positiveOpeningLocations.length === 1) {
+        const [openingLocationId, locationQty] = positiveOpeningLocations[0];
+        if (!locationQty.eq(openingQty)) continue;
+        for (const locationId of locationIds) {
+          openingStates.set(
+            locationId,
+            locationId === openingLocationId
+              ? createHistoricalInventoryStateFromSnapshot(
+                  locationQty,
+                  openingRate,
+                  openingValue
+                )
+              : stateForZeroOpening(openingRate)
+          );
+        }
+      } else {
+        let allocatedValue = new Decimal(0);
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          const value = repairMoney(quantity.times(openingRate));
+          openingStates.set(
+            locationId,
+            createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
+          );
+          allocatedValue = repairMoney(allocatedValue.plus(value));
+        }
+        if (!allocatedValue.eq(openingValue)) continue;
+      }
+
+      const replayStates = new Map<number, HistoricalInventoryState>();
+      for (const [locationId, opening] of openingStates) {
+        replayStates.set(
+          locationId,
+          createHistoricalInventoryStateFromSnapshot(
+            opening.quantity,
+            opening.averageRate,
+            opening.totalValue
+          )
+        );
+      }
+      const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+      for (const movement of itemMovements) {
+        const current =
+          replayStates.get(movement.locationId) ?? stateForZeroOpening(openingRate);
+        if (movement.sale) {
+          const key = movementKey(movement);
+          if (checkpointTargetKeys.has(key)) {
+            replayProposals.set(
+              movement.sale.salesItemId,
+              historicalSaleProposalFromState(movement, current)
+            );
+          }
+        }
+        replayStates.set(
+          movement.locationId,
+          applyHistoricalInventoryMovement(current, {
+            quantityDelta: movement.quantityDelta,
+            unitCost: movement.unitCost,
+          })
+        );
+      }
+
+      let exactCheckpointReplay = true;
+      for (const locationId of locationIds) {
+        const key = historicalInventoryKey(companyId, locationId, stockItemId);
+        const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
+        const expected = checkpointStates.get(key);
+        if (expected) {
+          if (!historicalInventoryStatesEqual(actual, expected)) {
+            exactCheckpointReplay = false;
+            break;
+          }
+        } else if (
+          !repairQuantity(actual.quantity).isZero() ||
+          repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+        ) {
+          exactCheckpointReplay = false;
+          break;
+        }
+      }
+      if (!exactCheckpointReplay) continue;
+
+      for (const key of itemTargetKeys) {
+        forwardReplayResolvedKeys.add(key);
+        const locationId = Number(key.split(":")[1]);
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "OPENING_FORWARD_REPLAY_PROVEN",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "|" + openingValue.toFixed(2),
+          actual: inferredOpeningTotal.toFixed(3) + "|" + openingValue.toFixed(2),
+          detail:
+            "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
+        });
+      }
+      for (const proposal of replayProposals.values()) {
+        proposalsBySaleId.set(proposal.salesItemId, proposal);
+      }
+    }
+
     const rewindBoundaryReached = new Set<string>();
 
     for (const movement of movementsInCheckpoint) {
@@ -2179,6 +2368,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       if (
         !checkpointTargetKeys.has(key) ||
         unavailableKeys.has(key) ||
+        forwardReplayResolvedKeys.has(key) ||
         rewindBoundaryReached.has(key)
       ) {
         continue;
