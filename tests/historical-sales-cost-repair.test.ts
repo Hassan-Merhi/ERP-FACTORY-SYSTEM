@@ -761,6 +761,73 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.reversible).toBe(false);
   });
 
+  it("falls back to the value-derived center for a uniquely solvable POS reversal only after the stored-rate search finds none", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "14",
+      "128.85",
+      "1815.12"
+    );
+    const posReversal = movement({
+      movementId: "canonical:29139",
+      occurredAt: "2026-09-09T09:42:29.570Z",
+      quantityDelta: "1",
+      unitCost: "128.850000",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, posReversal);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("13.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1685.47");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("129.65");
+  });
+
+  it("falls back to the value-derived center for a uniquely solvable legacy sale issue", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "9",
+      "19.62",
+      "675.19"
+    );
+    const legacySale = movement({
+      movementId: "sale-marker:51181",
+      occurredAt: "2026-04-07T12:06:54.887Z",
+      quantityDelta: "-1",
+      unitCost: null,
+      sourceType: "legacy-sale",
+      evidence: "legacy",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, legacySale);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("LEGACY_ISSUE_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("750.21");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("75.02");
+  });
+
+  it("keeps a derived-center stock-transfer inverse blocked when more than one exact rate candidate exists", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "165",
+      "61.35",
+      "10056.39"
+    );
+    const transferOut = movement({
+      movementId: "canonical:16798",
+      occurredAt: "2026-08-31T13:01:41.856Z",
+      quantityDelta: "-98",
+      unitCost: "61.340000",
+      sourceType: "stock-transfer",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, transferOut);
+    expect(reversed.reversible).toBe(false);
+  });
+
   it("recovers a canonical POS issue when quantity and value invert exactly but the reconstructed rate is stale", () => {
     const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
     const saleIssue = movement({

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v25-legacy-sale-rate-only";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v26-derived-rate-fallback";
 
 const ZERO = new Decimal(0);
 
@@ -604,30 +604,43 @@ function canonicalRateOnlyRecovery(
     // exactly. The post-state average-rate field is allowed to disagree because
     // this helper is invoked only when stateRateDisagreesWithValue() already
     // proved that the reconstructed intermediate rate is stale.
-    const candidates: HistoricalInventoryState[] = [];
-    for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
-      const beforeValue = repairMoney(
-        stateAfter.totalValue.minus(delta.times(candidateRate))
-      );
-      if (beforeValue.lt(ZERO)) continue;
-      const candidate = rawHistoricalInventoryState(
-        previousQty,
-        candidateRate,
-        beforeValue
-      );
-      if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
-        continue;
+    const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
+      const candidates: HistoricalInventoryState[] = [];
+      for (const candidateRate of candidateRatesAround(center)) {
+        const beforeValue = repairMoney(
+          stateAfter.totalValue.minus(delta.times(candidateRate))
+        );
+        if (beforeValue.lt(ZERO)) continue;
+        const candidate = rawHistoricalInventoryState(
+          previousQty,
+          candidateRate,
+          beforeValue
+        );
+        if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+          continue;
+        }
+        const replayed = applyHistoricalInventoryMovement(candidate, {
+          quantityDelta: delta,
+          unitCost: null,
+        });
+        if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+          candidates.push(candidate);
+        }
       }
-      const replayed = applyHistoricalInventoryMovement(candidate, {
-        quantityDelta: delta,
-        unitCost: null,
-      });
-      if (statesEqualQuantityAndValue(replayed, stateAfter)) {
-        candidates.push(candidate);
-      }
+      return candidates;
+    };
+
+    const primaryCandidates = evaluateCandidates(stateAfter.averageRate);
+    if (primaryCandidates.length > 1) return null;
+    if (primaryCandidates.length === 1) {
+      stateBefore = primaryCandidates[0];
+    } else {
+      const derivedCenter = derivedRateCandidateCenter(stateAfter);
+      if (!derivedCenter) return null;
+      const derivedCandidates = evaluateCandidates(derivedCenter);
+      if (derivedCandidates.length !== 1) return null;
+      stateBefore = derivedCandidates[0];
     }
-    if (candidates.length !== 1) return null;
-    stateBefore = candidates[0];
   } else if (
     delta.gt(ZERO) &&
     movement.sourceType !== "pos-sale" &&
@@ -653,29 +666,42 @@ function canonicalRateOnlyRecovery(
     // inventory average rate. When the reconstructed intermediate rate is stale,
     // recover only a UNIQUE self-consistent source-rate candidate whose issue
     // replay preserves quantity and total value exactly.
-    const candidates: HistoricalInventoryState[] = [];
-    for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
-      const beforeValue = repairMoney(
-        stateAfter.totalValue.plus(delta.abs().times(candidateRate))
-      );
-      const candidate = rawHistoricalInventoryState(
-        previousQty,
-        candidateRate,
-        beforeValue
-      );
-      if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
-        continue;
+    const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
+      const candidates: HistoricalInventoryState[] = [];
+      for (const candidateRate of candidateRatesAround(center)) {
+        const beforeValue = repairMoney(
+          stateAfter.totalValue.plus(delta.abs().times(candidateRate))
+        );
+        const candidate = rawHistoricalInventoryState(
+          previousQty,
+          candidateRate,
+          beforeValue
+        );
+        if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+          continue;
+        }
+        const replayed = applyHistoricalInventoryMovement(candidate, {
+          quantityDelta: delta,
+          unitCost: movement.unitCost,
+        });
+        if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+          candidates.push(candidate);
+        }
       }
-      const replayed = applyHistoricalInventoryMovement(candidate, {
-        quantityDelta: delta,
-        unitCost: movement.unitCost,
-      });
-      if (statesEqualQuantityAndValue(replayed, stateAfter)) {
-        candidates.push(candidate);
-      }
+      return candidates;
+    };
+
+    const primaryCandidates = evaluateCandidates(stateAfter.averageRate);
+    if (primaryCandidates.length > 1) return null;
+    if (primaryCandidates.length === 1) {
+      stateBefore = primaryCandidates[0];
+    } else {
+      const derivedCenter = derivedRateCandidateCenter(stateAfter);
+      if (!derivedCenter) return null;
+      const derivedCandidates = evaluateCandidates(derivedCenter);
+      if (derivedCandidates.length !== 1) return null;
+      stateBefore = derivedCandidates[0];
     }
-    if (candidates.length !== 1) return null;
-    stateBefore = candidates[0];
   } else if (
     delta.lt(ZERO) &&
     (movement.sourceType === "pos-sale" ||
@@ -726,6 +752,12 @@ function candidateRatesAround(rate: Decimal): Decimal[] {
   return values;
 }
 
+function derivedRateCandidateCenter(state: HistoricalInventoryState): Decimal | null {
+  const quantity = repairQuantity(state.quantity);
+  if (!quantity.gt(ZERO)) return null;
+  return repairRate(Decimal.max(state.totalValue.dividedBy(quantity), ZERO));
+}
+
 function legacyIssueRateOnlyRecovery(
   stateAfter: HistoricalInventoryState,
   movement: HistoricalSalesRepairMovement
@@ -742,31 +774,45 @@ function legacyIssueRateOnlyRecovery(
     return null;
   }
 
-  const candidates: HistoricalInventoryState[] = [];
-  for (const candidateRate of candidateRatesAround(stateAfter.averageRate)) {
-    const beforeValue = repairMoney(
-      stateAfter.totalValue.plus(delta.abs().times(candidateRate))
-    );
-    if (beforeValue.lt(ZERO)) continue;
-    const candidate = rawHistoricalInventoryState(
-      previousQty,
-      candidateRate,
-      beforeValue
-    );
-    if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
-      continue;
+  const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
+    const candidates: HistoricalInventoryState[] = [];
+    for (const candidateRate of candidateRatesAround(center)) {
+      const beforeValue = repairMoney(
+        stateAfter.totalValue.plus(delta.abs().times(candidateRate))
+      );
+      if (beforeValue.lt(ZERO)) continue;
+      const candidate = rawHistoricalInventoryState(
+        previousQty,
+        candidateRate,
+        beforeValue
+      );
+      if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
+        continue;
+      }
+      const replayed = applyHistoricalInventoryMovement(candidate, {
+        quantityDelta: delta,
+        unitCost: null,
+      });
+      if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+        candidates.push(candidate);
+      }
     }
-    const replayed = applyHistoricalInventoryMovement(candidate, {
-      quantityDelta: delta,
-      unitCost: null,
-    });
-    if (statesEqualQuantityAndValue(replayed, stateAfter)) {
-      candidates.push(candidate);
-    }
-  }
+    return candidates;
+  };
 
-  if (candidates.length !== 1) return null;
-  const stateBefore = candidates[0];
+  const primaryCandidates = evaluateCandidates(stateAfter.averageRate);
+  if (primaryCandidates.length > 1) return null;
+
+  let stateBefore: HistoricalInventoryState;
+  if (primaryCandidates.length === 1) {
+    stateBefore = primaryCandidates[0];
+  } else {
+    const derivedCenter = derivedRateCandidateCenter(stateAfter);
+    if (!derivedCenter) return null;
+    const derivedCandidates = evaluateCandidates(derivedCenter);
+    if (derivedCandidates.length !== 1) return null;
+    stateBefore = derivedCandidates[0];
+  }
   const replayed = applyHistoricalInventoryMovement(stateBefore, {
     quantityDelta: delta,
     unitCost: null,
