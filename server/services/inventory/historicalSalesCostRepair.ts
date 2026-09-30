@@ -3207,6 +3207,37 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
       if (!reversed.reversible) {
+        const priorRateHint = priorCostMemoryRateHints.get(movement.movementId) ?? null;
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "REWIND_BOUNDARY_DIAGNOSTIC",
+          status: "warning",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairRate(stateAfter.averageRate).toFixed(2) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(movement.quantityDelta).toFixed(3) +
+            "|" +
+            (movement.unitCost == null ? "null" : String(movement.unitCost)) +
+            "|" +
+            (priorRateHint == null ? "null" : repairRate(priorRateHint).toFixed(2)),
+          detail:
+            "reason=" +
+            reversed.reason +
+            " boundary=" +
+            movement.movementId +
+            " sourceType=" +
+            movement.sourceType +
+            " evidence=" +
+            movement.evidence +
+            " stateAfter=qty|rate|value delta|unitCost|priorRateHint occurredAt=" +
+            movement.occurredAt,
+        });
         const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
           (saleMovement) =>
             compareMovementMutationAscending(saleMovement, movement) <= 0 &&
