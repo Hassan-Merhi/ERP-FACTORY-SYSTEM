@@ -2300,10 +2300,11 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     ].sort(compareMovementMutationAscending);
     const priorCostMemoryRateHints =
       buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
+    const fallbackMovementsInCheckpoint = legacyTransferFallbackMovements
+      .filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime())
+      .sort(compareMovementMutationAscending);
     const legacyTransferFallbackItemIds = new Set(
-      legacyMovements
-        .filter((movement) => movement.sourceType.endsWith("-flag-fallback"))
-        .map((movement) => movement.stockItemId)
+      fallbackMovementsInCheckpoint.map((movement) => movement.stockItemId)
     );
     const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
     for (const movement of legacyMovements) {
@@ -2319,6 +2320,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     // reconcile them to the pinned stock-item opening balance, replay every
     // durable movement forward, and accept only an exact checkpoint match.
     const forwardReplayResolvedKeys = new Set<string>();
+    const fallbackProvenItemIds = new Set<number>();
     const movementsAscending = [...movementsInCheckpoint].sort(compareMovementMutationAscending);
     const stockItemById = new Map(stockItems.map((item) => [Number(item.id), item]));
     const targetKeysByItem = new Map<number, string[]>();
