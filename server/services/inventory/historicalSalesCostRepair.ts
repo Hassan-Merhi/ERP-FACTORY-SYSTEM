@@ -106,13 +106,15 @@ function hscrError(code: string): Error {
 
 function d(value: Decimal.Value | null | undefined): Decimal {
   const parsed = new Decimal(value ?? 0);
-  if (!parsed.isFinite()) throw hscrError(`HSCR_NON_FINITE_VALUE:${String(value)}`);
+  if (!parsed.isFinite())
+    throw hscrError(`HSCR_NON_FINITE_VALUE:${String(value)}`);
   return parsed;
 }
 
 function iso(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(date.getTime())) throw hscrError(`HSCR_INVALID_TIMESTAMP:${String(value)}`);
+  if (!Number.isFinite(date.getTime()))
+    throw hscrError(`HSCR_INVALID_TIMESTAMP:${String(value)}`);
   return date.toISOString();
 }
 
@@ -121,33 +123,52 @@ function beforeCutoff(value: Date, canonicalStart: Date | null): boolean {
 }
 
 async function enableMaintenanceScope(client: PoolClient): Promise<void> {
-  await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
+  await client.query(
+    "SELECT set_config('app.company_scope_maintenance', 'on', true)",
+  );
   await client.query("SELECT set_config('app.current_company_id', '', true)");
-  await client.query("SELECT set_config('app.authorized_company_ids', '', true)");
+  await client.query(
+    "SELECT set_config('app.authorized_company_ids', '', true)",
+  );
 }
 
-async function companyIdsForRun(client: PoolClient, requested?: number[]): Promise<number[]> {
+async function companyIdsForRun(
+  client: PoolClient,
+  requested?: number[],
+): Promise<number[]> {
   if (requested?.length) {
-    const unique = [...new Set(requested.map(Number).filter((value) => Number.isInteger(value) && value > 0))];
+    const unique = [
+      ...new Set(
+        requested
+          .map(Number)
+          .filter((value) => Number.isInteger(value) && value > 0),
+      ),
+    ];
     const existing = await client.query<{ id: number }>(
       "SELECT id FROM companies WHERE id = ANY($1::int[]) ORDER BY id",
-      [unique]
+      [unique],
     );
     if (existing.rows.length !== unique.length) {
       throw hscrError("HSCR_REQUESTED_COMPANY_NOT_FOUND");
     }
     return existing.rows.map((row) => Number(row.id));
   }
-  const all = await client.query<{ id: number }>("SELECT id FROM companies ORDER BY id");
+  const all = await client.query<{ id: number }>(
+    "SELECT id FROM companies ORDER BY id",
+  );
   return all.rows.map((row) => Number(row.id));
 }
 
-async function loadCanonicalStart(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<Date | null> {
+async function loadCanonicalStart(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date,
+): Promise<Date | null> {
   const result = await client.query<{ started_at: Date | null }>(
     `SELECT MIN(created_at) AS started_at
        FROM canonical_stock_movements
       WHERE company_id=$1 AND created_at <= $2`,
-    [companyId, sourceCutoff]
+    [companyId, sourceCutoff],
   );
   return result.rows[0]?.started_at ?? null;
 }
@@ -156,7 +177,7 @@ async function loadCanonicalMovements(
   client: PoolClient,
   companyId: number,
   canonicalStart: Date | null,
-  sourceCutoff: Date
+  sourceCutoff: Date,
 ): Promise<HistoricalSalesRepairMovement[]> {
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
@@ -167,7 +188,7 @@ async function loadCanonicalMovements(
         AND created_at >= $2
         AND created_at <= $3
       ORDER BY occurred_at,id`,
-    [companyId, canonicalStart, sourceCutoff]
+    [companyId, canonicalStart, sourceCutoff],
   );
   return rows.rows.map((row) => ({
     movementId: `canonical:${row.id}`,
@@ -187,7 +208,7 @@ async function loadCanonicalMovements(
 async function loadSales(
   client: PoolClient,
   companyId: number,
-  sourceCutoff: Date
+  sourceCutoff: Date,
 ): Promise<SaleRow[]> {
   const rows = await client.query<SaleRow>(
     `SELECT si.id AS sales_item_id,si.voucher_id,v.location_id,si.stock_item_id,
@@ -202,7 +223,7 @@ async function loadSales(
         AND COALESCE(v.optional,false)=false
         AND GREATEST(si.created_at,v.created_at) <= $2
       ORDER BY GREATEST(si.created_at,v.created_at),si.id`,
-    [companyId, sourceCutoff]
+    [companyId, sourceCutoff],
   );
   return rows.rows;
 }
@@ -211,7 +232,7 @@ async function loadLegacyMovements(
   client: PoolClient,
   companyId: number,
   canonicalStart: Date | null,
-  sourceCutoff: Date
+  sourceCutoff: Date,
 ): Promise<LegacyRow[]> {
   const params = [companyId, canonicalStart, sourceCutoff];
   const rows = await client.query<LegacyRow>(
@@ -439,7 +460,7 @@ async function loadLegacyMovements(
     UNION ALL SELECT * FROM archive_in
     ORDER BY occurred_at,sequence
     `,
-    params
+    params,
   );
   return rows.rows;
 }
@@ -448,7 +469,7 @@ async function loadLegacyManualAdjustments(
   client: PoolClient,
   companyId: number,
   canonicalStart: Date | null,
-  sourceCutoff: Date
+  sourceCutoff: Date,
 ): Promise<{ movements: LegacyRow[]; checks: RepairCheck[] }> {
   const rows = await client.query<AuditInventoryRow>(
     `SELECT id,record_id AS stock_item_id,
@@ -465,14 +486,14 @@ async function loadLegacyManualAdjustments(
         AND created_at <= $3
         AND ($2::timestamptz IS NULL OR created_at < $2)
       ORDER BY created_at,id`,
-    [companyId, canonicalStart, sourceCutoff]
+    [companyId, canonicalStart, sourceCutoff],
   );
 
   const movements: LegacyRow[] = [];
   const checks: RepairCheck[] = [];
   const locationRows = await client.query<{ id: number; name: string }>(
     `SELECT id,name FROM locations WHERE company_id=$1 ORDER BY id`,
-    [companyId]
+    [companyId],
   );
   const locationsByName = new Map<string, number[]>();
   for (const location of locationRows.rows) {
@@ -482,7 +503,12 @@ async function loadLegacyManualAdjustments(
   }
 
   for (const row of rows.rows) {
-    if (!row.stock_item_id || !row.location_name || row.old_quantity === null || row.new_quantity === null) {
+    if (
+      !row.stock_item_id ||
+      !row.location_name ||
+      row.old_quantity === null ||
+      row.new_quantity === null
+    ) {
       checks.push({
         companyId,
         locationId: null,
@@ -528,10 +554,20 @@ async function loadLegacyManualAdjustments(
 function addMovementNet(
   net: Map<string, Decimal>,
   companyId: number,
-  movement: Pick<HistoricalSalesRepairMovement, "locationId" | "stockItemId" | "quantityDelta">
+  movement: Pick<
+    HistoricalSalesRepairMovement,
+    "locationId" | "stockItemId" | "quantityDelta"
+  >,
 ): void {
-  const key = historicalInventoryKey(companyId, movement.locationId, movement.stockItemId);
-  net.set(key, (net.get(key) ?? new Decimal(0)).plus(d(movement.quantityDelta)));
+  const key = historicalInventoryKey(
+    companyId,
+    movement.locationId,
+    movement.stockItemId,
+  );
+  net.set(
+    key,
+    (net.get(key) ?? new Decimal(0)).plus(d(movement.quantityDelta)),
+  );
 }
 
 function buildOpeningStates(input: {
@@ -539,17 +575,26 @@ function buildOpeningStates(input: {
   stockItems: StockItemRow[];
   liveInventory: InventoryRow[];
   movements: HistoricalSalesRepairMovement[];
-}): { openings: HistoricalSalesRepairOpening[]; checks: RepairCheck[]; derivedOpeningByKey: Map<string, Decimal> } {
+}): {
+  openings: HistoricalSalesRepairOpening[];
+  checks: RepairCheck[];
+  derivedOpeningByKey: Map<string, Decimal>;
+} {
   const { companyId, stockItems, liveInventory, movements } = input;
   const checks: RepairCheck[] = [];
   const movementNet = new Map<string, Decimal>();
-  for (const movement of movements) addMovementNet(movementNet, companyId, movement);
+  for (const movement of movements)
+    addMovementNet(movementNet, companyId, movement);
 
   const liveByKey = new Map<string, Decimal>();
   for (const row of liveInventory) {
     liveByKey.set(
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      repairQuantity(row.quantity)
+      historicalInventoryKey(
+        companyId,
+        Number(row.location_id),
+        Number(row.stock_item_id),
+      ),
+      repairQuantity(row.quantity),
     );
   }
 
@@ -558,7 +603,11 @@ function buildOpeningStates(input: {
   for (const key of allKeys) {
     derivedOpeningByKey.set(
       key,
-      repairQuantity((liveByKey.get(key) ?? new Decimal(0)).minus(movementNet.get(key) ?? new Decimal(0)))
+      repairQuantity(
+        (liveByKey.get(key) ?? new Decimal(0)).minus(
+          movementNet.get(key) ?? new Decimal(0),
+        ),
+      ),
     );
   }
 
@@ -581,14 +630,15 @@ function buildOpeningStates(input: {
         stockItemId,
         code: "STOCK_ITEM_MISSING",
         status: "block",
-        detail: "Movement/inventory references a stock item that is missing from the stock master",
+        detail:
+          "Movement/inventory references a stock item that is missing from the stock master",
       });
       continue;
     }
 
     const derivedTotal = keys.reduce(
       (sum, key) => sum.plus(derivedOpeningByKey.get(key) ?? 0),
-      new Decimal(0)
+      new Decimal(0),
     );
     const masterOpeningQty = repairQuantity(item.opening_qty ?? "0");
     if (derivedTotal.minus(masterOpeningQty).abs().gt(QTY_TOLERANCE)) {
@@ -607,7 +657,9 @@ function buildOpeningStates(input: {
 
     const openingRate = repairMoney(item.opening_rate ?? "0");
     const openingValue = repairMoney(item.opening_value ?? "0");
-    const calculatedOpeningValue = repairMoney(masterOpeningQty.times(openingRate));
+    const calculatedOpeningValue = repairMoney(
+      masterOpeningQty.times(openingRate),
+    );
     if (calculatedOpeningValue.minus(openingValue).abs().gt(MONEY_TOLERANCE)) {
       checks.push({
         companyId,
@@ -635,7 +687,8 @@ function buildOpeningStates(input: {
           status: "block",
           expected: ">=0.000",
           actual: quantity.toFixed(3),
-          detail: "Location opening reconstructed from quantity history is negative",
+          detail:
+            "Location opening reconstructed from quantity history is negative",
         });
         continue;
       }
@@ -703,11 +756,15 @@ function buildRepairBlockerIndex(checks: RepairCheck[]): RepairBlockerIndex {
 
 function blockerForProposal(
   blockers: RepairBlockerIndex,
-  proposal: Pick<HistoricalSalesRepairProposal, "companyId" | "locationId" | "stockItemId">
+  proposal: Pick<
+    HistoricalSalesRepairProposal,
+    "companyId" | "locationId" | "stockItemId"
+  >,
 ): RepairCheck | undefined {
   return (
-    blockers.locationSpecific.get(`${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`) ??
-    blockers.itemWide.get(`${proposal.companyId}:${proposal.stockItemId}`)
+    blockers.locationSpecific.get(
+      `${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`,
+    ) ?? blockers.itemWide.get(`${proposal.companyId}:${proposal.stockItemId}`)
   );
 }
 
@@ -718,20 +775,28 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
     keys.add(
       `${check.companyId}:${check.locationId === null ? "*" : check.locationId}:${
         check.stockItemId === null ? "*" : check.stockItemId
-      }`
+      }`,
     );
   }
   return keys.size;
 }
 
-const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
+const CANONICAL_SALE_SOURCE_TYPES = new Set([
+  "pos-sale",
+  "pos-import",
+  "credit-sales-import",
+]);
 
-function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
+function canonicalSaleEvidenceKeys(
+  movements: HistoricalSalesRepairMovement[],
+): Set<string> {
   const keys = new Set<string>();
   for (const movement of movements) {
     if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
     if (d(movement.quantityDelta).gte(0)) continue;
-    keys.add(`${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`);
+    keys.add(
+      `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`,
+    );
   }
   return keys;
 }
@@ -741,20 +806,27 @@ function markAmbiguousTimestampTies(
   movements: HistoricalSalesRepairMovement[],
   sales: SaleRow[],
   canonicalStart: Date | null,
-  canonicalSaleKeys: Set<string>
+  canonicalSaleKeys: Set<string>,
 ): RepairCheck[] {
   const checks: RepairCheck[] = [];
   const inboundByKeyTime = new Set<string>();
   for (const movement of movements) {
     if (movement.evidence !== "legacy") continue;
-    if (d(movement.quantityDelta).lte(0) || movement.unitCost === null) continue;
+    if (d(movement.quantityDelta).lte(0) || movement.unitCost === null)
+      continue;
     inboundByKeyTime.add(
-      `${movement.locationId}:${movement.stockItemId}:${movement.occurredAt}`
+      `${movement.locationId}:${movement.stockItemId}:${movement.occurredAt}`,
     );
   }
   for (const sale of sales) {
-    if (!sale.location_id || !beforeCutoff(sale.created_at, canonicalStart)) continue;
-    if (canonicalSaleKeys.has(`${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`)) continue;
+    if (!sale.location_id || !beforeCutoff(sale.created_at, canonicalStart))
+      continue;
+    if (
+      canonicalSaleKeys.has(
+        `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`,
+      )
+    )
+      continue;
     const key = `${sale.location_id}:${sale.stock_item_id}:${iso(sale.created_at)}`;
     if (inboundByKeyTime.has(key)) {
       checks.push({
@@ -773,33 +845,41 @@ function markAmbiguousTimestampTies(
 async function dryRunCompany(
   client: PoolClient,
   companyId: number,
-  sourceCutoff: Date
+  sourceCutoff: Date,
 ): Promise<CompanyDryRun> {
-  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
+  await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [
+    `historical-sales-cost-repair:${companyId}`,
+  ]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales] = await Promise.all([
-    client.query<InventoryRow>(
-      `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
+  const [inventoryResult, stockItemResult, canonicalStart, sales] =
+    await Promise.all([
+      client.query<InventoryRow>(
+        `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
          FROM inventory
         WHERE company_id=$1
         ORDER BY location_id,stock_item_id`,
-      [companyId]
-    ),
-    client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text
+        [companyId],
+      ),
+      client.query<StockItemRow>(
+        `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text
          FROM stock_items
         WHERE company_id=$1
         ORDER BY id`,
-      [companyId]
-    ),
-    loadCanonicalStart(client, companyId, sourceCutoff),
-    loadSales(client, companyId, sourceCutoff),
-  ]);
+        [companyId],
+      ),
+      loadCanonicalStart(client, companyId, sourceCutoff),
+      loadSales(client, companyId, sourceCutoff),
+    ]);
 
   const [canonical, legacy, manual] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
-    loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+    loadLegacyManualAdjustments(
+      client,
+      companyId,
+      canonicalStart,
+      sourceCutoff,
+    ),
   ]);
 
   const checks: RepairCheck[] = [...manual.checks];
@@ -887,7 +967,15 @@ async function dryRunCompany(
     });
   }
 
-  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart, canonicalSaleKeys));
+  checks.push(
+    ...markAmbiguousTimestampTies(
+      companyId,
+      movements,
+      sales,
+      canonicalStart,
+      canonicalSaleKeys,
+    ),
+  );
 
   const opening = buildOpeningStates({
     companyId,
@@ -897,15 +985,25 @@ async function dryRunCompany(
   });
   checks.push(...opening.checks);
 
-  const replay = replayHistoricalSalesCosts({ openings: opening.openings, movements });
+  const replay = replayHistoricalSalesCosts({
+    openings: opening.openings,
+    movements,
+  });
   const proposals = replay.proposals;
   const liveByKey = new Map(
     inventoryResult.rows.map((row) => [
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
+      historicalInventoryKey(
+        companyId,
+        Number(row.location_id),
+        Number(row.stock_item_id),
+      ),
       row,
-    ])
+    ]),
   );
-  const replayKeys = new Set([...liveByKey.keys(), ...replay.closingStates.keys()]);
+  const replayKeys = new Set([
+    ...liveByKey.keys(),
+    ...replay.closingStates.keys(),
+  ]);
   for (const key of replayKeys) {
     const state = replay.closingStates.get(key);
     const live = liveByKey.get(key);
@@ -937,7 +1035,8 @@ async function dryRunCompany(
         status: "block",
         expected: expectedValue.toFixed(2),
         actual: actualValue.toFixed(2),
-        detail: "Forward weighted-average replay does not reproduce live closing inventory value",
+        detail:
+          "Forward weighted-average replay does not reproduce live closing inventory value",
       });
     } else {
       checks.push({
@@ -971,7 +1070,7 @@ async function dryRunCompany(
 function proposalHashSource(
   proposal: HistoricalSalesRepairProposal,
   status: string,
-  blockerCode?: string | null
+  blockerCode?: string | null,
 ): string {
   return [
     proposal.salesItemId,
@@ -995,7 +1094,7 @@ async function persistProposalRows(
   client: PoolClient,
   runId: number,
   proposals: HistoricalSalesRepairProposal[],
-  checks: RepairCheck[]
+  checks: RepairCheck[],
 ): Promise<void> {
   const blockers = buildRepairBlockerIndex(checks);
 
@@ -1005,7 +1104,11 @@ async function persistProposalRows(
     const values: unknown[] = [];
     const placeholders = batch.map((proposal, index) => {
       const blocked = blockerForProposal(blockers, proposal);
-      const status = blocked ? "blocked" : proposal.changed ? "ready" : "unchanged";
+      const status = blocked
+        ? "blocked"
+        : proposal.changed
+          ? "ready"
+          : "unchanged";
       const base = index * 20;
       values.push(
         runId,
@@ -1027,7 +1130,7 @@ async function persistProposalRows(
         proposal.changed,
         status,
         blocked?.code ?? null,
-        blocked?.detail ?? null
+        blocked?.detail ?? null,
       );
       const p = Array.from({ length: 20 }, (_, i) => "$" + (base + i + 1));
       return `(${p.join(",")})`;
@@ -1040,12 +1143,16 @@ async function persistProposalRows(
         blocker_detail)
        VALUES ${placeholders.join(",")}
        ON CONFLICT (run_id,sales_item_id) DO NOTHING`,
-      values
+      values,
     );
   }
 }
 
-async function persistChecks(client: PoolClient, runId: number, checks: RepairCheck[]): Promise<void> {
+async function persistChecks(
+  client: PoolClient,
+  runId: number,
+  checks: RepairCheck[],
+): Promise<void> {
   const batchSize = 400;
   for (let offset = 0; offset < checks.length; offset += batchSize) {
     const batch = checks.slice(offset, offset + batchSize);
@@ -1061,7 +1168,7 @@ async function persistChecks(client: PoolClient, runId: number, checks: RepairCh
         check.status,
         check.expected ?? null,
         check.actual ?? null,
-        check.detail ?? null
+        check.detail ?? null,
       );
       return `(${Array.from({ length: 9 }, (_, i) => `$${base + i + 1}`).join(",")})`;
     });
@@ -1069,7 +1176,7 @@ async function persistChecks(client: PoolClient, runId: number, checks: RepairCh
       `INSERT INTO historical_sales_cost_repair_checks
        (run_id,company_id,location_id,stock_item_id,check_code,status,expected_value,actual_value,detail)
        VALUES ${placeholders.join(",")}`,
-      values
+      values,
     );
   }
 }
@@ -1100,9 +1207,13 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   try {
     await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
     await enableMaintenanceScope(client);
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-dry-run'))");
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-dry-run'))",
+    );
 
-    const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
+    const cutoffResult = await client.query<{ cutoff: Date }>(
+      "SELECT clock_timestamp() AS cutoff",
+    );
     const sourceCutoff = cutoffResult.rows[0].cutoff;
     const companyIds = await companyIdsForRun(client, input.companyIds);
 
@@ -1111,7 +1222,12 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
        (algorithm_version,status,source_cutoff_at,requested_company_ids,created_by)
        VALUES ($1,'building',$2,$3,$4)
        RETURNING id`,
-      [HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION, sourceCutoff, companyIds, input.createdBy]
+      [
+        HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
+        sourceCutoff,
+        companyIds,
+        input.createdBy,
+      ],
     );
     runId = Number(created.rows[0].id);
 
@@ -1129,45 +1245,73 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     await persistProposalRows(client, runId, allProposals, allChecks);
 
     const blockers = buildRepairBlockerIndex(allChecks);
-    const blockedRows = allProposals.filter((proposal) => blockerForProposal(blockers, proposal)).length;
+    const blockedRows = allProposals.filter((proposal) =>
+      blockerForProposal(blockers, proposal),
+    ).length;
     const changedRows = allProposals.filter(
-      (proposal) => proposal.changed && !blockerForProposal(blockers, proposal)
+      (proposal) => proposal.changed && !blockerForProposal(blockers, proposal),
     ).length;
 
     const originalTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalTotalCost), new Decimal(0))
+      allProposals.reduce(
+        (sum, proposal) => sum.plus(proposal.originalTotalCost),
+        new Decimal(0),
+      ),
     );
     const proposedTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedTotalCost), new Decimal(0))
+      allProposals.reduce(
+        (sum, proposal) => sum.plus(proposal.proposedTotalCost),
+        new Decimal(0),
+      ),
     );
     const originalTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalProfit), new Decimal(0))
+      allProposals.reduce(
+        (sum, proposal) => sum.plus(proposal.originalProfit),
+        new Decimal(0),
+      ),
     );
     const proposedTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedProfit), new Decimal(0))
+      allProposals.reduce(
+        (sum, proposal) => sum.plus(proposal.proposedProfit),
+        new Decimal(0),
+      ),
     );
 
     const hash = createHash("sha256");
     hash.update(HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION);
     hash.update("|");
     hash.update(sourceCutoff.toISOString());
-    for (const proposal of [...allProposals].sort((a, b) => a.salesItemId - b.salesItemId)) {
+    for (const proposal of [...allProposals].sort(
+      (a, b) => a.salesItemId - b.salesItemId,
+    )) {
       const blocked = blockerForProposal(blockers, proposal);
       hash.update("\n");
       hash.update(
-        proposalHashSource(proposal, blocked ? "blocked" : proposal.changed ? "ready" : "unchanged", blocked?.code)
+        proposalHashSource(
+          proposal,
+          blocked ? "blocked" : proposal.changed ? "ready" : "unchanged",
+          blocked?.code,
+        ),
       );
     }
     for (const check of [...allChecks].sort((a, b) =>
       [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.code]
         .join(":")
-        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.code].join(":"))
+        .localeCompare(
+          [b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.code].join(
+            ":",
+          ),
+        ),
     )) {
       hash.update("\ncheck|");
       hash.update(JSON.stringify(check));
     }
     const auditHash = hash.digest("hex");
-    const status: "blocked" | "ready" = allChecks.some((check) => check.status === "block") ? "blocked" : "ready";
+    const status: "blocked" | "ready" = allChecks.some(
+      (check) => check.status === "block",
+    )
+      ? "blocked"
+      : "ready";
 
     const report = {
       algorithmVersion: HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
@@ -1209,7 +1353,7 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
         originalTotalProfit.toFixed(2),
         proposedTotalProfit.toFixed(2),
         JSON.stringify(report),
-      ]
+      ],
     );
 
     await client.query("COMMIT");
@@ -1244,12 +1388,14 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   } catch (error) {
     await client.query("ROLLBACK").catch(() => undefined);
     if (runId) {
-      await pool.query(
-        `UPDATE historical_sales_cost_repair_runs
+      await pool
+        .query(
+          `UPDATE historical_sales_cost_repair_runs
             SET status='failed',completed_at=NOW(),error=$2
           WHERE id=$1 AND status='building'`,
-        [runId, error instanceof Error ? error.message : String(error)]
-      ).catch(() => undefined);
+          [runId, error instanceof Error ? error.message : String(error)],
+        )
+        .catch(() => undefined);
     }
     throw error;
   } finally {
@@ -1257,7 +1403,9 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   }
 }
 
-export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Record<string, unknown> | null> {
+export async function getHistoricalSalesCostRepairRun(
+  runId: number,
+): Promise<Record<string, unknown> | null> {
   await ensureHistoricalSalesCostRepairSchema(pool);
   const run = await pool.query(
     `SELECT id,algorithm_version,status,source_cutoff_at,requested_company_ids,created_by,created_at,
@@ -1266,7 +1414,7 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
             proposed_total_profit,report,error
        FROM historical_sales_cost_repair_runs
       WHERE id=$1`,
-    [runId]
+    [runId],
   );
   if (!run.rows[0]) return null;
 
@@ -1277,7 +1425,7 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
         WHERE run_id=$1 AND status IN ('block','warning')
         ORDER BY company_id,stock_item_id,location_id NULLS FIRST,check_code
         LIMIT 500`,
-      [runId]
+      [runId],
     ),
     pool.query(
       `SELECT company_id,
@@ -1292,7 +1440,7 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
         WHERE run_id=$1
         GROUP BY company_id,date_trunc('month',occurred_at)
         ORDER BY company_id,month`,
-      [runId]
+      [runId],
     ),
     pool.query(
       `SELECT status,COUNT(*)::int AS rows
@@ -1300,7 +1448,7 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
         WHERE run_id=$1
         GROUP BY status
         ORDER BY status`,
-      [runId]
+      [runId],
     ),
   ]);
   return {
@@ -1321,7 +1469,9 @@ export async function applyHistoricalSalesCostRepair(input: {
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
     await enableMaintenanceScope(client);
-    await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-apply'))");
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-apply'))",
+    );
 
     const runResult = await client.query<{
       id: number;
@@ -1336,11 +1486,13 @@ export async function applyHistoricalSalesCostRepair(input: {
          FROM historical_sales_cost_repair_runs
         WHERE id=$1
         FOR UPDATE`,
-      [input.runId]
+      [input.runId],
     );
     const run = runResult.rows[0];
     if (!run) throw hscrError("HSCR_RUN_NOT_FOUND");
-    if (run.algorithm_version !== HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION) {
+    if (
+      run.algorithm_version !== HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION
+    ) {
       throw hscrError("HSCR_ALGORITHM_VERSION_MISMATCH");
     }
     if (run.status !== "ready") {
@@ -1354,7 +1506,7 @@ export async function applyHistoricalSalesCostRepair(input: {
       `SELECT COUNT(*)::text AS count
          FROM historical_sales_cost_repair_checks
         WHERE run_id=$1 AND status='block'`,
-      [input.runId]
+      [input.runId],
     );
     if (Number(blockerCount.rows[0]?.count ?? 0) !== 0) {
       throw hscrError("HSCR_RUN_HAS_BLOCKERS");
@@ -1368,7 +1520,10 @@ export async function applyHistoricalSalesCostRepair(input: {
     // Fail closed if a source document was edited after the reviewed dry run.
     // Normal new stock activity is allowed; only backdated canonical evidence or
     // audited mutations of source-bearing records invalidate the reviewed run.
-    const openingDrift = await client.query<{ stock_item_id: number; check_code: string }>(
+    const openingDrift = await client.query<{
+      stock_item_id: number;
+      check_code: string;
+    }>(
       `SELECT c.stock_item_id,c.check_code
          FROM historical_sales_cost_repair_checks c
          JOIN stock_items si
@@ -1386,17 +1541,20 @@ export async function applyHistoricalSalesCostRepair(input: {
           )
         ORDER BY c.stock_item_id,c.check_code
         LIMIT 25`,
-      [input.runId]
+      [input.runId],
     );
     if (openingDrift.rows.length > 0) {
       throw new Error(
         `Historical sales cost repair opening evidence changed after dry run: ${openingDrift.rows
           .map((row) => `${row.stock_item_id}/${row.check_code}`)
-          .join(", ")}. Build and review a new dry run.`
+          .join(", ")}. Build and review a new dry run.`,
       );
     }
 
-    const sourceDrift = await client.query<{ kind: string; evidence_id: string }>(
+    const sourceDrift = await client.query<{
+      kind: string;
+      evidence_id: string;
+    }>(
       `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
          FROM canonical_stock_movements
         WHERE company_id = ANY($1::int[])
@@ -1424,13 +1582,13 @@ export async function applyHistoricalSalesCostRepair(input: {
           AND c.created_at <= $2
         ORDER BY kind,evidence_id
         LIMIT 25`,
-      [targetCompanyIds, run.source_cutoff_at]
+      [targetCompanyIds, run.source_cutoff_at],
     );
     if (sourceDrift.rows.length > 0) {
       throw new Error(
         `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
           .map((row) => `${row.kind}#${row.evidence_id}`)
-          .join(", ")}. Build and review a new dry run.`
+          .join(", ")}. Build and review a new dry run.`,
       );
     }
 
@@ -1448,13 +1606,13 @@ export async function applyHistoricalSalesCostRepair(input: {
           )
         ORDER BY r.sales_item_id
         LIMIT 25`,
-      [input.runId]
+      [input.runId],
     );
     if (drift.rows.length > 0) {
       throw new Error(
         `Historical sales cost repair refused because target sale rows changed after dry run: ${drift.rows
           .map((row) => row.sales_item_id)
-          .join(", ")}`
+          .join(", ")}`,
       );
     }
 
@@ -1462,7 +1620,7 @@ export async function applyHistoricalSalesCostRepair(input: {
       `UPDATE historical_sales_cost_repair_runs
           SET status='applying',applied_by=$2
         WHERE id=$1`,
-      [input.runId, input.appliedBy]
+      [input.runId, input.appliedBy],
     );
 
     await client.query(
@@ -1475,7 +1633,7 @@ export async function applyHistoricalSalesCostRepair(input: {
          FROM historical_sales_cost_repair_rows r
         WHERE r.run_id=$1 AND r.status='ready'
        ON CONFLICT (run_id,sales_item_id) DO NOTHING`,
-      [input.runId, input.appliedBy]
+      [input.runId, input.appliedBy],
     );
 
     const updated = await client.query(
@@ -1488,14 +1646,14 @@ export async function applyHistoricalSalesCostRepair(input: {
           AND r.status='ready'
           AND r.sales_item_id=si.id
         RETURNING si.id`,
-      [input.runId]
+      [input.runId],
     );
 
     await client.query(
       `UPDATE historical_sales_cost_repair_rows
           SET status='applied',applied_at=NOW()
         WHERE run_id=$1 AND status='ready'`,
-      [input.runId]
+      [input.runId],
     );
 
     const verify = await client.query<{ count: string }>(
@@ -1509,7 +1667,7 @@ export async function applyHistoricalSalesCostRepair(input: {
             OR si.total_cost IS DISTINCT FROM r.proposed_total_cost
             OR si.profit IS DISTINCT FROM r.proposed_profit
           )`,
-      [input.runId]
+      [input.runId],
     );
     if (Number(verify.rows[0]?.count ?? 0) !== 0) {
       throw hscrError("HSCR_POST_APPLY_VERIFY_FAILED");
@@ -1519,7 +1677,7 @@ export async function applyHistoricalSalesCostRepair(input: {
       `UPDATE historical_sales_cost_repair_runs
           SET status='applied',applied_at=NOW(),completed_at=NOW()
         WHERE id=$1`,
-      [input.runId]
+      [input.runId],
     );
 
     await client.query("COMMIT");
