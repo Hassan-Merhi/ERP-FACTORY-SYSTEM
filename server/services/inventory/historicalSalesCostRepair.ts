@@ -370,6 +370,10 @@ function compareMovementMutationDescending(a: HistoricalSalesRepairMovement, b: 
 }
 
 function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
+  if (movement.movementId.startsWith("canonical-correction:")) {
+    const id = Number(movement.movementId.split(":")[1]);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
   if (!movement.movementId.startsWith("canonical:")) return null;
   const id = Number(movement.movementId.slice("canonical:".length));
   return Number.isInteger(id) && id > 0 ? id : null;
@@ -412,10 +416,14 @@ type CanonicalSaleEvidence = {
   movements: HistoricalSalesRepairMovement[];
   latestMutationAt: number;
   latestNegativeMovements: HistoricalSalesRepairMovement[];
+  latestPositiveMovements: HistoricalSalesRepairMovement[];
   latestNegativeRates: Set<string>;
   latestNegativeQuantity: Decimal;
   latestNegativeValue: Decimal;
   latestNegativeRate: Decimal | null;
+  latestPositiveRate: Decimal | null;
+  totalSignedQuantity: Decimal;
+  anchorCanonicalId: number;
 };
 
 function activeCanonicalSaleEvidence(
@@ -440,6 +448,13 @@ function activeCanonicalSaleEvidence(
           d(movement.quantityDelta).lt(0)
       )
       .sort(compareMovementMutationAscending);
+    const latestPositiveMovements = rows
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) === latestMutationAt &&
+          d(movement.quantityDelta).gt(0)
+      )
+      .sort(compareMovementMutationAscending);
     const latestNegativeRates = new Set<string>();
     let latestNegativeQuantity = new Decimal(0);
     let latestNegativeValue = new Decimal(0);
@@ -459,14 +474,41 @@ function activeCanonicalSaleEvidence(
         ? repairRate(latestNegativeValue.dividedBy(latestNegativeQuantity))
         : null;
 
+    let latestPositiveQuantity = new Decimal(0);
+    let latestPositiveValue = new Decimal(0);
+    let hasMissingPositiveCost = false;
+    for (const movement of latestPositiveMovements) {
+      const quantity = d(movement.quantityDelta).abs();
+      latestPositiveQuantity = repairQuantity(latestPositiveQuantity.plus(quantity));
+      if (movement.unitCost === null || movement.unitCost === undefined) {
+        hasMissingPositiveCost = true;
+        continue;
+      }
+      latestPositiveValue = latestPositiveValue.plus(quantity.times(d(movement.unitCost)));
+    }
+    const latestPositiveRate =
+      !hasMissingPositiveCost && latestPositiveQuantity.gt(0)
+        ? repairRate(latestPositiveValue.dividedBy(latestPositiveQuantity))
+        : null;
+    const totalSignedQuantity = repairQuantity(
+      rows.reduce((sum, movement) => sum.plus(d(movement.quantityDelta)), new Decimal(0))
+    );
+    const anchorCanonicalId = Math.max(
+      ...rows.map((movement) => canonicalMovementNumericId(movement) ?? 0)
+    );
+
     result.set(key, {
       movements: rows.sort(compareMovementMutationAscending),
       latestMutationAt,
       latestNegativeMovements,
+      latestPositiveMovements,
       latestNegativeRates,
       latestNegativeQuantity,
       latestNegativeValue: repairMoney(latestNegativeValue),
       latestNegativeRate,
+      latestPositiveRate,
+      totalSignedQuantity,
+      anchorCanonicalId,
     });
   }
   return result;
@@ -1739,6 +1781,8 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     );
   }
 
+  const canonicalSaleLifecycleCorrections: HistoricalSalesRepairMovement[] = [];
+
   for (const [key, evidence] of canonicalSaleEvidence) {
     const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
     const expectedQuantity = saleQuantityByEvidenceKey.get(key);
@@ -1778,7 +1822,62 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         detail: `Voucher ${voucherIdText} latest canonical issue batch contains multiple recorded rates; using its quantity-weighted recorded cost`,
       });
     }
+
+    const desiredSignedQuantity = repairQuantity(expectedQuantity.negated());
+    const correctionDelta = repairQuantity(desiredSignedQuantity.minus(evidence.totalSignedQuantity));
+    if (!correctionDelta.isZero()) {
+      const correctionRate =
+        correctionDelta.lt(0)
+          ? evidence.latestNegativeRate
+          : evidence.latestPositiveRate ?? evidence.latestNegativeRate;
+      const anchorMovement =
+        evidence.latestNegativeMovements[evidence.latestNegativeMovements.length - 1] ??
+        evidence.latestPositiveMovements[evidence.latestPositiveMovements.length - 1] ??
+        evidence.movements[evidence.movements.length - 1];
+
+      if (!correctionRate || evidence.anchorCanonicalId <= 0 || !anchorMovement) {
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CANONICAL_SALE_LIFECYCLE_CORRECTION_UNPROVEN",
+          status: "block",
+          expected: desiredSignedQuantity.toFixed(3),
+          actual: evidence.totalSignedQuantity.toFixed(3),
+          detail: `Voucher ${voucherIdText} canonical lifecycle differs from the current sale but has no direct rate anchor for the missing inventory effect`,
+        });
+      } else {
+        canonicalSaleLifecycleCorrections.push({
+          movementId: `canonical-correction:${evidence.anchorCanonicalId}:${voucherIdText}:${locationIdText}:${stockItemIdText}`,
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          occurredAt: anchorMovement.occurredAt,
+          createdAt: new Date(evidence.latestMutationAt).toISOString(),
+          sequence: evidence.anchorCanonicalId * 10 + 9,
+          quantityDelta: correctionDelta.toFixed(3),
+          unitCost: correctionRate.toFixed(2),
+          sourceType: "canonical-sale-lifecycle-correction",
+          sourceId: voucherIdText,
+          evidence: "canonical",
+        });
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CANONICAL_SALE_LIFECYCLE_CORRECTION",
+          status: "pass",
+          expected: desiredSignedQuantity.toFixed(3),
+          actual: evidence.totalSignedQuantity.toFixed(3),
+          detail: `Voucher ${voucherIdText} replay adds ${correctionDelta.toFixed(
+            3
+          )} units at its latest canonical mutation to match the current immutable sale state`,
+        });
+      }
+    }
   }
+
+  const canonicalForReplay = [...canonical, ...canonicalSaleLifecycleCorrections];
 
   const legacySales: SaleRow[] = [];
   for (const sale of sales) {
@@ -1904,7 +2003,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       checkpoint,
       checkpointStates,
       historicalMerges,
-      canonical,
+      canonical: canonicalForReplay,
       legacyMovements,
     });
     checks.push(...mergedRecovery.checks);
@@ -1961,7 +2060,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const postCheckpointMovements = [
-      ...canonical.filter((movement) => {
+      ...canonicalForReplay.filter((movement) => {
         const id = canonicalMovementNumericId(movement);
         return id !== null && id > checkpoint.movementCutoffId;
       }),
@@ -2027,7 +2126,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     // mutation order. This includes durable legacy rows that never received a
     // canonical journal counterpart after canonical journaling began.
     const movementsInCheckpoint = [
-      ...canonical.filter((movement) => {
+      ...canonicalForReplay.filter((movement) => {
         const id = canonicalMovementNumericId(movement);
         return id !== null && id <= checkpoint.movementCutoffId;
       }),
