@@ -17,4 +17,13 @@ describe("container offload historical cost immutability", () => {
       expect(route).not.toContain('action: "sync-sales-costs"');
     }
   });
+
+  it("blocks manual current-average repricing and keeps the compatibility sync read-only for sales", () => {
+    const statsRoute = source("server/routes/stats/statsSalesRoutes.ts");
+    const syncService = source("server/services/syncSalesItemCosts.ts");
+
+    expect(statsRoute).toContain("HISTORICAL_SALE_COST_IMMUTABLE");
+    expect(statsRoute).not.toContain(".update(salesItems)");
+    expect(syncService).not.toContain(".update(salesItems)");
+  });
 });
