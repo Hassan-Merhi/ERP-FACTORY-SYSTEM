@@ -79,7 +79,7 @@ type CanonicalRow = {
   location_id: number;
   stock_item_id: number;
   quantity_delta: string;
-  unit_cost: string;
+  unit_cost: string | null;
   source_type: string;
   source_id: string;
   occurred_at: Date;
