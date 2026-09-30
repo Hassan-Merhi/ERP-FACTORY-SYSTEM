@@ -577,6 +577,24 @@ function buildOpeningStates(input: {
       expected: masterOpeningQty.toFixed(3),
       actual: derivedTotal.toFixed(3),
     });
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId,
+      code: "OPENING_RATE_PINNED",
+      status: "pass",
+      expected: openingRate.toFixed(2),
+      actual: openingRate.toFixed(2),
+    });
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId,
+      code: "OPENING_VALUE_RECONCILED",
+      status: "pass",
+      expected: openingValue.toFixed(2),
+      actual: calculatedOpeningValue.toFixed(2),
+    });
   }
 
   return { openings, checks, derivedOpeningByKey };
@@ -1228,6 +1246,34 @@ export async function applyHistoricalSalesCostRepair(input: {
     // Fail closed if a source document was edited after the reviewed dry run.
     // Normal new stock activity is allowed; only backdated canonical evidence or
     // audited mutations of source-bearing records invalidate the reviewed run.
+    const openingDrift = await client.query<{ stock_item_id: number; check_code: string }>(
+      `SELECT c.stock_item_id,c.check_code
+         FROM historical_sales_cost_repair_checks c
+         JOIN stock_items si
+           ON si.company_id=c.company_id
+          AND si.id=c.stock_item_id
+        WHERE c.run_id=$1
+          AND c.status='pass'
+          AND c.check_code IN ('OPENING_QUANTITY_RECONCILED','OPENING_RATE_PINNED','OPENING_VALUE_RECONCILED')
+          AND (
+            (c.check_code='OPENING_QUANTITY_RECONCILED' AND si.opening_qty::numeric IS DISTINCT FROM c.expected_value::numeric)
+            OR
+            (c.check_code='OPENING_RATE_PINNED' AND si.opening_rate::numeric IS DISTINCT FROM c.expected_value::numeric)
+            OR
+            (c.check_code='OPENING_VALUE_RECONCILED' AND si.opening_value::numeric IS DISTINCT FROM c.expected_value::numeric)
+          )
+        ORDER BY c.stock_item_id,c.check_code
+        LIMIT 25`,
+      [input.runId]
+    );
+    if (openingDrift.rows.length > 0) {
+      throw new Error(
+        `Historical sales cost repair opening evidence changed after dry run: ${openingDrift.rows
+          .map((row) => `${row.stock_item_id}/${row.check_code}`)
+          .join(", ")}. Build and review a new dry run.`
+      );
+    }
+
     const sourceDrift = await client.query<{ kind: string; evidence_id: string }>(
       `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
          FROM canonical_stock_movements
@@ -1235,11 +1281,25 @@ export async function applyHistoricalSalesCostRepair(input: {
           AND created_at > $2
           AND occurred_at <= $2
         UNION ALL
-       SELECT 'audited-source-edit'::text AS kind,id::text AS evidence_id
-         FROM audit_log
-        WHERE company_id = ANY($1::int[])
-          AND created_at > $2
-          AND table_name IN ('inventory','vouchers','containers','stock_items')
+       SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
+         FROM audit_log a
+         JOIN vouchers v
+           ON a.table_name='vouchers'
+          AND a.record_id=v.id
+          AND v.company_id=a.company_id
+        WHERE a.company_id = ANY($1::int[])
+          AND a.created_at > $2
+          AND v.created_at <= $2
+        UNION ALL
+       SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
+         FROM audit_log a
+         JOIN containers c
+           ON a.table_name='containers'
+          AND a.record_id=c.id
+          AND c.company_id=a.company_id
+        WHERE a.company_id = ANY($1::int[])
+          AND a.created_at > $2
+          AND c.created_at <= $2
         ORDER BY kind,evidence_id
         LIMIT 25`,
       [targetCompanyIds, run.source_cutoff_at]
