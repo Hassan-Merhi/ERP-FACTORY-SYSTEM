@@ -40,6 +40,7 @@ import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHand
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
+import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -254,6 +255,7 @@ let migrationsDone = false;
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
       await ensureFinancialOperationRequests(pool);
+      await ensureRecurringJournalSchema(pool);
       try {
         // Factory Production Targets and Attendance Register must be available
         // even when production skips the bulk startup migration pass.
