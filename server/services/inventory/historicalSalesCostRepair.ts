@@ -98,15 +98,21 @@ type CompanyDryRun = {
 const QTY_TOLERANCE = new Decimal("0.001");
 const MONEY_TOLERANCE = new Decimal("0.02");
 
+function hscrError(code: string): Error {
+  const error = new Error();
+  error.message = code;
+  return error;
+}
+
 function d(value: Decimal.Value | null | undefined): Decimal {
   const parsed = new Decimal(value ?? 0);
-  if (!parsed.isFinite()) throw new Error(`HSCR_NON_FINITE_VALUE:${String(value)}`);
+  if (!parsed.isFinite()) throw hscrError(`HSCR_NON_FINITE_VALUE:${String(value)}`);
   return parsed;
 }
 
 function iso(value: Date | string): string {
   const date = value instanceof Date ? value : new Date(value);
-  if (!Number.isFinite(date.getTime())) throw new Error(`HSCR_INVALID_TIMESTAMP:${String(value)}`);
+  if (!Number.isFinite(date.getTime())) throw hscrError(`HSCR_INVALID_TIMESTAMP:${String(value)}`);
   return date.toISOString();
 }
 
@@ -128,7 +134,7 @@ async function companyIdsForRun(client: PoolClient, requested?: number[]): Promi
       [unique]
     );
     if (existing.rows.length !== unique.length) {
-      throw new Error("HSCR_REQUESTED_COMPANY_NOT_FOUND");
+      throw hscrError("HSCR_REQUESTED_COMPANY_NOT_FOUND");
     }
     return existing.rows.map((row) => Number(row.id));
   }
@@ -1320,15 +1326,15 @@ export async function applyHistoricalSalesCostRepair(input: {
       [input.runId]
     );
     const run = runResult.rows[0];
-    if (!run) throw new Error("HSCR_RUN_NOT_FOUND");
+    if (!run) throw hscrError("HSCR_RUN_NOT_FOUND");
     if (run.algorithm_version !== HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION) {
-      throw new Error("HSCR_ALGORITHM_VERSION_MISMATCH");
+      throw hscrError("HSCR_ALGORITHM_VERSION_MISMATCH");
     }
     if (run.status !== "ready") {
-      throw new Error(`HSCR_RUN_NOT_READY:${input.runId}:${run.status}`);
+      throw hscrError(`HSCR_RUN_NOT_READY:${input.runId}:${run.status}`);
     }
     if (!run.audit_hash || run.audit_hash !== input.auditHash) {
-      throw new Error("HSCR_AUDIT_HASH_MISMATCH");
+      throw hscrError("HSCR_AUDIT_HASH_MISMATCH");
     }
 
     const blockerCount = await client.query<{ count: string }>(
@@ -1338,12 +1344,12 @@ export async function applyHistoricalSalesCostRepair(input: {
       [input.runId]
     );
     if (Number(blockerCount.rows[0]?.count ?? 0) !== 0) {
-      throw new Error("HSCR_RUN_HAS_BLOCKERS");
+      throw hscrError("HSCR_RUN_HAS_BLOCKERS");
     }
 
     const targetCompanyIds = (run.requested_company_ids ?? []).map(Number);
     if (targetCompanyIds.length === 0) {
-      throw new Error("HSCR_RUN_SCOPE_EMPTY");
+      throw hscrError("HSCR_RUN_SCOPE_EMPTY");
     }
 
     // Fail closed if a source document was edited after the reviewed dry run.
@@ -1493,7 +1499,7 @@ export async function applyHistoricalSalesCostRepair(input: {
       [input.runId]
     );
     if (Number(verify.rows[0]?.count ?? 0) !== 0) {
-      throw new Error("HSCR_POST_APPLY_VERIFY_FAILED");
+      throw hscrError("HSCR_POST_APPLY_VERIFY_FAILED");
     }
 
     await client.query(
