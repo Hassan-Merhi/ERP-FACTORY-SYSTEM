@@ -833,7 +833,6 @@ async function dryRunCompany(
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
-    blockedItemLocations: checks.filter((check) => check.status === "block").length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
   };
 
