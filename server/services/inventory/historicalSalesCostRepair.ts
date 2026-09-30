@@ -1821,7 +1821,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     );
 
     // Prove the immutable checkpoint still reaches today's active-location
-    // inventory using only canonical movements after its movement-id boundary.
+    // inventory using every durable movement after the checkpoint. Canonical
+    // rows use the exact checkpoint movement-id boundary; noncanonical durable
+    // rows use the checkpoint timestamp.
     const liveReplayStates = new Map<string, HistoricalInventoryState>();
     for (const [key, state] of checkpointStates) {
       if (checkpointTargetKeys.has(key)) {
@@ -1831,9 +1833,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         );
       }
     }
-    for (const movement of [...canonical].sort((a, b) => a.sequence - b.sequence)) {
-      const canonicalId = Math.floor((movement.sequence - 5) / 10);
-      if (canonicalId <= checkpoint.movementCutoffId) continue;
+
+    const postCheckpointMovements = [
+      ...canonical.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id > checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) > checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationAscending);
+
+    for (const movement of postCheckpointMovements) {
       const key = movementKey(movement);
       if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const current =
