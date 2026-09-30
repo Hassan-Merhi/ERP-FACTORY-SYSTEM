@@ -26,13 +26,17 @@ function parseCompanyIds(raw: string | undefined): number[] | undefined {
 }
 
 export async function maybeRunHistoricalSalesCostRepairFromEnv(): Promise<void> {
-  const mode = String(process.env.HISTORICAL_SALES_COST_REPAIR_MODE ?? "").trim().toLowerCase();
+  const mode = String(process.env.HISTORICAL_SALES_COST_REPAIR_MODE ?? "")
+    .trim()
+    .toLowerCase();
   if (!mode || mode === "off" || mode === "disabled") return;
 
   if (mode === "dry-run") {
     const result = await buildHistoricalSalesCostRepairDryRun({
       createdBy: "render-startup-env",
-      companyIds: parseCompanyIds(process.env.HISTORICAL_SALES_COST_REPAIR_COMPANY_IDS),
+      companyIds: parseCompanyIds(
+        process.env.HISTORICAL_SALES_COST_REPAIR_COMPANY_IDS,
+      ),
     });
     logger.info("HISTORICAL_SALES_COST_REPAIR_DRY_RUN_RESULT", {
       module: "historical-sales-cost-repair",
@@ -44,18 +48,28 @@ export async function maybeRunHistoricalSalesCostRepairFromEnv(): Promise<void> 
 
   if (mode === "apply") {
     const runId = Number(process.env.HISTORICAL_SALES_COST_REPAIR_RUN_ID);
-    const auditHash = String(process.env.HISTORICAL_SALES_COST_REPAIR_AUDIT_HASH ?? "").trim().toLowerCase();
+    const auditHash = String(
+      process.env.HISTORICAL_SALES_COST_REPAIR_AUDIT_HASH ?? "",
+    )
+      .trim()
+      .toLowerCase();
     if (!Number.isSafeInteger(runId) || runId <= 0) {
-      throw hscrStartupError(`HSCR_ENV_RUN_ID_INVALID:${ENV_RUN_ID}:${ENV_MODE}`);
+      throw hscrStartupError(
+        `HSCR_ENV_RUN_ID_INVALID:${ENV_RUN_ID}:${ENV_MODE}`,
+      );
     }
     if (!/^[a-f0-9]{64}$/.test(auditHash)) {
-      throw hscrStartupError(`HSCR_ENV_AUDIT_HASH_INVALID:${ENV_AUDIT_HASH}:${ENV_MODE}`);
+      throw hscrStartupError(
+        `HSCR_ENV_AUDIT_HASH_INVALID:${ENV_AUDIT_HASH}:${ENV_MODE}`,
+      );
     }
 
     const existing = await getHistoricalSalesCostRepairRun(runId);
     if (!existing) throw hscrStartupError(`HSCR_RUN_NOT_FOUND:${runId}`);
     if (String(existing.audit_hash ?? "").toLowerCase() !== auditHash) {
-      throw hscrStartupError(`HSCR_ENV_AUDIT_HASH_MISMATCH:${runId}:${ENV_AUDIT_HASH}`);
+      throw hscrStartupError(
+        `HSCR_ENV_AUDIT_HASH_MISMATCH:${runId}:${ENV_AUDIT_HASH}`,
+      );
     }
     if (existing.status === "applied") {
       logger.info("HISTORICAL_SALES_COST_REPAIR_ALREADY_APPLIED", {
