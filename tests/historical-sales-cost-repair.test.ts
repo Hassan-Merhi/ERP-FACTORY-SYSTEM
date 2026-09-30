@@ -950,4 +950,29 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.reversible).toBe(false);
   });
 
+
+  it("recovers an outbound stock-adjustment edit apply from its persisted canonical line value", () => {
+    const after = createHistoricalInventoryStateFromSnapshot(
+      "232",
+      "67.75",
+      "15757.78"
+    );
+    const editApply = movement({
+      movementId: "canonical:21820",
+      occurredAt: "2026-09-04T06:31:33.476Z",
+      quantityDelta: "-1",
+      unitCost: "67.750000",
+      sourceType: "stock_adjustment_edit_apply",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, editApply);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_ADJUSTMENT_EDIT_VALUE");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("233.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("15825.53");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("67.92");
+  });
+
 });

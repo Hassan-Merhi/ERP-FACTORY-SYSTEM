@@ -3317,6 +3317,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         });
       }
 
+      if (reversed.recovery === "CANONICAL_ADJUSTMENT_EDIT_VALUE") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_ADJUSTMENT_EDIT_VALUE_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Canonical stock-adjustment edit apply boundary " +
+            movement.movementId +
+            " recovered by adding back its persisted line value and replaying the source-specific consumption semantics exactly. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
       if (reversed.recovery === "LEGACY_RECEIPT_RATE_ONLY") {
         checks.push({
           companyId,

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v27-legacy-offload-rate-only";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v28-adjustment-edit-value-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -563,6 +563,12 @@ function canonicalRateOnlyRecovery(
 
   let stateBefore: HistoricalInventoryState | null = null;
 
+  const adjustmentEditRecovery = canonicalAdjustmentEditApplyValueInverse(
+    stateAfter,
+    movement
+  );
+  if (adjustmentEditRecovery) return adjustmentEditRecovery;
+
   if (
     INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) &&
     delta.gt(ZERO) &&
@@ -829,6 +835,55 @@ function legacyIssueRateOnlyRecovery(
   };
 }
 
+function canonicalAdjustmentEditApplyValueInverse(
+  stateAfter: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryReverseResult | null {
+  if (
+    movement.evidence !== "canonical" ||
+    movement.sourceType !== "stock_adjustment_edit_apply" ||
+    movement.unitCost === null ||
+    movement.unitCost === undefined
+  ) {
+    return null;
+  }
+
+  const delta = repairQuantity(movement.quantityDelta);
+  if (!delta.lt(ZERO)) return null;
+
+  const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+  if (!previousQty.gt(ZERO)) return null;
+
+  const exactIssueValue = repairMoney(
+    delta.abs().times(decimal(movement.unitCost, "adjustment edit apply unit cost"))
+  );
+  const beforeValue = repairMoney(stateAfter.totalValue.plus(exactIssueValue));
+  const beforeRate = repairRate(
+    beforeValue.gt(ZERO)
+      ? beforeValue.dividedBy(previousQty)
+      : Decimal.max(decimal(movement.unitCost, "adjustment edit apply fallback rate"), ZERO)
+  );
+  const stateBefore = rawHistoricalInventoryState(previousQty, beforeRate, beforeValue);
+
+  const replayQty = repairQuantity(previousQty.plus(delta));
+  const replayValue = replayQty.gt(ZERO)
+    ? repairMoney(Decimal.max(beforeValue.minus(exactIssueValue), ZERO))
+    : ZERO;
+  const replayRate =
+    replayQty.gt(ZERO) && replayValue.gt(ZERO)
+      ? repairRate(replayValue.dividedBy(replayQty))
+      : repairRate(Decimal.max(decimal(movement.unitCost, "adjustment edit apply replay rate"), ZERO));
+  const replayed = rawHistoricalInventoryState(replayQty, replayRate, replayValue);
+
+  if (!statesEqualQuantityAndValue(replayed, stateAfter)) return null;
+
+  return {
+    reversible: true,
+    stateBefore,
+    recovery: "CANONICAL_ADJUSTMENT_EDIT_VALUE",
+  };
+}
+
 function legacyExactReceiptRateOnlyRecovery(
   stateAfter: HistoricalInventoryState,
   movement: HistoricalSalesRepairMovement
@@ -879,6 +934,7 @@ export type HistoricalInventoryReverseResult =
       stateBefore: HistoricalInventoryState;
       recovery?:
         | "CANONICAL_RATE_ONLY"
+        | "CANONICAL_ADJUSTMENT_EDIT_VALUE"
         | "LEGACY_ISSUE_RATE_ONLY"
         | "LEGACY_RECEIPT_RATE_ONLY";
     }
