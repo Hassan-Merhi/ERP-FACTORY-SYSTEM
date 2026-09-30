@@ -406,6 +406,62 @@ export async function getRecurringJournalForSource(companyId: number, sourceVouc
   };
 }
 
+export async function listRecurringJournals(companyId: number) {
+  return db
+    .select({
+      id: recurringJournals.id,
+      sourceVoucherId: recurringJournals.sourceVoucherId,
+      sourceVoucherNumber: vouchers.voucherNumber,
+      sourceVoucherDescription: vouchers.description,
+      name: recurringJournals.name,
+      descriptionTemplate: recurringJournals.descriptionTemplate,
+      frequency: recurringJournals.frequency,
+      scheduleRule: recurringJournals.scheduleRule,
+      timezone: recurringJournals.timezone,
+      currency: recurringJournals.currency,
+      active: recurringJournals.active,
+      startDate: recurringJournals.startDate,
+      endDate: recurringJournals.endDate,
+      nextRunDate: recurringJournals.nextRunDate,
+      lastRunDate: recurringJournals.lastRunDate,
+      lastAttemptAt: recurringJournals.lastAttemptAt,
+      lastError: recurringJournals.lastError,
+    })
+    .from(recurringJournals)
+    .innerJoin(vouchers, eq(recurringJournals.sourceVoucherId, vouchers.id))
+    .where(eq(recurringJournals.companyId, companyId))
+    .orderBy(asc(recurringJournals.nextRunDate), asc(recurringJournals.id));
+}
+
+export async function upsertRecurringJournalFromVoucherNumber(
+  input: Omit<UpsertRecurringJournalFromVoucherInput, "sourceVoucherId"> & { voucherNumber: string }
+): Promise<RecurringJournal> {
+  const voucherNumber = String(input.voucherNumber || "").trim();
+  if (!voucherNumber) {
+    throw new RecurringJournalError("RECURRING_SOURCE_NUMBER_REQUIRED", "Journal voucher number is required");
+  }
+
+  const [voucher] = await db
+    .select({ id: vouchers.id })
+    .from(vouchers)
+    .where(and(eq(vouchers.companyId, input.companyId), eq(vouchers.voucherNumber, voucherNumber)))
+    .limit(1);
+
+  if (!voucher) {
+    throw new RecurringJournalError(
+      "RECURRING_SOURCE_NOT_FOUND",
+      `Journal voucher ${voucherNumber} was not found in the selected company`,
+      404
+    );
+  }
+
+  const { voucherNumber: _voucherNumber, ...rest } = input;
+  return upsertRecurringJournalFromVoucher({
+    ...rest,
+    sourceVoucherId: voucher.id,
+  });
+}
+
 export async function getRecurringJournalHistory(companyId: number, recurringJournalId: number) {
   const rows = await db
     .select({
