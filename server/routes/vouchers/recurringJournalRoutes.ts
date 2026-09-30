@@ -5,8 +5,10 @@ import {
   RecurringJournalError,
   getRecurringJournalForSource,
   getRecurringJournalHistory,
+  listRecurringJournals,
   updateRecurringJournal,
   upsertRecurringJournalFromVoucher,
+  upsertRecurringJournalFromVoucherNumber,
 } from "../../services/accounting/recurringJournalService";
 
 function positiveId(raw: unknown): number | null {
@@ -28,6 +30,37 @@ function currentCompanyId(req: Request): number | null {
 }
 
 export function registerRecurringJournalRoutes(app: Express): void {
+  app.get("/api/recurring-journals", requireAuth, requireNonPOS, async (req, res) => {
+    const companyId = currentCompanyId(req);
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+    try {
+      return res.json({ recurringJournals: await listRecurringJournals(companyId) });
+    } catch (error: unknown) {
+      sendRecurringError(res, error);
+    }
+  });
+
+  app.post("/api/recurring-journals/from-voucher-number", requireAuth, requireNonPOS, async (req, res) => {
+    const companyId = currentCompanyId(req);
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+    try {
+      const recurring = await upsertRecurringJournalFromVoucherNumber({
+        companyId,
+        voucherNumber: String(req.body?.voucherNumber ?? ""),
+        userId: req.session.userId ?? null,
+        timezone: req.body?.timezone,
+        endDate: req.body?.endDate,
+        descriptionTemplate: req.body?.descriptionTemplate,
+      });
+      const history = await getRecurringJournalHistory(companyId, recurring.id);
+      return res.json({ recurring, history });
+    } catch (error: unknown) {
+      sendRecurringError(res, error);
+    }
+  });
+
   app.get("/api/recurring-journals/by-voucher/:voucherId", requireAuth, requireNonPOS, async (req, res) => {
     const companyId = currentCompanyId(req);
     const voucherId = positiveId(req.params.voucherId);
