@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v29-recorded-canonical-sale-rate";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v30-wave6-valuation-reset";
 
 const ZERO = new Decimal(0);
 
@@ -55,6 +55,14 @@ export type HistoricalSalesRepairMovement = {
   quantityDelta: string;
   unitCost: string | null;
   exactValue?: string | null;
+  valuationReset?: {
+    beforeQuantity: string;
+    beforeAverageRate: string;
+    beforeTotalValue: string;
+    afterQuantity: string;
+    afterAverageRate: string;
+    afterTotalValue: string;
+  };
   sourceType: string;
   sourceId: string;
   evidence: "canonical" | "legacy";
@@ -149,6 +157,29 @@ function rawHistoricalInventoryState(
     totalValue: repairMoney(decimal(totalValueInput, "raw state total value")),
   };
 }
+
+function valuationResetState(
+  reset: NonNullable<HistoricalSalesRepairMovement["valuationReset"]>,
+  side: "before" | "after"
+): HistoricalInventoryState {
+  return rawHistoricalInventoryState(
+    side === "before" ? reset.beforeQuantity : reset.afterQuantity,
+    side === "before" ? reset.beforeAverageRate : reset.afterAverageRate,
+    side === "before" ? reset.beforeTotalValue : reset.afterTotalValue
+  );
+}
+
+function valuationResetStateMatches(
+  state: HistoricalInventoryState,
+  expected: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(state.quantity).eq(repairQuantity(expected.quantity)) &&
+    repairRate(state.averageRate).eq(repairRate(expected.averageRate)) &&
+    repairMoney(state.totalValue).eq(repairMoney(expected.totalValue))
+  );
+}
+
 
 function movementTimeMs(movement: HistoricalSalesRepairMovement): number {
   const parsed = Date.parse(movement.createdAt ?? movement.occurredAt);
@@ -248,6 +279,12 @@ export function applyHistoricalSalesRepairMovement(
   state: HistoricalInventoryState,
   movement: HistoricalSalesRepairMovement
 ): HistoricalInventoryState {
+  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+    const before = valuationResetState(movement.valuationReset, "before");
+    return valuationResetStateMatches(state, before)
+      ? valuationResetState(movement.valuationReset, "after")
+      : rawHistoricalInventoryState(state.quantity, state.averageRate, state.totalValue);
+  }
   if (INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType)) {
     return applyInitialOffloadMovement(state, movement);
   }
@@ -424,6 +461,13 @@ export function applyHistoricalForwardReplayMovement(
   state: HistoricalForwardReplayState,
   movement: HistoricalSalesRepairMovement
 ): HistoricalForwardReplayState {
+  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+    return {
+      inventory: applyHistoricalSalesRepairMovement(state.inventory, movement),
+      negativeLayerQuantity: repairQuantity(state.negativeLayerQuantity),
+    };
+  }
+
   const mutationAt = movementTimeMs(movement);
   const delta = repairQuantity(movement.quantityDelta);
   const previousQty = repairQuantity(state.inventory.quantity);
@@ -1121,6 +1165,17 @@ export function reverseHistoricalSalesRepairMovement(
     stateAfterInput.totalValue
   );
   const delta = repairQuantity(movement.quantityDelta);
+
+  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+    const expectedAfter = valuationResetState(movement.valuationReset, "after");
+    if (!valuationResetStateMatches(stateAfter, expectedAfter)) {
+      return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+    }
+    return {
+      reversible: true,
+      stateBefore: valuationResetState(movement.valuationReset, "before"),
+    };
+  }
 
   if (
     INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) &&

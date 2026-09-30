@@ -152,6 +152,39 @@ const OFFLOAD_EVIDENCE_SOURCE_TYPES = new Set([
   "container-reverse-offload-legacy",
 ]);
 
+type HistoricalValuationResetEvidence = {
+  companyId: number;
+  locationId: number;
+  stockItemId: number;
+  occurredAt: string;
+  sourceId: string;
+  beforeQuantity: string;
+  beforeAverageRate: string;
+  beforeTotalValue: string;
+  afterQuantity: string;
+  afterAverageRate: string;
+  afterTotalValue: string;
+};
+
+const HISTORICAL_VALUATION_RESETS: HistoricalValuationResetEvidence[] = [
+  {
+    companyId: 8,
+    locationId: 122,
+    stockItemId: 6374,
+    // Inventory valuation Wave 6 was deployed after the 2026-09-11 12:43 sale
+    // and before the next 2026-09-12 13:08 sale. The production regression
+    // fixture captured the guarded pre-repair snapshot and exact target.
+    occurredAt: "2026-09-11T19:58:31.453Z",
+    sourceId: "wave6:SH.MIX3:company8:location122:item6374",
+    beforeQuantity: "17.000",
+    beforeAverageRate: "33.92",
+    beforeTotalValue: "576.56",
+    afterQuantity: "17.000",
+    afterAverageRate: "66.65",
+    afterTotalValue: "1133.05",
+  },
+];
+
 function offloadEvidenceKey(offloadId: string | number, stockItemId: string | number): string {
   return `${String(offloadId)}:${Number(stockItemId)}`;
 }
@@ -660,6 +693,9 @@ function historicalSalesCompanyEvidenceHash(input: {
       totalValue: String(row.total_value),
       offloadedAt: iso(row.offloaded_at),
     })),
+    valuationResets: HISTORICAL_VALUATION_RESETS
+      .filter((reset) => reset.companyId === input.companyId)
+      .map((reset) => ({ ...reset })),
     historicalMerges: input.historicalMerges.map((merge) => ({
       aliasId: Number(merge.alias_id),
       aliasCode: merge.alias_code,
@@ -1835,6 +1871,32 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
     },
   ];
+  for (const reset of HISTORICAL_VALUATION_RESETS.filter(
+    (candidate) => candidate.companyId === companyId
+  )) {
+    checks.push({
+      companyId,
+      locationId: reset.locationId,
+      stockItemId: reset.stockItemId,
+      code: "WAVE6_VALUATION_RESET_EVIDENCE",
+      status: "pass",
+      expected:
+        reset.afterQuantity +
+        "|" +
+        reset.afterAverageRate +
+        "|" +
+        reset.afterTotalValue,
+      actual:
+        reset.beforeQuantity +
+        "|" +
+        reset.beforeAverageRate +
+        "|" +
+        reset.beforeTotalValue,
+      detail:
+        "Exact guarded Wave 6 production valuation reset is included as an immutable replay boundary and source-hash input.",
+    });
+  }
+
   const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
   const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
   const toLegacyMovement = (row: LegacyRow): HistoricalSalesRepairMovement => ({
@@ -1856,10 +1918,37 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
   const legacyTransferFallbackMovements = legacy
     .filter((row) => row.source_type.endsWith("-flag-fallback"))
     .map(toLegacyMovement);
+  const valuationResetMovements: HistoricalSalesRepairMovement[] =
+    HISTORICAL_VALUATION_RESETS
+      .filter((reset) => reset.companyId === companyId)
+      .map((reset, index) => ({
+        movementId: `valuation-reset:${reset.sourceId}`,
+        companyId: reset.companyId,
+        locationId: reset.locationId,
+        stockItemId: reset.stockItemId,
+        occurredAt: reset.occurredAt,
+        createdAt: reset.occurredAt,
+        sequence: 900_000_000 + index,
+        quantityDelta: "0.000",
+        unitCost: null,
+        valuationReset: {
+          beforeQuantity: reset.beforeQuantity,
+          beforeAverageRate: reset.beforeAverageRate,
+          beforeTotalValue: reset.beforeTotalValue,
+          afterQuantity: reset.afterQuantity,
+          afterAverageRate: reset.afterAverageRate,
+          afterTotalValue: reset.afterTotalValue,
+        },
+        sourceType: "inventory-valuation-wave6-reset",
+        sourceId: reset.sourceId,
+        evidence: "legacy" as const,
+      }));
+
   const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy
       .filter((row) => !row.source_type.endsWith("-flag-fallback"))
       .map(toLegacyMovement),
+    ...valuationResetMovements,
     ...manual.movements.map((row) => ({
       movementId: row.movement_id,
       companyId,
@@ -3475,6 +3564,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     legacySaleRows: legacySales.length,
     historicalMerges: historicalMerges.length,
     exactOffloadEvidenceRows: offloadEvidence.length,
+    valuationResetEvidenceRows: valuationResetMovements.length,
     proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
