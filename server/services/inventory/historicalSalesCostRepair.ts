@@ -24,6 +24,7 @@ type RepairCheck = {
   companyId: number;
   locationId: number | null;
   stockItemId: number | null;
+  salesItemId?: number | null;
   code: string;
   status: "pass" | "block" | "warning";
   expected?: string | null;
@@ -534,9 +535,11 @@ function historicalSalesCompanyEvidenceHash(input: {
       sourceId: row.source_id,
     })),
     manualChecks: [...input.manual.checks].sort((a, b) =>
-      [a.locationId ?? 0, a.stockItemId ?? 0, a.code, a.detail ?? ""]
+      [a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code, a.detail ?? ""]
         .join(":")
-        .localeCompare([b.locationId ?? 0, b.stockItemId ?? 0, b.code, b.detail ?? ""].join(":"))
+        .localeCompare(
+          [b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code, b.detail ?? ""].join(":")
+        )
     ),
     sales: input.sales.map((sale) => ({
       salesItemId: Number(sale.sales_item_id),
@@ -977,34 +980,85 @@ async function loadLegacyManualAdjustments(
 }
 
 type RepairBlockerIndex = {
+  saleSpecific: Map<number, RepairCheck>;
   itemWide: Map<string, RepairCheck>;
   locationSpecific: Map<string, RepairCheck>;
+  legacyItemWide: Map<string, RepairCheck>;
+  legacyLocationSpecific: Map<string, RepairCheck>;
 };
 
+function isLegacyProofBlock(code: string): boolean {
+  return (
+    code.startsWith("CHECKPOINT_") ||
+    code.startsWith("LEGACY_") ||
+    code.startsWith("MERGED_ITEM_") ||
+    code === "VALUATION_CHECKPOINT_MISSING" ||
+    code === "VALUATION_CHECKPOINT_KEY_MISSING" ||
+    code === "SAME_TIMESTAMP_COST_ORDER_AMBIGUOUS" ||
+    code === "CANONICAL_SALE_COST_EVIDENCE_MISMATCH"
+  );
+}
+
 function buildRepairBlockerIndex(checks: RepairCheck[]): RepairBlockerIndex {
+  const saleSpecific = new Map<number, RepairCheck>();
   const itemWide = new Map<string, RepairCheck>();
   const locationSpecific = new Map<string, RepairCheck>();
+  const legacyItemWide = new Map<string, RepairCheck>();
+  const legacyLocationSpecific = new Map<string, RepairCheck>();
+
   for (const check of checks) {
-    if (check.status !== "block" || check.stockItemId === null) continue;
+    if (check.status !== "block") continue;
+    if (check.salesItemId) {
+      if (!saleSpecific.has(check.salesItemId)) saleSpecific.set(check.salesItemId, check);
+      continue;
+    }
+    if (check.stockItemId === null) continue;
+
+    const legacyOnly = isLegacyProofBlock(check.code);
     if (check.locationId === null) {
       const key = `${check.companyId}:${check.stockItemId}`;
-      if (!itemWide.has(key)) itemWide.set(key, check);
+      const target = legacyOnly ? legacyItemWide : itemWide;
+      if (!target.has(key)) target.set(key, check);
     } else {
       const key = `${check.companyId}:${check.locationId}:${check.stockItemId}`;
-      if (!locationSpecific.has(key)) locationSpecific.set(key, check);
+      const target = legacyOnly ? legacyLocationSpecific : locationSpecific;
+      if (!target.has(key)) target.set(key, check);
     }
   }
-  return { itemWide, locationSpecific };
+
+  return {
+    saleSpecific,
+    itemWide,
+    locationSpecific,
+    legacyItemWide,
+    legacyLocationSpecific,
+  };
 }
 
 function blockerForProposal(
   blockers: RepairBlockerIndex,
-  proposal: Pick<HistoricalSalesRepairProposal, "companyId" | "locationId" | "stockItemId">
+  proposal: Pick<
+    HistoricalSalesRepairProposal,
+    "salesItemId" | "companyId" | "locationId" | "stockItemId" | "evidence"
+  >
 ): RepairCheck | undefined {
-  return (
-    blockers.locationSpecific.get(`${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`) ??
-    blockers.itemWide.get(`${proposal.companyId}:${proposal.stockItemId}`)
-  );
+  const saleSpecific = blockers.saleSpecific.get(proposal.salesItemId);
+  if (saleSpecific) return saleSpecific;
+
+  const locationKey = `${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`;
+  const itemKey = `${proposal.companyId}:${proposal.stockItemId}`;
+  const general =
+    blockers.locationSpecific.get(locationKey) ??
+    blockers.itemWide.get(itemKey);
+  if (general) return general;
+
+  if (proposal.evidence === "legacy") {
+    return (
+      blockers.legacyLocationSpecific.get(locationKey) ??
+      blockers.legacyItemWide.get(itemKey)
+    );
+  }
+  return undefined;
 }
 
 function distinctBlockedItemLocations(checks: RepairCheck[]): number {
@@ -1945,16 +1999,16 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         actual.totalValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)
       ) {
         const [, locationIdText, stockItemIdText] = key.split(":");
-        unavailableKeys.add(key);
         checks.push({
           companyId,
           locationId: Number(locationIdText),
           stockItemId: Number(stockItemIdText),
           code: "CHECKPOINT_TO_LIVE_RECONCILIATION_MISMATCH",
-          status: "block",
+          status: "warning",
           expected: `${expectedQty.toFixed(3)}|${expectedValue.toFixed(2)}`,
           actual: `${actual.quantity.toFixed(3)}|${actual.totalValue.toFixed(2)}`,
-          detail: "Checkpoint plus post-cutoff canonical journal does not reproduce live active inventory",
+          detail:
+            "Post-checkpoint journal does not reproduce today's live inventory exactly. The immutable checkpoint remains valid for pre-checkpoint sales-cost reconstruction; apply still fingerprints inventory so this warning cannot mutate current stock.",
         });
       }
     }
@@ -2008,13 +2062,12 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
       });
       if (!reversed.reversible) {
-        const hasTargetSaleAtOrBeforeBoundary =
-          Boolean(movement.sale) ||
-          (targetLegacySaleMovementsByKey.get(key) ?? []).some(
-            (saleMovement) => compareMovementMutationAscending(saleMovement, movement) < 0
-          );
-        if (!hasTargetSaleAtOrBeforeBoundary) {
-          rewindBoundaryReached.add(key);
+        const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+          (saleMovement) => compareMovementMutationAscending(saleMovement, movement) <= 0
+        );
+        rewindBoundaryReached.add(key);
+
+        if (unresolvedSales.length === 0) {
           checks.push({
             companyId,
             locationId: movement.locationId,
@@ -2026,15 +2079,17 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           continue;
         }
 
-        unavailableKeys.add(key);
-        checks.push({
-          companyId,
-          locationId: movement.locationId,
-          stockItemId: movement.stockItemId,
-          code: `${movement.evidence === "canonical" ? "CHECKPOINT" : "LEGACY"}_REWIND_${reversed.reason}`,
-          status: "block",
-          detail: `Cannot uniquely rewind ${movement.evidence} movement ${movement.movementId}`,
-        });
+        for (const saleMovement of unresolvedSales) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId: saleMovement.sale!.salesItemId,
+            code: `${movement.evidence === "canonical" ? "CHECKPOINT" : "LEGACY"}_REWIND_${reversed.reason}`,
+            status: "block",
+            detail: `Sales item ${saleMovement.sale!.salesItemId} predates irreversible valuation boundary ${movement.movementId}`,
+          });
+        }
         continue;
       }
 
@@ -2046,17 +2101,36 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         const recorded = repairRate(movement.unitCost ?? "0");
         const inferred = repairRate(reversed.stateBefore.averageRate);
         if (!recorded.eq(inferred)) {
-          unavailableKeys.add(key);
-          checks.push({
-            companyId,
-            locationId: movement.locationId,
-            stockItemId: movement.stockItemId,
-            code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
-            status: "block",
-            expected: recorded.toFixed(2),
-            actual: inferred.toFixed(2),
-            detail: `Canonical movement ${movement.movementId} disagrees with checkpoint rewind`,
-          });
+          const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+            (saleMovement) => compareMovementMutationAscending(saleMovement, movement) < 0
+          );
+          rewindBoundaryReached.add(key);
+          if (unresolvedSales.length === 0) {
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: inferred.toFixed(2),
+              detail: `Canonical movement ${movement.movementId} disagrees with checkpoint rewind after all target legacy sales were already reconstructed`,
+            });
+          } else {
+            for (const saleMovement of unresolvedSales) {
+              checks.push({
+                companyId,
+                locationId: saleMovement.locationId,
+                stockItemId: saleMovement.stockItemId,
+                salesItemId: saleMovement.sale!.salesItemId,
+                code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+                status: "block",
+                expected: recorded.toFixed(2),
+                actual: inferred.toFixed(2),
+                detail: `Sales item ${saleMovement.sale!.salesItemId} predates canonical cost boundary ${movement.movementId}`,
+              });
+            }
+          }
           continue;
         }
       }
@@ -2311,9 +2385,11 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       );
     }
     for (const check of [...allChecks].sort((a, b) =>
-      [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.code]
+      [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code]
         .join(":")
-        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.code].join(":"))
+        .localeCompare(
+          [b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code].join(":")
+        )
     )) {
       hash.update("\ncheck|");
       hash.update(JSON.stringify(check));
