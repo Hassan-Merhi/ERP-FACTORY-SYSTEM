@@ -195,4 +195,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await import("../services/accounting/ensurePhase3InventoryValuationSchema");
   const baselinesCreated = await ensurePhase3InventoryValuationSchema(pool);
   logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
+
+  // Disabled by default. This one-shot control exists so an explicitly reviewed
+  // historical-sales repair can be dry-run/applied on Render without exposing
+  // database credentials or turning the repair into normal startup behavior.
+  const { maybeRunHistoricalSalesCostRepairFromEnv } =
+    await import("../services/inventory/historicalSalesCostRepairStartup");
+  await maybeRunHistoricalSalesCostRepairFromEnv();
 }
