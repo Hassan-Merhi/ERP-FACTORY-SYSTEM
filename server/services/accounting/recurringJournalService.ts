@@ -455,10 +455,13 @@ export async function upsertRecurringJournalFromVoucherNumber(
     );
   }
 
-  const { voucherNumber: _voucherNumber, ...rest } = input;
   return upsertRecurringJournalFromVoucher({
-    ...rest,
+    companyId: input.companyId,
     sourceVoucherId: voucher.id,
+    userId: input.userId,
+    timezone: input.timezone,
+    endDate: input.endDate,
+    descriptionTemplate: input.descriptionTemplate,
   });
 }
 
