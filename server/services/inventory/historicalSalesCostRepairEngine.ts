@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v3-canonical-lifecycle";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v4-cost-memory-anchors";
 
 const ZERO = new Decimal(0);
 
@@ -158,7 +158,11 @@ export type HistoricalInventoryReverseResult =
  */
 export function reverseHistoricalInventoryMovement(
   stateAfterInput: HistoricalInventoryState,
-  input: { quantityDelta: Decimal.Value; unitCost?: Decimal.Value | null }
+  input: {
+    quantityDelta: Decimal.Value;
+    unitCost?: Decimal.Value | null;
+    priorCostMemoryRate?: Decimal.Value | null;
+  }
 ): HistoricalInventoryReverseResult {
   const stateAfter = createHistoricalInventoryStateFromSnapshot(
     stateAfterInput.quantity,
@@ -174,6 +178,20 @@ export function reverseHistoricalInventoryMovement(
 
   if (delta.gt(ZERO)) {
     if (input.unitCost !== null && input.unitCost !== undefined && previousQty.lte(ZERO)) {
+      if (input.priorCostMemoryRate !== null && input.priorCostMemoryRate !== undefined) {
+        const priorRate = repairRate(
+          Decimal.max(decimal(input.priorCostMemoryRate, "prior cost memory rate"), ZERO)
+        );
+        const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, priorRate, ZERO);
+        const replayed = applyHistoricalInventoryMovement(stateBefore, {
+          quantityDelta: delta,
+          unitCost: input.unitCost,
+        });
+        if (statesEqual(replayed, stateAfter)) {
+          return { reversible: true, stateBefore };
+        }
+        return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+      }
       return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
     }
 
