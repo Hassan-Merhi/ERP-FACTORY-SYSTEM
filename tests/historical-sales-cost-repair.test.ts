@@ -670,4 +670,80 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("108.00");
   });
 
+  it("recovers a canonical POS issue when quantity and value invert exactly but the reconstructed rate is stale", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
+    const saleIssue = movement({
+      movementId: "canonical:rate-only-pos-issue",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "-1",
+      unitCost: "100.00",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, saleIssue);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1090.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
+  it("recovers a canonical priced receipt when only the reconstructed post-rate disagrees", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("10", "100.00", "1100.00");
+    const transferIn = movement({
+      movementId: "canonical:rate-only-transfer-in",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "2",
+      unitCost: "150.00",
+      sourceType: "stock-transfer",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, transferIn);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("8.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("800.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
+  it("recovers a canonical exact-value offload when only the reconstructed post-rate disagrees", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("10", "100.00", "1100.00");
+    const offload = movement({
+      movementId: "canonical:rate-only-offload",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "2",
+      unitCost: "150.00",
+      exactValue: "300.00",
+      sourceType: "container-offload",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, offload);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("8.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("800.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
+  it("keeps the same rate-only shortcut disabled for legacy evidence", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("10", "100.00", "1100.00");
+    const legacyTransferIn = movement({
+      movementId: "legacy:rate-only-transfer-in",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "2",
+      unitCost: "150.00",
+      sourceType: "legacy-stock-transfer-in",
+      evidence: "legacy",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, legacyTransferIn);
+    expect(reversed.reversible).toBe(false);
+  });
+
 });
