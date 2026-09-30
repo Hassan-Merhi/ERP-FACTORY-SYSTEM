@@ -2199,7 +2199,17 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           (check.locationId === null ||
             itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
       );
-      if (hasPreexistingEvidenceBlock) continue;
+      if (hasPreexistingEvidenceBlock) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_SKIPPED_PREEXISTING_BLOCK",
+          status: "warning",
+          detail: "Opening forward proof was skipped because independent evidence already blocks this stock item.",
+        });
+        continue;
+      }
 
       const itemMovements = movementsAscending.filter(
         (movement) => movement.stockItemId === stockItemId
@@ -2244,19 +2254,53 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         inferredOpeningQtyByLocation.set(locationId, inferred);
         inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
       }
-      if (openingQuantityInvalid) continue;
+      if (openingQuantityInvalid) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_NEGATIVE_INFERRED_QTY",
+          status: "warning",
+          detail: "Checkpoint minus durable movement deltas implies a negative opening quantity at one or more locations.",
+        });
+        continue;
+      }
 
       const openingQty = repairQuantity(stockItem.opening_qty);
       const openingRate = repairRate(stockItem.opening_rate);
       const openingValue = repairMoney(stockItem.opening_value);
-      if (!inferredOpeningTotal.eq(openingQty)) continue;
+      if (!inferredOpeningTotal.eq(openingQty)) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_QTY_MISMATCH",
+          status: "warning",
+          expected: openingQty.toFixed(3),
+          actual: inferredOpeningTotal.toFixed(3),
+          detail: "Opening quantity implied by checkpoint and durable movements does not match the pinned stock-item opening quantity.",
+        });
+        continue;
+      }
 
       const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(
         ([, quantity]) => quantity.gt(0)
       );
       const openingStates = new Map<number, HistoricalInventoryState>();
       if (openingQty.isZero()) {
-        if (openingValue.abs().gt(MONEY_TOLERANCE)) continue;
+        if (openingValue.abs().gt(MONEY_TOLERANCE)) {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_ZERO_QTY_VALUE_MISMATCH",
+            status: "warning",
+            expected: "0.00",
+            actual: openingValue.toFixed(2),
+            detail: "Pinned opening quantity is zero but pinned opening value is nonzero.",
+          });
+          continue;
+        }
         for (const locationId of locationIds) {
           openingStates.set(locationId, stateForZeroOpening(openingRate));
         }
@@ -2285,7 +2329,19 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           );
           allocatedValue = repairMoney(allocatedValue.plus(value));
         }
-        if (!allocatedValue.eq(openingValue)) continue;
+        if (!allocatedValue.eq(openingValue)) {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_VALUE_ALLOCATION_MISMATCH",
+            status: "warning",
+            expected: openingValue.toFixed(2),
+            actual: allocatedValue.toFixed(2),
+            detail: "Multiple inferred opening locations cannot reproduce the pinned opening value at the pinned opening rate.",
+          });
+          continue;
+        }
       }
 
       const replayStates = new Map<number, HistoricalInventoryState>();
@@ -2322,6 +2378,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
 
       let exactCheckpointReplay = true;
+      let replayMismatchDetail: string | null = null;
       for (const locationId of locationIds) {
         const key = historicalInventoryKey(companyId, locationId, stockItemId);
         const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
@@ -2329,6 +2386,21 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         if (expected) {
           if (!historicalInventoryStatesEqual(actual, expected)) {
             exactCheckpointReplay = false;
+            replayMismatchDetail =
+              "location " +
+              locationId +
+              " expected " +
+              repairQuantity(expected.quantity).toFixed(3) +
+              "|" +
+              repairRate(expected.averageRate).toFixed(2) +
+              "|" +
+              repairMoney(expected.totalValue).toFixed(2) +
+              " actual " +
+              repairQuantity(actual.quantity).toFixed(3) +
+              "|" +
+              repairRate(actual.averageRate).toFixed(2) +
+              "|" +
+              repairMoney(actual.totalValue).toFixed(2);
             break;
           }
         } else if (
@@ -2336,10 +2408,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
         ) {
           exactCheckpointReplay = false;
+          replayMismatchDetail =
+            "location " +
+            locationId +
+            " has no checkpoint row but replay ends " +
+            repairQuantity(actual.quantity).toFixed(3) +
+            "|" +
+            repairRate(actual.averageRate).toFixed(2) +
+            "|" +
+            repairMoney(actual.totalValue).toFixed(2);
           break;
         }
       }
-      if (!exactCheckpointReplay) continue;
+      if (!exactCheckpointReplay) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
+          status: "warning",
+          detail: replayMismatchDetail ?? "Forward replay did not reproduce the immutable checkpoint.",
+        });
+        continue;
+      }
 
       for (const key of itemTargetKeys) {
         forwardReplayResolvedKeys.add(key);
