@@ -2450,9 +2450,7 @@ export async function applyHistoricalSalesCostRepair(input: {
       if (!expected) throw hscrError(`HSCR_V2_EVIDENCE_HASH_MISSING:${companyId}`);
       const actual = await recomputeHistoricalSalesCompanyEvidenceHash(client, companyId, run.source_cutoff_at);
       if (actual !== expected) {
-        throw new Error(
-          `Historical sales cost repair source evidence changed after dry run for company ${companyId}. Build and review a new dry run.`
-        );
+        throw hscrError(`HSCR_V2_SOURCE_EVIDENCE_DRIFT:${companyId}`);
       }
     }
 
