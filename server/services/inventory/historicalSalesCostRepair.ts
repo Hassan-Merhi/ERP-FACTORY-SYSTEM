@@ -373,9 +373,7 @@ type CanonicalSaleEvidence = {
   totalQuantity: Decimal;
 };
 
-function activeCanonicalSaleEvidence(
-  movements: HistoricalSalesRepairMovement[]
-): Map<string, CanonicalSaleEvidence> {
+function activeCanonicalSaleEvidence(movements: HistoricalSalesRepairMovement[]): Map<string, CanonicalSaleEvidence> {
   const reversedIds = new Set<number>();
   for (const movement of movements) {
     const reversal = movement.reversalOfMovementId;
@@ -403,7 +401,6 @@ function activeCanonicalSaleEvidence(
   }
   return result;
 }
-
 
 function historicalSalesCompanyEvidenceHash(input: {
   companyId: number;
@@ -955,7 +952,6 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
 
-
 function markAmbiguousTimestampTies(
   companyId: number,
   movements: HistoricalSalesRepairMovement[],
@@ -998,20 +994,14 @@ function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
   return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
 }
 
-function stateQuantityValueMatches(
-  actual: HistoricalInventoryState,
-  expected: HistoricalInventoryState
-): boolean {
+function stateQuantityValueMatches(actual: HistoricalInventoryState, expected: HistoricalInventoryState): boolean {
   return (
     repairQuantity(actual.quantity).minus(repairQuantity(expected.quantity)).abs().lte(QTY_TOLERANCE) &&
     repairMoney(actual.totalValue).minus(repairMoney(expected.totalValue)).abs().lte(MONEY_TOLERANCE)
   );
 }
 
-function checkpointContainsMovement(
-  movement: HistoricalSalesRepairMovement,
-  checkpoint: ValuationCheckpoint
-): boolean {
+function checkpointContainsMovement(movement: HistoricalSalesRepairMovement, checkpoint: ValuationCheckpoint): boolean {
   const canonicalId = canonicalMovementNumericId(movement);
   if (canonicalId !== null) return canonicalId <= checkpoint.movementCutoffId;
   return movementMutationTime(movement) <= checkpoint.createdAt.getTime();
@@ -1204,8 +1194,7 @@ function recoverHistoricalMergedSales(input: {
     }
     for (const movement of keptPreMovements) {
       if (!relevantLocations.has(movement.locationId)) continue;
-      const current =
-        keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      const current = keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
       keptBeforeByLocation.set(
         movement.locationId,
         applyHistoricalInventoryMovement(current, {
@@ -1290,14 +1279,8 @@ function recoverHistoricalMergedSales(input: {
         break;
       }
       const normalizedValue = sourceValue.abs().lte(MONEY_TOLERANCE) ? new Decimal(0) : sourceValue;
-      const sourceRate = sourceQty.gt(0)
-        ? repairRate(normalizedValue.dividedBy(sourceQty))
-        : sourceOpeningRate;
-      const sourceState = createHistoricalInventoryStateFromSnapshot(
-        sourceQty,
-        sourceRate,
-        normalizedValue
-      );
+      const sourceRate = sourceQty.gt(0) ? repairRate(normalizedValue.dividedBy(sourceQty)) : sourceOpeningRate;
+      const sourceState = createHistoricalInventoryStateFromSnapshot(sourceQty, sourceRate, normalizedValue);
 
       const combinedQty = repairQuantity(keptBefore.quantity.plus(sourceState.quantity));
       const combinedValue = repairMoney(keptBefore.totalValue.plus(sourceState.totalValue));
@@ -1375,10 +1358,7 @@ function recoverHistoricalMergedSales(input: {
     const remainingOpeningQty = repairQuantity(sourceOpeningQty.minus(recoveredOpeningQty));
     const remainingOpeningValue = repairMoney(sourceOpeningValue.minus(recoveredOpeningValue));
 
-    if (
-      remainingOpeningQty.lt(QTY_TOLERANCE.negated()) ||
-      remainingOpeningValue.lt(MONEY_TOLERANCE.negated())
-    ) {
+    if (remainingOpeningQty.lt(QTY_TOLERANCE.negated()) || remainingOpeningValue.lt(MONEY_TOLERANCE.negated())) {
       blockSourceKeys(
         sourceItemId,
         "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
@@ -1392,10 +1372,7 @@ function recoverHistoricalMergedSales(input: {
         sourcePreMovements.some((movement) => movement.locationId === locationId) ||
         sourceTargetLocations.includes(locationId)
     );
-    if (
-      (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) &&
-      unresolvedWithActivity.length !== 1
-    ) {
+    if ((!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) && unresolvedWithActivity.length !== 1) {
       blockSourceKeys(
         sourceItemId,
         "MERGED_ITEM_OPENING_LOCATION_AMBIGUOUS",
@@ -1409,14 +1386,9 @@ function recoverHistoricalMergedSales(input: {
     let forwardFailure: { locationId: number; detail: string } | null = null;
     for (const locationId of unresolvedWithActivity) {
       const getsRemainder =
-        unresolvedWithActivity.length === 1 &&
-        (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
+        unresolvedWithActivity.length === 1 && (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
       const opening = getsRemainder
-        ? createHistoricalInventoryStateFromSnapshot(
-            remainingOpeningQty,
-            sourceOpeningRate,
-            remainingOpeningValue
-          )
+        ? createHistoricalInventoryStateFromSnapshot(remainingOpeningQty, sourceOpeningRate, remainingOpeningValue)
         : stateForZeroOpening(sourceOpeningRate);
       const replay = replayMergedSourceLocationForward({
         companyId: input.companyId,
@@ -1795,9 +1767,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           companyId,
           locationId,
           stockItemId,
-          code: mergedSourceIds.has(stockItemId)
-            ? "MERGED_ITEM_RECOVERY_FAILED"
-            : "VALUATION_CHECKPOINT_KEY_MISSING",
+          code: mergedSourceIds.has(stockItemId) ? "MERGED_ITEM_RECOVERY_FAILED" : "VALUATION_CHECKPOINT_KEY_MISSING",
           status: "block",
           detail: mergedSourceIds.has(stockItemId)
             ? "Historical merged item could not be reconstructed uniquely"
@@ -1959,8 +1929,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const rewindReadyKeys =
-      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length +
-      mergedRecovery.recoveredKeys.size;
+      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length + mergedRecovery.recoveredKeys.size;
     checks.push({
       companyId,
       locationId: null,
@@ -1973,10 +1942,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     });
   }
 
-  const proposals = [
-    ...directCanonicalProposals.values(),
-    ...proposalsBySaleId.values(),
-  ].sort((a, b) => a.salesItemId - b.salesItemId);
+  const proposals = [...directCanonicalProposals.values(), ...proposalsBySaleId.values()].sort(
+    (a, b) => a.salesItemId - b.salesItemId
+  );
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
