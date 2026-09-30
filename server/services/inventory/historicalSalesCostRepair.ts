@@ -523,6 +523,7 @@ function historicalSalesCompanyEvidenceHash(input: {
   legacy: LegacyRow[];
   manual: { movements: LegacyRow[]; checks: RepairCheck[] };
   sales: SaleRow[];
+  stockItems: StockItemRow[];
   historicalMerges: HistoricalMergeRow[];
 }): string {
   const payload = {
@@ -595,6 +596,16 @@ function historicalSalesCompanyEvidenceHash(input: {
       profit: String(sale.profit),
       createdAt: iso(sale.created_at),
     })),
+    stockItems: input.stockItems.map((item) => ({
+      id: Number(item.id),
+      code: item.code,
+      openingQty: String(item.opening_qty),
+      openingRate: String(item.opening_rate),
+      openingValue: String(item.opening_value),
+      active: Boolean(item.active),
+      deletedAt: item.deleted_at ? iso(item.deleted_at) : null,
+      createdAt: iso(item.created_at),
+    })),
     historicalMerges: input.historicalMerges.map((merge) => ({
       aliasId: Number(merge.alias_id),
       aliasCode: merge.alias_code,
@@ -621,9 +632,10 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
   companyId: number,
   sourceCutoff: Date
 ): Promise<string> {
-  const [canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+  const [canonicalStart, sales, stockItems, checkpoint, historicalMerges] = await Promise.all([
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
+    loadStockItems(client, companyId),
     loadValuationCheckpoint(client, companyId),
     loadHistoricalMerges(client, companyId),
   ]);
@@ -640,6 +652,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     legacy,
     manual,
     sales,
+    stockItems,
     historicalMerges,
   });
 }
@@ -690,6 +703,18 @@ async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient)
         .join(", ")}`
     );
   }
+}
+
+async function loadStockItems(client: PoolClient, companyId: number): Promise<StockItemRow[]> {
+  const result = await client.query<StockItemRow>(
+    `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
+            active,deleted_at,created_at
+       FROM stock_items
+      WHERE company_id=$1
+      ORDER BY id`,
+    [companyId]
+  );
+  return result.rows;
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -1159,6 +1184,17 @@ type MergedRecoveryResult = {
 
 function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
   return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
+}
+
+function historicalInventoryStatesEqual(
+  left: HistoricalInventoryState,
+  right: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
+    repairRate(left.averageRate).eq(repairRate(right.averageRate)) &&
+    repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
+  );
 }
 
 function stateQuantityValueMatches(
@@ -1683,7 +1719,7 @@ function recoverHistoricalMergedSales(input: {
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
       `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
          FROM inventory i
@@ -1695,14 +1731,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         ORDER BY i.location_id,i.stock_item_id`,
       [companyId]
     ),
-    client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
-              active,deleted_at,created_at
-         FROM stock_items
-        WHERE company_id=$1
-        ORDER BY id`,
-      [companyId]
-    ),
+    loadStockItems(client, companyId),
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
     loadValuationCheckpoint(client, companyId),
@@ -1723,6 +1752,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     legacy,
     manual,
     sales,
+    stockItems,
     historicalMerges,
   });
   const checks: RepairCheck[] = [
@@ -2142,6 +2172,195 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       rows.push(movement);
       targetLegacySaleMovementsByKey.set(key, rows);
     }
+
+    // Reverse replay can lose pre-reset cost memory. Before blocking older
+    // sales, derive location opening quantities from the immutable checkpoint,
+    // reconcile them to the pinned stock-item opening balance, replay every
+    // durable movement forward, and accept only an exact checkpoint match.
+    const forwardReplayResolvedKeys = new Set<string>();
+    const movementsAscending = [...movementsInCheckpoint].sort(compareMovementMutationAscending);
+    const stockItemById = new Map(stockItems.map((item) => [Number(item.id), item]));
+    const targetKeysByItem = new Map<number, string[]>();
+    for (const key of checkpointTargetKeys) {
+      const stockItemId = Number(key.split(":")[2]);
+      const rows = targetKeysByItem.get(stockItemId) ?? [];
+      rows.push(key);
+      targetKeysByItem.set(stockItemId, rows);
+    }
+
+    for (const [stockItemId, itemTargetKeys] of targetKeysByItem) {
+      const stockItem = stockItemById.get(stockItemId);
+      if (!stockItem) continue;
+
+      const hasPreexistingEvidenceBlock = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null ||
+            itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
+      );
+      if (hasPreexistingEvidenceBlock) continue;
+
+      const itemMovements = movementsAscending.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
+      const locationIds = new Set<number>([
+        ...checkpoint.rows
+          .filter((row) => Number(row.stock_item_id) === stockItemId)
+          .map((row) => Number(row.location_id)),
+        ...itemMovements.map((movement) => movement.locationId),
+      ]);
+      if (locationIds.size === 0) continue;
+
+      const movementDeltaByLocation = new Map<number, Decimal>();
+      for (const movement of itemMovements) {
+        movementDeltaByLocation.set(
+          movement.locationId,
+          repairQuantity(
+            (movementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+              d(movement.quantityDelta)
+            )
+          )
+        );
+      }
+
+      const inferredOpeningQtyByLocation = new Map<number, Decimal>();
+      let inferredOpeningTotal = new Decimal(0);
+      let openingQuantityInvalid = false;
+      for (const locationId of locationIds) {
+        const checkpointState = checkpointStates.get(
+          historicalInventoryKey(companyId, locationId, stockItemId)
+        );
+        let inferred = repairQuantity(
+          (checkpointState?.quantity ?? new Decimal(0)).minus(
+            movementDeltaByLocation.get(locationId) ?? new Decimal(0)
+          )
+        );
+        if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
+        if (inferred.lt(0)) {
+          openingQuantityInvalid = true;
+          break;
+        }
+        inferredOpeningQtyByLocation.set(locationId, inferred);
+        inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
+      }
+      if (openingQuantityInvalid) continue;
+
+      const openingQty = repairQuantity(stockItem.opening_qty);
+      const openingRate = repairRate(stockItem.opening_rate);
+      const openingValue = repairMoney(stockItem.opening_value);
+      if (!inferredOpeningTotal.eq(openingQty)) continue;
+
+      const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(
+        ([, quantity]) => quantity.gt(0)
+      );
+      const openingStates = new Map<number, HistoricalInventoryState>();
+      if (openingQty.isZero()) {
+        if (openingValue.abs().gt(MONEY_TOLERANCE)) continue;
+        for (const locationId of locationIds) {
+          openingStates.set(locationId, stateForZeroOpening(openingRate));
+        }
+      } else if (positiveOpeningLocations.length === 1) {
+        const [openingLocationId, locationQty] = positiveOpeningLocations[0];
+        if (!locationQty.eq(openingQty)) continue;
+        for (const locationId of locationIds) {
+          openingStates.set(
+            locationId,
+            locationId === openingLocationId
+              ? createHistoricalInventoryStateFromSnapshot(
+                  locationQty,
+                  openingRate,
+                  openingValue
+                )
+              : stateForZeroOpening(openingRate)
+          );
+        }
+      } else {
+        let allocatedValue = new Decimal(0);
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          const value = repairMoney(quantity.times(openingRate));
+          openingStates.set(
+            locationId,
+            createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
+          );
+          allocatedValue = repairMoney(allocatedValue.plus(value));
+        }
+        if (!allocatedValue.eq(openingValue)) continue;
+      }
+
+      const replayStates = new Map<number, HistoricalInventoryState>();
+      for (const [locationId, opening] of openingStates) {
+        replayStates.set(
+          locationId,
+          createHistoricalInventoryStateFromSnapshot(
+            opening.quantity,
+            opening.averageRate,
+            opening.totalValue
+          )
+        );
+      }
+      const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+      for (const movement of itemMovements) {
+        const current =
+          replayStates.get(movement.locationId) ?? stateForZeroOpening(openingRate);
+        if (movement.sale) {
+          const key = movementKey(movement);
+          if (checkpointTargetKeys.has(key)) {
+            replayProposals.set(
+              movement.sale.salesItemId,
+              historicalSaleProposalFromState(movement, current)
+            );
+          }
+        }
+        replayStates.set(
+          movement.locationId,
+          applyHistoricalInventoryMovement(current, {
+            quantityDelta: movement.quantityDelta,
+            unitCost: movement.unitCost,
+          })
+        );
+      }
+
+      let exactCheckpointReplay = true;
+      for (const locationId of locationIds) {
+        const key = historicalInventoryKey(companyId, locationId, stockItemId);
+        const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
+        const expected = checkpointStates.get(key);
+        if (expected) {
+          if (!historicalInventoryStatesEqual(actual, expected)) {
+            exactCheckpointReplay = false;
+            break;
+          }
+        } else if (
+          !repairQuantity(actual.quantity).isZero() ||
+          repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+        ) {
+          exactCheckpointReplay = false;
+          break;
+        }
+      }
+      if (!exactCheckpointReplay) continue;
+
+      for (const key of itemTargetKeys) {
+        forwardReplayResolvedKeys.add(key);
+        const locationId = Number(key.split(":")[1]);
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "OPENING_FORWARD_REPLAY_PROVEN",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "|" + openingValue.toFixed(2),
+          actual: inferredOpeningTotal.toFixed(3) + "|" + openingValue.toFixed(2),
+          detail:
+            "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
+        });
+      }
+      for (const proposal of replayProposals.values()) {
+        proposalsBySaleId.set(proposal.salesItemId, proposal);
+      }
+    }
+
     const rewindBoundaryReached = new Set<string>();
 
     for (const movement of movementsInCheckpoint) {
@@ -2149,6 +2368,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       if (
         !checkpointTargetKeys.has(key) ||
         unavailableKeys.has(key) ||
+        forwardReplayResolvedKeys.has(key) ||
         rewindBoundaryReached.has(key)
       ) {
         continue;
@@ -2278,7 +2498,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     sourceEvidenceHash,
     activeInventoryRows: inventoryResult.rows.length,
     checkpointRows: checkpoint?.rows.length ?? 0,
-    stockItems: stockItemResult.rows.length,
+    stockItems: stockItems.length,
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
