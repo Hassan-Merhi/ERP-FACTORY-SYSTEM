@@ -30,10 +30,7 @@ describe("recurring journal scheduling", () => {
 
 describe("recurring journal posting safety contract", () => {
   it("locks and rechecks recurrence state and writes the factory daybook mirror", () => {
-    const sourcePath = path.resolve(
-      process.cwd(),
-      "server/services/accounting/recurringJournalService.ts"
-    );
+    const sourcePath = path.resolve(process.cwd(), "server/services/accounting/recurringJournalService.ts");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source).toContain('.for("update")');

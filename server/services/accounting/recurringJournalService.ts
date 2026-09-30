@@ -448,12 +448,7 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
       const [locked] = await tx
         .select()
         .from(recurringJournals)
-        .where(
-          and(
-            eq(recurringJournals.id, recurring.id),
-            eq(recurringJournals.companyId, recurring.companyId)
-          )
-        )
+        .where(and(eq(recurringJournals.id, recurring.id), eq(recurringJournals.companyId, recurring.companyId)))
         .for("update");
 
       if (!locked || !locked.active || locked.nextRunDate !== scheduledFor) {
@@ -547,15 +542,10 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
             txType: "JOURNAL",
             referenceId: posted.voucher.id,
             referenceTable: "vouchers",
-            description:
-              posted.voucher.description || `Journal voucher #${posted.voucher.voucherNumber}`,
+            description: posted.voucher.description || `Journal voucher #${posted.voucher.voucherNumber}`,
             currencyCode: currency,
             amountCurrency: String(transactionTotal),
-            fxRateToUsd: erpRateToDaybookFxRateToUsd(
-              currency,
-              "USD",
-              posted.voucher.exchangeRate
-            ),
+            fxRateToUsd: erpRateToDaybookFxRateToUsd(currency, "USD", posted.voucher.exchangeRate),
             amountUsd: String(baseTotal),
             createdBy: null,
           });
