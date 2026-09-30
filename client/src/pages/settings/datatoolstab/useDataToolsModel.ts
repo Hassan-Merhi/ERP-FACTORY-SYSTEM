@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
@@ -116,25 +116,6 @@ export function useDataToolsModel() {
       return res.json();
     },
     enabled: !!silentProdLocId && silentProdOpen,
-  });
-
-  const recalculateCostsMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/sales-report/recalculate-costs", {});
-      const summary: { updatedCount?: number; totalChecked?: number } = await res.json();
-      return summary;
-    },
-    onSuccess: (data: { updatedCount?: number; totalChecked?: number }) => {
-      toast({
-        title: "Cost Prices Updated",
-        description: `Updated ${data.updatedCount} of ${data.totalChecked} sales items`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/sales-report"] });
-    },
-    onError: (error: Error) => {
-      if (error?._handledGlobally) return;
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
   });
 
   const downloadCostPriceTemplate = async () => {
@@ -633,7 +614,6 @@ export function useDataToolsModel() {
     allStockItems,
     silentLocInventory,
     silentLocInventoryLoading,
-    recalculateCostsMutation,
     downloadSilentTemplate,
     handleSilentImportFile,
     exportSilentExcel,
