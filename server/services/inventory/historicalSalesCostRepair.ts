@@ -3317,6 +3317,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         });
       }
 
+      if (reversed.recovery === "LEGACY_RECEIPT_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "LEGACY_RECEIPT_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Legacy offload boundary " +
+            movement.movementId +
+            " recovered from the exact stored offload total_value because replay reproduced quantity and total value exactly; only the reconstructed intermediate average-rate field disagreed. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
       if (
         movement.evidence === "canonical" &&
         CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
