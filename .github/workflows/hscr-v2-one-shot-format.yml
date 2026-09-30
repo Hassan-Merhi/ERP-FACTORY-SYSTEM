@@ -1,0 +1,50 @@
+name: HSCR V2 one-shot format
+
+on:
+  push:
+    branches:
+      - fix/hscr-v2-postmerge-gates
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout hotfix branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: fix/hscr-v2-postmerge-gates
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --bin-links=true
+
+      - name: Format repair source
+        run: node node_modules/prettier/bin/prettier.cjs --write server/services/inventory/historicalSalesCostRepair.ts
+
+      - name: Verify lint and format
+        run: |
+          npm run lint
+          node node_modules/prettier/bin/prettier.cjs --check server/services/inventory/historicalSalesCostRepair.ts
+
+      - name: Commit formatting
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add server/services/inventory/historicalSalesCostRepair.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git commit -m "Format historical sales repair"
+          git push origin HEAD:fix/hscr-v2-postmerge-gates
