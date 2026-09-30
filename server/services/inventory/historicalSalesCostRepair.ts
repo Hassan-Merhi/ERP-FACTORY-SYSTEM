@@ -770,7 +770,6 @@ function markAmbiguousTimestampTies(
   return checks;
 }
 
-
 async function dryRunCompany(
   client: PoolClient,
   companyId: number,
@@ -969,7 +968,11 @@ async function dryRunCompany(
   return { proposals, checks, report };
 }
 
-function proposalHashSource(proposal: HistoricalSalesRepairProposal, status: string, blockerCode?: string | null): string {
+function proposalHashSource(
+  proposal: HistoricalSalesRepairProposal,
+  status: string,
+  blockerCode?: string | null
+): string {
   return [
     proposal.salesItemId,
     proposal.voucherId,
@@ -1131,10 +1134,18 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       (proposal) => proposal.changed && !blockerForProposal(blockers, proposal)
     ).length;
 
-    const originalTotalCost = repairMoney(allProposals.reduce((sum, p) => sum.plus(p.originalTotalCost), new Decimal(0)));
-    const proposedTotalCost = repairMoney(allProposals.reduce((sum, p) => sum.plus(p.proposedTotalCost), new Decimal(0)));
-    const originalTotalProfit = repairMoney(allProposals.reduce((sum, p) => sum.plus(p.originalProfit), new Decimal(0)));
-    const proposedTotalProfit = repairMoney(allProposals.reduce((sum, p) => sum.plus(p.proposedProfit), new Decimal(0)));
+    const originalTotalCost = repairMoney(
+      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalTotalCost), new Decimal(0))
+    );
+    const proposedTotalCost = repairMoney(
+      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedTotalCost), new Decimal(0))
+    );
+    const originalTotalProfit = repairMoney(
+      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalProfit), new Decimal(0))
+    );
+    const proposedTotalProfit = repairMoney(
+      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedProfit), new Decimal(0))
+    );
 
     const hash = createHash("sha256");
     hash.update(HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION);
@@ -1143,12 +1154,14 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     for (const proposal of [...allProposals].sort((a, b) => a.salesItemId - b.salesItemId)) {
       const blocked = blockerForProposal(blockers, proposal);
       hash.update("\n");
-      hash.update(proposalHashSource(proposal, blocked ? "blocked" : proposal.changed ? "ready" : "unchanged", blocked?.code));
+      hash.update(
+        proposalHashSource(proposal, blocked ? "blocked" : proposal.changed ? "ready" : "unchanged", blocked?.code)
+      );
     }
     for (const check of [...allChecks].sort((a, b) =>
-      [a.companyId,a.locationId ?? 0,a.stockItemId ?? 0,a.code].join(":").localeCompare(
-        [b.companyId,b.locationId ?? 0,b.stockItemId ?? 0,b.code].join(":")
-      )
+      [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.code]
+        .join(":")
+        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.code].join(":"))
     )) {
       hash.update("\ncheck|");
       hash.update(JSON.stringify(check));
