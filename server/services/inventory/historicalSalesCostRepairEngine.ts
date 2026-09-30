@@ -10,10 +10,7 @@ function hscrEngineError(code: string): Error {
   return error;
 }
 
-function decimal(
-  value: Decimal.Value | null | undefined,
-  field: string,
-): Decimal {
+function decimal(value: Decimal.Value | null | undefined, field: string): Decimal {
   try {
     const parsed = new Decimal(value ?? 0);
     if (!parsed.isFinite()) throw new Error("not finite");
@@ -96,25 +93,17 @@ export type HistoricalSalesRepairReplayResult = {
   closingStates: Map<string, HistoricalInventoryState>;
 };
 
-export function historicalInventoryKey(
-  companyId: number,
-  locationId: number,
-  stockItemId: number,
-): string {
+export function historicalInventoryKey(companyId: number, locationId: number, stockItemId: number): string {
   return `${companyId}:${locationId}:${stockItemId}`;
 }
 
 export function createHistoricalInventoryState(
   quantityValue: Decimal.Value,
-  rateValue: Decimal.Value,
+  rateValue: Decimal.Value
 ): HistoricalInventoryState {
   const quantity = repairQuantity(quantityValue);
-  const averageRate = repairRate(
-    Decimal.max(decimal(rateValue, "opening rate"), ZERO),
-  );
-  const totalValue = quantity.gt(ZERO)
-    ? repairMoney(quantity.times(averageRate))
-    : ZERO;
+  const averageRate = repairRate(Decimal.max(decimal(rateValue, "opening rate"), ZERO));
+  const totalValue = quantity.gt(ZERO) ? repairMoney(quantity.times(averageRate)) : ZERO;
   return { quantity, averageRate, totalValue };
 }
 
@@ -131,7 +120,7 @@ export function createHistoricalInventoryState(
  */
 export function applyHistoricalInventoryMovement(
   state: HistoricalInventoryState,
-  input: { quantityDelta: Decimal.Value; unitCost?: Decimal.Value | null },
+  input: { quantityDelta: Decimal.Value; unitCost?: Decimal.Value | null }
 ): HistoricalInventoryState {
   const delta = repairQuantity(input.quantityDelta);
   const previousQty = repairQuantity(state.quantity);
@@ -140,15 +129,11 @@ export function applyHistoricalInventoryMovement(
   const incomingRate =
     input.unitCost === null || input.unitCost === undefined
       ? previousRate
-      : repairRate(
-          Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO),
-        );
+      : repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
   const newQty = repairQuantity(previousQty.plus(delta));
 
   if (delta.gt(ZERO)) {
-    const valueBearingQty = previousQty.isNegative()
-      ? Decimal.max(delta.minus(previousQty.abs()), ZERO)
-      : delta;
+    const valueBearingQty = previousQty.isNegative() ? Decimal.max(delta.minus(previousQty.abs()), ZERO) : delta;
     if (newQty.lte(ZERO)) {
       return {
         quantity: newQty,
@@ -157,12 +142,7 @@ export function applyHistoricalInventoryMovement(
       };
     }
 
-    const newValue = repairMoney(
-      Decimal.max(
-        previousValue.plus(valueBearingQty.times(incomingRate)),
-        ZERO,
-      ),
-    );
+    const newValue = repairMoney(Decimal.max(previousValue.plus(valueBearingQty.times(incomingRate)), ZERO));
     return {
       quantity: newQty,
       averageRate: repairRate(newValue.dividedBy(newQty)),
@@ -172,9 +152,7 @@ export function applyHistoricalInventoryMovement(
 
   if (delta.lt(ZERO)) {
     if (newQty.gt(ZERO)) {
-      const newValue = repairMoney(
-        Decimal.max(previousValue.minus(delta.abs().times(previousRate)), ZERO),
-      );
+      const newValue = repairMoney(Decimal.max(previousValue.minus(delta.abs().times(previousRate)), ZERO));
       return {
         quantity: newQty,
         averageRate: repairRate(newValue.dividedBy(newQty)),
@@ -196,10 +174,7 @@ export function applyHistoricalInventoryMovement(
   };
 }
 
-function compareMovements(
-  a: HistoricalSalesRepairMovement,
-  b: HistoricalSalesRepairMovement,
-): number {
+function compareMovements(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
   const time = Date.parse(a.occurredAt) - Date.parse(b.occurredAt);
   if (time !== 0) return time;
   if (a.sequence !== b.sequence) return a.sequence - b.sequence;
@@ -213,12 +188,8 @@ export function replayHistoricalSalesCosts(input: {
   const states = new Map<string, HistoricalInventoryState>();
   for (const opening of input.openings) {
     states.set(
-      historicalInventoryKey(
-        opening.companyId,
-        opening.locationId,
-        opening.stockItemId,
-      ),
-      createHistoricalInventoryState(opening.quantity, opening.averageRate),
+      historicalInventoryKey(opening.companyId, opening.locationId, opening.stockItemId),
+      createHistoricalInventoryState(opening.quantity, opening.averageRate)
     );
   }
 
@@ -226,27 +197,16 @@ export function replayHistoricalSalesCosts(input: {
   const movements = [...input.movements].sort(compareMovements);
 
   for (const movement of movements) {
-    const key = historicalInventoryKey(
-      movement.companyId,
-      movement.locationId,
-      movement.stockItemId,
-    );
+    const key = historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
     const current =
       states.get(key) ??
-      createHistoricalInventoryState(
-        "0",
-        movement.unitCost === null ? "0" : (movement.unitCost ?? "0"),
-      );
+      createHistoricalInventoryState("0", movement.unitCost === null ? "0" : (movement.unitCost ?? "0"));
 
     if (movement.sale) {
       const saleQty = repairQuantity(movement.sale.quantity).abs();
       const proposedCostPrice = repairRate(current.averageRate);
       const proposedTotalCost = repairMoney(saleQty.times(proposedCostPrice));
-      const proposedProfit = repairMoney(
-        decimal(movement.sale.totalSales, "sale total").minus(
-          proposedTotalCost,
-        ),
-      );
+      const proposedProfit = repairMoney(decimal(movement.sale.totalSales, "sale total").minus(proposedTotalCost));
 
       const originalCostPrice = repairRate(movement.sale.originalCostPrice);
       const originalTotalCost = repairMoney(movement.sale.originalTotalCost);
@@ -280,7 +240,7 @@ export function replayHistoricalSalesCosts(input: {
       applyHistoricalInventoryMovement(current, {
         quantityDelta: movement.quantityDelta,
         unitCost: movement.unitCost,
-      }),
+      })
     );
   }
 
