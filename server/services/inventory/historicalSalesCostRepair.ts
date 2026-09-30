@@ -1186,6 +1186,17 @@ function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
   return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
 }
 
+function historicalInventoryStatesEqual(
+  left: HistoricalInventoryState,
+  right: HistoricalInventoryState
+): boolean {
+  return (
+    repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
+    repairRate(left.averageRate).eq(repairRate(right.averageRate)) &&
+    repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
+  );
+}
+
 function stateQuantityValueMatches(
   actual: HistoricalInventoryState,
   expected: HistoricalInventoryState
