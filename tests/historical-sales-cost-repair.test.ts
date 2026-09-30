@@ -643,4 +643,27 @@ describe("historical sales cost repair replay", () => {
     expect(next.inventory.averageRate.toFixed(2)).toBe("100.00");
   });
 
+  it("reverses a POS reversal journal with the same unpriced semantics used in production", () => {
+    const start = createHistoricalInventoryStateFromSnapshot("5", "100.00", "500.00");
+    const posReversal = movement({
+      movementId: "canonical:pos-reverse-inverse",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "2",
+      unitCost: "80.00",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+    });
+    const after = applyHistoricalForwardReplayMovement(
+      createHistoricalForwardReplayState(start),
+      posReversal
+    ).inventory;
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, posReversal);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("5.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("500.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
 });
