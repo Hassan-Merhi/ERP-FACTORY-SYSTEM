@@ -117,9 +117,7 @@ function RecurringJournalCard({
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">{recurring.name}</h3>
-            <Badge variant={recurring.active ? "secondary" : "outline"}>
-              {recurring.active ? "Active" : "Paused"}
-            </Badge>
+            <Badge variant={recurring.active ? "secondary" : "outline"}>{recurring.active ? "Active" : "Paused"}</Badge>
             <Badge variant="outline">{recurring.currency}</Badge>
           </div>
           <p className="text-sm text-muted-foreground">
