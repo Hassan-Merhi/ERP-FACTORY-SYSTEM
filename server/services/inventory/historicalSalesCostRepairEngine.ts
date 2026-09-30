@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v18-rewind-boundary-diagnostics";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v19-pos-reversal-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -781,7 +781,15 @@ export function reverseHistoricalSalesRepairMovement(
 
   return reverseHistoricalInventoryMovement(stateAfter, {
     quantityDelta: movement.quantityDelta,
-    unitCost: movement.unitCost,
+    // Historical POS reversal/edit receipts restored quantity without passing
+    // the old sale-line cost into adjustInventory(). The canonical journal
+    // nevertheless records that old cost. Forward replay already ignores it;
+    // reverse replay must do the same or it reconstructs a valuation path that
+    // production never executed.
+    unitCost:
+      movement.sourceType === "pos-sale" && delta.gt(ZERO)
+        ? null
+        : movement.unitCost,
     priorCostMemoryRate: input?.priorCostMemoryRate,
   });
 }
