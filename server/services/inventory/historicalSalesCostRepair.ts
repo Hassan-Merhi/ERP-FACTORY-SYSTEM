@@ -1189,8 +1189,10 @@ export async function applyHistoricalSalesCostRepair(input: {
       audit_hash: string;
       algorithm_version: string;
       blocked_rows: number;
+      source_cutoff_at: Date;
+      requested_company_ids: number[] | null;
     }>(
-      `SELECT id,status,audit_hash,algorithm_version,blocked_rows
+      `SELECT id,status,audit_hash,algorithm_version,blocked_rows,source_cutoff_at,requested_company_ids
          FROM historical_sales_cost_repair_runs
         WHERE id=$1
         FOR UPDATE`,
@@ -1216,6 +1218,38 @@ export async function applyHistoricalSalesCostRepair(input: {
     );
     if (Number(blockerCount.rows[0]?.count ?? 0) !== 0) {
       throw new Error("Historical sales cost repair run contains blockers");
+    }
+
+    const targetCompanyIds = (run.requested_company_ids ?? []).map(Number);
+    if (targetCompanyIds.length === 0) {
+      throw new Error("Historical sales cost repair run has no company scope");
+    }
+
+    // Fail closed if a source document was edited after the reviewed dry run.
+    // Normal new stock activity is allowed; only backdated canonical evidence or
+    // audited mutations of source-bearing records invalidate the reviewed run.
+    const sourceDrift = await client.query<{ kind: string; evidence_id: string }>(
+      `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
+         FROM canonical_stock_movements
+        WHERE company_id = ANY($1::int[])
+          AND created_at > $2
+          AND occurred_at <= $2
+        UNION ALL
+       SELECT 'audited-source-edit'::text AS kind,id::text AS evidence_id
+         FROM audit_log
+        WHERE company_id = ANY($1::int[])
+          AND created_at > $2
+          AND table_name IN ('inventory','vouchers','containers','stock_items')
+        ORDER BY kind,evidence_id
+        LIMIT 25`,
+      [targetCompanyIds, run.source_cutoff_at]
+    );
+    if (sourceDrift.rows.length > 0) {
+      throw new Error(
+        `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
+          .map((row) => `${row.kind}#${row.evidence_id}`)
+          .join(", ")}. Build and review a new dry run.`
+      );
     }
 
     const drift = await client.query<{ sales_item_id: number }>(
