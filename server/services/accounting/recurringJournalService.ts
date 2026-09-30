@@ -106,8 +106,12 @@ export function firstRecurringRunDate(sourceVoucherDate: string, timeZone: strin
 
   const sourceMonthKey = source.year * 12 + source.month;
   const todayMonthKey = today.year * 12 + today.month;
-  const anchor = sourceMonthKey >= todayMonthKey ? sourceVoucherDate : localToday;
-  return nextMonthEndIso(anchor);
+
+  if (sourceMonthKey >= todayMonthKey) {
+    return nextMonthEndIso(sourceVoucherDate);
+  }
+
+  return monthEndIso(today.year, today.month);
 }
 
 function replaceFirstIgnoreCase(value: string, search: string, replacement: string): string | null {
@@ -279,10 +283,6 @@ export async function upsertRecurringJournalFromVoucher(
         : deriveRecurringDescriptionTemplate(voucher.description, voucher.voucherDate);
 
     if (existing) {
-      const nextRunDate =
-        existing.nextRunDate < localIsoDate(timeZone)
-          ? firstRecurringRunDate(voucher.voucherDate, timeZone)
-          : existing.nextRunDate;
       const [updated] = await tx
         .update(recurringJournals)
         .set({
@@ -293,8 +293,6 @@ export async function upsertRecurringJournalFromVoucher(
           exchangeRate: voucher.exchangeRate,
           entryTemplate,
           endDate,
-          nextRunDate,
-          active: true,
           lastError: null,
           updatedAt: new Date(),
         })
@@ -360,7 +358,7 @@ export async function updateRecurringJournal(
   const active = patch.active ?? existing.active;
 
   let nextRunDate = existing.nextRunDate;
-  if (active && (!existing.active || nextRunDate < localIsoDate(timeZone))) {
+  if (active && !existing.active) {
     nextRunDate = firstRecurringRunDate(existing.lastRunDate || existing.startDate, timeZone);
   }
   if (endDate && endDate < nextRunDate && active) {
