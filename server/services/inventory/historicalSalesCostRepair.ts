@@ -1568,7 +1568,30 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
   ]);
 
-  const checks: RepairCheck[] = [...manual.checks];
+  const sourceEvidenceHash = historicalSalesCompanyEvidenceHash({
+    companyId,
+    canonicalStart,
+    checkpoint,
+    canonical,
+    legacy,
+    manual,
+    sales,
+    historicalMerges,
+  });
+  const checks: RepairCheck[] = [
+    ...manual.checks,
+    {
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "V2_SOURCE_EVIDENCE_HASH",
+      status: "pass",
+      expected: sourceEvidenceHash,
+      actual: sourceEvidenceHash,
+      detail:
+        "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
+    },
+  ];
   const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
   const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
   const legacyMovements: HistoricalSalesRepairMovement[] = [
@@ -1987,6 +2010,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     sourceCutoff: sourceCutoff.toISOString(),
     checkpointAt: checkpoint?.createdAt.toISOString() ?? null,
     checkpointMovementCutoffId: checkpoint?.movementCutoffId ?? null,
+    sourceEvidenceHash,
     activeInventoryRows: inventoryResult.rows.length,
     checkpointRows: checkpoint?.rows.length ?? 0,
     stockItems: stockItemResult.rows.length,
