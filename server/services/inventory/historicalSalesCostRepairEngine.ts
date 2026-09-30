@@ -409,37 +409,22 @@ export function applyHistoricalForwardReplayMovement(
 ): HistoricalForwardReplayState {
   const mutationAt = movementTimeMs(movement);
   const delta = repairQuantity(movement.quantityDelta);
-
-  if (mutationAt < INVENTORY_SAFETY_CLAMP_AT) {
-    return {
-      inventory: applyPreSafetyInventoryMovement(state.inventory, movement),
-      negativeLayerQuantity: state.negativeLayerQuantity,
-    };
-  }
-
-  if (mutationAt < NEGATIVE_LAYER_ENGINE_AT) {
-    return {
-      inventory: applySafetyClampInventoryMovement(state.inventory, movement),
-      negativeLayerQuantity: state.negativeLayerQuantity,
-    };
-  }
-
   const previousQty = repairQuantity(state.inventory.quantity);
   let layerQty = repairQuantity(state.negativeLayerQuantity);
 
   if (INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType)) {
     return {
       inventory: applyHistoricalSalesRepairMovement(state.inventory, movement),
-      // Initial container offloads bypassed adjustInventory and therefore did
-      // not settle existing negative layers. That is exactly how stale layers
-      // survived after stock had already crossed back above zero.
+      // Initial container offloads always used their own valuation path. After
+      // negative layers were introduced they also bypassed layer settlement,
+      // which is how stale layers could survive after stock crossed positive.
       negativeLayerQuantity: layerQty,
     };
   }
 
   if (EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)) {
     const inventory = applyHistoricalSalesRepairMovement(state.inventory, movement);
-    if (delta.lt(ZERO)) {
+    if (mutationAt >= NEGATIVE_LAYER_ENGINE_AT && delta.lt(ZERO)) {
       layerQty = addNegativeLayerQuantity(
         layerQty,
         previousQty,
@@ -448,6 +433,20 @@ export function applyHistoricalForwardReplayMovement(
       );
     }
     return { inventory, negativeLayerQuantity: layerQty };
+  }
+
+  if (mutationAt < INVENTORY_SAFETY_CLAMP_AT) {
+    return {
+      inventory: applyPreSafetyInventoryMovement(state.inventory, movement),
+      negativeLayerQuantity: layerQty,
+    };
+  }
+
+  if (mutationAt < NEGATIVE_LAYER_ENGINE_AT) {
+    return {
+      inventory: applySafetyClampInventoryMovement(state.inventory, movement),
+      negativeLayerQuantity: layerQty,
+    };
   }
 
   const previousRate = repairRate(Decimal.max(state.inventory.averageRate, ZERO));
