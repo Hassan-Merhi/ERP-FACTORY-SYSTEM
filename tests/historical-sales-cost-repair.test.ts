@@ -286,6 +286,28 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
   });
 
+  it("uses full canonical receipt precision before rounding stored inventory values", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00");
+    const after = applyHistoricalInventoryMovement(before, {
+      quantityDelta: "24",
+      unitCost: "69.194444",
+    });
+
+    expect(after.quantity.toFixed(3)).toBe("25.000");
+    expect(after.averageRate.toFixed(2)).toBe("66.83");
+    expect(after.totalValue.toFixed(2)).toBe("1670.67");
+
+    const reversed = reverseHistoricalInventoryMovement(after, {
+      quantityDelta: "24",
+      unitCost: "69.194444",
+    });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("1.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("10.00");
+  });
+
   it("proves a merged source by rewinding the kept checkpoint and conserving merge value", () => {
     const sourceOpening = createHistoricalInventoryStateFromSnapshot("10", "112.77", "1127.70");
     const sourceAfterReceipt = applyHistoricalInventoryMovement(sourceOpening, {
