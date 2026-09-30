@@ -10,11 +10,8 @@ import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
-import { db } from "../../../db";
 import { requireAuth, requireNonPOS } from "../../../auth";
-import { containerOffloadItems, offloadRequestSchema } from "@shared/schema";
-import { eq } from "drizzle-orm";
-import { syncSalesItemCostsForStockItems } from "../../../services/syncSalesItemCosts";
+import { offloadRequestSchema } from "@shared/schema";
 import { executeContainerOffloadLifecycle } from "../../../services/containers/offload-lifecycle/execute";
 import { ContainerOffloadLifecycleError } from "../../../services/containers/offload-lifecycle/types";
 
@@ -74,38 +71,8 @@ export function registerContainerOffloadCreateRoutes(app: Express) {
 
       res.json(result.offload);
 
-      Promise.resolve().then(async () => {
-        try {
-          let stockItemIds = result.stockItemIds;
-          if (stockItemIds.length === 0) {
-            const offloadItems = await db
-              .select({ stockItemId: containerOffloadItems.stockItemId })
-              .from(containerOffloadItems)
-              .where(eq(containerOffloadItems.offloadId, result.offload.id));
-            stockItemIds = [...new Set(offloadItems.map((item) => item.stockItemId))];
-          }
-          if (stockItemIds.length === 0) return;
-
-          const syncResult = await syncSalesItemCostsForStockItems(companyId, result.locationId, stockItemIds);
-          if (syncResult.updatedCount > 0) {
-            logger.info("Sales item costs synced after container offload", {
-              module: "containers",
-              action: "sync-sales-costs",
-              containerId,
-              locationId: result.locationId,
-              stockItemIds,
-              updatedSalesItems: syncResult.updatedCount,
-            });
-          }
-        } catch (syncError: unknown) {
-          logger.error("Failed to sync sales item costs after offload (non-fatal)", {
-            module: "containers",
-            action: "sync-sales-costs",
-            containerId,
-            error: getErrorMessage(syncError),
-          });
-        }
-      });
+      // Preserve posted sales at their transaction-time cost. A new receipt
+      // must not reprice historical sales from today's inventory average.
     } catch (error: unknown) {
       logger.error("Container offload failed", {
         module: "containers",

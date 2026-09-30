@@ -5,7 +5,6 @@ import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { parseId } from "../../lib/parseId";
-import { syncSalesItemCostsForStockItems } from "../../services/syncSalesItemCosts";
 import {
   ContainerOffloadLifecycleError,
   executeContainerOffloadLifecycle,
@@ -78,35 +77,9 @@ async function runCentralOffload(req: Request, res: Response, mode: ContainerOff
       res.json(result.offload);
     }
 
-    Promise.resolve().then(async () => {
-      if (result.stockItemIds.length === 0) return;
-      try {
-        const syncResult = await syncSalesItemCostsForStockItems(
-          result.companyId,
-          result.locationId,
-          result.stockItemIds
-        );
-        if (syncResult.updatedCount > 0) {
-          logger.info("Sales item costs synced after atomic container offload", {
-            module: "containers",
-            action: "sync-sales-costs",
-            companyId,
-            containerId,
-            locationId: result.locationId,
-            stockItemIds: result.stockItemIds,
-            updatedSalesItems: syncResult.updatedCount,
-          });
-        }
-      } catch (syncError: unknown) {
-        logger.error("Failed to sync sales item costs after atomic offload (non-fatal)", {
-          module: "containers",
-          action: "sync-sales-costs",
-          companyId,
-          containerId,
-          error: getErrorMessage(syncError),
-        });
-      }
-    });
+    // A receipt changes current inventory cost only. Posted sales keep the
+    // historical cost captured when they were sold; a later offload must not
+    // retroactively rewrite sales_items.costPrice / totalCost / profit.
   } catch (error: unknown) {
     logger.error("Atomic container offload lifecycle failed", {
       module: "containers",
