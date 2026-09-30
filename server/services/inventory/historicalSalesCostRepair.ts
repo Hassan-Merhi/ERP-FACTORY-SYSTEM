@@ -374,6 +374,39 @@ function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): nu
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+function buildPriorCanonicalCostMemoryRateHints(
+  movements: HistoricalSalesRepairMovement[]
+): Map<string, string> {
+  const hints = new Map<string, string>();
+  const knownRateByKey = new Map<string, Decimal>();
+
+  for (const movement of [...movements].sort(compareMovementMutationAscending)) {
+    const key = movementKey(movement);
+    const knownRate = knownRateByKey.get(key);
+    if (knownRate) hints.set(movement.movementId, knownRate.toFixed(2));
+
+    const delta = d(movement.quantityDelta);
+    if (
+      delta.lt(0) &&
+      movement.evidence === "canonical" &&
+      movement.unitCost !== null &&
+      movement.unitCost !== undefined
+    ) {
+      knownRateByKey.set(key, repairRate(movement.unitCost));
+      continue;
+    }
+
+    if (delta.gt(0) && movement.unitCost !== null && movement.unitCost !== undefined) {
+      const incomingRate = repairRate(movement.unitCost);
+      if (!knownRate || !incomingRate.eq(knownRate)) {
+        knownRateByKey.delete(key);
+      }
+    }
+  }
+
+  return hints;
+}
+
 type CanonicalSaleEvidence = {
   movements: HistoricalSalesRepairMovement[];
   latestMutationAt: number;
@@ -1097,6 +1130,7 @@ function recoverHistoricalMergedSales(input: {
   const proposals: HistoricalSalesRepairProposal[] = [];
   const checks: RepairCheck[] = [];
   const allMovements = [...input.legacyMovements, ...input.canonical];
+  const priorCostMemoryRateHints = buildPriorCanonicalCostMemoryRateHints(allMovements);
   const mergeBySource = new Map(input.historicalMerges.map((merge) => [Number(merge.source_item_id), merge]));
   const missingKeys = [...input.targetKeys].filter((key) => !input.checkpointStates.has(key));
   const sourceIds = [...new Set(missingKeys.map((key) => Number(key.split(":")[2])))];
@@ -1279,6 +1313,7 @@ function recoverHistoricalMergedSales(input: {
         const reversed = reverseHistoricalInventoryMovement(stateAfter, {
           quantityDelta: movement.quantityDelta,
           unitCost: movement.unitCost,
+          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
         if (!reversed.reversible) {
           keptRewindFailure = {
@@ -1377,6 +1412,7 @@ function recoverHistoricalMergedSales(input: {
         const reversed = reverseHistoricalInventoryMovement(stateAfter, {
           quantityDelta: movement.quantityDelta,
           unitCost: movement.unitCost,
+          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
         if (!reversed.reversible) {
           sourceRewindFailure = {
@@ -1943,6 +1979,8 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }),
       ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
     ].sort(compareMovementMutationDescending);
+    const priorCostMemoryRateHints =
+      buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
     const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
     for (const movement of legacyMovements) {
       if (!movement.sale) continue;
@@ -1967,6 +2005,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const reversed = reverseHistoricalInventoryMovement(stateAfter, {
         quantityDelta: movement.quantityDelta,
         unitCost: movement.unitCost,
+        priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
       });
       if (!reversed.reversible) {
         const hasTargetSaleAtOrBeforeBoundary =

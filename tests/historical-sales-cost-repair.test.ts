@@ -249,6 +249,32 @@ describe("historical sales cost repair replay", () => {
     expect(reversed).toEqual({ reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" });
   });
 
+  it("rewinds a priced receipt across zero when canonical history pins the prior cost memory", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: "12" });
+    const reversed = reverseHistoricalInventoryMovement(after, {
+      quantityDelta: "5",
+      unitCost: "12",
+      priorCostMemoryRate: "10",
+    });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("-2.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("10.00");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
+  });
+
+  it("rejects an incorrect prior cost-memory anchor", () => {
+    const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
+    const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: "12" });
+    const reversed = reverseHistoricalInventoryMovement(after, {
+      quantityDelta: "5",
+      unitCost: "12",
+      priorCostMemoryRate: "99",
+    });
+    expect(reversed).toEqual({ reversible: false, reason: "MOVEMENT_INVERSE_INVALID" });
+  });
+
   it("can rewind an unpriced receipt across zero because cost memory is retained", () => {
     const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
     const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: null });
