@@ -3317,6 +3317,22 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         });
       }
 
+      if (reversed.recovery === "CANONICAL_RECORDED_ISSUE_RATE") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_RECORDED_SALE_RATE_RECOVERED",
+          status: "pass",
+          expected: repairRate(movement.unitCost ?? "0").toFixed(2),
+          actual: repairRate(reversed.stateBefore.averageRate).toFixed(2),
+          detail:
+            "Canonical sale boundary " +
+            movement.movementId +
+            " used its recorded transaction-time issue rate because that rate replayed quantity and total value exactly and the generic inverse selected a conflicting rate.",
+        });
+      }
+
       if (reversed.recovery === "CANONICAL_ADJUSTMENT_EDIT_VALUE") {
         checks.push({
           companyId,
