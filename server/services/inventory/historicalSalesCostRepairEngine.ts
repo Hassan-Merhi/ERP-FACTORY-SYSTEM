@@ -226,10 +226,7 @@ export function reverseHistoricalInventoryMovement(
   }
 
   if (stateAfter.quantity.lte(ZERO)) {
-    const stateBefore = createHistoricalInventoryState(
-      previousQty,
-      stateAfter.averageRate
-    );
+    const stateBefore = createHistoricalInventoryState(previousQty, stateAfter.averageRate);
     const replayed = applyHistoricalInventoryMovement(stateBefore, {
       quantityDelta: delta,
       unitCost: input.unitCost,
