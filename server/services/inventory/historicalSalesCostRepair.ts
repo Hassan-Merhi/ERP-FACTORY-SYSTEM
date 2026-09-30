@@ -635,7 +635,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=c.company_id
       WHERE COALESCE(co.optional,false)=false
         AND co.offloaded_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR co.offloaded_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -669,7 +668,6 @@ async function loadLegacyMovements(
       WHERE v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sai.created_at,sav.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sai.created_at,sav.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -701,7 +699,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -732,7 +729,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -762,7 +758,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(cni.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(cni.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -789,7 +784,6 @@ async function loadLegacyMovements(
       JOIN stock_group_location_archives a ON a.id=ai.archive_id
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.archived_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.archived_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -817,7 +811,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.restored_at IS NOT NULL
         AND a.restored_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.restored_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -861,10 +854,9 @@ async function loadLegacyManualAdjustments(
         AND action='update'
         AND changes ? 'adjustmentType'
         AND changes ? 'quantity'
-        AND created_at <= $3
-        AND ($2::timestamptz IS NULL OR created_at < $2)
+        AND created_at <= $2
       ORDER BY created_at,id`,
-    [companyId, canonicalStart, sourceCutoff]
+    [companyId, sourceCutoff]
   );
 
   const movements: LegacyRow[] = [];
