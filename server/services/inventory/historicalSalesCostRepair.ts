@@ -523,6 +523,7 @@ function historicalSalesCompanyEvidenceHash(input: {
   legacy: LegacyRow[];
   manual: { movements: LegacyRow[]; checks: RepairCheck[] };
   sales: SaleRow[];
+  stockItems: StockItemRow[];
   historicalMerges: HistoricalMergeRow[];
 }): string {
   const payload = {
@@ -595,6 +596,16 @@ function historicalSalesCompanyEvidenceHash(input: {
       profit: String(sale.profit),
       createdAt: iso(sale.created_at),
     })),
+    stockItems: input.stockItems.map((item) => ({
+      id: Number(item.id),
+      code: item.code,
+      openingQty: String(item.opening_qty),
+      openingRate: String(item.opening_rate),
+      openingValue: String(item.opening_value),
+      active: Boolean(item.active),
+      deletedAt: item.deleted_at ? iso(item.deleted_at) : null,
+      createdAt: iso(item.created_at),
+    })),
     historicalMerges: input.historicalMerges.map((merge) => ({
       aliasId: Number(merge.alias_id),
       aliasCode: merge.alias_code,
@@ -621,9 +632,10 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
   companyId: number,
   sourceCutoff: Date
 ): Promise<string> {
-  const [canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+  const [canonicalStart, sales, stockItems, checkpoint, historicalMerges] = await Promise.all([
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
+    loadStockItems(client, companyId),
     loadValuationCheckpoint(client, companyId),
     loadHistoricalMerges(client, companyId),
   ]);
@@ -640,6 +652,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     legacy,
     manual,
     sales,
+    stockItems,
     historicalMerges,
   });
 }
@@ -690,6 +703,18 @@ async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient)
         .join(", ")}`
     );
   }
+}
+
+async function loadStockItems(client: PoolClient, companyId: number): Promise<StockItemRow[]> {
+  const result = await client.query<StockItemRow>(
+    `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
+            active,deleted_at,created_at
+       FROM stock_items
+      WHERE company_id=$1
+      ORDER BY id`,
+    [companyId]
+  );
+  return result.rows;
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -1683,7 +1708,7 @@ function recoverHistoricalMergedSales(input: {
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
+  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
       `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
          FROM inventory i
@@ -1695,14 +1720,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         ORDER BY i.location_id,i.stock_item_id`,
       [companyId]
     ),
-    client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
-              active,deleted_at,created_at
-         FROM stock_items
-        WHERE company_id=$1
-        ORDER BY id`,
-      [companyId]
-    ),
+    loadStockItems(client, companyId),
     loadCanonicalStart(client, companyId, sourceCutoff),
     loadSales(client, companyId, sourceCutoff),
     loadValuationCheckpoint(client, companyId),
@@ -1723,6 +1741,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     legacy,
     manual,
     sales,
+    stockItems,
     historicalMerges,
   });
   const checks: RepairCheck[] = [
@@ -2278,7 +2297,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     sourceEvidenceHash,
     activeInventoryRows: inventoryResult.rows.length,
     checkpointRows: checkpoint?.rows.length ?? 0,
-    stockItems: stockItemResult.rows.length,
+    stockItems: stockItems.length,
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
