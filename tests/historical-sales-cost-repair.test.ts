@@ -7,7 +7,8 @@ import {
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
 
 function movement(
-  overrides: Partial<HistoricalSalesRepairMovement> & Pick<HistoricalSalesRepairMovement, "movementId" | "quantityDelta">
+  overrides: Partial<HistoricalSalesRepairMovement> &
+    Pick<HistoricalSalesRepairMovement, "movementId" | "quantityDelta">
 ): HistoricalSalesRepairMovement {
   return {
     movementId: overrides.movementId,
