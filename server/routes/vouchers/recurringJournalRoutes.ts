@@ -1,12 +1,14 @@
 import type { Express, Request, Response } from "express";
-import { requireAuth, requireNonPOS } from "../../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import {
   RecurringJournalError,
   getRecurringJournalForSource,
   getRecurringJournalHistory,
+  listRecurringJournals,
   updateRecurringJournal,
   upsertRecurringJournalFromVoucher,
+  upsertRecurringJournalFromVoucherNumber,
 } from "../../services/accounting/recurringJournalService";
 
 function positiveId(raw: unknown): number | null {
@@ -27,72 +29,140 @@ function currentCompanyId(req: Request): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
+// Recurring journals are managed from ERP Settings, so API access intentionally matches the Admin/Developer Settings route.
 export function registerRecurringJournalRoutes(app: Express): void {
-  app.get("/api/recurring-journals/by-voucher/:voucherId", requireAuth, requireNonPOS, async (req, res) => {
-    const companyId = currentCompanyId(req);
-    const voucherId = positiveId(req.params.voucherId);
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    if (!voucherId) return res.status(400).json({ message: "Invalid voucher id" });
+  app.get(
+    "/api/recurring-journals",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-    try {
-      return res.json(await getRecurringJournalForSource(companyId, voucherId));
-    } catch (error: unknown) {
-      sendRecurringError(res, error);
+      try {
+        return res.json({ recurringJournals: await listRecurringJournals(companyId) });
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
     }
-  });
+  );
 
-  app.post("/api/recurring-journals/from-voucher/:voucherId", requireAuth, requireNonPOS, async (req, res) => {
-    const companyId = currentCompanyId(req);
-    const voucherId = positiveId(req.params.voucherId);
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    if (!voucherId) return res.status(400).json({ message: "Invalid voucher id" });
+  app.post(
+    "/api/recurring-journals/from-voucher-number",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-    try {
-      const recurring = await upsertRecurringJournalFromVoucher({
-        companyId,
-        sourceVoucherId: voucherId,
-        userId: req.session.userId ?? null,
-        timezone: req.body?.timezone,
-        endDate: req.body?.endDate,
-        descriptionTemplate: req.body?.descriptionTemplate,
-      });
-      const history = await getRecurringJournalHistory(companyId, recurring.id);
-      return res.json({ recurring, history });
-    } catch (error: unknown) {
-      sendRecurringError(res, error);
+      try {
+        const recurring = await upsertRecurringJournalFromVoucherNumber({
+          companyId,
+          voucherNumber: String(req.body?.voucherNumber ?? ""),
+          userId: req.session.userId ?? null,
+          timezone: req.body?.timezone,
+          endDate: req.body?.endDate,
+          descriptionTemplate: req.body?.descriptionTemplate,
+        });
+        const history = await getRecurringJournalHistory(companyId, recurring.id);
+        return res.json({ recurring, history });
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
     }
-  });
+  );
 
-  app.patch("/api/recurring-journals/:id", requireAuth, requireNonPOS, async (req, res) => {
-    const companyId = currentCompanyId(req);
-    const recurringId = positiveId(req.params.id);
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    if (!recurringId) return res.status(400).json({ message: "Invalid recurring journal id" });
+  app.get(
+    "/api/recurring-journals/by-voucher/:voucherId",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      const voucherId = positiveId(req.params.voucherId);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!voucherId) return res.status(400).json({ message: "Invalid voucher id" });
 
-    try {
-      const recurring = await updateRecurringJournal(companyId, recurringId, {
-        active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
-        timezone: req.body?.timezone,
-        endDate: req.body?.endDate,
-        descriptionTemplate: req.body?.descriptionTemplate,
-      });
-      const history = await getRecurringJournalHistory(companyId, recurring.id);
-      return res.json({ recurring, history });
-    } catch (error: unknown) {
-      sendRecurringError(res, error);
+      try {
+        return res.json(await getRecurringJournalForSource(companyId, voucherId));
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
     }
-  });
+  );
 
-  app.get("/api/recurring-journals/:id/history", requireAuth, requireNonPOS, async (req, res) => {
-    const companyId = currentCompanyId(req);
-    const recurringId = positiveId(req.params.id);
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    if (!recurringId) return res.status(400).json({ message: "Invalid recurring journal id" });
+  app.post(
+    "/api/recurring-journals/from-voucher/:voucherId",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      const voucherId = positiveId(req.params.voucherId);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!voucherId) return res.status(400).json({ message: "Invalid voucher id" });
 
-    try {
-      return res.json({ history: await getRecurringJournalHistory(companyId, recurringId) });
-    } catch (error: unknown) {
-      sendRecurringError(res, error);
+      try {
+        const recurring = await upsertRecurringJournalFromVoucher({
+          companyId,
+          sourceVoucherId: voucherId,
+          userId: req.session.userId ?? null,
+          timezone: req.body?.timezone,
+          endDate: req.body?.endDate,
+          descriptionTemplate: req.body?.descriptionTemplate,
+        });
+        const history = await getRecurringJournalHistory(companyId, recurring.id);
+        return res.json({ recurring, history });
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
     }
-  });
+  );
+
+  app.patch(
+    "/api/recurring-journals/:id",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      const recurringId = positiveId(req.params.id);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!recurringId) return res.status(400).json({ message: "Invalid recurring journal id" });
+
+      try {
+        const recurring = await updateRecurringJournal(companyId, recurringId, {
+          active: typeof req.body?.active === "boolean" ? req.body.active : undefined,
+          timezone: req.body?.timezone,
+          endDate: req.body?.endDate,
+          descriptionTemplate: req.body?.descriptionTemplate,
+        });
+        const history = await getRecurringJournalHistory(companyId, recurring.id);
+        return res.json({ recurring, history });
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
+    }
+  );
+
+  app.get(
+    "/api/recurring-journals/:id/history",
+    requireAuth,
+    requireRole("Admin", "Developer"),
+    requireNonPOS,
+    async (req, res) => {
+      const companyId = currentCompanyId(req);
+      const recurringId = positiveId(req.params.id);
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (!recurringId) return res.status(400).json({ message: "Invalid recurring journal id" });
+
+      try {
+        return res.json({ history: await getRecurringJournalHistory(companyId, recurringId) });
+      } catch (error: unknown) {
+        sendRecurringError(res, error);
+      }
+    }
+  );
 }
