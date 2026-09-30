@@ -10,6 +10,7 @@ import {
   historicalInventoryKey,
   repairMoney,
   repairQuantity,
+  repairRate,
   replayHistoricalSalesCosts,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairOpening,
@@ -652,6 +653,150 @@ function markAmbiguousTimestampTies(
   return checks;
 }
 
+
+const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
+
+function canonicalMovementId(movement: HistoricalSalesRepairMovement): number {
+  const match = movement.movementId.match(/^canonical:(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function replaceCanonicalEraSaleProposals(input: {
+  companyId: number;
+  canonicalStart: Date | null;
+  canonicalMovements: HistoricalSalesRepairMovement[];
+  sales: SaleRow[];
+  proposals: HistoricalSalesRepairProposal[];
+  checks: RepairCheck[];
+}): HistoricalSalesRepairProposal[] {
+  const { companyId, canonicalStart, canonicalMovements, sales, checks } = input;
+  if (!canonicalStart) return input.proposals;
+
+  const proposalBySaleId = new Map(input.proposals.map((proposal) => [proposal.salesItemId, proposal]));
+  const currentSalesGroups = new Map<string, SaleRow[]>();
+
+  for (const sale of sales) {
+    if (beforeCutoff(sale.created_at, canonicalStart) || !sale.location_id) continue;
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    const group = currentSalesGroups.get(key) ?? [];
+    group.push(sale);
+    currentSalesGroups.set(key, group);
+  }
+
+  const canonicalGroups = new Map<string, HistoricalSalesRepairMovement[]>();
+  for (const movement of canonicalMovements) {
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    if (d(movement.quantityDelta).gte(0)) continue;
+    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
+    const group = canonicalGroups.get(key) ?? [];
+    group.push(movement);
+    canonicalGroups.set(key, group);
+  }
+
+  for (const [key, saleGroupUnsorted] of currentSalesGroups) {
+    const saleGroup = [...saleGroupUnsorted].sort((a, b) => Number(a.sales_item_id) - Number(b.sales_item_id));
+    const candidates = [...(canonicalGroups.get(key) ?? [])].sort(
+      (a, b) => canonicalMovementId(a) - canonicalMovementId(b)
+    );
+    const sample = saleGroup[0];
+    const locationId = Number(sample.location_id);
+    const stockItemId = Number(sample.stock_item_id);
+
+    if (candidates.length < saleGroup.length) {
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "CANONICAL_SALE_EVIDENCE_MISSING",
+        status: "block",
+        expected: String(saleGroup.length),
+        actual: String(candidates.length),
+        detail: `Voucher ${sample.voucher_id} does not have enough canonical sale issues to prove current sale-line costs`,
+      });
+      continue;
+    }
+
+    // POS edits append a fresh issue revision after reversing the old one. The
+    // current sales_items rows are the latest revision, so pair them with the
+    // latest issue set for this voucher/location/item.
+    const selected = candidates.slice(candidates.length - saleGroup.length);
+    const remaining = [...selected];
+    const pairs: Array<{ sale: SaleRow; movement: HistoricalSalesRepairMovement }> = [];
+    let pairingFailed = false;
+
+    for (const sale of saleGroup) {
+      const saleQty = repairQuantity(sale.quantity).abs();
+      const matchIndex = remaining.findIndex((movement) =>
+        repairQuantity(movement.quantityDelta).abs().eq(saleQty)
+      );
+      if (matchIndex < 0) {
+        pairingFailed = true;
+        break;
+      }
+      pairs.push({ sale, movement: remaining.splice(matchIndex, 1)[0] });
+    }
+
+    if (pairingFailed || pairs.length !== saleGroup.length) {
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "CANONICAL_SALE_EVIDENCE_AMBIGUOUS",
+        status: "block",
+        expected: saleGroup.map((sale) => repairQuantity(sale.quantity).abs().toFixed(3)).join(","),
+        actual: selected.map((movement) => repairQuantity(movement.quantityDelta).abs().toFixed(3)).join(","),
+        detail: `Voucher ${sample.voucher_id} canonical sale issues cannot be paired unambiguously to current sale lines`,
+      });
+      continue;
+    }
+
+    for (const { sale, movement } of pairs) {
+      const original = proposalBySaleId.get(Number(sale.sales_item_id));
+      if (!original) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "CANONICAL_SALE_PROPOSAL_MISSING",
+          status: "block",
+          detail: `Sale item ${sale.sales_item_id} was not present in the replay proposal set`,
+        });
+        continue;
+      }
+
+      const proposedCostPrice = repairRate(movement.unitCost ?? "0");
+      const proposedTotalCost = repairMoney(d(sale.quantity).abs().times(proposedCostPrice));
+      const proposedProfit = repairMoney(d(sale.total_sales).minus(proposedTotalCost));
+      proposalBySaleId.set(Number(sale.sales_item_id), {
+        ...original,
+        occurredAt: movement.occurredAt,
+        sourceType: movement.sourceType,
+        sourceId: movement.sourceId,
+        evidence: "canonical",
+        proposedCostPrice: proposedCostPrice.toFixed(2),
+        proposedTotalCost: proposedTotalCost.toFixed(2),
+        proposedProfit: proposedProfit.toFixed(2),
+        changed:
+          !repairRate(sale.cost_price).eq(proposedCostPrice) ||
+          !repairMoney(sale.total_cost).eq(proposedTotalCost) ||
+          !repairMoney(sale.profit).eq(proposedProfit),
+      });
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "CANONICAL_SALE_COST_PROVEN",
+        status: "pass",
+        expected: proposedCostPrice.toFixed(2),
+        actual: repairRate(movement.unitCost ?? "0").toFixed(2),
+        detail: `Sale item ${sale.sales_item_id} cost is proven by canonical movement ${movement.movementId}`,
+      });
+    }
+  }
+
+  return input.proposals.map((proposal) => proposalBySaleId.get(proposal.salesItemId) ?? proposal);
+}
+
 async function dryRunCompany(
   client: PoolClient,
   companyId: number,
@@ -764,6 +909,14 @@ async function dryRunCompany(
   checks.push(...opening.checks);
 
   const replay = replayHistoricalSalesCosts({ openings: opening.openings, movements });
+  const proposals = replaceCanonicalEraSaleProposals({
+    companyId,
+    canonicalStart,
+    canonicalMovements: canonical,
+    sales,
+    proposals: replay.proposals,
+    checks,
+  });
   const liveByKey = new Map(
     inventoryResult.rows.map((row) => [
       historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
@@ -818,11 +971,6 @@ async function dryRunCompany(
   }
 
   const blockers = buildRepairBlockerIndex(checks);
-  const proposals = replay.proposals.map((proposal) => ({
-    ...proposal,
-    changed: proposal.changed,
-  }));
-
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
