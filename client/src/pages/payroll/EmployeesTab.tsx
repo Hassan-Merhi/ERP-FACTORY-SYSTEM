@@ -45,6 +45,7 @@ interface EmployeesTabProps {
   setGroupMembersDialogOpen: (val: boolean) => void;
   pendingBonuses: Record<number, { amount: number; description: string; employeeName: string }>;
   setBulkDepositSelections: (val: Record<number, boolean>) => void;
+  setBulkDepositAmounts: (val: Record<number, string>) => void;
   setBulkDepositDialogOpen: (val: boolean) => void;
   setBulkBonusAmounts: (val: Record<number, string>) => void;
   setBulkBonusStep: (val: "edit" | "preview") => void;
@@ -75,6 +76,7 @@ export function EmployeesTab({
   setGroupMembersDialogOpen,
   pendingBonuses,
   setBulkDepositSelections,
+  setBulkDepositAmounts,
   setBulkDepositDialogOpen,
   setBulkBonusAmounts,
   setBulkBonusStep,
@@ -215,6 +217,7 @@ export function EmployeesTab({
                   <DropdownMenuItem
                     onClick={() => {
                       setBulkDepositSelections({});
+                      setBulkDepositAmounts({});
                       setBulkDepositDialogOpen(true);
                     }}
                     data-testid="button-open-bulk-deposit"
