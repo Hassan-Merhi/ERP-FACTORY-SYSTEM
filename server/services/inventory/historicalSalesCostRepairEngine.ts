@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v19-pos-reversal-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v20-monotonic-rewind-restore";
 
 const ZERO = new Decimal(0);
 
@@ -781,15 +781,13 @@ export function reverseHistoricalSalesRepairMovement(
 
   return reverseHistoricalInventoryMovement(stateAfter, {
     quantityDelta: movement.quantityDelta,
-    // Historical POS reversal/edit receipts restored quantity without passing
-    // the old sale-line cost into adjustInventory(). The canonical journal
-    // nevertheless records that old cost. Forward replay already ignores it;
-    // reverse replay must do the same or it reconstructs a valuation path that
-    // production never executed.
-    unitCost:
-      movement.sourceType === "pos-sale" && delta.gt(ZERO)
-        ? null
-        : movement.unitCost,
+    // Positive POS reversal rows are locally ambiguous: production restored
+    // quantity without passing the old line cost, while the canonical journal
+    // still records that historical sale cost. Treating the row as unpriced
+    // globally regressed previously proven checkpoint paths in V19. Preserve
+    // the V18-priced inverse until an alternate unpriced branch is selected by
+    // a full checkpoint proof rather than by one locally reversible movement.
+    unitCost: movement.unitCost,
     priorCostMemoryRate: input?.priorCostMemoryRate,
   });
 }
