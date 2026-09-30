@@ -1837,23 +1837,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
   ];
   const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
   const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
+  const toLegacyMovement = (row: LegacyRow): HistoricalSalesRepairMovement => ({
+    movementId: row.movement_id,
+    companyId,
+    locationId: Number(row.location_id),
+    stockItemId: Number(row.stock_item_id),
+    occurredAt: iso(row.occurred_at),
+    sequence: Number(row.sequence),
+    quantityDelta: String(row.quantity_delta),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+    exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
+      ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
+      : null,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    evidence: "legacy" as const,
+  });
+  const legacyTransferFallbackMovements = legacy
+    .filter((row) => row.source_type.endsWith("-flag-fallback"))
+    .map(toLegacyMovement);
   const legacyMovements: HistoricalSalesRepairMovement[] = [
-    ...legacy.map((row) => ({
-      movementId: row.movement_id,
-      companyId,
-      locationId: Number(row.location_id),
-      stockItemId: Number(row.stock_item_id),
-      occurredAt: iso(row.occurred_at),
-      sequence: Number(row.sequence),
-      quantityDelta: String(row.quantity_delta),
-      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
-      exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
-        ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
-        : null,
-      sourceType: row.source_type,
-      sourceId: row.source_id,
-      evidence: "legacy" as const,
-    })),
+    ...legacy
+      .filter((row) => !row.source_type.endsWith("-flag-fallback"))
+      .map(toLegacyMovement),
     ...manual.movements.map((row) => ({
       movementId: row.movement_id,
       companyId,
