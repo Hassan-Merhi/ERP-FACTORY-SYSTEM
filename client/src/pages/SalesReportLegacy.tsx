@@ -7,13 +7,24 @@ import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { PeriodFilter, PeriodFilterValue, getDefaultPeriodValue } from "@/components/ui/period-filter";
+import {
+  PeriodFilter,
+  PeriodFilterValue,
+  getDefaultPeriodValue,
+} from "@/components/ui/period-filter";
 import { ErpMobileFilters } from "@/components/ui/erp-mobile-filters";
 import { useDateJump } from "@/hooks/use-date-jump";
 
 import { useToast } from "@/hooks/use-toast";
 import { PageHeader } from "@/components/PageHeader";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   FileSpreadsheet,
   FileText,
@@ -32,13 +43,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { format, parseISO, startOfDay, startOfMonth, startOfYear } from "date-fns";
+import {
+  format,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfYear,
+} from "date-fns";
 import { useDateFormat } from "@/contexts/DateFormatContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 import { ErrorState } from "@/components/ui/page-state";
 
-import type { DailySummary, GroupingType, ProfitFilter, SalesReportItem } from "./salesreportlegacy/types";
+import type {
+  DailySummary,
+  GroupingType,
+  ProfitFilter,
+  SalesReportItem,
+} from "./salesreportlegacy/types";
 import type { SalesCogsReconciliation } from "./salesreportlegacy/types";
 import { useSalesReportDateKeyboard } from "./salesreportlegacy/useSalesReportDateKeyboard";
 import { exportSalesReportExcel } from "./salesreportlegacy/exportExcel";
@@ -48,8 +70,12 @@ import {
 } from "./salesreportlegacy/SalesReportFilterControls";
 import type { ApiListRow } from "@shared/apiTypes";
 export default function SalesReport() {
-  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("today"));
-  useDateJump((date) => setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }));
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilterValue>(() =>
+    getDefaultPeriodValue("today"),
+  );
+  useDateJump((date) =>
+    setPeriodFilter({ fromDate: date, toDate: date, preset: "custom" }),
+  );
 
   useSalesReportDateKeyboard(setPeriodFilter);
 
@@ -87,24 +113,33 @@ export default function SalesReport() {
 
   // Resolve selected group names (for multi-company query)
   const selectedStockGroupNames = useMemo(
-    () => stockGroups.filter((g) => selectedStockGroups.includes(String(g.id))).map((g) => g.name as string),
-    [stockGroups, selectedStockGroups]
+    () =>
+      stockGroups
+        .filter((g) => selectedStockGroups.includes(String(g.id)))
+        .map((g) => g.name as string),
+    [stockGroups, selectedStockGroups],
   );
 
   // Build query params for single-company mode (location/group filtered client-side)
   const queryParams = new URLSearchParams();
-  if (periodFilter.fromDate) queryParams.append("startDate", periodFilter.fromDate);
+  if (periodFilter.fromDate)
+    queryParams.append("startDate", periodFilter.fromDate);
   if (periodFilter.toDate) queryParams.append("endDate", periodFilter.toDate);
 
   const queryString = queryParams.toString();
-  const singleCompanyQueryKey = queryString ? `/api/sales-report?${queryString}` : "/api/sales-report";
+  const singleCompanyQueryKey = queryString
+    ? `/api/sales-report?${queryString}`
+    : "/api/sales-report";
 
   // Build query params for multi-company mode
   const multiCompanyParams = new URLSearchParams();
-  if (periodFilter.fromDate) multiCompanyParams.append("startDate", periodFilter.fromDate);
-  if (periodFilter.toDate) multiCompanyParams.append("endDate", periodFilter.toDate);
+  if (periodFilter.fromDate)
+    multiCompanyParams.append("startDate", periodFilter.fromDate);
+  if (periodFilter.toDate)
+    multiCompanyParams.append("endDate", periodFilter.toDate);
   // Note: locationId and stockItemId are company-specific so not passed in multi-company mode
-  if (selectedCompanies.length > 0) multiCompanyParams.append("companyFilter", selectedCompanies.join(","));
+  if (selectedCompanies.length > 0)
+    multiCompanyParams.append("companyFilter", selectedCompanies.join(","));
   if (selectedStockGroupNames.length > 0) {
     multiCompanyParams.append("stockGroupName", selectedStockGroupNames[0]);
   }
@@ -137,7 +172,9 @@ export default function SalesReport() {
   });
 
   // Use the appropriate data based on mode
-  const salesData = isMultiCompanyMode ? allCompaniesSalesData : singleCompanySalesData;
+  const salesData = isMultiCompanyMode
+    ? allCompaniesSalesData
+    : singleCompanySalesData;
   const isLoading = isMultiCompanyMode ? isLoadingMulti : isLoadingSingle;
   const isError = isMultiCompanyMode ? isErrorMulti : isErrorSingle;
   const refetchReport = isMultiCompanyMode ? refetchMulti : refetchSingle;
@@ -162,8 +199,10 @@ export default function SalesReport() {
     if (selectedStockGroups.length === 0) return null;
     return new Set(
       stockItems
-        .filter((item) => selectedStockGroups.includes(String(item.stockGroupId)))
-        .map((item) => item.id as number)
+        .filter((item) =>
+          selectedStockGroups.includes(String(item.stockGroupId)),
+        )
+        .map((item) => item.id as number),
     );
   }, [selectedStockGroups, stockItems]);
 
@@ -171,11 +210,16 @@ export default function SalesReport() {
   const localFilteredData = useMemo(
     () =>
       salesData.filter((item) => {
-        if (selectedLocations.length > 0 && !selectedLocations.includes(String(item.locationId))) return false;
-        if (selectedGroupItemIds && !selectedGroupItemIds.has(item.stockItemId)) return false;
+        if (
+          selectedLocations.length > 0 &&
+          !selectedLocations.includes(String(item.locationId))
+        )
+          return false;
+        if (selectedGroupItemIds && !selectedGroupItemIds.has(item.stockItemId))
+          return false;
         return true;
       }),
-    [salesData, selectedLocations, selectedGroupItemIds]
+    [salesData, selectedLocations, selectedGroupItemIds],
   );
 
   // Extract unique companies from multi-company data
@@ -187,77 +231,85 @@ export default function SalesReport() {
         uniqueCompanies.set(item.companyCode, item.companyName);
       }
     });
-    return Array.from(uniqueCompanies.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return Array.from(uniqueCompanies.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
   }, [isMultiCompanyMode, allCompaniesSalesData]);
 
   // Group sales by date/month/year — credit sales get their own separate group
-  const groupedData: DailySummary[] = localFilteredData.reduce((acc: DailySummary[], item) => {
-    const itemDate = parseISO(item.voucherDate);
-    let dateKey: string;
-    let displayDate: string;
+  const groupedData: DailySummary[] = localFilteredData.reduce(
+    (acc: DailySummary[], item) => {
+      const itemDate = parseISO(item.voucherDate);
+      let dateKey: string;
+      let displayDate: string;
 
-    if (grouping === "daily") {
-      dateKey = format(startOfDay(itemDate), "yyyy-MM-dd");
-      displayDate = formatDisplayDate(itemDate);
-    } else if (grouping === "monthly") {
-      dateKey = format(startOfMonth(itemDate), "yyyy-MM");
-      displayDate = format(itemDate, "MMMM yyyy");
-    } else {
-      dateKey = format(startOfYear(itemDate), "yyyy");
-      displayDate = format(itemDate, "yyyy");
-    }
-
-    const isCredit = item.isCreditSale === true;
-    // In merge view combine credit + cash; otherwise keep them separate
-    const groupKey = !mergeView && isCredit ? `${dateKey}-credit` : dateKey;
-
-    // Filter by search term
-    if (searchTerm && !searchAny(searchTerm, item.stockItemName, item.locationName)) {
-      return acc;
-    }
-
-    const existing = acc.find((g) => g.date === groupKey);
-    const totalSales = parseFloat(item.totalSales);
-    const totalCost = parseFloat(item.totalCost);
-    const totalConfiguredCost = item.totalConfiguredCost;
-    const costProfit = parseFloat(item.costProfit);
-    const configuredProfit = item.configuredProfit;
-
-    const qty = parseFloat(item.quantity);
-
-    if (existing) {
-      existing.totalSales += totalSales;
-      existing.totalCost += totalCost;
-      existing.totalConfiguredCost += totalConfiguredCost;
-      existing.costProfit += costProfit;
-      existing.configuredProfit += configuredProfit;
-      existing.itemCount += 1;
-      existing.totalQty += qty;
-      existing.items.push(item);
-      // If we're merging and this row mixes credit + cash, flag it
-      if (mergeView && existing.isCreditSale !== isCredit) {
-        existing.hasMixedSales = true;
+      if (grouping === "daily") {
+        dateKey = format(startOfDay(itemDate), "yyyy-MM-dd");
+        displayDate = formatDisplayDate(itemDate);
+      } else if (grouping === "monthly") {
+        dateKey = format(startOfMonth(itemDate), "yyyy-MM");
+        displayDate = format(itemDate, "MMMM yyyy");
+      } else {
+        dateKey = format(startOfYear(itemDate), "yyyy");
+        displayDate = format(itemDate, "yyyy");
       }
-    } else {
-      acc.push({
-        date: groupKey,
-        dateKey,
-        displayDate,
-        totalSales,
-        totalCost,
-        totalConfiguredCost,
-        costProfit,
-        configuredProfit,
-        itemCount: 1,
-        totalQty: qty,
-        isCreditSale: isCredit,
-        hasMixedSales: false,
-        items: [item],
-      });
-    }
 
-    return acc;
-  }, []);
+      const isCredit = item.isCreditSale === true;
+      // In merge view combine credit + cash; otherwise keep them separate
+      const groupKey = !mergeView && isCredit ? `${dateKey}-credit` : dateKey;
+
+      // Filter by search term
+      if (
+        searchTerm &&
+        !searchAny(searchTerm, item.stockItemName, item.locationName)
+      ) {
+        return acc;
+      }
+
+      const existing = acc.find((g) => g.date === groupKey);
+      const totalSales = parseFloat(item.totalSales);
+      const totalCost = parseFloat(item.totalCost);
+      const totalConfiguredCost = item.totalConfiguredCost;
+      const costProfit = parseFloat(item.costProfit);
+      const configuredProfit = item.configuredProfit;
+
+      const qty = parseFloat(item.quantity);
+
+      if (existing) {
+        existing.totalSales += totalSales;
+        existing.totalCost += totalCost;
+        existing.totalConfiguredCost += totalConfiguredCost;
+        existing.costProfit += costProfit;
+        existing.configuredProfit += configuredProfit;
+        existing.itemCount += 1;
+        existing.totalQty += qty;
+        existing.items.push(item);
+        // If we're merging and this row mixes credit + cash, flag it
+        if (mergeView && existing.isCreditSale !== isCredit) {
+          existing.hasMixedSales = true;
+        }
+      } else {
+        acc.push({
+          date: groupKey,
+          dateKey,
+          displayDate,
+          totalSales,
+          totalCost,
+          totalConfiguredCost,
+          costProfit,
+          configuredProfit,
+          itemCount: 1,
+          totalQty: qty,
+          isCreditSale: isCredit,
+          hasMixedSales: false,
+          items: [item],
+        });
+      }
+
+      return acc;
+    },
+    [],
+  );
 
   // Sort by date descending (most recent first)
   groupedData.sort((a, b) => b.date.localeCompare(a.date));
@@ -280,15 +332,15 @@ export default function SalesReport() {
       configuredProfit: acc.configuredProfit + group.configuredProfit,
       totalQty: acc.totalQty + group.totalQty,
     }),
-    { totalSales: 0, totalCost: 0, totalConfiguredCost: 0, costProfit: 0, configuredProfit: 0, totalQty: 0 }
+    {
+      totalSales: 0,
+      totalCost: 0,
+      totalConfiguredCost: 0,
+      costProfit: 0,
+      configuredProfit: 0,
+      totalQty: 0,
+    },
   );
-
-  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
-  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
-  const displayedCostProfit =
-    isAllTimeReconciliationView && cogsReconciliation
-      ? cogsReconciliation.adjustedCostProfit
-      : totals.costProfit;
 
   const handleClearFilters = () => {
     setPeriodFilter(getDefaultPeriodValue("today"));
@@ -298,6 +350,13 @@ export default function SalesReport() {
     setProfitFilter("all");
     setSelectedCompanies([]);
   };
+
+  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
+  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
+  const displayedCostProfit =
+    isAllTimeReconciliationView && cogsReconciliation
+      ? cogsReconciliation.adjustedCostProfit
+      : totals.costProfit;
 
   // Declared after handleClearFilters: the build-time bandwidth transform
   // replaces the block that ends there. Counts what "Clear filters" resets;
@@ -342,11 +401,17 @@ export default function SalesReport() {
         if (filteredGroupedData.length === 0) return;
         e.preventDefault();
         setSelectedRowDate((prev) => {
-          const idx = prev ? filteredGroupedData.findIndex((g) => g.date === prev) : -1;
+          const idx = prev
+            ? filteredGroupedData.findIndex((g) => g.date === prev)
+            : -1;
           if (e.key === "ArrowDown") {
-            return filteredGroupedData[idx < filteredGroupedData.length - 1 ? idx + 1 : 0].date;
+            return filteredGroupedData[
+              idx < filteredGroupedData.length - 1 ? idx + 1 : 0
+            ].date;
           } else {
-            return filteredGroupedData[idx > 0 ? idx - 1 : filteredGroupedData.length - 1].date;
+            return filteredGroupedData[
+              idx > 0 ? idx - 1 : filteredGroupedData.length - 1
+            ].date;
           }
         });
       }
@@ -357,7 +422,9 @@ export default function SalesReport() {
 
   useEffect(() => {
     if (!selectedRowDate) return;
-    const el = document.querySelector(`[data-testid="row-sale-${selectedRowDate}"]`);
+    const el = document.querySelector(
+      `[data-testid="row-sale-${selectedRowDate}"]`,
+    );
     if (el) el.scrollIntoView({ block: "nearest", behavior: "auto" });
   }, [selectedRowDate]);
 
@@ -382,8 +449,10 @@ export default function SalesReport() {
       params.set("startDate", `${dk}-01-01`);
       params.set("endDate", `${dk}-12-31`);
     }
-    if (selectedLocations.length === 1) params.set("locationId", selectedLocations[0]);
-    if (selectedStockGroups.length === 1) params.set("stockGroupId", selectedStockGroups[0]);
+    if (selectedLocations.length === 1)
+      params.set("locationId", selectedLocations[0]);
+    if (selectedStockGroups.length === 1)
+      params.set("stockGroupId", selectedStockGroups[0]);
     if (searchTerm) params.set("searchTerm", searchTerm);
     // Merged rows contain both credit and cash — omit the param so detail shows all
     if (!summary.hasMixedSales) {
@@ -391,7 +460,8 @@ export default function SalesReport() {
     }
     if (isMultiCompanyMode) {
       params.set("allCompanies", "true");
-      if (selectedCompanies.length > 0) params.set("companyFilter", selectedCompanies.join(","));
+      if (selectedCompanies.length > 0)
+        params.set("companyFilter", selectedCompanies.join(","));
     }
     window.open(`/sales-report/detail?${params.toString()}`, "_blank");
   };
@@ -434,11 +504,17 @@ export default function SalesReport() {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={handleExportExcel} data-testid="menu-export-excel">
+            <DropdownMenuItem
+              onClick={handleExportExcel}
+              data-testid="menu-export-excel"
+            >
               <FileSpreadsheet className="w-4 h-4 mr-2" />
               Export Excel
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleExportPDF} data-testid="menu-export-pdf">
+            <DropdownMenuItem
+              onClick={handleExportPDF}
+              data-testid="menu-export-pdf"
+            >
               <FileText className="w-4 h-4 mr-2" />
               Export PDF
             </DropdownMenuItem>
@@ -461,13 +537,19 @@ export default function SalesReport() {
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
               <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-muted-foreground text-xs">Total Sales</span>
-              <span className="font-semibold font-mono text-sm" data-testid="text-total-sales">
+              <span
+                className="font-semibold font-mono text-sm"
+                data-testid="text-total-sales"
+              >
                 {formatAmount(totals.totalSales)}
               </span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
               <span className="text-muted-foreground text-xs">Cost Price</span>
-              <span className="font-semibold font-mono text-sm" data-testid="text-total-cost">
+              <span
+                className="font-semibold font-mono text-sm"
+                data-testid="text-total-cost"
+              >
                 {formatAmount(totals.totalCost)}
               </span>
             </div>
@@ -481,15 +563,24 @@ export default function SalesReport() {
               <span
                 className={`font-semibold font-mono text-sm ${displayedCostProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                 data-testid="text-cost-profit"
-                title={isAllTimeReconciliationView ? cogsReconciliation?.formula : undefined}
+                title={
+                  isAllTimeReconciliationView
+                    ? cogsReconciliation?.formula
+                    : undefined
+                }
               >
                 {displayedCostProfit < 0 ? "-" : ""}
                 {formatAmount(Math.abs(displayedCostProfit))}
               </span>
             </div>
             <div className="flex items-center gap-1.5 rounded-lg border bg-muted/40 px-3 py-1.5 text-sm">
-              <span className="text-muted-foreground text-xs">Hassan's Price</span>
-              <span className="font-semibold font-mono text-sm" data-testid="text-configured-cost">
+              <span className="text-muted-foreground text-xs">
+                Hassan's Price
+              </span>
+              <span
+                className="font-semibold font-mono text-sm"
+                data-testid="text-configured-cost"
+              >
                 {formatAmount(totals.totalConfiguredCost)}
               </span>
             </div>
@@ -499,7 +590,9 @@ export default function SalesReport() {
               ) : (
                 <TrendingDown className="h-3.5 w-3.5 text-red-500" />
               )}
-              <span className="text-muted-foreground text-xs">Hassan's Profit</span>
+              <span className="text-muted-foreground text-xs">
+                Hassan's Profit
+              </span>
               <span
                 className={`font-semibold font-mono text-sm ${totals.configuredProfit >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}
                 data-testid="text-configured-profit"
@@ -516,7 +609,11 @@ export default function SalesReport() {
       <ErpMobileFilters
         label="Sales report filters"
         primary={
-          <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter-sales-report" />
+          <PeriodFilter
+            value={periodFilter}
+            onChange={setPeriodFilter}
+            data-testid="period-filter-sales-report"
+          />
         }
         quick={
           <Input
@@ -540,9 +637,16 @@ export default function SalesReport() {
           ) : (
             <div className="flex flex-wrap items-center gap-2">
               {/* Date period */}
-              <PeriodFilter value={periodFilter} onChange={setPeriodFilter} data-testid="period-filter-sales-report" />
+              <PeriodFilter
+                value={periodFilter}
+                onChange={setPeriodFilter}
+                data-testid="period-filter-sales-report"
+              />
 
-              <SalesReportFilterControls {...salesReportFilterControls} showSeparator />
+              <SalesReportFilterControls
+                {...salesReportFilterControls}
+                showSeparator
+              />
 
               {/* Search */}
               <Input
@@ -558,7 +662,12 @@ export default function SalesReport() {
                 selectedLocations.length > 0 ||
                 selectedStockGroups.length > 0 ||
                 profitFilter !== "all") && (
-                <Button variant="ghost" size="sm" onClick={handleClearFilters} data-testid="button-clear-filters">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  data-testid="button-clear-filters"
+                >
                   Clear
                 </Button>
               )}
@@ -580,10 +689,18 @@ export default function SalesReport() {
             <Table mobileLayout="cards">
               <TableHeader>
                 <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <TableHead className="text-xs h-9 font-semibold">Date</TableHead>
-                  <TableHead className="text-xs h-9 font-semibold text-right hidden sm:table-cell">Items</TableHead>
-                  <TableHead className="text-xs h-9 font-semibold text-right">Qty</TableHead>
-                  <TableHead className="text-xs h-9 font-semibold text-right">Total Sales</TableHead>
+                  <TableHead className="text-xs h-9 font-semibold">
+                    Date
+                  </TableHead>
+                  <TableHead className="text-xs h-9 font-semibold text-right hidden sm:table-cell">
+                    Items
+                  </TableHead>
+                  <TableHead className="text-xs h-9 font-semibold text-right">
+                    Qty
+                  </TableHead>
+                  <TableHead className="text-xs h-9 font-semibold text-right">
+                    Total Sales
+                  </TableHead>
                   <TableHead className="text-xs h-9 font-semibold text-right hidden sm:table-cell">
                     Cost Price
                   </TableHead>
@@ -649,7 +766,9 @@ export default function SalesReport() {
                           <TrendingUp className="h-5 w-5 text-muted-foreground" />
                         </div>
                         <p className="text-sm font-medium">No sales found</p>
-                        <p className="text-xs text-muted-foreground">Try adjusting your date range or filters</p>
+                        <p className="text-xs text-muted-foreground">
+                          Try adjusting your date range or filters
+                        </p>
                       </div>
                     </TableCell>
                   </TableRow>
