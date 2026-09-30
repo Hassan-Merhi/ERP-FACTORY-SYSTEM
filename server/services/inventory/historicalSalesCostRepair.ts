@@ -2427,40 +2427,40 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_RUN_SCOPE_EMPTY");
     }
 
-    // Fail closed if a source document was edited after the reviewed dry run.
-    // Normal new stock activity is allowed; only backdated canonical evidence or
-    // audited mutations of source-bearing records invalidate the reviewed run.
-    const openingDrift = await client.query<{
-      stock_item_id: number;
-      check_code: string;
-    }>(
-      `SELECT c.stock_item_id,c.check_code
-         FROM historical_sales_cost_repair_checks c
-         JOIN stock_items si
-           ON si.company_id=c.company_id
-          AND si.id=c.stock_item_id
-        WHERE c.run_id=$1
-          AND c.status='pass'
-          AND c.check_code IN ('OPENING_QUANTITY_RECONCILED','OPENING_RATE_PINNED','OPENING_VALUE_RECONCILED')
-          AND (
-            (c.check_code='OPENING_QUANTITY_RECONCILED' AND si.opening_qty::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_RATE_PINNED' AND si.opening_rate::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_VALUE_RECONCILED' AND si.opening_value::numeric IS DISTINCT FROM c.expected_value::numeric)
-          )
-        ORDER BY c.stock_item_id,c.check_code
-        LIMIT 25`,
+    // Recompute the exact V2 evidence bundle that was reviewed during dry-run.
+    // This pins the immutable checkpoint/cutoff, canonical + legacy movements,
+    // merge aliases/source openings, and every target sale original.
+    const evidenceChecks = await client.query<{ company_id: number; expected_value: string }>(
+      `SELECT company_id,expected_value
+         FROM historical_sales_cost_repair_checks
+        WHERE run_id=$1
+          AND check_code='V2_SOURCE_EVIDENCE_HASH'
+          AND status='pass'
+        ORDER BY company_id`,
       [input.runId]
     );
-    if (openingDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair opening evidence changed after dry run: ${openingDrift.rows
-          .map((row) => `${row.stock_item_id}/${row.check_code}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
+    const expectedEvidenceByCompany = new Map(
+      evidenceChecks.rows.map((row) => [Number(row.company_id), String(row.expected_value)])
+    );
+    if (expectedEvidenceByCompany.size !== targetCompanyIds.length) {
+      throw hscrError("HSCR_V2_EVIDENCE_HASH_SCOPE_MISMATCH");
+    }
+    for (const companyId of targetCompanyIds) {
+      const expected = expectedEvidenceByCompany.get(companyId);
+      if (!expected) throw hscrError(`HSCR_V2_EVIDENCE_HASH_MISSING:${companyId}`);
+      const actual = await recomputeHistoricalSalesCompanyEvidenceHash(client, companyId, run.source_cutoff_at);
+      if (actual !== expected) {
+        throw new Error(
+          `Historical sales cost repair source evidence changed after dry run for company ${companyId}. Build and review a new dry run.`
+        );
+      }
     }
 
+    await assertSalesItemsUpdateHasNoSideEffectTriggers(client);
+    const inventoryBeforeApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+
+    // Keep targeted "changed-after-cutoff" checks as a second line of defense.
+    // Normal new stock activity after the source cutoff is allowed.
     const sourceDrift = await client.query<{
       kind: string;
       evidence_id: string;
@@ -2583,11 +2583,30 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_POST_APPLY_VERIFY_FAILED");
     }
 
+    const inventoryAfterApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+    if (
+      inventoryAfterApply.hash !== inventoryBeforeApply.hash ||
+      inventoryAfterApply.rowCount !== inventoryBeforeApply.rowCount
+    ) {
+      throw hscrError("HSCR_INVENTORY_CHANGED_DURING_APPLY");
+    }
+
     await client.query(
       `UPDATE historical_sales_cost_repair_runs
-          SET status='applied',applied_at=NOW(),completed_at=NOW()
+          SET status='applied',
+              applied_at=NOW(),
+              completed_at=NOW(),
+              report=COALESCE(report,'{}'::jsonb) || jsonb_build_object(
+                'applyInventorySnapshot',
+                jsonb_build_object(
+                  'beforeHash',$2::text,
+                  'afterHash',$3::text,
+                  'rowCount',$4::int,
+                  'unchanged',true
+                )
+              )
         WHERE id=$1`,
-      [input.runId]
+      [input.runId, inventoryBeforeApply.hash, inventoryAfterApply.hash, inventoryAfterApply.rowCount]
     );
 
     await client.query("COMMIT");
