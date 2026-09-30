@@ -2336,11 +2336,15 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const itemMovements = movementsAscending.filter(
         (movement) => movement.stockItemId === stockItemId
       );
+      const normalizedItemMovements = normalizedMovementsAscending.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
       const locationIds = new Set<number>([
         ...checkpoint.rows
           .filter((row) => Number(row.stock_item_id) === stockItemId)
           .map((row) => Number(row.location_id)),
         ...itemMovements.map((movement) => movement.locationId),
+        ...normalizedItemMovements.map((movement) => movement.locationId),
       ]);
       if (locationIds.size === 0) continue;
 
@@ -2355,6 +2359,34 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           )
         );
       }
+      const normalizedMovementDeltaByLocation = new Map<number, Decimal>();
+      for (const movement of normalizedItemMovements) {
+        normalizedMovementDeltaByLocation.set(
+          movement.locationId,
+          repairQuantity(
+            (normalizedMovementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+              d(movement.quantityDelta)
+            )
+          )
+        );
+      }
+      const normalizedQuantityCompatible = [...locationIds].every((locationId) =>
+        (normalizedMovementDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
+          movementDeltaByLocation.get(locationId) ?? new Decimal(0)
+        )
+      );
+      const rawPosFingerprint = itemMovements
+        .filter((movement) => movement.sourceType === "pos-sale")
+        .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+        .join("|");
+      const normalizedPosFingerprint = normalizedItemMovements
+        .filter(
+          (movement) =>
+            movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized"
+        )
+        .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+        .join("|");
+      const normalizedLifecycleChanged = rawPosFingerprint !== normalizedPosFingerprint;
 
       const inferredOpeningQtyByLocation = new Map<number, Decimal>();
       let inferredOpeningTotal = new Decimal(0);
@@ -2466,55 +2498,73 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         }
       }
 
-      const replayStates = new Map<number, HistoricalInventoryState>();
-      for (const [locationId, opening] of openingStates) {
-        replayStates.set(
-          locationId,
-          createHistoricalInventoryStateFromSnapshot(
-            opening.quantity,
-            opening.averageRate,
-            opening.totalValue
-          )
-        );
-      }
-      const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
-      for (const movement of itemMovements) {
-        const current =
-          replayStates.get(movement.locationId) ?? stateForZeroOpening(openingRate);
-        if (movement.sale) {
-          const key = movementKey(movement);
-          if (checkpointTargetKeys.has(key)) {
-            replayProposals.set(
-              movement.sale.salesItemId,
-              historicalSaleProposalFromState(movement, current)
-            );
-          }
+      const replayToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
+        const replayStates = new Map<number, HistoricalInventoryState>();
+        for (const [locationId, opening] of openingStates) {
+          replayStates.set(
+            locationId,
+            createHistoricalInventoryStateFromSnapshot(
+              opening.quantity,
+              opening.averageRate,
+              opening.totalValue
+            )
+          );
         }
-        replayStates.set(
-          movement.locationId,
-          applyHistoricalSalesRepairMovement(current, movement)
-        );
-      }
 
-      let exactCheckpointReplay = true;
-      let replayMismatchDetail: string | null = null;
-      for (const locationId of locationIds) {
-        const key = historicalInventoryKey(companyId, locationId, stockItemId);
-        const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
-        const expected = checkpointStates.get(key);
-        if (expected) {
-          if (!historicalInventoryStatesEqual(actual, expected)) {
-            exactCheckpointReplay = false;
-            replayMismatchDetail =
+        const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+        for (const movement of candidateMovements) {
+          const current =
+            replayStates.get(movement.locationId) ?? stateForZeroOpening(openingRate);
+          if (movement.sale) {
+            const key = movementKey(movement);
+            if (checkpointTargetKeys.has(key)) {
+              replayProposals.set(
+                movement.sale.salesItemId,
+                historicalSaleProposalFromState(movement, current)
+              );
+            }
+          }
+          replayStates.set(
+            movement.locationId,
+            applyHistoricalSalesRepairMovement(current, movement)
+          );
+        }
+
+        let exact = true;
+        let detail: string | null = null;
+        for (const locationId of locationIds) {
+          const key = historicalInventoryKey(companyId, locationId, stockItemId);
+          const actual = replayStates.get(locationId) ?? stateForZeroOpening(openingRate);
+          const expected = checkpointStates.get(key);
+          if (expected) {
+            if (!historicalInventoryStatesEqual(actual, expected)) {
+              exact = false;
+              detail =
+                "location " +
+                locationId +
+                " expected " +
+                repairQuantity(expected.quantity).toFixed(3) +
+                "|" +
+                repairRate(expected.averageRate).toFixed(2) +
+                "|" +
+                repairMoney(expected.totalValue).toFixed(2) +
+                " actual " +
+                repairQuantity(actual.quantity).toFixed(3) +
+                "|" +
+                repairRate(actual.averageRate).toFixed(2) +
+                "|" +
+                repairMoney(actual.totalValue).toFixed(2);
+              break;
+            }
+          } else if (
+            !repairQuantity(actual.quantity).isZero() ||
+            repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+          ) {
+            exact = false;
+            detail =
               "location " +
               locationId +
-              " expected " +
-              repairQuantity(expected.quantity).toFixed(3) +
-              "|" +
-              repairRate(expected.averageRate).toFixed(2) +
-              "|" +
-              repairMoney(expected.totalValue).toFixed(2) +
-              " actual " +
+              " has no checkpoint row but replay ends " +
               repairQuantity(actual.quantity).toFixed(3) +
               "|" +
               repairRate(actual.averageRate).toFixed(2) +
@@ -2522,33 +2572,55 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
               repairMoney(actual.totalValue).toFixed(2);
             break;
           }
-        } else if (
-          !repairQuantity(actual.quantity).isZero() ||
-          repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
-        ) {
-          exactCheckpointReplay = false;
-          replayMismatchDetail =
-            "location " +
-            locationId +
-            " has no checkpoint row but replay ends " +
-            repairQuantity(actual.quantity).toFixed(3) +
-            "|" +
-            repairRate(actual.averageRate).toFixed(2) +
-            "|" +
-            repairMoney(actual.totalValue).toFixed(2);
-          break;
+        }
+
+        return { exact, detail, replayProposals };
+      };
+
+      const rawReplay = replayToCheckpoint(itemMovements);
+      let acceptedReplay = rawReplay;
+      let proofMode: "raw" | "normalized-pos-lifecycle" = "raw";
+      let normalizedReplay:
+        | ReturnType<typeof replayToCheckpoint>
+        | undefined;
+
+      if (
+        !rawReplay.exact &&
+        normalizedQuantityCompatible &&
+        normalizedLifecycleChanged
+      ) {
+        normalizedReplay = replayToCheckpoint(normalizedItemMovements);
+        if (normalizedReplay.exact) {
+          acceptedReplay = normalizedReplay;
+          proofMode = "normalized-pos-lifecycle";
         }
       }
-      if (!exactCheckpointReplay) {
+
+      if (!acceptedReplay.exact) {
         checks.push({
           companyId,
           locationId: null,
           stockItemId,
           code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
           status: "warning",
-          detail: replayMismatchDetail ?? "Forward replay did not reproduce the immutable checkpoint.",
+          detail:
+            rawReplay.detail ??
+            normalizedReplay?.detail ??
+            "Forward replay did not reproduce the immutable checkpoint.",
         });
         continue;
+      }
+
+      if (proofMode === "normalized-pos-lifecycle") {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_POS_LIFECYCLE_NORMALIZED",
+          status: "pass",
+          detail:
+            "Raw POS edit/delete valuation history missed the checkpoint, but the final-active-sale normalization reproduced the immutable Phase 3 checkpoint exactly.",
+        });
       }
 
       for (const key of itemTargetKeys) {
@@ -2563,10 +2635,12 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           expected: openingQty.toFixed(3) + "|" + openingValue.toFixed(2),
           actual: inferredOpeningTotal.toFixed(3) + "|" + openingValue.toFixed(2),
           detail:
-            "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
+            proofMode === "normalized-pos-lifecycle"
+              ? "Pinned stock opening balance and normalized final POS lifecycle replay exactly to the immutable Phase 3 checkpoint"
+              : "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
         });
       }
-      for (const proposal of replayProposals.values()) {
+      for (const proposal of acceptedReplay.replayProposals.values()) {
         proposalsBySaleId.set(proposal.salesItemId, proposal);
       }
     }
