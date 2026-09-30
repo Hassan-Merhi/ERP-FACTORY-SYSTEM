@@ -576,13 +576,48 @@ function buildOpeningStates(input: {
   return { openings, checks, derivedOpeningByKey };
 }
 
-function blockedItemKeys(checks: RepairCheck[]): Set<string> {
-  const blocked = new Set<string>();
+type RepairBlockerIndex = {
+  itemWide: Map<string, RepairCheck>;
+  locationSpecific: Map<string, RepairCheck>;
+};
+
+function buildRepairBlockerIndex(checks: RepairCheck[]): RepairBlockerIndex {
+  const itemWide = new Map<string, RepairCheck>();
+  const locationSpecific = new Map<string, RepairCheck>();
   for (const check of checks) {
     if (check.status !== "block" || check.stockItemId === null) continue;
-    blocked.add(`${check.companyId}:${check.stockItemId}`);
+    if (check.locationId === null) {
+      const key = `${check.companyId}:${check.stockItemId}`;
+      if (!itemWide.has(key)) itemWide.set(key, check);
+    } else {
+      const key = `${check.companyId}:${check.locationId}:${check.stockItemId}`;
+      if (!locationSpecific.has(key)) locationSpecific.set(key, check);
+    }
   }
-  return blocked;
+  return { itemWide, locationSpecific };
+}
+
+function blockerForProposal(
+  blockers: RepairBlockerIndex,
+  proposal: Pick<HistoricalSalesRepairProposal, "companyId" | "locationId" | "stockItemId">
+): RepairCheck | undefined {
+  return (
+    blockers.locationSpecific.get(`${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`) ??
+    blockers.itemWide.get(`${proposal.companyId}:${proposal.stockItemId}`)
+  );
+}
+
+function distinctBlockedItemLocations(checks: RepairCheck[]): number {
+  const keys = new Set<string>();
+  for (const check of checks) {
+    if (check.status !== "block") continue;
+    keys.add(
+      `${check.companyId}:${check.locationId === null ? "*" : check.locationId}:${
+        check.stockItemId === null ? "*" : check.stockItemId
+      }`
+    );
+  }
+  return keys.size;
 }
 
 function markAmbiguousTimestampTies(
@@ -782,7 +817,7 @@ async function dryRunCompany(
     }
   }
 
-  const blocked = blockedItemKeys(checks);
+  const blockers = buildRepairBlockerIndex(checks);
   const proposals = replay.proposals.map((proposal) => ({
     ...proposal,
     changed: proposal.changed,
@@ -799,7 +834,7 @@ async function dryRunCompany(
     saleRows: sales.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: checks.filter((check) => check.status === "block").length,
-    blockedStockItems: blocked.size,
+    blockedItemLocations: distinctBlockedItemLocations(checks),
   };
 
   return { proposals, checks, report };
@@ -830,21 +865,16 @@ async function persistProposalRows(
   proposals: HistoricalSalesRepairProposal[],
   checks: RepairCheck[]
 ): Promise<void> {
-  const blockedByItem = new Map<string, RepairCheck>();
-  for (const check of checks) {
-    if (check.status !== "block" || check.stockItemId === null) continue;
-    const key = `${check.companyId}:${check.stockItemId}`;
-    if (!blockedByItem.has(key)) blockedByItem.set(key, check);
-  }
+  const blockers = buildRepairBlockerIndex(checks);
 
   const batchSize = 300;
   for (let offset = 0; offset < proposals.length; offset += batchSize) {
     const batch = proposals.slice(offset, offset + batchSize);
     const values: unknown[] = [];
     const placeholders = batch.map((proposal, index) => {
-      const blocked = blockedByItem.get(`${proposal.companyId}:${proposal.stockItemId}`);
+      const blocked = blockerForProposal(blockers, proposal);
       const status = blocked ? "blocked" : proposal.changed ? "ready" : "unchanged";
-      const base = index * 22;
+      const base = index * 20;
       values.push(
         runId,
         proposal.companyId,
@@ -865,11 +895,9 @@ async function persistProposalRows(
         proposal.changed,
         status,
         blocked?.code ?? null,
-        blocked?.detail ?? null,
-        null,
-        null
+        blocked?.detail ?? null
       );
-      const p = Array.from({ length: 22 }, (_, i) => `$${base + i + 1}`);
+      const p = Array.from({ length: 20 }, (_, i) => `${base + i + 1}`);
       return `(${p.join(",")})`;
     });
     await client.query(
@@ -877,7 +905,7 @@ async function persistProposalRows(
        (run_id,company_id,location_id,stock_item_id,voucher_id,sales_item_id,occurred_at,
         evidence,source_type,source_id,original_cost_price,original_total_cost,original_profit,
         proposed_cost_price,proposed_total_cost,proposed_profit,changed,status,blocker_code,
-        blocker_detail,applied_at,id)
+        blocker_detail)
        VALUES ${placeholders.join(",")}
        ON CONFLICT (run_id,sales_item_id) DO NOTHING`,
       values
@@ -968,10 +996,10 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     await persistChecks(client, runId, allChecks);
     await persistProposalRows(client, runId, allProposals, allChecks);
 
-    const blockedByItem = blockedItemKeys(allChecks);
-    const blockedRows = allProposals.filter((p) => blockedByItem.has(`${p.companyId}:${p.stockItemId}`)).length;
+    const blockers = buildRepairBlockerIndex(allChecks);
+    const blockedRows = allProposals.filter((proposal) => blockerForProposal(blockers, proposal)).length;
     const changedRows = allProposals.filter(
-      (p) => p.changed && !blockedByItem.has(`${p.companyId}:${p.stockItemId}`)
+      (proposal) => proposal.changed && !blockerForProposal(blockers, proposal)
     ).length;
 
     const originalTotalCost = repairMoney(allProposals.reduce((sum, p) => sum.plus(p.originalTotalCost), new Decimal(0)));
@@ -984,7 +1012,7 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     hash.update("|");
     hash.update(sourceCutoff.toISOString());
     for (const proposal of [...allProposals].sort((a, b) => a.salesItemId - b.salesItemId)) {
-      const blocked = blockedByItem.get(`${proposal.companyId}:${proposal.stockItemId}`);
+      const blocked = blockerForProposal(blockers, proposal);
       hash.update("\n");
       hash.update(proposalHashSource(proposal, blocked ? "blocked" : proposal.changed ? "ready" : "unchanged", blocked?.code));
     }
@@ -1033,7 +1061,7 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
         allProposals.length,
         changedRows,
         blockedRows,
-        allChecks.filter((check) => check.status === "block").length,
+        distinctBlockedItemLocations(allChecks),
         originalTotalCost.toFixed(2),
         proposedTotalCost.toFixed(2),
         originalTotalProfit.toFixed(2),
@@ -1064,7 +1092,7 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       totalSalesRows: allProposals.length,
       changedRows,
       blockedRows,
-      blockedItemLocations: allChecks.filter((check) => check.status === "block").length,
+      blockedItemLocations: distinctBlockedItemLocations(allChecks),
       originalTotalCost: originalTotalCost.toFixed(2),
       proposedTotalCost: proposedTotalCost.toFixed(2),
       originalTotalProfit: originalTotalProfit.toFixed(2),
