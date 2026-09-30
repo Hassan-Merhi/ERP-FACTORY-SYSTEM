@@ -3271,6 +3271,29 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         continue;
       }
 
+      if (reversed.recovery === "CANONICAL_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_REWIND_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Canonical boundary " +
+            movement.movementId +
+            " recovered because forward replay reproduced quantity and total value exactly; only the reconstructed intermediate average-rate field disagreed. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
       if (
         movement.evidence === "canonical" &&
         CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
