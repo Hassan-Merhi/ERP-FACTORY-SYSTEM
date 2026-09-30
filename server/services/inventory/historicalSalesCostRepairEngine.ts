@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v2-checkpoint-rewind-merged";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v3-canonical-lifecycle";
 
 const ZERO = new Decimal(0);
 
@@ -236,6 +236,39 @@ export function reverseHistoricalInventoryMovement(
     return statesEqual(replayed, stateAfter)
       ? { reversible: true, stateBefore }
       : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+  }
+
+  // Canonical issue rows carry the transaction-time cost. For an outbound
+  // movement that leaves positive stock, that rate is the exact cost memory
+  // used by applyHistoricalInventoryMovement(), so try it before any inference.
+  if (input.unitCost !== null && input.unitCost !== undefined) {
+    const recordedRate = repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
+    const beforeValue = repairMoney(stateAfter.totalValue.plus(issueQty.times(recordedRate)));
+    const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, recordedRate, beforeValue);
+    const replayed = applyHistoricalInventoryMovement(stateBefore, {
+      quantityDelta: delta,
+      unitCost: recordedRate,
+    });
+    if (statesEqual(replayed, stateAfter)) {
+      return { reversible: true, stateBefore };
+    }
+  }
+
+  // Issues do not intentionally reprice inventory. In most legacy cases the
+  // rounded post-issue average is therefore also the pre-issue average.
+  const directRate = repairRate(stateAfter.averageRate);
+  const directBeforeValue = repairMoney(stateAfter.totalValue.plus(issueQty.times(directRate)));
+  const directStateBefore = createHistoricalInventoryStateFromSnapshot(
+    previousQty,
+    directRate,
+    directBeforeValue
+  );
+  const directReplay = applyHistoricalInventoryMovement(directStateBefore, {
+    quantityDelta: delta,
+    unitCost: input.unitCost,
+  });
+  if (statesEqual(directReplay, stateAfter)) {
+    return { reversible: true, stateBefore: directStateBefore };
   }
 
   const candidates: HistoricalInventoryState[] = [];
