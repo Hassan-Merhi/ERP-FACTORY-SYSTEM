@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request } from "express";
 
 import { requireAuth, requireRole } from "../../../auth";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -8,7 +8,7 @@ import {
   getHistoricalSalesCostRepairRun,
 } from "../../../services/inventory/historicalSalesCostRepair";
 
-function actorName(req: Express.Request): string {
+function actorName(req: Request): string {
   return req.session.username || req.user?.username || req.session.userId || "developer";
 }
 
