@@ -346,13 +346,6 @@ function movementKey(
   return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
 }
 
-function compareLegacyMovementDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
-  const time = Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
-  if (time !== 0) return time;
-  if (a.sequence !== b.sequence) return b.sequence - a.sequence;
-  return b.movementId.localeCompare(a.movementId);
-}
-
 function movementMutationTime(movement: HistoricalSalesRepairMovement): number {
   return Date.parse(movement.createdAt ?? movement.occurredAt);
 }
