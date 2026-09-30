@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v28-adjustment-edit-value-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v29-recorded-canonical-sale-rate";
 
 const ZERO = new Decimal(0);
 
@@ -934,6 +934,7 @@ export type HistoricalInventoryReverseResult =
       stateBefore: HistoricalInventoryState;
       recovery?:
         | "CANONICAL_RATE_ONLY"
+        | "CANONICAL_RECORDED_ISSUE_RATE"
         | "CANONICAL_ADJUSTMENT_EDIT_VALUE"
         | "LEGACY_ISSUE_RATE_ONLY"
         | "LEGACY_RECEIPT_RATE_ONLY";
@@ -1197,6 +1198,46 @@ export function reverseHistoricalSalesRepairMovement(
     unitCost: movement.unitCost,
     priorCostMemoryRate: input?.priorCostMemoryRate,
   });
+
+  if (
+    primary.reversible &&
+    movement.evidence === "canonical" &&
+    (movement.sourceType === "pos-sale" ||
+      movement.sourceType === "canonical-sale-lifecycle-correction") &&
+    delta.lt(ZERO) &&
+    movement.unitCost !== null &&
+    movement.unitCost !== undefined
+  ) {
+    const recordedRate = repairRate(
+      Decimal.max(decimal(movement.unitCost, "canonical recorded sale issue rate"), ZERO)
+    );
+    const inferredRate = repairRate(primary.stateBefore.averageRate);
+    if (!recordedRate.eq(inferredRate)) {
+      const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
+      if (previousQty.gt(ZERO)) {
+        const beforeValue = repairMoney(
+          stateAfter.totalValue.plus(delta.abs().times(recordedRate))
+        );
+        const recordedStateBefore = rawHistoricalInventoryState(
+          previousQty,
+          recordedRate,
+          beforeValue
+        );
+        const replayed = applyHistoricalInventoryMovement(recordedStateBefore, {
+          quantityDelta: delta,
+          unitCost: recordedRate,
+        });
+        if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+          return {
+            reversible: true,
+            stateBefore: recordedStateBefore,
+            recovery: "CANONICAL_RECORDED_ISSUE_RATE",
+          };
+        }
+      }
+    }
+  }
+
   if (primary.reversible || primary.reason !== "MOVEMENT_INVERSE_INVALID") {
     return primary;
   }
