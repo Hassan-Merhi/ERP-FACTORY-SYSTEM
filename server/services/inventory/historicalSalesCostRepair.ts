@@ -962,9 +962,6 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
 
-function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
-  return new Set(activeCanonicalSaleEvidence(movements).keys());
-}
 
 function markAmbiguousTimestampTies(
   companyId: number,
@@ -997,7 +994,6 @@ function markAmbiguousTimestampTies(
   }
   return checks;
 }
-
 
 type MergedRecoveryResult = {
   recoveredKeys: Set<string>;
