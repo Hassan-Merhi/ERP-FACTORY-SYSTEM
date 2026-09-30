@@ -122,7 +122,7 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         const requiredConfirmation = `APPLY-HISTORICAL-SALES-COST:${runId}:${auditHash.slice(0, 12)}`;
         if (req.body?.confirmation !== requiredConfirmation) {
           return res.status(400).json({
-            message: "HSCR_APPLY_CONFIRMATION_MISMATCH",
+            code: "HSCR_APPLY_CONFIRMATION_MISMATCH",
             requiredConfirmation,
           });
         }
