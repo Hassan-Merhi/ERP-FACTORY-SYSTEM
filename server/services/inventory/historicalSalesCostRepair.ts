@@ -2366,6 +2366,23 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const fallbackItemMovements = fallbackMovementsInCheckpoint.filter(
         (movement) => movement.stockItemId === stockItemId
       );
+      let fallbackProofCandidate:
+        | {
+            replay: {
+              exact: boolean;
+              detail: string | null;
+              replayProposals: Map<number, HistoricalSalesRepairProposal>;
+              peakNegativeLayerQuantity: Decimal;
+            };
+            openingTotal: Decimal;
+            openingProofBasis:
+              | "stock-opening"
+              | "location-import-inferred"
+              | "signed-location-import-inferred";
+            usedNormalizedPos: boolean;
+            movementCount: number;
+          }
+        | null = null;
 
       if (fallbackItemMovements.length > 0) {
         const fallbackRawMovements = [...itemMovements, ...fallbackItemMovements].sort(
@@ -2623,64 +2640,13 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           }
 
           if (fallbackAcceptedReplay.exact) {
-            fallbackProvenItemIds.add(stockItemId);
-            checks.push({
-              companyId,
-              locationId: null,
-              stockItemId,
-              code: "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN",
-              status: "pass",
-              actual: String(fallbackItemMovements.length),
-              detail:
-                "False inventory_applied legacy transfer rows are accepted only because the complete item replay reproduces the immutable Phase 3 checkpoint exactly.",
-            });
-            if (fallbackAcceptedReplay.peakNegativeLayerQuantity.gt(0)) {
-              checks.push({
-                companyId,
-                locationId: null,
-                stockItemId,
-                code: "OPENING_FORWARD_EPOCH_LAYER_REPLAY",
-                status: "pass",
-                actual: fallbackAcceptedReplay.peakNegativeLayerQuantity.toFixed(3),
-                detail:
-                  "Fallback transfer proof reproduced the checkpoint while simulating the historical negative-layer engine.",
-              });
-            }
-            if (fallbackUsedNormalizedPos) {
-              checks.push({
-                companyId,
-                locationId: null,
-                stockItemId,
-                code: "OPENING_FORWARD_POS_LIFECYCLE_NORMALIZED",
-                status: "pass",
-                detail:
-                  "Fallback transfer proof required the checkpoint-gated normalized POS lifecycle.",
-              });
-            }
-            for (const key of itemTargetKeys) {
-              forwardReplayResolvedKeys.add(key);
-              const locationId = Number(key.split(":")[1]);
-              checks.push({
-                companyId,
-                locationId,
-                stockItemId,
-                code: "OPENING_FORWARD_REPLAY_PROVEN",
-                status: "pass",
-                expected: openingQty.toFixed(3) + "|" + openingValue.toFixed(2),
-                actual:
-                  fallbackOpeningTotal.toFixed(3) +
-                  "|" +
-                  (fallbackOpeningProofBasis === "stock-opening"
-                    ? openingValue.toFixed(2)
-                    : repairMoney(fallbackOpeningTotal.times(openingRate)).toFixed(2)),
-                detail:
-                  "Legacy false-flag transfer candidate plus durable item history replays exactly to the immutable Phase 3 checkpoint.",
-              });
-            }
-            for (const proposal of fallbackAcceptedReplay.replayProposals.values()) {
-              proposalsBySaleId.set(proposal.salesItemId, proposal);
-            }
-            continue;
+            fallbackProofCandidate = {
+              replay: fallbackAcceptedReplay,
+              openingTotal: fallbackOpeningTotal,
+              openingProofBasis: fallbackOpeningProofBasis,
+              usedNormalizedPos: fallbackUsedNormalizedPos,
+              movementCount: fallbackItemMovements.length,
+            };
           }
         }
       }
@@ -2985,18 +2951,38 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       }
 
       if (!acceptedReplay.exact) {
-        checks.push({
-          companyId,
-          locationId: null,
-          stockItemId,
-          code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
-          status: "warning",
-          detail:
-            rawReplay.detail ??
-            normalizedReplay?.detail ??
-            "Forward replay did not reproduce the immutable checkpoint.",
-        });
-        continue;
+        if (fallbackProofCandidate) {
+          acceptedReplay = fallbackProofCandidate.replay;
+          inferredOpeningTotal = fallbackProofCandidate.openingTotal;
+          openingProofBasis = fallbackProofCandidate.openingProofBasis;
+          proofMode = fallbackProofCandidate.usedNormalizedPos
+            ? "normalized-pos-lifecycle"
+            : "raw";
+          fallbackProvenItemIds.add(stockItemId);
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN",
+            status: "pass",
+            actual: String(fallbackProofCandidate.movementCount),
+            detail:
+              "Trusted V15 replay failed, but adding the false inventory_applied legacy transfer rows reproduced the immutable Phase 3 checkpoint exactly; only this proven item history uses the fallback.",
+          });
+        } else {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
+            status: "warning",
+            detail:
+              rawReplay.detail ??
+              normalizedReplay?.detail ??
+              "Forward replay did not reproduce the immutable checkpoint.",
+          });
+          continue;
+        }
       }
 
       if (openingProofBasis === "signed-location-import-inferred") {
