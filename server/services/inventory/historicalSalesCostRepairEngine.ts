@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v2-checkpoint-rewind";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v2-checkpoint-rewind-merged";
 
 const ZERO = new Decimal(0);
 
@@ -44,6 +44,7 @@ export type HistoricalSalesRepairMovement = {
   locationId: number;
   stockItemId: number;
   occurredAt: string;
+  createdAt?: string;
   sequence: number;
   quantityDelta: string;
   unitCost: string | null;
