@@ -731,6 +731,26 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
   });
 
+  it("recovers a negative canonical sale lifecycle correction from its pinned issue rate", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
+    const correction = movement({
+      movementId: "canonical-correction:100:500:10:100",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "-1",
+      unitCost: "100.00",
+      sourceType: "canonical-sale-lifecycle-correction",
+      evidence: "canonical",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, correction);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("CANONICAL_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1090.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
   it("keeps the same rate-only shortcut disabled for legacy evidence", () => {
     const staleAfter = createHistoricalInventoryStateFromSnapshot("10", "100.00", "1100.00");
     const legacyTransferIn = movement({
