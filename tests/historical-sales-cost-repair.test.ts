@@ -828,6 +828,32 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.reversible).toBe(false);
   });
 
+  it("recovers a legacy offload from its exact stored value when only the reconstructed rate is stale", () => {
+    const staleAfter = createHistoricalInventoryStateFromSnapshot(
+      "115",
+      "78.25",
+      "8969.47"
+    );
+    const legacyOffload = movement({
+      movementId: "offload:24505",
+      occurredAt: "2026-08-15T00:00:00.000Z",
+      quantityDelta: "6",
+      unitCost: "84.54",
+      exactValue: "507.24",
+      sourceType: "legacy-container-offload",
+      sourceId: "438",
+      evidence: "legacy",
+    });
+
+    const reversed = reverseHistoricalSalesRepairMovement(staleAfter, legacyOffload);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.recovery).toBe("LEGACY_RECEIPT_RATE_ONLY");
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("109.000");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("8462.23");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("77.64");
+  });
+
   it("recovers a canonical POS issue when quantity and value invert exactly but the reconstructed rate is stale", () => {
     const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "100.00", "990.00");
     const saleIssue = movement({
