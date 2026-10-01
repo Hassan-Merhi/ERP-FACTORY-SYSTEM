@@ -57,7 +57,7 @@ vi.mock("@tanstack/react-query", () => ({
           { id: 3, employeeId: 2, remainingBalance: "100", fullyPaid: true },
         ],
       };
-    if (key === "/api/factory/worker-deductions")
+    if (key === "/api/payroll/worker-deductions")
       return {
         data: [
           { id: 1, workerId: 1, amount: "25", applied: false },

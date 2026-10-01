@@ -89,9 +89,9 @@ export function useERPRunPayrollModel() {
   });
 
   const { data: workerDeductionsRaw = [] } = useQuery<WorkerDeductionRow[]>({
-    queryKey: ["/api/factory/worker-deductions", companyId],
+    queryKey: ["/api/payroll/worker-deductions", companyId],
     queryFn: async () => {
-      const res = await fetch("/api/factory/worker-deductions", { credentials: "include" });
+      const res = await fetch(`/api/payroll/worker-deductions?companyId=${companyId}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
