@@ -2236,6 +2236,8 @@ function rateHullBlocks(input: {
   offloadEvidence: OffloadValueEvidenceRow[];
   checkpoint: ValuationCheckpoint | null;
   historicalMerges: HistoricalMergeRow[];
+  /** Sales proven independently of the rewind chain (closed zero-stock eras). */
+  independentSaleIds?: Set<number>;
 }): RepairCheck[] {
   const hull = evidencedRateHullByItem(input);
   const worstByKey = new Map<string, { proposal: HistoricalSalesRepairProposal; count: number }>();
@@ -2251,8 +2253,41 @@ function rateHullBlocks(input: {
     });
   }
 
-  return [...worstByKey.values()].map(({ proposal, count }) => {
+  const independent = input.independentSaleIds ?? new Set<number>();
+  const legacyByKey = new Map<string, HistoricalSalesRepairProposal[]>();
+  for (const candidate of input.proposals) {
+    if (candidate.evidence !== "legacy") continue;
+    const key = `${candidate.locationId}:${candidate.stockItemId}`;
+    if (!worstByKey.has(key)) continue;
+    const list = legacyByKey.get(key) ?? [];
+    list.push(candidate);
+    legacyByKey.set(key, list);
+  }
+  const checks: RepairCheck[] = [];
+  for (const [key, { proposal, count }] of worstByKey) {
     const range = hull.get(proposal.stockItemId);
+    const keyProposals = legacyByKey.get(key) ?? [];
+    if (!keyProposals.some((candidate) => independent.has(candidate.salesItemId))) {
+      checks.push(hullCheck(proposal, count, range));
+      continue;
+    }
+    // V48: a hull violation proves the rewind chain wrong, not a sale proven by
+    // a closed zero-stock era that never used it. Block every other legacy
+    // sale at the key individually; an independent sale is blocked only when
+    // its own cost is outside the range.
+    for (const candidate of keyProposals) {
+      const ownOutside = !historicalRateWithinEvidencedRange(repairRate(candidate.proposedCostPrice), range);
+      if (independent.has(candidate.salesItemId) && !ownOutside) continue;
+      checks.push({ ...hullCheck(proposal, count, range), salesItemId: candidate.salesItemId });
+    }
+  }
+  return checks;
+
+  function hullCheck(
+    proposal: HistoricalSalesRepairProposal,
+    count: number,
+    range: ReturnType<typeof hull.get>
+  ): RepairCheck {
     return {
       companyId: input.companyId,
       locationId: proposal.locationId,
@@ -2263,7 +2298,7 @@ function rateHullBlocks(input: {
       actual: repairRate(proposal.proposedCostPrice).toFixed(2),
       detail: `${count} reconstructed sale cost(s) fall outside every rate this item ever carried (worst: sales item ${proposal.salesItemId}); the reconstruction chain for this item/location is unproven`,
     };
-  });
+  }
 }
 
 async function dryRunCompany(
@@ -2761,6 +2796,7 @@ async function dryRunCompany(
   checks.push(...markAmbiguousTimestampTies(companyId, legacyMovements, sales, canonicalStart, canonicalSaleKeys));
 
   const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
+  const closedEraProvenSaleIds = new Set<number>();
   const targetKeys = new Set(
     legacySales
       .filter((sale) => sale.location_id !== null)
@@ -4720,6 +4756,7 @@ async function dryRunCompany(
             block.detail = `${block.detail ?? ""} (superseded: closed zero-stock era ${anchor.movementId}..${movements[closedAt].movementId})`;
           }
           proposalsBySaleId.set(proposal.salesItemId, proposal);
+          closedEraProvenSaleIds.add(proposal.salesItemId);
           proven += 1;
         }
         eraProvenSales += proven;
@@ -4808,6 +4845,7 @@ async function dryRunCompany(
       offloadEvidence,
       checkpoint,
       historicalMerges,
+      independentSaleIds: closedEraProvenSaleIds,
     })
   );
 
