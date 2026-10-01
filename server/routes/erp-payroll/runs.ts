@@ -82,7 +82,18 @@ export function registerPayrollRunRoutes(app: Express) {
       // Attach item counts + totals
       const result = await Promise.all(
         runs.map(async (run) => {
-          const items = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, run.id));
+          const rawItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, run.id));
+          const items = rawItems.map((i) => {
+            const storedPayrollDeduction = parseFloat(i.payrollDeduction || "0");
+            const inferredLegacyDeduction = Math.max(
+              0,
+              parseFloat(i.baseSalary || "0") - parseFloat(i.deduction || "0") - parseFloat(i.netPay || "0")
+            );
+            return {
+              ...i,
+              payrollDeduction: (storedPayrollDeduction > 0.005 ? storedPayrollDeduction : inferredLegacyDeduction).toFixed(2),
+            };
+          });
           const totalNet = items.reduce((s, i) => s + parseFloat(i.netPay), 0);
           const totalBase = items.reduce((s, i) => s + parseFloat(i.baseSalary), 0);
           return {
@@ -128,7 +139,12 @@ export function registerPayrollRunRoutes(app: Express) {
         // cannot silently make the paid payroll disagree with the saved preview.
         const payrollDeductionIdsByEmployee = new Map<number, number[]>();
         for (const item of runItems) {
-          const target = parseFloat(item.payrollDeduction || "0");
+          const storedPayrollDeduction = parseFloat(item.payrollDeduction || "0");
+          const inferredLegacyDeduction = Math.max(
+            0,
+            parseFloat(item.baseSalary || "0") - parseFloat(item.deduction || "0") - parseFloat(item.netPay || "0")
+          );
+          const target = storedPayrollDeduction > 0.005 ? storedPayrollDeduction : inferredLegacyDeduction;
           if (target <= 0 || !item.employeeId) continue;
 
           const pending = await db
