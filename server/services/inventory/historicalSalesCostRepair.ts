@@ -3868,24 +3868,85 @@ async function dryRunCompany(
         rewindBoundaryReached.add(key);
 
         if (reversed.reason === "MOVEMENT_INVERSE_INVALID") {
-          // V41 measurement: an impossible inverse proves the rewound state
-          // above this movement wrong, yet sales between it and the
-          // checkpoint were already priced from that state.
+          // V43: an impossible inverse proves the rewound state above this
+          // movement inconsistent with the evidence below it, yet the legacy
+          // sales between it and the checkpoint were already priced from that
+          // state. The error is somewhere between the checkpoint and here, so
+          // a sale's rewound cost is kept only when it is independent of where
+          // the error lies: a priced receipt into exactly empty stock fixes
+          // the state after it whatever came before, and a forward replay from
+          // that state must reach the same cost for the sale. Otherwise the
+          // sale is blocked.
           const pricedAbove = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
             (saleMovement) =>
               compareMovementMutationAscending(saleMovement, movement) > 0 &&
               proposalsBySaleId.has(saleMovement.sale!.salesItemId) &&
               !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
-          ).length;
-          if (pricedAbove > 0) {
+          );
+          if (pricedAbove.length > 0) {
+            const delta = repairQuantity(movement.quantityDelta);
+            const determined =
+              delta.gt(0) &&
+              movement.unitCost !== null &&
+              movement.unitCost !== undefined &&
+              !posJournalCostIsNotInventoryRate(movement) &&
+              repairQuantity(stateAfter.quantity).minus(delta).isZero();
+            const forwardCost = new Map<number, string>();
+            if (determined) {
+              let forward = applyHistoricalSalesRepairMovement(
+                createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+                movement
+              );
+              const later = movementsInCheckpoint
+                .filter(
+                  (candidate) =>
+                    movementKey(candidate) === key && compareMovementMutationAscending(candidate, movement) > 0
+                )
+                .sort(compareMovementMutationAscending);
+              for (const laterMovement of later) {
+                if (laterMovement.sale) {
+                  forwardCost.set(
+                    laterMovement.sale.salesItemId,
+                    historicalSaleProposalFromState(laterMovement, forward).proposedCostPrice
+                  );
+                }
+                forward = applyHistoricalSalesRepairMovement(forward, laterMovement);
+              }
+            }
+            let agreed = 0;
+            for (const saleMovement of pricedAbove) {
+              const salesItemId = saleMovement.sale!.salesItemId;
+              const rewound = proposalsBySaleId.get(salesItemId)!.proposedCostPrice;
+              const forward = forwardCost.get(salesItemId);
+              if (forward !== undefined && forward === rewound) {
+                agreed += 1;
+                continue;
+              }
+              checks.push({
+                companyId,
+                locationId: saleMovement.locationId,
+                stockItemId: saleMovement.stockItemId,
+                salesItemId,
+                code: "CHECKPOINT_REWIND_CONTRADICTED_BELOW",
+                status: "block",
+                expected: rewound,
+                actual: forward ?? "undetermined",
+                detail: `Sales item ${salesItemId} was rewound from a state contradicted by ${movement.movementId} (${
+                  determined ? "forward replay from the empty-stock receipt disagrees" : "no fully determined state below"
+                })`,
+              });
+            }
             checks.push({
               companyId,
               locationId: movement.locationId,
               stockItemId: movement.stockItemId,
-              code: "REWIND_CONTRADICTION_ABOVE_PROPOSALS",
+              code: "REWIND_CONTRADICTION_TWO_SIDED",
               status: "warning",
-              actual: String(pricedAbove),
-              detail: `${pricedAbove} legacy sale proposals above impossible inverse ${movement.movementId} came from the contradicted rewind`,
+              expected: String(pricedAbove.length),
+              actual: String(agreed),
+              detail: `${agreed} of ${pricedAbove.length} legacy sales above impossible inverse ${movement.movementId} have the same cost from the checkpoint rewind and from ${
+                determined ? "a forward replay of the empty-stock receipt" : "no independent forward state"
+              }`,
             });
           }
         }
