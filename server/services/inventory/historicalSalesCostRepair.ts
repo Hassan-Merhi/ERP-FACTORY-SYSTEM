@@ -15,6 +15,7 @@ import {
   createHistoricalSignedLocationImportState,
   historicalInventoryKey,
   historicalRateWithinEvidencedRange,
+  historicalStateRateMatchesValue,
   historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
@@ -3551,6 +3552,14 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
 
     const rewindBoundaryReached = new Set<string>();
     const UNRECORDED_REVALUATION_MIN_JUMP = new Decimal("0.02");
+    const reanchorRequests: Array<{
+      key: string;
+      anchor: HistoricalSalesRepairMovement;
+      beforeQuantity: Decimal;
+      recorded: Decimal;
+      inferred: Decimal;
+      unresolvedSales: HistoricalSalesRepairMovement[];
+    }> = [];
     let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
     const nextMovementAtKey = (
       key: string,
@@ -3577,6 +3586,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     // warning to measure before any threshold becomes a blocker.
     const rewindSensitivity = new Map<string, Decimal>();
     const REWIND_AMPLIFICATION_LIMIT = new Decimal(100);
+    const REANCHOR_MAX_CANDIDATES = new Decimal(20000);
     const rewindAmplification = new Map<
       string,
       { max: Decimal; maxSalesItemId: number; proposals: number; over10: number; over100: number }
@@ -3789,6 +3799,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           // movement (cost-price import, direct location import). That
           // boundary cannot be crossed without evidence of the revaluation.
           const nextMovement = nextMovementAtKey(key, movement);
+          let unrecordedRevaluation = false;
           if (
             nextMovement &&
             nextMovement.evidence === "canonical" &&
@@ -3812,6 +3823,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
                 nextMovement.createdAt ?? nextMovement.occurredAt
               }) with no stock movement between them`,
             });
+            unrecordedRevaluation = true;
           }
           const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
             (saleMovement) =>
@@ -3819,7 +3831,18 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
               !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
           );
           rewindBoundaryReached.add(key);
-          if (unresolvedSales.length === 0) {
+          if (unrecordedRevaluation && unresolvedSales.length > 0) {
+            // V39: try to re-anchor below the revaluation instead of blocking
+            // outright; the blocks are emitted after the attempt if it fails.
+            reanchorRequests.push({
+              key,
+              anchor: movement,
+              beforeQuantity: repairQuantity(reversed.stateBefore.quantity),
+              recorded,
+              inferred,
+              unresolvedSales,
+            });
+          } else if (unresolvedSales.length === 0) {
             checks.push({
               companyId,
               locationId: movement.locationId,
@@ -3899,6 +3922,190 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         rewindAmplification.set(key, amplification);
       }
       rewindStates.set(key, reversed.stateBefore);
+    }
+
+    // V39: re-anchor below an unrecorded revaluation. At the pre-revaluation
+    // original sale the locked live rate (journaled) and the quantity (the
+    // quantity chain is unaffected by a valuation overwrite) are exact; only
+    // the value is unknown. Every value whose stored 2dp rate equals the
+    // recorded rate is a candidate. Each candidate is rewound independently
+    // through the key's earlier history and must survive every inverse and
+    // every earlier recorded live sale rate. Proposals are accepted only when
+    // at least one candidate survives and all survivors agree exactly on every
+    // reconstructed sale cost and on where the rewind stops.
+    for (const request of reanchorRequests) {
+      const [, locationIdText, stockItemIdText] = request.key.split(":");
+      const locationId = Number(locationIdText);
+      const stockItemId = Number(stockItemIdText);
+      const blockUnresolved = (sales: HistoricalSalesRepairMovement[]) => {
+        for (const saleMovement of sales) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId: saleMovement.sale!.salesItemId,
+            code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+            status: "block",
+            expected: request.recorded.toFixed(2),
+            actual: request.inferred.toFixed(2),
+            detail: `Sales item ${saleMovement.sale!.salesItemId} predates canonical cost boundary ${request.anchor.movementId}`,
+          });
+        }
+      };
+
+      const quantity = request.beforeQuantity;
+      const candidates: HistoricalInventoryState[] = [];
+      if (!quantity.gt(0)) {
+        candidates.push(createHistoricalInventoryStateFromSnapshot(quantity, request.recorded, "0"));
+      } else {
+        const lowCents = quantity.times(request.recorded.minus("0.006")).times(100).floor();
+        const highCents = quantity.times(request.recorded.plus("0.006")).times(100).ceil();
+        if (highCents.minus(lowCents).gt(REANCHOR_MAX_CANDIDATES)) {
+          checks.push({
+            companyId,
+            locationId,
+            stockItemId,
+            code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_AMBIGUOUS",
+            status: "warning",
+            actual: highCents.minus(lowCents).toFixed(0),
+            detail: `Value window at ${request.anchor.movementId} is too wide to enumerate`,
+          });
+          blockUnresolved(request.unresolvedSales);
+          continue;
+        }
+        for (let cents = lowCents; cents.lte(highCents); cents = cents.plus(1)) {
+          const candidate = {
+            quantity,
+            averageRate: request.recorded,
+            totalValue: repairMoney(cents.dividedBy(100)),
+          };
+          if (historicalStateRateMatchesValue(candidate)) candidates.push(candidate);
+        }
+      }
+
+      const unresolvedIds = new Set(request.unresolvedSales.map((sale) => sale.sale!.salesItemId));
+      const earlier = movementsInCheckpoint.filter(
+        (candidateMovement) =>
+          movementKey(candidateMovement) === request.key &&
+          compareMovementMutationAscending(candidateMovement, request.anchor) < 0
+      );
+      type ReanchorOutcome = {
+        proposals: Map<number, HistoricalSalesRepairProposal>;
+        sensitivity: Map<number, Decimal>;
+        stoppedAt: string | null;
+      };
+      const outcomes: ReanchorOutcome[] = [];
+      for (const start of candidates) {
+        let state = start;
+        let sensitivity = quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1);
+        const outcome: ReanchorOutcome = { proposals: new Map(), sensitivity: new Map(), stoppedAt: null };
+        let survived = true;
+        for (const earlierMovement of earlier) {
+          const reversedEarlier = reverseHistoricalSalesRepairMovement(state, earlierMovement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(earlierMovement.movementId) ?? null,
+          });
+          if (!reversedEarlier.reversible) {
+            if (reversedEarlier.reason === "COST_MEMORY_IRREVERSIBLE") {
+              outcome.stoppedAt = earlierMovement.movementId;
+            } else {
+              survived = false;
+            }
+            break;
+          }
+          if (
+            earlierMovement.evidence === "canonical" &&
+            CANONICAL_SALE_SOURCE_TYPES.has(earlierMovement.sourceType) &&
+            !posJournalCostIsNotInventoryRate(earlierMovement) &&
+            d(earlierMovement.quantityDelta).lt(0) &&
+            earlierMovement.unitCost !== null &&
+            earlierMovement.unitCost !== undefined &&
+            !repairRate(earlierMovement.unitCost).eq(repairRate(reversedEarlier.stateBefore.averageRate))
+          ) {
+            survived = false;
+            break;
+          }
+          const afterQty = repairQuantity(state.quantity);
+          const beforeQty = repairQuantity(reversedEarlier.stateBefore.quantity);
+          if (d(earlierMovement.quantityDelta).gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
+            sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
+          }
+          if (earlierMovement.sale && unresolvedIds.has(earlierMovement.sale.salesItemId)) {
+            outcome.proposals.set(
+              earlierMovement.sale.salesItemId,
+              historicalSaleProposalFromState(earlierMovement, reversedEarlier.stateBefore)
+            );
+            outcome.sensitivity.set(earlierMovement.sale.salesItemId, sensitivity);
+          }
+          state = reversedEarlier.stateBefore;
+        }
+        if (survived) outcomes.push(outcome);
+      }
+
+      const signature = (outcome: ReanchorOutcome) =>
+        `${outcome.stoppedAt ?? ""}|` +
+        [...outcome.proposals.entries()]
+          .sort((a, b) => a[0] - b[0])
+          .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
+          .join(",");
+      const distinctOutcomes = new Set(outcomes.map(signature));
+      if (outcomes.length === 0 || distinctOutcomes.size !== 1 || outcomes[0].proposals.size === 0) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_AMBIGUOUS",
+          status: "warning",
+          expected: "1 agreeing outcome",
+          actual: `${outcomes.length} surviving of ${candidates.length} candidates, ${distinctOutcomes.size} distinct outcomes`,
+          detail: `Re-anchor below unrecorded revaluation at ${request.anchor.movementId} is not unique`,
+        });
+        blockUnresolved(request.unresolvedSales);
+        continue;
+      }
+
+      const accepted = outcomes[0];
+      let proven = 0;
+      for (const saleMovement of request.unresolvedSales) {
+        const salesItemId = saleMovement.sale!.salesItemId;
+        const proposal = accepted.proposals.get(salesItemId);
+        if (!proposal) {
+          blockUnresolved([saleMovement]);
+          continue;
+        }
+        const saleSensitivity = Decimal.max(
+          ...outcomes.map((outcome) => outcome.sensitivity.get(salesItemId) ?? new Decimal(0))
+        );
+        if (saleSensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
+          checks.push({
+            companyId,
+            locationId,
+            stockItemId,
+            salesItemId,
+            code: "LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED",
+            status: "block",
+            expected: `<=${REWIND_AMPLIFICATION_LIMIT.toFixed(0)}`,
+            actual: saleSensitivity.toFixed(2),
+            detail: `Sales item ${salesItemId} re-anchored cost moves ${saleSensitivity.toFixed(
+              2
+            )} cents per cent of model error`,
+          });
+          continue;
+        }
+        proposalsBySaleId.set(salesItemId, proposal);
+        proven += 1;
+      }
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_PROVEN",
+        status: "pass",
+        expected: String(request.unresolvedSales.length),
+        actual: String(proven),
+        detail: `${outcomes.length} of ${candidates.length} value candidates at ${request.anchor.movementId} survived and agree on every reconstructed sale cost${
+          accepted.stoppedAt ? `; rewind stops at ${accepted.stoppedAt}` : ""
+        }`,
+      });
     }
 
     for (const [key, amplification] of rewindAmplification) {
