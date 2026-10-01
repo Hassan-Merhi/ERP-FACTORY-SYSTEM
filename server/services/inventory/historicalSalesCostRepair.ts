@@ -1915,6 +1915,31 @@ function recoverHistoricalMergedSales(input: {
       }
       if (!keptRewindFailure) {
         for (const [locationId, states] of keptCandidates) {
+          if (states.length > 1 && sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+            // A source with an exact zero opening has a forward-determined
+            // contribution at the merge, so the combined state must equal the
+            // kept item's pre-merge state plus that contribution.
+            const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+            const contribution = replayMergedSourceLocationForward({
+              companyId: input.companyId,
+              sourceItemId,
+              locationId,
+              opening: stateForZeroOpening(sourceOpeningRate),
+              movements: allMovements,
+              mergeAtMs,
+            }).stateAtMerge;
+            const expectedQty = repairQuantity(keptBefore.quantity.plus(contribution.quantity));
+            const expectedValue = repairMoney(keptBefore.totalValue.plus(contribution.totalValue));
+            const matching = states.filter(
+              (state) =>
+                repairQuantity(state.quantity).eq(expectedQty) && repairMoney(state.totalValue).eq(expectedValue)
+            );
+            if (matching.length === 1) {
+              keptCandidates.set(locationId, matching);
+              combinedAtMergeByLocation.set(locationId, matching[0]);
+              continue;
+            }
+          }
           if (states.length !== 1) {
             keptRewindFailure = {
               locationId,
@@ -3900,6 +3925,7 @@ async function dryRunCompany(
     const finishedAlternates = new Map<string, RewindAlternate[]>();
     const primaryHistoryByKey = new Map<string, Map<number, HistoricalSalesRepairProposal>>();
     const branchOverflowKeys = new Set<string>();
+    const legacyInverseAmbiguity = new Map<string, { sales: number; maxSpread: Decimal }>();
     const branchSignature = (state: HistoricalInventoryState, history: Map<number, HistoricalSalesRepairProposal>) =>
       traceState(state) +
       "|" +
@@ -3954,6 +3980,32 @@ async function dryRunCompany(
       let reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
         priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
       });
+
+      // V49 measurement: a legacy sale whose own inverse has several exact
+      // pre-issue rates is priced on the primary choice (rate unchanged across
+      // the issue); count them so the residual uncertainty is reported.
+      if (
+        movement.evidence === "legacy" &&
+        movement.sale &&
+        reversed.reversible &&
+        isLiveRateIssueWithUnpinnedRate(movement)
+      ) {
+        const primaryBefore = reversed.stateBefore;
+        const alternatives = historicalIssueInverseCandidates(stateAfter, movement).filter(
+          (candidate) => !historicalInventoryStatesEqual(candidate, primaryBefore)
+        );
+        if (alternatives.length > 0) {
+          const spread = Decimal.max(
+            ...alternatives.map((candidate) =>
+              repairRate(candidate.averageRate).minus(repairRate(primaryBefore.averageRate)).abs()
+            )
+          );
+          const entry = legacyInverseAmbiguity.get(key) ?? { sales: 0, maxSpread: new Decimal(0) };
+          entry.sales += 1;
+          if (spread.gt(entry.maxSpread)) entry.maxSpread = spread;
+          legacyInverseAmbiguity.set(key, entry);
+        }
+      }
 
       // V45: advance and branch the alternates, then let recorded evidence
       // prune them or replace a contradicted primary.
@@ -4503,6 +4555,20 @@ async function dryRunCompany(
         costMemoryResetByKey.set(key, movement);
       }
       rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const [key, entry] of legacyInverseAmbiguity) {
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+        status: "warning",
+        expected: String(entry.sales),
+        actual: entry.maxSpread.toFixed(2),
+        detail: `${entry.sales} legacy sale inverse(s) admit another exact pre-issue rate (largest gap ${entry.maxSpread.toFixed(2)}); priced on the rate-unchanged inverse`,
+      });
     }
 
     // V45: a legacy sale rewound on the primary path is priced only when every
