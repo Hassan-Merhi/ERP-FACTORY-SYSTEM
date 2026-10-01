@@ -22,6 +22,8 @@ import {
   posJournalCostIsNotInventoryRate,
   isExactValuationReset,
   reanchorHistoricalRewindAtRecordedRate,
+  reverseCollapsedPosIssueGroup,
+  collapsedPosIssueGroup,
   repairRate,
   reverseHistoricalSalesRepairMovement,
   type HistoricalForwardReplayState,
@@ -241,8 +243,12 @@ function offloadEvidenceKey(offloadId: string | number, stockItemId: string | nu
   return `${String(offloadId)}:${Number(stockItemId)}`;
 }
 
-function reanchorCodePrefix(transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET"): string {
-  return transition === "UNRECORDED_REVALUATION" ? "LEGACY_UNRECORDED_REVALUATION" : "LEGACY_COST_MEMORY_RESET";
+function reanchorCodePrefix(
+  transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET" | "COLLAPSED_POS_LINES"
+): string {
+  if (transition === "UNRECORDED_REVALUATION") return "LEGACY_UNRECORDED_REVALUATION";
+  if (transition === "COST_MEMORY_RESET") return "LEGACY_COST_MEMORY_RESET";
+  return "LEGACY_COLLAPSED_POS_LINES";
 }
 
 function traceState(state: HistoricalInventoryState): string {
@@ -3753,7 +3759,7 @@ async function dryRunCompany(
       recorded: Decimal;
       inferred: Decimal;
       unresolvedSales: HistoricalSalesRepairMovement[];
-      transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET";
+      transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET" | "COLLAPSED_POS_LINES";
       transitionMovementId: string;
     }> = [];
     // V41: the newest-in-rewind movement at each key that erased cost memory
@@ -3763,6 +3769,7 @@ async function dryRunCompany(
     // holds no information about the earlier rate, so a canonical sale's
     // recorded live rate below it is the only evidence of that rate.
     const costMemoryResetByKey = new Map<string, HistoricalSalesRepairMovement>();
+    const collapsedGroupStates = new Map<string, HistoricalInventoryState>();
     let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
     const nextMovementAtKey = (
       key: string,
@@ -3807,9 +3814,59 @@ async function dryRunCompany(
       }
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
-      const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
-          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+      // V44: invert an original POS issue together with its restored dropped
+      // lines. One solution is applied; several (the pre-sale value is only
+      // known to the cent window of the recorded rate) re-anchor at the
+      // original issue through the unique-value proof; none falls back to the
+      // generic inverse.
+      if (movement.canonicalPosRole === "dropped-line" && !collapsedGroupStates.has(movement.movementId)) {
+        const group = collapsedPosIssueGroup(movementsInCheckpoint, movement);
+        const original = group[group.length - 1];
+        const solutions = reverseCollapsedPosIssueGroup(stateAfter, group);
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code:
+            solutions.length === 1
+              ? "CANONICAL_POS_LINE_GROUP_INVERTED"
+              : solutions.length > 1
+                ? "CANONICAL_POS_LINE_GROUP_REANCHORED"
+                : "CANONICAL_POS_LINE_GROUP_NO_JOINT_INVERSE",
+          status: solutions.length === 0 ? "warning" : "pass",
+          detail: `${group.length - 1} restored line(s) of ${original?.movementId ?? "?"}: ${solutions.length} joint inverse(s) reproduce the recorded live rate`,
         });
+        if (solutions.length === 1) {
+          solutions[0].forEach((groupState, index) => collapsedGroupStates.set(group[index].movementId, groupState));
+        } else if (solutions.length > 1 && original) {
+          const lastBefore = solutions[0][solutions[0].length - 1];
+          const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+            (saleMovement) =>
+              compareMovementMutationAscending(saleMovement, original) < 0 &&
+              !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
+          );
+          rewindBoundaryReached.add(key);
+          if (unresolvedSales.length > 0) {
+            reanchorRequests.push({
+              key,
+              anchor: original,
+              beforeQuantity: repairQuantity(lastBefore.quantity),
+              recorded: repairRate(original.unitCost!),
+              inferred: repairRate(lastBefore.averageRate),
+              unresolvedSales,
+              transition: "COLLAPSED_POS_LINES",
+              transitionMovementId: movement.movementId,
+            });
+          }
+          continue;
+        }
+      }
+      const forcedGroupState = collapsedGroupStates.get(movement.movementId);
+      const reversed: ReturnType<typeof reverseHistoricalSalesRepairMovement> = forcedGroupState
+        ? { reversible: true, stateBefore: forcedGroupState }
+        : reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+          });
       traceRewind(
         key,
         [
@@ -3868,24 +3925,85 @@ async function dryRunCompany(
         rewindBoundaryReached.add(key);
 
         if (reversed.reason === "MOVEMENT_INVERSE_INVALID") {
-          // V41 measurement: an impossible inverse proves the rewound state
-          // above this movement wrong, yet sales between it and the
-          // checkpoint were already priced from that state.
+          // V43: an impossible inverse proves the rewound state above this
+          // movement inconsistent with the evidence below it, yet the legacy
+          // sales between it and the checkpoint were already priced from that
+          // state. The error is somewhere between the checkpoint and here, so
+          // a sale's rewound cost is kept only when it is independent of where
+          // the error lies: a priced receipt into exactly empty stock fixes
+          // the state after it whatever came before, and a forward replay from
+          // that state must reach the same cost for the sale. Otherwise the
+          // sale is blocked.
           const pricedAbove = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
             (saleMovement) =>
               compareMovementMutationAscending(saleMovement, movement) > 0 &&
               proposalsBySaleId.has(saleMovement.sale!.salesItemId) &&
               !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
-          ).length;
-          if (pricedAbove > 0) {
+          );
+          if (pricedAbove.length > 0) {
+            const delta = repairQuantity(movement.quantityDelta);
+            const determined =
+              delta.gt(0) &&
+              movement.unitCost !== null &&
+              movement.unitCost !== undefined &&
+              !posJournalCostIsNotInventoryRate(movement) &&
+              repairQuantity(stateAfter.quantity).minus(delta).isZero();
+            const forwardCost = new Map<number, string>();
+            if (determined) {
+              let forward = applyHistoricalSalesRepairMovement(
+                createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+                movement
+              );
+              const later = movementsInCheckpoint
+                .filter(
+                  (candidate) =>
+                    movementKey(candidate) === key && compareMovementMutationAscending(candidate, movement) > 0
+                )
+                .sort(compareMovementMutationAscending);
+              for (const laterMovement of later) {
+                if (laterMovement.sale) {
+                  forwardCost.set(
+                    laterMovement.sale.salesItemId,
+                    historicalSaleProposalFromState(laterMovement, forward).proposedCostPrice
+                  );
+                }
+                forward = applyHistoricalSalesRepairMovement(forward, laterMovement);
+              }
+            }
+            let agreed = 0;
+            for (const saleMovement of pricedAbove) {
+              const salesItemId = saleMovement.sale!.salesItemId;
+              const rewound = proposalsBySaleId.get(salesItemId)!.proposedCostPrice;
+              const forward = forwardCost.get(salesItemId);
+              if (forward !== undefined && forward === rewound) {
+                agreed += 1;
+                continue;
+              }
+              checks.push({
+                companyId,
+                locationId: saleMovement.locationId,
+                stockItemId: saleMovement.stockItemId,
+                salesItemId,
+                code: "CHECKPOINT_REWIND_CONTRADICTED_BELOW",
+                status: "block",
+                expected: rewound,
+                actual: forward ?? "undetermined",
+                detail: `Sales item ${salesItemId} was rewound from a state contradicted by ${movement.movementId} (${
+                  determined ? "forward replay from the empty-stock receipt disagrees" : "no fully determined state below"
+                })`,
+              });
+            }
             checks.push({
               companyId,
               locationId: movement.locationId,
               stockItemId: movement.stockItemId,
-              code: "REWIND_CONTRADICTION_ABOVE_PROPOSALS",
+              code: "REWIND_CONTRADICTION_TWO_SIDED",
               status: "warning",
-              actual: String(pricedAbove),
-              detail: `${pricedAbove} legacy sale proposals above impossible inverse ${movement.movementId} came from the contradicted rewind`,
+              expected: String(pricedAbove.length),
+              actual: String(agreed),
+              detail: `${agreed} of ${pricedAbove.length} legacy sales above impossible inverse ${movement.movementId} have the same cost from the checkpoint rewind and from ${
+                determined ? "a forward replay of the empty-stock receipt" : "no independent forward state"
+              }`,
             });
           }
         }

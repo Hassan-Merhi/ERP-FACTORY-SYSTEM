@@ -8,7 +8,9 @@ import {
 } from "../server/services/inventory/historicalSalesCostRepair";
 import {
   canonicalPosRoleFromIdempotencyKey,
+  collapsedPosIssueGroup,
   createHistoricalInventoryStateFromSnapshot,
+  reverseCollapsedPosIssueGroup,
   reverseHistoricalSalesRepairMovement,
   type HistoricalSalesRepairMovement,
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
@@ -121,5 +123,37 @@ describe("V41 dropped POS line restoration", () => {
     expect(reversed.stateBefore.quantity.toFixed(3)).toBe("11.000");
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("167.52");
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1842.72");
+  });
+
+  it("inverts an original issue jointly with its restored line and pins the recorded live rate", () => {
+    // Production voucher 13581 at 1/135/730: journaled 2 @ 168.82, a 3-unit
+    // line dropped; the rewound state after the sale is 1 @ 168.81.
+    const original = canonicalPos(25305, "pos-sale:13581:rev0:730", "-2.000000", "168.820000", "2026-09-07T14:27:31.246Z");
+    const dropped = droppedPosLineMovements(1, [original], [saleLine(99052, 13581, "2"), saleLine(99053, 13581, "3")])
+      .movements[0];
+    const group = collapsedPosIssueGroup([dropped, original], dropped);
+    expect(group.map((movement) => movement.movementId)).toEqual([dropped.movementId, original.movementId]);
+
+    const solutions = reverseCollapsedPosIssueGroup(
+      createHistoricalInventoryStateFromSnapshot("1", "168.81", "168.81"),
+      group,
+      10
+    );
+    // Generic inversion of the dropped line alone picks 168.81 and then
+    // contradicts the recorded 168.82; every joint solution starts at 168.82.
+    expect(solutions.length).toBeGreaterThan(1);
+    for (const solution of solutions) {
+      expect(solution[1].quantity.toFixed(3)).toBe("6.000");
+      expect(solution[1].averageRate.toFixed(2)).toBe("168.82");
+    }
+    expect(solutions.map((solution) => solution[1].totalValue.toFixed(2))).toContain("1012.91");
+  });
+
+  it("finds no joint inverse when no chain reaches the recorded rate", () => {
+    const original = canonicalPos(1, "pos-sale:5:rev0:730", "-1.000000", "20.000000", "2026-08-20T10:00:00Z");
+    const dropped = droppedPosLineMovements(1, [original], [saleLine(1, 5, "1"), saleLine(2, 5, "1")]).movements[0];
+    expect(
+      reverseCollapsedPosIssueGroup(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"), [dropped, original])
+    ).toEqual([]);
   });
 });

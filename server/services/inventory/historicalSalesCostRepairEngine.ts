@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v42-dropped-lines-in-checkpoint-rewind";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v44-joint-pos-line-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -1708,10 +1708,25 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
     let sensitivity = quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1);
     const outcome: Outcome = { proposals: new Map(), sensitivity: new Map(), stoppedAt: null };
     let survived = true;
+    const forced = new Map<string, HistoricalInventoryState>();
     for (const movement of input.earlierMovementsDescending) {
-      const reversed = reverseHistoricalSalesRepairMovement(state, movement, {
-        priorCostMemoryRate: input.priorCostMemoryRateHints?.get(movement.movementId) ?? null,
-      });
+      if (movement.canonicalPosRole === "dropped-line" && !forced.has(movement.movementId)) {
+        const group = collapsedPosIssueGroup(input.earlierMovementsDescending, movement);
+        const solutions = reverseCollapsedPosIssueGroup(state, group);
+        if (solutions.length === 1) {
+          solutions[0].forEach((groupState, index) => forced.set(group[index].movementId, groupState));
+        } else if (solutions.length > 1) {
+          // Not unique inside a candidate rewind: this candidate proves nothing.
+          survived = false;
+          break;
+        }
+      }
+      const forcedState = forced.get(movement.movementId);
+      const reversed: HistoricalInventoryReverseResult = forcedState
+        ? { reversible: true, stateBefore: forcedState }
+        : reverseHistoricalSalesRepairMovement(state, movement, {
+            priorCostMemoryRate: input.priorCostMemoryRateHints?.get(movement.movementId) ?? null,
+          });
       if (!reversed.reversible) {
         if (reversed.reason === "COST_MEMORY_IRREVERSIBLE") outcome.stoppedAt = movement.movementId;
         else survived = false;
@@ -1764,4 +1779,84 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
     sensitivity,
     stoppedAt: proven ? outcomes[0].stoppedAt : null,
   };
+}
+
+/**
+ * Jointly invert an original POS issue and its restored dropped lines (V44).
+ *
+ * Each dropped line was issued at the live rate left by the line before it,
+ * so inverting a line alone can have two self-consistent pre-states a cent
+ * apart. The journaled first line records the live rate before the whole
+ * sale, which pins the chain: every combination of dropped-line pre-rates
+ * (within ten cents of the after-state rate) is tried, and the inverse is
+ * accepted only when exactly one combination replays every line exactly and
+ * lands on a pre-sale state whose stored rate equals the recorded rate.
+ *
+ * `groupDescending` is newest first: the dropped lines, then the original.
+ * Returns every solution (the state before each movement, in the same
+ * order), capped at `maxSolutions`; an empty list when none exists.
+ */
+export function reverseCollapsedPosIssueGroup(
+  stateAfterInput: HistoricalInventoryState,
+  groupDescending: HistoricalSalesRepairMovement[],
+  maxSolutions = 2
+): HistoricalInventoryState[][] {
+  const original = groupDescending[groupDescending.length - 1];
+  if (!original || !isRecordedLiveRateObservation(original)) return [];
+  const recorded = repairRate(original.unitCost!);
+  const dropped = groupDescending.slice(0, -1);
+  if (dropped.length === 0 || dropped.some((movement) => movement.canonicalPosRole !== "dropped-line")) return [];
+
+  const solutions: HistoricalInventoryState[][] = [];
+  const search = (state: HistoricalInventoryState, index: number, path: HistoricalInventoryState[]) => {
+    if (solutions.length >= maxSolutions) return;
+    if (index === dropped.length) {
+      const quantity = repairQuantity(original.quantityDelta).abs();
+      const before = rawHistoricalInventoryState(
+        repairQuantity(state.quantity.plus(quantity)),
+        recorded,
+        repairMoney(state.totalValue.plus(quantity.times(recorded)))
+      );
+      if (!historicalStateRateMatchesValue(before)) return;
+      if (!statesEqual(applyHistoricalSalesRepairMovement(before, original), state)) return;
+      solutions.push([...path, before]);
+      return;
+    }
+    const movement = dropped[index];
+    const quantity = repairQuantity(movement.quantityDelta).abs();
+    const center = repairRate(state.averageRate);
+    for (let cents = -10; cents <= 10; cents += 1) {
+      const rate = repairRate(center.plus(new Decimal(cents).dividedBy(100)));
+      if (rate.lt(ZERO)) continue;
+      const before = rawHistoricalInventoryState(
+        repairQuantity(state.quantity.plus(quantity)),
+        rate,
+        repairMoney(state.totalValue.plus(quantity.times(rate)))
+      );
+      if (!historicalStateRateMatchesValue(before)) continue;
+      if (!statesEqual(applyHistoricalSalesRepairMovement(before, movement), state)) continue;
+      search(before, index + 1, [...path, before]);
+    }
+  };
+  search(
+    rawHistoricalInventoryState(stateAfterInput.quantity, stateAfterInput.averageRate, stateAfterInput.totalValue),
+    0,
+    []
+  );
+  return solutions;
+}
+
+/** The restored dropped lines and their original issue, newest first, from a newest-first list. */
+export function collapsedPosIssueGroup(
+  movementsDescending: HistoricalSalesRepairMovement[],
+  dropped: HistoricalSalesRepairMovement
+): HistoricalSalesRepairMovement[] {
+  const originalId = dropped.movementId.split(":")[1];
+  const key = `${dropped.companyId}:${dropped.locationId}:${dropped.stockItemId}`;
+  return movementsDescending.filter(
+    (movement) =>
+      `${movement.companyId}:${movement.locationId}:${movement.stockItemId}` === key &&
+      (movement.movementId === `canonical:${originalId}` ||
+        movement.movementId.startsWith(`canonical-dropped-line:${originalId}:`))
+  );
 }
