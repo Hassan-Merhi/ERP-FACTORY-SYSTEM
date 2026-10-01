@@ -7,7 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
@@ -16,6 +16,7 @@ import { triggerAccountWhatsAppStatement } from "../factoryWhatsappRoutes";
 import {
   erpPayrollRunItems,
   erpPayrollRuns,
+  factoryWorkerDeductions,
   salaryAdvanceDeductions,
   salaryAdvances,
   voucherEntries,
@@ -46,6 +47,7 @@ export function registerPayrollRunRoutes(app: Express) {
           groupName: it.groupName || null,
           baseSalary: parseFloat(it.baseSalary).toFixed(2),
           deduction: parseFloat(it.deduction || 0).toFixed(2),
+          payrollDeduction: parseFloat(it.payrollDeduction || 0).toFixed(2),
           netPay: parseFloat(it.netPay).toFixed(2),
         }))
       );
@@ -120,6 +122,41 @@ export function registerPayrollRunRoutes(app: Express) {
         const runItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));
         const totalAmount = runItems.reduce((s, i) => s + parseFloat(i.netPay), 0);
         if (totalAmount <= 0) return res.status(400).json({ message: "Total net pay must be > 0" });
+
+        // Resolve the exact pending worker-deduction records represented by this draft.
+        // We validate before creating the payment voucher so stale/deleted deductions
+        // cannot silently make the paid payroll disagree with the saved preview.
+        const payrollDeductionIdsByEmployee = new Map<number, number[]>();
+        for (const item of runItems) {
+          const target = parseFloat(item.payrollDeduction || "0");
+          if (target <= 0 || !item.employeeId) continue;
+
+          const pending = await db
+            .select()
+            .from(factoryWorkerDeductions)
+            .where(
+              and(
+                eq(factoryWorkerDeductions.companyId, companyId),
+                eq(factoryWorkerDeductions.workerId, item.employeeId),
+                eq(factoryWorkerDeductions.applied, false)
+              )
+            )
+            .orderBy(factoryWorkerDeductions.createdAt, factoryWorkerDeductions.id);
+
+          let accumulated = 0;
+          const ids: number[] = [];
+          for (const ded of pending) {
+            if (accumulated >= target - 0.005) break;
+            accumulated += parseFloat(ded.amount || "0");
+            ids.push(ded.id);
+          }
+          if (Math.abs(accumulated - target) > 0.005) {
+            return res.status(409).json({
+              message: `Pending payroll deductions changed for ${item.employeeName}. Refresh the payroll preview and try again.`,
+            });
+          }
+          payrollDeductionIdsByEmployee.set(item.employeeId, ids);
+        }
 
         const allAccounts = await storage.getAllLedgerAccounts(companyId);
 
@@ -229,6 +266,21 @@ export function registerPayrollRunRoutes(app: Express) {
           }
         }
 
+        // Mark one-time worker deductions as paid/applied by this ERP payroll run.
+        for (const [employeeId, deductionIds] of payrollDeductionIdsByEmployee) {
+          if (deductionIds.length === 0) continue;
+          await db
+            .update(factoryWorkerDeductions)
+            .set({ applied: true, erpPayrollRunId: runId })
+            .where(
+              and(
+                eq(factoryWorkerDeductions.companyId, companyId),
+                eq(factoryWorkerDeductions.workerId, employeeId),
+                inArray(factoryWorkerDeductions.id, deductionIds)
+              )
+            );
+        }
+
         // WhatsApp auto-statement trigger (non-fatal) — uses the same per-account
         // rule configured in Accounts → WhatsApp settings
         let waResult: { sent: boolean; error?: string } = { sent: false };
@@ -265,6 +317,7 @@ export function registerPayrollRunRoutes(app: Express) {
               groupName: it.groupName || null,
               baseSalary: parseFloat(it.baseSalary).toFixed(2),
               deduction: parseFloat(it.deduction || 0).toFixed(2),
+              payrollDeduction: parseFloat(it.payrollDeduction || 0).toFixed(2),
               netPay: parseFloat(it.netPay).toFixed(2),
             }))
           );
