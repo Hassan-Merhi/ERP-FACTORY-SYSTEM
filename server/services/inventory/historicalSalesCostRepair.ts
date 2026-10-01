@@ -4888,6 +4888,112 @@ async function dryRunCompany(
         }
         index = closedAt + 1;
       }
+
+      // V51: the open era before the canonical journal. From the last priced
+      // receipt into exactly empty stock before the first recorded live rate,
+      // a forward replay is exact if the movement model is; it is accepted
+      // only when it reproduces the first two recorded live rates exactly
+      // (observation-validated era), and then prices the legacy sales before
+      // the first observation, replacing their rewind-failure blocks.
+      const observationIndexes = movements
+        .map((movement, position) => (isRecordedLiveRateObservation(movement) ? position : -1))
+        .filter((position) => position >= 0);
+      if (observationIndexes.length >= 2) {
+        const firstObservation = observationIndexes[0];
+        let start = -1;
+        for (let position = firstObservation - 1; position >= 0; position -= 1) {
+          const candidate = movements[position];
+          const candidatePriced =
+            (candidate.exactValue !== null && candidate.exactValue !== undefined) ||
+            (candidate.unitCost !== null &&
+              candidate.unitCost !== undefined &&
+              !posJournalCostIsNotInventoryRate(candidate));
+          if (
+            repairQuantity(candidate.quantityDelta).gt(0) &&
+            candidatePriced &&
+            quantityBefore[position].isZero() &&
+            !isExactValuationReset(candidate)
+          ) {
+            start = position;
+            break;
+          }
+        }
+        if (start >= 0) {
+          let state = applyHistoricalSalesRepairMovement(
+            createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+            movements[start]
+          );
+          const openProposals: HistoricalSalesRepairProposal[] = [];
+          let matched = 0;
+          let failed = false;
+          for (let cursor = start + 1; cursor < movements.length && matched < 2; cursor += 1) {
+            const movement = movements[cursor];
+            if (isRecordedLiveRateObservation(movement)) {
+              if (!repairRate(movement.unitCost!).eq(repairRate(state.averageRate))) {
+                failed = true;
+                break;
+              }
+              matched += 1;
+            } else if (movement.sale && cursor < firstObservation) {
+              openProposals.push(historicalSaleProposalFromState(movement, state));
+            }
+            state = applyHistoricalSalesRepairMovement(state, movement);
+            if (state.quantity.lt(0)) {
+              failed = true;
+              break;
+            }
+          }
+          if (!failed && matched === 2 && openProposals.length > 0) {
+            let proven = 0;
+            let conflicts = 0;
+            for (const proposal of openProposals) {
+              const blocks = (blockedSaleCodes.get(proposal.salesItemId) ?? []).filter(
+                (block) => block.status === "block"
+              );
+              const existing = proposalsBySaleId.get(proposal.salesItemId);
+              if (blocks.length === 0) {
+                if (existing && existing.proposedCostPrice !== proposal.proposedCostPrice) {
+                  conflicts += 1;
+                  checks.push({
+                    companyId,
+                    locationId: proposal.locationId,
+                    stockItemId: proposal.stockItemId,
+                    salesItemId: proposal.salesItemId,
+                    code: "OBSERVED_ERA_FORWARD_DISAGREES",
+                    status: "block",
+                    expected: proposal.proposedCostPrice,
+                    actual: existing.proposedCostPrice,
+                    detail: `Sales item ${proposal.salesItemId}: the observation-validated era from ${movements[start].movementId} gives a different cost than the checkpoint rewind`,
+                  });
+                }
+                continue;
+              }
+              if (!blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) continue;
+              for (const block of blocks) {
+                block.status = "warning";
+                block.detail = `${block.detail ?? ""} (superseded: observation-validated era ${movements[start].movementId}..${movements[firstObservation].movementId})`;
+              }
+              proposalsBySaleId.set(proposal.salesItemId, proposal);
+              closedEraProvenSaleIds.add(proposal.salesItemId);
+              proven += 1;
+            }
+            eraProvenSales += proven;
+            eraConflictSales += conflicts;
+            if (proven > 0 || conflicts > 0) {
+              checks.push({
+                companyId,
+                locationId: movements[start].locationId,
+                stockItemId: movements[start].stockItemId,
+                code: "OBSERVED_ERA_FORWARD_PROVEN",
+                status: "pass",
+                expected: String(openProposals.length),
+                actual: String(proven),
+                detail: `Era from ${movements[start].movementId} (priced receipt into empty stock) replays exactly to the recorded live rates at ${movements[observationIndexes[0]].movementId} and ${movements[observationIndexes[1]].movementId}; ${proven} blocked sale(s) priced, ${conflicts} conflict(s)`,
+              });
+            }
+          }
+        }
+      }
     }
     checks.push({
       companyId,
