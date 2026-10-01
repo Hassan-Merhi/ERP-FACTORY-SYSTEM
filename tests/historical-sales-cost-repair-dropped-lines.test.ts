@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("../server/db", () => ({ pool: {}, db: {} }));
 
 import {
+  activeCanonicalSaleEvidence,
   canonicalMovementNumericId,
   droppedPosLineMovements,
 } from "../server/services/inventory/historicalSalesCostRepair";
@@ -155,5 +156,17 @@ describe("V41 dropped POS line restoration", () => {
     expect(
       reverseCollapsedPosIssueGroup(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"), [dropped, original])
     ).toEqual([]);
+  });
+
+  it("prices a canonical sale from its journaled lines only, not diluted by restored lines", () => {
+    // Regression for runs #49-#52: the restored line counted in the quantity
+    // but not in the value, so 2 @ 168.82 + 3 restored priced at 67.53.
+    const original = canonicalPos(25305, "pos-sale:13581:rev0:730", "-2.000000", "168.820000", "2026-09-07T14:27:31.246Z");
+    const dropped = droppedPosLineMovements(1, [original], [saleLine(99052, 13581, "2"), saleLine(99053, 13581, "3")])
+      .movements;
+    const evidence = activeCanonicalSaleEvidence([original, ...dropped]).get("13581:135:730")!;
+    expect(evidence.latestNegativeRate?.toFixed(2)).toBe("168.82");
+    expect(evidence.latestNegativeQuantity.toFixed(3)).toBe("5.000");
+    expect(evidence.totalSignedQuantity.toFixed(3)).toBe("-5.000");
   });
 });
