@@ -1555,6 +1555,7 @@ function recoverHistoricalMergedSales(input: {
         if (
           movement.evidence === "canonical" &&
           CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+          !posJournalCostIsNotInventoryRate(movement) &&
           d(movement.quantityDelta).lt(0) &&
           movement.unitCost !== null &&
           !repairRate(movement.unitCost).eq(repairRate(reversed.stateBefore.averageRate))
@@ -3575,9 +3576,13 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         });
       }
 
+      // V33: only an original POS sale issue journals the locked live rate. An
+      // edit re-issue journals the preserved old sale-line cost, so it is not
+      // evidence about the inventory rate and must not be compared with it.
       if (
         movement.evidence === "canonical" &&
         CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+        !posJournalCostIsNotInventoryRate(movement) &&
         d(movement.quantityDelta).lt(0)
       ) {
         const recorded = repairRate(movement.unitCost ?? "0");
