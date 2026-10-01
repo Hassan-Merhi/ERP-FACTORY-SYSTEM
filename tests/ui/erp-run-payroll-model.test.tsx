@@ -39,6 +39,7 @@ const employees = [
 ];
 const workerGroups = [
   { id: 10, name: "Production", groupType: "Worker", members: [{ id: 1 }] },
+  { id: 12, name: "Backup Crew", groupType: "Worker", members: [{ id: 1 }] },
   { id: 11, name: "Supervisors", groupType: "Supervisor", members: [{ id: 2 }] },
 ];
 
@@ -143,7 +144,7 @@ describe("ERP payroll model positive paths", () => {
 
     expect(result.current.isDeveloper).toBe(true);
     expect(result.current.workers.map((worker) => worker.id)).toEqual([1, 2]);
-    expect(result.current.workerGroups.map((group) => group.id)).toEqual([10]);
+    expect(result.current.workerGroups.map((group) => group.id)).toEqual([10, 12]);
     expect(result.current.ungroupedWorkers.map((worker) => worker.id)).toEqual([2]);
     expect(result.current.advanceBalanceByEmployee).toEqual({ 1: 250 });
     expect(result.current.cashAccounts).toHaveLength(1);
@@ -155,6 +156,7 @@ describe("ERP payroll model positive paths", () => {
 
     act(() => result.current.enterPreview());
     expect(result.current.step).toBe(2);
+    expect(result.current.previewItems).toHaveLength(2);
     expect(result.current.previewItems).toEqual([
       expect.objectContaining({
         employeeId: 1,

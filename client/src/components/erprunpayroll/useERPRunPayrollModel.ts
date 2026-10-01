@@ -199,9 +199,13 @@ export function useERPRunPayrollModel() {
 
   function enterPreview() {
     const items: PreviewItem[] = [];
+    // A worker can belong to more than one worker group. Payroll is per employee,
+    // so never add the same employee twice just because they have multiple memberships.
+    const addedEmployeeIds = new Set<number>();
     function addGroup(label: string, memberIds: number[]) {
       for (const id of memberIds) {
-        if (!selectedWorkers.has(id) || !workerById[id]) continue;
+        if (!selectedWorkers.has(id) || !workerById[id] || addedEmployeeIds.has(id)) continue;
+        addedEmployeeIds.add(id);
         const w = workerById[id];
         const salary = parseFloat(w.monthlySalary || "0");
         const deduction = Math.min(advanceBalanceByEmployee[id] || 0, salary);
