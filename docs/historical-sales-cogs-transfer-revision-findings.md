@@ -196,3 +196,57 @@ different pre-sale rate. A forward replay of sampled keys shows two causes.
    - The same writers above mean that undetected revaluations before canonical
      journaling (2026-08-15) can exist anywhere. The V32 evidenced-rate range
      and V35 amplification guards are the safety net for those.
+
+## Direct-revaluation writer inventory (2026-10-01)
+
+Code paths, current and deleted, that rewrite `inventory.average_rate` / `total_value`
+without a stock movement:
+
+| Writer | Effect | Persisted evidence before V38 |
+|---|---|---|
+| `updateCostPricesByBarcode` (`POST /api/locations/:id/import-cost-prices`) | rate = imported price (2dp), value = qty × price | none |
+| `updateInventory` (direct location import) | quantity journaled only; rate/value overwritten | quantity row only |
+| `applyInventoryRateDeltaAndSync` (offload charge edit `PATCH /api/containers/:id/offload`) | rate += per-bale delta, value = qty × rate; container vouchers deleted | none |
+| `syncSalesItemCostsForStockItems` | stamps every historical `sales_items.cost_price` at the key with today's rate | none (this is the corruption being repaired) |
+| `POST /api/admin/repair-inventory-values` | zero/negative rows: rate and value set to 0 (erases cost memory) | log line only |
+| `POST /api/admin/rebuild-inventory` | quantity and value rebuilt from vouchers | none |
+| `POST /api/admin/fix-sales-inventory` | negative quantities set to 0 | none |
+
+Since V38, the two import writers record `inventory_valuation_overrides`. Render
+request logs keep 30 days, which doesn't reach the 2026-09-01 company 10 rewrites. So
+those rewrites can be crossed only through recorded live rates: the V39/V41 re-anchor.
+
+## Dropped POS lines (V41)
+
+From 2026-08-13 (`123d9eedc`) to 2026-09-26 (`2e4d483fa`), the original POS issue
+key was `pos-sale:V:rev0:ITEM`, with no line suffix. When a sale had two lines of the
+same item, the second line's journal insert collided with the first line's key. The
+journal kept only the first line, but inventory was deducted for every line. In
+production, all 812 unedited multi-line sales journal exactly the first line's
+quantity, and none journal the total. Edit legs gained `:line:` suffixes on
+2026-09-09.
+
+The lifecycle correction added the missing quantity at the voucher's *latest*
+mutation, which overstated stock between the sale and that mutation. Of the 315
+`CANONICAL_SALE_COST_EVIDENCE_MISMATCH` groups in run #48, 191 (9,719 rows) carry
+such a correction. Example: company 1/135/730, voucher 12782 (lines of 1 + 2, journaled
+−1, corrected −2 on 09-10). That correction put 3 units ahead of canonical sale 30043
+instead of 1.
+
+V41 restores dropped lines at the original issue instant, as unpriced live-rate
+issues, only where the original lines are proven. That means (a) the voucher was never
+edited or deleted, so the current lines are the original lines, or (b) the first edit
+of the voucher/item journals line-level reversal legs. In both cases the journaled
+quantity must equal the first line. Vouchers first edited before 2026-09-09 keep the
+previous behaviour, because their original lines are unknown.
+
+## Valuation eras (V41)
+
+A priced receipt into zero or negative stock, or a pinned valuation reset, erases cost
+memory. Above such a boundary the checkpoint holds no information about the earlier
+rate. When the checkpoint rewind then reaches an original canonical sale whose recorded
+live rate disagrees, V41 re-anchors at that sale, using the V39 unique-value proof. It
+does not block outright. Disagreements without such a boundary or an unrecorded
+revaluation stay blocked. A priced receipt into exactly empty stock now also has to
+reproduce the rewound after-state, so a contradiction there is reported as an invalid
+inverse, not as missing cost memory.

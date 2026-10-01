@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v40-rewind-timeline-diagnostics";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v41-dropped-pos-lines-era-anchors";
 
 const ZERO = new Decimal(0);
 
@@ -74,6 +74,7 @@ export type HistoricalSalesRepairMovement = {
    * production restored stock at the live stored rate.
    */
   canonicalPosRole?: CanonicalPosRole;
+  idempotencyKey?: string | null;
   sale?: {
     salesItemId: number;
     voucherId: number;
@@ -91,7 +92,7 @@ const EXACT_VALUATION_RESET_SOURCE_TYPES = new Set([
 ]);
 
 /** A recorded exact before/after valuation reset (Wave 6, or a stage-031 override). */
-function isExactValuationReset(
+export function isExactValuationReset(
   movement: HistoricalSalesRepairMovement
 ): movement is HistoricalSalesRepairMovement & {
   valuationReset: NonNullable<HistoricalSalesRepairMovement["valuationReset"]>;
@@ -99,7 +100,14 @@ function isExactValuationReset(
   return EXACT_VALUATION_RESET_SOURCE_TYPES.has(movement.sourceType) && Boolean(movement.valuationReset);
 }
 
-export type CanonicalPosRole = "sale-issue" | "edit-issue" | "edit-reversal";
+/**
+ * "dropped-line": a POS sale line that production issued at the live stored
+ * rate but whose journal row was lost. From 2026-08-13 to 2026-09-26 the
+ * original issue key was per stock item (pos-sale:V:rev0:ITEM), so a second
+ * line of the same item collided and only the first line was journaled.
+ * These rows are reconstructed by the dry-run, never loaded.
+ */
+export type CanonicalPosRole = "sale-issue" | "edit-issue" | "edit-reversal" | "dropped-line";
 
 export function canonicalPosRoleFromIdempotencyKey(
   sourceType: string,
@@ -107,6 +115,8 @@ export function canonicalPosRoleFromIdempotencyKey(
 ): CanonicalPosRole | undefined {
   if (sourceType !== "pos-sale") return undefined;
   const key = idempotencyKey ?? "";
+  // From 2026-09-26 the original issue carries an issue:...:line: suffix too.
+  if (/^pos-sale:\d+:rev0:issue:/.test(key)) return "sale-issue";
   if (/^pos-sale:\d+:rev\d+:reverse:/.test(key)) return "edit-reversal";
   if (/^pos-sale:\d+:rev\d+:issue:/.test(key)) return "edit-issue";
   return "sale-issue";
@@ -116,7 +126,9 @@ export function canonicalPosRoleFromIdempotencyKey(
 export function posJournalCostIsNotInventoryRate(movement: HistoricalSalesRepairMovement): boolean {
   return (
     movement.sourceType === "pos-sale" &&
-    (movement.canonicalPosRole === "edit-issue" || movement.canonicalPosRole === "edit-reversal")
+    (movement.canonicalPosRole === "edit-issue" ||
+      movement.canonicalPosRole === "edit-reversal" ||
+      movement.canonicalPosRole === "dropped-line")
   );
 }
 
@@ -793,7 +805,8 @@ function canonicalRateOnlyRecovery(
   } else if (
     delta.lt(ZERO) &&
     (movement.sourceType === "stock-transfer" ||
-      (movement.sourceType === "pos-sale" && movement.canonicalPosRole === "edit-issue"))
+      (movement.sourceType === "pos-sale" &&
+        (movement.canonicalPosRole === "edit-issue" || movement.canonicalPosRole === "dropped-line")))
   ) {
     // A POS edit re-issue also consumed the live stored rate while journaling
     // the preserved old line cost, so it uses the same unique source-rate search.
@@ -1120,6 +1133,16 @@ export function reverseHistoricalInventoryMovement(
         }
         return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
       }
+      // V41: into exactly empty stock the receipt alone sets quantity, value
+      // and rate, whatever the erased cost memory was. A rewound state that
+      // disagrees proves the model above this point wrong.
+      if (previousQty.isZero()) {
+        const replayed = applyHistoricalInventoryMovement(
+          createHistoricalInventoryStateFromSnapshot(ZERO, ZERO, ZERO),
+          { quantityDelta: delta, unitCost: input.unitCost }
+        );
+        if (!statesEqualQuantityAndValue(replayed, stateAfter)) return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+      }
       return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
     }
 
@@ -1306,6 +1329,17 @@ export function reverseHistoricalSalesRepairMovement(
         : { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
     }
 
+    // V41: an exact-value offload into exactly empty stock fixes the after
+    // state independently of the erased cost memory.
+    if (
+      previousQty.isZero() &&
+      !statesEqualQuantityAndValue(
+        applyHistoricalSalesRepairMovement(rawHistoricalInventoryState(ZERO, ZERO, ZERO), movement),
+        stateAfter
+      )
+    ) {
+      return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+    }
     return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
   }
 
@@ -1584,4 +1618,150 @@ export function replayHistoricalSalesCosts(input: {
   }
 
   return { proposals, closingStates: states };
+}
+
+/**
+ * True for a canonical original sale issue: its unit cost is the locked live
+ * inventory rate at the moment of the sale, a persisted observation of the
+ * stored average rate. Edit legs journal the old line cost and are excluded.
+ */
+export function isRecordedLiveRateObservation(movement: HistoricalSalesRepairMovement): boolean {
+  return (
+    movement.evidence === "canonical" &&
+    (movement.sourceType === "pos-sale" ||
+      movement.sourceType === "pos-import" ||
+      movement.sourceType === "credit-sales-import") &&
+    !posJournalCostIsNotInventoryRate(movement) &&
+    decimal(movement.quantityDelta, "quantity delta").lt(0) &&
+    movement.unitCost !== null &&
+    movement.unitCost !== undefined
+  );
+}
+
+export type HistoricalReanchorResult = {
+  status: "proven" | "ambiguous" | "too-wide";
+  candidateCount: number;
+  survivorCount: number;
+  distinctOutcomeCount: number;
+  /** Reconstructed cost for each target sale reached by every survivor. */
+  proposals: Map<number, HistoricalSalesRepairProposal>;
+  /** Worst rewind amplification per target sale across all survivors. */
+  sensitivity: Map<number, Decimal>;
+  /** Movement where every survivor stopped at irreversible cost memory. */
+  stoppedAt: string | null;
+};
+
+/**
+ * Re-anchor a checkpoint rewind at a canonical original sale issue (V39/V41).
+ *
+ * At the anchor the locked live rate is journaled and the quantity is exact,
+ * only the value is unknown: every 2dp value whose stored rate equals the
+ * recorded rate is a candidate. Each candidate is rewound independently
+ * through the earlier movements (newest first) and must survive every inverse
+ * and agree with every earlier recorded live sale rate. The result is proven
+ * only when at least one candidate survives and all survivors agree exactly on
+ * every reconstructed target sale cost and on where the rewind stops, so the
+ * unknown value cannot change any proposal.
+ */
+export function reanchorHistoricalRewindAtRecordedRate(input: {
+  anchorQuantity: Decimal.Value;
+  recordedRate: Decimal.Value;
+  earlierMovementsDescending: HistoricalSalesRepairMovement[];
+  targetSaleIds: Set<number>;
+  priorCostMemoryRateHints?: Map<string, Decimal.Value>;
+  maxCandidates?: number;
+}): HistoricalReanchorResult {
+  const quantity = repairQuantity(input.anchorQuantity);
+  const recorded = repairRate(input.recordedRate);
+  const maxCandidates = new Decimal(input.maxCandidates ?? 20000);
+  const candidates: HistoricalInventoryState[] = [];
+  if (!quantity.gt(0)) {
+    candidates.push(createHistoricalInventoryStateFromSnapshot(quantity, recorded, "0"));
+  } else {
+    const lowCents = quantity.times(recorded.minus("0.006")).times(100).floor();
+    const highCents = quantity.times(recorded.plus("0.006")).times(100).ceil();
+    if (highCents.minus(lowCents).gt(maxCandidates)) {
+      return {
+        status: "too-wide",
+        candidateCount: highCents.minus(lowCents).toNumber(),
+        survivorCount: 0,
+        distinctOutcomeCount: 0,
+        proposals: new Map(),
+        sensitivity: new Map(),
+        stoppedAt: null,
+      };
+    }
+    for (let cents = lowCents; cents.lte(highCents); cents = cents.plus(1)) {
+      const candidate = { quantity, averageRate: recorded, totalValue: repairMoney(cents.dividedBy(100)) };
+      if (historicalStateRateMatchesValue(candidate)) candidates.push(candidate);
+    }
+  }
+
+  type Outcome = {
+    proposals: Map<number, HistoricalSalesRepairProposal>;
+    sensitivity: Map<number, Decimal>;
+    stoppedAt: string | null;
+  };
+  const outcomes: Outcome[] = [];
+  for (const start of candidates) {
+    let state = start;
+    let sensitivity = quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1);
+    const outcome: Outcome = { proposals: new Map(), sensitivity: new Map(), stoppedAt: null };
+    let survived = true;
+    for (const movement of input.earlierMovementsDescending) {
+      const reversed = reverseHistoricalSalesRepairMovement(state, movement, {
+        priorCostMemoryRate: input.priorCostMemoryRateHints?.get(movement.movementId) ?? null,
+      });
+      if (!reversed.reversible) {
+        if (reversed.reason === "COST_MEMORY_IRREVERSIBLE") outcome.stoppedAt = movement.movementId;
+        else survived = false;
+        break;
+      }
+      if (
+        isRecordedLiveRateObservation(movement) &&
+        !repairRate(movement.unitCost!).eq(repairRate(reversed.stateBefore.averageRate))
+      ) {
+        survived = false;
+        break;
+      }
+      const afterQty = repairQuantity(state.quantity);
+      const beforeQty = repairQuantity(reversed.stateBefore.quantity);
+      if (decimal(movement.quantityDelta, "quantity delta").gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
+        sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
+      }
+      if (movement.sale && input.targetSaleIds.has(movement.sale.salesItemId)) {
+        outcome.proposals.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, reversed.stateBefore));
+        outcome.sensitivity.set(movement.sale.salesItemId, sensitivity);
+      }
+      state = reversed.stateBefore;
+    }
+    if (survived) outcomes.push(outcome);
+  }
+
+  const signature = (outcome: Outcome) =>
+    `${outcome.stoppedAt ?? ""}|` +
+    [...outcome.proposals.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
+      .join(",");
+  const distinct = new Set(outcomes.map(signature));
+  const proven = outcomes.length > 0 && distinct.size === 1 && outcomes[0].proposals.size > 0;
+  const sensitivity = new Map<number, Decimal>();
+  if (proven) {
+    for (const salesItemId of outcomes[0].proposals.keys()) {
+      sensitivity.set(
+        salesItemId,
+        Decimal.max(...outcomes.map((outcome) => outcome.sensitivity.get(salesItemId) ?? new Decimal(0)))
+      );
+    }
+  }
+  return {
+    status: proven ? "proven" : "ambiguous",
+    candidateCount: candidates.length,
+    survivorCount: outcomes.length,
+    distinctOutcomeCount: distinct.size,
+    proposals: proven ? outcomes[0].proposals : new Map(),
+    sensitivity,
+    stoppedAt: proven ? outcomes[0].stoppedAt : null,
+  };
 }
