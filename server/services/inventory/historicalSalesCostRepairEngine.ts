@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v50-strict-unique-legacy-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v51-observation-validated-era";
 
 const ZERO = new Decimal(0);
 
