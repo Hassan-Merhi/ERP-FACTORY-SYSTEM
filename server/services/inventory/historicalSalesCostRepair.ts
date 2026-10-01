@@ -728,7 +728,7 @@ export function droppedPosLineMovements(
   return { movements, checks };
 }
 
-function activeCanonicalSaleEvidence(
+export function activeCanonicalSaleEvidence(
   movements: HistoricalSalesRepairMovement[]
 ): Map<string, CanonicalSaleEvidence> {
   const grouped = new Map<string, HistoricalSalesRepairMovement[]>();
@@ -759,24 +759,27 @@ function activeCanonicalSaleEvidence(
       .sort(compareMovementMutationAscending);
     const latestNegativeRates = new Set<string>();
     let latestNegativeQuantity = new Decimal(0);
+    let latestNegativePricedQuantity = new Decimal(0);
     let latestNegativeValue = new Decimal(0);
     let hasMissingCost = false;
     for (const movement of latestNegativeMovements) {
       const quantity = d(movement.quantityDelta).abs();
       latestNegativeQuantity = repairQuantity(latestNegativeQuantity.plus(quantity));
       // A reconstructed dropped line has no journaled cost of its own; the
-      // sale's recorded rate comes from the journaled line(s).
+      // sale's recorded rate comes from the journaled line(s) only, so it
+      // counts toward the issued quantity but not toward the rate.
       if (movement.canonicalPosRole === "dropped-line") continue;
       if (movement.unitCost === null || movement.unitCost === undefined) {
         hasMissingCost = true;
         continue;
       }
+      latestNegativePricedQuantity = repairQuantity(latestNegativePricedQuantity.plus(quantity));
       latestNegativeRates.add(repairRate(movement.unitCost).toFixed(2));
       latestNegativeValue = latestNegativeValue.plus(quantity.times(d(movement.unitCost)));
     }
     const latestNegativeRate =
-      !hasMissingCost && latestNegativeQuantity.gt(0)
-        ? repairRate(latestNegativeValue.dividedBy(latestNegativeQuantity))
+      !hasMissingCost && latestNegativePricedQuantity.gt(0)
+        ? repairRate(latestNegativeValue.dividedBy(latestNegativePricedQuantity))
         : null;
 
     let latestPositiveQuantity = new Decimal(0);
@@ -2620,6 +2623,26 @@ async function dryRunCompany(
     const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
     if (canonicalEvidence) {
       if (canonicalEvidence.latestNegativeRate !== null) {
+        // A canonical sale's cost is a quantity-weighted mean of its own
+        // journaled live rates, so it can never leave their range.
+        const recordedRates = [...canonicalEvidence.latestNegativeRates].map((rate) => d(rate));
+        if (
+          recordedRates.length > 0 &&
+          (canonicalEvidence.latestNegativeRate.lt(Decimal.min(...recordedRates)) ||
+            canonicalEvidence.latestNegativeRate.gt(Decimal.max(...recordedRates)))
+        ) {
+          checks.push({
+            companyId,
+            locationId: Number(sale.location_id),
+            stockItemId: Number(sale.stock_item_id),
+            salesItemId: Number(sale.sales_item_id),
+            code: "CANONICAL_SALE_RATE_OUTSIDE_RECORDED",
+            status: "block",
+            expected: [...canonicalEvidence.latestNegativeRates].sort().join(","),
+            actual: canonicalEvidence.latestNegativeRate.toFixed(2),
+            detail: `Sales item ${sale.sales_item_id} proposed rate is outside the voucher's journaled live rates`,
+          });
+        }
         const evidenceMovement =
           canonicalEvidence.latestNegativeMovements[canonicalEvidence.latestNegativeMovements.length - 1] ??
           canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
