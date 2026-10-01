@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v49-merge-contribution-match";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v50-strict-unique-legacy-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -1649,6 +1649,8 @@ export type HistoricalReanchorResult = {
   sensitivity: Map<number, Decimal>;
   /** Movement where every survivor stopped at irreversible cost memory. */
   stoppedAt: string | null;
+  /** Target sales whose own legacy inverse admits another exact pre-sale rate (V50). */
+  notUniqueSaleIds: Set<number>;
 };
 
 /**
@@ -1689,6 +1691,7 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
         proposals: new Map(),
         sensitivity: new Map(),
         stoppedAt: null,
+        notUniqueSaleIds: new Set(),
       };
     }
     for (let cents = lowCents; cents.lte(highCents); cents = cents.plus(1)) {
@@ -1702,6 +1705,7 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
     sensitivity: Map<number, Decimal>;
     stoppedAt: string | null;
   };
+  const notUniqueSaleIds = new Set<number>();
   // V47: each value candidate is rewound as a set of branches. An issue at an
   // unpinned live rate keeps every exact inverse (canonical era only, as in the
   // checkpoint rewind); recorded live rates prune. A candidate whose branches
@@ -1760,6 +1764,14 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
           if (movement.sale && input.targetSaleIds.has(movement.sale.salesItemId)) {
             outcome.proposals.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, before));
             outcome.sensitivity.set(movement.sale.salesItemId, sensitivity);
+            if (
+              movement.evidence !== "canonical" &&
+              historicalIssueInverseCandidates(branch.state, movement).some(
+                (candidate) => !statesEqual(candidate, before)
+              )
+            ) {
+              notUniqueSaleIds.add(movement.sale.salesItemId);
+            }
           }
           next.push({ state: before, sensitivity, outcome });
         }
@@ -1806,6 +1818,7 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
     proposals: proven ? outcomes[0].proposals : new Map(),
     sensitivity,
     stoppedAt: proven ? outcomes[0].stoppedAt : null,
+    notUniqueSaleIds,
   };
 }
 
