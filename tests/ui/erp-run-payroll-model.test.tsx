@@ -39,6 +39,7 @@ const employees = [
 ];
 const workerGroups = [
   { id: 10, name: "Production", groupType: "Worker", members: [{ id: 1 }] },
+  { id: 12, name: "Backup Crew", groupType: "Worker", members: [{ id: 1 }] },
   { id: 11, name: "Supervisors", groupType: "Supervisor", members: [{ id: 2 }] },
 ];
 
@@ -57,7 +58,7 @@ vi.mock("@tanstack/react-query", () => ({
           { id: 3, employeeId: 2, remainingBalance: "100", fullyPaid: true },
         ],
       };
-    if (key === "/api/factory/worker-deductions")
+    if (key === "/api/payroll/worker-deductions")
       return {
         data: [
           { id: 1, workerId: 1, amount: "25", applied: false },
@@ -109,7 +110,8 @@ const payrollRun = {
       groupName: "Production",
       baseSalary: "1000",
       deduction: "250",
-      netPay: "750",
+      payrollDeduction: "30",
+      netPay: "720",
     },
     {
       employeeId: 2,
@@ -117,6 +119,7 @@ const payrollRun = {
       groupName: "Ungrouped",
       baseSalary: "800",
       deduction: "0",
+      payrollDeduction: "0",
       netPay: "800",
     },
   ],
@@ -143,7 +146,7 @@ describe("ERP payroll model positive paths", () => {
 
     expect(result.current.isDeveloper).toBe(true);
     expect(result.current.workers.map((worker) => worker.id)).toEqual([1, 2]);
-    expect(result.current.workerGroups.map((group) => group.id)).toEqual([10]);
+    expect(result.current.workerGroups.map((group) => group.id)).toEqual([10, 12]);
     expect(result.current.ungroupedWorkers.map((worker) => worker.id)).toEqual([2]);
     expect(result.current.advanceBalanceByEmployee).toEqual({ 1: 250 });
     expect(result.current.cashAccounts).toHaveLength(1);
@@ -155,6 +158,7 @@ describe("ERP payroll model positive paths", () => {
 
     act(() => result.current.enterPreview());
     expect(result.current.step).toBe(2);
+    expect(result.current.previewItems).toHaveLength(2);
     expect(result.current.previewItems).toEqual([
       expect.objectContaining({
         employeeId: 1,
@@ -206,7 +210,9 @@ describe("ERP payroll model positive paths", () => {
 
     result.current.printRun(payrollRun as never);
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Worker Salaries"));
-    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,550.00"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,520.00"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Payroll Deduction"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("-USD\u00a030.00"));
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("August payroll"));
     expect(harness.close).toHaveBeenCalledOnce();
 
@@ -226,6 +232,15 @@ describe("ERP payroll model positive paths", () => {
     act(() => result.current.enterPreview());
 
     await expect(saveDraft.mutationFn()).resolves.toEqual({ ok: true });
+    expect(harness.apiRequest).toHaveBeenCalledWith(
+      "POST",
+      "/api/payroll/runs",
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ employeeId: 1, payrollDeduction: "30.00", netPay: "720.00" }),
+        ]),
+      })
+    );
     await expect(payRun.mutationFn({ runId: 70, accountId: "90" })).resolves.toEqual({ ok: true });
     await expect(deleteRun.mutationFn(70)).resolves.toBeUndefined();
     await expect(undoRun.mutationFn(70)).resolves.toBeUndefined();

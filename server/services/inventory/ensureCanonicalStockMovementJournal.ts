@@ -4,6 +4,7 @@ import { logger } from "../../lib/logger";
 import { ensureAccountingPostingRequests } from "../accounting/ensureAccountingPostingRequests";
 
 import { canonicalStockMovementJournal } from "../../startup-schema/021-canonical-stock-movement-journal";
+import { inventoryValuationOverrides } from "../../startup-schema/031-inventory-valuation-overrides";
 
 /**
  * Creates the canonical stock movement journal regardless of migration mode.
@@ -22,7 +23,7 @@ import { canonicalStockMovementJournal } from "../../startup-schema/021-canonica
  * writes without their journal/idempotency protection.
  */
 export async function ensureCanonicalStockMovementJournal(pool: Pool): Promise<void> {
-  for (const statement of canonicalStockMovementJournal) {
+  for (const statement of [...canonicalStockMovementJournal, ...inventoryValuationOverrides]) {
     await pool.query(statement);
   }
   logger.info("[startup] ✓ Canonical stock movement journal ensured");

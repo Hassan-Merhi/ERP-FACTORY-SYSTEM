@@ -572,7 +572,7 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                         <TableCell>
                           {d.applied ? (
                             <Badge variant="default" className="bg-green-600">
-                              Applied
+                              Paid
                             </Badge>
                           ) : (
                             <Badge variant="outline" className="border-amber-500 text-amber-500">

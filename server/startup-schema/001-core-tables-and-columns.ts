@@ -507,8 +507,10 @@ export const coreTablesAndColumns: string[] = [
       group_name text,
       base_salary decimal(18,2) NOT NULL,
       deduction decimal(18,2) NOT NULL DEFAULT 0,
+      payroll_deduction decimal(18,2) NOT NULL DEFAULT 0,
       net_pay decimal(18,2) NOT NULL
     )`,
+  `ALTER TABLE erp_payroll_run_items ADD COLUMN IF NOT EXISTS payroll_deduction decimal(18,2) NOT NULL DEFAULT 0`,
   // Waste Dispatch tables (Mar 2026)
   `CREATE TABLE IF NOT EXISTS waste_dispatches (
       id serial PRIMARY KEY,
