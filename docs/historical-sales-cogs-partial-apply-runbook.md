@@ -10,6 +10,35 @@ The partial apply is a separate, explicitly named path that writes **only**
 rows whose `historical_sales_cost_repair_rows.status = 'ready'`.
 Code: `server/services/inventory/historicalSalesCostPartialApply.ts`.
 
+## Final production state (October 1, 2026)
+
+The partial apply ran once, for dry-run **#62** (algorithm
+`2026-10-01-v54-opening-era-observed-only`), from production commit
+`9357c3a4`. It is recorded as partial-apply record #1 and was applied
+2026-10-01 19:32:55 UTC by `render-startup-env`.
+
+| | Rows |
+|---|---:|
+| Repaired (`ready`, now at proposed values) | 24,670 |
+| Intentionally unresolved (`blocked`, original values kept) | 29,061 |
+| Unchanged | 19,363 |
+
+- Target COGS went from 6,896,724.82 to 6,722,454.65. Target profit went from
+  1,904,681.93 to 2,078,952.06.
+- Independent verification passed. Every repaired row is at its proposed
+  value, and blocked and unchanged rows are untouched. Inventory, vouchers,
+  journal lines, stock movements, containers, transfers, adjustments and
+  valuation history fingerprinted identically before and after.
+- `HISTORICAL_SALES_COST_REPAIR_MODE` is back to `off`, and the one-time approval
+  variables were blanked. A normal deploy builds no dry-run and applies nothing.
+- The 24,670 before/after snapshots stay in
+  `historical_sales_cost_repair_apply_log` (partial_apply_id 1). The rollback
+  below stays available. It needs only run ID 62, the run's audit hash (stored
+  on the run and on record #1), and the rollback confirmation.
+- The 29,061 blocked rows must not be altered without new, independent
+  historical evidence (see the findings document). New dry-runs are refused
+  while record #1 is active.
+
 ## What it writes
 
 | Table | Apply | Rollback |
