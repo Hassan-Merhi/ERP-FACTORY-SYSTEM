@@ -3395,6 +3395,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     // for nine months) amplify a 2-cent drift into 536M/unit. Recorded as a
     // warning to measure before any threshold becomes a blocker.
     const rewindSensitivity = new Map<string, Decimal>();
+    const REWIND_AMPLIFICATION_LIMIT = new Decimal(100);
     const rewindAmplification = new Map<
       string,
       { max: Decimal; maxSalesItemId: number; proposals: number; over10: number; over100: number }
@@ -3659,6 +3660,24 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           over100: 0,
         };
         amplification.proposals += 1;
+        if (sensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
+          // V35: a reconstruction this ill-conditioned is not proven even when
+          // every local inverse replays exactly: one cent of model drift near
+          // the checkpoint moves this sale's cost by more than a dollar.
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            salesItemId: movement.sale.salesItemId,
+            code: "LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED",
+            status: "block",
+            expected: `<=${REWIND_AMPLIFICATION_LIMIT.toFixed(0)}`,
+            actual: sensitivity.toFixed(2),
+            detail: `Sales item ${movement.sale.salesItemId} rewound cost moves ${sensitivity.toFixed(
+              2
+            )} cents per cent of checkpoint-side model error`,
+          });
+        }
         if (sensitivity.gt(10)) amplification.over10 += 1;
         if (sensitivity.gt(100)) amplification.over100 += 1;
         if (sensitivity.gt(amplification.max)) {
