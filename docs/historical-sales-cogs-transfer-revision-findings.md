@@ -325,3 +325,29 @@ The rows carrying the 8,285 canonical mismatches sit in 218 groups:
 The legacy cost-memory, invalid-inverse and rate-hull groups need value evidence from
 before 2026-08-15 that was never recorded: the unrecorded direct revaluation writers
 listed above.
+
+## V50–V54 (2026-10-01)
+
+- **V50, strict proof.** A legacy sale whose own inverse admits more than one exact
+  pre-sale rate is blocked (`LEGACY_SALE_INVERSE_NOT_UNIQUE`). This applies in the
+  checkpoint rewind, the re-anchor and the merged-item source rewind.
+- **V51, observed open era.** From the last priced receipt into empty stock before the
+  first recorded live rate, a forward replay that reproduces the first two recorded
+  rates prices the legacy sales before them. Run #58: 20 eras, 123 sales, 0 conflicts.
+- **V52.** A closed era ends at the sale that takes stock to zero or below.
+- **V53/V54, opening eras (rejected as evidence).** Seeding each location with its
+  checkpoint-implied opening at the pinned item rate disagreed with checkpoint-proven
+  sales 765 times and agreed 78 times in run #60. The "location opened at the item
+  rate" assumption doesn't hold, so these eras are now diagnostic only
+  (`OPENING_ERA_UNVALIDATED`). Opening eras that reproduce two recorded live rates are
+  still used.
+- **Reliability evidence for the forward proofs kept.** In run #60:
+  - receipt-started closed eras (917 eras): 166 overlaps with checkpoint-proven
+    sales, 0 conflicts;
+  - observed eras (20 eras): 47 overlaps, 0 conflicts.
+- **Coverage gap.** Run #59: about 19,800 remaining rewind-failure sales have no
+  receipt into empty stock before them, because stock never ran out after the
+  opening. They need an evidenced per-location opening value, which doesn't exist.
+
+Run #61 (V54): 73,088 rows, 24,670 ready, 19,357 unchanged, 29,061 blocked across
+1,622 groups.
