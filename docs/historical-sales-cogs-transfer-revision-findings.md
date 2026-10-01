@@ -288,3 +288,40 @@ Their V27 proposals were unsafe:
 | other | 532 | 9 | -4,236.22 |
 
 V27's "ready" set was not safe to apply.
+
+## V47–V49 (2026-10-01)
+
+- **rev0 edit legs.** Vouchers created before canonical journaling journal their
+  first edit as `rev0:reverse`/`rev0:issue`. V41 had read those `rev0:issue` legs as
+  original sale issues, which caused false mismatches (voucher 12219, six groups).
+  Lifecycle corrections priced from edit legs (old line cost) are now unpriced
+  live-rate movements.
+- **Closed zero-stock eras.** An era runs from a priced receipt into exactly empty
+  stock until stock is exactly zero again, and a forward replay prices the sales in
+  it. Run #54 used 866 eras to price 4,003 previously blocked sales. In none of them
+  did the era's cost disagree with a sale the checkpoint rewind had already priced.
+  An era is rejected if stock goes negative or a recorded live rate inside it
+  disagrees. The rate hull now blocks era-proven sales only when their own cost is
+  outside the range.
+- **Branching re-anchor and merged item.** The re-anchor and the merged-item kept
+  rewind now branch like the checkpoint rewind. Merged item 228 still ends with 3
+  exact states at the merge, and the zero-opening contribution doesn't single one
+  out, so it stays blocked.
+- **Stability.** Every sale ready in two consecutive runs from #53 to #56 kept
+  exactly the same cost.
+- **Residual legacy ambiguity (not blocked).** 1,521 rewound legacy sales in 831
+  groups also admit another exact pre-issue rate. They are priced on the
+  rate-unchanged inverse. The alternative is 1 cent away for 1,266 of them, 2–5 cents
+  for 240, and 6–10 cents for 15. `LEGACY_SALE_INVERSE_NOT_UNIQUE` warnings list them.
+
+## Remaining blockers after run #56
+
+The rows carrying the 8,285 canonical mismatches sit in 218 groups:
+- 151 groups have no detected transition: unexplained value drift in the canonical
+  era, often a few dollars across large quantities.
+- 67 groups sit below a detected revaluation or cost-memory reset, where the
+  re-anchor isn't unique.
+
+The legacy cost-memory, invalid-inverse and rate-hull groups need value evidence from
+before 2026-08-15 that was never recorded: the unrecorded direct revaluation writers
+listed above.
