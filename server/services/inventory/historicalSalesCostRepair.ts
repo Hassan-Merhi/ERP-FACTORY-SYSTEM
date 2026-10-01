@@ -148,6 +148,7 @@ type CompanyDryRun = {
 };
 
 const QTY_TOLERANCE = new Decimal("0.001");
+const REWIND_TRACE_LIMIT = 160;
 const MONEY_TOLERANCE = new Decimal("0.02");
 const OFFLOAD_EVIDENCE_SOURCE_TYPES = new Set([
   "container-offload",
@@ -236,6 +237,16 @@ async function loadValuationOverrides(
 
 function offloadEvidenceKey(offloadId: string | number, stockItemId: string | number): string {
   return `${String(offloadId)}:${Number(stockItemId)}`;
+}
+
+function traceState(state: HistoricalInventoryState): string {
+  return (
+    repairQuantity(state.quantity).toFixed(3) +
+    "|" +
+    repairRate(state.averageRate).toFixed(2) +
+    "|" +
+    repairMoney(state.totalValue).toFixed(2)
+  );
 }
 
 function hscrError(code: string): Error {
@@ -2013,8 +2024,22 @@ function rateHullBlocks(input: {
   });
 }
 
-async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
+async function dryRunCompany(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date,
+  options: { diagnoseKeys?: Set<string> } = {}
+): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
+  // V40 diagnostics: the checkpoint rewind trace per item/location, newest
+  // first, so a blocked group can be read movement by movement. Read-only.
+  const rewindTrace = new Map<string, string[]>();
+  const traceRewind = (key: string, line: string) => {
+    const lines = rewindTrace.get(key) ?? [];
+    lines.push(line);
+    if (!options.diagnoseKeys?.has(key) && lines.length > REWIND_TRACE_LIMIT) lines.shift();
+    rewindTrace.set(key, lines);
+  };
 
   const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, offloadEvidence, historicalMerges] = await Promise.all([
     client.query<InventoryRow>(
@@ -3607,6 +3632,24 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
           priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
         });
+      traceRewind(
+        key,
+        [
+          movement.createdAt ?? movement.occurredAt,
+          movement.movementId,
+          movement.sourceType + (movement.canonicalPosRole ? "/" + movement.canonicalPosRole : ""),
+          "dq=" + repairQuantity(movement.quantityDelta).toFixed(3),
+          "uc=" + (movement.unitCost == null ? "-" : String(movement.unitCost)),
+          "ev=" + (movement.exactValue == null ? "-" : String(movement.exactValue)),
+          "after=" + traceState(stateAfter),
+          reversed.reversible
+            ? "before=" + traceState(reversed.stateBefore) + (reversed.recovery ? " via " + reversed.recovery : "")
+            : "IRREVERSIBLE " + reversed.reason,
+          movement.sale ? "sale=" + movement.sale.salesItemId : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
       if (!reversed.reversible) {
         const priorRateHint = priorCostMemoryRateHints.get(movement.movementId) ?? null;
         checks.push({
@@ -4169,6 +4212,27 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     })
   );
 
+  const diagnosedKeys = new Set(options.diagnoseKeys ?? []);
+  for (const check of checks) {
+    if (check.status === "block" && check.locationId !== null && check.stockItemId !== null) {
+      diagnosedKeys.add(historicalInventoryKey(companyId, check.locationId, check.stockItemId));
+    }
+  }
+  for (const key of [...diagnosedKeys].sort()) {
+    const lines = rewindTrace.get(key);
+    if (!lines?.length) continue;
+    const [, locationIdText, stockItemIdText] = key.split(":");
+    checks.push({
+      companyId,
+      locationId: Number(locationIdText),
+      stockItemId: Number(stockItemIdText),
+      code: "REWIND_TIMELINE_DIAGNOSTIC",
+      status: "warning",
+      expected: String(lines.length),
+      detail: lines.join("\n"),
+    });
+  }
+
   const proposals = [
     ...directCanonicalProposals.values(),
     ...proposalsBySaleId.values(),
@@ -4504,6 +4568,41 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     }
     throw error;
   } finally {
+    client.release();
+  }
+}
+
+/**
+ * Read-only diagnosis of one company/location/item group: runs the company
+ * dry-run inside a READ ONLY transaction that is always rolled back, persists
+ * nothing, and returns the group's checks (including the full rewind timeline)
+ * and proposals.
+ */
+export async function diagnoseHistoricalSalesCostKey(input: {
+  companyId: number;
+  locationId: number;
+  stockItemId: number;
+}): Promise<{ checks: RepairCheck[]; proposals: HistoricalSalesRepairProposal[]; report: Record<string, unknown> }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    await enableMaintenanceScope(client);
+    const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
+    const key = historicalInventoryKey(input.companyId, input.locationId, input.stockItemId);
+    const result = await dryRunCompany(client, input.companyId, cutoffResult.rows[0].cutoff, {
+      diagnoseKeys: new Set([key]),
+    });
+    return {
+      checks: result.checks.filter(
+        (check) => check.locationId === input.locationId && check.stockItemId === input.stockItemId
+      ),
+      proposals: result.proposals.filter(
+        (proposal) => proposal.locationId === input.locationId && proposal.stockItemId === input.stockItemId
+      ),
+      report: result.report,
+    };
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
     client.release();
   }
 }
