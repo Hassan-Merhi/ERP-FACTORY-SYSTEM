@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v31-pos-edit-live-rate-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v32-evidenced-rate-range-guard";
 
 const ZERO = new Decimal(0);
 
@@ -120,6 +120,25 @@ export function historicalStateRateMatchesValue(state: HistoricalInventoryState)
   if (repairRate(value.dividedBy(quantity)).eq(rate)) return true;
   const floatRate = new Decimal((value.toNumber() / quantity.toNumber()).toFixed(2));
   return floatRate.eq(rate);
+}
+
+const EVIDENCED_RATE_RANGE_TOLERANCE = new Decimal("0.01");
+
+/**
+ * A moving weighted average is a convex combination of the rates that fed it.
+ * A reconstructed cost outside every evidenced rate (beyond 2dp rounding) is
+ * impossible and proves the reconstruction chain wrong.
+ */
+export function historicalRateWithinEvidencedRange(
+  rate: Decimal.Value,
+  range: { low: Decimal.Value; high: Decimal.Value } | undefined
+): boolean {
+  if (!range) return false;
+  const value = repairRate(rate);
+  return (
+    value.gte(decimal(range.low, "range low").minus(EVIDENCED_RATE_RANGE_TOLERANCE)) &&
+    value.lte(decimal(range.high, "range high").plus(EVIDENCED_RATE_RANGE_TOLERANCE))
+  );
 }
 
 export type HistoricalSalesRepairOpening = {

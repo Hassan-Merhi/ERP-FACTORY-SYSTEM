@@ -14,6 +14,7 @@ import {
   createHistoricalInventoryStateFromSnapshot,
   createHistoricalSignedLocationImportState,
   historicalInventoryKey,
+  historicalRateWithinEvidencedRange,
   historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
@@ -1811,6 +1812,102 @@ function recoverHistoricalMergedSales(input: {
   return { recoveredKeys, proposals, checks };
 }
 
+/**
+ * Every rate an item could have carried, from evidence already pinned in the
+ * V2 source hash: pinned openings, priced receipts (canonical and legacy),
+ * exact offload values, recorded live sale-issue rates, the checkpoint, and
+ * the rates of historically merged source items.
+ */
+function evidencedRateHullByItem(input: {
+  stockItems: StockItemRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
+  checkpoint: ValuationCheckpoint | null;
+  historicalMerges: HistoricalMergeRow[];
+}): Map<number, { low: Decimal; high: Decimal }> {
+  const hull = new Map<number, { low: Decimal; high: Decimal }>();
+  const add = (stockItemId: number, value: Decimal.Value | null | undefined) => {
+    if (value === null || value === undefined) return;
+    const rate = new Decimal(value);
+    if (!rate.isFinite() || !rate.gt(0)) return;
+    const current = hull.get(stockItemId);
+    if (!current) {
+      hull.set(stockItemId, { low: rate, high: rate });
+      return;
+    }
+    if (rate.lt(current.low)) current.low = rate;
+    if (rate.gt(current.high)) current.high = rate;
+  };
+
+  for (const item of input.stockItems) add(Number(item.id), item.opening_rate);
+  for (const movement of input.canonical) {
+    const delta = d(movement.quantityDelta);
+    if (delta.gt(0) || movement.canonicalPosRole === "sale-issue") {
+      add(movement.stockItemId, movement.unitCost);
+    }
+  }
+  for (const row of input.legacy) {
+    if (d(row.quantity_delta).gt(0)) add(Number(row.stock_item_id), row.unit_cost);
+  }
+  for (const row of input.offloadEvidence) {
+    add(Number(row.stock_item_id), row.rate);
+    const quantity = d(row.quantity);
+    if (quantity.gt(0)) add(Number(row.stock_item_id), d(row.total_value).dividedBy(quantity));
+  }
+  for (const row of input.checkpoint?.rows ?? []) {
+    if (d(row.quantity).gt(0)) add(Number(row.stock_item_id), row.average_rate);
+  }
+  for (const merge of input.historicalMerges) {
+    const source = hull.get(Number(merge.source_item_id));
+    if (source) {
+      add(Number(merge.kept_item_id), source.low);
+      add(Number(merge.kept_item_id), source.high);
+    }
+    add(Number(merge.kept_item_id), merge.source_opening_rate);
+  }
+  return hull;
+}
+
+function rateHullBlocks(input: {
+  companyId: number;
+  proposals: HistoricalSalesRepairProposal[];
+  stockItems: StockItemRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
+  checkpoint: ValuationCheckpoint | null;
+  historicalMerges: HistoricalMergeRow[];
+}): RepairCheck[] {
+  const hull = evidencedRateHullByItem(input);
+  const worstByKey = new Map<string, { proposal: HistoricalSalesRepairProposal; count: number }>();
+  for (const proposal of input.proposals) {
+    if (proposal.evidence !== "legacy") continue;
+    const rate = repairRate(proposal.proposedCostPrice);
+    if (historicalRateWithinEvidencedRange(rate, hull.get(proposal.stockItemId))) continue;
+    const key = `${proposal.locationId}:${proposal.stockItemId}`;
+    const current = worstByKey.get(key);
+    worstByKey.set(key, {
+      proposal: current && d(current.proposal.proposedCostPrice).gt(rate) ? current.proposal : proposal,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+
+  return [...worstByKey.values()].map(({ proposal, count }) => {
+    const range = hull.get(proposal.stockItemId);
+    return {
+      companyId: input.companyId,
+      locationId: proposal.locationId,
+      stockItemId: proposal.stockItemId,
+      code: "LEGACY_PROPOSED_COST_OUTSIDE_RATE_HULL",
+      status: "block" as const,
+      expected: range ? `${repairRate(range.low).toFixed(2)}..${repairRate(range.high).toFixed(2)}` : "no rate evidence",
+      actual: repairRate(proposal.proposedCostPrice).toFixed(2),
+      detail: `${count} reconstructed sale cost(s) fall outside every rate this item ever carried (worst: sales item ${proposal.salesItemId}); the reconstruction chain for this item/location is unproven`,
+    };
+  });
+}
+
 async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
 
@@ -3552,6 +3649,26 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       detail: "Legacy sale item/location keys with a fully provable checkpoint rewind",
     });
   }
+
+  // V32: a moving weighted average is a convex combination of the rates that
+  // fed it, so a reconstructed sale cost can never leave the range of every
+  // rate the item ever carried. Run #33 marked legacy proposals of 536M/unit
+  // (item normally ~107) "ready": a rewind chain amplified a small inverse
+  // error geometrically while every local step still looked consistent. Any
+  // reconstructed proposal outside the evidenced range proves the chain for
+  // that item/location is wrong, so every legacy proposal there is blocked.
+  checks.push(
+    ...rateHullBlocks({
+      companyId,
+      proposals: [...proposalsBySaleId.values()],
+      stockItems,
+      canonical,
+      legacy,
+      offloadEvidence,
+      checkpoint,
+      historicalMerges,
+    })
+  );
 
   const proposals = [
     ...directCanonicalProposals.values(),
