@@ -282,7 +282,7 @@ function traceState(state: HistoricalInventoryState): string {
   );
 }
 
-function hscrError(code: string): Error {
+export function hscrError(code: string): Error {
   const error = new Error();
   error.message = code;
   return error;
@@ -304,7 +304,7 @@ function beforeCutoff(value: Date, canonicalStart: Date | null): boolean {
   return canonicalStart === null || value.getTime() < canonicalStart.getTime();
 }
 
-async function enableMaintenanceScope(client: PoolClient): Promise<void> {
+export async function enableMaintenanceScope(client: PoolClient): Promise<void> {
   await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
   await client.query("SELECT set_config('app.current_company_id', '', true)");
   await client.query("SELECT set_config('app.authorized_company_ids', '', true)");
@@ -1026,7 +1026,7 @@ function journalWithoutOverriddenLocationUpdates(
   );
 }
 
-async function recomputeHistoricalSalesCompanyEvidenceHash(
+export async function recomputeHistoricalSalesCompanyEvidenceHash(
   client: PoolClient,
   companyId: number,
   sourceCutoff: Date
@@ -1060,7 +1060,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
   });
 }
 
-async function inventoryEvidenceFingerprint(
+export async function inventoryEvidenceFingerprint(
   client: PoolClient,
   companyIds: number[]
 ): Promise<{ hash: string; rowCount: number }> {
@@ -1088,7 +1088,7 @@ async function inventoryEvidenceFingerprint(
   return { hash: hash.digest("hex"), rowCount: result.rows.length };
 }
 
-async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
+export async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
   const triggers = await client.query<{ trigger_name: string }>(
     `SELECT tg.tgname AS trigger_name
        FROM pg_trigger tg
@@ -5399,6 +5399,18 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     await enableMaintenanceScope(client);
     await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-dry-run'))");
 
+    // A proven-rows-only partial apply rewrites sale costs that this engine
+    // reads as historical evidence. Until a dry-run can restore that evidence
+    // from the apply log, refuse to build on top of an active partial apply.
+    const activePartial = await client.query<{ run_id: number }>(
+      `SELECT run_id FROM historical_sales_cost_repair_partial_applies WHERE status='applied' ORDER BY run_id`
+    );
+    if (activePartial.rows.length > 0) {
+      throw hscrError(
+        `HSCR_DRY_RUN_REFUSED_ACTIVE_PARTIAL_APPLY:${activePartial.rows.map((row) => row.run_id).join(",")}`
+      );
+    }
+
     const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
     const sourceCutoff = cutoffResult.rows[0].cutoff;
     const companyIds = await companyIdsForRun(client, input.companyIds);
@@ -5663,6 +5675,58 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
   };
 }
 
+/**
+ * Fails when historical source evidence was back-dated or edited after the
+ * dry-run cutoff. Normal new stock activity after the cutoff is allowed.
+ * Shared by the full apply and the proven-rows-only partial apply.
+ */
+export async function assertNoHistoricalSourceEditsAfterCutoff(
+  client: PoolClient,
+  targetCompanyIds: number[],
+  sourceCutoff: Date
+): Promise<void> {
+  const sourceDrift = await client.query<{
+    kind: string;
+    evidence_id: string;
+  }>(
+    `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
+       FROM canonical_stock_movements
+      WHERE company_id = ANY($1::int[])
+        AND created_at > $2
+        AND occurred_at <= $2
+      UNION ALL
+     SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN vouchers v
+         ON a.table_name='vouchers'
+        AND a.record_id=v.id
+        AND v.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND v.created_at <= $2
+      UNION ALL
+     SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN containers c
+         ON a.table_name='containers'
+        AND a.record_id=c.id
+        AND c.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND c.created_at <= $2
+      ORDER BY kind,evidence_id
+      LIMIT 25`,
+    [targetCompanyIds, sourceCutoff]
+  );
+  if (sourceDrift.rows.length > 0) {
+    throw new Error(
+      `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
+        .map((row) => `${row.kind}#${row.evidence_id}`)
+        .join(", ")}. Build and review a new dry run.`
+    );
+  }
+}
+
 export async function applyHistoricalSalesCostRepair(input: {
   runId: number;
   auditHash: string;
@@ -5700,6 +5764,13 @@ export async function applyHistoricalSalesCostRepair(input: {
     }
     if (!run.audit_hash || run.audit_hash !== input.auditHash) {
       throw hscrError("HSCR_AUDIT_HASH_MISMATCH");
+    }
+    const partial = await client.query(
+      "SELECT id FROM historical_sales_cost_repair_partial_applies WHERE run_id=$1",
+      [input.runId]
+    );
+    if (partial.rows.length > 0) {
+      throw hscrError("HSCR_RUN_PARTIALLY_APPLIED");
     }
 
     const blockerCount = await client.query<{ count: string }>(
@@ -5749,46 +5820,7 @@ export async function applyHistoricalSalesCostRepair(input: {
 
     // Keep targeted "changed-after-cutoff" checks as a second line of defense.
     // Normal new stock activity after the source cutoff is allowed.
-    const sourceDrift = await client.query<{
-      kind: string;
-      evidence_id: string;
-    }>(
-      `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
-         FROM canonical_stock_movements
-        WHERE company_id = ANY($1::int[])
-          AND created_at > $2
-          AND occurred_at <= $2
-        UNION ALL
-       SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN vouchers v
-           ON a.table_name='vouchers'
-          AND a.record_id=v.id
-          AND v.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND v.created_at <= $2
-        UNION ALL
-       SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN containers c
-           ON a.table_name='containers'
-          AND a.record_id=c.id
-          AND c.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND c.created_at <= $2
-        ORDER BY kind,evidence_id
-        LIMIT 25`,
-      [targetCompanyIds, run.source_cutoff_at]
-    );
-    if (sourceDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
-          .map((row) => `${row.kind}#${row.evidence_id}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
-    }
+    await assertNoHistoricalSourceEditsAfterCutoff(client, targetCompanyIds, run.source_cutoff_at);
 
     const drift = await client.query<{ sales_item_id: number }>(
       `SELECT r.sales_item_id

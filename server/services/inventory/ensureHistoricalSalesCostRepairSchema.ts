@@ -91,5 +91,41 @@ export async function ensureHistoricalSalesCostRepairSchema(pool: Pool): Promise
       applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE (run_id, sales_item_id)
     );
+
+    -- Proven-rows-only partial apply. One record per reviewed run; the
+    -- apply log below carries the per-row before/after snapshot used for an
+    -- exact rollback. Blocked and unchanged rows are never written.
+    CREATE TABLE IF NOT EXISTS historical_sales_cost_repair_partial_applies (
+      id BIGSERIAL PRIMARY KEY,
+      run_id BIGINT NOT NULL UNIQUE REFERENCES historical_sales_cost_repair_runs(id) ON DELETE RESTRICT,
+      audit_hash VARCHAR(64) NOT NULL,
+      algorithm_version TEXT NOT NULL,
+      target_hash VARCHAR(64) NOT NULL,
+      target_rows INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('applied','rolled_back')),
+      applied_by TEXT NOT NULL,
+      applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      rolled_back_by TEXT,
+      rolled_back_at TIMESTAMPTZ,
+      report JSONB NOT NULL DEFAULT '{}'::jsonb,
+      rollback_report JSONB
+    );
+
+    ALTER TABLE historical_sales_cost_repair_apply_log
+      ADD COLUMN IF NOT EXISTS apply_mode TEXT NOT NULL DEFAULT 'full',
+      ADD COLUMN IF NOT EXISTS partial_apply_id BIGINT REFERENCES historical_sales_cost_repair_partial_applies(id) ON DELETE RESTRICT,
+      ADD COLUMN IF NOT EXISTS voucher_id INTEGER,
+      ADD COLUMN IF NOT EXISTS location_id INTEGER,
+      ADD COLUMN IF NOT EXISTS stock_item_id INTEGER,
+      ADD COLUMN IF NOT EXISTS occurred_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS evidence TEXT,
+      ADD COLUMN IF NOT EXISTS source_type TEXT,
+      ADD COLUMN IF NOT EXISTS source_id TEXT,
+      ADD COLUMN IF NOT EXISTS audit_hash VARCHAR(64),
+      ADD COLUMN IF NOT EXISTS rolled_back_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS rolled_back_by TEXT;
+
+    CREATE INDEX IF NOT EXISTS historical_sales_cost_repair_apply_log_partial_idx
+      ON historical_sales_cost_repair_apply_log(partial_apply_id);
   `);
 }
