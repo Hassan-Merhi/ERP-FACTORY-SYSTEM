@@ -1865,35 +1865,65 @@ function recoverHistoricalMergedSales(input: {
     }
 
     if (!keptRewindFailure) {
+      // V47: rewind the kept item as a set of exact branches (as the
+      // checkpoint rewind does); recorded live rates prune, and the merge
+      // split needs exactly one surviving state per location.
+      const keptCandidates = new Map<number, HistoricalInventoryState[]>(
+        [...combinedAtMergeByLocation.entries()].map(([locationId, state]) => [locationId, [state]])
+      );
       for (const movement of keptPostMovements) {
         if (!relevantLocations.has(movement.locationId)) continue;
-        const stateAfter = combinedAtMergeByLocation.get(movement.locationId);
-        if (!stateAfter) continue;
-        const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
-          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
-        });
-        if (!reversed.reversible) {
+        const current = keptCandidates.get(movement.locationId);
+        if (!current) continue;
+        const next: HistoricalInventoryState[] = [];
+        let lastReason = "";
+        for (const stateAfter of current) {
+          const befores: HistoricalInventoryState[] = [];
+          const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+          });
+          if (reversed.reversible) befores.push(reversed.stateBefore);
+          else lastReason = reversed.reason;
+          if (movement.evidence === "canonical") befores.push(...historicalIssueInverseCandidates(stateAfter, movement));
+          for (const before of befores) {
+            if (
+              isRecordedLiveRateObservation(movement) &&
+              !repairRate(movement.unitCost!).eq(repairRate(before.averageRate))
+            ) {
+              continue;
+            }
+            if (!next.some((existing) => historicalInventoryStatesEqual(existing, before))) next.push(before);
+          }
+        }
+        if (next.length === 0) {
           keptRewindFailure = {
             locationId: movement.locationId,
-            detail: `Cannot rewind kept item movement ${movement.movementId}: ${reversed.reason}`,
+            detail: lastReason
+              ? `Cannot rewind kept item movement ${movement.movementId}: ${lastReason}`
+              : `Canonical kept-item sale ${movement.movementId} disagrees with every exact checkpoint rewind branch`,
           };
           break;
         }
-        if (
-          movement.evidence === "canonical" &&
-          CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
-          !posJournalCostIsNotInventoryRate(movement) &&
-          d(movement.quantityDelta).lt(0) &&
-          movement.unitCost !== null &&
-          !repairRate(movement.unitCost).eq(repairRate(reversed.stateBefore.averageRate))
-        ) {
+        if (next.length > 64) {
           keptRewindFailure = {
             locationId: movement.locationId,
-            detail: `Canonical kept-item sale ${movement.movementId} disagrees with checkpoint rewind`,
+            detail: `Kept item rewind exceeded the branch limit at ${movement.movementId}`,
           };
           break;
         }
-        combinedAtMergeByLocation.set(movement.locationId, reversed.stateBefore);
+        keptCandidates.set(movement.locationId, next);
+      }
+      if (!keptRewindFailure) {
+        for (const [locationId, states] of keptCandidates) {
+          if (states.length !== 1) {
+            keptRewindFailure = {
+              locationId,
+              detail: `Kept item rewind has ${states.length} exact states at the merge`,
+            };
+            break;
+          }
+          combinedAtMergeByLocation.set(locationId, states[0]);
+        }
       }
     }
 
