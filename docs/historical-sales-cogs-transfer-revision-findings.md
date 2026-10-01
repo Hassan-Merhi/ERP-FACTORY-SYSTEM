@@ -130,3 +130,31 @@ The legacy transfer `NOT EXISTS` excludes a legacy leg whenever *any* canonical
 pre-canonical revised transfer (770, created 2026-08-12, last saved in the
 canonical era) is affected. Check whether its pre-canonical application is
 missing from the replay.
+
+## Rewind divergence: company 1, location 134, item 702 (runs #33–#36)
+
+- Every historical sale at this location stores cost_price 107.34. That is the
+  locked live rate of canonical sale 13471 on 2026-09-04, stamped onto older
+  sales. This is the corruption the repair exists to fix.
+- Stock never reaches zero. Starting from the item opening of 1 @ 92.11, it hovers
+  at 1–5 units and returns to exactly 1 unit dozens of times from January to
+  September. Because there is no reset, the checkpoint rewind must cross every
+  receipt. Each rewound receipt multiplies the reconstructed rate's sensitivity
+  to any value error by Q_after/Q_before (often 2–6×). A 2-cent drift became
+  110 → 157 → 471 → 6,031 → … → 536,372,383.50/unit by January. Every local
+  inverse step still replayed exactly, so only the V32 evidenced-rate-range
+  guard caught it.
+- A forward replay from the opening is stable and plausible (92 → 107), but it
+  ends at 1|107.07|107.07 against checkpoint 1|107.05|107.05. Canonical sale
+  issues show production 1–2 cents away from the replay as early as 2026-08-17
+  (recorded 106.68 vs replay 106.66).
+- Emulating pre-2026-08-02 float rounding (adjustInventory moved to decimal.js in
+  3635b8c36) does not close the gap. The drift sits in August. The likely cause
+  is ordering: legacy offloads are placed at their user-entered `offloaded_at`
+  date (midnight), and `container_offloads` has no entry timestamp. Candidate
+  evidence for the real entry time is the "Freight for offloaded container"
+  journal vouchers (from 2026-04-29), but they link to offloads only through
+  description text, so they need a proof-grade link before use.
+- V34 adds a `REWIND_ERROR_AMPLIFICATION` warning (worst sensitivity per key) to
+  measure this conditioning problem across all keys before choosing a blocking
+  threshold.

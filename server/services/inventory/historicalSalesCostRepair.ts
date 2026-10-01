@@ -3387,6 +3387,18 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const rewindBoundaryReached = new Set<string>();
+    // V34 diagnostic: rewinding a receipt divides any value error by the
+    // smaller pre-receipt quantity, so the reconstructed rate's sensitivity to
+    // a one-cent model error at the checkpoint grows by Q_after/Q_before at
+    // every rewound receipt (issues leave it unchanged). Low-stock keys that
+    // never reach zero (company 1, location 134, item 702 hovered at one unit
+    // for nine months) amplify a 2-cent drift into 536M/unit. Recorded as a
+    // warning to measure before any threshold becomes a blocker.
+    const rewindSensitivity = new Map<string, Decimal>();
+    const rewindAmplification = new Map<
+      string,
+      { max: Decimal; maxSalesItemId: number; proposals: number; over10: number; over100: number }
+    >();
 
     for (const movement of movementsInCheckpoint) {
       const key = movementKey(movement);
@@ -3624,13 +3636,57 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         }
       }
 
+      const afterQty = repairQuantity(stateAfter.quantity);
+      const beforeQty = repairQuantity(reversed.stateBefore.quantity);
+      let sensitivity =
+        rewindSensitivity.get(key) ??
+        (afterQty.gt(0) ? new Decimal(1).dividedBy(afterQty) : new Decimal(1));
+      if (d(movement.quantityDelta).gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
+        sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
+      }
+      rewindSensitivity.set(key, sensitivity);
+
       if (movement.sale && !forwardResetProvenSaleIds.has(movement.sale.salesItemId)) {
         proposalsBySaleId.set(
           movement.sale.salesItemId,
           historicalSaleProposalFromState(movement, reversed.stateBefore)
         );
+        const amplification = rewindAmplification.get(key) ?? {
+          max: new Decimal(0),
+          maxSalesItemId: movement.sale.salesItemId,
+          proposals: 0,
+          over10: 0,
+          over100: 0,
+        };
+        amplification.proposals += 1;
+        if (sensitivity.gt(10)) amplification.over10 += 1;
+        if (sensitivity.gt(100)) amplification.over100 += 1;
+        if (sensitivity.gt(amplification.max)) {
+          amplification.max = sensitivity;
+          amplification.maxSalesItemId = movement.sale.salesItemId;
+        }
+        rewindAmplification.set(key, amplification);
       }
       rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const [key, amplification] of rewindAmplification) {
+      if (!amplification.max.gt(1)) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "REWIND_ERROR_AMPLIFICATION",
+        status: "warning",
+        expected: "<=1.00",
+        actual: amplification.max.toFixed(2),
+        detail: `Rewound rate moves up to ${amplification.max.toFixed(
+          2
+        )} cents per cent of checkpoint-side model error (worst: sales item ${amplification.maxSalesItemId}); ${
+          amplification.proposals
+        } rewound proposals, ${amplification.over10} above 10x, ${amplification.over100} above 100x`,
+      });
     }
 
     for (const sale of legacySales) {
@@ -3871,17 +3927,24 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       (proposal) => proposal.changed && !blockerForProposal(blockers, proposal)
     ).length;
 
-    const originalTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalTotalCost), new Decimal(0))
-    );
+    // V34: run totals describe what apply would actually write. A blocked row
+    // keeps its original values, so only unblocked proposals contribute their
+    // proposed cost/profit. The rejected candidates of blocked rows are still
+    // reported separately for diagnostics, but never mixed into the headline
+    // totals (run #36 showed 3.2B "proposed" that lived entirely in blocked rows).
+    const sumMoney = (
+      proposals: HistoricalSalesRepairProposal[],
+      field: "originalTotalCost" | "proposedTotalCost" | "originalProfit" | "proposedProfit"
+    ) => repairMoney(proposals.reduce((sum, proposal) => sum.plus(proposal[field]), new Decimal(0)));
+    const blockedProposals = allProposals.filter((proposal) => blockerForProposal(blockers, proposal));
+    const applicableProposals = allProposals.filter((proposal) => !blockerForProposal(blockers, proposal));
+    const originalTotalCost = sumMoney(allProposals, "originalTotalCost");
     const proposedTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedTotalCost), new Decimal(0))
+      sumMoney(applicableProposals, "proposedTotalCost").plus(sumMoney(blockedProposals, "originalTotalCost"))
     );
-    const originalTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalProfit), new Decimal(0))
-    );
+    const originalTotalProfit = sumMoney(allProposals, "originalProfit");
     const proposedTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedProfit), new Decimal(0))
+      sumMoney(applicableProposals, "proposedProfit").plus(sumMoney(blockedProposals, "originalProfit"))
     );
 
     const hash = createHash("sha256");
@@ -3912,6 +3975,15 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       algorithmVersion: HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
       sourceCutoff: sourceCutoff.toISOString(),
       companies: companyReports,
+      totals: {
+        basis: "apply-effective: unblocked rows at proposed values, blocked rows at original values",
+        applicableRows: applicableProposals.length,
+        applicableOriginalTotalCost: sumMoney(applicableProposals, "originalTotalCost").toFixed(2),
+        applicableProposedTotalCost: sumMoney(applicableProposals, "proposedTotalCost").toFixed(2),
+        blockedRows: blockedProposals.length,
+        blockedOriginalTotalCost: sumMoney(blockedProposals, "originalTotalCost").toFixed(2),
+        blockedRejectedCandidateTotalCost: sumMoney(blockedProposals, "proposedTotalCost").toFixed(2),
+      },
       checks: {
         total: allChecks.length,
         pass: allChecks.filter((check) => check.status === "pass").length,
