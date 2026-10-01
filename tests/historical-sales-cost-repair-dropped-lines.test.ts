@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/db", () => ({ pool: {}, db: {} }));
 
-import { droppedPosLineMovements } from "../server/services/inventory/historicalSalesCostRepair";
+import {
+  canonicalMovementNumericId,
+  droppedPosLineMovements,
+} from "../server/services/inventory/historicalSalesCostRepair";
 import {
   canonicalPosRoleFromIdempotencyKey,
   createHistoricalInventoryStateFromSnapshot,
@@ -67,6 +70,8 @@ describe("V41 dropped POS line restoration", () => {
       sourceType: "pos-sale",
     });
     expect(result.movements[0].sequence).toBeGreaterThan(original.sequence);
+    // The restored line sits on the same side of the checkpoint cutoff as its journal row.
+    expect(canonicalMovementNumericId(result.movements[0])).toBe(9989);
     expect(result.checks[0]).toMatchObject({ code: "CANONICAL_POS_DROPPED_LINE_RESTORED", status: "pass", expected: "3.000" });
   });
 

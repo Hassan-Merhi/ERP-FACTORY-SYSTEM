@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v41-dropped-pos-lines-era-anchors";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v42-dropped-lines-in-checkpoint-rewind";
 
 const ZERO = new Decimal(0);
 
