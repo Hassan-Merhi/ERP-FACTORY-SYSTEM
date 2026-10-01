@@ -4,6 +4,7 @@ import {
   applyHistoricalSalesRepairMovement,
   createHistoricalInventoryStateFromSnapshot,
   historicalRateWithinEvidencedRange,
+  historicalIssueInverseCandidates,
   historicalSaleProposalFromState,
   isRecordedLiveRateObservation,
   reanchorHistoricalRewindAtRecordedRate,
@@ -577,5 +578,31 @@ describe("historical COGS reconstruction scenarios", () => {
     ).toBe(false);
     expect(isRecordedLiveRateObservation(legacySale(1, "2026-03-01T00:00:00Z", "1"))).toBe(false);
     void applyHistoricalSalesRepairMovement;
+  });
+
+  it("keeps every exact inverse of a large live-rate issue and lets a recorded live rate choose (1/134/113)", () => {
+    const item = { locationId: 134, stockItemId: 113, evidence: "canonical" as const };
+    const sale14647 = { ...canonicalSale("14647", "2026-08-28T13:57:21Z", "2", "78.25"), ...item };
+    const transfer15602 = mv({ movementId: "canonical:15602", occurredAt: "2026-08-29T10:06:06Z", quantityDelta: "-10", unitCost: "78.25", sourceType: "stock-transfer", ...item });
+    const offload18586 = mv({ movementId: "canonical:18586", occurredAt: "2026-09-02T07:19:11Z", quantityDelta: "10", unitCost: "84.31", exactValue: "843.10", sourceType: "container-offload", ...item });
+    const editReversal = mv({ movementId: "canonical:20609", occurredAt: "2026-09-03T07:42:37Z", quantityDelta: "2", unitCost: "78.81", sourceType: "pos-sale", canonicalPosRole: "edit-reversal", ...item });
+    const editIssue = mv({ movementId: "canonical:20635", occurredAt: "2026-09-03T07:42:37Z", quantityDelta: "-2", unitCost: "78.81", sourceType: "pos-sale", canonicalPosRole: "edit-issue", ...item });
+    const offload22587 = mv({ movementId: "canonical:22587", occurredAt: "2026-09-05T06:12:41Z", quantityDelta: "6", unitCost: "84.47", exactValue: "506.82", sourceType: "container-offload", ...item });
+    const transfer23667 = mv({ movementId: "canonical:23667", occurredAt: "2026-09-05T11:28:54Z", quantityDelta: "-100", unitCost: "78.81", sourceType: "stock-transfer", ...item });
+
+    const candidates = historicalIssueInverseCandidates(state("14", "79.10", "1107.34"), transfer23667);
+    expect(candidates.map((candidate) => candidate.averageRate.toFixed(2))).toEqual(
+      expect.arrayContaining(["79.10", "79.11"])
+    );
+
+    const reachedRates = candidates.map((candidate) => {
+      const branch = rewind(candidate, [sale14647, transfer15602, offload18586, editReversal, editIssue, offload22587]);
+      return branch.ok ? "ok" : `${branch.at}:${branch.inferred ?? branch.reason}`;
+    });
+    // The first exact inverse (79.10) the generic rewind takes contradicts the
+    // recorded 78.25; the 79.11 branch replays every movement and agrees.
+    const byRate = new Map(candidates.map((candidate, index) => [candidate.averageRate.toFixed(2), reachedRates[index]]));
+    expect(byRate.get("79.10")).toBe("canonical:14647:78.24");
+    expect(byRate.get("79.11")).toBe("ok");
   });
 });

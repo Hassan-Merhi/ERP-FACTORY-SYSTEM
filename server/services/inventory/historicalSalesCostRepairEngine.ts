@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v44-joint-pos-line-inverse";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v45-branching-rewind";
 
 const ZERO = new Decimal(0);
 
@@ -1859,4 +1859,62 @@ export function collapsedPosIssueGroup(
       (movement.movementId === `canonical:${originalId}` ||
         movement.movementId.startsWith(`canonical-dropped-line:${originalId}:`))
   );
+}
+
+/**
+ * True for an outbound movement production executed at the live stored rate
+ * whose journal does not pin that rate: unpriced issues, POS edit re-issues,
+ * restored dropped lines and stock-transfer source legs (the journal carries
+ * the transfer document rate). Original POS sale issues are excluded: their
+ * journaled unit cost is the live rate.
+ */
+export function isLiveRateIssueWithUnpinnedRate(movement: HistoricalSalesRepairMovement): boolean {
+  if (!decimal(movement.quantityDelta, "quantity delta").lt(ZERO)) return false;
+  if (movement.exactValue !== null && movement.exactValue !== undefined) return false;
+  if (isExactValuationReset(movement)) return false;
+  if (INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) || EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)) {
+    return false;
+  }
+  return (
+    movement.unitCost === null ||
+    movement.unitCost === undefined ||
+    posJournalCostIsNotInventoryRate(movement) ||
+    movement.sourceType === "stock-transfer"
+  );
+}
+
+/**
+ * Every pre-issue state that replays exactly to `stateAfter` for an issue at
+ * the live stored rate (V45). Issuing q at rate R leaves value V - qR and a
+ * stored rate round((V - qR)/(Q - q)), so when q is large against what remains
+ * several pre-issue rates within a few cents can lead to the same after-state.
+ * Only positive after-states are expanded; rates within ten cents of the
+ * after-state rate are tried.
+ */
+export function historicalIssueInverseCandidates(
+  stateAfterInput: HistoricalInventoryState,
+  movement: HistoricalSalesRepairMovement
+): HistoricalInventoryState[] {
+  const stateAfter = rawHistoricalInventoryState(
+    stateAfterInput.quantity,
+    stateAfterInput.averageRate,
+    stateAfterInput.totalValue
+  );
+  if (!isLiveRateIssueWithUnpinnedRate(movement) || !stateAfter.quantity.gt(ZERO)) return [];
+  const quantity = repairQuantity(movement.quantityDelta).abs();
+  const center = repairRate(stateAfter.averageRate);
+  const candidates: HistoricalInventoryState[] = [];
+  for (let cents = -10; cents <= 10; cents += 1) {
+    const rate = repairRate(center.plus(new Decimal(cents).dividedBy(100)));
+    if (!rate.gt(ZERO)) continue;
+    const before = rawHistoricalInventoryState(
+      repairQuantity(stateAfter.quantity.plus(quantity)),
+      rate,
+      repairMoney(stateAfter.totalValue.plus(quantity.times(rate)))
+    );
+    if (!historicalStateRateMatchesValue(before)) continue;
+    if (!statesEqual(applyHistoricalSalesRepairMovement(before, movement), stateAfter)) continue;
+    candidates.push(before);
+  }
+  return candidates;
 }
