@@ -20,6 +20,8 @@ import {
   repairMoney,
   repairQuantity,
   posJournalCostIsNotInventoryRate,
+  isExactValuationReset,
+  reanchorHistoricalRewindAtRecordedRate,
   repairRate,
   reverseHistoricalSalesRepairMovement,
   type HistoricalForwardReplayState,
@@ -239,6 +241,10 @@ function offloadEvidenceKey(offloadId: string | number, stockItemId: string | nu
   return `${String(offloadId)}:${Number(stockItemId)}`;
 }
 
+function reanchorCodePrefix(transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET"): string {
+  return transition === "UNRECORDED_REVALUATION" ? "LEGACY_UNRECORDED_REVALUATION" : "LEGACY_COST_MEMORY_RESET";
+}
+
 function traceState(state: HistoricalInventoryState): string {
   return (
     repairQuantity(state.quantity).toFixed(3) +
@@ -322,6 +328,7 @@ async function loadCanonicalMovements(
   );
   return rows.rows.map((row) => ({
     canonicalPosRole: canonicalPosRoleFromIdempotencyKey(row.source_type, row.idempotency_key),
+    idempotencyKey: row.idempotency_key ?? null,
     movementId: `canonical:${row.id}`,
     companyId,
     locationId: Number(row.location_id),
@@ -569,6 +576,146 @@ type CanonicalSaleEvidence = {
   anchorCanonicalId: number;
 };
 
+const COLLAPSED_ORIGINAL_POS_KEY = /^pos-sale:(\d+):rev0:(\d+)$/;
+const EDIT_REVERSAL_LINE_KEY = /^pos-sale:\d+:rev(\d+):reverse:\d+:line:(\d+)$/;
+const EDIT_LEG_REVISION_KEY = /^pos-sale:\d+:rev(\d+):(?:reverse|issue):/;
+
+/**
+ * V41: restore POS sale lines whose canonical issue row was lost.
+ *
+ * From 2026-08-13 (123d9eedc) until 2026-09-26 (2e4d483fa) the original POS
+ * issue key was per stock item (pos-sale:V:rev0:ITEM). A second line of the
+ * same item collided with the first line's key, so the journal kept only the
+ * first line while inventory was deducted for every line (production: all 812
+ * unedited multi-line sales journal exactly the first line's quantity). The
+ * lifecycle correction then added the missing quantity at the latest mutation,
+ * days or weeks too late, which shifts the quantity chain between the sale and
+ * that mutation.
+ *
+ * The original lines are proven only when
+ *  (a) the voucher was never edited or deleted: the current sales lines are
+ *      the original lines; or
+ *  (b) the first edit of this voucher/item journals line-level reversal legs
+ *      (from 2026-09-09): those legs reverse exactly the lines then on the sale.
+ * In both cases the journaled quantity must equal the first line's quantity.
+ * Each further line is restored at the original issue's instant as an
+ * unpriced issue at the live stored rate, which is what production executed.
+ */
+export function droppedPosLineMovements(
+  companyId: number,
+  canonical: HistoricalSalesRepairMovement[],
+  sales: SaleRow[]
+): { movements: HistoricalSalesRepairMovement[]; checks: RepairCheck[] } {
+  const movements: HistoricalSalesRepairMovement[] = [];
+  const checks: RepairCheck[] = [];
+  const posByVoucher = new Map<string, HistoricalSalesRepairMovement[]>();
+  const deletedVouchers = new Set<string>();
+  for (const movement of canonical) {
+    if (movement.sourceType === "voucher_delete_pos_sale") deletedVouchers.add(String(movement.sourceId));
+    if (movement.sourceType !== "pos-sale") continue;
+    const rows = posByVoucher.get(String(movement.sourceId)) ?? [];
+    rows.push(movement);
+    posByVoucher.set(String(movement.sourceId), rows);
+  }
+  const linesByVoucherItem = new Map<string, SaleRow[]>();
+  for (const sale of sales) {
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    const rows = linesByVoucherItem.get(key) ?? [];
+    rows.push(sale);
+    linesByVoucherItem.set(key, rows);
+  }
+
+  for (const [voucherId, rows] of posByVoucher) {
+    const voucherEdited = rows.some((row) => EDIT_LEG_REVISION_KEY.test(row.idempotencyKey ?? ""));
+    for (const original of rows) {
+      const match = COLLAPSED_ORIGINAL_POS_KEY.exec(original.idempotencyKey ?? "");
+      if (!match || !d(original.quantityDelta).lt(0)) continue;
+      const journaledQuantity = repairQuantity(d(original.quantityDelta).abs());
+      const itemRows = rows
+        .filter(
+          (row) =>
+            row !== original &&
+            row.stockItemId === original.stockItemId &&
+            row.locationId === original.locationId
+        )
+        .sort(compareMovementMutationAscending);
+
+      let lineQuantities: Decimal[] | null = null;
+      let basis = "";
+      if (!voucherEdited && !deletedVouchers.has(voucherId) && itemRows.length === 0) {
+        const lines = (linesByVoucherItem.get(`${voucherId}:${original.locationId}:${original.stockItemId}`) ?? [])
+          .slice()
+          .sort((a, b) => Number(a.sales_item_id) - Number(b.sales_item_id));
+        if (lines.length > 1) {
+          lineQuantities = lines.map((line) => repairQuantity(d(line.quantity).abs()));
+          basis = "unedited sale lines " + lines.map((line) => line.sales_item_id).join(",");
+        }
+      } else if (itemRows.length > 0) {
+        const firstRevision = EDIT_LEG_REVISION_KEY.exec(itemRows[0].idempotencyKey ?? "")?.[1];
+        const firstEdit = firstRevision
+          ? itemRows.filter((row) => EDIT_LEG_REVISION_KEY.exec(row.idempotencyKey ?? "")?.[1] === firstRevision)
+          : [];
+        const reversals = firstEdit.filter((row) => d(row.quantityDelta).gt(0));
+        const lineLegs = reversals
+          .map((row) => ({ row, line: EDIT_REVERSAL_LINE_KEY.exec(row.idempotencyKey ?? "") }))
+          .filter((entry) => entry.line !== null);
+        if (reversals.length > 1 && lineLegs.length === reversals.length) {
+          lineLegs.sort((a, b) => Number(a.line![2]) - Number(b.line![2]));
+          lineQuantities = lineLegs.map((entry) => repairQuantity(d(entry.row.quantityDelta).abs()));
+          basis = `rev${firstRevision} line reversals ` + lineLegs.map((entry) => entry.line![2]).join(",");
+        }
+      }
+      if (!lineQuantities) continue;
+
+      const locationId = original.locationId;
+      const stockItemId = original.stockItemId;
+      if (!lineQuantities[0].eq(journaledQuantity)) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "CANONICAL_POS_DROPPED_LINE_UNPROVEN",
+          status: "warning",
+          expected: journaledQuantity.toFixed(3),
+          actual: lineQuantities.map((quantity) => quantity.toFixed(3)).join("+"),
+          detail: `Voucher ${voucherId} journaled ${original.movementId} does not equal its first line (${basis}); dropped lines not restored`,
+        });
+        continue;
+      }
+      lineQuantities.slice(1).forEach((quantity, index) => {
+        movements.push({
+          movementId: `canonical-dropped-line:${canonicalMovementNumericId(original)}:${index + 2}`,
+          companyId,
+          locationId,
+          stockItemId,
+          occurredAt: original.occurredAt,
+          createdAt: original.createdAt,
+          sequence: original.sequence + (index + 1) / 100,
+          quantityDelta: quantity.negated().toFixed(3),
+          unitCost: null,
+          sourceType: "pos-sale",
+          sourceId: original.sourceId,
+          evidence: "canonical",
+          canonicalPosRole: "dropped-line",
+        });
+      });
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "CANONICAL_POS_DROPPED_LINE_RESTORED",
+        status: "pass",
+        expected: lineQuantities
+          .reduce((sum, quantity) => sum.plus(quantity), new Decimal(0))
+          .toFixed(3),
+        actual: journaledQuantity.toFixed(3),
+        detail: `Voucher ${voucherId} ${original.movementId}: restored ${lineQuantities.length - 1} line(s) lost to the per-item rev0 key at the original issue instant (${basis})`,
+      });
+    }
+  }
+  return { movements, checks };
+}
+
 function activeCanonicalSaleEvidence(
   movements: HistoricalSalesRepairMovement[]
 ): Map<string, CanonicalSaleEvidence> {
@@ -605,6 +752,9 @@ function activeCanonicalSaleEvidence(
     for (const movement of latestNegativeMovements) {
       const quantity = d(movement.quantityDelta).abs();
       latestNegativeQuantity = repairQuantity(latestNegativeQuantity.plus(quantity));
+      // A reconstructed dropped line has no journaled cost of its own; the
+      // sale's recorded rate comes from the journaled line(s).
+      if (movement.canonicalPosRole === "dropped-line") continue;
       if (movement.unitCost === null || movement.unitCost === undefined) {
         hasMissingCost = true;
         continue;
@@ -794,6 +944,33 @@ function historicalSalesCompanyEvidenceHash(input: {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }
 
+/**
+ * A direct location inventory update journals its quantity change as a
+ * location_inventory_update movement in the same transaction as its valuation
+ * override. The override reset carries that quantity change together with the
+ * exact valuation, so the journal row is replaced by it rather than applied
+ * twice. Shared by the dry-run and the apply-time evidence hash.
+ */
+function journalWithoutOverriddenLocationUpdates(
+  loaded: HistoricalSalesRepairMovement[],
+  valuationOverrides: ValuationOverrideRow[]
+): HistoricalSalesRepairMovement[] {
+  const overrideTransactionKeys = new Set(
+    valuationOverrides.map(
+      (row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`
+    )
+  );
+  return loaded.filter(
+    (movement) =>
+      !(
+        movement.sourceType === "location_inventory_update" &&
+        overrideTransactionKeys.has(
+          `${movement.locationId}:${movement.stockItemId}:${movement.createdAt ?? movement.occurredAt}`
+        )
+      )
+  );
+}
+
 async function recomputeHistoricalSalesCompanyEvidenceHash(
   client: PoolClient,
   companyId: number,
@@ -807,7 +984,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     loadOffloadValueEvidence(client, companyId, sourceCutoff),
     loadHistoricalMerges(client, companyId),
   ]);
-  const [canonical, legacy, manual, valuationOverrides] = await Promise.all([
+  const [loadedCanonical, legacy, manual, valuationOverrides] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
@@ -817,7 +994,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     companyId,
     canonicalStart,
     checkpoint,
-    canonical,
+    canonical: journalWithoutOverriddenLocationUpdates(loadedCanonical, valuationOverrides),
     legacy,
     manual,
     sales,
@@ -2067,31 +2244,13 @@ async function dryRunCompany(
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
     loadValuationOverrides(client, companyId, sourceCutoff),
   ]);
-  // A direct location inventory update journals its quantity change as a
-  // location_inventory_update movement in the same transaction as its
-  // valuation override. The override reset below carries that quantity change
-  // together with the exact valuation, so the journal row is replaced by it
-  // rather than applied twice.
-  const overrideTransactionKeys = new Set(
-    valuationOverrides.map(
-      (row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`
-    )
-  );
-  const canonical = loadedCanonical.filter(
-    (movement) =>
-      !(
-        movement.sourceType === "location_inventory_update" &&
-        overrideTransactionKeys.has(
-          `${movement.locationId}:${movement.stockItemId}:${movement.createdAt ?? movement.occurredAt}`
-        )
-      )
-  );
+  const journalCanonical = journalWithoutOverriddenLocationUpdates(loadedCanonical, valuationOverrides);
 
   const sourceEvidenceHash = historicalSalesCompanyEvidenceHash({
     companyId,
     canonicalStart,
     checkpoint,
-    canonical,
+    canonical: journalCanonical,
     legacy,
     manual,
     sales,
@@ -2100,6 +2259,10 @@ async function dryRunCompany(
     historicalMerges,
     valuationOverrides,
   });
+  // Derived from hashed evidence (the journal and the sales lines), so the
+  // restored lines need no hash entry of their own.
+  const droppedPosLines = droppedPosLineMovements(companyId, journalCanonical, sales);
+  const canonical = [...journalCanonical, ...droppedPosLines.movements];
   const offloadEvidenceByKey = new Map(
     offloadEvidence.map((row) => [
       offloadEvidenceKey(row.offload_id, row.stock_item_id),
@@ -2116,6 +2279,7 @@ async function dryRunCompany(
 
   const checks: RepairCheck[] = [
     ...manual.checks,
+    ...droppedPosLines.checks,
     {
       companyId,
       locationId: null,
@@ -3584,7 +3748,16 @@ async function dryRunCompany(
       recorded: Decimal;
       inferred: Decimal;
       unresolvedSales: HistoricalSalesRepairMovement[];
+      transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET";
+      transitionMovementId: string;
     }> = [];
+    // V41: the newest-in-rewind movement at each key that erased cost memory
+    // between the checkpoint and the current rewind position: a priced receipt
+    // into zero or negative stock (production sets the rate from the receipt
+    // alone) or a pinned valuation reset. Above such a boundary the checkpoint
+    // holds no information about the earlier rate, so a canonical sale's
+    // recorded live rate below it is the only evidence of that rate.
+    const costMemoryResetByKey = new Map<string, HistoricalSalesRepairMovement>();
     let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
     const nextMovementAtKey = (
       key: string,
@@ -3688,6 +3861,29 @@ async function dryRunCompany(
             !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
         );
         rewindBoundaryReached.add(key);
+
+        if (reversed.reason === "MOVEMENT_INVERSE_INVALID") {
+          // V41 measurement: an impossible inverse proves the rewound state
+          // above this movement wrong, yet sales between it and the
+          // checkpoint were already priced from that state.
+          const pricedAbove = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+            (saleMovement) =>
+              compareMovementMutationAscending(saleMovement, movement) > 0 &&
+              proposalsBySaleId.has(saleMovement.sale!.salesItemId) &&
+              !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
+          ).length;
+          if (pricedAbove > 0) {
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "REWIND_CONTRADICTION_ABOVE_PROPOSALS",
+              status: "warning",
+              actual: String(pricedAbove),
+              detail: `${pricedAbove} legacy sale proposals above impossible inverse ${movement.movementId} came from the contradicted rewind`,
+            });
+          }
+        }
 
         if (unresolvedSales.length === 0) {
           checks.push({
@@ -3874,9 +4070,13 @@ async function dryRunCompany(
               !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
           );
           rewindBoundaryReached.add(key);
-          if (unrecordedRevaluation && unresolvedSales.length > 0) {
+          const costMemoryReset = costMemoryResetByKey.get(key);
+          if ((unrecordedRevaluation || costMemoryReset) && unresolvedSales.length > 0) {
             // V39: try to re-anchor below the revaluation instead of blocking
             // outright; the blocks are emitted after the attempt if it fails.
+            // V41: the same proof applies below a cost-memory reset, where the
+            // disagreement is the rewind's guess of an erased rate, not a
+            // contradiction between independent evidence.
             reanchorRequests.push({
               key,
               anchor: movement,
@@ -3884,6 +4084,24 @@ async function dryRunCompany(
               recorded,
               inferred,
               unresolvedSales,
+              transition: unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET",
+              transitionMovementId: unrecordedRevaluation
+                ? nextMovementAtKey(key, movement)?.movementId ?? movement.movementId
+                : costMemoryReset!.movementId,
+            });
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "VALUATION_ERA_BOUNDARY",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: inferred.toFixed(2),
+              detail: `transition=${unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET"} at ${
+                unrecordedRevaluation
+                  ? nextMovementAtKey(key, movement)?.movementId ?? movement.movementId
+                  : costMemoryReset!.movementId
+              }; anchor=${movement.movementId} recorded live rate ${recorded.toFixed(2)}, checkpoint rewind inferred ${inferred.toFixed(2)}`,
             });
           } else if (unresolvedSales.length === 0) {
             checks.push({
@@ -3964,6 +4182,16 @@ async function dryRunCompany(
         }
         rewindAmplification.set(key, amplification);
       }
+      if (
+        isExactValuationReset(movement) ||
+        (d(movement.quantityDelta).gt(0) &&
+          movement.unitCost !== null &&
+          movement.unitCost !== undefined &&
+          !posJournalCostIsNotInventoryRate(movement) &&
+          repairQuantity(reversed.stateBefore.quantity).lte(0))
+      ) {
+        costMemoryResetByKey.set(key, movement);
+      }
       rewindStates.set(key, reversed.stateBefore);
     }
 
@@ -3996,128 +4224,60 @@ async function dryRunCompany(
         }
       };
 
-      const quantity = request.beforeQuantity;
-      const candidates: HistoricalInventoryState[] = [];
-      if (!quantity.gt(0)) {
-        candidates.push(createHistoricalInventoryStateFromSnapshot(quantity, request.recorded, "0"));
-      } else {
-        const lowCents = quantity.times(request.recorded.minus("0.006")).times(100).floor();
-        const highCents = quantity.times(request.recorded.plus("0.006")).times(100).ceil();
-        if (highCents.minus(lowCents).gt(REANCHOR_MAX_CANDIDATES)) {
-          checks.push({
-            companyId,
-            locationId,
-            stockItemId,
-            code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_AMBIGUOUS",
-            status: "warning",
-            actual: highCents.minus(lowCents).toFixed(0),
-            detail: `Value window at ${request.anchor.movementId} is too wide to enumerate`,
-          });
-          blockUnresolved(request.unresolvedSales);
-          continue;
-        }
-        for (let cents = lowCents; cents.lte(highCents); cents = cents.plus(1)) {
-          const candidate = {
-            quantity,
-            averageRate: request.recorded,
-            totalValue: repairMoney(cents.dividedBy(100)),
-          };
-          if (historicalStateRateMatchesValue(candidate)) candidates.push(candidate);
-        }
-      }
-
-      const unresolvedIds = new Set(request.unresolvedSales.map((sale) => sale.sale!.salesItemId));
       const earlier = movementsInCheckpoint.filter(
         (candidateMovement) =>
           movementKey(candidateMovement) === request.key &&
           compareMovementMutationAscending(candidateMovement, request.anchor) < 0
       );
-      type ReanchorOutcome = {
-        proposals: Map<number, HistoricalSalesRepairProposal>;
-        sensitivity: Map<number, Decimal>;
-        stoppedAt: string | null;
-      };
-      const outcomes: ReanchorOutcome[] = [];
-      for (const start of candidates) {
-        let state = start;
-        let sensitivity = quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1);
-        const outcome: ReanchorOutcome = { proposals: new Map(), sensitivity: new Map(), stoppedAt: null };
-        let survived = true;
-        for (const earlierMovement of earlier) {
-          const reversedEarlier = reverseHistoricalSalesRepairMovement(state, earlierMovement, {
-            priorCostMemoryRate: priorCostMemoryRateHints.get(earlierMovement.movementId) ?? null,
-          });
-          if (!reversedEarlier.reversible) {
-            if (reversedEarlier.reason === "COST_MEMORY_IRREVERSIBLE") {
-              outcome.stoppedAt = earlierMovement.movementId;
-            } else {
-              survived = false;
-            }
-            break;
-          }
-          if (
-            earlierMovement.evidence === "canonical" &&
-            CANONICAL_SALE_SOURCE_TYPES.has(earlierMovement.sourceType) &&
-            !posJournalCostIsNotInventoryRate(earlierMovement) &&
-            d(earlierMovement.quantityDelta).lt(0) &&
-            earlierMovement.unitCost !== null &&
-            earlierMovement.unitCost !== undefined &&
-            !repairRate(earlierMovement.unitCost).eq(repairRate(reversedEarlier.stateBefore.averageRate))
-          ) {
-            survived = false;
-            break;
-          }
-          const afterQty = repairQuantity(state.quantity);
-          const beforeQty = repairQuantity(reversedEarlier.stateBefore.quantity);
-          if (d(earlierMovement.quantityDelta).gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
-            sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
-          }
-          if (earlierMovement.sale && unresolvedIds.has(earlierMovement.sale.salesItemId)) {
-            outcome.proposals.set(
-              earlierMovement.sale.salesItemId,
-              historicalSaleProposalFromState(earlierMovement, reversedEarlier.stateBefore)
-            );
-            outcome.sensitivity.set(earlierMovement.sale.salesItemId, sensitivity);
-          }
-          state = reversedEarlier.stateBefore;
-        }
-        if (survived) outcomes.push(outcome);
-      }
-
-      const signature = (outcome: ReanchorOutcome) =>
-        `${outcome.stoppedAt ?? ""}|` +
-        [...outcome.proposals.entries()]
-          .sort((a, b) => a[0] - b[0])
-          .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
-          .join(",");
-      const distinctOutcomes = new Set(outcomes.map(signature));
-      if (outcomes.length === 0 || distinctOutcomes.size !== 1 || outcomes[0].proposals.size === 0) {
+      const result = reanchorHistoricalRewindAtRecordedRate({
+        anchorQuantity: request.beforeQuantity,
+        recordedRate: request.recorded,
+        earlierMovementsDescending: earlier,
+        targetSaleIds: new Set(request.unresolvedSales.map((sale) => sale.sale!.salesItemId)),
+        priorCostMemoryRateHints,
+        maxCandidates: REANCHOR_MAX_CANDIDATES.toNumber(),
+      });
+      if (result.status !== "proven") {
         checks.push({
           companyId,
           locationId,
           stockItemId,
-          code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_AMBIGUOUS",
+          code: `${reanchorCodePrefix(request.transition)}_REANCHOR_AMBIGUOUS`,
           status: "warning",
           expected: "1 agreeing outcome",
-          actual: `${outcomes.length} surviving of ${candidates.length} candidates, ${distinctOutcomes.size} distinct outcomes`,
-          detail: `Re-anchor below unrecorded revaluation at ${request.anchor.movementId} is not unique`,
+          actual:
+            result.status === "too-wide"
+              ? `${result.candidateCount} cent values to enumerate`
+              : `${result.survivorCount} surviving of ${result.candidateCount} candidates, ${result.distinctOutcomeCount} distinct outcomes`,
+          detail: `Re-anchor at ${request.anchor.movementId} below ${request.transition} ${request.transitionMovementId} is not unique`,
         });
         blockUnresolved(request.unresolvedSales);
         continue;
       }
 
-      const accepted = outcomes[0];
       let proven = 0;
       for (const saleMovement of request.unresolvedSales) {
         const salesItemId = saleMovement.sale!.salesItemId;
-        const proposal = accepted.proposals.get(salesItemId);
+        const proposal = result.proposals.get(salesItemId);
         if (!proposal) {
-          blockUnresolved([saleMovement]);
+          if (result.stoppedAt) {
+            // Every survivor stopped at the same irreversible cost-memory
+            // boundary above this sale: that, not the anchor, blocks it.
+            checks.push({
+              companyId,
+              locationId: saleMovement.locationId,
+              stockItemId: saleMovement.stockItemId,
+              salesItemId,
+              code: "LEGACY_REWIND_COST_MEMORY_IRREVERSIBLE",
+              status: "block",
+              detail: `Sales item ${salesItemId} predates irreversible valuation boundary ${result.stoppedAt} below re-anchor ${request.anchor.movementId}`,
+            });
+          } else {
+            blockUnresolved([saleMovement]);
+          }
           continue;
         }
-        const saleSensitivity = Decimal.max(
-          ...outcomes.map((outcome) => outcome.sensitivity.get(salesItemId) ?? new Decimal(0))
-        );
+        const saleSensitivity = result.sensitivity.get(salesItemId) ?? new Decimal(0);
         if (saleSensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
           checks.push({
             companyId,
@@ -4141,12 +4301,12 @@ async function dryRunCompany(
         companyId,
         locationId,
         stockItemId,
-        code: "LEGACY_UNRECORDED_REVALUATION_REANCHOR_PROVEN",
+        code: `${reanchorCodePrefix(request.transition)}_REANCHOR_PROVEN`,
         status: "pass",
         expected: String(request.unresolvedSales.length),
         actual: String(proven),
-        detail: `${outcomes.length} of ${candidates.length} value candidates at ${request.anchor.movementId} survived and agree on every reconstructed sale cost${
-          accepted.stoppedAt ? `; rewind stops at ${accepted.stoppedAt}` : ""
+        detail: `${result.survivorCount} of ${result.candidateCount} value candidates at ${request.anchor.movementId} (recorded ${request.recorded.toFixed(2)}, below ${request.transition} ${request.transitionMovementId}) survived and agree on every reconstructed sale cost${
+          result.stoppedAt ? `; rewind stops at ${result.stoppedAt}` : ""
         }`,
       });
     }
