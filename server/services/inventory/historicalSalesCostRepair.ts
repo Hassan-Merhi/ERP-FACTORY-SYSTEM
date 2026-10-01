@@ -515,8 +515,13 @@ function compareMovementMutationDescending(a: HistoricalSalesRepairMovement, b: 
   return -compareMovementMutationAscending(a, b);
 }
 
-function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
-  if (movement.movementId.startsWith("canonical-correction:")) {
+export function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
+  // Derived rows carry the journal id they were reconstructed from, so the
+  // checkpoint cutoff places them on the same side as that journal row.
+  if (
+    movement.movementId.startsWith("canonical-correction:") ||
+    movement.movementId.startsWith("canonical-dropped-line:")
+  ) {
     const id = Number(movement.movementId.split(":")[1]);
     return Number.isInteger(id) && id > 0 ? id : null;
   }
