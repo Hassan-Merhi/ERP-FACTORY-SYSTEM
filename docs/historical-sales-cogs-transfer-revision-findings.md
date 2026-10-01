@@ -158,3 +158,41 @@ missing from the replay.
 - V34 adds a `REWIND_ERROR_AMPLIFICATION` warning (worst sensitivity per key) to
   measure this conditioning problem across all keys before choosing a blocking
   threshold.
+
+## POS sale-cost mismatches (run #39: 12,811 blocked rows on 317 keys)
+
+The blocker fires when the checkpoint rewind reaches an original POS sale issue
+(`pos-sale:V:revN:ITEM`, which journals the locked live rate) and infers a
+different pre-sale rate. A forward replay of sampled keys shows two causes.
+
+1. **Unrecorded revaluations (≈35 keys).** Company 10 (Golden Coast), key
+   132/6282, sold at a recorded 33.15–33.16 through 2026-08-31 and at 37.07 from
+   2026-09-01, with no stock movement in between. Location 131 jumped to the same
+   37.07 at the same moment. Across the canonical journal there are 45 such
+   jumps (two consecutive original sale issues at a key, no movement between,
+   recorded rates more than 0.02 apart). 35 of them fall on 2026-09-01 – 09-04,
+   mostly company 10, often moving an item to one identical rate across
+   locations 131/132/133.
+   - Writers in the code that change average_rate/total_value without a
+     movement or an audit row: `updateCostPricesByBarcode` (location
+     cost-price import: rate = price, value = qty × price) and direct
+     location inventory imports.
+   - No surviving evidence of when they ran or what they wrote was found:
+     audit_log has nothing, Render request logs do not reach back that far, and
+     `sp_migration_cutover_stock_deltas` is empty (the SP Phase 4 migration
+     never ran). The cash/bank "revaluation service" is FX only.
+   - Sales before such a jump cannot be proven by rewinding from the
+     checkpoint, so the blocks are correct. V37 labels these boundaries
+     `UNRECORDED_REVALUATION_DETECTED` (warning) so they are not confused
+     with model drift.
+   - Possible recovery to explore: re-anchor the rewind at the last pre-jump
+     original sale (rate pinned, value within ±0.005×qty) and accept a value
+     candidate only if it is unique against every earlier recorded live rate.
+2. **Cent-level drift (most of the rest).** Mismatches of 0.01–0.05, the same
+   pattern as item 702: forward replays stay within a few cents of production,
+   but the rewind cannot reach the recorded rate exactly. Causes still open.
+   Float rounding (pre-2026-08-02) and legacy offload ordering (fixed in V36)
+   were ruled out or corrected for the cases examined.
+   - The same writers above mean that undetected revaluations before canonical
+     journaling (2026-08-15) can exist anywhere. The V32 evidenced-rate range
+     and V35 amplification guards are the safety net for those.
