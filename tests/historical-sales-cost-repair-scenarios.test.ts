@@ -635,4 +635,20 @@ describe("historical COGS reconstruction scenarios", () => {
     expect(result.status).toBe("proven");
     expect(result.proposals.get(901)?.proposedCostPrice).toBe(legacyCost);
   });
+
+  it("does not treat a legacy sale with two exact pre-sale rates as proven (strict proof)", () => {
+    // 3 units leave 1 @ 168.81: before-rates 168.81 and 168.82 both replay exactly.
+    const sale = legacySale(950, "2026-07-01T08:00:00Z", "3");
+    const after = state("1", "168.81", "168.81");
+    const rates = historicalIssueInverseCandidates(after, sale).map((candidate) => candidate.averageRate.toFixed(2));
+    expect(rates.length).toBeGreaterThan(1);
+
+    const result = reanchorHistoricalRewindAtRecordedRate({
+      anchorQuantity: "1",
+      recordedRate: "168.81",
+      earlierMovementsDescending: [sale],
+      targetSaleIds: new Set([950]),
+    });
+    expect(result.notUniqueSaleIds.has(950)).toBe(true);
+  });
 });

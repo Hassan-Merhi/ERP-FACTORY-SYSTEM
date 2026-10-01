@@ -244,6 +244,26 @@ function offloadEvidenceKey(offloadId: string | number, stockItemId: string | nu
   return `${String(offloadId)}:${Number(stockItemId)}`;
 }
 
+function legacyInverseNotUniqueBlock(
+  companyId: number,
+  movement: HistoricalSalesRepairMovement,
+  primaryBefore: HistoricalInventoryState,
+  alternatives: HistoricalInventoryState[],
+  path: string
+): RepairCheck {
+  return {
+    companyId,
+    locationId: movement.locationId,
+    stockItemId: movement.stockItemId,
+    salesItemId: movement.sale!.salesItemId,
+    code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+    status: "block",
+    expected: repairRate(primaryBefore.averageRate).toFixed(2),
+    actual: alternatives.map((candidate) => repairRate(candidate.averageRate).toFixed(2)).join(","),
+    detail: `Sales item ${movement.sale!.salesItemId}: the ${path} admits more than one exact pre-sale rate, so its cost is not uniquely proven`,
+  };
+}
+
 function reanchorCodePrefix(
   transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET" | "COLLAPSED_POS_LINES"
 ): string {
@@ -2034,6 +2054,15 @@ function recoverHistoricalMergedSales(input: {
         }
         if (movement.sale) {
           locationProposals.push(historicalSaleProposalFromState(movement, reversed.stateBefore));
+          const primaryBefore = reversed.stateBefore;
+          const alternatives = historicalIssueInverseCandidates(stateAfter, movement).filter(
+            (candidate) => !historicalInventoryStatesEqual(candidate, primaryBefore)
+          );
+          if (alternatives.length > 0) {
+            checks.push(
+              legacyInverseNotUniqueBlock(input.companyId, movement, primaryBefore, alternatives, "merged source rewind")
+            );
+          }
         }
         stateAfter = reversed.stateBefore;
       }
@@ -4004,6 +4033,12 @@ async function dryRunCompany(
           entry.sales += 1;
           if (spread.gt(entry.maxSpread)) entry.maxSpread = spread;
           legacyInverseAmbiguity.set(key, entry);
+          // V50 strict proof: the sale's own cost is not uniquely determined.
+          if (!forwardResetProvenSaleIds.has(movement.sale.salesItemId)) {
+            checks.push(
+              legacyInverseNotUniqueBlock(companyId, movement, primaryBefore, alternatives, "checkpoint rewind")
+            );
+          }
         }
       }
 
@@ -4563,11 +4598,11 @@ async function dryRunCompany(
         companyId,
         locationId: Number(locationIdText),
         stockItemId: Number(stockItemIdText),
-        code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+        code: "LEGACY_SALE_INVERSE_AMBIGUITY_SUMMARY",
         status: "warning",
         expected: String(entry.sales),
         actual: entry.maxSpread.toFixed(2),
-        detail: `${entry.sales} legacy sale inverse(s) admit another exact pre-issue rate (largest gap ${entry.maxSpread.toFixed(2)}); priced on the rate-unchanged inverse`,
+        detail: `${entry.sales} legacy sale inverse(s) admit another exact pre-issue rate (largest gap ${entry.maxSpread.toFixed(2)}); blocked as LEGACY_SALE_INVERSE_NOT_UNIQUE`,
       });
     }
 
@@ -4692,6 +4727,18 @@ async function dryRunCompany(
           }
           continue;
         }
+        if (result.notUniqueSaleIds.has(salesItemId)) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId,
+            code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+            status: "block",
+            detail: `Sales item ${salesItemId}: the re-anchored rewind at ${request.anchor.movementId} admits more than one exact pre-sale rate, so its cost is not uniquely proven`,
+          });
+          continue;
+        }
         const saleSensitivity = result.sensitivity.get(salesItemId) ?? new Decimal(0);
         if (saleSensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
           checks.push({
@@ -4735,7 +4782,7 @@ async function dryRunCompany(
     // for its sales. The era is rejected if stock goes negative inside it or a
     // recorded live rate inside it disagrees; a sale the rewind already priced
     // differently is blocked rather than repriced.
-    const REWIND_FAILURE_BLOCKS = /^(LEGACY_REWIND_|CHECKPOINT_REWIND_|CANONICAL_SALE_COST_EVIDENCE_MISMATCH$|LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED$)/;
+    const REWIND_FAILURE_BLOCKS = /^(LEGACY_REWIND_|CHECKPOINT_REWIND_|CANONICAL_SALE_COST_EVIDENCE_MISMATCH$|LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED$|LEGACY_SALE_INVERSE_NOT_UNIQUE$)/;
     const blockedSaleCodes = new Map<number, RepairCheck[]>();
     for (const check of checks) {
       if (check.status !== "block" || !check.salesItemId) continue;
