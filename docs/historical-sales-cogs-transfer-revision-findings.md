@@ -351,3 +351,22 @@ listed above.
 
 Run #61 (V54): 73,088 rows, 24,670 ready, 19,357 unchanged, 29,061 blocked across
 1,622 groups.
+
+## Evidence sources checked after V54 (all rejected)
+
+- **Import tables.** `import_batches` and `ai_import_jobs` are empty. `import_logs`
+  (564 files) hold container packing lists, not location openings.
+- **Bulk price updates in `audit_log`** (company 1 on 2026-05-29; companies 9 and 17
+  on 2026-08-19). These come from `bulk-ops.ts` and change selling prices only, not
+  inventory cost.
+- **Stock-transfer document rates as live-rate observations.** In the canonical era,
+  a transfer issued right after a sale carries exactly that sale's recorded live rate
+  in 226 of 276 cases (82%), and within a cent in 250 (90%). One in ten is off by
+  more, so these are not strict evidence.
+- **Single-location openings.** The run #60 opening-era conflicts are not caused by
+  splitting an item opening across locations. Single-location items show 378
+  conflicts against 68 agreements. The pinned item opening rate itself does not match
+  the January inventory rate, so openings cannot anchor a forward proof.
+- **Canonical container offloads into empty stock that contradict the rewind** (81
+  groups). Most differ from the receipt by one cent at one unit. The sales after them
+  are covered by closed eras; the sales before them have no determined start.
