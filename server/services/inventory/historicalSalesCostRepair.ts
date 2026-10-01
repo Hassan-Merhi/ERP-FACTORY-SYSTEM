@@ -3450,6 +3450,24 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const rewindBoundaryReached = new Set<string>();
+    const UNRECORDED_REVALUATION_MIN_JUMP = new Decimal("0.02");
+    let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
+    const nextMovementAtKey = (
+      key: string,
+      movement: HistoricalSalesRepairMovement
+    ): HistoricalSalesRepairMovement | undefined => {
+      if (!movementsAscendingByKey) {
+        movementsAscendingByKey = new Map();
+        for (const candidate of movementsAscending) {
+          const rows = movementsAscendingByKey.get(movementKey(candidate)) ?? [];
+          rows.push(candidate);
+          movementsAscendingByKey.set(movementKey(candidate), rows);
+        }
+      }
+      const rows = movementsAscendingByKey.get(key) ?? [];
+      const index = rows.findIndex((candidate) => candidate.movementId === movement.movementId);
+      return index >= 0 ? rows[index + 1] : undefined;
+    };
     // V34 diagnostic: rewinding a receipt divides any value error by the
     // smaller pre-receipt quantity, so the reconstructed rate's sensitivity to
     // a one-cent model error at the checkpoint grows by Q_after/Q_before at
@@ -3664,6 +3682,37 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         const recorded = repairRate(movement.unitCost ?? "0");
         const inferred = repairRate(reversed.stateBefore.averageRate);
         if (!recorded.eq(inferred)) {
+          // V37 diagnostic: issues never move the average beyond rounding, so
+          // when the very next movement at this key is another original sale
+          // issue journaling a materially different locked live rate, the
+          // inventory was revalued in between by a writer that left no
+          // movement (cost-price import, direct location import). That
+          // boundary cannot be crossed without evidence of the revaluation.
+          const nextMovement = nextMovementAtKey(key, movement);
+          if (
+            nextMovement &&
+            nextMovement.evidence === "canonical" &&
+            nextMovement.canonicalPosRole === "sale-issue" &&
+            d(nextMovement.quantityDelta).lt(0) &&
+            nextMovement.unitCost !== null &&
+            nextMovement.unitCost !== undefined &&
+            repairRate(nextMovement.unitCost).minus(recorded).abs().gt(UNRECORDED_REVALUATION_MIN_JUMP)
+          ) {
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "UNRECORDED_REVALUATION_DETECTED",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: repairRate(nextMovement.unitCost).toFixed(2),
+              detail: `Locked live rate moved from ${recorded.toFixed(2)} (${movement.movementId}, ${
+                movement.createdAt ?? movement.occurredAt
+              }) to ${repairRate(nextMovement.unitCost).toFixed(2)} (${nextMovement.movementId}, ${
+                nextMovement.createdAt ?? nextMovement.occurredAt
+              }) with no stock movement between them`,
+            });
+          }
           const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
             (saleMovement) =>
               compareMovementMutationAscending(saleMovement, movement) < 0 &&
