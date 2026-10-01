@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canonicalPosRoleFromIdempotencyKey,
+  historicalRateWithinEvidencedRange,
   historicalStateRateMatchesValue,
   applyHistoricalForwardReplayMovement,
   applyHistoricalInventoryMovement,
@@ -1200,5 +1201,17 @@ describe("historical sales cost repair replay", () => {
     if (!reversed.reversible) return;
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("500.00");
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
+  it("treats any reconstructed cost outside the evidenced rate range as impossible", () => {
+    const range = { low: "95.00", high: "120.00" };
+    expect(historicalRateWithinEvidencedRange("107.34", range)).toBe(true);
+    expect(historicalRateWithinEvidencedRange("94.99", range)).toBe(true);
+    expect(historicalRateWithinEvidencedRange("120.01", range)).toBe(true);
+    expect(historicalRateWithinEvidencedRange("94.98", range)).toBe(false);
+    // Run #33 marked this item-702 proposal "ready".
+    expect(historicalRateWithinEvidencedRange("536372383.50", range)).toBe(false);
+    expect(historicalRateWithinEvidencedRange("0.00", range)).toBe(false);
+    expect(historicalRateWithinEvidencedRange("107.34", undefined)).toBe(false);
   });
 });
