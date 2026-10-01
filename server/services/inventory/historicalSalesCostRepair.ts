@@ -7,12 +7,28 @@ import { logger } from "../../lib/logger";
 import { ensureHistoricalSalesCostRepairSchema } from "./ensureHistoricalSalesCostRepairSchema";
 import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
+  applyHistoricalForwardReplayMovement,
+  applyHistoricalSalesRepairMovement,
+  canonicalPosRoleFromIdempotencyKey,
+  createHistoricalForwardReplayState,
+  createHistoricalInventoryStateFromSnapshot,
+  createHistoricalSignedLocationImportState,
   historicalInventoryKey,
+  historicalRateWithinEvidencedRange,
+  historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
-  replayHistoricalSalesCosts,
+  posJournalCostIsNotInventoryRate,
+  isExactValuationReset,
+  reanchorHistoricalRewindAtRecordedRate,
+  historicalIssueInverseCandidates,
+  isLiveRateIssueWithUnpinnedRate,
+  isRecordedLiveRateObservation,
+  repairRate,
+  reverseHistoricalSalesRepairMovement,
+  type HistoricalForwardReplayState,
+  type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
-  type HistoricalSalesRepairOpening,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
 
@@ -20,6 +36,7 @@ type RepairCheck = {
   companyId: number;
   locationId: number | null;
   stockItemId: number | null;
+  salesItemId?: number | null;
   code: string;
   status: "pass" | "block" | "warning";
   expected?: string | null;
@@ -35,12 +52,39 @@ type InventoryRow = {
   total_value: string;
 };
 
+type ValuationCheckpoint = {
+  movementCutoffId: number;
+  createdAt: Date;
+  rows: InventoryRow[];
+};
+
 type StockItemRow = {
   id: number;
   code: string | null;
   opening_qty: string;
   opening_rate: string;
   opening_value: string;
+  active: boolean;
+  deleted_at: Date | null;
+  created_at: Date;
+};
+
+type HistoricalMergeRow = {
+  alias_id: number;
+  alias_code: string;
+  alias_created_at: Date;
+  source_item_id: number;
+  source_code: string;
+  source_opening_qty: string;
+  source_opening_rate: string;
+  source_opening_value: string;
+  source_deleted_at: Date | null;
+  kept_item_id: number;
+  kept_code: string;
+  kept_opening_qty: string;
+  kept_opening_rate: string;
+  kept_opening_value: string;
+  merge_at: Date;
 };
 
 type CanonicalRow = {
@@ -48,11 +92,13 @@ type CanonicalRow = {
   location_id: number;
   stock_item_id: number;
   quantity_delta: string;
-  unit_cost: string;
+  unit_cost: string | null;
   source_type: string;
   source_id: string;
   occurred_at: Date;
   created_at: Date;
+  reversal_of_movement_id: number | null;
+  idempotency_key: string | null;
 };
 
 type SaleRow = {
@@ -78,6 +124,16 @@ type LegacyRow = {
   sequence: number;
   source_type: string;
   source_id: string;
+  mutation_at?: Date | null;
+};
+
+type OffloadValueEvidenceRow = {
+  offload_id: number;
+  stock_item_id: number;
+  quantity: string;
+  rate: string;
+  total_value: string;
+  offloaded_at: Date;
 };
 
 type AuditInventoryRow = {
@@ -96,9 +152,136 @@ type CompanyDryRun = {
 };
 
 const QTY_TOLERANCE = new Decimal("0.001");
+const REWIND_TRACE_LIMIT = 160;
 const MONEY_TOLERANCE = new Decimal("0.02");
+const OFFLOAD_EVIDENCE_SOURCE_TYPES = new Set([
+  "container-offload",
+  "legacy-container-offload",
+  "offload_optional_suspend",
+  "offload_optional_restore",
+  "container-reverse-offload",
+  "container-reverse-offload-legacy",
+]);
 
-function hscrError(code: string): Error {
+type HistoricalValuationResetEvidence = {
+  companyId: number;
+  locationId: number;
+  stockItemId: number;
+  occurredAt: string;
+  sourceId: string;
+  beforeQuantity: string;
+  beforeAverageRate: string;
+  beforeTotalValue: string;
+  afterQuantity: string;
+  afterAverageRate: string;
+  afterTotalValue: string;
+};
+
+const HISTORICAL_VALUATION_RESETS: HistoricalValuationResetEvidence[] = [
+  {
+    companyId: 8,
+    locationId: 122,
+    stockItemId: 6374,
+    // Inventory valuation Wave 6 was deployed after the 2026-09-11 12:43 sale
+    // and before the next 2026-09-12 13:08 sale. The production regression
+    // fixture captured the guarded pre-repair snapshot and exact target.
+    occurredAt: "2026-09-11T19:58:31.453Z",
+    sourceId: "wave6:SH.MIX3:company8:location122:item6374",
+    beforeQuantity: "17.000",
+    beforeAverageRate: "33.92",
+    beforeTotalValue: "576.56",
+    afterQuantity: "17.000",
+    afterAverageRate: "66.65",
+    afterTotalValue: "1133.05",
+  },
+];
+
+type ValuationOverrideRow = {
+  id: number;
+  location_id: number;
+  stock_item_id: number;
+  source_type: string;
+  before_quantity: string;
+  before_average_rate: string;
+  before_total_value: string;
+  after_quantity: string;
+  after_average_rate: string;
+  after_total_value: string;
+  created_at: Date;
+};
+
+/**
+ * Direct valuation overwrites recorded by the location cost-price import and
+ * the direct location inventory update (inventory_valuation_overrides, stage
+ * 031). Each is an exact before/after reset written in the same transaction as
+ * the inventory row, so replay can cross it the way it crosses the Wave 6 reset.
+ */
+async function loadValuationOverrides(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<ValuationOverrideRow[]> {
+  const exists = await client.query<{ present: string | null }>(
+    `SELECT to_regclass('public.inventory_valuation_overrides')::text AS present`
+  );
+  if (!exists.rows[0]?.present) return [];
+  const rows = await client.query<ValuationOverrideRow>(
+    `SELECT id,location_id,stock_item_id,source_type,
+            before_quantity::text,before_average_rate::text,before_total_value::text,
+            after_quantity::text,after_average_rate::text,after_total_value::text,
+            created_at
+       FROM inventory_valuation_overrides
+      WHERE company_id=$1
+        AND created_at <= $2
+      ORDER BY created_at,id`,
+    [companyId, sourceCutoff]
+  );
+  return rows.rows;
+}
+
+function offloadEvidenceKey(offloadId: string | number, stockItemId: string | number): string {
+  return `${String(offloadId)}:${Number(stockItemId)}`;
+}
+
+function legacyInverseNotUniqueBlock(
+  companyId: number,
+  movement: HistoricalSalesRepairMovement,
+  primaryBefore: HistoricalInventoryState,
+  alternatives: HistoricalInventoryState[],
+  path: string
+): RepairCheck {
+  return {
+    companyId,
+    locationId: movement.locationId,
+    stockItemId: movement.stockItemId,
+    salesItemId: movement.sale!.salesItemId,
+    code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+    status: "block",
+    expected: repairRate(primaryBefore.averageRate).toFixed(2),
+    actual: alternatives.map((candidate) => repairRate(candidate.averageRate).toFixed(2)).join(","),
+    detail: `Sales item ${movement.sale!.salesItemId}: the ${path} admits more than one exact pre-sale rate, so its cost is not uniquely proven`,
+  };
+}
+
+function reanchorCodePrefix(
+  transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET" | "COLLAPSED_POS_LINES"
+): string {
+  if (transition === "UNRECORDED_REVALUATION") return "LEGACY_UNRECORDED_REVALUATION";
+  if (transition === "COST_MEMORY_RESET") return "LEGACY_COST_MEMORY_RESET";
+  return "LEGACY_COLLAPSED_POS_LINES";
+}
+
+function traceState(state: HistoricalInventoryState): string {
+  return (
+    repairQuantity(state.quantity).toFixed(3) +
+    "|" +
+    repairRate(state.averageRate).toFixed(2) +
+    "|" +
+    repairMoney(state.totalValue).toFixed(2)
+  );
+}
+
+export function hscrError(code: string): Error {
   const error = new Error();
   error.message = code;
   return error;
@@ -120,7 +303,7 @@ function beforeCutoff(value: Date, canonicalStart: Date | null): boolean {
   return canonicalStart === null || value.getTime() < canonicalStart.getTime();
 }
 
-async function enableMaintenanceScope(client: PoolClient): Promise<void> {
+export async function enableMaintenanceScope(client: PoolClient): Promise<void> {
   await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
   await client.query("SELECT set_config('app.current_company_id', '', true)");
   await client.query("SELECT set_config('app.authorized_company_ids', '', true)");
@@ -161,7 +344,7 @@ async function loadCanonicalMovements(
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
     `SELECT id,location_id,stock_item_id,quantity_delta::text,unit_cost::text,
-            source_type,source_id,occurred_at,created_at
+            source_type,source_id,occurred_at,created_at,reversal_of_movement_id,idempotency_key
        FROM canonical_stock_movements
       WHERE company_id=$1
         AND created_at >= $2
@@ -169,19 +352,745 @@ async function loadCanonicalMovements(
       ORDER BY occurred_at,id`,
     [companyId, canonicalStart, sourceCutoff]
   );
+  // A voucher created before canonical journaling has canonical revision 0,
+  // so its first edit journals rev0:reverse/rev0:issue legs. Only a rev0
+  // issue with no reversal legs of the same voucher at the same instant is an
+  // original sale issue (the post-2026-09-26 original key format).
+  const editInstants = new Set(
+    rows.rows
+      .filter(
+        (row) => row.source_type === "pos-sale" && /^pos-sale:\d+:rev\d+:reverse:/.test(row.idempotency_key ?? "")
+      )
+      .map((row) => `${row.source_id}:${iso(row.created_at)}`)
+  );
+  const roleFor = (row: CanonicalRow) => {
+    const role = canonicalPosRoleFromIdempotencyKey(row.source_type, row.idempotency_key);
+    if (
+      role === "sale-issue" &&
+      /^pos-sale:\d+:rev0:issue:/.test(row.idempotency_key ?? "") &&
+      editInstants.has(`${row.source_id}:${iso(row.created_at)}`)
+    ) {
+      return "edit-issue" as const;
+    }
+    return role;
+  };
   return rows.rows.map((row) => ({
+    canonicalPosRole: roleFor(row),
+    idempotencyKey: row.idempotency_key ?? null,
     movementId: `canonical:${row.id}`,
     companyId,
     locationId: Number(row.location_id),
     stockItemId: Number(row.stock_item_id),
     occurredAt: iso(row.occurred_at),
+    createdAt: iso(row.created_at),
     sequence: Number(row.id) * 10 + 5,
     quantityDelta: String(row.quantity_delta),
-    unitCost: String(row.unit_cost),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
     sourceType: row.source_type,
     sourceId: row.source_id,
     evidence: "canonical" as const,
+    reversalOfMovementId: row.reversal_of_movement_id === null ? null : Number(row.reversal_of_movement_id),
   }));
+}
+
+async function loadValuationCheckpoint(client: PoolClient, companyId: number): Promise<ValuationCheckpoint | null> {
+  const cutover = await client.query<{ movement_cutoff_id: number; created_at: Date }>(
+    `SELECT movement_cutoff_id,created_at
+       FROM phase3_inventory_valuation_cutovers
+      WHERE company_id=$1
+      LIMIT 1`,
+    [companyId]
+  );
+  const row = cutover.rows[0];
+  if (!row) return null;
+
+  const baseline = await client.query<InventoryRow>(
+    `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
+       FROM phase3_inventory_valuation_baselines
+      WHERE company_id=$1
+      ORDER BY location_id,stock_item_id`,
+    [companyId]
+  );
+  return {
+    movementCutoffId: Number(row.movement_cutoff_id),
+    createdAt: row.created_at,
+    rows: baseline.rows,
+  };
+}
+
+async function loadOffloadValueEvidence(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<OffloadValueEvidenceRow[]> {
+  const result = await client.query<OffloadValueEvidenceRow>(
+    `SELECT co.id AS offload_id,coi.stock_item_id,
+            coi.quantity::text,coi.rate::text,coi.total_value::text,
+            co.offloaded_at
+       FROM container_offload_items coi
+       JOIN container_offloads co ON co.id=coi.offload_id
+       JOIN containers c ON c.id=co.container_id
+      WHERE c.company_id=$1
+        AND co.offloaded_at <= $2
+      ORDER BY co.id,coi.stock_item_id`,
+    [companyId, sourceCutoff]
+  );
+  return result.rows;
+}
+
+async function loadHistoricalMerges(client: PoolClient, companyId: number): Promise<HistoricalMergeRow[]> {
+  const result = await client.query<HistoricalMergeRow>(
+    `SELECT
+        a.id AS alias_id,
+        a.alias_code,
+        a.created_at AS alias_created_at,
+        source.id AS source_item_id,
+        source.code AS source_code,
+        source.opening_qty::text AS source_opening_qty,
+        source.opening_rate::text AS source_opening_rate,
+        source.opening_value::text AS source_opening_value,
+        source.deleted_at AS source_deleted_at,
+        kept.id AS kept_item_id,
+        kept.code AS kept_code,
+        kept.opening_qty::text AS kept_opening_qty,
+        kept.opening_rate::text AS kept_opening_rate,
+        kept.opening_value::text AS kept_opening_value,
+        COALESCE(source.deleted_at,a.created_at) AS merge_at
+       FROM stock_item_code_aliases a
+       JOIN stock_items kept
+         ON kept.company_id=a.company_id
+        AND kept.id=a.stock_item_id
+       JOIN stock_items source
+         ON source.company_id=a.company_id
+        AND source.code=a.alias_code
+        AND source.id<>a.stock_item_id
+      WHERE a.company_id=$1
+        AND a.description LIKE 'Merged from:%'
+      ORDER BY COALESCE(source.deleted_at,a.created_at),a.id`,
+    [companyId]
+  );
+  return result.rows;
+}
+
+function proposalFromRecordedRate(
+  companyId: number,
+  sale: SaleRow,
+  proposedRate: Decimal.Value,
+  sourceType: string,
+  sourceId: string,
+  evidence: "canonical" | "legacy"
+): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  const proposedCostPrice = repairRate(proposedRate);
+  const proposedTotalCost = repairMoney(repairQuantity(sale.quantity).abs().times(proposedCostPrice));
+  const proposedProfit = repairMoney(d(sale.total_sales).minus(proposedTotalCost));
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType,
+    sourceId,
+    evidence,
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: proposedCostPrice.toFixed(2),
+    proposedTotalCost: proposedTotalCost.toFixed(2),
+    proposedProfit: proposedProfit.toFixed(2),
+    changed:
+      !originalCostPrice.eq(proposedCostPrice) ||
+      !originalTotalCost.eq(proposedTotalCost) ||
+      !originalProfit.eq(proposedProfit),
+  };
+}
+
+function originalProposalForSale(companyId: number, sale: SaleRow): HistoricalSalesRepairProposal {
+  if (!sale.location_id) throw hscrError("HSCR_SALE_LOCATION_REQUIRED_FOR_PROPOSAL");
+  const originalCostPrice = repairRate(sale.cost_price);
+  const originalTotalCost = repairMoney(sale.total_cost);
+  const originalProfit = repairMoney(sale.profit);
+  return {
+    salesItemId: Number(sale.sales_item_id),
+    voucherId: Number(sale.voucher_id),
+    companyId,
+    locationId: Number(sale.location_id),
+    stockItemId: Number(sale.stock_item_id),
+    occurredAt: iso(sale.created_at),
+    sourceType: "legacy-sale",
+    sourceId: String(sale.voucher_id),
+    evidence: "legacy",
+    originalCostPrice: originalCostPrice.toFixed(2),
+    originalTotalCost: originalTotalCost.toFixed(2),
+    originalProfit: originalProfit.toFixed(2),
+    proposedCostPrice: originalCostPrice.toFixed(2),
+    proposedTotalCost: originalTotalCost.toFixed(2),
+    proposedProfit: originalProfit.toFixed(2),
+    changed: false,
+  };
+}
+
+function movementKey(
+  movement: Pick<HistoricalSalesRepairMovement, "companyId" | "locationId" | "stockItemId">
+): string {
+  return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
+}
+
+function movementMutationTime(movement: HistoricalSalesRepairMovement): number {
+  return Date.parse(movement.createdAt ?? movement.occurredAt);
+}
+
+function compareMovementMutationAscending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  const time = movementMutationTime(a) - movementMutationTime(b);
+  if (time !== 0) return time;
+  if (a.sequence !== b.sequence) return a.sequence - b.sequence;
+  return a.movementId.localeCompare(b.movementId);
+}
+
+function compareMovementMutationDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
+  return -compareMovementMutationAscending(a, b);
+}
+
+export function canonicalMovementNumericId(movement: HistoricalSalesRepairMovement): number | null {
+  // Derived rows carry the journal id they were reconstructed from, so the
+  // checkpoint cutoff places them on the same side as that journal row.
+  if (
+    movement.movementId.startsWith("canonical-correction:") ||
+    movement.movementId.startsWith("canonical-dropped-line:")
+  ) {
+    const id = Number(movement.movementId.split(":")[1]);
+    return Number.isInteger(id) && id > 0 ? id : null;
+  }
+  if (!movement.movementId.startsWith("canonical:")) return null;
+  const id = Number(movement.movementId.slice("canonical:".length));
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function buildPriorCanonicalCostMemoryRateHints(movements: HistoricalSalesRepairMovement[]): Map<string, string> {
+  const hints = new Map<string, string>();
+  const knownRateByKey = new Map<string, Decimal>();
+
+  for (const movement of [...movements].sort(compareMovementMutationAscending)) {
+    const key = movementKey(movement);
+    const knownRate = knownRateByKey.get(key);
+    if (knownRate) hints.set(movement.movementId, knownRate.toFixed(2));
+
+    const delta = d(movement.quantityDelta);
+    // V31: POS edit legs journal the old sale-line cost, not the live rate
+    // production used. They neither pin nor invalidate cost memory: the live
+    // rate is preserved by an unchanged edit, so the prior hint stays valid.
+    if (posJournalCostIsNotInventoryRate(movement)) continue;
+    if (
+      delta.lt(0) &&
+      movement.evidence === "canonical" &&
+      movement.unitCost !== null &&
+      movement.unitCost !== undefined
+    ) {
+      knownRateByKey.set(key, repairRate(movement.unitCost));
+      continue;
+    }
+
+    if (delta.gt(0) && movement.unitCost !== null && movement.unitCost !== undefined) {
+      const incomingRate = repairRate(movement.unitCost);
+      if (!knownRate || !incomingRate.eq(knownRate)) {
+        knownRateByKey.delete(key);
+      }
+    }
+  }
+
+  return hints;
+}
+
+type CanonicalSaleEvidence = {
+  movements: HistoricalSalesRepairMovement[];
+  latestMutationAt: number;
+  latestNegativeMovements: HistoricalSalesRepairMovement[];
+  latestPositiveMovements: HistoricalSalesRepairMovement[];
+  latestNegativeRates: Set<string>;
+  latestNegativeQuantity: Decimal;
+  latestNegativeValue: Decimal;
+  latestNegativeRate: Decimal | null;
+  latestPositiveRate: Decimal | null;
+  totalSignedQuantity: Decimal;
+  anchorCanonicalId: number;
+};
+
+const COLLAPSED_ORIGINAL_POS_KEY = /^pos-sale:(\d+):rev0:(\d+)$/;
+const EDIT_REVERSAL_LINE_KEY = /^pos-sale:\d+:rev(\d+):reverse:\d+:line:(\d+)$/;
+const EDIT_LEG_REVISION_KEY = /^pos-sale:\d+:rev(\d+):(?:reverse|issue):/;
+
+/**
+ * V41: restore POS sale lines whose canonical issue row was lost.
+ *
+ * From 2026-08-13 (123d9eedc) until 2026-09-26 (2e4d483fa) the original POS
+ * issue key was per stock item (pos-sale:V:rev0:ITEM). A second line of the
+ * same item collided with the first line's key, so the journal kept only the
+ * first line while inventory was deducted for every line (production: all 812
+ * unedited multi-line sales journal exactly the first line's quantity). The
+ * lifecycle correction then added the missing quantity at the latest mutation,
+ * days or weeks too late, which shifts the quantity chain between the sale and
+ * that mutation.
+ *
+ * The original lines are proven only when
+ *  (a) the voucher was never edited or deleted: the current sales lines are
+ *      the original lines; or
+ *  (b) the first edit of this voucher/item journals line-level reversal legs
+ *      (from 2026-09-09): those legs reverse exactly the lines then on the sale.
+ * In both cases the journaled quantity must equal the first line's quantity.
+ * Each further line is restored at the original issue's instant as an
+ * unpriced issue at the live stored rate, which is what production executed.
+ */
+export function droppedPosLineMovements(
+  companyId: number,
+  canonical: HistoricalSalesRepairMovement[],
+  sales: SaleRow[]
+): { movements: HistoricalSalesRepairMovement[]; checks: RepairCheck[] } {
+  const movements: HistoricalSalesRepairMovement[] = [];
+  const checks: RepairCheck[] = [];
+  const posByVoucher = new Map<string, HistoricalSalesRepairMovement[]>();
+  const deletedVouchers = new Set<string>();
+  for (const movement of canonical) {
+    if (movement.sourceType === "voucher_delete_pos_sale") deletedVouchers.add(String(movement.sourceId));
+    if (movement.sourceType !== "pos-sale") continue;
+    const rows = posByVoucher.get(String(movement.sourceId)) ?? [];
+    rows.push(movement);
+    posByVoucher.set(String(movement.sourceId), rows);
+  }
+  const linesByVoucherItem = new Map<string, SaleRow[]>();
+  for (const sale of sales) {
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    const rows = linesByVoucherItem.get(key) ?? [];
+    rows.push(sale);
+    linesByVoucherItem.set(key, rows);
+  }
+
+  for (const [voucherId, rows] of posByVoucher) {
+    const voucherEdited = rows.some((row) => EDIT_LEG_REVISION_KEY.test(row.idempotencyKey ?? ""));
+    for (const original of rows) {
+      const match = COLLAPSED_ORIGINAL_POS_KEY.exec(original.idempotencyKey ?? "");
+      if (!match || !d(original.quantityDelta).lt(0)) continue;
+      const journaledQuantity = repairQuantity(d(original.quantityDelta).abs());
+      const itemRows = rows
+        .filter(
+          (row) =>
+            row !== original && row.stockItemId === original.stockItemId && row.locationId === original.locationId
+        )
+        .sort(compareMovementMutationAscending);
+
+      let lineQuantities: Decimal[] | null = null;
+      let basis = "";
+      if (!voucherEdited && !deletedVouchers.has(voucherId) && itemRows.length === 0) {
+        const lines = (linesByVoucherItem.get(`${voucherId}:${original.locationId}:${original.stockItemId}`) ?? [])
+          .slice()
+          .sort((a, b) => Number(a.sales_item_id) - Number(b.sales_item_id));
+        if (lines.length > 1) {
+          lineQuantities = lines.map((line) => repairQuantity(d(line.quantity).abs()));
+          basis = "unedited sale lines " + lines.map((line) => line.sales_item_id).join(",");
+        }
+      } else if (itemRows.length > 0) {
+        const firstRevision = EDIT_LEG_REVISION_KEY.exec(itemRows[0].idempotencyKey ?? "")?.[1];
+        const firstEdit = firstRevision
+          ? itemRows.filter((row) => EDIT_LEG_REVISION_KEY.exec(row.idempotencyKey ?? "")?.[1] === firstRevision)
+          : [];
+        const reversals = firstEdit.filter((row) => d(row.quantityDelta).gt(0));
+        const lineLegs = reversals
+          .map((row) => ({ row, line: EDIT_REVERSAL_LINE_KEY.exec(row.idempotencyKey ?? "") }))
+          .filter((entry) => entry.line !== null);
+        if (reversals.length > 1 && lineLegs.length === reversals.length) {
+          lineLegs.sort((a, b) => Number(a.line![2]) - Number(b.line![2]));
+          lineQuantities = lineLegs.map((entry) => repairQuantity(d(entry.row.quantityDelta).abs()));
+          basis = `rev${firstRevision} line reversals ` + lineLegs.map((entry) => entry.line![2]).join(",");
+        }
+      }
+      if (!lineQuantities) continue;
+
+      const locationId = original.locationId;
+      const stockItemId = original.stockItemId;
+      if (!lineQuantities[0].eq(journaledQuantity)) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "CANONICAL_POS_DROPPED_LINE_UNPROVEN",
+          status: "warning",
+          expected: journaledQuantity.toFixed(3),
+          actual: lineQuantities.map((quantity) => quantity.toFixed(3)).join("+"),
+          detail: `Voucher ${voucherId} journaled ${original.movementId} does not equal its first line (${basis}); dropped lines not restored`,
+        });
+        continue;
+      }
+      lineQuantities.slice(1).forEach((quantity, index) => {
+        movements.push({
+          movementId: `canonical-dropped-line:${canonicalMovementNumericId(original)}:${index + 2}`,
+          companyId,
+          locationId,
+          stockItemId,
+          occurredAt: original.occurredAt,
+          createdAt: original.createdAt,
+          sequence: original.sequence + (index + 1) / 100,
+          quantityDelta: quantity.negated().toFixed(3),
+          unitCost: null,
+          sourceType: "pos-sale",
+          sourceId: original.sourceId,
+          evidence: "canonical",
+          canonicalPosRole: "dropped-line",
+        });
+      });
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: "CANONICAL_POS_DROPPED_LINE_RESTORED",
+        status: "pass",
+        expected: lineQuantities.reduce((sum, quantity) => sum.plus(quantity), new Decimal(0)).toFixed(3),
+        actual: journaledQuantity.toFixed(3),
+        detail: `Voucher ${voucherId} ${original.movementId}: restored ${lineQuantities.length - 1} line(s) lost to the per-item rev0 key at the original issue instant (${basis})`,
+      });
+    }
+  }
+  return { movements, checks };
+}
+
+export function activeCanonicalSaleEvidence(
+  movements: HistoricalSalesRepairMovement[]
+): Map<string, CanonicalSaleEvidence> {
+  const grouped = new Map<string, HistoricalSalesRepairMovement[]>();
+  for (const movement of movements) {
+    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    const key = `${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`;
+    const rows = grouped.get(key) ?? [];
+    rows.push(movement);
+    grouped.set(key, rows);
+  }
+
+  const result = new Map<string, CanonicalSaleEvidence>();
+  for (const [key, rows] of grouped) {
+    const latestMutationAt = Math.max(...rows.map(movementMutationTime));
+    const latestNegativeMovements = rows
+      .filter((movement) => movementMutationTime(movement) === latestMutationAt && d(movement.quantityDelta).lt(0))
+      .sort(compareMovementMutationAscending);
+    const latestPositiveMovements = rows
+      .filter((movement) => movementMutationTime(movement) === latestMutationAt && d(movement.quantityDelta).gt(0))
+      .sort(compareMovementMutationAscending);
+    const latestNegativeRates = new Set<string>();
+    let latestNegativeQuantity = new Decimal(0);
+    let latestNegativePricedQuantity = new Decimal(0);
+    let latestNegativeValue = new Decimal(0);
+    let hasMissingCost = false;
+    for (const movement of latestNegativeMovements) {
+      const quantity = d(movement.quantityDelta).abs();
+      latestNegativeQuantity = repairQuantity(latestNegativeQuantity.plus(quantity));
+      // A reconstructed dropped line has no journaled cost of its own; the
+      // sale's recorded rate comes from the journaled line(s) only, so it
+      // counts toward the issued quantity but not toward the rate.
+      if (movement.canonicalPosRole === "dropped-line") continue;
+      if (movement.unitCost === null || movement.unitCost === undefined) {
+        hasMissingCost = true;
+        continue;
+      }
+      latestNegativePricedQuantity = repairQuantity(latestNegativePricedQuantity.plus(quantity));
+      latestNegativeRates.add(repairRate(movement.unitCost).toFixed(2));
+      latestNegativeValue = latestNegativeValue.plus(quantity.times(d(movement.unitCost)));
+    }
+    const latestNegativeRate =
+      !hasMissingCost && latestNegativePricedQuantity.gt(0)
+        ? repairRate(latestNegativeValue.dividedBy(latestNegativePricedQuantity))
+        : null;
+
+    let latestPositiveQuantity = new Decimal(0);
+    let latestPositiveValue = new Decimal(0);
+    let hasMissingPositiveCost = false;
+    for (const movement of latestPositiveMovements) {
+      const quantity = d(movement.quantityDelta).abs();
+      latestPositiveQuantity = repairQuantity(latestPositiveQuantity.plus(quantity));
+      if (movement.unitCost === null || movement.unitCost === undefined) {
+        hasMissingPositiveCost = true;
+        continue;
+      }
+      latestPositiveValue = latestPositiveValue.plus(quantity.times(d(movement.unitCost)));
+    }
+    const latestPositiveRate =
+      !hasMissingPositiveCost && latestPositiveQuantity.gt(0)
+        ? repairRate(latestPositiveValue.dividedBy(latestPositiveQuantity))
+        : null;
+    const totalSignedQuantity = repairQuantity(
+      rows.reduce((sum, movement) => sum.plus(d(movement.quantityDelta)), new Decimal(0))
+    );
+    const anchorCanonicalId = Math.max(...rows.map((movement) => canonicalMovementNumericId(movement) ?? 0));
+
+    result.set(key, {
+      movements: rows.sort(compareMovementMutationAscending),
+      latestMutationAt,
+      latestNegativeMovements,
+      latestPositiveMovements,
+      latestNegativeRates,
+      latestNegativeQuantity,
+      latestNegativeValue: repairMoney(latestNegativeValue),
+      latestNegativeRate,
+      latestPositiveRate,
+      totalSignedQuantity,
+      anchorCanonicalId,
+    });
+  }
+  return result;
+}
+
+function historicalSalesCompanyEvidenceHash(input: {
+  companyId: number;
+  canonicalStart: Date | null;
+  checkpoint: ValuationCheckpoint | null;
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  manual: { movements: LegacyRow[]; checks: RepairCheck[] };
+  sales: SaleRow[];
+  stockItems: StockItemRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
+  historicalMerges: HistoricalMergeRow[];
+  valuationOverrides: ValuationOverrideRow[];
+}): string {
+  const payload = {
+    companyId: input.companyId,
+    canonicalStart: input.canonicalStart ? input.canonicalStart.toISOString() : null,
+    checkpoint: input.checkpoint
+      ? {
+          movementCutoffId: input.checkpoint.movementCutoffId,
+          createdAt: input.checkpoint.createdAt.toISOString(),
+          rows: input.checkpoint.rows.map((row) => ({
+            locationId: Number(row.location_id),
+            stockItemId: Number(row.stock_item_id),
+            quantity: String(row.quantity),
+            averageRate: String(row.average_rate),
+            totalValue: String(row.total_value),
+          })),
+        }
+      : null,
+    canonical: input.canonical.map((movement) => ({
+      movementId: movement.movementId,
+      locationId: movement.locationId,
+      stockItemId: movement.stockItemId,
+      occurredAt: movement.occurredAt,
+      createdAt: movement.createdAt ?? null,
+      reversalOfMovementId: movement.reversalOfMovementId ?? null,
+      sequence: movement.sequence,
+      quantityDelta: movement.quantityDelta,
+      unitCost: movement.unitCost,
+      sourceType: movement.sourceType,
+      sourceId: movement.sourceId,
+      canonicalPosRole: movement.canonicalPosRole ?? null,
+    })),
+    legacy: input.legacy.map((row) => ({
+      movementId: row.movement_id,
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      quantityDelta: String(row.quantity_delta),
+      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+      occurredAt: iso(row.occurred_at),
+      mutationAt: row.mutation_at ? iso(row.mutation_at) : null,
+      sequence: Number(row.sequence),
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+    })),
+    manualMovements: input.manual.movements.map((row) => ({
+      movementId: row.movement_id,
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      quantityDelta: String(row.quantity_delta),
+      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+      occurredAt: iso(row.occurred_at),
+      sequence: Number(row.sequence),
+      sourceType: row.source_type,
+      sourceId: row.source_id,
+    })),
+    manualChecks: [...input.manual.checks].sort((a, b) =>
+      [a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code, a.detail ?? ""]
+        .join(":")
+        .localeCompare([b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code, b.detail ?? ""].join(":"))
+    ),
+    sales: input.sales.map((sale) => ({
+      salesItemId: Number(sale.sales_item_id),
+      voucherId: Number(sale.voucher_id),
+      locationId: sale.location_id === null ? null : Number(sale.location_id),
+      stockItemId: Number(sale.stock_item_id),
+      quantity: String(sale.quantity),
+      totalSales: String(sale.total_sales),
+      costPrice: String(sale.cost_price),
+      totalCost: String(sale.total_cost),
+      profit: String(sale.profit),
+      createdAt: iso(sale.created_at),
+    })),
+    stockItems: input.stockItems.map((item) => ({
+      id: Number(item.id),
+      code: item.code,
+      openingQty: String(item.opening_qty),
+      openingRate: String(item.opening_rate),
+      openingValue: String(item.opening_value),
+      active: Boolean(item.active),
+      deletedAt: item.deleted_at ? iso(item.deleted_at) : null,
+      createdAt: iso(item.created_at),
+    })),
+    offloadEvidence: input.offloadEvidence.map((row) => ({
+      offloadId: Number(row.offload_id),
+      stockItemId: Number(row.stock_item_id),
+      quantity: String(row.quantity),
+      rate: String(row.rate),
+      totalValue: String(row.total_value),
+      offloadedAt: iso(row.offloaded_at),
+    })),
+    valuationResets: HISTORICAL_VALUATION_RESETS.filter((reset) => reset.companyId === input.companyId).map(
+      (reset) => ({ ...reset })
+    ),
+    valuationOverrides: input.valuationOverrides.map((row) => ({
+      id: Number(row.id),
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      sourceType: row.source_type,
+      before: [row.before_quantity, row.before_average_rate, row.before_total_value].map(String),
+      after: [row.after_quantity, row.after_average_rate, row.after_total_value].map(String),
+      createdAt: iso(row.created_at),
+    })),
+    historicalMerges: input.historicalMerges.map((merge) => ({
+      aliasId: Number(merge.alias_id),
+      aliasCode: merge.alias_code,
+      aliasCreatedAt: iso(merge.alias_created_at),
+      sourceItemId: Number(merge.source_item_id),
+      sourceCode: merge.source_code,
+      sourceOpeningQty: String(merge.source_opening_qty),
+      sourceOpeningRate: String(merge.source_opening_rate),
+      sourceOpeningValue: String(merge.source_opening_value),
+      sourceDeletedAt: merge.source_deleted_at ? iso(merge.source_deleted_at) : null,
+      keptItemId: Number(merge.kept_item_id),
+      keptCode: merge.kept_code,
+      keptOpeningQty: String(merge.kept_opening_qty),
+      keptOpeningRate: String(merge.kept_opening_rate),
+      keptOpeningValue: String(merge.kept_opening_value),
+      mergeAt: iso(merge.merge_at),
+    })),
+  };
+  return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+/**
+ * A direct location inventory update journals its quantity change as a
+ * location_inventory_update movement in the same transaction as its valuation
+ * override. The override reset carries that quantity change together with the
+ * exact valuation, so the journal row is replaced by it rather than applied
+ * twice. Shared by the dry-run and the apply-time evidence hash.
+ */
+function journalWithoutOverriddenLocationUpdates(
+  loaded: HistoricalSalesRepairMovement[],
+  valuationOverrides: ValuationOverrideRow[]
+): HistoricalSalesRepairMovement[] {
+  const overrideTransactionKeys = new Set(
+    valuationOverrides.map((row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`)
+  );
+  return loaded.filter(
+    (movement) =>
+      !(
+        movement.sourceType === "location_inventory_update" &&
+        overrideTransactionKeys.has(
+          `${movement.locationId}:${movement.stockItemId}:${movement.createdAt ?? movement.occurredAt}`
+        )
+      )
+  );
+}
+
+export async function recomputeHistoricalSalesCompanyEvidenceHash(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<string> {
+  const [canonicalStart, sales, stockItems, checkpoint, offloadEvidence, historicalMerges] = await Promise.all([
+    loadCanonicalStart(client, companyId, sourceCutoff),
+    loadSales(client, companyId, sourceCutoff),
+    loadStockItems(client, companyId),
+    loadValuationCheckpoint(client, companyId),
+    loadOffloadValueEvidence(client, companyId, sourceCutoff),
+    loadHistoricalMerges(client, companyId),
+  ]);
+  const [loadedCanonical, legacy, manual, valuationOverrides] = await Promise.all([
+    loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
+    loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
+    loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+    loadValuationOverrides(client, companyId, sourceCutoff),
+  ]);
+  return historicalSalesCompanyEvidenceHash({
+    companyId,
+    canonicalStart,
+    checkpoint,
+    canonical: journalWithoutOverriddenLocationUpdates(loadedCanonical, valuationOverrides),
+    legacy,
+    manual,
+    sales,
+    stockItems,
+    offloadEvidence,
+    historicalMerges,
+    valuationOverrides,
+  });
+}
+
+export async function inventoryEvidenceFingerprint(
+  client: PoolClient,
+  companyIds: number[]
+): Promise<{ hash: string; rowCount: number }> {
+  const result = await client.query<{
+    company_id: number;
+    location_id: number;
+    stock_item_id: number;
+    quantity: string;
+    average_rate: string;
+    total_value: string;
+  }>(
+    `SELECT company_id,location_id,stock_item_id,
+            quantity::text,average_rate::text,total_value::text
+       FROM inventory
+      WHERE company_id = ANY($1::int[])
+      ORDER BY company_id,location_id,stock_item_id`,
+    [companyIds]
+  );
+  const hash = createHash("sha256");
+  for (const row of result.rows) {
+    hash.update(
+      `${row.company_id}|${row.location_id}|${row.stock_item_id}|${row.quantity}|${row.average_rate}|${row.total_value}\n`
+    );
+  }
+  return { hash: hash.digest("hex"), rowCount: result.rows.length };
+}
+
+export async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
+  const triggers = await client.query<{ trigger_name: string }>(
+    `SELECT tg.tgname AS trigger_name
+       FROM pg_trigger tg
+       JOIN pg_class c ON c.oid=tg.tgrelid
+       JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname='public'
+        AND c.relname='sales_items'
+        AND NOT tg.tgisinternal
+      ORDER BY tg.tgname`
+  );
+  if (triggers.rows.length > 0) {
+    throw new Error(
+      `Historical sales cost repair refused because sales_items has unreviewed side-effect trigger(s): ${triggers.rows
+        .map((row) => row.trigger_name)
+        .join(", ")}`
+    );
+  }
+}
+
+async function loadStockItems(client: PoolClient, companyId: number): Promise<StockItemRow[]> {
+  const result = await client.query<StockItemRow>(
+    `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text,
+            active,deleted_at,created_at
+       FROM stock_items
+      WHERE company_id=$1
+      ORDER BY id`,
+    [companyId]
+  );
+  return result.rows;
 }
 
 async function loadSales(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<SaleRow[]> {
@@ -215,6 +1124,46 @@ async function loadLegacyMovements(
     WITH boundary AS (
       SELECT $1::int AS company_id,$2::timestamptz AS canonical_start,$3::timestamptz AS source_cutoff
     ),
+    -- V36: offloadContainer() posts its charge vouchers inside the same
+    -- transaction that mutates inventory, numbered
+    -- PREFIX-{containerNumber}-{Date.now()}. That system-generated millisecond
+    -- stamp, corroborated by vouchers.created_at, is the real inventory
+    -- mutation time; offloaded_at is only the user-entered calendar date.
+    -- Used only when the container has exactly one offload and exactly one
+    -- charge-voucher transaction, so re-offloads and later charge edits fall
+    -- back to offloaded_at.
+    offload_voucher_groups AS (
+      SELECT
+        v.company_id,
+        substring(v.voucher_number from '^(?:DUTY|OFFICE|TRANS|XFER|CHG)-(.+)-[0-9]{13}$') AS container_number,
+        COUNT(DISTINCT v.created_at) AS transaction_groups,
+        MIN(v.created_at) AS entered_at,
+        bool_and(
+          ABS(
+            substring(v.voucher_number from '([0-9]{13})$')::bigint -
+            (EXTRACT(EPOCH FROM v.created_at) * 1000)::bigint
+          ) < 120000
+        ) AS stamp_agrees
+      FROM vouchers v
+      JOIN boundary b ON b.company_id=v.company_id
+      WHERE v.voucher_type='Payment'
+        AND v.voucher_number ~ '^(DUTY|OFFICE|TRANS|XFER|CHG)-.+-[0-9]{13}$'
+      GROUP BY 1,2
+    ),
+    offload_entry AS (
+      SELECT co.id AS offload_id, g.entered_at AS mutation_at
+      FROM container_offloads co
+      JOIN containers c ON c.id=co.container_id
+      JOIN boundary b ON b.company_id=c.company_id
+      JOIN offload_voucher_groups g
+        ON g.company_id=c.company_id
+       AND g.container_number=c.container_number
+      WHERE COALESCE(co.optional,false)=false
+        AND g.transaction_groups=1
+        AND g.stamp_agrees
+        AND g.entered_at <= b.source_cutoff
+        AND (SELECT COUNT(*) FROM container_offloads o2 WHERE o2.container_id=co.container_id)=1
+    ),
     offloads AS (
       SELECT
         'offload:'||coi.id::text AS movement_id,
@@ -232,7 +1181,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=c.company_id
       WHERE COALESCE(co.optional,false)=false
         AND co.offloaded_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR co.offloaded_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -266,7 +1214,6 @@ async function loadLegacyMovements(
       WHERE v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sai.created_at,sav.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sai.created_at,sav.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -287,18 +1234,19 @@ async function loadLegacyMovements(
         sti.rate::text,
         GREATEST(sti.created_at,stv.created_at,v.created_at),
         sti.id*10+3,
-        'legacy-stock-transfer-out',
+        CASE
+          WHEN COALESCE(stv.inventory_applied,false)=true THEN 'legacy-stock-transfer-out'
+          ELSE 'legacy-stock-transfer-out-flag-fallback'
+        END,
         stv.id::text
       FROM stock_transfer_items sti
       JOIN stock_transfer_vouchers stv ON stv.id=sti.transfer_id
       JOIN vouchers v ON v.id=stv.voucher_id
       JOIN boundary b ON b.company_id=v.company_id
-      WHERE stv.inventory_applied=true
-        AND COALESCE(sti.source_location_id,stv.source_location_id) IS NOT NULL
+      WHERE COALESCE(sti.source_location_id,stv.source_location_id) IS NOT NULL
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -319,17 +1267,18 @@ async function loadLegacyMovements(
         sti.rate::text,
         GREATEST(sti.created_at,stv.created_at,v.created_at),
         sti.id*10+4,
-        'legacy-stock-transfer-in',
+        CASE
+          WHEN COALESCE(stv.inventory_applied,false)=true THEN 'legacy-stock-transfer-in'
+          ELSE 'legacy-stock-transfer-in-flag-fallback'
+        END,
         stv.id::text
       FROM stock_transfer_items sti
       JOIN stock_transfer_vouchers stv ON stv.id=sti.transfer_id
       JOIN vouchers v ON v.id=stv.voucher_id
       JOIN boundary b ON b.company_id=v.company_id
-      WHERE stv.inventory_applied=true
-        AND v.deleted_at IS NULL
+      WHERE v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(sti.created_at,stv.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(sti.created_at,stv.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -347,7 +1296,7 @@ async function loadLegacyMovements(
         cni.location_id,
         cni.stock_item_id,
         (CASE WHEN v.voucher_type='Credit Note' THEN ABS(cni.quantity) ELSE -ABS(cni.quantity) END)::text,
-        NULL::text,
+        cni.inventory_cost::text,
         GREATEST(cni.created_at,v.created_at),
         cni.id*10+6,
         CASE WHEN v.voucher_type='Credit Note' THEN 'legacy-credit-note' ELSE 'legacy-debit-note' END,
@@ -359,7 +1308,6 @@ async function loadLegacyMovements(
         AND v.deleted_at IS NULL
         AND COALESCE(v.optional,false)=false
         AND GREATEST(cni.created_at,v.created_at) <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR GREATEST(cni.created_at,v.created_at) < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -386,7 +1334,6 @@ async function loadLegacyMovements(
       JOIN stock_group_location_archives a ON a.id=ai.archive_id
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.archived_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.archived_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -414,7 +1361,6 @@ async function loadLegacyMovements(
       JOIN boundary b ON b.company_id=a.company_id
       WHERE a.restored_at IS NOT NULL
         AND a.restored_at <= b.source_cutoff
-        AND (b.canonical_start IS NULL OR a.restored_at < b.canonical_start)
         AND NOT EXISTS (
           SELECT 1
             FROM canonical_stock_movements csm
@@ -426,14 +1372,20 @@ async function loadLegacyMovements(
              AND csm.created_at <= b.source_cutoff
         )
     )
-    SELECT * FROM offloads
-    UNION ALL SELECT * FROM adjustments
-    UNION ALL SELECT * FROM transfer_source
-    UNION ALL SELECT * FROM transfer_destination
-    UNION ALL SELECT * FROM notes
-    UNION ALL SELECT * FROM archive_out
-    UNION ALL SELECT * FROM archive_in
-    ORDER BY occurred_at,sequence
+    SELECT u.*, oe.mutation_at
+    FROM (
+      SELECT * FROM offloads
+      UNION ALL SELECT * FROM adjustments
+      UNION ALL SELECT * FROM transfer_source
+      UNION ALL SELECT * FROM transfer_destination
+      UNION ALL SELECT * FROM notes
+      UNION ALL SELECT * FROM archive_out
+      UNION ALL SELECT * FROM archive_in
+    ) u
+    LEFT JOIN offload_entry oe
+      ON u.source_type='legacy-container-offload'
+     AND oe.offload_id::text=u.source_id
+    ORDER BY u.occurred_at,u.sequence
     `,
     params
   );
@@ -458,10 +1410,9 @@ async function loadLegacyManualAdjustments(
         AND action='update'
         AND changes ? 'adjustmentType'
         AND changes ? 'quantity'
-        AND created_at <= $3
-        AND ($2::timestamptz IS NULL OR created_at < $2)
+        AND created_at <= $2
       ORDER BY created_at,id`,
-    [companyId, canonicalStart, sourceCutoff]
+    [companyId, sourceCutoff]
   );
 
   const movements: LegacyRow[] = [];
@@ -521,191 +1472,78 @@ async function loadLegacyManualAdjustments(
   return { movements, checks };
 }
 
-function addMovementNet(
-  net: Map<string, Decimal>,
-  companyId: number,
-  movement: Pick<HistoricalSalesRepairMovement, "locationId" | "stockItemId" | "quantityDelta">
-): void {
-  const key = historicalInventoryKey(companyId, movement.locationId, movement.stockItemId);
-  net.set(key, (net.get(key) ?? new Decimal(0)).plus(d(movement.quantityDelta)));
-}
-
-function buildOpeningStates(input: {
-  companyId: number;
-  stockItems: StockItemRow[];
-  liveInventory: InventoryRow[];
-  movements: HistoricalSalesRepairMovement[];
-}): {
-  openings: HistoricalSalesRepairOpening[];
-  checks: RepairCheck[];
-  derivedOpeningByKey: Map<string, Decimal>;
-} {
-  const { companyId, stockItems, liveInventory, movements } = input;
-  const checks: RepairCheck[] = [];
-  const movementNet = new Map<string, Decimal>();
-  for (const movement of movements) addMovementNet(movementNet, companyId, movement);
-
-  const liveByKey = new Map<string, Decimal>();
-  for (const row of liveInventory) {
-    liveByKey.set(
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      repairQuantity(row.quantity)
-    );
-  }
-
-  const allKeys = new Set([...liveByKey.keys(), ...movementNet.keys()]);
-  const derivedOpeningByKey = new Map<string, Decimal>();
-  for (const key of allKeys) {
-    derivedOpeningByKey.set(
-      key,
-      repairQuantity((liveByKey.get(key) ?? new Decimal(0)).minus(movementNet.get(key) ?? new Decimal(0)))
-    );
-  }
-
-  const itemMap = new Map(stockItems.map((item) => [Number(item.id), item]));
-  const keysByItem = new Map<number, string[]>();
-  for (const key of allKeys) {
-    const stockItemId = Number(key.split(":")[2]);
-    const keys = keysByItem.get(stockItemId) ?? [];
-    keys.push(key);
-    keysByItem.set(stockItemId, keys);
-  }
-
-  const openings: HistoricalSalesRepairOpening[] = [];
-  for (const [stockItemId, keys] of keysByItem) {
-    const item = itemMap.get(stockItemId);
-    if (!item) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "STOCK_ITEM_MISSING",
-        status: "block",
-        detail: "Movement/inventory references a stock item that is missing from the stock master",
-      });
-      continue;
-    }
-
-    const derivedTotal = keys.reduce((sum, key) => sum.plus(derivedOpeningByKey.get(key) ?? 0), new Decimal(0));
-    const masterOpeningQty = repairQuantity(item.opening_qty ?? "0");
-    if (derivedTotal.minus(masterOpeningQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: masterOpeningQty.toFixed(3),
-        actual: derivedTotal.toFixed(3),
-        detail: `Derived location openings do not sum to stock master opening for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    const openingRate = repairMoney(item.opening_rate ?? "0");
-    const openingValue = repairMoney(item.opening_value ?? "0");
-    const calculatedOpeningValue = repairMoney(masterOpeningQty.times(openingRate));
-    if (calculatedOpeningValue.minus(openingValue).abs().gt(MONEY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: null,
-        stockItemId,
-        code: "OPENING_VALUE_MISMATCH",
-        status: "block",
-        expected: openingValue.toFixed(2),
-        actual: calculatedOpeningValue.toFixed(2),
-        detail: `Opening quantity × rate does not reconcile to opening value for ${item.code ?? stockItemId}`,
-      });
-      continue;
-    }
-
-    for (const key of keys) {
-      const parts = key.split(":");
-      const locationId = Number(parts[1]);
-      const quantity = derivedOpeningByKey.get(key) ?? new Decimal(0);
-      if (quantity.lt(new Decimal(0).minus(QTY_TOLERANCE))) {
-        checks.push({
-          companyId,
-          locationId,
-          stockItemId,
-          code: "NEGATIVE_DERIVED_OPENING",
-          status: "block",
-          expected: ">=0.000",
-          actual: quantity.toFixed(3),
-          detail: "Location opening reconstructed from quantity history is negative",
-        });
-        continue;
-      }
-      openings.push({
-        companyId,
-        locationId,
-        stockItemId,
-        quantity: repairQuantity(Decimal.max(quantity, 0)).toFixed(3),
-        averageRate: openingRate.toFixed(2),
-      });
-    }
-
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_QUANTITY_RECONCILED",
-      status: "pass",
-      expected: masterOpeningQty.toFixed(3),
-      actual: derivedTotal.toFixed(3),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_RATE_PINNED",
-      status: "pass",
-      expected: openingRate.toFixed(2),
-      actual: openingRate.toFixed(2),
-    });
-    checks.push({
-      companyId,
-      locationId: null,
-      stockItemId,
-      code: "OPENING_VALUE_RECONCILED",
-      status: "pass",
-      expected: openingValue.toFixed(2),
-      actual: calculatedOpeningValue.toFixed(2),
-    });
-  }
-
-  return { openings, checks, derivedOpeningByKey };
-}
-
 type RepairBlockerIndex = {
+  saleSpecific: Map<number, RepairCheck>;
   itemWide: Map<string, RepairCheck>;
   locationSpecific: Map<string, RepairCheck>;
+  legacyItemWide: Map<string, RepairCheck>;
+  legacyLocationSpecific: Map<string, RepairCheck>;
 };
 
+function isLegacyProofBlock(code: string): boolean {
+  return (
+    code.startsWith("CHECKPOINT_") ||
+    code.startsWith("LEGACY_") ||
+    code.startsWith("MERGED_ITEM_") ||
+    code === "VALUATION_CHECKPOINT_MISSING" ||
+    code === "VALUATION_CHECKPOINT_KEY_MISSING" ||
+    code === "SAME_TIMESTAMP_COST_ORDER_AMBIGUOUS" ||
+    code === "CANONICAL_SALE_COST_EVIDENCE_MISMATCH"
+  );
+}
+
 function buildRepairBlockerIndex(checks: RepairCheck[]): RepairBlockerIndex {
+  const saleSpecific = new Map<number, RepairCheck>();
   const itemWide = new Map<string, RepairCheck>();
   const locationSpecific = new Map<string, RepairCheck>();
+  const legacyItemWide = new Map<string, RepairCheck>();
+  const legacyLocationSpecific = new Map<string, RepairCheck>();
+
   for (const check of checks) {
-    if (check.status !== "block" || check.stockItemId === null) continue;
+    if (check.status !== "block") continue;
+    if (check.salesItemId) {
+      if (!saleSpecific.has(check.salesItemId)) saleSpecific.set(check.salesItemId, check);
+      continue;
+    }
+    if (check.stockItemId === null) continue;
+
+    const legacyOnly = isLegacyProofBlock(check.code);
     if (check.locationId === null) {
       const key = `${check.companyId}:${check.stockItemId}`;
-      if (!itemWide.has(key)) itemWide.set(key, check);
+      const target = legacyOnly ? legacyItemWide : itemWide;
+      if (!target.has(key)) target.set(key, check);
     } else {
       const key = `${check.companyId}:${check.locationId}:${check.stockItemId}`;
-      if (!locationSpecific.has(key)) locationSpecific.set(key, check);
+      const target = legacyOnly ? legacyLocationSpecific : locationSpecific;
+      if (!target.has(key)) target.set(key, check);
     }
   }
-  return { itemWide, locationSpecific };
+
+  return {
+    saleSpecific,
+    itemWide,
+    locationSpecific,
+    legacyItemWide,
+    legacyLocationSpecific,
+  };
 }
 
 function blockerForProposal(
   blockers: RepairBlockerIndex,
-  proposal: Pick<HistoricalSalesRepairProposal, "companyId" | "locationId" | "stockItemId">
+  proposal: Pick<HistoricalSalesRepairProposal, "salesItemId" | "companyId" | "locationId" | "stockItemId" | "evidence">
 ): RepairCheck | undefined {
-  return (
-    blockers.locationSpecific.get(`${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`) ??
-    blockers.itemWide.get(`${proposal.companyId}:${proposal.stockItemId}`)
-  );
+  const saleSpecific = blockers.saleSpecific.get(proposal.salesItemId);
+  if (saleSpecific) return saleSpecific;
+
+  const locationKey = `${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`;
+  const itemKey = `${proposal.companyId}:${proposal.stockItemId}`;
+  const general = blockers.locationSpecific.get(locationKey) ?? blockers.itemWide.get(itemKey);
+  if (general) return general;
+
+  if (proposal.evidence === "legacy") {
+    return blockers.legacyLocationSpecific.get(locationKey) ?? blockers.legacyItemWide.get(itemKey);
+  }
+  return undefined;
 }
 
 function distinctBlockedItemLocations(checks: RepairCheck[]): number {
@@ -722,16 +1560,6 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 }
 
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
-
-function canonicalSaleEvidenceKeys(movements: HistoricalSalesRepairMovement[]): Set<string> {
-  const keys = new Set<string>();
-  for (const movement of movements) {
-    if (!CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    if (d(movement.quantityDelta).gte(0)) continue;
-    keys.add(`${movement.sourceId}:${movement.locationId}:${movement.stockItemId}`);
-  }
-  return keys;
-}
 
 function markAmbiguousTimestampTies(
   companyId: number,
@@ -765,52 +1593,898 @@ function markAmbiguousTimestampTies(
   return checks;
 }
 
-async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff: Date): Promise<CompanyDryRun> {
+type MergedRecoveryResult = {
+  recoveredKeys: Set<string>;
+  proposals: HistoricalSalesRepairProposal[];
+  checks: RepairCheck[];
+};
+
+function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
+  return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
+}
+
+function historicalInventoryStatesEqual(left: HistoricalInventoryState, right: HistoricalInventoryState): boolean {
+  return (
+    repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
+    repairRate(left.averageRate).eq(repairRate(right.averageRate)) &&
+    repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
+  );
+}
+
+function stateQuantityValueMatches(actual: HistoricalInventoryState, expected: HistoricalInventoryState): boolean {
+  return (
+    repairQuantity(actual.quantity).minus(repairQuantity(expected.quantity)).abs().lte(QTY_TOLERANCE) &&
+    repairMoney(actual.totalValue).minus(repairMoney(expected.totalValue)).abs().lte(MONEY_TOLERANCE)
+  );
+}
+
+function checkpointContainsMovement(movement: HistoricalSalesRepairMovement, checkpoint: ValuationCheckpoint): boolean {
+  const canonicalId = canonicalMovementNumericId(movement);
+  if (canonicalId !== null) return canonicalId <= checkpoint.movementCutoffId;
+  return movementMutationTime(movement) <= checkpoint.createdAt.getTime();
+}
+
+function replayMergedSourceLocationForward(input: {
+  companyId: number;
+  sourceItemId: number;
+  locationId: number;
+  opening: HistoricalInventoryState;
+  movements: HistoricalSalesRepairMovement[];
+  mergeAtMs: number;
+}): { stateAtMerge: HistoricalInventoryState; proposals: HistoricalSalesRepairProposal[] } {
+  let state = createHistoricalInventoryStateFromSnapshot(
+    input.opening.quantity,
+    input.opening.averageRate,
+    input.opening.totalValue
+  );
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const movements = input.movements
+    .filter(
+      (movement) =>
+        movement.stockItemId === input.sourceItemId &&
+        movement.locationId === input.locationId &&
+        movementMutationTime(movement) < input.mergeAtMs
+    )
+    .sort(compareMovementMutationAscending);
+
+  for (const movement of movements) {
+    if (movement.sale) proposals.push(historicalSaleProposalFromState(movement, state));
+    state = applyHistoricalSalesRepairMovement(state, movement);
+  }
+  return { stateAtMerge: state, proposals };
+}
+
+function recoverHistoricalMergedSales(input: {
+  companyId: number;
+  targetKeys: Set<string>;
+  checkpoint: ValuationCheckpoint;
+  checkpointStates: Map<string, HistoricalInventoryState>;
+  historicalMerges: HistoricalMergeRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacyMovements: HistoricalSalesRepairMovement[];
+}): MergedRecoveryResult {
+  const recoveredKeys = new Set<string>();
+  const proposals: HistoricalSalesRepairProposal[] = [];
+  const checks: RepairCheck[] = [];
+  const allMovements = [...input.legacyMovements, ...input.canonical];
+  const priorCostMemoryRateHints = buildPriorCanonicalCostMemoryRateHints(allMovements);
+  const mergeBySource = new Map(input.historicalMerges.map((merge) => [Number(merge.source_item_id), merge]));
+  const missingKeys = [...input.targetKeys].filter((key) => !input.checkpointStates.has(key));
+  const sourceIds = [...new Set(missingKeys.map((key) => Number(key.split(":")[2])))];
+
+  const blockSourceKeys = (sourceItemId: number, code: string, detail: string) => {
+    const sourceKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    for (const key of sourceKeys) {
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code,
+        status: "block",
+        detail,
+      });
+    }
+  };
+
+  for (const sourceItemId of sourceIds) {
+    const merge = mergeBySource.get(sourceItemId);
+    if (!merge) continue;
+
+    const mergeAtMs = merge.merge_at.getTime();
+    if (!Number.isFinite(mergeAtMs) || mergeAtMs > input.checkpoint.createdAt.getTime()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_MERGE_TIMESTAMP_INVALID",
+        `Historical merge timestamp is not before the valuation checkpoint (alias ${merge.alias_id})`
+      );
+      continue;
+    }
+
+    const sourceMovements = allMovements.filter((movement) => movement.stockItemId === sourceItemId);
+    const postMergeSource = sourceMovements.filter((movement) => movementMutationTime(movement) >= mergeAtMs);
+    if (postMergeSource.length > 0) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SOURCE_MOVEMENT_AFTER_MERGE",
+        `Historical source item has ${postMergeSource.length} inventory movement(s) at/after merge; identity transition is not clean`
+      );
+      continue;
+    }
+
+    const sourceOpeningQty = repairQuantity(merge.source_opening_qty);
+    const sourceOpeningRate = repairRate(merge.source_opening_rate);
+    const sourceOpeningValue = repairMoney(merge.source_opening_value);
+    const sourceTargetKeys = missingKeys.filter((key) => Number(key.split(":")[2]) === sourceItemId);
+    const sourceTargetLocations = sourceTargetKeys.map((key) => Number(key.split(":")[1]));
+
+    if (sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+      const locations = new Set<number>([
+        ...sourceTargetLocations,
+        ...sourceMovements.map((movement) => movement.locationId),
+      ]);
+      const sourceProposals: HistoricalSalesRepairProposal[] = [];
+      for (const locationId of locations) {
+        const replay = replayMergedSourceLocationForward({
+          companyId: input.companyId,
+          sourceItemId,
+          locationId,
+          opening: stateForZeroOpening(sourceOpeningRate),
+          movements: allMovements,
+          mergeAtMs,
+        });
+        sourceProposals.push(...replay.proposals);
+      }
+
+      const proposedSaleIds = new Set(sourceProposals.map((proposal) => proposal.salesItemId));
+      const missingProposal = input.legacyMovements.find(
+        (movement) =>
+          movement.stockItemId === sourceItemId &&
+          movement.sale &&
+          sourceTargetLocations.includes(movement.locationId) &&
+          !proposedSaleIds.has(movement.sale.salesItemId)
+      );
+      if (missingProposal) {
+        blockSourceKeys(
+          sourceItemId,
+          "MERGED_ITEM_ZERO_OPENING_REPLAY_INCOMPLETE",
+          `Could not replay sale item ${missingProposal.sale?.salesItemId ?? "unknown"} from exact zero opening`
+        );
+        continue;
+      }
+
+      proposals.push(...sourceProposals);
+      for (const key of sourceTargetKeys) {
+        recoveredKeys.add(key);
+        const [, locationIdText] = key.split(":");
+        checks.push({
+          companyId: input.companyId,
+          locationId: Number(locationIdText),
+          stockItemId: sourceItemId,
+          code: "MERGED_ITEM_ZERO_OPENING_REPLAY",
+          status: "pass",
+          expected: "0.000|0.00",
+          actual: "0.000|0.00",
+          detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merged at ${iso(merge.merge_at)}; source opening is exact zero`,
+        });
+      }
+      continue;
+    }
+
+    const keptOpeningQty = repairQuantity(merge.kept_opening_qty);
+    const keptOpeningValue = repairMoney(merge.kept_opening_value);
+    if (!keptOpeningQty.isZero() || !keptOpeningValue.isZero()) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SPLIT_UNPROVEN",
+        `Source opening is nonzero and kept item ${merge.kept_item_id} also has a nonzero opening; merge split cannot be uniquely separated`
+      );
+      continue;
+    }
+
+    const keptItemId = Number(merge.kept_item_id);
+    const keptMovements = allMovements.filter((movement) => movement.stockItemId === keptItemId);
+    const sourcePreMovements = sourceMovements.filter((movement) => movementMutationTime(movement) < mergeAtMs);
+    const keptPreMovements = keptMovements
+      .filter((movement) => movementMutationTime(movement) < mergeAtMs)
+      .sort(compareMovementMutationAscending);
+    const keptPostMovements = keptMovements
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) > mergeAtMs && checkpointContainsMovement(movement, input.checkpoint)
+      )
+      .sort(compareMovementMutationDescending);
+
+    const relevantLocations = new Set<number>([
+      ...sourceTargetLocations,
+      ...sourcePreMovements.map((movement) => movement.locationId),
+      ...input.checkpoint.rows
+        .filter((row) => Number(row.stock_item_id) === keptItemId)
+        .map((row) => Number(row.location_id)),
+    ]);
+
+    const keptBeforeByLocation = new Map<number, HistoricalInventoryState>();
+    for (const locationId of relevantLocations) {
+      keptBeforeByLocation.set(locationId, stateForZeroOpening(merge.kept_opening_rate));
+    }
+    for (const movement of keptPreMovements) {
+      if (!relevantLocations.has(movement.locationId)) continue;
+      const current = keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      keptBeforeByLocation.set(movement.locationId, applyHistoricalSalesRepairMovement(current, movement));
+    }
+
+    const combinedAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let keptRewindFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const checkpointKey = historicalInventoryKey(input.companyId, locationId, keptItemId);
+      const checkpointState = input.checkpointStates.get(checkpointKey);
+      if (!checkpointState) {
+        keptRewindFailure = {
+          locationId,
+          detail: `Kept item ${keptItemId} has no checkpoint row at location ${locationId}`,
+        };
+        break;
+      }
+      combinedAtMergeByLocation.set(
+        locationId,
+        createHistoricalInventoryStateFromSnapshot(
+          checkpointState.quantity,
+          checkpointState.averageRate,
+          checkpointState.totalValue
+        )
+      );
+    }
+
+    if (!keptRewindFailure) {
+      // V47: rewind the kept item as a set of exact branches (as the
+      // checkpoint rewind does); recorded live rates prune, and the merge
+      // split needs exactly one surviving state per location.
+      const keptCandidates = new Map<number, HistoricalInventoryState[]>(
+        [...combinedAtMergeByLocation.entries()].map(([locationId, state]) => [locationId, [state]])
+      );
+      for (const movement of keptPostMovements) {
+        if (!relevantLocations.has(movement.locationId)) continue;
+        const current = keptCandidates.get(movement.locationId);
+        if (!current) continue;
+        const next: HistoricalInventoryState[] = [];
+        let lastReason = "";
+        for (const stateAfter of current) {
+          const befores: HistoricalInventoryState[] = [];
+          const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+          });
+          if (reversed.reversible) befores.push(reversed.stateBefore);
+          else lastReason = reversed.reason;
+          if (movement.evidence === "canonical")
+            befores.push(...historicalIssueInverseCandidates(stateAfter, movement));
+          for (const before of befores) {
+            if (
+              isRecordedLiveRateObservation(movement) &&
+              !repairRate(movement.unitCost!).eq(repairRate(before.averageRate))
+            ) {
+              continue;
+            }
+            if (!next.some((existing) => historicalInventoryStatesEqual(existing, before))) next.push(before);
+          }
+        }
+        if (next.length === 0) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: lastReason
+              ? `Cannot rewind kept item movement ${movement.movementId}: ${lastReason}`
+              : `Canonical kept-item sale ${movement.movementId} disagrees with every exact checkpoint rewind branch`,
+          };
+          break;
+        }
+        if (next.length > 64) {
+          keptRewindFailure = {
+            locationId: movement.locationId,
+            detail: `Kept item rewind exceeded the branch limit at ${movement.movementId}`,
+          };
+          break;
+        }
+        keptCandidates.set(movement.locationId, next);
+      }
+      if (!keptRewindFailure) {
+        for (const [locationId, states] of keptCandidates) {
+          if (states.length > 1 && sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+            // A source with an exact zero opening has a forward-determined
+            // contribution at the merge, so the combined state must equal the
+            // kept item's pre-merge state plus that contribution.
+            const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+            const contribution = replayMergedSourceLocationForward({
+              companyId: input.companyId,
+              sourceItemId,
+              locationId,
+              opening: stateForZeroOpening(sourceOpeningRate),
+              movements: allMovements,
+              mergeAtMs,
+            }).stateAtMerge;
+            const expectedQty = repairQuantity(keptBefore.quantity.plus(contribution.quantity));
+            const expectedValue = repairMoney(keptBefore.totalValue.plus(contribution.totalValue));
+            const matching = states.filter(
+              (state) =>
+                repairQuantity(state.quantity).eq(expectedQty) && repairMoney(state.totalValue).eq(expectedValue)
+            );
+            if (matching.length === 1) {
+              keptCandidates.set(locationId, matching);
+              combinedAtMergeByLocation.set(locationId, matching[0]);
+              continue;
+            }
+          }
+          if (states.length !== 1) {
+            keptRewindFailure = {
+              locationId,
+              detail: `Kept item rewind has ${states.length} exact states at the merge`,
+            };
+            break;
+          }
+          combinedAtMergeByLocation.set(locationId, states[0]);
+        }
+      }
+    }
+
+    if (keptRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_KEPT_REWIND_FAILED", keptRewindFailure.detail);
+      continue;
+    }
+
+    const sourceAtMergeByLocation = new Map<number, HistoricalInventoryState>();
+    let subtractionFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of relevantLocations) {
+      const combined = combinedAtMergeByLocation.get(locationId)!;
+      const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      const sourceQty = repairQuantity(combined.quantity.minus(keptBefore.quantity));
+      const sourceValue = repairMoney(combined.totalValue.minus(keptBefore.totalValue));
+      if (sourceValue.lt(MONEY_TOLERANCE.negated())) {
+        subtractionFailure = {
+          locationId,
+          detail: `Merge subtraction produced negative source value ${sourceValue.toFixed(2)}`,
+        };
+        break;
+      }
+      const normalizedValue = sourceValue.abs().lte(MONEY_TOLERANCE) ? new Decimal(0) : sourceValue;
+      const sourceRate = sourceQty.gt(0) ? repairRate(normalizedValue.dividedBy(sourceQty)) : sourceOpeningRate;
+      const sourceState = createHistoricalInventoryStateFromSnapshot(sourceQty, sourceRate, normalizedValue);
+
+      const combinedQty = repairQuantity(keptBefore.quantity.plus(sourceState.quantity));
+      const combinedValue = repairMoney(keptBefore.totalValue.plus(sourceState.totalValue));
+      const combinedRate = combinedQty.gt(0) ? repairRate(combinedValue.dividedBy(combinedQty)) : new Decimal(0);
+      if (
+        !combinedQty.eq(repairQuantity(combined.quantity)) ||
+        !combinedValue.eq(repairMoney(combined.totalValue)) ||
+        !combinedRate.eq(repairRate(combined.averageRate))
+      ) {
+        subtractionFailure = {
+          locationId,
+          detail: "Source/kept split does not replay the exact post-merge checkpoint-rewound state",
+        };
+        break;
+      }
+      sourceAtMergeByLocation.set(locationId, sourceState);
+    }
+
+    if (subtractionFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_VALUE_SPLIT_FAILED", subtractionFailure.detail);
+      continue;
+    }
+
+    const tempProposals: HistoricalSalesRepairProposal[] = [];
+    const openingByLocation = new Map<number, HistoricalInventoryState>();
+    const unresolvedLocations: number[] = [];
+    let sourceRewindFailure: { locationId: number; detail: string } | null = null;
+
+    for (const locationId of relevantLocations) {
+      const sourceAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      const movements = sourcePreMovements
+        .filter((movement) => movement.locationId === locationId)
+        .sort(compareMovementMutationDescending);
+
+      if (sourceAtMerge.quantity.lte(0)) {
+        unresolvedLocations.push(locationId);
+        continue;
+      }
+
+      let stateAfter = sourceAtMerge;
+      const locationProposals: HistoricalSalesRepairProposal[] = [];
+      for (const movement of movements) {
+        const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+        });
+        if (!reversed.reversible) {
+          sourceRewindFailure = {
+            locationId,
+            detail: `Cannot rewind source movement ${movement.movementId}: ${reversed.reason}`,
+          };
+          break;
+        }
+        if (movement.sale) {
+          locationProposals.push(historicalSaleProposalFromState(movement, reversed.stateBefore));
+          const primaryBefore = reversed.stateBefore;
+          const alternatives = historicalIssueInverseCandidates(stateAfter, movement).filter(
+            (candidate) => !historicalInventoryStatesEqual(candidate, primaryBefore)
+          );
+          if (alternatives.length > 0) {
+            checks.push(
+              legacyInverseNotUniqueBlock(
+                input.companyId,
+                movement,
+                primaryBefore,
+                alternatives,
+                "merged source rewind"
+              )
+            );
+          }
+        }
+        stateAfter = reversed.stateBefore;
+      }
+      if (sourceRewindFailure) break;
+      openingByLocation.set(locationId, stateAfter);
+      tempProposals.push(...locationProposals);
+    }
+
+    if (sourceRewindFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_SOURCE_REWIND_FAILED", sourceRewindFailure.detail);
+      continue;
+    }
+
+    let recoveredOpeningQty = new Decimal(0);
+    let recoveredOpeningValue = new Decimal(0);
+    for (const opening of openingByLocation.values()) {
+      recoveredOpeningQty = repairQuantity(recoveredOpeningQty.plus(opening.quantity));
+      recoveredOpeningValue = repairMoney(recoveredOpeningValue.plus(opening.totalValue));
+    }
+    const remainingOpeningQty = repairQuantity(sourceOpeningQty.minus(recoveredOpeningQty));
+    const remainingOpeningValue = repairMoney(sourceOpeningValue.minus(recoveredOpeningValue));
+
+    if (remainingOpeningQty.lt(QTY_TOLERANCE.negated()) || remainingOpeningValue.lt(MONEY_TOLERANCE.negated())) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Rewind exceeded source opening: remaining ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const unresolvedWithActivity = unresolvedLocations.filter(
+      (locationId) =>
+        sourcePreMovements.some((movement) => movement.locationId === locationId) ||
+        sourceTargetLocations.includes(locationId)
+    );
+    if ((!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) && unresolvedWithActivity.length !== 1) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_LOCATION_AMBIGUOUS",
+        `Remaining source opening ${remainingOpeningQty.toFixed(3)} / ${remainingOpeningValue.toFixed(
+          2
+        )} cannot be assigned uniquely across ${unresolvedWithActivity.length} unresolved locations`
+      );
+      continue;
+    }
+
+    let forwardFailure: { locationId: number; detail: string } | null = null;
+    for (const locationId of unresolvedWithActivity) {
+      const getsRemainder =
+        unresolvedWithActivity.length === 1 && (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
+      const opening = getsRemainder
+        ? createHistoricalInventoryStateFromSnapshot(remainingOpeningQty, sourceOpeningRate, remainingOpeningValue)
+        : stateForZeroOpening(sourceOpeningRate);
+      const replay = replayMergedSourceLocationForward({
+        companyId: input.companyId,
+        sourceItemId,
+        locationId,
+        opening,
+        movements: allMovements,
+        mergeAtMs,
+      });
+      const expectedAtMerge = sourceAtMergeByLocation.get(locationId)!;
+      if (!stateQuantityValueMatches(replay.stateAtMerge, expectedAtMerge)) {
+        forwardFailure = {
+          locationId,
+          detail: `Forward replay reaches ${replay.stateAtMerge.quantity.toFixed(3)} / ${replay.stateAtMerge.totalValue.toFixed(
+            2
+          )}, expected merge contribution ${expectedAtMerge.quantity.toFixed(3)} / ${expectedAtMerge.totalValue.toFixed(2)}`,
+        };
+        break;
+      }
+      openingByLocation.set(locationId, opening);
+      tempProposals.push(...replay.proposals);
+    }
+
+    if (forwardFailure) {
+      blockSourceKeys(sourceItemId, "MERGED_ITEM_FORWARD_PROOF_FAILED", forwardFailure.detail);
+      continue;
+    }
+
+    let finalOpeningQty = new Decimal(0);
+    let finalOpeningValue = new Decimal(0);
+    let openingRateMismatch = false;
+    for (const opening of openingByLocation.values()) {
+      finalOpeningQty = repairQuantity(finalOpeningQty.plus(opening.quantity));
+      finalOpeningValue = repairMoney(finalOpeningValue.plus(opening.totalValue));
+      if (opening.quantity.gt(0) && !repairRate(opening.averageRate).eq(sourceOpeningRate)) {
+        openingRateMismatch = true;
+      }
+    }
+    if (
+      finalOpeningQty.minus(sourceOpeningQty).abs().gt(QTY_TOLERANCE) ||
+      finalOpeningValue.minus(sourceOpeningValue).abs().gt(MONEY_TOLERANCE) ||
+      openingRateMismatch
+    ) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
+        `Recovered opening ${finalOpeningQty.toFixed(3)} @ ${sourceOpeningRate.toFixed(
+          2
+        )} / ${finalOpeningValue.toFixed(2)} does not reproduce stock master ${sourceOpeningQty.toFixed(
+          3
+        )} / ${sourceOpeningValue.toFixed(2)}`
+      );
+      continue;
+    }
+
+    const targetSaleIds = new Set(
+      input.legacyMovements
+        .filter(
+          (movement) =>
+            movement.stockItemId === sourceItemId &&
+            movement.sale &&
+            sourceTargetLocations.includes(movement.locationId)
+        )
+        .map((movement) => movement.sale!.salesItemId)
+    );
+    const recoveredSaleIds = new Set(tempProposals.map((proposal) => proposal.salesItemId));
+    if ([...targetSaleIds].some((saleId) => !recoveredSaleIds.has(saleId))) {
+      blockSourceKeys(
+        sourceItemId,
+        "MERGED_ITEM_SALE_PROPOSAL_INCOMPLETE",
+        "At least one historical sale did not receive a proposal from the proven merge rewind"
+      );
+      continue;
+    }
+
+    proposals.push(...tempProposals);
+    for (const key of sourceTargetKeys) {
+      recoveredKeys.add(key);
+      const [, locationIdText] = key.split(":");
+      checks.push({
+        companyId: input.companyId,
+        locationId: Number(locationIdText),
+        stockItemId: sourceItemId,
+        code: "MERGED_ITEM_IDENTITY_RECONCILED",
+        status: "pass",
+        expected: `${sourceOpeningQty.toFixed(3)}|${sourceOpeningValue.toFixed(2)}`,
+        actual: `${finalOpeningQty.toFixed(3)}|${finalOpeningValue.toFixed(2)}`,
+        detail: `Alias ${merge.alias_code} -> ${merge.kept_code}; merge ${iso(
+          merge.merge_at
+        )}; kept checkpoint rewound and exact source opening recovered`,
+      });
+    }
+  }
+
+  return { recoveredKeys, proposals, checks };
+}
+
+/**
+ * Every rate an item could have carried, from evidence already pinned in the
+ * V2 source hash: pinned openings, priced receipts (canonical and legacy),
+ * exact offload values, recorded live sale-issue rates, the checkpoint, and
+ * the rates of historically merged source items.
+ */
+function evidencedRateHullByItem(input: {
+  stockItems: StockItemRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
+  checkpoint: ValuationCheckpoint | null;
+  historicalMerges: HistoricalMergeRow[];
+}): Map<number, { low: Decimal; high: Decimal }> {
+  const hull = new Map<number, { low: Decimal; high: Decimal }>();
+  const add = (stockItemId: number, value: Decimal.Value | null | undefined) => {
+    if (value === null || value === undefined) return;
+    const rate = new Decimal(value);
+    if (!rate.isFinite() || !rate.gt(0)) return;
+    const current = hull.get(stockItemId);
+    if (!current) {
+      hull.set(stockItemId, { low: rate, high: rate });
+      return;
+    }
+    if (rate.lt(current.low)) current.low = rate;
+    if (rate.gt(current.high)) current.high = rate;
+  };
+
+  for (const item of input.stockItems) add(Number(item.id), item.opening_rate);
+  for (const movement of input.canonical) {
+    const delta = d(movement.quantityDelta);
+    if (delta.gt(0) || movement.canonicalPosRole === "sale-issue") {
+      add(movement.stockItemId, movement.unitCost);
+    }
+  }
+  for (const row of input.legacy) {
+    if (d(row.quantity_delta).gt(0)) add(Number(row.stock_item_id), row.unit_cost);
+  }
+  for (const row of input.offloadEvidence) {
+    add(Number(row.stock_item_id), row.rate);
+    const quantity = d(row.quantity);
+    if (quantity.gt(0)) add(Number(row.stock_item_id), d(row.total_value).dividedBy(quantity));
+  }
+  for (const row of input.checkpoint?.rows ?? []) {
+    if (d(row.quantity).gt(0)) add(Number(row.stock_item_id), row.average_rate);
+  }
+  for (const merge of input.historicalMerges) {
+    const source = hull.get(Number(merge.source_item_id));
+    if (source) {
+      add(Number(merge.kept_item_id), source.low);
+      add(Number(merge.kept_item_id), source.high);
+    }
+    add(Number(merge.kept_item_id), merge.source_opening_rate);
+  }
+  return hull;
+}
+
+function rateHullBlocks(input: {
+  companyId: number;
+  proposals: HistoricalSalesRepairProposal[];
+  stockItems: StockItemRow[];
+  canonical: HistoricalSalesRepairMovement[];
+  legacy: LegacyRow[];
+  offloadEvidence: OffloadValueEvidenceRow[];
+  checkpoint: ValuationCheckpoint | null;
+  historicalMerges: HistoricalMergeRow[];
+  /** Sales proven independently of the rewind chain (closed zero-stock eras). */
+  independentSaleIds?: Set<number>;
+}): RepairCheck[] {
+  const hull = evidencedRateHullByItem(input);
+  const worstByKey = new Map<string, { proposal: HistoricalSalesRepairProposal; count: number }>();
+  for (const proposal of input.proposals) {
+    if (proposal.evidence !== "legacy") continue;
+    const rate = repairRate(proposal.proposedCostPrice);
+    if (historicalRateWithinEvidencedRange(rate, hull.get(proposal.stockItemId))) continue;
+    const key = `${proposal.locationId}:${proposal.stockItemId}`;
+    const current = worstByKey.get(key);
+    worstByKey.set(key, {
+      proposal: current && d(current.proposal.proposedCostPrice).gt(rate) ? current.proposal : proposal,
+      count: (current?.count ?? 0) + 1,
+    });
+  }
+
+  const independent = input.independentSaleIds ?? new Set<number>();
+  const legacyByKey = new Map<string, HistoricalSalesRepairProposal[]>();
+  for (const candidate of input.proposals) {
+    if (candidate.evidence !== "legacy") continue;
+    const key = `${candidate.locationId}:${candidate.stockItemId}`;
+    if (!worstByKey.has(key)) continue;
+    const list = legacyByKey.get(key) ?? [];
+    list.push(candidate);
+    legacyByKey.set(key, list);
+  }
+  const checks: RepairCheck[] = [];
+  for (const [key, { proposal, count }] of worstByKey) {
+    const range = hull.get(proposal.stockItemId);
+    const keyProposals = legacyByKey.get(key) ?? [];
+    if (!keyProposals.some((candidate) => independent.has(candidate.salesItemId))) {
+      checks.push(hullCheck(proposal, count, range));
+      continue;
+    }
+    // V48: a hull violation proves the rewind chain wrong, not a sale proven by
+    // a closed zero-stock era that never used it. Block every other legacy
+    // sale at the key individually; an independent sale is blocked only when
+    // its own cost is outside the range.
+    for (const candidate of keyProposals) {
+      const ownOutside = !historicalRateWithinEvidencedRange(repairRate(candidate.proposedCostPrice), range);
+      if (independent.has(candidate.salesItemId) && !ownOutside) continue;
+      checks.push({ ...hullCheck(proposal, count, range), salesItemId: candidate.salesItemId });
+    }
+  }
+  return checks;
+
+  function hullCheck(
+    proposal: HistoricalSalesRepairProposal,
+    count: number,
+    range: ReturnType<typeof hull.get>
+  ): RepairCheck {
+    return {
+      companyId: input.companyId,
+      locationId: proposal.locationId,
+      stockItemId: proposal.stockItemId,
+      code: "LEGACY_PROPOSED_COST_OUTSIDE_RATE_HULL",
+      status: "block" as const,
+      expected: range
+        ? `${repairRate(range.low).toFixed(2)}..${repairRate(range.high).toFixed(2)}`
+        : "no rate evidence",
+      actual: repairRate(proposal.proposedCostPrice).toFixed(2),
+      detail: `${count} reconstructed sale cost(s) fall outside every rate this item ever carried (worst: sales item ${proposal.salesItemId}); the reconstruction chain for this item/location is unproven`,
+    };
+  }
+}
+
+async function dryRunCompany(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date,
+  options: { diagnoseKeys?: Set<string> } = {}
+): Promise<CompanyDryRun> {
   await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`historical-sales-cost-repair:${companyId}`]);
+  // V40 diagnostics: the checkpoint rewind trace per item/location, newest
+  // first, so a blocked group can be read movement by movement. Read-only.
+  const rewindTrace = new Map<string, string[]>();
+  const traceRewind = (key: string, line: string) => {
+    const lines = rewindTrace.get(key) ?? [];
+    lines.push(line);
+    if (!options.diagnoseKeys?.has(key) && lines.length > REWIND_TRACE_LIMIT) lines.shift();
+    rewindTrace.set(key, lines);
+  };
 
-  const [inventoryResult, stockItemResult, canonicalStart, sales] = await Promise.all([
-    client.query<InventoryRow>(
-      `SELECT location_id,stock_item_id,quantity::text,average_rate::text,total_value::text
-         FROM inventory
-        WHERE company_id=$1
-        ORDER BY location_id,stock_item_id`,
-      [companyId]
-    ),
-    client.query<StockItemRow>(
-      `SELECT id,code,opening_qty::text,opening_rate::text,opening_value::text
-         FROM stock_items
-        WHERE company_id=$1
-        ORDER BY id`,
-      [companyId]
-    ),
-    loadCanonicalStart(client, companyId, sourceCutoff),
-    loadSales(client, companyId, sourceCutoff),
-  ]);
+  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, offloadEvidence, historicalMerges] =
+    await Promise.all([
+      client.query<InventoryRow>(
+        `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
+         FROM inventory i
+         JOIN locations l
+           ON l.id=i.location_id
+          AND l.company_id=i.company_id
+          AND l.deleted_at IS NULL
+        WHERE i.company_id=$1
+        ORDER BY i.location_id,i.stock_item_id`,
+        [companyId]
+      ),
+      loadStockItems(client, companyId),
+      loadCanonicalStart(client, companyId, sourceCutoff),
+      loadSales(client, companyId, sourceCutoff),
+      loadValuationCheckpoint(client, companyId),
+      loadOffloadValueEvidence(client, companyId, sourceCutoff),
+      loadHistoricalMerges(client, companyId),
+    ]);
 
-  const [canonical, legacy, manual] = await Promise.all([
+  const [loadedCanonical, legacy, manual, valuationOverrides] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+    loadValuationOverrides(client, companyId, sourceCutoff),
   ]);
+  const journalCanonical = journalWithoutOverriddenLocationUpdates(loadedCanonical, valuationOverrides);
 
-  const checks: RepairCheck[] = [...manual.checks];
-  const canonicalSaleKeys = canonicalSaleEvidenceKeys(canonical);
+  const sourceEvidenceHash = historicalSalesCompanyEvidenceHash({
+    companyId,
+    canonicalStart,
+    checkpoint,
+    canonical: journalCanonical,
+    legacy,
+    manual,
+    sales,
+    stockItems,
+    offloadEvidence,
+    historicalMerges,
+    valuationOverrides,
+  });
+  // Derived from hashed evidence (the journal and the sales lines), so the
+  // restored lines need no hash entry of their own.
+  const droppedPosLines = droppedPosLineMovements(companyId, journalCanonical, sales);
+  const canonical = [...journalCanonical, ...droppedPosLines.movements];
+  const offloadEvidenceByKey = new Map(
+    offloadEvidence.map((row) => [offloadEvidenceKey(row.offload_id, row.stock_item_id), row])
+  );
+  for (const movement of canonical) {
+    if (!OFFLOAD_EVIDENCE_SOURCE_TYPES.has(movement.sourceType)) continue;
+    const evidence = offloadEvidenceByKey.get(offloadEvidenceKey(movement.sourceId, movement.stockItemId));
+    if (evidence) movement.exactValue = String(evidence.total_value);
+  }
 
-  const movements: HistoricalSalesRepairMovement[] = [
-    ...canonical,
-    ...legacy.map((row) => ({
-      movementId: row.movement_id,
+  const checks: RepairCheck[] = [
+    ...manual.checks,
+    ...droppedPosLines.checks,
+    {
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "V2_SOURCE_EVIDENCE_HASH",
+      status: "pass",
+      expected: sourceEvidenceHash,
+      actual: sourceEvidenceHash,
+      detail:
+        "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
+    },
+  ];
+  const pinnedOffloadRows = legacy.filter((row) => row.source_type === "legacy-container-offload" && row.mutation_at);
+  checks.push({
+    companyId,
+    locationId: null,
+    stockItemId: null,
+    code: "LEGACY_OFFLOAD_ENTRY_TIME_PINNED",
+    status: "pass",
+    expected: String(legacy.filter((row) => row.source_type === "legacy-container-offload").length),
+    actual: String(pinnedOffloadRows.length),
+    detail:
+      "Legacy offload item rows ordered at their charge-voucher transaction time (unique container offload, single voucher group, millisecond stamp agrees with created_at); the rest keep offloaded_at",
+  });
+  for (const reset of HISTORICAL_VALUATION_RESETS.filter((candidate) => candidate.companyId === companyId)) {
+    checks.push({
+      companyId,
+      locationId: reset.locationId,
+      stockItemId: reset.stockItemId,
+      code: "WAVE6_VALUATION_RESET_EVIDENCE",
+      status: "pass",
+      expected: reset.afterQuantity + "|" + reset.afterAverageRate + "|" + reset.afterTotalValue,
+      actual: reset.beforeQuantity + "|" + reset.beforeAverageRate + "|" + reset.beforeTotalValue,
+      detail:
+        "Exact guarded Wave 6 production valuation reset is included as an immutable replay boundary and source-hash input.",
+    });
+  }
+
+  const canonicalSaleEvidence = activeCanonicalSaleEvidence(canonical);
+  const canonicalSaleKeys = new Set(canonicalSaleEvidence.keys());
+  const toLegacyMovement = (row: LegacyRow): HistoricalSalesRepairMovement => ({
+    movementId: row.movement_id,
+    companyId,
+    locationId: Number(row.location_id),
+    stockItemId: Number(row.stock_item_id),
+    occurredAt: iso(row.occurred_at),
+    ...(row.mutation_at ? { createdAt: iso(row.mutation_at) } : {}),
+    sequence: Number(row.sequence),
+    quantityDelta: String(row.quantity_delta),
+    unitCost: row.unit_cost === null ? null : String(row.unit_cost),
+    exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
+      ? (offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null)
+      : null,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    evidence: "legacy" as const,
+  });
+  const legacyTransferFallbackMovements = legacy
+    .filter((row) => row.source_type.endsWith("-flag-fallback"))
+    .map(toLegacyMovement);
+  const valuationResetMovements: HistoricalSalesRepairMovement[] = HISTORICAL_VALUATION_RESETS.filter(
+    (reset) => reset.companyId === companyId
+  ).map((reset, index) => ({
+    movementId: `valuation-reset:${reset.sourceId}`,
+    companyId: reset.companyId,
+    locationId: reset.locationId,
+    stockItemId: reset.stockItemId,
+    occurredAt: reset.occurredAt,
+    createdAt: reset.occurredAt,
+    sequence: 900_000_000 + index,
+    quantityDelta: "0.000",
+    unitCost: null,
+    valuationReset: {
+      beforeQuantity: reset.beforeQuantity,
+      beforeAverageRate: reset.beforeAverageRate,
+      beforeTotalValue: reset.beforeTotalValue,
+      afterQuantity: reset.afterQuantity,
+      afterAverageRate: reset.afterAverageRate,
+      afterTotalValue: reset.afterTotalValue,
+    },
+    sourceType: "inventory-valuation-wave6-reset",
+    sourceId: reset.sourceId,
+    evidence: "legacy" as const,
+  }));
+  valuationResetMovements.push(
+    ...valuationOverrides.map((row) => ({
+      movementId: `valuation-override:${row.id}`,
       companyId,
       locationId: Number(row.location_id),
       stockItemId: Number(row.stock_item_id),
-      occurredAt: iso(row.occurred_at),
-      sequence: Number(row.sequence),
-      quantityDelta: String(row.quantity_delta),
-      unitCost: row.unit_cost === null ? null : String(row.unit_cost),
-      sourceType: row.source_type,
-      sourceId: row.source_id,
+      occurredAt: iso(row.created_at),
+      createdAt: iso(row.created_at),
+      sequence: Number(row.id) * 10 + 9,
+      quantityDelta: repairQuantity(d(row.after_quantity).minus(d(row.before_quantity))).toFixed(3),
+      unitCost: null,
+      valuationReset: {
+        beforeQuantity: String(row.before_quantity),
+        beforeAverageRate: String(row.before_average_rate),
+        beforeTotalValue: String(row.before_total_value),
+        afterQuantity: String(row.after_quantity),
+        afterAverageRate: String(row.after_average_rate),
+        afterTotalValue: String(row.after_total_value),
+      },
+      sourceType: "inventory-valuation-override",
+      sourceId: `${row.source_type}:${row.id}`,
       evidence: "legacy" as const,
-    })),
+    }))
+  );
+
+  const legacyMovements: HistoricalSalesRepairMovement[] = [
+    ...legacy.filter((row) => !row.source_type.endsWith("-flag-fallback")).map(toLegacyMovement),
+    ...valuationResetMovements,
     ...manual.movements.map((row) => ({
       movementId: row.movement_id,
       companyId,
@@ -826,6 +2500,181 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     })),
   ];
 
+  const directCanonicalProposals = new Map<number, HistoricalSalesRepairProposal>();
+  const saleQuantityByEvidenceKey = new Map<string, Decimal>();
+  for (const sale of sales) {
+    if (!sale.location_id) continue;
+    const key = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
+    saleQuantityByEvidenceKey.set(
+      key,
+      repairQuantity((saleQuantityByEvidenceKey.get(key) ?? new Decimal(0)).plus(d(sale.quantity).abs()))
+    );
+  }
+
+  const canonicalSaleLifecycleCorrections: HistoricalSalesRepairMovement[] = [];
+
+  for (const [key, evidence] of canonicalSaleEvidence) {
+    const [voucherIdText, locationIdText, stockItemIdText] = key.split(":");
+    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
+    if (!expectedQuantity) continue;
+    if (evidence.latestNegativeRate === null) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_RATE_MISSING",
+        status: "block",
+        detail: `Voucher ${voucherIdText} latest canonical sale mutation has no priced outbound issue`,
+      });
+      continue;
+    }
+    if (!evidence.latestNegativeQuantity.eq(expectedQuantity)) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_QUANTITY_DRIFT",
+        status: "warning",
+        expected: expectedQuantity.toFixed(3),
+        actual: evidence.latestNegativeQuantity.toFixed(3),
+        detail: `Voucher ${voucherIdText} quantity differs from its latest canonical issue batch; the exact transaction-time cost rate is still pinned by the matching latest mutation timestamp`,
+      });
+    }
+    if (evidence.latestNegativeRates.size > 1) {
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "CANONICAL_SALE_MULTI_RATE_RECONCILED",
+        status: "warning",
+        expected: evidence.latestNegativeRate.toFixed(2),
+        actual: [...evidence.latestNegativeRates].sort().join(","),
+        detail: `Voucher ${voucherIdText} latest canonical issue batch contains multiple recorded rates; using its quantity-weighted recorded cost`,
+      });
+    }
+
+    const desiredSignedQuantity = repairQuantity(expectedQuantity.negated());
+    const correctionDelta = repairQuantity(desiredSignedQuantity.minus(evidence.totalSignedQuantity));
+    if (!correctionDelta.isZero()) {
+      const rateSource = correctionDelta.lt(0)
+        ? evidence.latestNegativeMovements
+        : evidence.latestPositiveMovements.length > 0
+          ? evidence.latestPositiveMovements
+          : evidence.latestNegativeMovements;
+      // V47: edit legs journal the old sale-line cost, not the live rate the
+      // missing effect was executed at, so such a correction is unpriced.
+      const correctionAtLiveRate =
+        rateSource.length > 0 && rateSource.every((rateMovement) => posJournalCostIsNotInventoryRate(rateMovement));
+      const correctionRate = correctionDelta.lt(0)
+        ? evidence.latestNegativeRate
+        : (evidence.latestPositiveRate ?? evidence.latestNegativeRate);
+      const anchorMovement =
+        evidence.latestNegativeMovements[evidence.latestNegativeMovements.length - 1] ??
+        evidence.latestPositiveMovements[evidence.latestPositiveMovements.length - 1] ??
+        evidence.movements[evidence.movements.length - 1];
+
+      if (!correctionRate || evidence.anchorCanonicalId <= 0 || !anchorMovement) {
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CANONICAL_SALE_LIFECYCLE_CORRECTION_UNPROVEN",
+          status: "block",
+          expected: desiredSignedQuantity.toFixed(3),
+          actual: evidence.totalSignedQuantity.toFixed(3),
+          detail: `Voucher ${voucherIdText} canonical lifecycle differs from the current sale but has no direct rate anchor for the missing inventory effect`,
+        });
+      } else {
+        canonicalSaleLifecycleCorrections.push({
+          movementId: `canonical-correction:${evidence.anchorCanonicalId}:${voucherIdText}:${locationIdText}:${stockItemIdText}`,
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          occurredAt: anchorMovement.occurredAt,
+          createdAt: new Date(evidence.latestMutationAt).toISOString(),
+          sequence: evidence.anchorCanonicalId * 10 + 9,
+          quantityDelta: correctionDelta.toFixed(3),
+          unitCost: correctionAtLiveRate ? null : correctionRate.toFixed(2),
+          sourceType: "canonical-sale-lifecycle-correction",
+          sourceId: voucherIdText,
+          evidence: "canonical",
+        });
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CANONICAL_SALE_LIFECYCLE_CORRECTION",
+          status: "pass",
+          expected: desiredSignedQuantity.toFixed(3),
+          actual: evidence.totalSignedQuantity.toFixed(3),
+          detail: `Voucher ${voucherIdText} replay adds ${correctionDelta.toFixed(
+            3
+          )} units at its latest canonical mutation to match the current immutable sale state`,
+        });
+      }
+    }
+  }
+
+  const canonicalForReplay = [...canonical, ...canonicalSaleLifecycleCorrections];
+
+  // POS edits/deletes before the 2026-09-11 valuation hardening wrote a
+  // reversal receipt followed by a replacement issue. Those canonical rows are
+  // excellent lifecycle evidence but not exact valuation evidence: the
+  // reversal used the then-live inventory average, while the journal unit_cost
+  // stored the old sale-line cost. Build an alternate replay that collapses
+  // each POS lifecycle to the final active sale state. It is never trusted on
+  // its own: later forward proof accepts it only when it reproduces the
+  // immutable Phase 3 checkpoint exactly.
+  const normalizedCanonicalPosReplay: HistoricalSalesRepairMovement[] = canonical.filter(
+    (movement) => movement.sourceType !== "pos-sale"
+  );
+  for (const [key, evidence] of canonicalSaleEvidence) {
+    const posMovements = evidence.movements.filter((movement) => movement.sourceType === "pos-sale");
+    if (posMovements.length === 0) continue;
+
+    const expectedQuantity = saleQuantityByEvidenceKey.get(key);
+    if (!expectedQuantity) {
+      // The sale no longer exists. Its edit/delete lifecycle has a normalized
+      // net stock effect of zero.
+      continue;
+    }
+
+    const latestPosMutationAt = Math.max(...posMovements.map(movementMutationTime));
+    const latestNegative = posMovements
+      .filter(
+        (movement) =>
+          movementMutationTime(movement) === latestPosMutationAt &&
+          d(movement.quantityDelta).lt(0) &&
+          movement.unitCost !== null &&
+          movement.unitCost !== undefined
+      )
+      .sort(compareMovementMutationAscending);
+
+    let weightedQuantity = new Decimal(0);
+    let weightedValue = new Decimal(0);
+    for (const movement of latestNegative) {
+      const quantity = d(movement.quantityDelta).abs();
+      weightedQuantity = weightedQuantity.plus(quantity);
+      weightedValue = weightedValue.plus(quantity.times(d(movement.unitCost)));
+    }
+
+    if (latestNegative.length === 0 || !weightedQuantity.gt(0)) {
+      // Without a latest priced issue, do not normalize this lifecycle.
+      normalizedCanonicalPosReplay.push(...posMovements);
+      continue;
+    }
+
+    const anchor = latestNegative[latestNegative.length - 1];
+    normalizedCanonicalPosReplay.push({
+      ...anchor,
+      quantityDelta: repairQuantity(expectedQuantity.negated()).toFixed(3),
+      unitCost: repairRate(weightedValue.dividedBy(weightedQuantity)).toFixed(2),
+      sourceType: "pos-sale-normalized",
+      sourceId: key.split(":")[0],
+    });
+  }
+
+  const legacySales: SaleRow[] = [];
   for (const sale of sales) {
     if (!sale.location_id) {
       checks.push({
@@ -840,10 +2689,49 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     }
 
     const saleEvidenceKey = `${sale.voucher_id}:${sale.location_id}:${sale.stock_item_id}`;
-    if (canonicalSaleKeys.has(saleEvidenceKey)) continue;
-
-    const legacySale = beforeCutoff(sale.created_at, canonicalStart);
-    if (!legacySale) {
+    const canonicalEvidence = canonicalSaleEvidence.get(saleEvidenceKey);
+    if (canonicalEvidence) {
+      if (canonicalEvidence.latestNegativeRate !== null) {
+        // A canonical sale's cost is a quantity-weighted mean of its own
+        // journaled live rates, so it can never leave their range.
+        const recordedRates = [...canonicalEvidence.latestNegativeRates].map((rate) => d(rate));
+        if (
+          recordedRates.length > 0 &&
+          (canonicalEvidence.latestNegativeRate.lt(Decimal.min(...recordedRates)) ||
+            canonicalEvidence.latestNegativeRate.gt(Decimal.max(...recordedRates)))
+        ) {
+          checks.push({
+            companyId,
+            locationId: Number(sale.location_id),
+            stockItemId: Number(sale.stock_item_id),
+            salesItemId: Number(sale.sales_item_id),
+            code: "CANONICAL_SALE_RATE_OUTSIDE_RECORDED",
+            status: "block",
+            expected: [...canonicalEvidence.latestNegativeRates].sort().join(","),
+            actual: canonicalEvidence.latestNegativeRate.toFixed(2),
+            detail: `Sales item ${sale.sales_item_id} proposed rate is outside the voucher's journaled live rates`,
+          });
+        }
+        const evidenceMovement =
+          canonicalEvidence.latestNegativeMovements[canonicalEvidence.latestNegativeMovements.length - 1] ??
+          canonicalEvidence.movements[canonicalEvidence.movements.length - 1];
+        directCanonicalProposals.set(
+          Number(sale.sales_item_id),
+          proposalFromRecordedRate(
+            companyId,
+            sale,
+            canonicalEvidence.latestNegativeRate,
+            evidenceMovement.sourceType,
+            evidenceMovement.sourceId,
+            "canonical"
+          )
+        );
+      } else {
+        directCanonicalProposals.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+      continue;
+    }
+    if (!beforeCutoff(sale.created_at, canonicalStart)) {
       checks.push({
         companyId,
         locationId: Number(sale.location_id),
@@ -854,7 +2742,9 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
       });
       continue;
     }
-    movements.push({
+
+    legacySales.push(sale);
+    legacyMovements.push({
       movementId: `sale-marker:${sale.sales_item_id}`,
       companyId,
       locationId: Number(sale.location_id),
@@ -878,83 +2768,2323 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     });
   }
 
-  checks.push(...markAmbiguousTimestampTies(companyId, movements, sales, canonicalStart, canonicalSaleKeys));
+  checks.push(...markAmbiguousTimestampTies(companyId, legacyMovements, sales, canonicalStart, canonicalSaleKeys));
 
-  const opening = buildOpeningStates({
-    companyId,
-    stockItems: stockItemResult.rows,
-    liveInventory: inventoryResult.rows,
-    movements,
-  });
-  checks.push(...opening.checks);
-
-  const replay = replayHistoricalSalesCosts({
-    openings: opening.openings,
-    movements,
-  });
-  const proposals = replay.proposals;
-  const liveByKey = new Map(
-    inventoryResult.rows.map((row) => [
-      historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
-      row,
-    ])
+  const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
+  const closedEraProvenSaleIds = new Set<number>();
+  // V53: per-location opening states where the checkpoint-implied location
+  // openings sum exactly to the pinned item opening (no negative location),
+  // valued at the pinned item opening rate.
+  const evidencedOpeningStates = new Map<string, HistoricalInventoryState>();
+  const targetKeys = new Set(
+    legacySales
+      .filter((sale) => sale.location_id !== null)
+      .map((sale) => historicalInventoryKey(companyId, Number(sale.location_id), Number(sale.stock_item_id)))
   );
-  const replayKeys = new Set([...liveByKey.keys(), ...replay.closingStates.keys()]);
-  for (const key of replayKeys) {
-    const state = replay.closingStates.get(key);
-    const live = liveByKey.get(key);
-    const [, locationIdText, stockItemIdText] = key.split(":");
-    const expectedQty = repairQuantity(live?.quantity ?? "0");
-    const actualQty = repairQuantity(state?.quantity ?? "0");
-    if (actualQty.minus(expectedQty).abs().gt(QTY_TOLERANCE)) {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_QUANTITY_MISMATCH",
-        status: "block",
-        expected: expectedQty.toFixed(3),
-        actual: actualQty.toFixed(3),
-        detail: "Forward replay does not reproduce live closing quantity",
-      });
-      continue;
+
+  if (!checkpoint || checkpoint.rows.length === 0) {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_MISSING",
+      status: "block",
+      detail: "Phase 3 inventory valuation checkpoint is missing for this company",
+    });
+    for (const sale of legacySales) {
+      if (sale.location_id) proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+    }
+  } else {
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "VALUATION_CHECKPOINT_PRESENT",
+      status: "pass",
+      expected: String(checkpoint.movementCutoffId),
+      actual: String(checkpoint.movementCutoffId),
+      detail: checkpoint.createdAt.toISOString(),
+    });
+
+    const checkpointByKey = new Map<string, InventoryRow>();
+    const checkpointStates = new Map<string, HistoricalInventoryState>();
+    for (const row of checkpoint.rows) {
+      const key = historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id));
+      checkpointByKey.set(key, row);
+      checkpointStates.set(
+        key,
+        createHistoricalInventoryStateFromSnapshot(row.quantity, row.average_rate, row.total_value)
+      );
     }
 
-    const expectedValue = repairMoney(live?.total_value ?? "0");
-    const actualValue = repairMoney(state?.totalValue ?? "0");
-    if (actualValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)) {
+    const mergedRecovery = recoverHistoricalMergedSales({
+      companyId,
+      targetKeys,
+      checkpoint,
+      checkpointStates,
+      historicalMerges,
+      canonical: canonicalForReplay,
+      legacyMovements,
+    });
+    checks.push(...mergedRecovery.checks);
+    for (const proposal of mergedRecovery.proposals) {
+      proposalsBySaleId.set(proposal.salesItemId, proposal);
+    }
+
+    const mergedSourceIds = new Set(historicalMerges.map((merge) => Number(merge.source_item_id)));
+    const unavailableKeys = new Set<string>();
+    for (const key of targetKeys) {
+      if (checkpointStates.has(key) || mergedRecovery.recoveredKeys.has(key)) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      const locationId = Number(locationIdText);
+      const stockItemId = Number(stockItemIdText);
+      unavailableKeys.add(key);
+      const alreadyBlocked = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.companyId === companyId &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null || check.locationId === locationId)
+      );
+      if (!alreadyBlocked) {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: mergedSourceIds.has(stockItemId) ? "MERGED_ITEM_RECOVERY_FAILED" : "VALUATION_CHECKPOINT_KEY_MISSING",
+          status: "block",
+          detail: mergedSourceIds.has(stockItemId)
+            ? "Historical merged item could not be reconstructed uniquely"
+            : "Legacy sale item/location has no row in the immutable Phase 3 valuation checkpoint",
+        });
+      }
+    }
+    const checkpointTargetKeys = new Set(
+      [...targetKeys].filter((key) => checkpointStates.has(key) && !unavailableKeys.has(key))
+    );
+
+    // Prove the immutable checkpoint still reaches today's active-location
+    // inventory using every durable movement after the checkpoint. Canonical
+    // rows use the exact checkpoint movement-id boundary; noncanonical durable
+    // rows use the checkpoint timestamp.
+    const liveReplayStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (checkpointTargetKeys.has(key)) {
+        liveReplayStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+
+    const postCheckpointMovements = [
+      ...canonicalForReplay.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id > checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) > checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationAscending);
+
+    for (const movement of postCheckpointMovements) {
+      const key = movementKey(movement);
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const current =
+        liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
+      liveReplayStates.set(key, applyHistoricalSalesRepairMovement(current, movement));
+    }
+
+    const liveByKey = new Map(
+      inventoryResult.rows.map((row) => [
+        historicalInventoryKey(companyId, Number(row.location_id), Number(row.stock_item_id)),
+        row,
+      ])
+    );
+    for (const key of checkpointTargetKeys) {
+      if (unavailableKeys.has(key)) continue;
+      const actual = liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", "0", "0");
+      const live = liveByKey.get(key);
+      const expectedQty = repairQuantity(live?.quantity ?? "0");
+      const expectedValue = repairMoney(live?.total_value ?? "0");
+      if (
+        actual.quantity.minus(expectedQty).abs().gt(QTY_TOLERANCE) ||
+        actual.totalValue.minus(expectedValue).abs().gt(MONEY_TOLERANCE)
+      ) {
+        const [, locationIdText, stockItemIdText] = key.split(":");
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          code: "CHECKPOINT_TO_LIVE_RECONCILIATION_MISMATCH",
+          status: "warning",
+          expected: `${expectedQty.toFixed(3)}|${expectedValue.toFixed(2)}`,
+          actual: `${actual.quantity.toFixed(3)}|${actual.totalValue.toFixed(2)}`,
+          detail:
+            "Post-checkpoint journal does not reproduce today's live inventory exactly. The immutable checkpoint remains valid for pre-checkpoint sales-cost reconstruction; apply still fingerprints inventory so this warning cannot mutate current stock.",
+        });
+      }
+    }
+
+    const rewindStates = new Map<string, HistoricalInventoryState>();
+    for (const [key, state] of checkpointStates) {
+      if (checkpointTargetKeys.has(key) && !unavailableKeys.has(key)) {
+        rewindStates.set(
+          key,
+          createHistoricalInventoryStateFromSnapshot(state.quantity, state.averageRate, state.totalValue)
+        );
+      }
+    }
+
+    // Rewind every durable movement represented in the checkpoint in actual
+    // mutation order. This includes durable legacy rows that never received a
+    // canonical journal counterpart after canonical journaling began.
+    const movementsInCheckpoint = [
+      ...canonicalForReplay.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id <= checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationDescending);
+    const normalizedMovementsAscending = [
+      ...normalizedCanonicalPosReplay.filter((movement) => {
+        const id = canonicalMovementNumericId(movement);
+        return id !== null && id <= checkpoint.movementCutoffId;
+      }),
+      ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
+    ].sort(compareMovementMutationAscending);
+    const priorCostMemoryRateHints = buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
+    const fallbackMovementsInCheckpoint = legacyTransferFallbackMovements
+      .filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime())
+      .sort(compareMovementMutationAscending);
+    const legacyTransferFallbackItemIds = new Set(
+      fallbackMovementsInCheckpoint.map((movement) => movement.stockItemId)
+    );
+    const targetLegacySaleMovementsByKey = new Map<string, HistoricalSalesRepairMovement[]>();
+    for (const movement of legacyMovements) {
+      if (!movement.sale) continue;
+      const key = movementKey(movement);
+      const rows = targetLegacySaleMovementsByKey.get(key) ?? [];
+      rows.push(movement);
+      targetLegacySaleMovementsByKey.set(key, rows);
+    }
+
+    // Reverse replay can lose pre-reset cost memory. Before blocking older
+    // sales, derive location opening quantities from the immutable checkpoint,
+    // reconcile them to the pinned stock-item opening balance, replay every
+    // durable movement forward, and accept only an exact checkpoint match.
+    const forwardReplayResolvedKeys = new Set<string>();
+    const fallbackProvenItemIds = new Set<number>();
+    const movementsAscending = [...movementsInCheckpoint].sort(compareMovementMutationAscending);
+    const stockItemById = new Map(stockItems.map((item) => [Number(item.id), item]));
+    const targetKeysByItem = new Map<number, string[]>();
+    for (const key of checkpointTargetKeys) {
+      const stockItemId = Number(key.split(":")[2]);
+      const rows = targetKeysByItem.get(stockItemId) ?? [];
+      rows.push(key);
+      targetKeysByItem.set(stockItemId, rows);
+    }
+
+    for (const [stockItemId, itemTargetKeys] of targetKeysByItem) {
+      const stockItem = stockItemById.get(stockItemId);
+      if (!stockItem) continue;
+
+      const hasPreexistingEvidenceBlock = checks.some(
+        (check) =>
+          check.status === "block" &&
+          check.stockItemId === stockItemId &&
+          (check.locationId === null || itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
+      );
+      if (hasPreexistingEvidenceBlock) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_SKIPPED_PREEXISTING_BLOCK",
+          status: "warning",
+          detail: "Opening forward proof was skipped because independent evidence already blocks this stock item.",
+        });
+        continue;
+      }
+
+      const itemMovements = movementsAscending.filter((movement) => movement.stockItemId === stockItemId);
+      const normalizedItemMovements = normalizedMovementsAscending.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
+      const openingQty = repairQuantity(stockItem.opening_qty);
+      const openingRate = repairRate(stockItem.opening_rate);
+      const openingValue = repairMoney(stockItem.opening_value);
+      const fallbackItemMovements = fallbackMovementsInCheckpoint.filter(
+        (movement) => movement.stockItemId === stockItemId
+      );
+      let fallbackProofCandidate: {
+        replay: {
+          exact: boolean;
+          detail: string | null;
+          replayProposals: Map<number, HistoricalSalesRepairProposal>;
+          peakNegativeLayerQuantity: Decimal;
+        };
+        openingTotal: Decimal;
+        openingProofBasis: "stock-opening" | "location-import-inferred" | "signed-location-import-inferred";
+        usedNormalizedPos: boolean;
+        movementCount: number;
+      } | null = null;
+
+      if (fallbackItemMovements.length > 0) {
+        const fallbackRawMovements = [...itemMovements, ...fallbackItemMovements].sort(
+          compareMovementMutationAscending
+        );
+        const fallbackNormalizedMovements = [...normalizedItemMovements, ...fallbackItemMovements].sort(
+          compareMovementMutationAscending
+        );
+        const fallbackLocationIds = new Set<number>([
+          ...checkpoint.rows
+            .filter((row) => Number(row.stock_item_id) === stockItemId)
+            .map((row) => Number(row.location_id)),
+          ...fallbackRawMovements.map((movement) => movement.locationId),
+          ...fallbackNormalizedMovements.map((movement) => movement.locationId),
+        ]);
+
+        const rawFallbackDeltaByLocation = new Map<number, Decimal>();
+        for (const movement of fallbackRawMovements) {
+          rawFallbackDeltaByLocation.set(
+            movement.locationId,
+            repairQuantity(
+              (rawFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(d(movement.quantityDelta))
+            )
+          );
+        }
+        const normalizedFallbackDeltaByLocation = new Map<number, Decimal>();
+        for (const movement of fallbackNormalizedMovements) {
+          normalizedFallbackDeltaByLocation.set(
+            movement.locationId,
+            repairQuantity(
+              (normalizedFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+                d(movement.quantityDelta)
+              )
+            )
+          );
+        }
+        const fallbackNormalizedQuantityCompatible = [...fallbackLocationIds].every((locationId) =>
+          (normalizedFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
+            rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
+          )
+        );
+
+        const fallbackOpeningQtyByLocation = new Map<number, Decimal>();
+        let fallbackOpeningTotal = new Decimal(0);
+        let fallbackHasNegativeOpening = false;
+        for (const locationId of fallbackLocationIds) {
+          const checkpointState = checkpointStates.get(historicalInventoryKey(companyId, locationId, stockItemId));
+          let inferred = repairQuantity(
+            (checkpointState?.quantity ?? new Decimal(0)).minus(
+              rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
+            )
+          );
+          if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
+          if (inferred.lt(0)) fallbackHasNegativeOpening = true;
+          fallbackOpeningQtyByLocation.set(locationId, inferred);
+          fallbackOpeningTotal = repairQuantity(fallbackOpeningTotal.plus(inferred));
+        }
+
+        let fallbackOpeningProofBasis:
+          "stock-opening" | "location-import-inferred" | "signed-location-import-inferred" = "stock-opening";
+        let fallbackOpeningStates: Map<number, HistoricalInventoryState> | null = new Map<
+          number,
+          HistoricalInventoryState
+        >();
+
+        if (fallbackHasNegativeOpening) {
+          if (!openingRate.gt(0)) {
+            fallbackOpeningStates = null;
+          } else {
+            fallbackOpeningProofBasis = "signed-location-import-inferred";
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              fallbackOpeningStates.set(locationId, createHistoricalSignedLocationImportState(quantity, openingRate));
+            }
+          }
+        } else if (!fallbackOpeningTotal.eq(openingQty)) {
+          if (!openingRate.gt(0)) {
+            fallbackOpeningStates = null;
+          } else {
+            fallbackOpeningProofBasis = "location-import-inferred";
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              fallbackOpeningStates.set(
+                locationId,
+                quantity.gt(0)
+                  ? createHistoricalInventoryStateFromSnapshot(
+                      quantity,
+                      openingRate,
+                      repairMoney(quantity.times(openingRate))
+                    )
+                  : stateForZeroOpening(openingRate)
+              );
+            }
+          }
+        } else if (openingQty.isZero()) {
+          if (openingValue.abs().gt(MONEY_TOLERANCE)) {
+            fallbackOpeningStates = null;
+          } else {
+            for (const locationId of fallbackLocationIds) {
+              fallbackOpeningStates.set(locationId, stateForZeroOpening(openingRate));
+            }
+          }
+        } else {
+          const positiveLocations = [...fallbackOpeningQtyByLocation.entries()].filter(([, quantity]) =>
+            quantity.gt(0)
+          );
+          if (positiveLocations.length === 1 && positiveLocations[0][1].eq(openingQty)) {
+            const openingLocationId = positiveLocations[0][0];
+            for (const locationId of fallbackLocationIds) {
+              fallbackOpeningStates.set(
+                locationId,
+                locationId === openingLocationId
+                  ? createHistoricalInventoryStateFromSnapshot(openingQty, openingRate, openingValue)
+                  : stateForZeroOpening(openingRate)
+              );
+            }
+          } else {
+            let allocatedValue = new Decimal(0);
+            for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
+              const value = repairMoney(quantity.times(openingRate));
+              fallbackOpeningStates.set(
+                locationId,
+                createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
+              );
+              allocatedValue = repairMoney(allocatedValue.plus(value));
+            }
+            if (!allocatedValue.eq(openingValue)) fallbackOpeningStates = null;
+          }
+        }
+
+        if (fallbackOpeningStates) {
+          const replayFallbackToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
+            const replayStates = new Map<number, HistoricalForwardReplayState>();
+            for (const [locationId, opening] of fallbackOpeningStates!) {
+              replayStates.set(locationId, createHistoricalForwardReplayState(opening));
+            }
+
+            const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+            let peakNegativeLayerQuantity = new Decimal(0);
+            for (const movement of candidateMovements) {
+              const current =
+                replayStates.get(movement.locationId) ??
+                createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+              if (movement.sale && checkpointTargetKeys.has(movementKey(movement))) {
+                replayProposals.set(
+                  movement.sale.salesItemId,
+                  historicalSaleProposalFromState(movement, current.inventory)
+                );
+              }
+              const next = applyHistoricalForwardReplayMovement(current, movement);
+              if (next.negativeLayerQuantity.gt(peakNegativeLayerQuantity)) {
+                peakNegativeLayerQuantity = next.negativeLayerQuantity;
+              }
+              replayStates.set(movement.locationId, next);
+            }
+
+            let exact = true;
+            let detail: string | null = null;
+            for (const locationId of fallbackLocationIds) {
+              const key = historicalInventoryKey(companyId, locationId, stockItemId);
+              const actual = replayStates.get(locationId)?.inventory ?? stateForZeroOpening(openingRate);
+              const expected = checkpointStates.get(key);
+              if (expected) {
+                if (!historicalInventoryStatesEqual(actual, expected)) {
+                  exact = false;
+                  detail =
+                    "location " +
+                    locationId +
+                    " expected " +
+                    repairQuantity(expected.quantity).toFixed(3) +
+                    "|" +
+                    repairRate(expected.averageRate).toFixed(2) +
+                    "|" +
+                    repairMoney(expected.totalValue).toFixed(2) +
+                    " actual " +
+                    repairQuantity(actual.quantity).toFixed(3) +
+                    "|" +
+                    repairRate(actual.averageRate).toFixed(2) +
+                    "|" +
+                    repairMoney(actual.totalValue).toFixed(2);
+                  break;
+                }
+              } else if (
+                !repairQuantity(actual.quantity).isZero() ||
+                repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+              ) {
+                exact = false;
+                detail =
+                  "location " +
+                  locationId +
+                  " has no checkpoint row but replay ends " +
+                  repairQuantity(actual.quantity).toFixed(3) +
+                  "|" +
+                  repairRate(actual.averageRate).toFixed(2) +
+                  "|" +
+                  repairMoney(actual.totalValue).toFixed(2);
+                break;
+              }
+            }
+            return { exact, detail, replayProposals, peakNegativeLayerQuantity };
+          };
+
+          const fallbackRawReplay = replayFallbackToCheckpoint(fallbackRawMovements);
+          let fallbackAcceptedReplay = fallbackRawReplay;
+          let fallbackUsedNormalizedPos = false;
+          const fallbackRawPosFingerprint = fallbackRawMovements
+            .filter((movement) => movement.sourceType === "pos-sale")
+            .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+            .join("|");
+          const fallbackNormalizedPosFingerprint = fallbackNormalizedMovements
+            .filter((movement) => movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized")
+            .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+            .join("|");
+
+          if (
+            !fallbackAcceptedReplay.exact &&
+            fallbackNormalizedQuantityCompatible &&
+            fallbackRawPosFingerprint !== fallbackNormalizedPosFingerprint
+          ) {
+            const normalizedFallbackReplay = replayFallbackToCheckpoint(fallbackNormalizedMovements);
+            if (normalizedFallbackReplay.exact) {
+              fallbackAcceptedReplay = normalizedFallbackReplay;
+              fallbackUsedNormalizedPos = true;
+            }
+          }
+
+          if (fallbackAcceptedReplay.exact) {
+            fallbackProofCandidate = {
+              replay: fallbackAcceptedReplay,
+              openingTotal: fallbackOpeningTotal,
+              openingProofBasis: fallbackOpeningProofBasis,
+              usedNormalizedPos: fallbackUsedNormalizedPos,
+              movementCount: fallbackItemMovements.length,
+            };
+          }
+        }
+      }
+
+      const locationIds = new Set<number>([
+        ...checkpoint.rows
+          .filter((row) => Number(row.stock_item_id) === stockItemId)
+          .map((row) => Number(row.location_id)),
+        ...itemMovements.map((movement) => movement.locationId),
+        ...normalizedItemMovements.map((movement) => movement.locationId),
+      ]);
+      if (locationIds.size === 0) continue;
+
+      const movementDeltaByLocation = new Map<number, Decimal>();
+      for (const movement of itemMovements) {
+        movementDeltaByLocation.set(
+          movement.locationId,
+          repairQuantity(
+            (movementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(d(movement.quantityDelta))
+          )
+        );
+      }
+      const normalizedMovementDeltaByLocation = new Map<number, Decimal>();
+      for (const movement of normalizedItemMovements) {
+        normalizedMovementDeltaByLocation.set(
+          movement.locationId,
+          repairQuantity(
+            (normalizedMovementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
+              d(movement.quantityDelta)
+            )
+          )
+        );
+      }
+      const normalizedQuantityCompatible = [...locationIds].every((locationId) =>
+        (normalizedMovementDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
+          movementDeltaByLocation.get(locationId) ?? new Decimal(0)
+        )
+      );
+      const rawPosFingerprint = itemMovements
+        .filter((movement) => movement.sourceType === "pos-sale")
+        .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+        .join("|");
+      const normalizedPosFingerprint = normalizedItemMovements
+        .filter((movement) => movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized")
+        .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
+        .join("|");
+      const normalizedLifecycleChanged = rawPosFingerprint !== normalizedPosFingerprint;
+
+      const inferredOpeningQtyByLocation = new Map<number, Decimal>();
+      let inferredOpeningTotal = new Decimal(0);
+      let hasNegativeInferredOpening = false;
+      for (const locationId of locationIds) {
+        const checkpointState = checkpointStates.get(historicalInventoryKey(companyId, locationId, stockItemId));
+        let inferred = repairQuantity(
+          (checkpointState?.quantity ?? new Decimal(0)).minus(movementDeltaByLocation.get(locationId) ?? new Decimal(0))
+        );
+        if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
+        if (inferred.lt(0)) hasNegativeInferredOpening = true;
+        inferredOpeningQtyByLocation.set(locationId, inferred);
+        inferredOpeningTotal = repairQuantity(inferredOpeningTotal.plus(inferred));
+      }
+
+      const pinnedOpeningQuantityMatches = inferredOpeningTotal.eq(openingQty);
+      if (pinnedOpeningQuantityMatches && !hasNegativeInferredOpening && openingRate.gt(0)) {
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          if (!quantity.gt(0)) continue;
+          evidencedOpeningStates.set(
+            historicalInventoryKey(companyId, locationId, stockItemId),
+            createHistoricalInventoryStateFromSnapshot(quantity, openingRate, repairMoney(quantity.times(openingRate)))
+          );
+        }
+      }
+      let openingProofBasis: "stock-opening" | "location-import-inferred" | "signed-location-import-inferred" =
+        "stock-opening";
+
+      if (hasNegativeInferredOpening) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_NEGATIVE_INFERRED_QTY",
+          status: "warning",
+          expected: openingQty.toFixed(3),
+          actual: inferredOpeningTotal.toFixed(3),
+          detail:
+            "Checkpoint minus durable movement deltas implies a signed per-location opening. V15 will try the historical signed location-import shape only when a pinned nonzero opening rate exists, and will accept it only on an exact checkpoint replay.",
+        });
+        if (!openingRate.gt(0)) continue;
+        openingProofBasis = "signed-location-import-inferred";
+      } else if (!pinnedOpeningQuantityMatches) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_QTY_MISMATCH",
+          status: "warning",
+          expected: openingQty.toFixed(3),
+          actual: inferredOpeningTotal.toFixed(3),
+          detail:
+            "Item-level opening quantity differs from checkpoint-implied location opening. The repair will try the historical location-import shape only when a pinned nonzero opening rate exists, and will accept it only on an exact checkpoint replay.",
+        });
+        if (!openingRate.gt(0)) continue;
+        openingProofBasis = "location-import-inferred";
+      }
+
+      const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(([, quantity]) =>
+        quantity.gt(0)
+      );
+      const openingStates = new Map<number, HistoricalInventoryState>();
+
+      if (openingProofBasis === "signed-location-import-inferred") {
+        // The historical location-import route accepted signed quantities and
+        // defaulted value to quantity × rate before writing the inventory row
+        // directly. Preserve that exact signed shape as a candidate. The
+        // candidate remains untrusted unless the complete historical replay
+        // reproduces the immutable checkpoint quantity, rate and value.
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          openingStates.set(locationId, createHistoricalSignedLocationImportState(quantity, openingRate));
+        }
+      } else if (openingProofBasis === "location-import-inferred") {
+        // Historical /api/locations/:locationId/import-inventory writes location
+        // quantity/value directly and does not update the item-level frozen
+        // opening quantity. Reconstruct those per-location quantities from the
+        // immutable checkpoint and durable net movement, but keep the separately
+        // pinned item opening rate as the independent cost anchor. This remains a
+        // candidate until the full quantity/rate/value replay matches exactly.
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          if (quantity.gt(0)) {
+            const value = repairMoney(quantity.times(openingRate));
+            openingStates.set(locationId, createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value));
+          } else {
+            openingStates.set(locationId, stateForZeroOpening(openingRate));
+          }
+        }
+      } else if (openingQty.isZero()) {
+        if (openingValue.abs().gt(MONEY_TOLERANCE)) {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_ZERO_QTY_VALUE_MISMATCH",
+            status: "warning",
+            expected: "0.00",
+            actual: openingValue.toFixed(2),
+            detail: "Pinned opening quantity is zero but pinned opening value is nonzero.",
+          });
+          continue;
+        }
+        for (const locationId of locationIds) {
+          openingStates.set(locationId, stateForZeroOpening(openingRate));
+        }
+      } else if (positiveOpeningLocations.length === 1) {
+        const [openingLocationId, locationQty] = positiveOpeningLocations[0];
+        if (!locationQty.eq(openingQty)) continue;
+        for (const locationId of locationIds) {
+          openingStates.set(
+            locationId,
+            locationId === openingLocationId
+              ? createHistoricalInventoryStateFromSnapshot(locationQty, openingRate, openingValue)
+              : stateForZeroOpening(openingRate)
+          );
+        }
+      } else {
+        let allocatedValue = new Decimal(0);
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          const value = repairMoney(quantity.times(openingRate));
+          openingStates.set(locationId, createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value));
+          allocatedValue = repairMoney(allocatedValue.plus(value));
+        }
+        if (!allocatedValue.eq(openingValue)) {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_VALUE_ALLOCATION_MISMATCH",
+            status: "warning",
+            expected: openingValue.toFixed(2),
+            actual: allocatedValue.toFixed(2),
+            detail:
+              "Multiple inferred opening locations cannot reproduce the pinned opening value at the pinned opening rate.",
+          });
+          continue;
+        }
+      }
+
+      const replayToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
+        const replayStates = new Map<number, HistoricalForwardReplayState>();
+        for (const [locationId, opening] of openingStates) {
+          replayStates.set(locationId, createHistoricalForwardReplayState(opening));
+        }
+
+        const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
+        let peakNegativeLayerQuantity = new Decimal(0);
+        for (const movement of candidateMovements) {
+          const current =
+            replayStates.get(movement.locationId) ??
+            createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+          if (movement.sale) {
+            const key = movementKey(movement);
+            if (checkpointTargetKeys.has(key)) {
+              replayProposals.set(
+                movement.sale.salesItemId,
+                historicalSaleProposalFromState(movement, current.inventory)
+              );
+            }
+          }
+          const next = applyHistoricalForwardReplayMovement(current, movement);
+          if (next.negativeLayerQuantity.gt(peakNegativeLayerQuantity)) {
+            peakNegativeLayerQuantity = next.negativeLayerQuantity;
+          }
+          replayStates.set(movement.locationId, next);
+        }
+
+        let exact = true;
+        let detail: string | null = null;
+        for (const locationId of locationIds) {
+          const key = historicalInventoryKey(companyId, locationId, stockItemId);
+          const actualReplay =
+            replayStates.get(locationId) ?? createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+          const actual = actualReplay.inventory;
+          const expected = checkpointStates.get(key);
+          if (expected) {
+            if (!historicalInventoryStatesEqual(actual, expected)) {
+              exact = false;
+              detail =
+                "location " +
+                locationId +
+                " expected " +
+                repairQuantity(expected.quantity).toFixed(3) +
+                "|" +
+                repairRate(expected.averageRate).toFixed(2) +
+                "|" +
+                repairMoney(expected.totalValue).toFixed(2) +
+                " actual " +
+                repairQuantity(actual.quantity).toFixed(3) +
+                "|" +
+                repairRate(actual.averageRate).toFixed(2) +
+                "|" +
+                repairMoney(actual.totalValue).toFixed(2) +
+                " peakLayerQty " +
+                peakNegativeLayerQuantity.toFixed(3);
+              break;
+            }
+          } else if (
+            !repairQuantity(actual.quantity).isZero() ||
+            repairMoney(actual.totalValue).abs().gt(MONEY_TOLERANCE)
+          ) {
+            exact = false;
+            detail =
+              "location " +
+              locationId +
+              " has no checkpoint row but replay ends " +
+              repairQuantity(actual.quantity).toFixed(3) +
+              "|" +
+              repairRate(actual.averageRate).toFixed(2) +
+              "|" +
+              repairMoney(actual.totalValue).toFixed(2) +
+              " peakLayerQty " +
+              peakNegativeLayerQuantity.toFixed(3);
+            break;
+          }
+        }
+
+        return { exact, detail, replayProposals, peakNegativeLayerQuantity };
+      };
+
+      const rawReplay = replayToCheckpoint(itemMovements);
+      let acceptedReplay = rawReplay;
+      let proofMode: "raw" | "normalized-pos-lifecycle" = "raw";
+      let normalizedReplay: ReturnType<typeof replayToCheckpoint> | undefined;
+
+      if (!rawReplay.exact && normalizedQuantityCompatible && normalizedLifecycleChanged) {
+        normalizedReplay = replayToCheckpoint(normalizedItemMovements);
+        if (normalizedReplay.exact) {
+          acceptedReplay = normalizedReplay;
+          proofMode = "normalized-pos-lifecycle";
+        }
+      }
+
+      if (!acceptedReplay.exact) {
+        if (fallbackProofCandidate) {
+          acceptedReplay = fallbackProofCandidate.replay;
+          inferredOpeningTotal = fallbackProofCandidate.openingTotal;
+          openingProofBasis = fallbackProofCandidate.openingProofBasis;
+          proofMode = fallbackProofCandidate.usedNormalizedPos ? "normalized-pos-lifecycle" : "raw";
+          fallbackProvenItemIds.add(stockItemId);
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "LEGACY_TRANSFER_FLAG_FALLBACK_REPLAY_PROVEN",
+            status: "pass",
+            actual: String(fallbackProofCandidate.movementCount),
+            detail:
+              "Trusted V15 replay failed, but adding the false inventory_applied legacy transfer rows reproduced the immutable Phase 3 checkpoint exactly; only this proven item history uses the fallback.",
+          });
+        } else {
+          checks.push({
+            companyId,
+            locationId: null,
+            stockItemId,
+            code: "OPENING_FORWARD_CHECKPOINT_MISMATCH",
+            status: "warning",
+            detail:
+              rawReplay.detail ??
+              normalizedReplay?.detail ??
+              "Forward replay did not reproduce the immutable checkpoint.",
+          });
+          continue;
+        }
+      }
+
+      if (openingProofBasis === "signed-location-import-inferred") {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_SIGNED_LOCATION_IMPORT_RECONCILED",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "@" + openingRate.toFixed(2),
+          actual: inferredOpeningTotal.toFixed(3) + "@" + openingRate.toFixed(2),
+          detail:
+            "Checkpoint-implied signed per-location openings seeded at the separately pinned item rate replay exactly to the immutable Phase 3 checkpoint, consistent with the historical signed location-inventory import path.",
+        });
+      }
+
+      if (openingProofBasis === "location-import-inferred") {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_LOCATION_IMPORT_RECONCILED",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "@" + openingRate.toFixed(2),
+          actual: inferredOpeningTotal.toFixed(3) + "@" + openingRate.toFixed(2),
+          detail:
+            "Checkpoint-implied per-location opening quantities seeded at the separately pinned item opening rate replay exactly to the immutable Phase 3 checkpoint, consistent with the historical direct location-inventory import path.",
+        });
+      }
+
+      if (acceptedReplay.peakNegativeLayerQuantity.gt(0)) {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_EPOCH_LAYER_REPLAY",
+          status: "pass",
+          actual: acceptedReplay.peakNegativeLayerQuantity.toFixed(3),
+          detail:
+            "Forward proof reproduced the checkpoint while simulating the historical negative-layer engine and its production epoch boundaries.",
+        });
+      }
+
+      if (proofMode === "normalized-pos-lifecycle") {
+        checks.push({
+          companyId,
+          locationId: null,
+          stockItemId,
+          code: "OPENING_FORWARD_POS_LIFECYCLE_NORMALIZED",
+          status: "pass",
+          detail:
+            "Raw POS edit/delete valuation history missed the checkpoint, but the final-active-sale normalization reproduced the immutable Phase 3 checkpoint exactly.",
+        });
+      }
+
+      for (const key of itemTargetKeys) {
+        forwardReplayResolvedKeys.add(key);
+        const locationId = Number(key.split(":")[1]);
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: "OPENING_FORWARD_REPLAY_PROVEN",
+          status: "pass",
+          expected: openingQty.toFixed(3) + "|" + openingValue.toFixed(2),
+          actual:
+            inferredOpeningTotal.toFixed(3) +
+            "|" +
+            (openingProofBasis === "location-import-inferred" || openingProofBasis === "signed-location-import-inferred"
+              ? repairMoney(inferredOpeningTotal.times(openingRate)).toFixed(2)
+              : openingValue.toFixed(2)),
+          detail:
+            openingProofBasis === "signed-location-import-inferred"
+              ? "Checkpoint-implied signed location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
+              : openingProofBasis === "location-import-inferred"
+                ? "Checkpoint-implied location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
+                : proofMode === "normalized-pos-lifecycle"
+                  ? "Pinned stock opening balance and normalized final POS lifecycle replay exactly to the immutable Phase 3 checkpoint"
+                  : "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
+        });
+      }
+      for (const proposal of acceptedReplay.replayProposals.values()) {
+        proposalsBySaleId.set(proposal.salesItemId, proposal);
+      }
+    }
+
+    for (const stockItemId of legacyTransferFallbackItemIds) {
+      const itemKeys = targetKeysByItem.get(stockItemId) ?? [];
+      if (itemKeys.length === 0 || fallbackProvenItemIds.has(stockItemId)) continue;
       checks.push({
         companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_VALUE_MISMATCH",
-        status: "block",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
-        detail: "Forward weighted-average replay does not reproduce live closing inventory value",
-      });
-    } else {
-      checks.push({
-        companyId,
-        locationId: Number(locationIdText),
-        stockItemId: Number(stockItemIdText),
-        code: "CLOSING_INVENTORY_RECONCILED",
-        status: "pass",
-        expected: expectedValue.toFixed(2),
-        actual: actualValue.toFixed(2),
+        locationId: null,
+        stockItemId,
+        code: "LEGACY_TRANSFER_FLAG_FALLBACK_IGNORED",
+        status: "warning",
+        actual: String(itemKeys.length),
+        detail:
+          "False inventory_applied legacy transfer rows did not reproduce the immutable checkpoint, so V17 ignores them and retains the trusted V15 movement history for this item.",
       });
     }
+
+    // A priced receipt that crosses an item/location from zero or negative
+    // quantity to positive quantity resets cost memory: the post-receipt
+    // valuation is determined entirely by the receipt rate and the positive
+    // remainder. Derive quantities backwards from the immutable checkpoint,
+    // then replay forward from each reset candidate. Accept the earliest
+    // candidate that reproduces the checkpoint exactly, which proves every
+    // target legacy sale after that reset without needing older cost memory.
+    const forwardResetProvenSaleIds = new Set<number>();
+    const movementsByTargetKey = new Map<string, HistoricalSalesRepairMovement[]>();
+    for (const movement of movementsAscending) {
+      const key = movementKey(movement);
+      if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
+      const rows = movementsByTargetKey.get(key) ?? [];
+      rows.push(movement);
+      movementsByTargetKey.set(key, rows);
+    }
+
+    for (const key of checkpointTargetKeys) {
+      if (unavailableKeys.has(key) || forwardReplayResolvedKeys.has(key)) continue;
+      const checkpointState = checkpointStates.get(key);
+      if (!checkpointState) continue;
+      const movements = movementsByTargetKey.get(key) ?? [];
+      if (movements.length === 0) continue;
+
+      const quantityBefore = new Array<Decimal>(movements.length);
+      let quantityAfter = repairQuantity(checkpointState.quantity);
+      for (let index = movements.length - 1; index >= 0; index -= 1) {
+        const delta = repairQuantity(movements[index].quantityDelta);
+        const before = repairQuantity(quantityAfter.minus(delta));
+        quantityBefore[index] = before;
+        quantityAfter = before;
+      }
+
+      let accepted:
+        | {
+            anchor: HistoricalSalesRepairMovement;
+            stateAtCheckpoint: HistoricalInventoryState;
+            proposals: HistoricalSalesRepairProposal[];
+          }
+        | undefined;
+
+      for (let anchorIndex = 0; anchorIndex < movements.length; anchorIndex += 1) {
+        const anchor = movements[anchorIndex];
+        const delta = repairQuantity(anchor.quantityDelta);
+        const beforeQty = quantityBefore[anchorIndex];
+        const afterQty = repairQuantity(beforeQty.plus(delta));
+        if (
+          !delta.gt(0) ||
+          anchor.unitCost === null ||
+          anchor.unitCost === undefined ||
+          posJournalCostIsNotInventoryRate(anchor) ||
+          beforeQty.gt(0) ||
+          !afterQty.gt(0)
+        ) {
+          continue;
+        }
+
+        let state = applyHistoricalSalesRepairMovement(
+          createHistoricalInventoryStateFromSnapshot(beforeQty, "0", "0"),
+          anchor
+        );
+        const candidateProposals: HistoricalSalesRepairProposal[] = [];
+        for (let index = anchorIndex + 1; index < movements.length; index += 1) {
+          const movement = movements[index];
+          if (movement.sale) {
+            candidateProposals.push(historicalSaleProposalFromState(movement, state));
+          }
+          state = applyHistoricalSalesRepairMovement(state, movement);
+        }
+
+        if (!historicalInventoryStatesEqual(state, checkpointState)) continue;
+        if (candidateProposals.length === 0) continue;
+
+        accepted = {
+          anchor,
+          stateAtCheckpoint: state,
+          proposals: candidateProposals,
+        };
+        break;
+      }
+
+      if (!accepted) continue;
+
+      let provenCount = 0;
+      for (const proposal of accepted.proposals) {
+        proposalsBySaleId.set(proposal.salesItemId, proposal);
+        forwardResetProvenSaleIds.add(proposal.salesItemId);
+        provenCount += 1;
+      }
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "FORWARD_RESET_SEGMENT_PROVEN",
+        status: "pass",
+        expected: `${repairQuantity(checkpointState.quantity).toFixed(3)}|${repairMoney(
+          checkpointState.totalValue
+        ).toFixed(2)}|${repairRate(checkpointState.averageRate).toFixed(2)}`,
+        actual: `${repairQuantity(accepted.stateAtCheckpoint.quantity).toFixed(3)}|${repairMoney(
+          accepted.stateAtCheckpoint.totalValue
+        ).toFixed(2)}|${repairRate(accepted.stateAtCheckpoint.averageRate).toFixed(2)}`,
+        detail: `Reset anchor ${accepted.anchor.movementId} proves ${provenCount} later legacy sale(s) by exact checkpoint replay`,
+      });
+    }
+
+    const rewindBoundaryReached = new Set<string>();
+    const UNRECORDED_REVALUATION_MIN_JUMP = new Decimal("0.02");
+    const reanchorRequests: Array<{
+      key: string;
+      anchor: HistoricalSalesRepairMovement;
+      beforeQuantity: Decimal;
+      recorded: Decimal;
+      inferred: Decimal;
+      unresolvedSales: HistoricalSalesRepairMovement[];
+      transition: "UNRECORDED_REVALUATION" | "COST_MEMORY_RESET" | "COLLAPSED_POS_LINES";
+      transitionMovementId: string;
+    }> = [];
+    // V41: the newest-in-rewind movement at each key that erased cost memory
+    // between the checkpoint and the current rewind position: a priced receipt
+    // into zero or negative stock (production sets the rate from the receipt
+    // alone) or a pinned valuation reset. Above such a boundary the checkpoint
+    // holds no information about the earlier rate, so a canonical sale's
+    // recorded live rate below it is the only evidence of that rate.
+    const costMemoryResetByKey = new Map<string, HistoricalSalesRepairMovement>();
+    // V45 branching rewind: alternate pre-states (each with the sale proposals
+    // it implies) where an issue at an unpinned live rate has several exact
+    // inverses. The primary path (rewindStates) drives every existing check;
+    // recorded live rates and exact inverses prune the alternates or promote
+    // one over a contradicted primary, and legacy sales are priced only when
+    // every surviving branch agrees.
+    type RewindAlternate = { state: HistoricalInventoryState; history: Map<number, HistoricalSalesRepairProposal> };
+    const REWIND_BRANCH_LIMIT = 32;
+    const rewindAlternates = new Map<string, RewindAlternate[]>();
+    const finishedAlternates = new Map<string, RewindAlternate[]>();
+    const primaryHistoryByKey = new Map<string, Map<number, HistoricalSalesRepairProposal>>();
+    const branchOverflowKeys = new Set<string>();
+    const legacyInverseAmbiguity = new Map<string, { sales: number; maxSpread: Decimal }>();
+    const branchSignature = (state: HistoricalInventoryState, history: Map<number, HistoricalSalesRepairProposal>) =>
+      traceState(state) +
+      "|" +
+      [...history.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
+        .join(",");
+    let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
+    const nextMovementAtKey = (
+      key: string,
+      movement: HistoricalSalesRepairMovement
+    ): HistoricalSalesRepairMovement | undefined => {
+      if (!movementsAscendingByKey) {
+        movementsAscendingByKey = new Map();
+        for (const candidate of movementsAscending) {
+          const rows = movementsAscendingByKey.get(movementKey(candidate)) ?? [];
+          rows.push(candidate);
+          movementsAscendingByKey.set(movementKey(candidate), rows);
+        }
+      }
+      const rows = movementsAscendingByKey.get(key) ?? [];
+      const index = rows.findIndex((candidate) => candidate.movementId === movement.movementId);
+      return index >= 0 ? rows[index + 1] : undefined;
+    };
+    // V34 diagnostic: rewinding a receipt divides any value error by the
+    // smaller pre-receipt quantity, so the reconstructed rate's sensitivity to
+    // a one-cent model error at the checkpoint grows by Q_after/Q_before at
+    // every rewound receipt (issues leave it unchanged). Low-stock keys that
+    // never reach zero (company 1, location 134, item 702 hovered at one unit
+    // for nine months) amplify a 2-cent drift into 536M/unit. Recorded as a
+    // warning to measure before any threshold becomes a blocker.
+    const rewindSensitivity = new Map<string, Decimal>();
+    const REWIND_AMPLIFICATION_LIMIT = new Decimal(100);
+    const REANCHOR_MAX_CANDIDATES = new Decimal(20000);
+    const rewindAmplification = new Map<
+      string,
+      { max: Decimal; maxSalesItemId: number; proposals: number; over10: number; over100: number }
+    >();
+
+    for (const movement of movementsInCheckpoint) {
+      const key = movementKey(movement);
+      if (
+        !checkpointTargetKeys.has(key) ||
+        unavailableKeys.has(key) ||
+        forwardReplayResolvedKeys.has(key) ||
+        rewindBoundaryReached.has(key)
+      ) {
+        continue;
+      }
+      const stateAfter = rewindStates.get(key);
+      if (!stateAfter) continue;
+      let reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+        priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+      });
+
+      // V49 measurement: a legacy sale whose own inverse has several exact
+      // pre-issue rates is priced on the primary choice (rate unchanged across
+      // the issue); count them so the residual uncertainty is reported.
+      if (
+        movement.evidence === "legacy" &&
+        movement.sale &&
+        reversed.reversible &&
+        isLiveRateIssueWithUnpinnedRate(movement)
+      ) {
+        const primaryBefore = reversed.stateBefore;
+        const alternatives = historicalIssueInverseCandidates(stateAfter, movement).filter(
+          (candidate) => !historicalInventoryStatesEqual(candidate, primaryBefore)
+        );
+        if (alternatives.length > 0) {
+          const spread = Decimal.max(
+            ...alternatives.map((candidate) =>
+              repairRate(candidate.averageRate).minus(repairRate(primaryBefore.averageRate)).abs()
+            )
+          );
+          const entry = legacyInverseAmbiguity.get(key) ?? { sales: 0, maxSpread: new Decimal(0) };
+          entry.sales += 1;
+          if (spread.gt(entry.maxSpread)) entry.maxSpread = spread;
+          legacyInverseAmbiguity.set(key, entry);
+          // V50 strict proof: the sale's own cost is not uniquely determined.
+          if (!forwardResetProvenSaleIds.has(movement.sale.salesItemId)) {
+            checks.push(
+              legacyInverseNotUniqueBlock(companyId, movement, primaryBefore, alternatives, "checkpoint rewind")
+            );
+          }
+        }
+      }
+
+      // V45: advance and branch the alternates, then let recorded evidence
+      // prune them or replace a contradicted primary.
+      const branchable = movement.evidence === "canonical" && isLiveRateIssueWithUnpinnedRate(movement);
+      const currentAlternates = rewindAlternates.get(key) ?? [];
+      if ((branchable || currentAlternates.length > 0) && !branchOverflowKeys.has(key)) {
+        const primaryHistory = primaryHistoryByKey.get(key) ?? new Map<number, HistoricalSalesRepairProposal>();
+        const withSale = (history: Map<number, HistoricalSalesRepairProposal>, state: HistoricalInventoryState) => {
+          if (!movement.sale || forwardResetProvenSaleIds.has(movement.sale.salesItemId)) return history;
+          const copy = new Map(history);
+          copy.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, state));
+          return copy;
+        };
+        const next: RewindAlternate[] = [];
+        const finished = finishedAlternates.get(key) ?? [];
+        if (branchable) {
+          for (const candidate of historicalIssueInverseCandidates(stateAfter, movement)) {
+            if (reversed.reversible && historicalInventoryStatesEqual(candidate, reversed.stateBefore)) continue;
+            next.push({ state: candidate, history: withSale(primaryHistory, candidate) });
+          }
+        }
+        for (const alternate of currentAlternates) {
+          const alternateReversed = reverseHistoricalSalesRepairMovement(alternate.state, movement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+          });
+          const befores: HistoricalInventoryState[] = [];
+          if (alternateReversed.reversible) befores.push(alternateReversed.stateBefore);
+          else if (alternateReversed.reason === "COST_MEMORY_IRREVERSIBLE") finished.push(alternate);
+          if (branchable) {
+            for (const candidate of historicalIssueInverseCandidates(alternate.state, movement)) {
+              if (!befores.some((before) => historicalInventoryStatesEqual(before, candidate))) befores.push(candidate);
+            }
+          }
+          for (const before of befores) next.push({ state: before, history: withSale(alternate.history, before) });
+        }
+
+        let surviving = next;
+        let promotedBy: string | null = null;
+        if (isRecordedLiveRateObservation(movement)) {
+          const recorded = repairRate(movement.unitCost!);
+          surviving = next.filter((alternate) => repairRate(alternate.state.averageRate).eq(recorded));
+          const primaryAgrees = reversed.reversible && repairRate(reversed.stateBefore.averageRate).eq(recorded);
+          if (!primaryAgrees && surviving.length > 0) promotedBy = "recorded live rate " + recorded.toFixed(2);
+        } else if (!reversed.reversible && reversed.reason === "MOVEMENT_INVERSE_INVALID" && surviving.length > 0) {
+          promotedBy = "exact inverse";
+        }
+        if (promotedBy) {
+          const promoted = surviving.shift()!;
+          reversed = { reversible: true, stateBefore: promoted.state };
+          const promotedHistory = new Map(promoted.history);
+          if (movement.sale) promotedHistory.delete(movement.sale.salesItemId);
+          for (const [salesItemId, proposal] of promotedHistory) proposalsBySaleId.set(salesItemId, proposal);
+          primaryHistoryByKey.set(key, promotedHistory);
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "REWIND_BRANCH_PROMOTED",
+            status: "pass",
+            actual: traceState(promoted.state),
+            detail: `At ${movement.movementId} the ${promotedBy} contradicts the primary rewind; an alternate exact inverse that agrees replaces it`,
+          });
+        }
+
+        const primaryNow = primaryHistoryByKey.get(key) ?? primaryHistory;
+        const primarySignature = reversed.reversible
+          ? branchSignature(reversed.stateBefore, withSale(primaryNow, reversed.stateBefore))
+          : null;
+        const seen = new Set<string>(primarySignature ? [primarySignature] : []);
+        const deduped: RewindAlternate[] = [];
+        for (const alternate of surviving) {
+          const signature = branchSignature(alternate.state, alternate.history);
+          if (seen.has(signature)) continue;
+          seen.add(signature);
+          deduped.push(alternate);
+        }
+        if (deduped.length > REWIND_BRANCH_LIMIT) {
+          branchOverflowKeys.add(key);
+          rewindAlternates.set(key, []);
+        } else {
+          rewindAlternates.set(key, deduped);
+        }
+        finishedAlternates.set(key, finished);
+      }
+      traceRewind(
+        key,
+        [
+          movement.createdAt ?? movement.occurredAt,
+          movement.movementId,
+          movement.sourceType + (movement.canonicalPosRole ? "/" + movement.canonicalPosRole : ""),
+          "dq=" + repairQuantity(movement.quantityDelta).toFixed(3),
+          "uc=" + (movement.unitCost == null ? "-" : String(movement.unitCost)),
+          "ev=" + (movement.exactValue == null ? "-" : String(movement.exactValue)),
+          "after=" + traceState(stateAfter),
+          reversed.reversible
+            ? "before=" + traceState(reversed.stateBefore) + (reversed.recovery ? " via " + reversed.recovery : "")
+            : "IRREVERSIBLE " + reversed.reason,
+          movement.sale ? "sale=" + movement.sale.salesItemId : "",
+          (rewindAlternates.get(key)?.length ?? 0) > 0 ? "alts=" + rewindAlternates.get(key)!.length : "",
+        ]
+          .filter(Boolean)
+          .join(" ")
+      );
+      if (!reversed.reversible) {
+        const priorRateHint = priorCostMemoryRateHints.get(movement.movementId) ?? null;
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "REWIND_BOUNDARY_DIAGNOSTIC",
+          status: "warning",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) +
+            "|" +
+            repairRate(stateAfter.averageRate).toFixed(2) +
+            "|" +
+            repairMoney(stateAfter.totalValue).toFixed(2),
+          actual:
+            repairQuantity(movement.quantityDelta).toFixed(3) +
+            "|" +
+            (movement.unitCost == null ? "null" : String(movement.unitCost)) +
+            "|" +
+            (priorRateHint == null ? "null" : repairRate(priorRateHint).toFixed(2)),
+          detail:
+            "reason=" +
+            reversed.reason +
+            " boundary=" +
+            movement.movementId +
+            " sourceType=" +
+            movement.sourceType +
+            " evidence=" +
+            movement.evidence +
+            " stateAfter=qty|rate|value delta|unitCost|priorRateHint occurredAt=" +
+            movement.occurredAt,
+        });
+        const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+          (saleMovement) =>
+            compareMovementMutationAscending(saleMovement, movement) <= 0 &&
+            !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
+        );
+        rewindBoundaryReached.add(key);
+
+        if (reversed.reason === "MOVEMENT_INVERSE_INVALID") {
+          // V43: an impossible inverse proves the rewound state above this
+          // movement inconsistent with the evidence below it, yet the legacy
+          // sales between it and the checkpoint were already priced from that
+          // state. The error is somewhere between the checkpoint and here, so
+          // a sale's rewound cost is kept only when it is independent of where
+          // the error lies: a priced receipt into exactly empty stock fixes
+          // the state after it whatever came before, and a forward replay from
+          // that state must reach the same cost for the sale. Otherwise the
+          // sale is blocked.
+          const pricedAbove = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+            (saleMovement) =>
+              compareMovementMutationAscending(saleMovement, movement) > 0 &&
+              proposalsBySaleId.has(saleMovement.sale!.salesItemId) &&
+              !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
+          );
+          if (pricedAbove.length > 0) {
+            const delta = repairQuantity(movement.quantityDelta);
+            const determined =
+              delta.gt(0) &&
+              movement.unitCost !== null &&
+              movement.unitCost !== undefined &&
+              !posJournalCostIsNotInventoryRate(movement) &&
+              repairQuantity(stateAfter.quantity).minus(delta).isZero();
+            const forwardCost = new Map<number, string>();
+            if (determined) {
+              let forward = applyHistoricalSalesRepairMovement(
+                createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+                movement
+              );
+              const later = movementsInCheckpoint
+                .filter(
+                  (candidate) =>
+                    movementKey(candidate) === key && compareMovementMutationAscending(candidate, movement) > 0
+                )
+                .sort(compareMovementMutationAscending);
+              for (const laterMovement of later) {
+                if (laterMovement.sale) {
+                  forwardCost.set(
+                    laterMovement.sale.salesItemId,
+                    historicalSaleProposalFromState(laterMovement, forward).proposedCostPrice
+                  );
+                }
+                forward = applyHistoricalSalesRepairMovement(forward, laterMovement);
+              }
+            }
+            let agreed = 0;
+            for (const saleMovement of pricedAbove) {
+              const salesItemId = saleMovement.sale!.salesItemId;
+              const rewound = proposalsBySaleId.get(salesItemId)!.proposedCostPrice;
+              const forward = forwardCost.get(salesItemId);
+              if (forward !== undefined && forward === rewound) {
+                agreed += 1;
+                continue;
+              }
+              checks.push({
+                companyId,
+                locationId: saleMovement.locationId,
+                stockItemId: saleMovement.stockItemId,
+                salesItemId,
+                code: "CHECKPOINT_REWIND_CONTRADICTED_BELOW",
+                status: "block",
+                expected: rewound,
+                actual: forward ?? "undetermined",
+                detail: `Sales item ${salesItemId} was rewound from a state contradicted by ${movement.movementId} (${
+                  determined
+                    ? "forward replay from the empty-stock receipt disagrees"
+                    : "no fully determined state below"
+                })`,
+              });
+            }
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "REWIND_CONTRADICTION_TWO_SIDED",
+              status: "warning",
+              expected: String(pricedAbove.length),
+              actual: String(agreed),
+              detail: `${agreed} of ${pricedAbove.length} legacy sales above impossible inverse ${movement.movementId} have the same cost from the checkpoint rewind and from ${
+                determined ? "a forward replay of the empty-stock receipt" : "no independent forward state"
+              }`,
+            });
+          }
+        }
+
+        if (unresolvedSales.length === 0) {
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "REWIND_RESET_BOUNDARY_REACHED",
+            status: "pass",
+            detail: `Stopped safely at ${movement.movementId} because no target historical sale exists before the irreversible valuation boundary`,
+          });
+          continue;
+        }
+
+        for (const saleMovement of unresolvedSales) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId: saleMovement.sale!.salesItemId,
+            code: `${movement.evidence === "canonical" ? "CHECKPOINT" : "LEGACY"}_REWIND_${reversed.reason}`,
+            status: "block",
+            detail: `Sales item ${saleMovement.sale!.salesItemId} predates irreversible valuation boundary ${movement.movementId}`,
+          });
+        }
+        continue;
+      }
+
+      if (reversed.recovery === "CANONICAL_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_REWIND_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Canonical boundary " +
+            movement.movementId +
+            " recovered because forward replay reproduced quantity and total value exactly; only the reconstructed intermediate average-rate field disagreed. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
+      if (reversed.recovery === "LEGACY_ISSUE_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "LEGACY_REWIND_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Legacy sale boundary " +
+            movement.movementId +
+            " recovered from the unique self-consistent pre-issue rate because replay reproduced quantity and total value exactly; no ambiguous rate candidate was accepted. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
+      if (reversed.recovery === "CANONICAL_RECORDED_ISSUE_RATE") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_RECORDED_SALE_RATE_RECOVERED",
+          status: "pass",
+          expected: repairRate(movement.unitCost ?? "0").toFixed(2),
+          actual: repairRate(reversed.stateBefore.averageRate).toFixed(2),
+          detail:
+            "Canonical sale boundary " +
+            movement.movementId +
+            " used its recorded transaction-time issue rate because that rate replayed quantity and total value exactly and the generic inverse selected a conflicting rate.",
+        });
+      }
+
+      if (reversed.recovery === "CANONICAL_ADJUSTMENT_EDIT_VALUE") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "CANONICAL_ADJUSTMENT_EDIT_VALUE_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Canonical stock-adjustment edit apply boundary " +
+            movement.movementId +
+            " recovered by adding back its persisted line value and replaying the source-specific consumption semantics exactly. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
+      if (reversed.recovery === "LEGACY_RECEIPT_RATE_ONLY") {
+        checks.push({
+          companyId,
+          locationId: movement.locationId,
+          stockItemId: movement.stockItemId,
+          code: "LEGACY_RECEIPT_RATE_ONLY_RECOVERED",
+          status: "pass",
+          expected:
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          detail:
+            "Legacy offload boundary " +
+            movement.movementId +
+            " recovered from the exact stored offload total_value because replay reproduced quantity and total value exactly; only the reconstructed intermediate average-rate field disagreed. Prior rate=" +
+            repairRate(reversed.stateBefore.averageRate).toFixed(2),
+        });
+      }
+
+      // V33: only an original POS sale issue journals the locked live rate. An
+      // edit re-issue journals the preserved old sale-line cost, so it is not
+      // evidence about the inventory rate and must not be compared with it.
+      if (
+        movement.evidence === "canonical" &&
+        CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
+        !posJournalCostIsNotInventoryRate(movement) &&
+        d(movement.quantityDelta).lt(0)
+      ) {
+        const recorded = repairRate(movement.unitCost ?? "0");
+        const inferred = repairRate(reversed.stateBefore.averageRate);
+        if (!recorded.eq(inferred)) {
+          // V37 diagnostic: issues never move the average beyond rounding, so
+          // when the very next movement at this key is another original sale
+          // issue journaling a materially different locked live rate, the
+          // inventory was revalued in between by a writer that left no
+          // movement (cost-price import, direct location import). That
+          // boundary cannot be crossed without evidence of the revaluation.
+          // V47: outbound movements between two recorded live rates move the
+          // stored rate by at most one cent of rounding each, so a larger gap
+          // than 0.02 plus a cent per intervening issue cannot come from them.
+          let nextMovement: HistoricalSalesRepairMovement | undefined = nextMovementAtKey(key, movement);
+          let issuesBetween = 0;
+          while (
+            nextMovement &&
+            !isRecordedLiveRateObservation(nextMovement) &&
+            d(nextMovement.quantityDelta).lt(0) &&
+            (nextMovement.exactValue === null || nextMovement.exactValue === undefined) &&
+            !isExactValuationReset(nextMovement)
+          ) {
+            issuesBetween += 1;
+            nextMovement = nextMovementAtKey(key, nextMovement);
+          }
+          let unrecordedRevaluation = false;
+          if (
+            nextMovement &&
+            isRecordedLiveRateObservation(nextMovement) &&
+            repairRate(nextMovement.unitCost!)
+              .minus(recorded)
+              .abs()
+              .gt(UNRECORDED_REVALUATION_MIN_JUMP.plus(new Decimal(issuesBetween).times("0.01")))
+          ) {
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "UNRECORDED_REVALUATION_DETECTED",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: repairRate(nextMovement.unitCost!).toFixed(2),
+              detail: `Locked live rate moved from ${recorded.toFixed(2)} (${movement.movementId}, ${
+                movement.createdAt ?? movement.occurredAt
+              }) to ${repairRate(nextMovement.unitCost!).toFixed(2)} (${nextMovement.movementId}, ${
+                nextMovement.createdAt ?? nextMovement.occurredAt
+              }) with ${issuesBetween ? issuesBetween + " outbound movement(s)" : "no stock movement"} between them`,
+            });
+            unrecordedRevaluation = true;
+          }
+          const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
+            (saleMovement) =>
+              compareMovementMutationAscending(saleMovement, movement) < 0 &&
+              !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
+          );
+          rewindBoundaryReached.add(key);
+          const costMemoryReset = costMemoryResetByKey.get(key);
+          if ((unrecordedRevaluation || costMemoryReset) && unresolvedSales.length > 0) {
+            // V39: try to re-anchor below the revaluation instead of blocking
+            // outright; the blocks are emitted after the attempt if it fails.
+            // V41: the same proof applies below a cost-memory reset, where the
+            // disagreement is the rewind's guess of an erased rate, not a
+            // contradiction between independent evidence.
+            reanchorRequests.push({
+              key,
+              anchor: movement,
+              beforeQuantity: repairQuantity(reversed.stateBefore.quantity),
+              recorded,
+              inferred,
+              unresolvedSales,
+              transition: unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET",
+              transitionMovementId: unrecordedRevaluation
+                ? (nextMovement?.movementId ?? movement.movementId)
+                : costMemoryReset!.movementId,
+            });
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "VALUATION_ERA_BOUNDARY",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: inferred.toFixed(2),
+              detail: `transition=${unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET"} at ${
+                unrecordedRevaluation ? (nextMovement?.movementId ?? movement.movementId) : costMemoryReset!.movementId
+              }; anchor=${movement.movementId} recorded live rate ${recorded.toFixed(2)}, checkpoint rewind inferred ${inferred.toFixed(2)}`,
+            });
+          } else if (unresolvedSales.length === 0) {
+            checks.push({
+              companyId,
+              locationId: movement.locationId,
+              stockItemId: movement.stockItemId,
+              code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+              status: "warning",
+              expected: recorded.toFixed(2),
+              actual: inferred.toFixed(2),
+              detail: `Canonical movement ${movement.movementId} disagrees with checkpoint rewind after all target legacy sales were already reconstructed`,
+            });
+          } else {
+            for (const saleMovement of unresolvedSales) {
+              checks.push({
+                companyId,
+                locationId: saleMovement.locationId,
+                stockItemId: saleMovement.stockItemId,
+                salesItemId: saleMovement.sale!.salesItemId,
+                code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+                status: "block",
+                expected: recorded.toFixed(2),
+                actual: inferred.toFixed(2),
+                detail: `Sales item ${saleMovement.sale!.salesItemId} predates canonical cost boundary ${movement.movementId}`,
+              });
+            }
+          }
+          continue;
+        }
+      }
+
+      const afterQty = repairQuantity(stateAfter.quantity);
+      const beforeQty = repairQuantity(reversed.stateBefore.quantity);
+      let sensitivity =
+        rewindSensitivity.get(key) ?? (afterQty.gt(0) ? new Decimal(1).dividedBy(afterQty) : new Decimal(1));
+      if (d(movement.quantityDelta).gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
+        sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
+      }
+      rewindSensitivity.set(key, sensitivity);
+
+      if (movement.sale && !forwardResetProvenSaleIds.has(movement.sale.salesItemId)) {
+        const primaryProposal = historicalSaleProposalFromState(movement, reversed.stateBefore);
+        proposalsBySaleId.set(movement.sale.salesItemId, primaryProposal);
+        const primaryHistory = primaryHistoryByKey.get(key) ?? new Map<number, HistoricalSalesRepairProposal>();
+        primaryHistory.set(movement.sale.salesItemId, primaryProposal);
+        primaryHistoryByKey.set(key, primaryHistory);
+        const amplification = rewindAmplification.get(key) ?? {
+          max: new Decimal(0),
+          maxSalesItemId: movement.sale.salesItemId,
+          proposals: 0,
+          over10: 0,
+          over100: 0,
+        };
+        amplification.proposals += 1;
+        if (sensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
+          // V35: a reconstruction this ill-conditioned is not proven even when
+          // every local inverse replays exactly: one cent of model drift near
+          // the checkpoint moves this sale's cost by more than a dollar.
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            salesItemId: movement.sale.salesItemId,
+            code: "LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED",
+            status: "block",
+            expected: `<=${REWIND_AMPLIFICATION_LIMIT.toFixed(0)}`,
+            actual: sensitivity.toFixed(2),
+            detail: `Sales item ${movement.sale.salesItemId} rewound cost moves ${sensitivity.toFixed(
+              2
+            )} cents per cent of checkpoint-side model error`,
+          });
+        }
+        if (sensitivity.gt(10)) amplification.over10 += 1;
+        if (sensitivity.gt(100)) amplification.over100 += 1;
+        if (sensitivity.gt(amplification.max)) {
+          amplification.max = sensitivity;
+          amplification.maxSalesItemId = movement.sale.salesItemId;
+        }
+        rewindAmplification.set(key, amplification);
+      }
+      if (
+        isExactValuationReset(movement) ||
+        (d(movement.quantityDelta).gt(0) &&
+          movement.unitCost !== null &&
+          movement.unitCost !== undefined &&
+          !posJournalCostIsNotInventoryRate(movement) &&
+          repairQuantity(reversed.stateBefore.quantity).lte(0))
+      ) {
+        costMemoryResetByKey.set(key, movement);
+      }
+      rewindStates.set(key, reversed.stateBefore);
+    }
+
+    for (const [key, entry] of legacyInverseAmbiguity) {
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "LEGACY_SALE_INVERSE_AMBIGUITY_SUMMARY",
+        status: "warning",
+        expected: String(entry.sales),
+        actual: entry.maxSpread.toFixed(2),
+        detail: `${entry.sales} legacy sale inverse(s) admit another exact pre-issue rate (largest gap ${entry.maxSpread.toFixed(2)}); blocked as LEGACY_SALE_INVERSE_NOT_UNIQUE`,
+      });
+    }
+
+    // V45: a legacy sale rewound on the primary path is priced only when every
+    // surviving branch reached the same cost for it.
+    for (const [key, primaryHistory] of primaryHistoryByKey) {
+      const alternates = [...(rewindAlternates.get(key) ?? []), ...(finishedAlternates.get(key) ?? [])];
+      const overflow = branchOverflowKeys.has(key);
+      if (alternates.length === 0 && !overflow) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      let blocked = 0;
+      for (const [salesItemId, proposal] of primaryHistory) {
+        if (forwardResetProvenSaleIds.has(salesItemId)) continue;
+        const disagreeing = alternates.find(
+          (alternate) => alternate.history.get(salesItemId)?.proposedCostPrice !== proposal.proposedCostPrice
+        );
+        if (!overflow && !disagreeing) continue;
+        blocked += 1;
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          salesItemId,
+          code: "CHECKPOINT_REWIND_COST_NOT_UNIQUE",
+          status: "block",
+          expected: proposal.proposedCostPrice,
+          actual: overflow ? "branch limit" : (disagreeing!.history.get(salesItemId)?.proposedCostPrice ?? "unreached"),
+          detail: `Sales item ${salesItemId} has a different cost on another exact rewind branch`,
+        });
+      }
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "REWIND_BRANCH_CONSENSUS",
+        status: "warning",
+        expected: String(primaryHistory.size),
+        actual: String(primaryHistory.size - blocked),
+        detail: `${alternates.length} surviving alternate branch(es)${overflow ? " (branch limit exceeded)" : ""}; ${blocked} of ${primaryHistory.size} rewound legacy sale(s) not unique`,
+      });
+    }
+
+    // V39: re-anchor below an unrecorded revaluation. At the pre-revaluation
+    // original sale the locked live rate (journaled) and the quantity (the
+    // quantity chain is unaffected by a valuation overwrite) are exact; only
+    // the value is unknown. Every value whose stored 2dp rate equals the
+    // recorded rate is a candidate. Each candidate is rewound independently
+    // through the key's earlier history and must survive every inverse and
+    // every earlier recorded live sale rate. Proposals are accepted only when
+    // at least one candidate survives and all survivors agree exactly on every
+    // reconstructed sale cost and on where the rewind stops.
+    for (const request of reanchorRequests) {
+      const [, locationIdText, stockItemIdText] = request.key.split(":");
+      const locationId = Number(locationIdText);
+      const stockItemId = Number(stockItemIdText);
+      const blockUnresolved = (sales: HistoricalSalesRepairMovement[]) => {
+        for (const saleMovement of sales) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId: saleMovement.sale!.salesItemId,
+            code: "CANONICAL_SALE_COST_EVIDENCE_MISMATCH",
+            status: "block",
+            expected: request.recorded.toFixed(2),
+            actual: request.inferred.toFixed(2),
+            detail: `Sales item ${saleMovement.sale!.salesItemId} predates canonical cost boundary ${request.anchor.movementId}`,
+          });
+        }
+      };
+
+      const earlier = movementsInCheckpoint.filter(
+        (candidateMovement) =>
+          movementKey(candidateMovement) === request.key &&
+          compareMovementMutationAscending(candidateMovement, request.anchor) < 0
+      );
+      const result = reanchorHistoricalRewindAtRecordedRate({
+        anchorQuantity: request.beforeQuantity,
+        recordedRate: request.recorded,
+        earlierMovementsDescending: earlier,
+        targetSaleIds: new Set(request.unresolvedSales.map((sale) => sale.sale!.salesItemId)),
+        priorCostMemoryRateHints,
+        maxCandidates: REANCHOR_MAX_CANDIDATES.toNumber(),
+      });
+      if (result.status !== "proven") {
+        checks.push({
+          companyId,
+          locationId,
+          stockItemId,
+          code: `${reanchorCodePrefix(request.transition)}_REANCHOR_AMBIGUOUS`,
+          status: "warning",
+          expected: "1 agreeing outcome",
+          actual:
+            result.status === "too-wide"
+              ? `${result.candidateCount} cent values to enumerate`
+              : `${result.survivorCount} surviving of ${result.candidateCount} candidates, ${result.distinctOutcomeCount} distinct outcomes`,
+          detail: `Re-anchor at ${request.anchor.movementId} below ${request.transition} ${request.transitionMovementId} is not unique`,
+        });
+        blockUnresolved(request.unresolvedSales);
+        continue;
+      }
+
+      let proven = 0;
+      for (const saleMovement of request.unresolvedSales) {
+        const salesItemId = saleMovement.sale!.salesItemId;
+        const proposal = result.proposals.get(salesItemId);
+        if (!proposal) {
+          if (result.stoppedAt) {
+            // Every survivor stopped at the same irreversible cost-memory
+            // boundary above this sale: that, not the anchor, blocks it.
+            checks.push({
+              companyId,
+              locationId: saleMovement.locationId,
+              stockItemId: saleMovement.stockItemId,
+              salesItemId,
+              code: "LEGACY_REWIND_COST_MEMORY_IRREVERSIBLE",
+              status: "block",
+              detail: `Sales item ${salesItemId} predates irreversible valuation boundary ${result.stoppedAt} below re-anchor ${request.anchor.movementId}`,
+            });
+          } else {
+            blockUnresolved([saleMovement]);
+          }
+          continue;
+        }
+        if (result.notUniqueSaleIds.has(salesItemId)) {
+          checks.push({
+            companyId,
+            locationId: saleMovement.locationId,
+            stockItemId: saleMovement.stockItemId,
+            salesItemId,
+            code: "LEGACY_SALE_INVERSE_NOT_UNIQUE",
+            status: "block",
+            detail: `Sales item ${salesItemId}: the re-anchored rewind at ${request.anchor.movementId} admits more than one exact pre-sale rate, so its cost is not uniquely proven`,
+          });
+          continue;
+        }
+        const saleSensitivity = result.sensitivity.get(salesItemId) ?? new Decimal(0);
+        if (saleSensitivity.gt(REWIND_AMPLIFICATION_LIMIT)) {
+          checks.push({
+            companyId,
+            locationId,
+            stockItemId,
+            salesItemId,
+            code: "LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED",
+            status: "block",
+            expected: `<=${REWIND_AMPLIFICATION_LIMIT.toFixed(0)}`,
+            actual: saleSensitivity.toFixed(2),
+            detail: `Sales item ${salesItemId} re-anchored cost moves ${saleSensitivity.toFixed(
+              2
+            )} cents per cent of model error`,
+          });
+          continue;
+        }
+        proposalsBySaleId.set(salesItemId, proposal);
+        proven += 1;
+      }
+      checks.push({
+        companyId,
+        locationId,
+        stockItemId,
+        code: `${reanchorCodePrefix(request.transition)}_REANCHOR_PROVEN`,
+        status: "pass",
+        expected: String(request.unresolvedSales.length),
+        actual: String(proven),
+        detail: `${result.survivorCount} of ${result.candidateCount} value candidates at ${request.anchor.movementId} (recorded ${request.recorded.toFixed(2)}, below ${request.transition} ${request.transitionMovementId}) survived and agree on every reconstructed sale cost${
+          result.stoppedAt ? `; rewind stops at ${result.stoppedAt}` : ""
+        }`,
+      });
+    }
+
+    // V47: closed zero-stock eras. A priced receipt into exactly empty stock
+    // fixes quantity, value and rate from the receipt alone, whatever came
+    // before; when stock later returns to exactly zero, every sale in between
+    // depends only on movements inside that era. The checkpoint rewind can
+    // only reach such an era by guessing the erased cost memory at the zero,
+    // so a forward replay inside the closed era replaces rewind-failure blocks
+    // for its sales. The era is rejected if stock goes negative inside it or a
+    // recorded live rate inside it disagrees; a sale the rewind already priced
+    // differently is blocked rather than repriced.
+    const REWIND_FAILURE_BLOCKS =
+      /^(LEGACY_REWIND_|CHECKPOINT_REWIND_|CANONICAL_SALE_COST_EVIDENCE_MISMATCH$|LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED$|LEGACY_SALE_INVERSE_NOT_UNIQUE$)/;
+    const blockedSaleCodes = new Map<number, RepairCheck[]>();
+    for (const check of checks) {
+      if (check.status !== "block" || !check.salesItemId) continue;
+      const list = blockedSaleCodes.get(check.salesItemId) ?? [];
+      list.push(check);
+      blockedSaleCodes.set(check.salesItemId, list);
+    }
+    let eraProvenSales = 0;
+    let eraConflictSales = 0;
+    for (const [key, movements] of movementsByTargetKey) {
+      if (forwardReplayResolvedKeys.has(key)) continue;
+      const checkpointState = checkpointStates.get(key);
+      if (!checkpointState) continue;
+      const quantityBefore = new Array<Decimal>(movements.length);
+      let quantityAfter = repairQuantity(checkpointState.quantity);
+      for (let index = movements.length - 1; index >= 0; index -= 1) {
+        quantityBefore[index] = repairQuantity(quantityAfter.minus(repairQuantity(movements[index].quantityDelta)));
+        quantityAfter = quantityBefore[index];
+      }
+      // V53: the opening era. An evidenced location opening (see
+      // evidencedOpeningStates) is a determined start just like a receipt into
+      // empty stock: forward from it until stock first reaches zero or goes
+      // short (closed), or, if it never does before the canonical journal,
+      // until it reproduces the first two recorded live rates (observed).
+      const acceptEra = (eraProposals: HistoricalSalesRepairProposal[], label: string, code: string) => {
+        let proven = 0;
+        let conflicts = 0;
+        for (const proposal of eraProposals) {
+          const blocks = (blockedSaleCodes.get(proposal.salesItemId) ?? []).filter((block) => block.status === "block");
+          const existing = proposalsBySaleId.get(proposal.salesItemId);
+          if (blocks.length === 0) {
+            if (existing && existing.proposedCostPrice !== proposal.proposedCostPrice) {
+              conflicts += 1;
+              checks.push({
+                companyId,
+                locationId: proposal.locationId,
+                stockItemId: proposal.stockItemId,
+                salesItemId: proposal.salesItemId,
+                code: "OPENING_ERA_FORWARD_DISAGREES",
+                status: "block",
+                expected: proposal.proposedCostPrice,
+                actual: existing.proposedCostPrice,
+                detail: `Sales item ${proposal.salesItemId}: ${label} gives a different cost than the checkpoint rewind`,
+              });
+            }
+            continue;
+          }
+          if (!blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) continue;
+          for (const block of blocks) {
+            block.status = "warning";
+            block.detail = `${block.detail ?? ""} (superseded: ${label})`;
+          }
+          proposalsBySaleId.set(proposal.salesItemId, proposal);
+          closedEraProvenSaleIds.add(proposal.salesItemId);
+          proven += 1;
+        }
+        eraProvenSales += proven;
+        eraConflictSales += conflicts;
+        if (proven > 0 || conflicts > 0) {
+          const [, locationIdText, stockItemIdText] = key.split(":");
+          checks.push({
+            companyId,
+            locationId: Number(locationIdText),
+            stockItemId: Number(stockItemIdText),
+            code,
+            status: "pass",
+            expected: String(eraProposals.length),
+            actual: String(proven),
+            detail: `${label}; ${proven} blocked sale(s) priced by forward replay, ${conflicts} conflict(s) with the checkpoint rewind`,
+          });
+        }
+      };
+      let openingEraEnd = -1;
+      const opening = evidencedOpeningStates.get(key);
+      if (opening && movements.length > 0 && quantityBefore[0].eq(repairQuantity(opening.quantity))) {
+        let state = opening;
+        const eraProposals: HistoricalSalesRepairProposal[] = [];
+        let matched = 0;
+        let rejected = false;
+        let closedAt = -1;
+        let sawObservation = false;
+        for (let cursor = 0; cursor < movements.length; cursor += 1) {
+          const movement = movements[cursor];
+          if (isRecordedLiveRateObservation(movement)) {
+            sawObservation = true;
+            if (!repairRate(movement.unitCost!).eq(repairRate(state.averageRate))) {
+              rejected = true;
+              break;
+            }
+            matched += 1;
+            if (matched >= 2) break;
+          } else if (movement.sale && !sawObservation) {
+            eraProposals.push(historicalSaleProposalFromState(movement, state));
+          }
+          state = applyHistoricalSalesRepairMovement(state, movement);
+          if (!sawObservation && state.quantity.lte(0)) {
+            closedAt = cursor;
+            break;
+          }
+        }
+        if (!rejected && closedAt >= 0) {
+          // V54: an opening era validated only by stock running out is not
+          // evidence. Run #60 compared it with checkpoint-proven sales: 765
+          // disagreed and 78 agreed, so the assumption that each location
+          // opened at the pinned item rate does not hold. Recorded as a
+          // diagnostic only; later eras still start after its close.
+          const [, locationIdText, stockItemIdText] = key.split(":");
+          checks.push({
+            companyId,
+            locationId: Number(locationIdText),
+            stockItemId: Number(stockItemIdText),
+            code: "OPENING_ERA_UNVALIDATED",
+            status: "warning",
+            expected: String(eraProposals.length),
+            detail: `Opening era closed at ${movements[closedAt].movementId} without a recorded live rate; not used as evidence`,
+          });
+          openingEraEnd = closedAt;
+        } else if (!rejected && matched >= 2) {
+          acceptEra(
+            eraProposals,
+            `opening era ${key} validated by two recorded live rates`,
+            "OPENING_ERA_OBSERVED_PROVEN"
+          );
+        }
+      }
+
+      let index = openingEraEnd + 1;
+      while (index < movements.length) {
+        const anchor = movements[index];
+        const delta = repairQuantity(anchor.quantityDelta);
+        const priced =
+          (anchor.exactValue !== null && anchor.exactValue !== undefined) ||
+          (anchor.unitCost !== null && anchor.unitCost !== undefined && !posJournalCostIsNotInventoryRate(anchor));
+        if (!delta.gt(0) || !priced || !quantityBefore[index].isZero() || isExactValuationReset(anchor)) {
+          index += 1;
+          continue;
+        }
+        let state = applyHistoricalSalesRepairMovement(
+          createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+          anchor
+        );
+        const eraProposals: HistoricalSalesRepairProposal[] = [];
+        let closedAt = -1;
+        let rejected = false;
+        for (let cursor = index + 1; cursor < movements.length; cursor += 1) {
+          const movement = movements[cursor];
+          if (
+            isRecordedLiveRateObservation(movement) &&
+            !repairRate(movement.unitCost!).eq(repairRate(state.averageRate))
+          ) {
+            rejected = true;
+            break;
+          }
+          if (movement.sale) eraProposals.push(historicalSaleProposalFromState(movement, state));
+          state = applyHistoricalSalesRepairMovement(state, movement);
+          // V52: the era closes when stock reaches zero or goes short; every
+          // sale up to that point was priced from a determined state.
+          if (state.quantity.lte(0)) {
+            closedAt = cursor;
+            break;
+          }
+        }
+        if (rejected || closedAt < 0) {
+          index += 1;
+          continue;
+        }
+        let proven = 0;
+        let conflicts = 0;
+        for (const proposal of eraProposals) {
+          const blocks = blockedSaleCodes.get(proposal.salesItemId) ?? [];
+          const existing = proposalsBySaleId.get(proposal.salesItemId);
+          if (blocks.length === 0) {
+            if (existing && existing.proposedCostPrice !== proposal.proposedCostPrice) {
+              conflicts += 1;
+              checks.push({
+                companyId,
+                locationId: proposal.locationId,
+                stockItemId: proposal.stockItemId,
+                salesItemId: proposal.salesItemId,
+                code: "CLOSED_ERA_FORWARD_DISAGREES",
+                status: "block",
+                expected: proposal.proposedCostPrice,
+                actual: existing.proposedCostPrice,
+                detail: `Sales item ${proposal.salesItemId}: closed zero-stock era from ${anchor.movementId} gives a different cost than the checkpoint rewind`,
+              });
+            }
+            continue;
+          }
+          if (!blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) continue;
+          for (const block of blocks) {
+            block.status = "warning";
+            block.detail = `${block.detail ?? ""} (superseded: closed zero-stock era ${anchor.movementId}..${movements[closedAt].movementId})`;
+          }
+          proposalsBySaleId.set(proposal.salesItemId, proposal);
+          closedEraProvenSaleIds.add(proposal.salesItemId);
+          proven += 1;
+        }
+        eraProvenSales += proven;
+        eraConflictSales += conflicts;
+        if (proven > 0 || conflicts > 0) {
+          checks.push({
+            companyId,
+            locationId: anchor.locationId,
+            stockItemId: anchor.stockItemId,
+            code: "CLOSED_ZERO_STOCK_ERA_PROVEN",
+            status: "pass",
+            expected: String(eraProposals.length),
+            actual: String(proven),
+            detail: `Era ${anchor.movementId}..${movements[closedAt].movementId} opens with a priced receipt into empty stock and closes at zero stock; ${proven} blocked sale(s) priced by forward replay, ${conflicts} conflict(s) with the checkpoint rewind`,
+          });
+        }
+        index = closedAt + 1;
+      }
+
+      // V51: the open era before the canonical journal. From the last priced
+      // receipt into exactly empty stock before the first recorded live rate,
+      // a forward replay is exact if the movement model is; it is accepted
+      // only when it reproduces the first two recorded live rates exactly
+      // (observation-validated era), and then prices the legacy sales before
+      // the first observation, replacing their rewind-failure blocks.
+      const observationIndexes = movements
+        .map((movement, position) => (isRecordedLiveRateObservation(movement) ? position : -1))
+        .filter((position) => position >= 0);
+      if (observationIndexes.length >= 2) {
+        const firstObservation = observationIndexes[0];
+        let start = -1;
+        for (let position = firstObservation - 1; position >= 0; position -= 1) {
+          const candidate = movements[position];
+          const candidatePriced =
+            (candidate.exactValue !== null && candidate.exactValue !== undefined) ||
+            (candidate.unitCost !== null &&
+              candidate.unitCost !== undefined &&
+              !posJournalCostIsNotInventoryRate(candidate));
+          if (
+            repairQuantity(candidate.quantityDelta).gt(0) &&
+            candidatePriced &&
+            quantityBefore[position].isZero() &&
+            !isExactValuationReset(candidate)
+          ) {
+            start = position;
+            break;
+          }
+        }
+        if (start >= 0) {
+          let state = applyHistoricalSalesRepairMovement(
+            createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+            movements[start]
+          );
+          const openProposals: HistoricalSalesRepairProposal[] = [];
+          let matched = 0;
+          let failed = false;
+          for (let cursor = start + 1; cursor < movements.length && matched < 2; cursor += 1) {
+            const movement = movements[cursor];
+            if (isRecordedLiveRateObservation(movement)) {
+              if (!repairRate(movement.unitCost!).eq(repairRate(state.averageRate))) {
+                failed = true;
+                break;
+              }
+              matched += 1;
+            } else if (movement.sale && cursor < firstObservation) {
+              openProposals.push(historicalSaleProposalFromState(movement, state));
+            }
+            state = applyHistoricalSalesRepairMovement(state, movement);
+            if (state.quantity.lt(0)) {
+              failed = true;
+              break;
+            }
+          }
+          if (!failed && matched === 2 && openProposals.length > 0) {
+            let proven = 0;
+            let conflicts = 0;
+            for (const proposal of openProposals) {
+              const blocks = (blockedSaleCodes.get(proposal.salesItemId) ?? []).filter(
+                (block) => block.status === "block"
+              );
+              const existing = proposalsBySaleId.get(proposal.salesItemId);
+              if (blocks.length === 0) {
+                if (existing && existing.proposedCostPrice !== proposal.proposedCostPrice) {
+                  conflicts += 1;
+                  checks.push({
+                    companyId,
+                    locationId: proposal.locationId,
+                    stockItemId: proposal.stockItemId,
+                    salesItemId: proposal.salesItemId,
+                    code: "OBSERVED_ERA_FORWARD_DISAGREES",
+                    status: "block",
+                    expected: proposal.proposedCostPrice,
+                    actual: existing.proposedCostPrice,
+                    detail: `Sales item ${proposal.salesItemId}: the observation-validated era from ${movements[start].movementId} gives a different cost than the checkpoint rewind`,
+                  });
+                }
+                continue;
+              }
+              if (!blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) continue;
+              for (const block of blocks) {
+                block.status = "warning";
+                block.detail = `${block.detail ?? ""} (superseded: observation-validated era ${movements[start].movementId}..${movements[firstObservation].movementId})`;
+              }
+              proposalsBySaleId.set(proposal.salesItemId, proposal);
+              closedEraProvenSaleIds.add(proposal.salesItemId);
+              proven += 1;
+            }
+            eraProvenSales += proven;
+            eraConflictSales += conflicts;
+            if (proven > 0 || conflicts > 0) {
+              checks.push({
+                companyId,
+                locationId: movements[start].locationId,
+                stockItemId: movements[start].stockItemId,
+                code: "OBSERVED_ERA_FORWARD_PROVEN",
+                status: "pass",
+                expected: String(openProposals.length),
+                actual: String(proven),
+                detail: `Era from ${movements[start].movementId} (priced receipt into empty stock) replays exactly to the recorded live rates at ${movements[observationIndexes[0]].movementId} and ${movements[observationIndexes[1]].movementId}; ${proven} blocked sale(s) priced, ${conflicts} conflict(s)`,
+              });
+            }
+          }
+        }
+      }
+    }
+    // V52 diagnostic: why each remaining rewind-failure sale is not in an era.
+    const eraGap = { noDeterminedStartBefore: 0, eraNeverCloses: 0, other: 0 };
+    for (const [key, movements] of movementsByTargetKey) {
+      if (forwardReplayResolvedKeys.has(key)) continue;
+      const checkpointState = checkpointStates.get(key);
+      if (!checkpointState) continue;
+      let quantityAfterGap = repairQuantity(checkpointState.quantity);
+      const startIndexes: number[] = [];
+      for (let position = movements.length - 1; position >= 0; position -= 1) {
+        const before = repairQuantity(quantityAfterGap.minus(repairQuantity(movements[position].quantityDelta)));
+        if (repairQuantity(movements[position].quantityDelta).gt(0) && before.isZero()) startIndexes.push(position);
+        quantityAfterGap = before;
+      }
+      movements.forEach((movement, position) => {
+        if (!movement.sale) return;
+        const blocks = (blockedSaleCodes.get(movement.sale.salesItemId) ?? []).filter(
+          (block) => block.status === "block"
+        );
+        if (blocks.length === 0 || !blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) return;
+        if (!startIndexes.some((startIndex) => startIndex < position)) eraGap.noDeterminedStartBefore += 1;
+        else if (!startIndexes.some((startIndex) => startIndex > position)) eraGap.eraNeverCloses += 1;
+        else eraGap.other += 1;
+      });
+    }
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "ERA_COVERAGE_GAP_DIAGNOSTIC",
+      status: "warning",
+      actual: JSON.stringify(eraGap),
+      detail:
+        "Remaining rewind-failure sales: no receipt into empty stock before them / no later return to empty stock / other (era rejected by a recorded rate or unpriced start)",
+    });
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "CLOSED_ZERO_STOCK_ERAS",
+      status: "pass",
+      expected: String(eraProvenSales),
+      actual: String(eraConflictSales),
+      detail:
+        "Sales priced by closed zero-stock era forward replay (expected) and sales blocked for disagreeing with the checkpoint rewind (actual)",
+    });
+
+    for (const [key, amplification] of rewindAmplification) {
+      if (!amplification.max.gt(1)) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "REWIND_ERROR_AMPLIFICATION",
+        status: "warning",
+        expected: "<=1.00",
+        actual: amplification.max.toFixed(2),
+        detail: `Rewound rate moves up to ${amplification.max.toFixed(
+          2
+        )} cents per cent of checkpoint-side model error (worst: sales item ${amplification.maxSalesItemId}); ${
+          amplification.proposals
+        } rewound proposals, ${amplification.over10} above 10x, ${amplification.over100} above 100x`,
+      });
+    }
+
+    for (const sale of legacySales) {
+      if (!sale.location_id) continue;
+      if (!proposalsBySaleId.has(Number(sale.sales_item_id))) {
+        proposalsBySaleId.set(Number(sale.sales_item_id), originalProposalForSale(companyId, sale));
+      }
+    }
+
+    const rewindReadyKeys =
+      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length + mergedRecovery.recoveredKeys.size;
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "CHECKPOINT_REWIND_COVERAGE",
+      status: rewindReadyKeys === targetKeys.size ? "pass" : "warning",
+      expected: String(targetKeys.size),
+      actual: String(rewindReadyKeys),
+      detail: "Legacy sale item/location keys with a fully provable checkpoint rewind",
+    });
   }
 
+  // V32: a moving weighted average is a convex combination of the rates that
+  // fed it, so a reconstructed sale cost can never leave the range of every
+  // rate the item ever carried. Run #33 marked legacy proposals of 536M/unit
+  // (item normally ~107) "ready": a rewind chain amplified a small inverse
+  // error geometrically while every local step still looked consistent. Any
+  // reconstructed proposal outside the evidenced range proves the chain for
+  // that item/location is wrong, so every legacy proposal there is blocked.
+  checks.push(
+    ...rateHullBlocks({
+      companyId,
+      proposals: [...proposalsBySaleId.values()],
+      stockItems,
+      canonical,
+      legacy,
+      offloadEvidence,
+      checkpoint,
+      historicalMerges,
+      independentSaleIds: closedEraProvenSaleIds,
+    })
+  );
+
+  const diagnosedKeys = new Set(options.diagnoseKeys ?? []);
+  for (const check of checks) {
+    if (check.status === "block" && check.locationId !== null && check.stockItemId !== null) {
+      diagnosedKeys.add(historicalInventoryKey(companyId, check.locationId, check.stockItemId));
+    }
+  }
+  for (const key of [...diagnosedKeys].sort()) {
+    const lines = rewindTrace.get(key);
+    if (!lines?.length) continue;
+    const [, locationIdText, stockItemIdText] = key.split(":");
+    checks.push({
+      companyId,
+      locationId: Number(locationIdText),
+      stockItemId: Number(stockItemIdText),
+      code: "REWIND_TIMELINE_DIAGNOSTIC",
+      status: "warning",
+      expected: String(lines.length),
+      detail: lines.join("\n"),
+    });
+  }
+
+  const proposals = [...directCanonicalProposals.values(), ...proposalsBySaleId.values()].sort(
+    (a, b) => a.salesItemId - b.salesItemId
+  );
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
     sourceCutoff: sourceCutoff.toISOString(),
-    inventoryRows: inventoryResult.rows.length,
-    stockItems: stockItemResult.rows.length,
+    checkpointAt: checkpoint?.createdAt.toISOString() ?? null,
+    checkpointMovementCutoffId: checkpoint?.movementCutoffId ?? null,
+    sourceEvidenceHash,
+    activeInventoryRows: inventoryResult.rows.length,
+    checkpointRows: checkpoint?.rows.length ?? 0,
+    stockItems: stockItems.length,
     canonicalMovements: canonical.length,
     legacyMovements: legacy.length + manual.movements.length,
     saleRows: sales.length,
+    canonicalSaleRows: directCanonicalProposals.size,
+    legacySaleRows: legacySales.length,
+    historicalMerges: historicalMerges.length,
+    exactOffloadEvidenceRows: offloadEvidence.length,
+    valuationResetEvidenceRows: valuationResetMovements.length,
+    proposedRows: proposals.length,
     changedSaleRows: proposals.filter((proposal) => proposal.changed).length,
     blockedItemLocations: distinctBlockedItemLocations(checks),
   };
@@ -1096,6 +5226,18 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     await enableMaintenanceScope(client);
     await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-dry-run'))");
 
+    // A proven-rows-only partial apply rewrites sale costs that this engine
+    // reads as historical evidence. Until a dry-run can restore that evidence
+    // from the apply log, refuse to build on top of an active partial apply.
+    const activePartial = await client.query<{ run_id: number }>(
+      `SELECT run_id FROM historical_sales_cost_repair_partial_applies WHERE status='applied' ORDER BY run_id`
+    );
+    if (activePartial.rows.length > 0) {
+      throw hscrError(
+        `HSCR_DRY_RUN_REFUSED_ACTIVE_PARTIAL_APPLY:${activePartial.rows.map((row) => row.run_id).join(",")}`
+      );
+    }
+
     const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
     const sourceCutoff = cutoffResult.rows[0].cutoff;
     const companyIds = await companyIdsForRun(client, input.companyIds);
@@ -1128,17 +5270,24 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       (proposal) => proposal.changed && !blockerForProposal(blockers, proposal)
     ).length;
 
-    const originalTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalTotalCost), new Decimal(0))
-    );
+    // V34: run totals describe what apply would actually write. A blocked row
+    // keeps its original values, so only unblocked proposals contribute their
+    // proposed cost/profit. The rejected candidates of blocked rows are still
+    // reported separately for diagnostics, but never mixed into the headline
+    // totals (run #36 showed 3.2B "proposed" that lived entirely in blocked rows).
+    const sumMoney = (
+      proposals: HistoricalSalesRepairProposal[],
+      field: "originalTotalCost" | "proposedTotalCost" | "originalProfit" | "proposedProfit"
+    ) => repairMoney(proposals.reduce((sum, proposal) => sum.plus(proposal[field]), new Decimal(0)));
+    const blockedProposals = allProposals.filter((proposal) => blockerForProposal(blockers, proposal));
+    const applicableProposals = allProposals.filter((proposal) => !blockerForProposal(blockers, proposal));
+    const originalTotalCost = sumMoney(allProposals, "originalTotalCost");
     const proposedTotalCost = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedTotalCost), new Decimal(0))
+      sumMoney(applicableProposals, "proposedTotalCost").plus(sumMoney(blockedProposals, "originalTotalCost"))
     );
-    const originalTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.originalProfit), new Decimal(0))
-    );
+    const originalTotalProfit = sumMoney(allProposals, "originalProfit");
     const proposedTotalProfit = repairMoney(
-      allProposals.reduce((sum, proposal) => sum.plus(proposal.proposedProfit), new Decimal(0))
+      sumMoney(applicableProposals, "proposedProfit").plus(sumMoney(blockedProposals, "originalProfit"))
     );
 
     const hash = createHash("sha256");
@@ -1153,9 +5302,9 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       );
     }
     for (const check of [...allChecks].sort((a, b) =>
-      [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.code]
+      [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code]
         .join(":")
-        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.code].join(":"))
+        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code].join(":"))
     )) {
       hash.update("\ncheck|");
       hash.update(JSON.stringify(check));
@@ -1167,6 +5316,15 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
       algorithmVersion: HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
       sourceCutoff: sourceCutoff.toISOString(),
       companies: companyReports,
+      totals: {
+        basis: "apply-effective: unblocked rows at proposed values, blocked rows at original values",
+        applicableRows: applicableProposals.length,
+        applicableOriginalTotalCost: sumMoney(applicableProposals, "originalTotalCost").toFixed(2),
+        applicableProposedTotalCost: sumMoney(applicableProposals, "proposedTotalCost").toFixed(2),
+        blockedRows: blockedProposals.length,
+        blockedOriginalTotalCost: sumMoney(blockedProposals, "originalTotalCost").toFixed(2),
+        blockedRejectedCandidateTotalCost: sumMoney(blockedProposals, "proposedTotalCost").toFixed(2),
+      },
       checks: {
         total: allChecks.length,
         pass: allChecks.filter((check) => check.status === "pass").length,
@@ -1253,6 +5411,41 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
   }
 }
 
+/**
+ * Read-only diagnosis of one company/location/item group: runs the company
+ * dry-run inside a READ ONLY transaction that is always rolled back, persists
+ * nothing, and returns the group's checks (including the full rewind timeline)
+ * and proposals.
+ */
+export async function diagnoseHistoricalSalesCostKey(input: {
+  companyId: number;
+  locationId: number;
+  stockItemId: number;
+}): Promise<{ checks: RepairCheck[]; proposals: HistoricalSalesRepairProposal[]; report: Record<string, unknown> }> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
+    await enableMaintenanceScope(client);
+    const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
+    const key = historicalInventoryKey(input.companyId, input.locationId, input.stockItemId);
+    const result = await dryRunCompany(client, input.companyId, cutoffResult.rows[0].cutoff, {
+      diagnoseKeys: new Set([key]),
+    });
+    return {
+      checks: result.checks.filter(
+        (check) => check.locationId === input.locationId && check.stockItemId === input.stockItemId
+      ),
+      proposals: result.proposals.filter(
+        (proposal) => proposal.locationId === input.locationId && proposal.stockItemId === input.stockItemId
+      ),
+      report: result.report,
+    };
+  } finally {
+    await client.query("ROLLBACK").catch(() => undefined);
+    client.release();
+  }
+}
+
 export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Record<string, unknown> | null> {
   await ensureHistoricalSalesCostRepairSchema(pool);
   const run = await pool.query(
@@ -1307,6 +5500,58 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
   };
 }
 
+/**
+ * Fails when historical source evidence was back-dated or edited after the
+ * dry-run cutoff. Normal new stock activity after the cutoff is allowed.
+ * Shared by the full apply and the proven-rows-only partial apply.
+ */
+export async function assertNoHistoricalSourceEditsAfterCutoff(
+  client: PoolClient,
+  targetCompanyIds: number[],
+  sourceCutoff: Date
+): Promise<void> {
+  const sourceDrift = await client.query<{
+    kind: string;
+    evidence_id: string;
+  }>(
+    `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
+       FROM canonical_stock_movements
+      WHERE company_id = ANY($1::int[])
+        AND created_at > $2
+        AND occurred_at <= $2
+      UNION ALL
+     SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN vouchers v
+         ON a.table_name='vouchers'
+        AND a.record_id=v.id
+        AND v.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND v.created_at <= $2
+      UNION ALL
+     SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN containers c
+         ON a.table_name='containers'
+        AND a.record_id=c.id
+        AND c.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND c.created_at <= $2
+      ORDER BY kind,evidence_id
+      LIMIT 25`,
+    [targetCompanyIds, sourceCutoff]
+  );
+  if (sourceDrift.rows.length > 0) {
+    throw new Error(
+      `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
+        .map((row) => `${row.kind}#${row.evidence_id}`)
+        .join(", ")}. Build and review a new dry run.`
+    );
+  }
+}
+
 export async function applyHistoricalSalesCostRepair(input: {
   runId: number;
   auditHash: string;
@@ -1345,6 +5590,12 @@ export async function applyHistoricalSalesCostRepair(input: {
     if (!run.audit_hash || run.audit_hash !== input.auditHash) {
       throw hscrError("HSCR_AUDIT_HASH_MISMATCH");
     }
+    const partial = await client.query("SELECT id FROM historical_sales_cost_repair_partial_applies WHERE run_id=$1", [
+      input.runId,
+    ]);
+    if (partial.rows.length > 0) {
+      throw hscrError("HSCR_RUN_PARTIALLY_APPLIED");
+    }
 
     const blockerCount = await client.query<{ count: string }>(
       `SELECT COUNT(*)::text AS count
@@ -1361,80 +5612,39 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_RUN_SCOPE_EMPTY");
     }
 
-    // Fail closed if a source document was edited after the reviewed dry run.
-    // Normal new stock activity is allowed; only backdated canonical evidence or
-    // audited mutations of source-bearing records invalidate the reviewed run.
-    const openingDrift = await client.query<{
-      stock_item_id: number;
-      check_code: string;
-    }>(
-      `SELECT c.stock_item_id,c.check_code
-         FROM historical_sales_cost_repair_checks c
-         JOIN stock_items si
-           ON si.company_id=c.company_id
-          AND si.id=c.stock_item_id
-        WHERE c.run_id=$1
-          AND c.status='pass'
-          AND c.check_code IN ('OPENING_QUANTITY_RECONCILED','OPENING_RATE_PINNED','OPENING_VALUE_RECONCILED')
-          AND (
-            (c.check_code='OPENING_QUANTITY_RECONCILED' AND si.opening_qty::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_RATE_PINNED' AND si.opening_rate::numeric IS DISTINCT FROM c.expected_value::numeric)
-            OR
-            (c.check_code='OPENING_VALUE_RECONCILED' AND si.opening_value::numeric IS DISTINCT FROM c.expected_value::numeric)
-          )
-        ORDER BY c.stock_item_id,c.check_code
-        LIMIT 25`,
+    // Recompute the exact V2 evidence bundle that was reviewed during dry-run.
+    // This pins the immutable checkpoint/cutoff, canonical + legacy movements,
+    // merge aliases/source openings, and every target sale original.
+    const evidenceChecks = await client.query<{ company_id: number; expected_value: string }>(
+      `SELECT company_id,expected_value
+         FROM historical_sales_cost_repair_checks
+        WHERE run_id=$1
+          AND check_code='V2_SOURCE_EVIDENCE_HASH'
+          AND status='pass'
+        ORDER BY company_id`,
       [input.runId]
     );
-    if (openingDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair opening evidence changed after dry run: ${openingDrift.rows
-          .map((row) => `${row.stock_item_id}/${row.check_code}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
+    const expectedEvidenceByCompany = new Map(
+      evidenceChecks.rows.map((row) => [Number(row.company_id), String(row.expected_value)])
+    );
+    if (expectedEvidenceByCompany.size !== targetCompanyIds.length) {
+      throw hscrError("HSCR_V2_EVIDENCE_HASH_SCOPE_MISMATCH");
+    }
+    for (const companyId of targetCompanyIds) {
+      const expected = expectedEvidenceByCompany.get(companyId);
+      if (!expected) throw hscrError(`HSCR_V2_EVIDENCE_HASH_MISSING:${companyId}`);
+      const actual = await recomputeHistoricalSalesCompanyEvidenceHash(client, companyId, run.source_cutoff_at);
+      if (actual !== expected) {
+        throw hscrError(`HSCR_V2_SOURCE_EVIDENCE_DRIFT:${companyId}`);
+      }
     }
 
-    const sourceDrift = await client.query<{
-      kind: string;
-      evidence_id: string;
-    }>(
-      `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
-         FROM canonical_stock_movements
-        WHERE company_id = ANY($1::int[])
-          AND created_at > $2
-          AND occurred_at <= $2
-        UNION ALL
-       SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN vouchers v
-           ON a.table_name='vouchers'
-          AND a.record_id=v.id
-          AND v.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND v.created_at <= $2
-        UNION ALL
-       SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN containers c
-           ON a.table_name='containers'
-          AND a.record_id=c.id
-          AND c.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND c.created_at <= $2
-        ORDER BY kind,evidence_id
-        LIMIT 25`,
-      [targetCompanyIds, run.source_cutoff_at]
-    );
-    if (sourceDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
-          .map((row) => `${row.kind}#${row.evidence_id}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
-    }
+    await assertSalesItemsUpdateHasNoSideEffectTriggers(client);
+    const inventoryBeforeApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+
+    // Keep targeted "changed-after-cutoff" checks as a second line of defense.
+    // Normal new stock activity after the source cutoff is allowed.
+    await assertNoHistoricalSourceEditsAfterCutoff(client, targetCompanyIds, run.source_cutoff_at);
 
     const drift = await client.query<{ sales_item_id: number }>(
       `SELECT r.sales_item_id
@@ -1517,11 +5727,30 @@ export async function applyHistoricalSalesCostRepair(input: {
       throw hscrError("HSCR_POST_APPLY_VERIFY_FAILED");
     }
 
+    const inventoryAfterApply = await inventoryEvidenceFingerprint(client, targetCompanyIds);
+    if (
+      inventoryAfterApply.hash !== inventoryBeforeApply.hash ||
+      inventoryAfterApply.rowCount !== inventoryBeforeApply.rowCount
+    ) {
+      throw hscrError("HSCR_INVENTORY_CHANGED_DURING_APPLY");
+    }
+
     await client.query(
       `UPDATE historical_sales_cost_repair_runs
-          SET status='applied',applied_at=NOW(),completed_at=NOW()
+          SET status='applied',
+              applied_at=NOW(),
+              completed_at=NOW(),
+              report=COALESCE(report,'{}'::jsonb) || jsonb_build_object(
+                'applyInventorySnapshot',
+                jsonb_build_object(
+                  'beforeHash',$2::text,
+                  'afterHash',$3::text,
+                  'rowCount',$4::int,
+                  'unchanged',true
+                )
+              )
         WHERE id=$1`,
-      [input.runId]
+      [input.runId, inventoryBeforeApply.hash, inventoryAfterApply.hash, inventoryAfterApply.rowCount]
     );
 
     await client.query("COMMIT");

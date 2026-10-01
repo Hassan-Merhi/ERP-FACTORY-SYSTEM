@@ -160,6 +160,8 @@
     "docs/accounting-flow.md": "reference",
     "docs/api-quickstart.md": "reference",
     "docs/architecture.md": "reference",
+    "docs/historical-sales-cogs-transfer-revision-findings.md": "reference",
+    "docs/historical-sales-cogs-partial-apply-runbook.md": "reference",
     "docs/archive/accounting-engine-audit.md": "record",
     "docs/archive/bandwidth-hotspots-phase1-location-summary.md": "record",
     "docs/archive/bandwidth-hotspots-phase2-daily-scan-barcode.md": "record",

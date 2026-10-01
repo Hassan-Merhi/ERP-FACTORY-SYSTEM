@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Wrench,
   MapPin,
+  CalendarClock,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
@@ -35,6 +36,7 @@ import { FileStorageAndExport } from "./settings/FileStorageAndExport";
 import { ExportCenter } from "./settings/ExportCenter";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
 import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
+import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
@@ -116,6 +118,10 @@ export default function Settings() {
       items: showSupplierTrackingDefaults
         ? [{ key: "supplier-tracking-defaults", label: "Supplier Defaults", icon: MapPin }]
         : [],
+    },
+    {
+      label: "Accounting",
+      items: [{ key: "recurring-journals", label: "Recurring Journals", icon: CalendarClock }],
     },
     {
       label: "Tools",
@@ -211,6 +217,7 @@ export default function Settings() {
           {activeSection === "supplier-tracking-defaults" && showSupplierTrackingDefaults && (
             <SupplierTrackingDefaultsTab canManage={canManageTrackingDefaults} />
           )}
+          {activeSection === "recurring-journals" && <RecurringJournalsTab />}
           {activeSection === "edit-log" && <EditLogTab selectedCompany={selectedCompany} />}
           {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
           {activeSection === "pos-setup" && currentUser?.role === "Developer" && (

@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2017,
+  "routeCount": 2021,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1694,6 +1694,10 @@
     "POST /api/admin/repair/historical-sales-cost/dry-run [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous> > <anonymous>]",
     "GET /api/admin/repair/historical-sales-cost/:runId [requireAuth > <anonymous> > <anonymous> > <anonymous>]",
     "POST /api/admin/repair/historical-sales-cost/:runId/apply [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous> > requirePasswordConfirmation > <anonymous>]",
+    "GET /api/admin/repair/historical-sales-cost/:runId/partial-apply/preview [requireAuth > <anonymous> > <anonymous> > <anonymous>]",
+    "GET /api/admin/repair/historical-sales-cost/:runId/partial-apply/verify [requireAuth > <anonymous> > <anonymous> > <anonymous>]",
+    "POST /api/admin/repair/historical-sales-cost/:runId/partial-apply [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous> > requirePasswordConfirmation > <anonymous>]",
+    "POST /api/admin/repair/historical-sales-cost/:runId/partial-apply/rollback [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous> > requirePasswordConfirmation > <anonymous>]",
     "DELETE /api/deleted-items/:type/:id/permanent [<anonymous> > requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/orphaned-records [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/orphaned-records/reassign [requireAuth > requireNonPOS > <anonymous>]",

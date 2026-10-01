@@ -642,7 +642,8 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                     <TableRow>
                       <TableHead className="text-xs">Worker</TableHead>
                       <TableHead className="text-right text-xs">Base</TableHead>
-                      <TableHead className="text-right text-xs">Deduction</TableHead>
+                      <TableHead className="text-right text-xs">Advance Deduction</TableHead>
+                      <TableHead className="text-right text-xs">Payroll Deduction</TableHead>
                       <TableHead className="text-right text-xs">Net Pay</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -655,6 +656,11 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                         </TableCell>
                         <TableCell className="text-right text-sm py-2 text-amber-600 dark:text-amber-400">
                           {parseFloat(it.deduction) > 0 ? `-${formatAmount(parseFloat(it.deduction))}` : "—"}
+                        </TableCell>
+                        <TableCell className="text-right text-sm py-2 text-orange-600 dark:text-orange-400">
+                          {parseFloat(it.payrollDeduction || "0") > 0
+                            ? `-${formatAmount(parseFloat(it.payrollDeduction || "0"))}`
+                            : "—"}
                         </TableCell>
                         <TableCell className="text-right text-sm py-2 font-semibold">
                           {formatAmount(parseFloat(it.netPay))}

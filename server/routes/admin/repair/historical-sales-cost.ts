@@ -14,6 +14,13 @@ import {
   buildHistoricalSalesCostRepairDryRun,
   getHistoricalSalesCostRepairRun,
 } from "../../../services/inventory/historicalSalesCostRepair";
+import {
+  HISTORICAL_SALES_COST_PARTIAL_APPLY_MODE,
+  applyHistoricalSalesCostPartial,
+  previewHistoricalSalesCostPartialApply,
+  rollbackHistoricalSalesCostPartial,
+  verifyHistoricalSalesCostPartialApply,
+} from "../../../services/inventory/historicalSalesCostPartialApply";
 
 const developerOnly = requireRole("Developer");
 const repairBudget = privilegedRequestBudget({ maxBodyBytes: 16 * 1024, maxCollectionItems: 100 });
@@ -137,6 +144,133 @@ export function registerHistoricalSalesCostRepairRoutes(app: Express): void {
         logger.error("Historical sales cost repair apply failed", {
           module: "historical-sales-cost-repair",
           action: "apply-route",
+          runId: req.params.runId,
+          error,
+        });
+        return res.status(500).json({ code: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Proven-rows-only partial apply. Separate from /apply, which still requires
+  // a ready run with zero blockers. Writes only rows whose status is 'ready'.
+  app.get(
+    "/api/admin/repair/historical-sales-cost/:runId/partial-apply/preview",
+    requireAuth,
+    developerOnly,
+    privilegedReadRateLimit,
+    async (req: Request, res: Response) => {
+      try {
+        const runId = Number.parseInt(req.params.runId, 10);
+        if (!Number.isInteger(runId) || runId <= 0) {
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
+        }
+        return res.json(
+          await previewHistoricalSalesCostPartialApply(runId, { includeTargetIds: req.query.ids === "1" })
+        );
+      } catch (error: unknown) {
+        logger.error("Historical sales cost partial-apply preview failed", {
+          module: "historical-sales-cost-repair",
+          action: "partial-preview-route",
+          error,
+        });
+        return res.status(500).json({ code: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.get(
+    "/api/admin/repair/historical-sales-cost/:runId/partial-apply/verify",
+    requireAuth,
+    developerOnly,
+    privilegedReadRateLimit,
+    async (req: Request, res: Response) => {
+      try {
+        const runId = Number.parseInt(req.params.runId, 10);
+        if (!Number.isInteger(runId) || runId <= 0) {
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
+        }
+        return res.json(await verifyHistoricalSalesCostPartialApply(runId));
+      } catch (error: unknown) {
+        logger.error("Historical sales cost partial-apply verify failed", {
+          module: "historical-sales-cost-repair",
+          action: "partial-verify-route",
+          error,
+        });
+        return res.status(500).json({ code: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/repair/historical-sales-cost/:runId/partial-apply",
+    requireAuth,
+    developerOnly,
+    privilegedMutationRateLimit,
+    repairBudget,
+    repairConcurrency,
+    requirePasswordConfirmation,
+    async (req: Request, res: Response) => {
+      try {
+        const runId = Number.parseInt(req.params.runId, 10);
+        if (!Number.isInteger(runId) || runId <= 0) {
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
+        }
+        if (req.body?.mode !== HISTORICAL_SALES_COST_PARTIAL_APPLY_MODE) {
+          return res.status(400).json({ code: "HSCR_PARTIAL_MODE_REQUIRED" });
+        }
+        const result = await applyHistoricalSalesCostPartial({
+          runId,
+          auditHash: String(req.body?.auditHash || "")
+            .trim()
+            .toLowerCase(),
+          targetHash: String(req.body?.targetHash || "")
+            .trim()
+            .toLowerCase(),
+          mode: String(req.body?.mode),
+          confirmation: String(req.body?.confirmation || ""),
+          appliedBy: actor(req),
+        });
+        return res.json(result);
+      } catch (error: unknown) {
+        logger.error("Historical sales cost partial apply failed", {
+          module: "historical-sales-cost-repair",
+          action: "partial-apply-route",
+          runId: req.params.runId,
+          error,
+        });
+        return res.status(500).json({ code: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/repair/historical-sales-cost/:runId/partial-apply/rollback",
+    requireAuth,
+    developerOnly,
+    privilegedMutationRateLimit,
+    repairBudget,
+    repairConcurrency,
+    requirePasswordConfirmation,
+    async (req: Request, res: Response) => {
+      try {
+        const runId = Number.parseInt(req.params.runId, 10);
+        if (!Number.isInteger(runId) || runId <= 0) {
+          return res.status(400).json({ code: "HSCR_RUN_ID_INVALID" });
+        }
+        const result = await rollbackHistoricalSalesCostPartial({
+          runId,
+          auditHash: String(req.body?.auditHash || "")
+            .trim()
+            .toLowerCase(),
+          confirmation: String(req.body?.confirmation || ""),
+          rolledBackBy: actor(req),
+        });
+        return res.json(result);
+      } catch (error: unknown) {
+        logger.error("Historical sales cost partial-apply rollback failed", {
+          module: "historical-sales-cost-repair",
+          action: "partial-rollback-route",
           runId: req.params.runId,
           error,
         });

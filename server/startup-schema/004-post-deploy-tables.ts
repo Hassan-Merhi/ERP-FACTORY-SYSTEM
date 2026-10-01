@@ -89,6 +89,7 @@ export const postDeployTables: string[] = [
       group_name text,
       base_salary decimal(18,2) NOT NULL,
       deduction decimal(18,2) NOT NULL DEFAULT 0,
+      payroll_deduction decimal(18,2) NOT NULL DEFAULT 0,
       net_pay decimal(18,2) NOT NULL
     )`,
   `CREATE TABLE IF NOT EXISTS factory_worker_categories (
@@ -198,6 +199,7 @@ export const postDeployTables: string[] = [
       created_at timestamp NOT NULL DEFAULT now()
     )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS rental_auto_transfer_unique ON rental_auto_transfer_configs (company_id, module)`,
+  `ALTER TABLE erp_payroll_run_items ADD COLUMN IF NOT EXISTS payroll_deduction decimal(18,2) NOT NULL DEFAULT 0`,
   // Multiple rules per company+module are supported — drop the unique constraint
   `DROP INDEX IF EXISTS rental_auto_transfer_unique`,
   `CREATE TABLE IF NOT EXISTS factory_transporters (
