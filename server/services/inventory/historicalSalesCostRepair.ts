@@ -1865,35 +1865,65 @@ function recoverHistoricalMergedSales(input: {
     }
 
     if (!keptRewindFailure) {
+      // V47: rewind the kept item as a set of exact branches (as the
+      // checkpoint rewind does); recorded live rates prune, and the merge
+      // split needs exactly one surviving state per location.
+      const keptCandidates = new Map<number, HistoricalInventoryState[]>(
+        [...combinedAtMergeByLocation.entries()].map(([locationId, state]) => [locationId, [state]])
+      );
       for (const movement of keptPostMovements) {
         if (!relevantLocations.has(movement.locationId)) continue;
-        const stateAfter = combinedAtMergeByLocation.get(movement.locationId);
-        if (!stateAfter) continue;
-        const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
-          priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
-        });
-        if (!reversed.reversible) {
+        const current = keptCandidates.get(movement.locationId);
+        if (!current) continue;
+        const next: HistoricalInventoryState[] = [];
+        let lastReason = "";
+        for (const stateAfter of current) {
+          const befores: HistoricalInventoryState[] = [];
+          const reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+            priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+          });
+          if (reversed.reversible) befores.push(reversed.stateBefore);
+          else lastReason = reversed.reason;
+          if (movement.evidence === "canonical") befores.push(...historicalIssueInverseCandidates(stateAfter, movement));
+          for (const before of befores) {
+            if (
+              isRecordedLiveRateObservation(movement) &&
+              !repairRate(movement.unitCost!).eq(repairRate(before.averageRate))
+            ) {
+              continue;
+            }
+            if (!next.some((existing) => historicalInventoryStatesEqual(existing, before))) next.push(before);
+          }
+        }
+        if (next.length === 0) {
           keptRewindFailure = {
             locationId: movement.locationId,
-            detail: `Cannot rewind kept item movement ${movement.movementId}: ${reversed.reason}`,
+            detail: lastReason
+              ? `Cannot rewind kept item movement ${movement.movementId}: ${lastReason}`
+              : `Canonical kept-item sale ${movement.movementId} disagrees with every exact checkpoint rewind branch`,
           };
           break;
         }
-        if (
-          movement.evidence === "canonical" &&
-          CANONICAL_SALE_SOURCE_TYPES.has(movement.sourceType) &&
-          !posJournalCostIsNotInventoryRate(movement) &&
-          d(movement.quantityDelta).lt(0) &&
-          movement.unitCost !== null &&
-          !repairRate(movement.unitCost).eq(repairRate(reversed.stateBefore.averageRate))
-        ) {
+        if (next.length > 64) {
           keptRewindFailure = {
             locationId: movement.locationId,
-            detail: `Canonical kept-item sale ${movement.movementId} disagrees with checkpoint rewind`,
+            detail: `Kept item rewind exceeded the branch limit at ${movement.movementId}`,
           };
           break;
         }
-        combinedAtMergeByLocation.set(movement.locationId, reversed.stateBefore);
+        keptCandidates.set(movement.locationId, next);
+      }
+      if (!keptRewindFailure) {
+        for (const [locationId, states] of keptCandidates) {
+          if (states.length !== 1) {
+            keptRewindFailure = {
+              locationId,
+              detail: `Kept item rewind has ${states.length} exact states at the merge`,
+            };
+            break;
+          }
+          combinedAtMergeByLocation.set(locationId, states[0]);
+        }
       }
     }
 
@@ -2206,6 +2236,8 @@ function rateHullBlocks(input: {
   offloadEvidence: OffloadValueEvidenceRow[];
   checkpoint: ValuationCheckpoint | null;
   historicalMerges: HistoricalMergeRow[];
+  /** Sales proven independently of the rewind chain (closed zero-stock eras). */
+  independentSaleIds?: Set<number>;
 }): RepairCheck[] {
   const hull = evidencedRateHullByItem(input);
   const worstByKey = new Map<string, { proposal: HistoricalSalesRepairProposal; count: number }>();
@@ -2221,8 +2253,41 @@ function rateHullBlocks(input: {
     });
   }
 
-  return [...worstByKey.values()].map(({ proposal, count }) => {
+  const independent = input.independentSaleIds ?? new Set<number>();
+  const legacyByKey = new Map<string, HistoricalSalesRepairProposal[]>();
+  for (const candidate of input.proposals) {
+    if (candidate.evidence !== "legacy") continue;
+    const key = `${candidate.locationId}:${candidate.stockItemId}`;
+    if (!worstByKey.has(key)) continue;
+    const list = legacyByKey.get(key) ?? [];
+    list.push(candidate);
+    legacyByKey.set(key, list);
+  }
+  const checks: RepairCheck[] = [];
+  for (const [key, { proposal, count }] of worstByKey) {
     const range = hull.get(proposal.stockItemId);
+    const keyProposals = legacyByKey.get(key) ?? [];
+    if (!keyProposals.some((candidate) => independent.has(candidate.salesItemId))) {
+      checks.push(hullCheck(proposal, count, range));
+      continue;
+    }
+    // V48: a hull violation proves the rewind chain wrong, not a sale proven by
+    // a closed zero-stock era that never used it. Block every other legacy
+    // sale at the key individually; an independent sale is blocked only when
+    // its own cost is outside the range.
+    for (const candidate of keyProposals) {
+      const ownOutside = !historicalRateWithinEvidencedRange(repairRate(candidate.proposedCostPrice), range);
+      if (independent.has(candidate.salesItemId) && !ownOutside) continue;
+      checks.push({ ...hullCheck(proposal, count, range), salesItemId: candidate.salesItemId });
+    }
+  }
+  return checks;
+
+  function hullCheck(
+    proposal: HistoricalSalesRepairProposal,
+    count: number,
+    range: ReturnType<typeof hull.get>
+  ): RepairCheck {
     return {
       companyId: input.companyId,
       locationId: proposal.locationId,
@@ -2233,7 +2298,7 @@ function rateHullBlocks(input: {
       actual: repairRate(proposal.proposedCostPrice).toFixed(2),
       detail: `${count} reconstructed sale cost(s) fall outside every rate this item ever carried (worst: sales item ${proposal.salesItemId}); the reconstruction chain for this item/location is unproven`,
     };
-  });
+  }
 }
 
 async function dryRunCompany(
@@ -2731,6 +2796,7 @@ async function dryRunCompany(
   checks.push(...markAmbiguousTimestampTies(companyId, legacyMovements, sales, canonicalStart, canonicalSaleKeys));
 
   const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
+  const closedEraProvenSaleIds = new Set<number>();
   const targetKeys = new Set(
     legacySales
       .filter((sale) => sale.location_id !== null)
@@ -4690,6 +4756,7 @@ async function dryRunCompany(
             block.detail = `${block.detail ?? ""} (superseded: closed zero-stock era ${anchor.movementId}..${movements[closedAt].movementId})`;
           }
           proposalsBySaleId.set(proposal.salesItemId, proposal);
+          closedEraProvenSaleIds.add(proposal.salesItemId);
           proven += 1;
         }
         eraProvenSales += proven;
@@ -4778,6 +4845,7 @@ async function dryRunCompany(
       offloadEvidence,
       checkpoint,
       historicalMerges,
+      independentSaleIds: closedEraProvenSaleIds,
     })
   );
 
