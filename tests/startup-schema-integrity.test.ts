@@ -127,9 +127,15 @@ import { startupMigrations } from "../server/startup-schema";
  * 'factory-permission-canonicalization-v2' migrations_log row. That takes the
  * count from 1367 to 1371. Nothing else moved; the rows these statements leave
  * are asserted in tests/factory-permission-canonicalization-migration.test.ts.
+ *
+ * Re-pinned for stage 031, append-only inventory valuation override evidence:
+ * one table plus one index, appended after stage 030 without moving any
+ * earlier statement. main already assembled 1378 statements while this file
+ * still pinned 1376 (an earlier change landed without re-pinning); with stage
+ * 031 the reviewed count is 1380.
  */
-const EXPECTED_STATEMENT_COUNT = 1376;
-const EXPECTED_CONTENT_HASH = "0d4c56f73919ef79affe3e468eceeda0cdc9a39320748d0ac47cb3c5d88ef3f0";
+const EXPECTED_STATEMENT_COUNT = 1380;
+const EXPECTED_CONTENT_HASH = "4fe4c8835df16c1ada4932fb8765b25e0b17698e14264e6a68003b14f59a32cd";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
