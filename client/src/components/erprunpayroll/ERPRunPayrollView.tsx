@@ -642,7 +642,8 @@ export function ERPRunPayrollView({ model }: ERPRunPayrollViewProps) {
                     <TableRow>
                       <TableHead className="text-xs">Worker</TableHead>
                       <TableHead className="text-right text-xs">Base</TableHead>
-                      <TableHead className="text-right text-xs">Deduction</TableHead>
+                      <TableHead className="text-right text-xs">Advance Deduction</TableHead>
+                      <TableHead className="text-right text-xs">Payroll Deduction</TableHead>
                       <TableHead className="text-right text-xs">Net Pay</TableHead>
                     </TableRow>
                   </TableHeader>
