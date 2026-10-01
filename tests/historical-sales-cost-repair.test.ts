@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalPosRoleFromIdempotencyKey,
+  historicalStateRateMatchesValue,
   applyHistoricalForwardReplayMovement,
   applyHistoricalInventoryMovement,
   applyHistoricalSalesRepairMovement,
@@ -31,6 +33,8 @@ function movement(
     sourceType: overrides.sourceType ?? "test",
     sourceId: overrides.sourceId ?? overrides.movementId,
     evidence: overrides.evidence ?? "legacy",
+    canonicalPosRole: overrides.canonicalPosRole,
+    valuationReset: overrides.valuationReset,
     sale: overrides.sale,
   };
 }
@@ -270,15 +274,25 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("0.00");
   });
 
-  it("rejects an incorrect prior cost-memory anchor", () => {
+  it("cannot falsify a prior cost-memory anchor across a priced zero-crossing receipt", () => {
+    // A priced receipt from negative stock overwrites the rate entirely, so the
+    // post-receipt state is identical for every prior rate. The anchor therefore
+    // has to come from independent canonical evidence; without one the step
+    // stays blocked, and with one the pre-state carries exactly that anchor.
     const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
     const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: "12" });
-    const reversed = reverseHistoricalInventoryMovement(after, {
+    expect(
+      reverseHistoricalInventoryMovement(after, { quantityDelta: "5", unitCost: "12" })
+    ).toEqual({ reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" });
+    const anchored = reverseHistoricalInventoryMovement(after, {
       quantityDelta: "5",
       unitCost: "12",
       priorCostMemoryRate: "99",
     });
-    expect(reversed).toEqual({ reversible: false, reason: "MOVEMENT_INVERSE_INVALID" });
+    expect(anchored.reversible).toBe(true);
+    if (!anchored.reversible) return;
+    expect(anchored.stateBefore.averageRate.toFixed(2)).toBe("99.00");
+    expect(anchored.stateBefore.quantity.toFixed(3)).toBe("-2.000");
   });
 
   it("can rewind an unpriced receipt across zero because cost memory is retained", () => {
@@ -1049,4 +1063,142 @@ describe("historical sales cost repair replay", () => {
     });
   });
 
+
+  it("derives canonical POS roles from immutable idempotency keys", () => {
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13532:rev0:510")).toBe("sale-issue");
+    expect(
+      canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14743:rev46:issue:6421:line:1")
+    ).toBe("edit-issue");
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13559:rev57:issue:6310")).toBe(
+      "edit-issue"
+    );
+    expect(
+      canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14989:rev31:reverse:52:line:108419")
+    ).toBe("edit-reversal");
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13471:rev54:reverse:1521")).toBe(
+      "edit-reversal"
+    );
+    expect(canonicalPosRoleFromIdempotencyKey("stock-transfer", "pos-sale:1:rev1:reverse:2")).toBe(
+      undefined
+    );
+  });
+
+  it("accepts half-up and float-tie stored rates but rejects any other rate/value pair", () => {
+    // 251.66 / 4 = 62.915 exactly: Decimal writers store 62.92, historical float
+    // writers stored 62.91 (present in the immutable Phase 3 checkpoint).
+    expect(
+      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.92", "251.66"))
+    ).toBe(true);
+    expect(
+      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.91", "251.66"))
+    ).toBe(true);
+    expect(
+      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.90", "251.66"))
+    ).toBe(false);
+    expect(
+      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("0", "70.00", "0"))
+    ).toBe(true);
+  });
+
+  it("inverts a production POS edit pair at the live stored rate instead of the old line cost", () => {
+    // Company 1, location 134, item 2329, voucher 13580 (canonical 31380/31470).
+    // The checkpoint rewind pins the state after the re-issue exactly.
+    const afterReissue = createHistoricalInventoryStateFromSnapshot("8", "105.21", "841.65");
+    const reissue = movement({
+      movementId: "canonical:31470",
+      occurredAt: "2026-09-10T09:45:55.118Z",
+      quantityDelta: "-2",
+      unitCost: "105.200000",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+      canonicalPosRole: "edit-issue",
+    });
+    const reversal = movement({
+      movementId: "canonical:31380",
+      occurredAt: "2026-09-10T09:45:55.118Z",
+      quantityDelta: "2",
+      unitCost: "105.200000",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+      canonicalPosRole: "edit-reversal",
+    });
+
+    const beforeReissue = reverseHistoricalSalesRepairMovement(afterReissue, reissue);
+    expect(beforeReissue.reversible).toBe(true);
+    if (!beforeReissue.reversible) return;
+    expect(beforeReissue.stateBefore.quantity.toFixed(3)).toBe("10.000");
+    expect(beforeReissue.stateBefore.averageRate.toFixed(2)).toBe("105.21");
+    expect(beforeReissue.stateBefore.totalValue.toFixed(2)).toBe("1052.07");
+
+    const beforeReversal = reverseHistoricalSalesRepairMovement(beforeReissue.stateBefore, reversal);
+    expect(beforeReversal.reversible).toBe(true);
+    if (!beforeReversal.reversible) return;
+    expect(beforeReversal.stateBefore.quantity.toFixed(3)).toBe("8.000");
+    expect(beforeReversal.stateBefore.averageRate.toFixed(2)).toBe("105.21");
+    expect(beforeReversal.stateBefore.totalValue.toFixed(2)).toBe("841.65");
+
+    // Forward replay of the recovered pre-state reproduces the pinned state.
+    const replayed = applyHistoricalSalesRepairMovement(
+      applyHistoricalSalesRepairMovement(beforeReversal.stateBefore, reversal),
+      reissue
+    );
+    expect(replayed.quantity.toFixed(3)).toBe("8.000");
+    expect(replayed.averageRate.toFixed(2)).toBe("105.21");
+    expect(replayed.totalValue.toFixed(2)).toBe("841.65");
+  });
+
+  it("does not rewind a recorded document rate into an impossible pre-issue state", () => {
+    // A caller-supplied document rate (105.10) that differs from the live
+    // average would rewind to 10|105.10|1051.85, a rate/value pair no production
+    // writer stores. Inference continues from the exact post-issue value.
+    const afterIssue = createHistoricalInventoryStateFromSnapshot("8", "105.21", "841.65");
+    const reversed = reverseHistoricalInventoryMovement(afterIssue, {
+      quantityDelta: "-2",
+      unitCost: "105.10",
+    });
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("105.21");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1052.07");
+  });
+
+  it("still uses a consistent recorded sale-issue rate for an original POS sale", () => {
+    const after = createHistoricalInventoryStateFromSnapshot("8", "100.00", "800.00");
+    const sale = movement({
+      movementId: "canonical:sale-issue",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "-2",
+      unitCost: "100.00",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+      canonicalPosRole: "sale-issue",
+    });
+    const reversed = reverseHistoricalSalesRepairMovement(after, sale);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("1000.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
+
+  it("replays an identified POS reversal receipt at the live rate in every replay path", () => {
+    const start = createHistoricalInventoryStateFromSnapshot("5", "100.00", "500.00");
+    const reversal = movement({
+      movementId: "canonical:tagged-reverse",
+      occurredAt: "2026-09-01T10:00:00.000Z",
+      quantityDelta: "2",
+      unitCost: "80.00",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+      canonicalPosRole: "edit-reversal",
+    });
+    const next = applyHistoricalSalesRepairMovement(start, reversal);
+    expect(next.totalValue.toFixed(2)).toBe("700.00");
+    expect(next.averageRate.toFixed(2)).toBe("100.00");
+
+    const reversed = reverseHistoricalSalesRepairMovement(next, reversal);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("500.00");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("100.00");
+  });
 });

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-09-30-v30-wave6-valuation-reset";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v31-pos-edit-live-rate-inverse";
 
 const ZERO = new Decimal(0);
 
@@ -66,6 +66,14 @@ export type HistoricalSalesRepairMovement = {
   sourceType: string;
   sourceId: string;
   evidence: "canonical" | "legacy";
+  /**
+   * Role of a canonical pos-sale row, derived from its immutable idempotency
+   * key. Only "sale-issue" rows (lockAndDeductInventoryForSaleItem) journal the
+   * locked live inventory average. Edit re-issues journal the preserved old
+   * sale-line cost, and edit/delete reversals journal the old line cost while
+   * production restored stock at the live stored rate.
+   */
+  canonicalPosRole?: CanonicalPosRole;
   sale?: {
     salesItemId: number;
     voucherId: number;
@@ -76,6 +84,43 @@ export type HistoricalSalesRepairMovement = {
     originalProfit: string;
   };
 };
+
+export type CanonicalPosRole = "sale-issue" | "edit-issue" | "edit-reversal";
+
+export function canonicalPosRoleFromIdempotencyKey(
+  sourceType: string,
+  idempotencyKey: string | null | undefined
+): CanonicalPosRole | undefined {
+  if (sourceType !== "pos-sale") return undefined;
+  const key = idempotencyKey ?? "";
+  if (/^pos-sale:\d+:rev\d+:reverse:/.test(key)) return "edit-reversal";
+  if (/^pos-sale:\d+:rev\d+:issue:/.test(key)) return "edit-issue";
+  return "sale-issue";
+}
+
+/** A canonical POS row whose journal unit_cost is not the inventory rate production used. */
+export function posJournalCostIsNotInventoryRate(movement: HistoricalSalesRepairMovement): boolean {
+  return (
+    movement.sourceType === "pos-sale" &&
+    (movement.canonicalPosRole === "edit-issue" || movement.canonicalPosRole === "edit-reversal")
+  );
+}
+
+/**
+ * Production stores average_rate as the 2dp rounding of total_value/quantity.
+ * Decimal writers round half-up; a few historical float writers rounded exact
+ * half-cent ties down (16 such rows exist in the immutable Phase 3 checkpoint).
+ * A reconstructed positive state outside both roundings never existed.
+ */
+export function historicalStateRateMatchesValue(state: HistoricalInventoryState): boolean {
+  const quantity = repairQuantity(state.quantity);
+  if (!quantity.gt(ZERO)) return true;
+  const rate = repairRate(state.averageRate);
+  const value = repairMoney(state.totalValue);
+  if (repairRate(value.dividedBy(quantity)).eq(rate)) return true;
+  const floatRate = new Decimal((value.toNumber() / quantity.toNumber()).toFixed(2));
+  return floatRate.eq(rate);
+}
 
 export type HistoricalSalesRepairOpening = {
   companyId: number;
@@ -293,7 +338,12 @@ export function applyHistoricalSalesRepairMovement(
   }
   return applyHistoricalInventoryMovement(state, {
     quantityDelta: movement.quantityDelta,
-    unitCost: movement.unitCost,
+    // Identified POS edit/delete reversals restored stock at the live stored
+    // rate in every era; their journal cost is the old sale-line cost.
+    unitCost:
+      movement.canonicalPosRole === "edit-reversal" && posJournalCostIsNotInventoryRate(movement)
+        ? null
+        : movement.unitCost,
   });
 }
 
@@ -709,8 +759,11 @@ function canonicalRateOnlyRecovery(
     );
   } else if (
     delta.lt(ZERO) &&
-    movement.sourceType === "stock-transfer"
+    (movement.sourceType === "stock-transfer" ||
+      (movement.sourceType === "pos-sale" && movement.canonicalPosRole === "edit-issue"))
   ) {
+    // A POS edit re-issue also consumed the live stored rate while journaling
+    // the preserved old line cost, so it uses the same unique source-rate search.
     // The transfer document rate is recorded in the canonical journal, but the
     // source-side deduction in adjustInventory() consumes stock at the source
     // inventory average rate. When the reconstructed intermediate rate is stale,
@@ -754,6 +807,7 @@ function canonicalRateOnlyRecovery(
     }
   } else if (
     delta.lt(ZERO) &&
+    !posJournalCostIsNotInventoryRate(movement) &&
     (movement.sourceType === "pos-sale" ||
       movement.sourceType === "canonical-sale-lifecycle-correction") &&
     movement.unitCost !== null &&
@@ -1104,6 +1158,10 @@ export function reverseHistoricalInventoryMovement(
   // Canonical issue rows carry the transaction-time cost. For an outbound
   // movement that leaves positive stock, that rate is the exact cost memory
   // used by applyHistoricalInventoryMovement(), so try it before any inference.
+  // V31: a recorded rate is accepted only when it is a production-consistent
+  // pre-issue state. A document rate that differs from the live average (old
+  // POS line cost, caller-supplied transfer rate) yields a state production
+  // could never have stored, so inference continues from the exact value.
   if (input.unitCost !== null && input.unitCost !== undefined) {
     const recordedRate = repairRate(Decimal.max(decimal(input.unitCost, "movement unit cost"), ZERO));
     const beforeValue = repairMoney(stateAfter.totalValue.plus(issueQty.times(recordedRate)));
@@ -1112,7 +1170,7 @@ export function reverseHistoricalInventoryMovement(
       quantityDelta: delta,
       unitCost: recordedRate,
     });
-    if (statesEqual(replayed, stateAfter)) {
+    if (statesEqual(replayed, stateAfter) && historicalStateRateMatchesValue(stateBefore)) {
       return { reversible: true, stateBefore };
     }
   }
@@ -1242,6 +1300,14 @@ export function reverseHistoricalSalesRepairMovement(
     );
   }
 
+  // V31: a POS edit is a reversal receipt followed by a re-issue, both executed
+  // at the live stored rate (reverseOriginalSaleInventory / rebuildSaleItems,
+  // before and after the 2026-09-11 hardening). The journal records the old
+  // sale-line cost on both legs. V19 unpriced only the receipt leg, so the
+  // re-issue still rewound at the old cost and the pair could not invert. When
+  // the loader identifies the role from the idempotency key, invert both legs
+  // with the production semantics; untagged rows keep the V18-V30 behaviour.
+  const posJournalCostIgnored = posJournalCostIsNotInventoryRate(movement);
   const primary = reverseHistoricalInventoryMovement(stateAfter, {
     quantityDelta: movement.quantityDelta,
     // Positive POS reversal rows are locally ambiguous: production restored
@@ -1250,13 +1316,14 @@ export function reverseHistoricalSalesRepairMovement(
     // globally regressed previously proven checkpoint paths in V19. Preserve
     // the V18-priced inverse until an alternate unpriced branch is selected by
     // a full checkpoint proof rather than by one locally reversible movement.
-    unitCost: movement.unitCost,
-    priorCostMemoryRate: input?.priorCostMemoryRate,
+    unitCost: posJournalCostIgnored ? null : movement.unitCost,
+    priorCostMemoryRate: posJournalCostIgnored ? null : input?.priorCostMemoryRate,
   });
 
   if (
     primary.reversible &&
     movement.evidence === "canonical" &&
+    !posJournalCostIgnored &&
     (movement.sourceType === "pos-sale" ||
       movement.sourceType === "canonical-sale-lifecycle-correction") &&
     delta.lt(ZERO) &&
@@ -1282,7 +1349,10 @@ export function reverseHistoricalSalesRepairMovement(
           quantityDelta: delta,
           unitCost: recordedRate,
         });
-        if (statesEqualQuantityAndValue(replayed, stateAfter)) {
+        if (
+          statesEqualQuantityAndValue(replayed, stateAfter) &&
+          historicalStateRateMatchesValue(recordedStateBefore)
+        ) {
           return {
             reversible: true,
             stateBefore: recordedStateBefore,
