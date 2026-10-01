@@ -9,6 +9,7 @@ import {
   HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION,
   applyHistoricalForwardReplayMovement,
   applyHistoricalSalesRepairMovement,
+  canonicalPosRoleFromIdempotencyKey,
   createHistoricalForwardReplayState,
   createHistoricalInventoryStateFromSnapshot,
   createHistoricalSignedLocationImportState,
@@ -16,6 +17,7 @@ import {
   historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
+  posJournalCostIsNotInventoryRate,
   repairRate,
   reverseHistoricalSalesRepairMovement,
   type HistoricalForwardReplayState,
@@ -90,6 +92,7 @@ type CanonicalRow = {
   occurred_at: Date;
   created_at: Date;
   reversal_of_movement_id: number | null;
+  idempotency_key: string | null;
 };
 
 type SaleRow = {
@@ -252,7 +255,7 @@ async function loadCanonicalMovements(
   if (!canonicalStart) return [];
   const rows = await client.query<CanonicalRow>(
     `SELECT id,location_id,stock_item_id,quantity_delta::text,unit_cost::text,
-            source_type,source_id,occurred_at,created_at,reversal_of_movement_id
+            source_type,source_id,occurred_at,created_at,reversal_of_movement_id,idempotency_key
        FROM canonical_stock_movements
       WHERE company_id=$1
         AND created_at >= $2
@@ -261,6 +264,7 @@ async function loadCanonicalMovements(
     [companyId, canonicalStart, sourceCutoff]
   );
   return rows.rows.map((row) => ({
+    canonicalPosRole: canonicalPosRoleFromIdempotencyKey(row.source_type, row.idempotency_key),
     movementId: `canonical:${row.id}`,
     companyId,
     locationId: Number(row.location_id),
@@ -469,6 +473,10 @@ function buildPriorCanonicalCostMemoryRateHints(
     if (knownRate) hints.set(movement.movementId, knownRate.toFixed(2));
 
     const delta = d(movement.quantityDelta);
+    // V31: POS edit legs journal the old sale-line cost, not the live rate
+    // production used. They neither pin nor invalidate cost memory: the live
+    // rate is preserved by an unchanged edit, so the prior hint stays valid.
+    if (posJournalCostIsNotInventoryRate(movement)) continue;
     if (
       delta.lt(0) &&
       movement.evidence === "canonical" &&
@@ -633,6 +641,7 @@ function historicalSalesCompanyEvidenceHash(input: {
       unitCost: movement.unitCost,
       sourceType: movement.sourceType,
       sourceId: movement.sourceId,
+      canonicalPosRole: movement.canonicalPosRole ?? null,
     })),
     legacy: input.legacy.map((row) => ({
       movementId: row.movement_id,
@@ -3224,6 +3233,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
           !delta.gt(0) ||
           anchor.unitCost === null ||
           anchor.unitCost === undefined ||
+          posJournalCostIsNotInventoryRate(anchor) ||
           beforeQty.gt(0) ||
           !afterQty.gt(0)
         ) {
