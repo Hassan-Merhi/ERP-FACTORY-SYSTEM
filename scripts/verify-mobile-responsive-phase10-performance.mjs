@@ -59,7 +59,7 @@ if (connectivity.includes("setInterval(async () =>") || connectivity.includes("1
 }
 
 for (const token of [
-  'CACHE_VERSION = "erp-v11"',
+  'CACHE_VERSION = "erp-v12"',
   "navigationPreload",
   "event.preloadResponse",
   "networkOnlyApi(request)",
