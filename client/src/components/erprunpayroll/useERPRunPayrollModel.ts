@@ -330,6 +330,7 @@ export function useERPRunPayrollModel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll/worker-deductions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       toast({
