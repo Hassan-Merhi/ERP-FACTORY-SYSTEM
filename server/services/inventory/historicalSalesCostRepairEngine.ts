@@ -86,10 +86,7 @@ export type HistoricalSalesRepairMovement = {
   };
 };
 
-const EXACT_VALUATION_RESET_SOURCE_TYPES = new Set([
-  "inventory-valuation-wave6-reset",
-  "inventory-valuation-override",
-]);
+const EXACT_VALUATION_RESET_SOURCE_TYPES = new Set(["inventory-valuation-wave6-reset", "inventory-valuation-override"]);
 
 /** A recorded exact before/after valuation reset (Wave 6, or a stage-031 override). */
 export function isExactValuationReset(
@@ -259,17 +256,13 @@ function valuationResetState(
   );
 }
 
-function valuationResetStateMatches(
-  state: HistoricalInventoryState,
-  expected: HistoricalInventoryState
-): boolean {
+function valuationResetStateMatches(state: HistoricalInventoryState, expected: HistoricalInventoryState): boolean {
   return (
     repairQuantity(state.quantity).eq(repairQuantity(expected.quantity)) &&
     repairRate(state.averageRate).eq(repairRate(expected.averageRate)) &&
     repairMoney(state.totalValue).eq(repairMoney(expected.totalValue))
   );
 }
-
 
 function movementTimeMs(movement: HistoricalSalesRepairMovement): number {
   const parsed = Date.parse(movement.createdAt ?? movement.occurredAt);
@@ -289,11 +282,7 @@ function applyInitialOffloadMovement(
   movement: HistoricalSalesRepairMovement
 ): HistoricalInventoryState {
   const delta = repairQuantity(movement.quantityDelta);
-  if (
-    !delta.gt(ZERO) ||
-    movement.exactValue === null ||
-    movement.exactValue === undefined
-  ) {
+  if (!delta.gt(ZERO) || movement.exactValue === null || movement.exactValue === undefined) {
     return applyHistoricalInventoryMovement(state, {
       quantityDelta: movement.quantityDelta,
       unitCost: movement.unitCost,
@@ -301,7 +290,6 @@ function applyInitialOffloadMovement(
   }
 
   const previousQty = repairQuantity(state.quantity);
-  const previousRate = repairRate(Decimal.max(state.averageRate, ZERO));
   const previousValue = repairMoney(state.totalValue);
   const exactValue = repairMoney(movement.exactValue);
   const incomingRate = exactOffloadRate(movement, delta);
@@ -313,11 +301,7 @@ function applyInitialOffloadMovement(
   }
 
   if (newQty.lt(ZERO)) {
-    return rawHistoricalInventoryState(
-      newQty,
-      incomingRate,
-      repairMoney(newQty.times(incomingRate))
-    );
+    return rawHistoricalInventoryState(newQty, incomingRate, repairMoney(newQty.times(incomingRate)));
   }
 
   let newValue: Decimal;
@@ -338,11 +322,7 @@ function applyExactOffloadRemoval(
   movement: HistoricalSalesRepairMovement
 ): HistoricalInventoryState {
   const delta = repairQuantity(movement.quantityDelta);
-  if (
-    !delta.lt(ZERO) ||
-    movement.exactValue === null ||
-    movement.exactValue === undefined
-  ) {
+  if (!delta.lt(ZERO) || movement.exactValue === null || movement.exactValue === undefined) {
     return applyHistoricalInventoryMovement(state, {
       quantityDelta: movement.quantityDelta,
       unitCost: movement.unitCost,
@@ -392,7 +372,6 @@ export function applyHistoricalSalesRepairMovement(
   });
 }
 
-
 const INVENTORY_SAFETY_CLAMP_AT = Date.parse("2026-03-13T06:57:11.066958Z");
 const NEGATIVE_LAYER_ENGINE_AT = Date.parse("2026-03-14T08:23:03.665494Z");
 const INCREMENTAL_SHORTAGE_FIX_AT = Date.parse("2026-07-12T18:27:04.885046Z");
@@ -426,22 +405,18 @@ export function createHistoricalSignedLocationImportState(
   return rawUnclampedHistoricalInventoryState(quantity, averageRate, totalValue);
 }
 
-
 function movementSuppliesIncomingRate(movement: HistoricalSalesRepairMovement): boolean {
   const delta = repairQuantity(movement.quantityDelta);
   if (!delta.gt(ZERO)) return false;
   // POS reversal/edit receipts historically restored quantity without passing
-  // the old line cost into adjustInventory(). The canonical journal still
+  // the old line cost into the adjustInventory helper. The canonical journal still
   // recorded that old cost, so treating unit_cost as an incoming receipt rate
   // would replay a valuation path production never used.
   if (movement.sourceType === "pos-sale") return false;
   return movement.unitCost !== null && movement.unitCost !== undefined;
 }
 
-function historicalIncomingRate(
-  movement: HistoricalSalesRepairMovement,
-  previousRate: Decimal
-): Decimal {
+function historicalIncomingRate(movement: HistoricalSalesRepairMovement, previousRate: Decimal): Decimal {
   if (!movementSuppliesIncomingRate(movement)) return previousRate;
   return Decimal.max(decimal(movement.unitCost, "historical incoming rate"), ZERO);
 }
@@ -460,9 +435,7 @@ function addNegativeLayerQuantity(
 ): Decimal {
   if (!newQty.lt(ZERO)) return repairQuantity(layerQty);
   const created =
-    mutationAt < INCREMENTAL_SHORTAGE_FIX_AT
-      ? newQty.abs()
-      : incrementalShortageQuantity(previousQty, newQty);
+    mutationAt < INCREMENTAL_SHORTAGE_FIX_AT ? newQty.abs() : incrementalShortageQuantity(previousQty, newQty);
   return repairQuantity(layerQty.plus(created));
 }
 
@@ -479,17 +452,13 @@ function applyPreSafetyInventoryMovement(
   if (delta.gt(ZERO) && movementSuppliesIncomingRate(movement)) {
     const incomingRate = historicalIncomingRate(movement, previousRate);
     const newValue = repairMoney(previousValue.plus(delta.times(incomingRate)));
-    const newRate = newQty.gt(ZERO)
-      ? repairRate(newValue.dividedBy(newQty))
-      : repairRate(incomingRate);
+    const newRate = newQty.gt(ZERO) ? repairRate(newValue.dividedBy(newQty)) : repairRate(incomingRate);
     return rawUnclampedHistoricalInventoryState(newQty, newRate, newValue);
   }
 
   if (delta.lt(ZERO)) {
     const newValue = repairMoney(previousValue.minus(delta.abs().times(previousRate)));
-    const newRate = newQty.gt(ZERO)
-      ? repairRate(newValue.dividedBy(newQty))
-      : previousRate;
+    const newRate = newQty.gt(ZERO) ? repairRate(newValue.dividedBy(newQty)) : previousRate;
     return rawUnclampedHistoricalInventoryState(newQty, newRate, newValue);
   }
 
@@ -512,9 +481,7 @@ function applySafetyClampInventoryMovement(
   if (delta.gt(ZERO) && movementSuppliesIncomingRate(movement)) {
     const incomingRate = historicalIncomingRate(movement, previousRate);
     newValue = repairMoney(previousValue.plus(delta.times(incomingRate)));
-    newRate = newQty.gt(ZERO)
-      ? repairRate(newValue.dividedBy(newQty))
-      : repairRate(incomingRate);
+    newRate = newQty.gt(ZERO) ? repairRate(newValue.dividedBy(newQty)) : repairRate(incomingRate);
   } else if (delta.lt(ZERO)) {
     const effectiveRate = repairRate(Decimal.max(previousRate, ZERO));
     newValue = repairMoney(previousValue.minus(delta.abs().times(effectiveRate)));
@@ -543,11 +510,7 @@ export function createHistoricalForwardReplayState(
   negativeLayerQuantity: Decimal.Value = 0
 ): HistoricalForwardReplayState {
   return {
-    inventory: rawUnclampedHistoricalInventoryState(
-      inventory.quantity,
-      inventory.averageRate,
-      inventory.totalValue
-    ),
+    inventory: rawUnclampedHistoricalInventoryState(inventory.quantity, inventory.averageRate, inventory.totalValue),
     negativeLayerQuantity: repairQuantity(Decimal.max(decimal(negativeLayerQuantity, "negative layer quantity"), ZERO)),
   };
 }
@@ -581,12 +544,7 @@ export function applyHistoricalForwardReplayMovement(
   if (EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)) {
     const inventory = applyHistoricalSalesRepairMovement(state.inventory, movement);
     if (mutationAt >= NEGATIVE_LAYER_ENGINE_AT && delta.lt(ZERO)) {
-      layerQty = addNegativeLayerQuantity(
-        layerQty,
-        previousQty,
-        repairQuantity(inventory.quantity),
-        mutationAt
-      );
+      layerQty = addNegativeLayerQuantity(layerQty, previousQty, repairQuantity(inventory.quantity), mutationAt);
     }
     return { inventory, negativeLayerQuantity: layerQty };
   }
@@ -611,16 +569,11 @@ export function applyHistoricalForwardReplayMovement(
 
   if (delta.gt(ZERO)) {
     const effectiveRate = historicalIncomingRate(movement, previousRate);
-    const shouldSettleLayers =
-      mutationAt < STALE_LAYER_SETTLEMENT_FIX_AT || previousQty.lt(ZERO);
-    const settled = shouldSettleLayers
-      ? Decimal.min(layerQty, delta)
-      : ZERO;
+    const shouldSettleLayers = mutationAt < STALE_LAYER_SETTLEMENT_FIX_AT || previousQty.lt(ZERO);
+    const settled = shouldSettleLayers ? Decimal.min(layerQty, delta) : ZERO;
     layerQty = repairQuantity(Decimal.max(layerQty.minus(settled), ZERO));
     const remaining = repairQuantity(delta.minus(settled));
-    let newValue = repairMoney(
-      Decimal.max(previousValue.plus(remaining.times(effectiveRate)), ZERO)
-    );
+    let newValue = repairMoney(Decimal.max(previousValue.plus(remaining.times(effectiveRate)), ZERO));
     let newRate: Decimal;
     if (newQty.gt(ZERO)) {
       newRate = repairRate(newValue.dividedBy(newQty));
@@ -637,15 +590,9 @@ export function applyHistoricalForwardReplayMovement(
   if (delta.lt(ZERO)) {
     const effectiveRate = repairRate(Decimal.max(previousRate, ZERO));
     if (newQty.gt(ZERO)) {
-      const newValue = repairMoney(
-        Decimal.max(previousValue.minus(delta.abs().times(effectiveRate)), ZERO)
-      );
+      const newValue = repairMoney(Decimal.max(previousValue.minus(delta.abs().times(effectiveRate)), ZERO));
       return {
-        inventory: rawHistoricalInventoryState(
-          newQty,
-          repairRate(newValue.dividedBy(newQty)),
-          newValue
-        ),
+        inventory: rawHistoricalInventoryState(newQty, repairRate(newValue.dividedBy(newQty)), newValue),
         negativeLayerQuantity: layerQty,
       };
     }
@@ -671,10 +618,7 @@ function statesEqual(left: HistoricalInventoryState, right: HistoricalInventoryS
   );
 }
 
-function statesEqualQuantityAndValue(
-  left: HistoricalInventoryState,
-  right: HistoricalInventoryState
-): boolean {
+function statesEqualQuantityAndValue(left: HistoricalInventoryState, right: HistoricalInventoryState): boolean {
   return (
     repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
     repairMoney(left.totalValue).eq(repairMoney(right.totalValue))
@@ -700,12 +644,9 @@ function canonicalRateOnlyRecovery(
   const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
   if (!previousQty.gt(ZERO)) return null;
 
-  let stateBefore: HistoricalInventoryState | null = null;
+  let stateBefore: HistoricalInventoryState | null;
 
-  const adjustmentEditRecovery = canonicalAdjustmentEditApplyValueInverse(
-    stateAfter,
-    movement
-  );
+  const adjustmentEditRecovery = canonicalAdjustmentEditApplyValueInverse(stateAfter, movement);
   if (adjustmentEditRecovery) return adjustmentEditRecovery;
 
   if (
@@ -716,31 +657,18 @@ function canonicalRateOnlyRecovery(
   ) {
     const beforeValue = repairMoney(stateAfter.totalValue.minus(repairMoney(movement.exactValue)));
     if (beforeValue.lt(ZERO)) return null;
-    stateBefore = rawHistoricalInventoryState(
-      previousQty,
-      repairRate(beforeValue.dividedBy(previousQty)),
-      beforeValue
-    );
+    stateBefore = rawHistoricalInventoryState(previousQty, repairRate(beforeValue.dividedBy(previousQty)), beforeValue);
   } else if (
     EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType) &&
     delta.lt(ZERO) &&
     movement.exactValue !== null &&
     movement.exactValue !== undefined
   ) {
-    const beforeValue = repairMoney(
-      stateAfter.totalValue.plus(repairMoney(movement.exactValue))
-    );
-    stateBefore = rawHistoricalInventoryState(
-      previousQty,
-      repairRate(beforeValue.dividedBy(previousQty)),
-      beforeValue
-    );
-  } else if (
-    delta.gt(ZERO) &&
-    movement.sourceType === "pos-sale"
-  ) {
+    const beforeValue = repairMoney(stateAfter.totalValue.plus(repairMoney(movement.exactValue)));
+    stateBefore = rawHistoricalInventoryState(previousQty, repairRate(beforeValue.dividedBy(previousQty)), beforeValue);
+  } else if (delta.gt(ZERO) && movement.sourceType === "pos-sale") {
     // Historical POS edit/delete reversals restored quantity without passing
-    // the old sale-line cost to adjustInventory(). V19 proved that replacing
+    // the old sale-line cost to the adjustInventory helper. V19 proved that replacing
     // every POS receipt inverse globally is not monotonic, so V23 only reaches
     // this branch after the primary V22 inverse has already failed.
     //
@@ -752,15 +680,9 @@ function canonicalRateOnlyRecovery(
     const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
       const candidates: HistoricalInventoryState[] = [];
       for (const candidateRate of candidateRatesAround(center)) {
-        const beforeValue = repairMoney(
-          stateAfter.totalValue.minus(delta.times(candidateRate))
-        );
+        const beforeValue = repairMoney(stateAfter.totalValue.minus(delta.times(candidateRate)));
         if (beforeValue.lt(ZERO)) continue;
-        const candidate = rawHistoricalInventoryState(
-          previousQty,
-          candidateRate,
-          beforeValue
-        );
+        const candidate = rawHistoricalInventoryState(previousQty, candidateRate, beforeValue);
         if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
           continue;
         }
@@ -786,22 +708,11 @@ function canonicalRateOnlyRecovery(
       if (derivedCandidates.length !== 1) return null;
       stateBefore = derivedCandidates[0];
     }
-  } else if (
-    delta.gt(ZERO) &&
-    movement.sourceType !== "pos-sale" &&
-    movementSuppliesIncomingRate(movement)
-  ) {
-    const incomingRate = Decimal.max(
-      decimal(movement.unitCost, "canonical incoming movement cost"),
-      ZERO
-    );
+  } else if (delta.gt(ZERO) && movement.sourceType !== "pos-sale" && movementSuppliesIncomingRate(movement)) {
+    const incomingRate = Decimal.max(decimal(movement.unitCost, "canonical incoming movement cost"), ZERO);
     const beforeValue = repairMoney(stateAfter.totalValue.minus(delta.times(incomingRate)));
     if (beforeValue.lt(ZERO)) return null;
-    stateBefore = rawHistoricalInventoryState(
-      previousQty,
-      repairRate(beforeValue.dividedBy(previousQty)),
-      beforeValue
-    );
+    stateBefore = rawHistoricalInventoryState(previousQty, repairRate(beforeValue.dividedBy(previousQty)), beforeValue);
   } else if (
     delta.lt(ZERO) &&
     (movement.sourceType === "stock-transfer" ||
@@ -811,21 +722,15 @@ function canonicalRateOnlyRecovery(
     // A POS edit re-issue also consumed the live stored rate while journaling
     // the preserved old line cost, so it uses the same unique source-rate search.
     // The transfer document rate is recorded in the canonical journal, but the
-    // source-side deduction in adjustInventory() consumes stock at the source
+    // source-side deduction in the adjustInventory helper consumes stock at the source
     // inventory average rate. When the reconstructed intermediate rate is stale,
     // recover only a UNIQUE self-consistent source-rate candidate whose issue
     // replay preserves quantity and total value exactly.
     const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
       const candidates: HistoricalInventoryState[] = [];
       for (const candidateRate of candidateRatesAround(center)) {
-        const beforeValue = repairMoney(
-          stateAfter.totalValue.plus(delta.abs().times(candidateRate))
-        );
-        const candidate = rawHistoricalInventoryState(
-          previousQty,
-          candidateRate,
-          beforeValue
-        );
+        const beforeValue = repairMoney(stateAfter.totalValue.plus(delta.abs().times(candidateRate)));
+        const candidate = rawHistoricalInventoryState(previousQty, candidateRate, beforeValue);
         if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
           continue;
         }
@@ -854,8 +759,7 @@ function canonicalRateOnlyRecovery(
   } else if (
     delta.lt(ZERO) &&
     !posJournalCostIsNotInventoryRate(movement) &&
-    (movement.sourceType === "pos-sale" ||
-      movement.sourceType === "canonical-sale-lifecycle-correction") &&
+    (movement.sourceType === "pos-sale" || movement.sourceType === "canonical-sale-lifecycle-correction") &&
     movement.unitCost !== null &&
     movement.unitCost !== undefined
   ) {
@@ -864,12 +768,8 @@ function canonicalRateOnlyRecovery(
     // correction is synthesized from latestNegativeRate, the quantity-weighted
     // canonical issue rate pinned to that sale's latest mutation. Both are
     // direct canonical evidence of the cost basis used for the missing issue.
-    const recordedRate = repairRate(
-      Decimal.max(decimal(movement.unitCost, "canonical POS issue cost"), ZERO)
-    );
-    const beforeValue = repairMoney(
-      stateAfter.totalValue.plus(delta.abs().times(recordedRate))
-    );
+    const recordedRate = repairRate(Decimal.max(decimal(movement.unitCost, "canonical POS issue cost"), ZERO));
+    const beforeValue = repairMoney(stateAfter.totalValue.plus(delta.abs().times(recordedRate)));
     stateBefore = rawHistoricalInventoryState(previousQty, recordedRate, beforeValue);
   } else {
     return null;
@@ -927,15 +827,9 @@ function legacyIssueRateOnlyRecovery(
   const evaluateCandidates = (center: Decimal): HistoricalInventoryState[] => {
     const candidates: HistoricalInventoryState[] = [];
     for (const candidateRate of candidateRatesAround(center)) {
-      const beforeValue = repairMoney(
-        stateAfter.totalValue.plus(delta.abs().times(candidateRate))
-      );
+      const beforeValue = repairMoney(stateAfter.totalValue.plus(delta.abs().times(candidateRate)));
       if (beforeValue.lt(ZERO)) continue;
-      const candidate = rawHistoricalInventoryState(
-        previousQty,
-        candidateRate,
-        beforeValue
-      );
+      const candidate = rawHistoricalInventoryState(previousQty, candidateRate, beforeValue);
       if (!repairRate(beforeValue.dividedBy(previousQty)).eq(candidateRate)) {
         continue;
       }
@@ -998,9 +892,7 @@ function canonicalAdjustmentEditApplyValueInverse(
   const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
   if (!previousQty.gt(ZERO)) return null;
 
-  const exactIssueValue = repairMoney(
-    delta.abs().times(decimal(movement.unitCost, "adjustment edit apply unit cost"))
-  );
+  const exactIssueValue = repairMoney(delta.abs().times(decimal(movement.unitCost, "adjustment edit apply unit cost")));
   const beforeValue = repairMoney(stateAfter.totalValue.plus(exactIssueValue));
   const beforeRate = repairRate(
     beforeValue.gt(ZERO)
@@ -1010,9 +902,7 @@ function canonicalAdjustmentEditApplyValueInverse(
   const stateBefore = rawHistoricalInventoryState(previousQty, beforeRate, beforeValue);
 
   const replayQty = repairQuantity(previousQty.plus(delta));
-  const replayValue = replayQty.gt(ZERO)
-    ? repairMoney(Decimal.max(beforeValue.minus(exactIssueValue), ZERO))
-    : ZERO;
+  const replayValue = replayQty.gt(ZERO) ? repairMoney(Decimal.max(beforeValue.minus(exactIssueValue), ZERO)) : ZERO;
   const replayRate =
     replayQty.gt(ZERO) && replayValue.gt(ZERO)
       ? repairRate(replayValue.dividedBy(replayQty))
@@ -1049,9 +939,7 @@ function legacyExactReceiptRateOnlyRecovery(
     return null;
   }
 
-  const beforeValue = repairMoney(
-    stateAfter.totalValue.minus(repairMoney(movement.exactValue))
-  );
+  const beforeValue = repairMoney(stateAfter.totalValue.minus(repairMoney(movement.exactValue)));
   if (beforeValue.lt(ZERO)) return null;
 
   const stateBefore = rawHistoricalInventoryState(
@@ -1120,9 +1008,7 @@ export function reverseHistoricalInventoryMovement(
   if (delta.gt(ZERO)) {
     if (input.unitCost !== null && input.unitCost !== undefined && previousQty.lte(ZERO)) {
       if (input.priorCostMemoryRate !== null && input.priorCostMemoryRate !== undefined) {
-        const priorRate = repairRate(
-          Decimal.max(decimal(input.priorCostMemoryRate, "prior cost memory rate"), ZERO)
-        );
+        const priorRate = repairRate(Decimal.max(decimal(input.priorCostMemoryRate, "prior cost memory rate"), ZERO));
         const stateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, priorRate, ZERO);
         const replayed = applyHistoricalInventoryMovement(stateBefore, {
           quantityDelta: delta,
@@ -1141,7 +1027,8 @@ export function reverseHistoricalInventoryMovement(
           createHistoricalInventoryStateFromSnapshot(ZERO, ZERO, ZERO),
           { quantityDelta: delta, unitCost: input.unitCost }
         );
-        if (!statesEqualQuantityAndValue(replayed, stateAfter)) return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
+        if (!statesEqualQuantityAndValue(replayed, stateAfter))
+          return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
       }
       return { reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" };
     }
@@ -1235,11 +1122,7 @@ export function reverseHistoricalInventoryMovement(
   // rounded post-issue average is therefore also the pre-issue average.
   const directRate = repairRate(stateAfter.averageRate);
   const directBeforeValue = repairMoney(stateAfter.totalValue.plus(issueQty.times(directRate)));
-  const directStateBefore = createHistoricalInventoryStateFromSnapshot(
-    previousQty,
-    directRate,
-    directBeforeValue
-  );
+  const directStateBefore = createHistoricalInventoryStateFromSnapshot(previousQty, directRate, directBeforeValue);
   const directReplay = applyHistoricalInventoryMovement(directStateBefore, {
     quantityDelta: delta,
     unitCost: input.unitCost,
@@ -1391,8 +1274,7 @@ export function reverseHistoricalSalesRepairMovement(
     primary.reversible &&
     movement.evidence === "canonical" &&
     !posJournalCostIgnored &&
-    (movement.sourceType === "pos-sale" ||
-      movement.sourceType === "canonical-sale-lifecycle-correction") &&
+    (movement.sourceType === "pos-sale" || movement.sourceType === "canonical-sale-lifecycle-correction") &&
     delta.lt(ZERO) &&
     movement.unitCost !== null &&
     movement.unitCost !== undefined
@@ -1404,22 +1286,13 @@ export function reverseHistoricalSalesRepairMovement(
     if (!recordedRate.eq(inferredRate)) {
       const previousQty = repairQuantity(stateAfter.quantity.minus(delta));
       if (previousQty.gt(ZERO)) {
-        const beforeValue = repairMoney(
-          stateAfter.totalValue.plus(delta.abs().times(recordedRate))
-        );
-        const recordedStateBefore = rawHistoricalInventoryState(
-          previousQty,
-          recordedRate,
-          beforeValue
-        );
+        const beforeValue = repairMoney(stateAfter.totalValue.plus(delta.abs().times(recordedRate)));
+        const recordedStateBefore = rawHistoricalInventoryState(previousQty, recordedRate, beforeValue);
         const replayed = applyHistoricalInventoryMovement(recordedStateBefore, {
           quantityDelta: delta,
           unitCost: recordedRate,
         });
-        if (
-          statesEqualQuantityAndValue(replayed, stateAfter) &&
-          historicalStateRateMatchesValue(recordedStateBefore)
-        ) {
+        if (statesEqualQuantityAndValue(replayed, stateAfter) && historicalStateRateMatchesValue(recordedStateBefore)) {
           return {
             reversible: true,
             stateBefore: recordedStateBefore,
@@ -1435,9 +1308,7 @@ export function reverseHistoricalSalesRepairMovement(
   }
 
   return (
-    legacyIssueRateOnlyRecovery(stateAfter, movement) ??
-    canonicalRateOnlyRecovery(stateAfter, movement) ??
-    primary
+    legacyIssueRateOnlyRecovery(stateAfter, movement) ?? canonicalRateOnlyRecovery(stateAfter, movement) ?? primary
   );
 }
 
@@ -1496,7 +1367,7 @@ export function applyHistoricalInventoryMovement(
   const previousQty = repairQuantity(state.quantity);
   const previousRate = repairRate(Decimal.max(state.averageRate, ZERO));
   const previousValue = repairMoney(Decimal.max(state.totalValue, ZERO));
-  // Match production adjustInventory(): receipt value uses the full
+  // Match the production adjustInventory helper: receipt value uses the full
   // transaction-time incoming rate (canonical unit_cost is 6dp). Only the
   // persisted inventory average is rounded to RATE_DP/2dp.
   const incomingRate =
@@ -1913,7 +1784,10 @@ export function isLiveRateIssueWithUnpinnedRate(movement: HistoricalSalesRepairM
   if (!decimal(movement.quantityDelta, "quantity delta").lt(ZERO)) return false;
   if (movement.exactValue !== null && movement.exactValue !== undefined) return false;
   if (isExactValuationReset(movement)) return false;
-  if (INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) || EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)) {
+  if (
+    INITIAL_OFFLOAD_SOURCE_TYPES.has(movement.sourceType) ||
+    EXACT_OFFLOAD_REMOVAL_SOURCE_TYPES.has(movement.sourceType)
+  ) {
     return false;
   }
   return (
