@@ -210,7 +210,9 @@ describe("ERP payroll model positive paths", () => {
 
     result.current.printRun(payrollRun as never);
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Worker Salaries"));
-    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,520.00"));\n    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Payroll Deduction"));\n    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("-USD\u00a030.00"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,520.00"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Payroll Deduction"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("-USD\u00a030.00"));
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("August payroll"));
     expect(harness.close).toHaveBeenCalledOnce();
 
