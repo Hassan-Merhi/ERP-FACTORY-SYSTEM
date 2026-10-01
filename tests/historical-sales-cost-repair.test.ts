@@ -1214,4 +1214,46 @@ describe("historical sales cost repair replay", () => {
     expect(historicalRateWithinEvidencedRange("0.00", range)).toBe(false);
     expect(historicalRateWithinEvidencedRange("107.34", undefined)).toBe(false);
   });
+
+  it("replays and rewinds a recorded valuation override, including a quantity change, only on an exact match", () => {
+    const override = movement({
+      movementId: "valuation-override:1",
+      occurredAt: "2026-10-02T09:00:00.000Z",
+      createdAt: "2026-10-02T09:00:00.000Z",
+      quantityDelta: "2.000",
+      unitCost: null,
+      sourceType: "inventory-valuation-override",
+      evidence: "legacy",
+      valuationReset: {
+        beforeQuantity: "4.000",
+        beforeAverageRate: "33.15",
+        beforeTotalValue: "132.60",
+        afterQuantity: "6.000",
+        afterAverageRate: "37.07",
+        afterTotalValue: "222.42",
+      },
+    });
+
+    const before = createHistoricalInventoryStateFromSnapshot("4", "33.15", "132.60");
+    const after = applyHistoricalSalesRepairMovement(before, override);
+    expect(after.quantity.toFixed(3)).toBe("6.000");
+    expect(after.averageRate.toFixed(2)).toBe("37.07");
+    expect(after.totalValue.toFixed(2)).toBe("222.42");
+
+    const forward = applyHistoricalForwardReplayMovement(createHistoricalForwardReplayState(before), override);
+    expect(forward.inventory.totalValue.toFixed(2)).toBe("222.42");
+
+    const reversed = reverseHistoricalSalesRepairMovement(after, override);
+    expect(reversed.reversible).toBe(true);
+    if (!reversed.reversible) return;
+    expect(reversed.stateBefore.quantity.toFixed(3)).toBe("4.000");
+    expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("33.15");
+    expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("132.60");
+
+    const drifted = createHistoricalInventoryStateFromSnapshot("6", "37.07", "222.43");
+    expect(reverseHistoricalSalesRepairMovement(drifted, override)).toEqual({
+      reversible: false,
+      reason: "MOVEMENT_INVERSE_INVALID",
+    });
+  });
 });
