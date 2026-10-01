@@ -2851,6 +2851,10 @@ async function dryRunCompany(
 
   const proposalsBySaleId = new Map<number, HistoricalSalesRepairProposal>();
   const closedEraProvenSaleIds = new Set<number>();
+  // V53: per-location opening states where the checkpoint-implied location
+  // openings sum exactly to the pinned item opening (no negative location),
+  // valued at the pinned item opening rate.
+  const evidencedOpeningStates = new Map<string, HistoricalInventoryState>();
   const targetKeys = new Set(
     legacySales
       .filter((sale) => sale.location_id !== null)
@@ -3452,6 +3456,15 @@ async function dryRunCompany(
       }
 
       const pinnedOpeningQuantityMatches = inferredOpeningTotal.eq(openingQty);
+      if (pinnedOpeningQuantityMatches && !hasNegativeInferredOpening && openingRate.gt(0)) {
+        for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
+          if (!quantity.gt(0)) continue;
+          evidencedOpeningStates.set(
+            historicalInventoryKey(companyId, locationId, stockItemId),
+            createHistoricalInventoryStateFromSnapshot(quantity, openingRate, repairMoney(quantity.times(openingRate)))
+          );
+        }
+      }
       let openingProofBasis:
         | "stock-opening"
         | "location-import-inferred"
@@ -4802,7 +4815,96 @@ async function dryRunCompany(
         quantityBefore[index] = repairQuantity(quantityAfter.minus(repairQuantity(movements[index].quantityDelta)));
         quantityAfter = quantityBefore[index];
       }
-      let index = 0;
+      // V53: the opening era. An evidenced location opening (see
+      // evidencedOpeningStates) is a determined start just like a receipt into
+      // empty stock: forward from it until stock first reaches zero or goes
+      // short (closed), or, if it never does before the canonical journal,
+      // until it reproduces the first two recorded live rates (observed).
+      const acceptEra = (eraProposals: HistoricalSalesRepairProposal[], label: string, code: string) => {
+        let proven = 0;
+        let conflicts = 0;
+        for (const proposal of eraProposals) {
+          const blocks = (blockedSaleCodes.get(proposal.salesItemId) ?? []).filter((block) => block.status === "block");
+          const existing = proposalsBySaleId.get(proposal.salesItemId);
+          if (blocks.length === 0) {
+            if (existing && existing.proposedCostPrice !== proposal.proposedCostPrice) {
+              conflicts += 1;
+              checks.push({
+                companyId,
+                locationId: proposal.locationId,
+                stockItemId: proposal.stockItemId,
+                salesItemId: proposal.salesItemId,
+                code: "OPENING_ERA_FORWARD_DISAGREES",
+                status: "block",
+                expected: proposal.proposedCostPrice,
+                actual: existing.proposedCostPrice,
+                detail: `Sales item ${proposal.salesItemId}: ${label} gives a different cost than the checkpoint rewind`,
+              });
+            }
+            continue;
+          }
+          if (!blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) continue;
+          for (const block of blocks) {
+            block.status = "warning";
+            block.detail = `${block.detail ?? ""} (superseded: ${label})`;
+          }
+          proposalsBySaleId.set(proposal.salesItemId, proposal);
+          closedEraProvenSaleIds.add(proposal.salesItemId);
+          proven += 1;
+        }
+        eraProvenSales += proven;
+        eraConflictSales += conflicts;
+        if (proven > 0 || conflicts > 0) {
+          const [, locationIdText, stockItemIdText] = key.split(":");
+          checks.push({
+            companyId,
+            locationId: Number(locationIdText),
+            stockItemId: Number(stockItemIdText),
+            code,
+            status: "pass",
+            expected: String(eraProposals.length),
+            actual: String(proven),
+            detail: `${label}; ${proven} blocked sale(s) priced by forward replay, ${conflicts} conflict(s) with the checkpoint rewind`,
+          });
+        }
+      };
+      let openingEraEnd = -1;
+      const opening = evidencedOpeningStates.get(key);
+      if (opening && movements.length > 0 && quantityBefore[0].eq(repairQuantity(opening.quantity))) {
+        let state = opening;
+        const eraProposals: HistoricalSalesRepairProposal[] = [];
+        let matched = 0;
+        let rejected = false;
+        let closedAt = -1;
+        let sawObservation = false;
+        for (let cursor = 0; cursor < movements.length; cursor += 1) {
+          const movement = movements[cursor];
+          if (isRecordedLiveRateObservation(movement)) {
+            sawObservation = true;
+            if (!repairRate(movement.unitCost!).eq(repairRate(state.averageRate))) {
+              rejected = true;
+              break;
+            }
+            matched += 1;
+            if (matched >= 2) break;
+          } else if (movement.sale && !sawObservation) {
+            eraProposals.push(historicalSaleProposalFromState(movement, state));
+          }
+          state = applyHistoricalSalesRepairMovement(state, movement);
+          if (!sawObservation && state.quantity.lte(0)) {
+            closedAt = cursor;
+            break;
+          }
+        }
+        if (!rejected && closedAt >= 0) {
+          acceptEra(eraProposals, `opening era ${key} closed at ${movements[closedAt].movementId}`, "OPENING_ERA_CLOSED_PROVEN");
+          openingEraEnd = closedAt;
+        } else if (!rejected && matched >= 2) {
+          acceptEra(eraProposals, `opening era ${key} validated by two recorded live rates`, "OPENING_ERA_OBSERVED_PROVEN");
+        }
+      }
+
+      let index = openingEraEnd + 1;
       while (index < movements.length) {
         const anchor = movements[index];
         const delta = repairQuantity(anchor.quantityDelta);
