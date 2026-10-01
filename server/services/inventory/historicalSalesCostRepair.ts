@@ -22,8 +22,9 @@ import {
   posJournalCostIsNotInventoryRate,
   isExactValuationReset,
   reanchorHistoricalRewindAtRecordedRate,
-  reverseCollapsedPosIssueGroup,
-  collapsedPosIssueGroup,
+  historicalIssueInverseCandidates,
+  isLiveRateIssueWithUnpinnedRate,
+  isRecordedLiveRateObservation,
   repairRate,
   reverseHistoricalSalesRepairMovement,
   type HistoricalForwardReplayState,
@@ -3769,7 +3770,25 @@ async function dryRunCompany(
     // holds no information about the earlier rate, so a canonical sale's
     // recorded live rate below it is the only evidence of that rate.
     const costMemoryResetByKey = new Map<string, HistoricalSalesRepairMovement>();
-    const collapsedGroupStates = new Map<string, HistoricalInventoryState>();
+    // V45 branching rewind: alternate pre-states (each with the sale proposals
+    // it implies) where an issue at an unpinned live rate has several exact
+    // inverses. The primary path (rewindStates) drives every existing check;
+    // recorded live rates and exact inverses prune the alternates or promote
+    // one over a contradicted primary, and legacy sales are priced only when
+    // every surviving branch agrees.
+    type RewindAlternate = { state: HistoricalInventoryState; history: Map<number, HistoricalSalesRepairProposal> };
+    const REWIND_BRANCH_LIMIT = 32;
+    const rewindAlternates = new Map<string, RewindAlternate[]>();
+    const finishedAlternates = new Map<string, RewindAlternate[]>();
+    const primaryHistoryByKey = new Map<string, Map<number, HistoricalSalesRepairProposal>>();
+    const branchOverflowKeys = new Set<string>();
+    const branchSignature = (state: HistoricalInventoryState, history: Map<number, HistoricalSalesRepairProposal>) =>
+      traceState(state) +
+      "|" +
+      [...history.entries()]
+        .sort((a, b) => a[0] - b[0])
+        .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
+        .join(",");
     let movementsAscendingByKey: Map<string, HistoricalSalesRepairMovement[]> | null = null;
     const nextMovementAtKey = (
       key: string,
@@ -3814,59 +3833,94 @@ async function dryRunCompany(
       }
       const stateAfter = rewindStates.get(key);
       if (!stateAfter) continue;
-      // V44: invert an original POS issue together with its restored dropped
-      // lines. One solution is applied; several (the pre-sale value is only
-      // known to the cent window of the recorded rate) re-anchor at the
-      // original issue through the unique-value proof; none falls back to the
-      // generic inverse.
-      if (movement.canonicalPosRole === "dropped-line" && !collapsedGroupStates.has(movement.movementId)) {
-        const group = collapsedPosIssueGroup(movementsInCheckpoint, movement);
-        const original = group[group.length - 1];
-        const solutions = reverseCollapsedPosIssueGroup(stateAfter, group);
-        checks.push({
-          companyId,
-          locationId: movement.locationId,
-          stockItemId: movement.stockItemId,
-          code:
-            solutions.length === 1
-              ? "CANONICAL_POS_LINE_GROUP_INVERTED"
-              : solutions.length > 1
-                ? "CANONICAL_POS_LINE_GROUP_REANCHORED"
-                : "CANONICAL_POS_LINE_GROUP_NO_JOINT_INVERSE",
-          status: solutions.length === 0 ? "warning" : "pass",
-          detail: `${group.length - 1} restored line(s) of ${original?.movementId ?? "?"}: ${solutions.length} joint inverse(s) reproduce the recorded live rate`,
-        });
-        if (solutions.length === 1) {
-          solutions[0].forEach((groupState, index) => collapsedGroupStates.set(group[index].movementId, groupState));
-        } else if (solutions.length > 1 && original) {
-          const lastBefore = solutions[0][solutions[0].length - 1];
-          const unresolvedSales = (targetLegacySaleMovementsByKey.get(key) ?? []).filter(
-            (saleMovement) =>
-              compareMovementMutationAscending(saleMovement, original) < 0 &&
-              !forwardResetProvenSaleIds.has(saleMovement.sale!.salesItemId)
-          );
-          rewindBoundaryReached.add(key);
-          if (unresolvedSales.length > 0) {
-            reanchorRequests.push({
-              key,
-              anchor: original,
-              beforeQuantity: repairQuantity(lastBefore.quantity),
-              recorded: repairRate(original.unitCost!),
-              inferred: repairRate(lastBefore.averageRate),
-              unresolvedSales,
-              transition: "COLLAPSED_POS_LINES",
-              transitionMovementId: movement.movementId,
-            });
+      let reversed = reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+        priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
+      });
+
+      // V45: advance and branch the alternates, then let recorded evidence
+      // prune them or replace a contradicted primary.
+      const branchable = movement.evidence === "canonical" && isLiveRateIssueWithUnpinnedRate(movement);
+      const currentAlternates = rewindAlternates.get(key) ?? [];
+      if ((branchable || currentAlternates.length > 0) && !branchOverflowKeys.has(key)) {
+        const primaryHistory = primaryHistoryByKey.get(key) ?? new Map<number, HistoricalSalesRepairProposal>();
+        const withSale = (history: Map<number, HistoricalSalesRepairProposal>, state: HistoricalInventoryState) => {
+          if (!movement.sale || forwardResetProvenSaleIds.has(movement.sale.salesItemId)) return history;
+          const copy = new Map(history);
+          copy.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, state));
+          return copy;
+        };
+        const next: RewindAlternate[] = [];
+        const finished = finishedAlternates.get(key) ?? [];
+        if (branchable) {
+          for (const candidate of historicalIssueInverseCandidates(stateAfter, movement)) {
+            if (reversed.reversible && historicalInventoryStatesEqual(candidate, reversed.stateBefore)) continue;
+            next.push({ state: candidate, history: withSale(primaryHistory, candidate) });
           }
-          continue;
         }
-      }
-      const forcedGroupState = collapsedGroupStates.get(movement.movementId);
-      const reversed: ReturnType<typeof reverseHistoricalSalesRepairMovement> = forcedGroupState
-        ? { reversible: true, stateBefore: forcedGroupState }
-        : reverseHistoricalSalesRepairMovement(stateAfter, movement, {
+        for (const alternate of currentAlternates) {
+          const alternateReversed = reverseHistoricalSalesRepairMovement(alternate.state, movement, {
             priorCostMemoryRate: priorCostMemoryRateHints.get(movement.movementId) ?? null,
           });
+          const befores: HistoricalInventoryState[] = [];
+          if (alternateReversed.reversible) befores.push(alternateReversed.stateBefore);
+          else if (alternateReversed.reason === "COST_MEMORY_IRREVERSIBLE") finished.push(alternate);
+          if (branchable) {
+            for (const candidate of historicalIssueInverseCandidates(alternate.state, movement)) {
+              if (!befores.some((before) => historicalInventoryStatesEqual(before, candidate))) befores.push(candidate);
+            }
+          }
+          for (const before of befores) next.push({ state: before, history: withSale(alternate.history, before) });
+        }
+
+        let surviving = next;
+        let promotedBy: string | null = null;
+        if (isRecordedLiveRateObservation(movement)) {
+          const recorded = repairRate(movement.unitCost!);
+          surviving = next.filter((alternate) => repairRate(alternate.state.averageRate).eq(recorded));
+          const primaryAgrees =
+            reversed.reversible && repairRate(reversed.stateBefore.averageRate).eq(recorded);
+          if (!primaryAgrees && surviving.length > 0) promotedBy = "recorded live rate " + recorded.toFixed(2);
+        } else if (!reversed.reversible && reversed.reason === "MOVEMENT_INVERSE_INVALID" && surviving.length > 0) {
+          promotedBy = "exact inverse";
+        }
+        if (promotedBy) {
+          const promoted = surviving.shift()!;
+          reversed = { reversible: true, stateBefore: promoted.state };
+          const promotedHistory = new Map(promoted.history);
+          if (movement.sale) promotedHistory.delete(movement.sale.salesItemId);
+          for (const [salesItemId, proposal] of promotedHistory) proposalsBySaleId.set(salesItemId, proposal);
+          primaryHistoryByKey.set(key, promotedHistory);
+          checks.push({
+            companyId,
+            locationId: movement.locationId,
+            stockItemId: movement.stockItemId,
+            code: "REWIND_BRANCH_PROMOTED",
+            status: "pass",
+            actual: traceState(promoted.state),
+            detail: `At ${movement.movementId} the ${promotedBy} contradicts the primary rewind; an alternate exact inverse that agrees replaces it`,
+          });
+        }
+
+        const primaryNow = primaryHistoryByKey.get(key) ?? primaryHistory;
+        const primarySignature = reversed.reversible
+          ? branchSignature(reversed.stateBefore, withSale(primaryNow, reversed.stateBefore))
+          : null;
+        const seen = new Set<string>(primarySignature ? [primarySignature] : []);
+        const deduped: RewindAlternate[] = [];
+        for (const alternate of surviving) {
+          const signature = branchSignature(alternate.state, alternate.history);
+          if (seen.has(signature)) continue;
+          seen.add(signature);
+          deduped.push(alternate);
+        }
+        if (deduped.length > REWIND_BRANCH_LIMIT) {
+          branchOverflowKeys.add(key);
+          rewindAlternates.set(key, []);
+        } else {
+          rewindAlternates.set(key, deduped);
+        }
+        finishedAlternates.set(key, finished);
+      }
       traceRewind(
         key,
         [
@@ -3881,6 +3935,7 @@ async function dryRunCompany(
             ? "before=" + traceState(reversed.stateBefore) + (reversed.recovery ? " via " + reversed.recovery : "")
             : "IRREVERSIBLE " + reversed.reason,
           movement.sale ? "sale=" + movement.sale.salesItemId : "",
+          (rewindAlternates.get(key)?.length ?? 0) > 0 ? "alts=" + rewindAlternates.get(key)!.length : "",
         ]
           .filter(Boolean)
           .join(" ")
@@ -4267,10 +4322,11 @@ async function dryRunCompany(
       rewindSensitivity.set(key, sensitivity);
 
       if (movement.sale && !forwardResetProvenSaleIds.has(movement.sale.salesItemId)) {
-        proposalsBySaleId.set(
-          movement.sale.salesItemId,
-          historicalSaleProposalFromState(movement, reversed.stateBefore)
-        );
+        const primaryProposal = historicalSaleProposalFromState(movement, reversed.stateBefore);
+        proposalsBySaleId.set(movement.sale.salesItemId, primaryProposal);
+        const primaryHistory = primaryHistoryByKey.get(key) ?? new Map<number, HistoricalSalesRepairProposal>();
+        primaryHistory.set(movement.sale.salesItemId, primaryProposal);
+        primaryHistoryByKey.set(key, primaryHistory);
         const amplification = rewindAmplification.get(key) ?? {
           max: new Decimal(0),
           maxSalesItemId: movement.sale.salesItemId,
@@ -4316,6 +4372,45 @@ async function dryRunCompany(
         costMemoryResetByKey.set(key, movement);
       }
       rewindStates.set(key, reversed.stateBefore);
+    }
+
+    // V45: a legacy sale rewound on the primary path is priced only when every
+    // surviving branch reached the same cost for it.
+    for (const [key, primaryHistory] of primaryHistoryByKey) {
+      const alternates = [...(rewindAlternates.get(key) ?? []), ...(finishedAlternates.get(key) ?? [])];
+      const overflow = branchOverflowKeys.has(key);
+      if (alternates.length === 0 && !overflow) continue;
+      const [, locationIdText, stockItemIdText] = key.split(":");
+      let blocked = 0;
+      for (const [salesItemId, proposal] of primaryHistory) {
+        if (forwardResetProvenSaleIds.has(salesItemId)) continue;
+        const disagreeing = alternates.find(
+          (alternate) => alternate.history.get(salesItemId)?.proposedCostPrice !== proposal.proposedCostPrice
+        );
+        if (!overflow && !disagreeing) continue;
+        blocked += 1;
+        checks.push({
+          companyId,
+          locationId: Number(locationIdText),
+          stockItemId: Number(stockItemIdText),
+          salesItemId,
+          code: "CHECKPOINT_REWIND_COST_NOT_UNIQUE",
+          status: "block",
+          expected: proposal.proposedCostPrice,
+          actual: overflow ? "branch limit" : disagreeing!.history.get(salesItemId)?.proposedCostPrice ?? "unreached",
+          detail: `Sales item ${salesItemId} has a different cost on another exact rewind branch`,
+        });
+      }
+      checks.push({
+        companyId,
+        locationId: Number(locationIdText),
+        stockItemId: Number(stockItemIdText),
+        code: "REWIND_BRANCH_CONSENSUS",
+        status: "warning",
+        expected: String(primaryHistory.size),
+        actual: String(primaryHistory.size - blocked),
+        detail: `${alternates.length} surviving alternate branch(es)${overflow ? " (branch limit exceeded)" : ""}; ${blocked} of ${primaryHistory.size} rewound legacy sale(s) not unique`,
+      });
     }
 
     // V39: re-anchor below an unrecorded revaluation. At the pre-revaluation
