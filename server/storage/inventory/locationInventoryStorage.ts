@@ -5,6 +5,7 @@ import { db, pool } from "../../db";
 import * as schema from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { recordInventoryValuationOverride } from "../../services/inventory/recordInventoryValuationOverride";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -241,7 +242,12 @@ export async function updateInventory(
   const operationId = randomUUID();
   await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ quantity: schema.inventory.quantity })
+      .select({
+        id: schema.inventory.id,
+        quantity: schema.inventory.quantity,
+        averageRate: schema.inventory.averageRate,
+        totalValue: schema.inventory.totalValue,
+      })
       .from(schema.inventory)
       .where(and(eq(schema.inventory.locationId, locationId), eq(schema.inventory.stockItemId, stockItemId)))
       .limit(1);
@@ -256,6 +262,22 @@ export async function updateInventory(
         target: [schema.inventory.locationId, schema.inventory.stockItemId],
         set: { quantity, averageRate, totalValue, lastUpdated: sql`now()` },
       });
+
+    // The journal below can only record the quantity change; a direct set also
+    // overwrites the valuation, so record the exact before and after state.
+    await recordInventoryValuationOverride(tx, {
+      companyId: resolvedCompanyId!,
+      locationId,
+      stockItemId,
+      inventoryId: existing?.id ?? null,
+      sourceType: "location-inventory-update",
+      before: {
+        quantity: existing?.quantity ?? "0",
+        averageRate: existing?.averageRate ?? "0",
+        totalValue: existing?.totalValue ?? "0",
+      },
+      after: { quantity, averageRate, totalValue },
+    });
 
     if (Number.isFinite(delta) && delta !== 0) {
       await postStockMovementTx(
