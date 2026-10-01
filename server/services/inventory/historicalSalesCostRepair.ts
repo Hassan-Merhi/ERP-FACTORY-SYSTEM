@@ -4828,11 +4828,9 @@ async function dryRunCompany(
           }
           if (movement.sale) eraProposals.push(historicalSaleProposalFromState(movement, state));
           state = applyHistoricalSalesRepairMovement(state, movement);
-          if (state.quantity.lt(0)) {
-            rejected = true;
-            break;
-          }
-          if (state.quantity.isZero()) {
+          // V52: the era closes when stock reaches zero or goes short; every
+          // sale up to that point was priced from a determined state.
+          if (state.quantity.lte(0)) {
             closedAt = cursor;
             break;
           }
@@ -4995,6 +4993,38 @@ async function dryRunCompany(
         }
       }
     }
+    // V52 diagnostic: why each remaining rewind-failure sale is not in an era.
+    const eraGap = { noDeterminedStartBefore: 0, eraNeverCloses: 0, other: 0 };
+    for (const [key, movements] of movementsByTargetKey) {
+      if (forwardReplayResolvedKeys.has(key)) continue;
+      const checkpointState = checkpointStates.get(key);
+      if (!checkpointState) continue;
+      let quantityAfterGap = repairQuantity(checkpointState.quantity);
+      const startIndexes: number[] = [];
+      for (let position = movements.length - 1; position >= 0; position -= 1) {
+        const before = repairQuantity(quantityAfterGap.minus(repairQuantity(movements[position].quantityDelta)));
+        if (repairQuantity(movements[position].quantityDelta).gt(0) && before.isZero()) startIndexes.push(position);
+        quantityAfterGap = before;
+      }
+      movements.forEach((movement, position) => {
+        if (!movement.sale) return;
+        const blocks = (blockedSaleCodes.get(movement.sale.salesItemId) ?? []).filter((block) => block.status === "block");
+        if (blocks.length === 0 || !blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) return;
+        if (!startIndexes.some((startIndex) => startIndex < position)) eraGap.noDeterminedStartBefore += 1;
+        else if (!startIndexes.some((startIndex) => startIndex > position)) eraGap.eraNeverCloses += 1;
+        else eraGap.other += 1;
+      });
+    }
+    checks.push({
+      companyId,
+      locationId: null,
+      stockItemId: null,
+      code: "ERA_COVERAGE_GAP_DIAGNOSTIC",
+      status: "warning",
+      actual: JSON.stringify(eraGap),
+      detail:
+        "Remaining rewind-failure sales: no receipt into empty stock before them / no later return to empty stock / other (era rejected by a recorded rate or unpriced start)",
+    });
     checks.push({
       companyId,
       locationId: null,
