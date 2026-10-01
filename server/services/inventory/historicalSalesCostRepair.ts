@@ -1915,6 +1915,31 @@ function recoverHistoricalMergedSales(input: {
       }
       if (!keptRewindFailure) {
         for (const [locationId, states] of keptCandidates) {
+          if (states.length > 1 && sourceOpeningQty.isZero() && sourceOpeningValue.isZero()) {
+            // A source with an exact zero opening has a forward-determined
+            // contribution at the merge, so the combined state must equal the
+            // kept item's pre-merge state plus that contribution.
+            const keptBefore = keptBeforeByLocation.get(locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+            const contribution = replayMergedSourceLocationForward({
+              companyId: input.companyId,
+              sourceItemId,
+              locationId,
+              opening: stateForZeroOpening(sourceOpeningRate),
+              movements: allMovements,
+              mergeAtMs,
+            }).stateAtMerge;
+            const expectedQty = repairQuantity(keptBefore.quantity.plus(contribution.quantity));
+            const expectedValue = repairMoney(keptBefore.totalValue.plus(contribution.totalValue));
+            const matching = states.filter(
+              (state) =>
+                repairQuantity(state.quantity).eq(expectedQty) && repairMoney(state.totalValue).eq(expectedValue)
+            );
+            if (matching.length === 1) {
+              keptCandidates.set(locationId, matching);
+              combinedAtMergeByLocation.set(locationId, matching[0]);
+              continue;
+            }
+          }
           if (states.length !== 1) {
             keptRewindFailure = {
               locationId,
