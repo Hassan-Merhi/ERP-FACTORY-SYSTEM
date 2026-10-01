@@ -110,7 +110,8 @@ const payrollRun = {
       groupName: "Production",
       baseSalary: "1000",
       deduction: "250",
-      netPay: "750",
+      payrollDeduction: "30",
+      netPay: "720",
     },
     {
       employeeId: 2,
@@ -118,6 +119,7 @@ const payrollRun = {
       groupName: "Ungrouped",
       baseSalary: "800",
       deduction: "0",
+      payrollDeduction: "0",
       netPay: "800",
     },
   ],
@@ -208,7 +210,7 @@ describe("ERP payroll model positive paths", () => {
 
     result.current.printRun(payrollRun as never);
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Worker Salaries"));
-    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,550.00"));
+    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("USD\u00a01,520.00"));\n    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("Payroll Deduction"));\n    expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("-USD\u00a030.00"));
     expect(harness.write).toHaveBeenCalledWith(expect.stringContaining("August payroll"));
     expect(harness.close).toHaveBeenCalledOnce();
 
@@ -228,6 +230,15 @@ describe("ERP payroll model positive paths", () => {
     act(() => result.current.enterPreview());
 
     await expect(saveDraft.mutationFn()).resolves.toEqual({ ok: true });
+    expect(harness.apiRequest).toHaveBeenCalledWith(
+      "POST",
+      "/api/payroll/runs",
+      expect.objectContaining({
+        items: expect.arrayContaining([
+          expect.objectContaining({ employeeId: 1, payrollDeduction: "30.00", netPay: "720.00" }),
+        ]),
+      })
+    );
     await expect(payRun.mutationFn({ runId: 70, accountId: "90" })).resolves.toEqual({ ok: true });
     await expect(deleteRun.mutationFn(70)).resolves.toBeUndefined();
     await expect(undoRun.mutationFn(70)).resolves.toBeUndefined();
