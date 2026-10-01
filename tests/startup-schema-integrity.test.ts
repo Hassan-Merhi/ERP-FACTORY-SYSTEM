@@ -133,9 +133,14 @@ import { startupMigrations } from "../server/startup-schema";
  * earlier statement. main already assembled 1378 statements while this file
  * still pinned 1376 (an earlier change landed without re-pinning); with stage
  * 031 the reviewed count is 1380.
+ *
+ * Re-pinned for the ERP payroll deduction changes (#1976, #1977), which added
+ * three statements to 004-post-deploy-tables and
+ * 010-security-notifications-and-precision without re-pinning, taking the
+ * count from 1380 to 1383.
  */
-const EXPECTED_STATEMENT_COUNT = 1380;
-const EXPECTED_CONTENT_HASH = "4fe4c8835df16c1ada4932fb8765b25e0b17698e14264e6a68003b14f59a32cd";
+const EXPECTED_STATEMENT_COUNT = 1383;
+const EXPECTED_CONTENT_HASH = "a52a03f379162f3a504a3a2f16b72d2cfc65062a6216a78ff15da7e8455232c0";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
