@@ -4897,7 +4897,21 @@ async function dryRunCompany(
           }
         }
         if (!rejected && closedAt >= 0) {
-          acceptEra(eraProposals, `opening era ${key} closed at ${movements[closedAt].movementId}`, "OPENING_ERA_CLOSED_PROVEN");
+          // V54: an opening era validated only by stock running out is not
+          // evidence. Run #60 compared it with checkpoint-proven sales: 765
+          // disagreed and 78 agreed, so the assumption that each location
+          // opened at the pinned item rate does not hold. Recorded as a
+          // diagnostic only; later eras still start after its close.
+          const [, locationIdText, stockItemIdText] = key.split(":");
+          checks.push({
+            companyId,
+            locationId: Number(locationIdText),
+            stockItemId: Number(stockItemIdText),
+            code: "OPENING_ERA_UNVALIDATED",
+            status: "warning",
+            expected: String(eraProposals.length),
+            detail: `Opening era closed at ${movements[closedAt].movementId} without a recorded live rate; not used as evidence`,
+          });
           openingEraEnd = closedAt;
         } else if (!rejected && matched >= 2) {
           acceptEra(eraProposals, `opening era ${key} validated by two recorded live rates`, "OPENING_ERA_OBSERVED_PROVEN");
