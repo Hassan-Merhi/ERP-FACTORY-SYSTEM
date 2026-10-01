@@ -250,3 +250,41 @@ does not block outright. Disagreements without such a boundary or an unrecorded
 revaluation stay blocked. A priced receipt into exactly empty stock now also has to
 reproduce the rewound after-state, so a contradiction there is reported as an invalid
 inverse, not as missing cost memory.
+
+## V42–V46 (2026-10-01)
+
+- **V42.** Restored lines carry their journal row's id, so the checkpoint cutoff no
+  longer filters them out of the rewind.
+- **V43, two-sided check.** An impossible inverse below already-priced legacy sales
+  showed that those sales came from a contradicted state. A sale is now kept only when
+  a forward replay from a priced receipt into exactly empty stock reaches the same
+  cost. In run #51, 274 of 2,632 such sales agreed; the rest are blocked as
+  `CHECKPOINT_REWIND_CONTRADICTED_BELOW`.
+- **V45, branching rewind.** An issue at an unpinned live rate can have several exact
+  inverses. Examples are a transfer source leg, a POS edit re-issue and a restored
+  line. In 1/134/113, transfer 23667 took 100 units from 14 @ 79.10 and inverts at
+  either 79.10 or 79.11. Only 79.11 replays to the recorded 78.25 at sale 14647. Every
+  exact inverse is now kept as a branch, and recorded live rates and exact inverses
+  prune them. Legacy sales are priced only when all branches agree. In run #52, 157
+  branches were promoted and mismatch rows fell from 12,351 to 9,268. Branching is
+  canonical-era only: legacy-era issues still take the primary inverse, which can be
+  one of several cent-apart consistent rates.
+- **V46, regression fix.** Since V41 a restored line counted toward the issued
+  quantity but not the journaled value, which diluted direct canonical proposals.
+  Runs #49–#52 marked 969 canonical rows ready at wrong costs: 57.86 off on average,
+  222.94 at most, never applied. A comparison of ready rows across runs found it. A
+  canonical proposal must now lie within its voucher's journaled live rates.
+
+## V27 versus later classifications
+
+Comparing run #30 (V27) with run #46 (V38), 9,393 rows went from ready to blocked.
+Their V27 proposals were unsafe:
+
+| V38 blocker | rows | V27 proposal >50% from original | V27 COGS delta |
+|---|---:|---:|---:|
+| rate hull | 5,688 | 615 | +52,363.55 |
+| canonical mismatch | 2,803 | 427 (137 above 1,000/unit) | +1,390,789.13 |
+| amplification >100× | 370 | 102 | +3,218,270,158.46 |
+| other | 532 | 9 | -4,236.22 |
+
+V27's "ready" set was not safe to apply.
