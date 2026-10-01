@@ -226,6 +226,16 @@ describe("PATCH /api/factory/containers/:id — partial updates", () => {
     expect(after.freight).toBe("250.00");
   });
 
+  it("accepts clearing an ETA with JSON null without storing the string null", async () => {
+    const id = await seedContainer();
+
+    const response = await patchContainer(id, { arrivalDate: null });
+
+    expect(response.status).toBe(200);
+    const after = await containerRow(id);
+    expect(after.arrival_date).toBeNull();
+  });
+
   it("coerces empty strings to null rather than storing them", async () => {
     const id = await seedContainer();
 
