@@ -15,7 +15,6 @@ import {
   createHistoricalSignedLocationImportState,
   historicalInventoryKey,
   historicalRateWithinEvidencedRange,
-  historicalStateRateMatchesValue,
   historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
@@ -282,7 +281,7 @@ function traceState(state: HistoricalInventoryState): string {
   );
 }
 
-function hscrError(code: string): Error {
+export function hscrError(code: string): Error {
   const error = new Error();
   error.message = code;
   return error;
@@ -304,7 +303,7 @@ function beforeCutoff(value: Date, canonicalStart: Date | null): boolean {
   return canonicalStart === null || value.getTime() < canonicalStart.getTime();
 }
 
-async function enableMaintenanceScope(client: PoolClient): Promise<void> {
+export async function enableMaintenanceScope(client: PoolClient): Promise<void> {
   await client.query("SELECT set_config('app.company_scope_maintenance', 'on', true)");
   await client.query("SELECT set_config('app.current_company_id', '', true)");
   await client.query("SELECT set_config('app.authorized_company_ids', '', true)");
@@ -359,7 +358,9 @@ async function loadCanonicalMovements(
   // original sale issue (the post-2026-09-26 original key format).
   const editInstants = new Set(
     rows.rows
-      .filter((row) => row.source_type === "pos-sale" && /^pos-sale:\d+:rev\d+:reverse:/.test(row.idempotency_key ?? ""))
+      .filter(
+        (row) => row.source_type === "pos-sale" && /^pos-sale:\d+:rev\d+:reverse:/.test(row.idempotency_key ?? "")
+      )
       .map((row) => `${row.source_id}:${iso(row.created_at)}`)
   );
   const roleFor = (row: CanonicalRow) => {
@@ -540,13 +541,6 @@ function movementKey(
   return historicalInventoryKey(movement.companyId, movement.locationId, movement.stockItemId);
 }
 
-function compareLegacyMovementDescending(a: HistoricalSalesRepairMovement, b: HistoricalSalesRepairMovement): number {
-  const time = Date.parse(b.occurredAt) - Date.parse(a.occurredAt);
-  if (time !== 0) return time;
-  if (a.sequence !== b.sequence) return b.sequence - a.sequence;
-  return b.movementId.localeCompare(a.movementId);
-}
-
 function movementMutationTime(movement: HistoricalSalesRepairMovement): number {
   return Date.parse(movement.createdAt ?? movement.occurredAt);
 }
@@ -577,9 +571,7 @@ export function canonicalMovementNumericId(movement: HistoricalSalesRepairMoveme
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function buildPriorCanonicalCostMemoryRateHints(
-  movements: HistoricalSalesRepairMovement[]
-): Map<string, string> {
+function buildPriorCanonicalCostMemoryRateHints(movements: HistoricalSalesRepairMovement[]): Map<string, string> {
   const hints = new Map<string, string>();
   const knownRateByKey = new Map<string, Decimal>();
 
@@ -686,9 +678,7 @@ export function droppedPosLineMovements(
       const itemRows = rows
         .filter(
           (row) =>
-            row !== original &&
-            row.stockItemId === original.stockItemId &&
-            row.locationId === original.locationId
+            row !== original && row.stockItemId === original.stockItemId && row.locationId === original.locationId
         )
         .sort(compareMovementMutationAscending);
 
@@ -757,9 +747,7 @@ export function droppedPosLineMovements(
         stockItemId,
         code: "CANONICAL_POS_DROPPED_LINE_RESTORED",
         status: "pass",
-        expected: lineQuantities
-          .reduce((sum, quantity) => sum.plus(quantity), new Decimal(0))
-          .toFixed(3),
+        expected: lineQuantities.reduce((sum, quantity) => sum.plus(quantity), new Decimal(0)).toFixed(3),
         actual: journaledQuantity.toFixed(3),
         detail: `Voucher ${voucherId} ${original.movementId}: restored ${lineQuantities.length - 1} line(s) lost to the per-item rev0 key at the original issue instant (${basis})`,
       });
@@ -784,18 +772,10 @@ export function activeCanonicalSaleEvidence(
   for (const [key, rows] of grouped) {
     const latestMutationAt = Math.max(...rows.map(movementMutationTime));
     const latestNegativeMovements = rows
-      .filter(
-        (movement) =>
-          movementMutationTime(movement) === latestMutationAt &&
-          d(movement.quantityDelta).lt(0)
-      )
+      .filter((movement) => movementMutationTime(movement) === latestMutationAt && d(movement.quantityDelta).lt(0))
       .sort(compareMovementMutationAscending);
     const latestPositiveMovements = rows
-      .filter(
-        (movement) =>
-          movementMutationTime(movement) === latestMutationAt &&
-          d(movement.quantityDelta).gt(0)
-      )
+      .filter((movement) => movementMutationTime(movement) === latestMutationAt && d(movement.quantityDelta).gt(0))
       .sort(compareMovementMutationAscending);
     const latestNegativeRates = new Set<string>();
     let latestNegativeQuantity = new Decimal(0);
@@ -841,9 +821,7 @@ export function activeCanonicalSaleEvidence(
     const totalSignedQuantity = repairQuantity(
       rows.reduce((sum, movement) => sum.plus(d(movement.quantityDelta)), new Decimal(0))
     );
-    const anchorCanonicalId = Math.max(
-      ...rows.map((movement) => canonicalMovementNumericId(movement) ?? 0)
-    );
+    const anchorCanonicalId = Math.max(...rows.map((movement) => canonicalMovementNumericId(movement) ?? 0));
 
     result.set(key, {
       movements: rows.sort(compareMovementMutationAscending),
@@ -861,7 +839,6 @@ export function activeCanonicalSaleEvidence(
   }
   return result;
 }
-
 
 function historicalSalesCompanyEvidenceHash(input: {
   companyId: number;
@@ -932,9 +909,7 @@ function historicalSalesCompanyEvidenceHash(input: {
     manualChecks: [...input.manual.checks].sort((a, b) =>
       [a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code, a.detail ?? ""]
         .join(":")
-        .localeCompare(
-          [b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code, b.detail ?? ""].join(":")
-        )
+        .localeCompare([b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code, b.detail ?? ""].join(":"))
     ),
     sales: input.sales.map((sale) => ({
       salesItemId: Number(sale.sales_item_id),
@@ -966,9 +941,9 @@ function historicalSalesCompanyEvidenceHash(input: {
       totalValue: String(row.total_value),
       offloadedAt: iso(row.offloaded_at),
     })),
-    valuationResets: HISTORICAL_VALUATION_RESETS
-      .filter((reset) => reset.companyId === input.companyId)
-      .map((reset) => ({ ...reset })),
+    valuationResets: HISTORICAL_VALUATION_RESETS.filter((reset) => reset.companyId === input.companyId).map(
+      (reset) => ({ ...reset })
+    ),
     valuationOverrides: input.valuationOverrides.map((row) => ({
       id: Number(row.id),
       locationId: Number(row.location_id),
@@ -1011,9 +986,7 @@ function journalWithoutOverriddenLocationUpdates(
   valuationOverrides: ValuationOverrideRow[]
 ): HistoricalSalesRepairMovement[] {
   const overrideTransactionKeys = new Set(
-    valuationOverrides.map(
-      (row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`
-    )
+    valuationOverrides.map((row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`)
   );
   return loaded.filter(
     (movement) =>
@@ -1026,7 +999,7 @@ function journalWithoutOverriddenLocationUpdates(
   );
 }
 
-async function recomputeHistoricalSalesCompanyEvidenceHash(
+export async function recomputeHistoricalSalesCompanyEvidenceHash(
   client: PoolClient,
   companyId: number,
   sourceCutoff: Date
@@ -1060,7 +1033,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
   });
 }
 
-async function inventoryEvidenceFingerprint(
+export async function inventoryEvidenceFingerprint(
   client: PoolClient,
   companyIds: number[]
 ): Promise<{ hash: string; rowCount: number }> {
@@ -1088,7 +1061,7 @@ async function inventoryEvidenceFingerprint(
   return { hash: hash.digest("hex"), rowCount: result.rows.length };
 }
 
-async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
+export async function assertSalesItemsUpdateHasNoSideEffectTriggers(client: PoolClient): Promise<void> {
   const triggers = await client.query<{ trigger_name: string }>(
     `SELECT tg.tgname AS trigger_name
        FROM pg_trigger tg
@@ -1557,26 +1530,18 @@ function buildRepairBlockerIndex(checks: RepairCheck[]): RepairBlockerIndex {
 
 function blockerForProposal(
   blockers: RepairBlockerIndex,
-  proposal: Pick<
-    HistoricalSalesRepairProposal,
-    "salesItemId" | "companyId" | "locationId" | "stockItemId" | "evidence"
-  >
+  proposal: Pick<HistoricalSalesRepairProposal, "salesItemId" | "companyId" | "locationId" | "stockItemId" | "evidence">
 ): RepairCheck | undefined {
   const saleSpecific = blockers.saleSpecific.get(proposal.salesItemId);
   if (saleSpecific) return saleSpecific;
 
   const locationKey = `${proposal.companyId}:${proposal.locationId}:${proposal.stockItemId}`;
   const itemKey = `${proposal.companyId}:${proposal.stockItemId}`;
-  const general =
-    blockers.locationSpecific.get(locationKey) ??
-    blockers.itemWide.get(itemKey);
+  const general = blockers.locationSpecific.get(locationKey) ?? blockers.itemWide.get(itemKey);
   if (general) return general;
 
   if (proposal.evidence === "legacy") {
-    return (
-      blockers.legacyLocationSpecific.get(locationKey) ??
-      blockers.legacyItemWide.get(itemKey)
-    );
+    return blockers.legacyLocationSpecific.get(locationKey) ?? blockers.legacyItemWide.get(itemKey);
   }
   return undefined;
 }
@@ -1595,7 +1560,6 @@ function distinctBlockedItemLocations(checks: RepairCheck[]): number {
 }
 
 const CANONICAL_SALE_SOURCE_TYPES = new Set(["pos-sale", "pos-import", "credit-sales-import"]);
-
 
 function markAmbiguousTimestampTies(
   companyId: number,
@@ -1639,10 +1603,7 @@ function stateForZeroOpening(rate: Decimal.Value): HistoricalInventoryState {
   return createHistoricalInventoryStateFromSnapshot("0", repairRate(rate), "0");
 }
 
-function historicalInventoryStatesEqual(
-  left: HistoricalInventoryState,
-  right: HistoricalInventoryState
-): boolean {
+function historicalInventoryStatesEqual(left: HistoricalInventoryState, right: HistoricalInventoryState): boolean {
   return (
     repairQuantity(left.quantity).eq(repairQuantity(right.quantity)) &&
     repairRate(left.averageRate).eq(repairRate(right.averageRate)) &&
@@ -1650,20 +1611,14 @@ function historicalInventoryStatesEqual(
   );
 }
 
-function stateQuantityValueMatches(
-  actual: HistoricalInventoryState,
-  expected: HistoricalInventoryState
-): boolean {
+function stateQuantityValueMatches(actual: HistoricalInventoryState, expected: HistoricalInventoryState): boolean {
   return (
     repairQuantity(actual.quantity).minus(repairQuantity(expected.quantity)).abs().lte(QTY_TOLERANCE) &&
     repairMoney(actual.totalValue).minus(repairMoney(expected.totalValue)).abs().lte(MONEY_TOLERANCE)
   );
 }
 
-function checkpointContainsMovement(
-  movement: HistoricalSalesRepairMovement,
-  checkpoint: ValuationCheckpoint
-): boolean {
+function checkpointContainsMovement(movement: HistoricalSalesRepairMovement, checkpoint: ValuationCheckpoint): boolean {
   const canonicalId = canonicalMovementNumericId(movement);
   if (canonicalId !== null) return canonicalId <= checkpoint.movementCutoffId;
   return movementMutationTime(movement) <= checkpoint.createdAt.getTime();
@@ -1854,12 +1809,8 @@ function recoverHistoricalMergedSales(input: {
     }
     for (const movement of keptPreMovements) {
       if (!relevantLocations.has(movement.locationId)) continue;
-      const current =
-        keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
-      keptBeforeByLocation.set(
-        movement.locationId,
-        applyHistoricalSalesRepairMovement(current, movement)
-      );
+      const current = keptBeforeByLocation.get(movement.locationId) ?? stateForZeroOpening(merge.kept_opening_rate);
+      keptBeforeByLocation.set(movement.locationId, applyHistoricalSalesRepairMovement(current, movement));
     }
 
     const combinedAtMergeByLocation = new Map<number, HistoricalInventoryState>();
@@ -1904,7 +1855,8 @@ function recoverHistoricalMergedSales(input: {
           });
           if (reversed.reversible) befores.push(reversed.stateBefore);
           else lastReason = reversed.reason;
-          if (movement.evidence === "canonical") befores.push(...historicalIssueInverseCandidates(stateAfter, movement));
+          if (movement.evidence === "canonical")
+            befores.push(...historicalIssueInverseCandidates(stateAfter, movement));
           for (const before of befores) {
             if (
               isRecordedLiveRateObservation(movement) &&
@@ -1992,14 +1944,8 @@ function recoverHistoricalMergedSales(input: {
         break;
       }
       const normalizedValue = sourceValue.abs().lte(MONEY_TOLERANCE) ? new Decimal(0) : sourceValue;
-      const sourceRate = sourceQty.gt(0)
-        ? repairRate(normalizedValue.dividedBy(sourceQty))
-        : sourceOpeningRate;
-      const sourceState = createHistoricalInventoryStateFromSnapshot(
-        sourceQty,
-        sourceRate,
-        normalizedValue
-      );
+      const sourceRate = sourceQty.gt(0) ? repairRate(normalizedValue.dividedBy(sourceQty)) : sourceOpeningRate;
+      const sourceState = createHistoricalInventoryStateFromSnapshot(sourceQty, sourceRate, normalizedValue);
 
       const combinedQty = repairQuantity(keptBefore.quantity.plus(sourceState.quantity));
       const combinedValue = repairMoney(keptBefore.totalValue.plus(sourceState.totalValue));
@@ -2060,7 +2006,13 @@ function recoverHistoricalMergedSales(input: {
           );
           if (alternatives.length > 0) {
             checks.push(
-              legacyInverseNotUniqueBlock(input.companyId, movement, primaryBefore, alternatives, "merged source rewind")
+              legacyInverseNotUniqueBlock(
+                input.companyId,
+                movement,
+                primaryBefore,
+                alternatives,
+                "merged source rewind"
+              )
             );
           }
         }
@@ -2085,10 +2037,7 @@ function recoverHistoricalMergedSales(input: {
     const remainingOpeningQty = repairQuantity(sourceOpeningQty.minus(recoveredOpeningQty));
     const remainingOpeningValue = repairMoney(sourceOpeningValue.minus(recoveredOpeningValue));
 
-    if (
-      remainingOpeningQty.lt(QTY_TOLERANCE.negated()) ||
-      remainingOpeningValue.lt(MONEY_TOLERANCE.negated())
-    ) {
+    if (remainingOpeningQty.lt(QTY_TOLERANCE.negated()) || remainingOpeningValue.lt(MONEY_TOLERANCE.negated())) {
       blockSourceKeys(
         sourceItemId,
         "MERGED_ITEM_OPENING_RECONCILIATION_FAILED",
@@ -2102,10 +2051,7 @@ function recoverHistoricalMergedSales(input: {
         sourcePreMovements.some((movement) => movement.locationId === locationId) ||
         sourceTargetLocations.includes(locationId)
     );
-    if (
-      (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) &&
-      unresolvedWithActivity.length !== 1
-    ) {
+    if ((!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero()) && unresolvedWithActivity.length !== 1) {
       blockSourceKeys(
         sourceItemId,
         "MERGED_ITEM_OPENING_LOCATION_AMBIGUOUS",
@@ -2119,14 +2065,9 @@ function recoverHistoricalMergedSales(input: {
     let forwardFailure: { locationId: number; detail: string } | null = null;
     for (const locationId of unresolvedWithActivity) {
       const getsRemainder =
-        unresolvedWithActivity.length === 1 &&
-        (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
+        unresolvedWithActivity.length === 1 && (!remainingOpeningQty.isZero() || !remainingOpeningValue.isZero());
       const opening = getsRemainder
-        ? createHistoricalInventoryStateFromSnapshot(
-            remainingOpeningQty,
-            sourceOpeningRate,
-            remainingOpeningValue
-          )
+        ? createHistoricalInventoryStateFromSnapshot(remainingOpeningQty, sourceOpeningRate, remainingOpeningValue)
         : stateForZeroOpening(sourceOpeningRate);
       const replay = replayMergedSourceLocationForward({
         companyId: input.companyId,
@@ -2348,7 +2289,9 @@ function rateHullBlocks(input: {
       stockItemId: proposal.stockItemId,
       code: "LEGACY_PROPOSED_COST_OUTSIDE_RATE_HULL",
       status: "block" as const,
-      expected: range ? `${repairRate(range.low).toFixed(2)}..${repairRate(range.high).toFixed(2)}` : "no rate evidence",
+      expected: range
+        ? `${repairRate(range.low).toFixed(2)}..${repairRate(range.high).toFixed(2)}`
+        : "no rate evidence",
       actual: repairRate(proposal.proposedCostPrice).toFixed(2),
       detail: `${count} reconstructed sale cost(s) fall outside every rate this item ever carried (worst: sales item ${proposal.salesItemId}); the reconstruction chain for this item/location is unproven`,
     };
@@ -2372,9 +2315,10 @@ async function dryRunCompany(
     rewindTrace.set(key, lines);
   };
 
-  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, offloadEvidence, historicalMerges] = await Promise.all([
-    client.query<InventoryRow>(
-      `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
+  const [inventoryResult, stockItems, canonicalStart, sales, checkpoint, offloadEvidence, historicalMerges] =
+    await Promise.all([
+      client.query<InventoryRow>(
+        `SELECT i.location_id,i.stock_item_id,i.quantity::text,i.average_rate::text,i.total_value::text
          FROM inventory i
          JOIN locations l
            ON l.id=i.location_id
@@ -2382,15 +2326,15 @@ async function dryRunCompany(
           AND l.deleted_at IS NULL
         WHERE i.company_id=$1
         ORDER BY i.location_id,i.stock_item_id`,
-      [companyId]
-    ),
-    loadStockItems(client, companyId),
-    loadCanonicalStart(client, companyId, sourceCutoff),
-    loadSales(client, companyId, sourceCutoff),
-    loadValuationCheckpoint(client, companyId),
-    loadOffloadValueEvidence(client, companyId, sourceCutoff),
-    loadHistoricalMerges(client, companyId),
-  ]);
+        [companyId]
+      ),
+      loadStockItems(client, companyId),
+      loadCanonicalStart(client, companyId, sourceCutoff),
+      loadSales(client, companyId, sourceCutoff),
+      loadValuationCheckpoint(client, companyId),
+      loadOffloadValueEvidence(client, companyId, sourceCutoff),
+      loadHistoricalMerges(client, companyId),
+    ]);
 
   const [loadedCanonical, legacy, manual, valuationOverrides] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
@@ -2418,16 +2362,11 @@ async function dryRunCompany(
   const droppedPosLines = droppedPosLineMovements(companyId, journalCanonical, sales);
   const canonical = [...journalCanonical, ...droppedPosLines.movements];
   const offloadEvidenceByKey = new Map(
-    offloadEvidence.map((row) => [
-      offloadEvidenceKey(row.offload_id, row.stock_item_id),
-      row,
-    ])
+    offloadEvidence.map((row) => [offloadEvidenceKey(row.offload_id, row.stock_item_id), row])
   );
   for (const movement of canonical) {
     if (!OFFLOAD_EVIDENCE_SOURCE_TYPES.has(movement.sourceType)) continue;
-    const evidence = offloadEvidenceByKey.get(
-      offloadEvidenceKey(movement.sourceId, movement.stockItemId)
-    );
+    const evidence = offloadEvidenceByKey.get(offloadEvidenceKey(movement.sourceId, movement.stockItemId));
     if (evidence) movement.exactValue = String(evidence.total_value);
   }
 
@@ -2446,9 +2385,7 @@ async function dryRunCompany(
         "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
     },
   ];
-  const pinnedOffloadRows = legacy.filter(
-    (row) => row.source_type === "legacy-container-offload" && row.mutation_at
-  );
+  const pinnedOffloadRows = legacy.filter((row) => row.source_type === "legacy-container-offload" && row.mutation_at);
   checks.push({
     companyId,
     locationId: null,
@@ -2460,27 +2397,15 @@ async function dryRunCompany(
     detail:
       "Legacy offload item rows ordered at their charge-voucher transaction time (unique container offload, single voucher group, millisecond stamp agrees with created_at); the rest keep offloaded_at",
   });
-  for (const reset of HISTORICAL_VALUATION_RESETS.filter(
-    (candidate) => candidate.companyId === companyId
-  )) {
+  for (const reset of HISTORICAL_VALUATION_RESETS.filter((candidate) => candidate.companyId === companyId)) {
     checks.push({
       companyId,
       locationId: reset.locationId,
       stockItemId: reset.stockItemId,
       code: "WAVE6_VALUATION_RESET_EVIDENCE",
       status: "pass",
-      expected:
-        reset.afterQuantity +
-        "|" +
-        reset.afterAverageRate +
-        "|" +
-        reset.afterTotalValue,
-      actual:
-        reset.beforeQuantity +
-        "|" +
-        reset.beforeAverageRate +
-        "|" +
-        reset.beforeTotalValue,
+      expected: reset.afterQuantity + "|" + reset.afterAverageRate + "|" + reset.afterTotalValue,
+      actual: reset.beforeQuantity + "|" + reset.beforeAverageRate + "|" + reset.beforeTotalValue,
       detail:
         "Exact guarded Wave 6 production valuation reset is included as an immutable replay boundary and source-hash input.",
     });
@@ -2499,7 +2424,7 @@ async function dryRunCompany(
     quantityDelta: String(row.quantity_delta),
     unitCost: row.unit_cost === null ? null : String(row.unit_cost),
     exactValue: OFFLOAD_EVIDENCE_SOURCE_TYPES.has(row.source_type)
-      ? offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null
+      ? (offloadEvidenceByKey.get(offloadEvidenceKey(row.source_id, row.stock_item_id))?.total_value ?? null)
       : null,
     sourceType: row.source_type,
     sourceId: row.source_id,
@@ -2508,31 +2433,30 @@ async function dryRunCompany(
   const legacyTransferFallbackMovements = legacy
     .filter((row) => row.source_type.endsWith("-flag-fallback"))
     .map(toLegacyMovement);
-  const valuationResetMovements: HistoricalSalesRepairMovement[] =
-    HISTORICAL_VALUATION_RESETS
-      .filter((reset) => reset.companyId === companyId)
-      .map((reset, index) => ({
-        movementId: `valuation-reset:${reset.sourceId}`,
-        companyId: reset.companyId,
-        locationId: reset.locationId,
-        stockItemId: reset.stockItemId,
-        occurredAt: reset.occurredAt,
-        createdAt: reset.occurredAt,
-        sequence: 900_000_000 + index,
-        quantityDelta: "0.000",
-        unitCost: null,
-        valuationReset: {
-          beforeQuantity: reset.beforeQuantity,
-          beforeAverageRate: reset.beforeAverageRate,
-          beforeTotalValue: reset.beforeTotalValue,
-          afterQuantity: reset.afterQuantity,
-          afterAverageRate: reset.afterAverageRate,
-          afterTotalValue: reset.afterTotalValue,
-        },
-        sourceType: "inventory-valuation-wave6-reset",
-        sourceId: reset.sourceId,
-        evidence: "legacy" as const,
-      }));
+  const valuationResetMovements: HistoricalSalesRepairMovement[] = HISTORICAL_VALUATION_RESETS.filter(
+    (reset) => reset.companyId === companyId
+  ).map((reset, index) => ({
+    movementId: `valuation-reset:${reset.sourceId}`,
+    companyId: reset.companyId,
+    locationId: reset.locationId,
+    stockItemId: reset.stockItemId,
+    occurredAt: reset.occurredAt,
+    createdAt: reset.occurredAt,
+    sequence: 900_000_000 + index,
+    quantityDelta: "0.000",
+    unitCost: null,
+    valuationReset: {
+      beforeQuantity: reset.beforeQuantity,
+      beforeAverageRate: reset.beforeAverageRate,
+      beforeTotalValue: reset.beforeTotalValue,
+      afterQuantity: reset.afterQuantity,
+      afterAverageRate: reset.afterAverageRate,
+      afterTotalValue: reset.afterTotalValue,
+    },
+    sourceType: "inventory-valuation-wave6-reset",
+    sourceId: reset.sourceId,
+    evidence: "legacy" as const,
+  }));
   valuationResetMovements.push(
     ...valuationOverrides.map((row) => ({
       movementId: `valuation-override:${row.id}`,
@@ -2559,9 +2483,7 @@ async function dryRunCompany(
   );
 
   const legacyMovements: HistoricalSalesRepairMovement[] = [
-    ...legacy
-      .filter((row) => !row.source_type.endsWith("-flag-fallback"))
-      .map(toLegacyMovement),
+    ...legacy.filter((row) => !row.source_type.endsWith("-flag-fallback")).map(toLegacyMovement),
     ...valuationResetMovements,
     ...manual.movements.map((row) => ({
       movementId: row.movement_id,
@@ -2643,10 +2565,9 @@ async function dryRunCompany(
       // missing effect was executed at, so such a correction is unpriced.
       const correctionAtLiveRate =
         rateSource.length > 0 && rateSource.every((rateMovement) => posJournalCostIsNotInventoryRate(rateMovement));
-      const correctionRate =
-        correctionDelta.lt(0)
-          ? evidence.latestNegativeRate
-          : evidence.latestPositiveRate ?? evidence.latestNegativeRate;
+      const correctionRate = correctionDelta.lt(0)
+        ? evidence.latestNegativeRate
+        : (evidence.latestPositiveRate ?? evidence.latestNegativeRate);
       const anchorMovement =
         evidence.latestNegativeMovements[evidence.latestNegativeMovements.length - 1] ??
         evidence.latestPositiveMovements[evidence.latestPositiveMovements.length - 1] ??
@@ -2930,9 +2851,7 @@ async function dryRunCompany(
           companyId,
           locationId,
           stockItemId,
-          code: mergedSourceIds.has(stockItemId)
-            ? "MERGED_ITEM_RECOVERY_FAILED"
-            : "VALUATION_CHECKPOINT_KEY_MISSING",
+          code: mergedSourceIds.has(stockItemId) ? "MERGED_ITEM_RECOVERY_FAILED" : "VALUATION_CHECKPOINT_KEY_MISSING",
           status: "block",
           detail: mergedSourceIds.has(stockItemId)
             ? "Historical merged item could not be reconstructed uniquely"
@@ -2971,10 +2890,7 @@ async function dryRunCompany(
       if (!checkpointTargetKeys.has(key) || unavailableKeys.has(key)) continue;
       const current =
         liveReplayStates.get(key) ?? createHistoricalInventoryStateFromSnapshot("0", movement.unitCost ?? "0", "0");
-      liveReplayStates.set(
-        key,
-        applyHistoricalSalesRepairMovement(current, movement)
-      );
+      liveReplayStates.set(key, applyHistoricalSalesRepairMovement(current, movement));
     }
 
     const liveByKey = new Map(
@@ -3035,8 +2951,7 @@ async function dryRunCompany(
       }),
       ...legacyMovements.filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime()),
     ].sort(compareMovementMutationAscending);
-    const priorCostMemoryRateHints =
-      buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
+    const priorCostMemoryRateHints = buildPriorCanonicalCostMemoryRateHints(movementsInCheckpoint);
     const fallbackMovementsInCheckpoint = legacyTransferFallbackMovements
       .filter((movement) => movementMutationTime(movement) <= checkpoint.createdAt.getTime())
       .sort(compareMovementMutationAscending);
@@ -3076,8 +2991,7 @@ async function dryRunCompany(
         (check) =>
           check.status === "block" &&
           check.stockItemId === stockItemId &&
-          (check.locationId === null ||
-            itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
+          (check.locationId === null || itemTargetKeys.some((key) => Number(key.split(":")[1]) === check.locationId))
       );
       if (hasPreexistingEvidenceBlock) {
         checks.push({
@@ -3091,9 +3005,7 @@ async function dryRunCompany(
         continue;
       }
 
-      const itemMovements = movementsAscending.filter(
-        (movement) => movement.stockItemId === stockItemId
-      );
+      const itemMovements = movementsAscending.filter((movement) => movement.stockItemId === stockItemId);
       const normalizedItemMovements = normalizedMovementsAscending.filter(
         (movement) => movement.stockItemId === stockItemId
       );
@@ -3103,32 +3015,26 @@ async function dryRunCompany(
       const fallbackItemMovements = fallbackMovementsInCheckpoint.filter(
         (movement) => movement.stockItemId === stockItemId
       );
-      let fallbackProofCandidate:
-        | {
-            replay: {
-              exact: boolean;
-              detail: string | null;
-              replayProposals: Map<number, HistoricalSalesRepairProposal>;
-              peakNegativeLayerQuantity: Decimal;
-            };
-            openingTotal: Decimal;
-            openingProofBasis:
-              | "stock-opening"
-              | "location-import-inferred"
-              | "signed-location-import-inferred";
-            usedNormalizedPos: boolean;
-            movementCount: number;
-          }
-        | null = null;
+      let fallbackProofCandidate: {
+        replay: {
+          exact: boolean;
+          detail: string | null;
+          replayProposals: Map<number, HistoricalSalesRepairProposal>;
+          peakNegativeLayerQuantity: Decimal;
+        };
+        openingTotal: Decimal;
+        openingProofBasis: "stock-opening" | "location-import-inferred" | "signed-location-import-inferred";
+        usedNormalizedPos: boolean;
+        movementCount: number;
+      } | null = null;
 
       if (fallbackItemMovements.length > 0) {
         const fallbackRawMovements = [...itemMovements, ...fallbackItemMovements].sort(
           compareMovementMutationAscending
         );
-        const fallbackNormalizedMovements = [
-          ...normalizedItemMovements,
-          ...fallbackItemMovements,
-        ].sort(compareMovementMutationAscending);
+        const fallbackNormalizedMovements = [...normalizedItemMovements, ...fallbackItemMovements].sort(
+          compareMovementMutationAscending
+        );
         const fallbackLocationIds = new Set<number>([
           ...checkpoint.rows
             .filter((row) => Number(row.stock_item_id) === stockItemId)
@@ -3142,9 +3048,7 @@ async function dryRunCompany(
           rawFallbackDeltaByLocation.set(
             movement.locationId,
             repairQuantity(
-              (rawFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
-                d(movement.quantityDelta)
-              )
+              (rawFallbackDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(d(movement.quantityDelta))
             )
           );
         }
@@ -3159,20 +3063,17 @@ async function dryRunCompany(
             )
           );
         }
-        const fallbackNormalizedQuantityCompatible = [...fallbackLocationIds].every(
-          (locationId) =>
-            (normalizedFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
-              rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
-            )
+        const fallbackNormalizedQuantityCompatible = [...fallbackLocationIds].every((locationId) =>
+          (normalizedFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)).eq(
+            rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
+          )
         );
 
         const fallbackOpeningQtyByLocation = new Map<number, Decimal>();
         let fallbackOpeningTotal = new Decimal(0);
         let fallbackHasNegativeOpening = false;
         for (const locationId of fallbackLocationIds) {
-          const checkpointState = checkpointStates.get(
-            historicalInventoryKey(companyId, locationId, stockItemId)
-          );
+          const checkpointState = checkpointStates.get(historicalInventoryKey(companyId, locationId, stockItemId));
           let inferred = repairQuantity(
             (checkpointState?.quantity ?? new Decimal(0)).minus(
               rawFallbackDeltaByLocation.get(locationId) ?? new Decimal(0)
@@ -3185,11 +3086,11 @@ async function dryRunCompany(
         }
 
         let fallbackOpeningProofBasis:
-          | "stock-opening"
-          | "location-import-inferred"
-          | "signed-location-import-inferred" = "stock-opening";
-        let fallbackOpeningStates: Map<number, HistoricalInventoryState> | null =
-          new Map<number, HistoricalInventoryState>();
+          "stock-opening" | "location-import-inferred" | "signed-location-import-inferred" = "stock-opening";
+        let fallbackOpeningStates: Map<number, HistoricalInventoryState> | null = new Map<
+          number,
+          HistoricalInventoryState
+        >();
 
         if (fallbackHasNegativeOpening) {
           if (!openingRate.gt(0)) {
@@ -3197,10 +3098,7 @@ async function dryRunCompany(
           } else {
             fallbackOpeningProofBasis = "signed-location-import-inferred";
             for (const [locationId, quantity] of fallbackOpeningQtyByLocation) {
-              fallbackOpeningStates.set(
-                locationId,
-                createHistoricalSignedLocationImportState(quantity, openingRate)
-              );
+              fallbackOpeningStates.set(locationId, createHistoricalSignedLocationImportState(quantity, openingRate));
             }
           }
         } else if (!fallbackOpeningTotal.eq(openingQty)) {
@@ -3230,8 +3128,8 @@ async function dryRunCompany(
             }
           }
         } else {
-          const positiveLocations = [...fallbackOpeningQtyByLocation.entries()].filter(
-            ([, quantity]) => quantity.gt(0)
+          const positiveLocations = [...fallbackOpeningQtyByLocation.entries()].filter(([, quantity]) =>
+            quantity.gt(0)
           );
           if (positiveLocations.length === 1 && positiveLocations[0][1].eq(openingQty)) {
             const openingLocationId = positiveLocations[0][0];
@@ -3239,11 +3137,7 @@ async function dryRunCompany(
               fallbackOpeningStates.set(
                 locationId,
                 locationId === openingLocationId
-                  ? createHistoricalInventoryStateFromSnapshot(
-                      openingQty,
-                      openingRate,
-                      openingValue
-                    )
+                  ? createHistoricalInventoryStateFromSnapshot(openingQty, openingRate, openingValue)
                   : stateForZeroOpening(openingRate)
               );
             }
@@ -3262,15 +3156,10 @@ async function dryRunCompany(
         }
 
         if (fallbackOpeningStates) {
-          const replayFallbackToCheckpoint = (
-            candidateMovements: HistoricalSalesRepairMovement[]
-          ) => {
+          const replayFallbackToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
             const replayStates = new Map<number, HistoricalForwardReplayState>();
             for (const [locationId, opening] of fallbackOpeningStates!) {
-              replayStates.set(
-                locationId,
-                createHistoricalForwardReplayState(opening)
-              );
+              replayStates.set(locationId, createHistoricalForwardReplayState(opening));
             }
 
             const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
@@ -3296,9 +3185,7 @@ async function dryRunCompany(
             let detail: string | null = null;
             for (const locationId of fallbackLocationIds) {
               const key = historicalInventoryKey(companyId, locationId, stockItemId);
-              const actual =
-                replayStates.get(locationId)?.inventory ??
-                stateForZeroOpening(openingRate);
+              const actual = replayStates.get(locationId)?.inventory ?? stateForZeroOpening(openingRate);
               const expected = checkpointStates.get(key);
               if (expected) {
                 if (!historicalInventoryStatesEqual(actual, expected)) {
@@ -3345,21 +3232,11 @@ async function dryRunCompany(
           let fallbackUsedNormalizedPos = false;
           const fallbackRawPosFingerprint = fallbackRawMovements
             .filter((movement) => movement.sourceType === "pos-sale")
-            .map(
-              (movement) =>
-                `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`
-            )
+            .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
             .join("|");
           const fallbackNormalizedPosFingerprint = fallbackNormalizedMovements
-            .filter(
-              (movement) =>
-                movement.sourceType === "pos-sale" ||
-                movement.sourceType === "pos-sale-normalized"
-            )
-            .map(
-              (movement) =>
-                `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`
-            )
+            .filter((movement) => movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized")
+            .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
             .join("|");
 
           if (
@@ -3367,9 +3244,7 @@ async function dryRunCompany(
             fallbackNormalizedQuantityCompatible &&
             fallbackRawPosFingerprint !== fallbackNormalizedPosFingerprint
           ) {
-            const normalizedFallbackReplay = replayFallbackToCheckpoint(
-              fallbackNormalizedMovements
-            );
+            const normalizedFallbackReplay = replayFallbackToCheckpoint(fallbackNormalizedMovements);
             if (normalizedFallbackReplay.exact) {
               fallbackAcceptedReplay = normalizedFallbackReplay;
               fallbackUsedNormalizedPos = true;
@@ -3402,9 +3277,7 @@ async function dryRunCompany(
         movementDeltaByLocation.set(
           movement.locationId,
           repairQuantity(
-            (movementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(
-              d(movement.quantityDelta)
-            )
+            (movementDeltaByLocation.get(movement.locationId) ?? new Decimal(0)).plus(d(movement.quantityDelta))
           )
         );
       }
@@ -3429,10 +3302,7 @@ async function dryRunCompany(
         .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
         .join("|");
       const normalizedPosFingerprint = normalizedItemMovements
-        .filter(
-          (movement) =>
-            movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized"
-        )
+        .filter((movement) => movement.sourceType === "pos-sale" || movement.sourceType === "pos-sale-normalized")
         .map((movement) => `${movement.movementId}:${movement.quantityDelta}:${movement.unitCost ?? ""}`)
         .join("|");
       const normalizedLifecycleChanged = rawPosFingerprint !== normalizedPosFingerprint;
@@ -3441,13 +3311,9 @@ async function dryRunCompany(
       let inferredOpeningTotal = new Decimal(0);
       let hasNegativeInferredOpening = false;
       for (const locationId of locationIds) {
-        const checkpointState = checkpointStates.get(
-          historicalInventoryKey(companyId, locationId, stockItemId)
-        );
+        const checkpointState = checkpointStates.get(historicalInventoryKey(companyId, locationId, stockItemId));
         let inferred = repairQuantity(
-          (checkpointState?.quantity ?? new Decimal(0)).minus(
-            movementDeltaByLocation.get(locationId) ?? new Decimal(0)
-          )
+          (checkpointState?.quantity ?? new Decimal(0)).minus(movementDeltaByLocation.get(locationId) ?? new Decimal(0))
         );
         if (inferred.abs().lte(QTY_TOLERANCE)) inferred = new Decimal(0);
         if (inferred.lt(0)) hasNegativeInferredOpening = true;
@@ -3465,10 +3331,8 @@ async function dryRunCompany(
           );
         }
       }
-      let openingProofBasis:
-        | "stock-opening"
-        | "location-import-inferred"
-        | "signed-location-import-inferred" = "stock-opening";
+      let openingProofBasis: "stock-opening" | "location-import-inferred" | "signed-location-import-inferred" =
+        "stock-opening";
 
       if (hasNegativeInferredOpening) {
         checks.push({
@@ -3500,8 +3364,8 @@ async function dryRunCompany(
         openingProofBasis = "location-import-inferred";
       }
 
-      const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(
-        ([, quantity]) => quantity.gt(0)
+      const positiveOpeningLocations = [...inferredOpeningQtyByLocation.entries()].filter(([, quantity]) =>
+        quantity.gt(0)
       );
       const openingStates = new Map<number, HistoricalInventoryState>();
 
@@ -3512,10 +3376,7 @@ async function dryRunCompany(
         // candidate remains untrusted unless the complete historical replay
         // reproduces the immutable checkpoint quantity, rate and value.
         for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
-          openingStates.set(
-            locationId,
-            createHistoricalSignedLocationImportState(quantity, openingRate)
-          );
+          openingStates.set(locationId, createHistoricalSignedLocationImportState(quantity, openingRate));
         }
       } else if (openingProofBasis === "location-import-inferred") {
         // Historical /api/locations/:locationId/import-inventory writes location
@@ -3527,10 +3388,7 @@ async function dryRunCompany(
         for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
           if (quantity.gt(0)) {
             const value = repairMoney(quantity.times(openingRate));
-            openingStates.set(
-              locationId,
-              createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
-            );
+            openingStates.set(locationId, createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value));
           } else {
             openingStates.set(locationId, stateForZeroOpening(openingRate));
           }
@@ -3559,11 +3417,7 @@ async function dryRunCompany(
           openingStates.set(
             locationId,
             locationId === openingLocationId
-              ? createHistoricalInventoryStateFromSnapshot(
-                  locationQty,
-                  openingRate,
-                  openingValue
-                )
+              ? createHistoricalInventoryStateFromSnapshot(locationQty, openingRate, openingValue)
               : stateForZeroOpening(openingRate)
           );
         }
@@ -3571,10 +3425,7 @@ async function dryRunCompany(
         let allocatedValue = new Decimal(0);
         for (const [locationId, quantity] of inferredOpeningQtyByLocation) {
           const value = repairMoney(quantity.times(openingRate));
-          openingStates.set(
-            locationId,
-            createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value)
-          );
+          openingStates.set(locationId, createHistoricalInventoryStateFromSnapshot(quantity, openingRate, value));
           allocatedValue = repairMoney(allocatedValue.plus(value));
         }
         if (!allocatedValue.eq(openingValue)) {
@@ -3586,7 +3437,8 @@ async function dryRunCompany(
             status: "warning",
             expected: openingValue.toFixed(2),
             actual: allocatedValue.toFixed(2),
-            detail: "Multiple inferred opening locations cannot reproduce the pinned opening value at the pinned opening rate.",
+            detail:
+              "Multiple inferred opening locations cannot reproduce the pinned opening value at the pinned opening rate.",
           });
           continue;
         }
@@ -3595,10 +3447,7 @@ async function dryRunCompany(
       const replayToCheckpoint = (candidateMovements: HistoricalSalesRepairMovement[]) => {
         const replayStates = new Map<number, HistoricalForwardReplayState>();
         for (const [locationId, opening] of openingStates) {
-          replayStates.set(
-            locationId,
-            createHistoricalForwardReplayState(opening)
-          );
+          replayStates.set(locationId, createHistoricalForwardReplayState(opening));
         }
 
         const replayProposals = new Map<number, HistoricalSalesRepairProposal>();
@@ -3628,8 +3477,7 @@ async function dryRunCompany(
         for (const locationId of locationIds) {
           const key = historicalInventoryKey(companyId, locationId, stockItemId);
           const actualReplay =
-            replayStates.get(locationId) ??
-            createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
+            replayStates.get(locationId) ?? createHistoricalForwardReplayState(stateForZeroOpening(openingRate));
           const actual = actualReplay.inventory;
           const expected = checkpointStates.get(key);
           if (expected) {
@@ -3680,15 +3528,9 @@ async function dryRunCompany(
       const rawReplay = replayToCheckpoint(itemMovements);
       let acceptedReplay = rawReplay;
       let proofMode: "raw" | "normalized-pos-lifecycle" = "raw";
-      let normalizedReplay:
-        | ReturnType<typeof replayToCheckpoint>
-        | undefined;
+      let normalizedReplay: ReturnType<typeof replayToCheckpoint> | undefined;
 
-      if (
-        !rawReplay.exact &&
-        normalizedQuantityCompatible &&
-        normalizedLifecycleChanged
-      ) {
+      if (!rawReplay.exact && normalizedQuantityCompatible && normalizedLifecycleChanged) {
         normalizedReplay = replayToCheckpoint(normalizedItemMovements);
         if (normalizedReplay.exact) {
           acceptedReplay = normalizedReplay;
@@ -3701,9 +3543,7 @@ async function dryRunCompany(
           acceptedReplay = fallbackProofCandidate.replay;
           inferredOpeningTotal = fallbackProofCandidate.openingTotal;
           openingProofBasis = fallbackProofCandidate.openingProofBasis;
-          proofMode = fallbackProofCandidate.usedNormalizedPos
-            ? "normalized-pos-lifecycle"
-            : "raw";
+          proofMode = fallbackProofCandidate.usedNormalizedPos ? "normalized-pos-lifecycle" : "raw";
           fallbackProvenItemIds.add(stockItemId);
           checks.push({
             companyId,
@@ -3797,8 +3637,7 @@ async function dryRunCompany(
           actual:
             inferredOpeningTotal.toFixed(3) +
             "|" +
-            (openingProofBasis === "location-import-inferred" ||
-            openingProofBasis === "signed-location-import-inferred"
+            (openingProofBasis === "location-import-inferred" || openingProofBasis === "signed-location-import-inferred"
               ? repairMoney(inferredOpeningTotal.times(openingRate)).toFixed(2)
               : openingValue.toFixed(2)),
           detail:
@@ -3807,8 +3646,8 @@ async function dryRunCompany(
               : openingProofBasis === "location-import-inferred"
                 ? "Checkpoint-implied location openings at the pinned item rate and all durable movements replay exactly to the immutable Phase 3 checkpoint"
                 : proofMode === "normalized-pos-lifecycle"
-                ? "Pinned stock opening balance and normalized final POS lifecycle replay exactly to the immutable Phase 3 checkpoint"
-                : "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
+                  ? "Pinned stock opening balance and normalized final POS lifecycle replay exactly to the immutable Phase 3 checkpoint"
+                  : "Pinned stock opening balance and all durable movements replay exactly to the immutable Phase 3 checkpoint",
         });
       }
       for (const proposal of acceptedReplay.replayProposals.values()) {
@@ -3888,7 +3727,10 @@ async function dryRunCompany(
           continue;
         }
 
-        let state = applyHistoricalSalesRepairMovement(createHistoricalInventoryStateFromSnapshot(beforeQty, "0", "0"), anchor);
+        let state = applyHistoricalSalesRepairMovement(
+          createHistoricalInventoryStateFromSnapshot(beforeQty, "0", "0"),
+          anchor
+        );
         const candidateProposals: HistoricalSalesRepairProposal[] = [];
         for (let index = anchorIndex + 1; index < movements.length; index += 1) {
           const movement = movements[index];
@@ -3927,11 +3769,9 @@ async function dryRunCompany(
         expected: `${repairQuantity(checkpointState.quantity).toFixed(3)}|${repairMoney(
           checkpointState.totalValue
         ).toFixed(2)}|${repairRate(checkpointState.averageRate).toFixed(2)}`,
-        actual: `${repairQuantity(accepted.stateAtCheckpoint.quantity).toFixed(
-          3
-        )}|${repairMoney(accepted.stateAtCheckpoint.totalValue).toFixed(
-          2
-        )}|${repairRate(accepted.stateAtCheckpoint.averageRate).toFixed(2)}`,
+        actual: `${repairQuantity(accepted.stateAtCheckpoint.quantity).toFixed(3)}|${repairMoney(
+          accepted.stateAtCheckpoint.totalValue
+        ).toFixed(2)}|${repairRate(accepted.stateAtCheckpoint.averageRate).toFixed(2)}`,
         detail: `Reset anchor ${accepted.anchor.movementId} proves ${provenCount} later legacy sale(s) by exact checkpoint replay`,
       });
     }
@@ -4095,8 +3935,7 @@ async function dryRunCompany(
         if (isRecordedLiveRateObservation(movement)) {
           const recorded = repairRate(movement.unitCost!);
           surviving = next.filter((alternate) => repairRate(alternate.state.averageRate).eq(recorded));
-          const primaryAgrees =
-            reversed.reversible && repairRate(reversed.stateBefore.averageRate).eq(recorded);
+          const primaryAgrees = reversed.reversible && repairRate(reversed.stateBefore.averageRate).eq(recorded);
           if (!primaryAgrees && surviving.length > 0) promotedBy = "recorded live rate " + recorded.toFixed(2);
         } else if (!reversed.reversible && reversed.reason === "MOVEMENT_INVERSE_INVALID" && surviving.length > 0) {
           promotedBy = "exact inverse";
@@ -4262,7 +4101,9 @@ async function dryRunCompany(
                 expected: rewound,
                 actual: forward ?? "undetermined",
                 detail: `Sales item ${salesItemId} was rewound from a state contradicted by ${movement.movementId} (${
-                  determined ? "forward replay from the empty-stock receipt disagrees" : "no fully determined state below"
+                  determined
+                    ? "forward replay from the empty-stock receipt disagrees"
+                    : "no fully determined state below"
                 })`,
               });
             }
@@ -4315,13 +4156,8 @@ async function dryRunCompany(
           code: "CANONICAL_REWIND_RATE_ONLY_RECOVERED",
           status: "pass",
           expected:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
-          actual:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
           detail:
             "Canonical boundary " +
             movement.movementId +
@@ -4338,13 +4174,8 @@ async function dryRunCompany(
           code: "LEGACY_REWIND_RATE_ONLY_RECOVERED",
           status: "pass",
           expected:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
-          actual:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
           detail:
             "Legacy sale boundary " +
             movement.movementId +
@@ -4377,13 +4208,8 @@ async function dryRunCompany(
           code: "CANONICAL_ADJUSTMENT_EDIT_VALUE_RECOVERED",
           status: "pass",
           expected:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
-          actual:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
           detail:
             "Canonical stock-adjustment edit apply boundary " +
             movement.movementId +
@@ -4400,13 +4226,8 @@ async function dryRunCompany(
           code: "LEGACY_RECEIPT_RATE_ONLY_RECOVERED",
           status: "pass",
           expected:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
-          actual:
-            repairQuantity(stateAfter.quantity).toFixed(3) +
-            "|" +
-            repairMoney(stateAfter.totalValue).toFixed(2),
+            repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
+          actual: repairQuantity(stateAfter.quantity).toFixed(3) + "|" + repairMoney(stateAfter.totalValue).toFixed(2),
           detail:
             "Legacy offload boundary " +
             movement.movementId +
@@ -4495,7 +4316,7 @@ async function dryRunCompany(
               unresolvedSales,
               transition: unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET",
               transitionMovementId: unrecordedRevaluation
-                ? nextMovement?.movementId ?? movement.movementId
+                ? (nextMovement?.movementId ?? movement.movementId)
                 : costMemoryReset!.movementId,
             });
             checks.push({
@@ -4507,9 +4328,7 @@ async function dryRunCompany(
               expected: recorded.toFixed(2),
               actual: inferred.toFixed(2),
               detail: `transition=${unrecordedRevaluation ? "UNRECORDED_REVALUATION" : "COST_MEMORY_RESET"} at ${
-                unrecordedRevaluation
-                  ? nextMovement?.movementId ?? movement.movementId
-                  : costMemoryReset!.movementId
+                unrecordedRevaluation ? (nextMovement?.movementId ?? movement.movementId) : costMemoryReset!.movementId
               }; anchor=${movement.movementId} recorded live rate ${recorded.toFixed(2)}, checkpoint rewind inferred ${inferred.toFixed(2)}`,
             });
           } else if (unresolvedSales.length === 0) {
@@ -4545,8 +4364,7 @@ async function dryRunCompany(
       const afterQty = repairQuantity(stateAfter.quantity);
       const beforeQty = repairQuantity(reversed.stateBefore.quantity);
       let sensitivity =
-        rewindSensitivity.get(key) ??
-        (afterQty.gt(0) ? new Decimal(1).dividedBy(afterQty) : new Decimal(1));
+        rewindSensitivity.get(key) ?? (afterQty.gt(0) ? new Decimal(1).dividedBy(afterQty) : new Decimal(1));
       if (d(movement.quantityDelta).gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
         sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
       }
@@ -4642,7 +4460,7 @@ async function dryRunCompany(
           code: "CHECKPOINT_REWIND_COST_NOT_UNIQUE",
           status: "block",
           expected: proposal.proposedCostPrice,
-          actual: overflow ? "branch limit" : disagreeing!.history.get(salesItemId)?.proposedCostPrice ?? "unreached",
+          actual: overflow ? "branch limit" : (disagreeing!.history.get(salesItemId)?.proposedCostPrice ?? "unreached"),
           detail: `Sales item ${salesItemId} has a different cost on another exact rewind branch`,
         });
       }
@@ -4795,7 +4613,8 @@ async function dryRunCompany(
     // for its sales. The era is rejected if stock goes negative inside it or a
     // recorded live rate inside it disagrees; a sale the rewind already priced
     // differently is blocked rather than repriced.
-    const REWIND_FAILURE_BLOCKS = /^(LEGACY_REWIND_|CHECKPOINT_REWIND_|CANONICAL_SALE_COST_EVIDENCE_MISMATCH$|LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED$|LEGACY_SALE_INVERSE_NOT_UNIQUE$)/;
+    const REWIND_FAILURE_BLOCKS =
+      /^(LEGACY_REWIND_|CHECKPOINT_REWIND_|CANONICAL_SALE_COST_EVIDENCE_MISMATCH$|LEGACY_REWIND_ERROR_AMPLIFICATION_EXCEEDED$|LEGACY_SALE_INVERSE_NOT_UNIQUE$)/;
     const blockedSaleCodes = new Map<number, RepairCheck[]>();
     for (const check of checks) {
       if (check.status !== "block" || !check.salesItemId) continue;
@@ -4914,7 +4733,11 @@ async function dryRunCompany(
           });
           openingEraEnd = closedAt;
         } else if (!rejected && matched >= 2) {
-          acceptEra(eraProposals, `opening era ${key} validated by two recorded live rates`, "OPENING_ERA_OBSERVED_PROVEN");
+          acceptEra(
+            eraProposals,
+            `opening era ${key} validated by two recorded live rates`,
+            "OPENING_ERA_OBSERVED_PROVEN"
+          );
         }
       }
 
@@ -4929,7 +4752,10 @@ async function dryRunCompany(
           index += 1;
           continue;
         }
-        let state = applyHistoricalSalesRepairMovement(createHistoricalInventoryStateFromSnapshot("0", "0", "0"), anchor);
+        let state = applyHistoricalSalesRepairMovement(
+          createHistoricalInventoryStateFromSnapshot("0", "0", "0"),
+          anchor
+        );
         const eraProposals: HistoricalSalesRepairProposal[] = [];
         let closedAt = -1;
         let rejected = false;
@@ -5124,7 +4950,9 @@ async function dryRunCompany(
       }
       movements.forEach((movement, position) => {
         if (!movement.sale) return;
-        const blocks = (blockedSaleCodes.get(movement.sale.salesItemId) ?? []).filter((block) => block.status === "block");
+        const blocks = (blockedSaleCodes.get(movement.sale.salesItemId) ?? []).filter(
+          (block) => block.status === "block"
+        );
         if (blocks.length === 0 || !blocks.every((block) => REWIND_FAILURE_BLOCKS.test(block.code))) return;
         if (!startIndexes.some((startIndex) => startIndex < position)) eraGap.noDeterminedStartBefore += 1;
         else if (!startIndexes.some((startIndex) => startIndex > position)) eraGap.eraNeverCloses += 1;
@@ -5149,7 +4977,8 @@ async function dryRunCompany(
       status: "pass",
       expected: String(eraProvenSales),
       actual: String(eraConflictSales),
-      detail: "Sales priced by closed zero-stock era forward replay (expected) and sales blocked for disagreeing with the checkpoint rewind (actual)",
+      detail:
+        "Sales priced by closed zero-stock era forward replay (expected) and sales blocked for disagreeing with the checkpoint rewind (actual)",
     });
 
     for (const [key, amplification] of rewindAmplification) {
@@ -5179,8 +5008,7 @@ async function dryRunCompany(
     }
 
     const rewindReadyKeys =
-      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length +
-      mergedRecovery.recoveredKeys.size;
+      [...checkpointTargetKeys].filter((key) => !unavailableKeys.has(key)).length + mergedRecovery.recoveredKeys.size;
     checks.push({
       companyId,
       locationId: null,
@@ -5235,10 +5063,9 @@ async function dryRunCompany(
     });
   }
 
-  const proposals = [
-    ...directCanonicalProposals.values(),
-    ...proposalsBySaleId.values(),
-  ].sort((a, b) => a.salesItemId - b.salesItemId);
+  const proposals = [...directCanonicalProposals.values(), ...proposalsBySaleId.values()].sort(
+    (a, b) => a.salesItemId - b.salesItemId
+  );
   const report = {
     companyId,
     canonicalStart: canonicalStart ? canonicalStart.toISOString() : null,
@@ -5399,6 +5226,18 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     await enableMaintenanceScope(client);
     await client.query("SELECT pg_advisory_xact_lock(hashtext('historical-sales-cost-repair-dry-run'))");
 
+    // A proven-rows-only partial apply rewrites sale costs that this engine
+    // reads as historical evidence. Until a dry-run can restore that evidence
+    // from the apply log, refuse to build on top of an active partial apply.
+    const activePartial = await client.query<{ run_id: number }>(
+      `SELECT run_id FROM historical_sales_cost_repair_partial_applies WHERE status='applied' ORDER BY run_id`
+    );
+    if (activePartial.rows.length > 0) {
+      throw hscrError(
+        `HSCR_DRY_RUN_REFUSED_ACTIVE_PARTIAL_APPLY:${activePartial.rows.map((row) => row.run_id).join(",")}`
+      );
+    }
+
     const cutoffResult = await client.query<{ cutoff: Date }>("SELECT clock_timestamp() AS cutoff");
     const sourceCutoff = cutoffResult.rows[0].cutoff;
     const companyIds = await companyIdsForRun(client, input.companyIds);
@@ -5465,9 +5304,7 @@ export async function buildHistoricalSalesCostRepairDryRun(input: {
     for (const check of [...allChecks].sort((a, b) =>
       [a.companyId, a.locationId ?? 0, a.stockItemId ?? 0, a.salesItemId ?? 0, a.code]
         .join(":")
-        .localeCompare(
-          [b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code].join(":")
-        )
+        .localeCompare([b.companyId, b.locationId ?? 0, b.stockItemId ?? 0, b.salesItemId ?? 0, b.code].join(":"))
     )) {
       hash.update("\ncheck|");
       hash.update(JSON.stringify(check));
@@ -5663,6 +5500,58 @@ export async function getHistoricalSalesCostRepairRun(runId: number): Promise<Re
   };
 }
 
+/**
+ * Fails when historical source evidence was back-dated or edited after the
+ * dry-run cutoff. Normal new stock activity after the cutoff is allowed.
+ * Shared by the full apply and the proven-rows-only partial apply.
+ */
+export async function assertNoHistoricalSourceEditsAfterCutoff(
+  client: PoolClient,
+  targetCompanyIds: number[],
+  sourceCutoff: Date
+): Promise<void> {
+  const sourceDrift = await client.query<{
+    kind: string;
+    evidence_id: string;
+  }>(
+    `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
+       FROM canonical_stock_movements
+      WHERE company_id = ANY($1::int[])
+        AND created_at > $2
+        AND occurred_at <= $2
+      UNION ALL
+     SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN vouchers v
+         ON a.table_name='vouchers'
+        AND a.record_id=v.id
+        AND v.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND v.created_at <= $2
+      UNION ALL
+     SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
+       FROM audit_log a
+       JOIN containers c
+         ON a.table_name='containers'
+        AND a.record_id=c.id
+        AND c.company_id=a.company_id
+      WHERE a.company_id = ANY($1::int[])
+        AND a.created_at > $2
+        AND c.created_at <= $2
+      ORDER BY kind,evidence_id
+      LIMIT 25`,
+    [targetCompanyIds, sourceCutoff]
+  );
+  if (sourceDrift.rows.length > 0) {
+    throw new Error(
+      `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
+        .map((row) => `${row.kind}#${row.evidence_id}`)
+        .join(", ")}. Build and review a new dry run.`
+    );
+  }
+}
+
 export async function applyHistoricalSalesCostRepair(input: {
   runId: number;
   auditHash: string;
@@ -5700,6 +5589,12 @@ export async function applyHistoricalSalesCostRepair(input: {
     }
     if (!run.audit_hash || run.audit_hash !== input.auditHash) {
       throw hscrError("HSCR_AUDIT_HASH_MISMATCH");
+    }
+    const partial = await client.query("SELECT id FROM historical_sales_cost_repair_partial_applies WHERE run_id=$1", [
+      input.runId,
+    ]);
+    if (partial.rows.length > 0) {
+      throw hscrError("HSCR_RUN_PARTIALLY_APPLIED");
     }
 
     const blockerCount = await client.query<{ count: string }>(
@@ -5749,46 +5644,7 @@ export async function applyHistoricalSalesCostRepair(input: {
 
     // Keep targeted "changed-after-cutoff" checks as a second line of defense.
     // Normal new stock activity after the source cutoff is allowed.
-    const sourceDrift = await client.query<{
-      kind: string;
-      evidence_id: string;
-    }>(
-      `SELECT 'backdated-canonical'::text AS kind,id::text AS evidence_id
-         FROM canonical_stock_movements
-        WHERE company_id = ANY($1::int[])
-          AND created_at > $2
-          AND occurred_at <= $2
-        UNION ALL
-       SELECT 'historical-voucher-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN vouchers v
-           ON a.table_name='vouchers'
-          AND a.record_id=v.id
-          AND v.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND v.created_at <= $2
-        UNION ALL
-       SELECT 'historical-container-edit'::text AS kind,a.id::text AS evidence_id
-         FROM audit_log a
-         JOIN containers c
-           ON a.table_name='containers'
-          AND a.record_id=c.id
-          AND c.company_id=a.company_id
-        WHERE a.company_id = ANY($1::int[])
-          AND a.created_at > $2
-          AND c.created_at <= $2
-        ORDER BY kind,evidence_id
-        LIMIT 25`,
-      [targetCompanyIds, run.source_cutoff_at]
-    );
-    if (sourceDrift.rows.length > 0) {
-      throw new Error(
-        `Historical sales cost repair source evidence changed after dry run: ${sourceDrift.rows
-          .map((row) => `${row.kind}#${row.evidence_id}`)
-          .join(", ")}. Build and review a new dry run.`
-      );
-    }
+    await assertNoHistoricalSourceEditsAfterCutoff(client, targetCompanyIds, run.source_cutoff_at);
 
     const drift = await client.query<{ sales_item_id: number }>(
       `SELECT r.sales_item_id
