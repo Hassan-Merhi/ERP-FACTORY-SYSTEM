@@ -119,6 +119,7 @@ type LegacyRow = {
   sequence: number;
   source_type: string;
   source_id: string;
+  mutation_at?: Date | null;
 };
 
 type OffloadValueEvidenceRow = {
@@ -651,6 +652,7 @@ function historicalSalesCompanyEvidenceHash(input: {
       quantityDelta: String(row.quantity_delta),
       unitCost: row.unit_cost === null ? null : String(row.unit_cost),
       occurredAt: iso(row.occurred_at),
+      mutationAt: row.mutation_at ? iso(row.mutation_at) : null,
       sequence: Number(row.sequence),
       sourceType: row.source_type,
       sourceId: row.source_id,
@@ -849,6 +851,46 @@ async function loadLegacyMovements(
     `
     WITH boundary AS (
       SELECT $1::int AS company_id,$2::timestamptz AS canonical_start,$3::timestamptz AS source_cutoff
+    ),
+    -- V36: offloadContainer() posts its charge vouchers inside the same
+    -- transaction that mutates inventory, numbered
+    -- PREFIX-{containerNumber}-{Date.now()}. That system-generated millisecond
+    -- stamp, corroborated by vouchers.created_at, is the real inventory
+    -- mutation time; offloaded_at is only the user-entered calendar date.
+    -- Used only when the container has exactly one offload and exactly one
+    -- charge-voucher transaction, so re-offloads and later charge edits fall
+    -- back to offloaded_at.
+    offload_voucher_groups AS (
+      SELECT
+        v.company_id,
+        substring(v.voucher_number from '^(?:DUTY|OFFICE|TRANS|XFER|CHG)-(.+)-[0-9]{13}$') AS container_number,
+        COUNT(DISTINCT v.created_at) AS transaction_groups,
+        MIN(v.created_at) AS entered_at,
+        bool_and(
+          ABS(
+            substring(v.voucher_number from '([0-9]{13})$')::bigint -
+            (EXTRACT(EPOCH FROM v.created_at) * 1000)::bigint
+          ) < 120000
+        ) AS stamp_agrees
+      FROM vouchers v
+      JOIN boundary b ON b.company_id=v.company_id
+      WHERE v.voucher_type='Payment'
+        AND v.voucher_number ~ '^(DUTY|OFFICE|TRANS|XFER|CHG)-.+-[0-9]{13}$'
+      GROUP BY 1,2
+    ),
+    offload_entry AS (
+      SELECT co.id AS offload_id, g.entered_at AS mutation_at
+      FROM container_offloads co
+      JOIN containers c ON c.id=co.container_id
+      JOIN boundary b ON b.company_id=c.company_id
+      JOIN offload_voucher_groups g
+        ON g.company_id=c.company_id
+       AND g.container_number=c.container_number
+      WHERE COALESCE(co.optional,false)=false
+        AND g.transaction_groups=1
+        AND g.stamp_agrees
+        AND g.entered_at <= b.source_cutoff
+        AND (SELECT COUNT(*) FROM container_offloads o2 WHERE o2.container_id=co.container_id)=1
     ),
     offloads AS (
       SELECT
@@ -1058,14 +1100,20 @@ async function loadLegacyMovements(
              AND csm.created_at <= b.source_cutoff
         )
     )
-    SELECT * FROM offloads
-    UNION ALL SELECT * FROM adjustments
-    UNION ALL SELECT * FROM transfer_source
-    UNION ALL SELECT * FROM transfer_destination
-    UNION ALL SELECT * FROM notes
-    UNION ALL SELECT * FROM archive_out
-    UNION ALL SELECT * FROM archive_in
-    ORDER BY occurred_at,sequence
+    SELECT u.*, oe.mutation_at
+    FROM (
+      SELECT * FROM offloads
+      UNION ALL SELECT * FROM adjustments
+      UNION ALL SELECT * FROM transfer_source
+      UNION ALL SELECT * FROM transfer_destination
+      UNION ALL SELECT * FROM notes
+      UNION ALL SELECT * FROM archive_out
+      UNION ALL SELECT * FROM archive_in
+    ) u
+    LEFT JOIN offload_entry oe
+      ON u.source_type='legacy-container-offload'
+     AND oe.offload_id::text=u.source_id
+    ORDER BY u.occurred_at,u.sequence
     `,
     params
   );
@@ -1978,6 +2026,20 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         "Pins Phase 3 checkpoint rows/cutoff, canonical and legacy movements, historical merge aliases, source openings, and target sale originals",
     },
   ];
+  const pinnedOffloadRows = legacy.filter(
+    (row) => row.source_type === "legacy-container-offload" && row.mutation_at
+  );
+  checks.push({
+    companyId,
+    locationId: null,
+    stockItemId: null,
+    code: "LEGACY_OFFLOAD_ENTRY_TIME_PINNED",
+    status: "pass",
+    expected: String(legacy.filter((row) => row.source_type === "legacy-container-offload").length),
+    actual: String(pinnedOffloadRows.length),
+    detail:
+      "Legacy offload item rows ordered at their charge-voucher transaction time (unique container offload, single voucher group, millisecond stamp agrees with created_at); the rest keep offloaded_at",
+  });
   for (const reset of HISTORICAL_VALUATION_RESETS.filter(
     (candidate) => candidate.companyId === companyId
   )) {
@@ -2012,6 +2074,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     locationId: Number(row.location_id),
     stockItemId: Number(row.stock_item_id),
     occurredAt: iso(row.occurred_at),
+    ...(row.mutation_at ? { createdAt: iso(row.mutation_at) } : {}),
     sequence: Number(row.sequence),
     quantityDelta: String(row.quantity_delta),
     unitCost: row.unit_cost === null ? null : String(row.unit_cost),
