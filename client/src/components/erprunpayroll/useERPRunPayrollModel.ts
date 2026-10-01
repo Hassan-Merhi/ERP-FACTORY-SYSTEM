@@ -258,6 +258,7 @@ export function useERPRunPayrollModel() {
           groupName: it.groupName,
           baseSalary: it.baseSalary.toFixed(2),
           deduction: it.deduction.toFixed(2),
+          payrollDeduction: it.pendingDeductions.toFixed(2),
           netPay: it.netPay.toFixed(2),
         })),
       });
@@ -289,6 +290,7 @@ export function useERPRunPayrollModel() {
     onSuccess: (_data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll/worker-deductions"] });
       toast({ title: "Payroll paid", description: "Ledger entries created successfully." });
       setPayDialogRun(null);
       setPayAccountId("");
@@ -404,8 +406,10 @@ export function useERPRunPayrollModel() {
     const items = run.items || [];
     const totalBase = items.reduce((s, it) => s + parseFloat(it.baseSalary || "0"), 0);
     const totalDed = items.reduce((s, it) => s + parseFloat(it.deduction || "0"), 0);
+    const totalPayrollDed = items.reduce((s, it) => s + parseFloat(it.payrollDeduction || "0"), 0);
     const totalNet = items.reduce((s, it) => s + parseFloat(it.netPay || "0"), 0);
     const hasDed = totalDed > 0;
+    const hasPayrollDed = totalPayrollDed > 0;
     const cur = selectedCompany?.displayCurrency || "$";
     const fmt = (n: number) =>
       `${cur}\u00A0${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -419,13 +423,15 @@ export function useERPRunPayrollModel() {
       `<th style="background:#111;color:#fff;font-weight:700;font-size:10px;padding:6px 8px;text-align:${align};border:1px solid #333;white-space:nowrap">${txt}</th>`;
 
     const headerCols = [TH("Name", "left"), TH("Group", "left"), TH("Base Salary")];
-    if (hasDed) headerCols.push(TH("Deduction"));
+    if (hasDed) headerCols.push(TH("Advance Deduction"));
+    if (hasPayrollDed) headerCols.push(TH("Payroll Deduction"));
     headerCols.push(TH("Net Pay"));
 
     const bodyRows = items
       .map((it, i) => {
         const bg = i % 2 === 0 ? "#fff" : "#f5f5f5";
         const ded = parseFloat(it.deduction || "0");
+        const payrollDed = parseFloat(it.payrollDeduction || "0");
         const TD = (txt: string, align = "right", bold = false) =>
           `<td style="border:1px solid #ccc;padding:5px 8px;text-align:${align};background:${bg};font-size:10px;${bold ? "font-weight:700;" : ""}">${txt}</td>`;
         const cells = [
@@ -434,6 +440,7 @@ export function useERPRunPayrollModel() {
           TD(fmt(parseFloat(it.baseSalary || "0"))),
         ];
         if (hasDed) cells.push(TD(ded > 0 ? `<span style="color:#b91c1c">-${fmt(ded)}</span>` : "—"));
+        if (hasPayrollDed) cells.push(TD(payrollDed > 0 ? `<span style="color:#c2410c">-${fmt(payrollDed)}</span>` : "—"));
         cells.push(TD(`<strong>${fmt(parseFloat(it.netPay || "0"))}</strong>`));
         return `<tr>${cells.join("")}</tr>`;
       })
@@ -446,6 +453,10 @@ export function useERPRunPayrollModel() {
     if (hasDed)
       totalCells.push(
         `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:10px;background:#b91c1c;color:#fff;text-align:right">-${fmt(totalDed)}</td>`
+      );
+    if (hasPayrollDed)
+      totalCells.push(
+        `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:10px;background:#c2410c;color:#fff;text-align:right">-${fmt(totalPayrollDed)}</td>`
       );
     totalCells.push(
       `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:11px;background:#16a34a;color:#fff;text-align:right">${fmt(totalNet)}</td>`
