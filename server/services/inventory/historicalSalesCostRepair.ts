@@ -190,6 +190,49 @@ const HISTORICAL_VALUATION_RESETS: HistoricalValuationResetEvidence[] = [
   },
 ];
 
+type ValuationOverrideRow = {
+  id: number;
+  location_id: number;
+  stock_item_id: number;
+  source_type: string;
+  before_quantity: string;
+  before_average_rate: string;
+  before_total_value: string;
+  after_quantity: string;
+  after_average_rate: string;
+  after_total_value: string;
+  created_at: Date;
+};
+
+/**
+ * Direct valuation overwrites recorded by the location cost-price import and
+ * the direct location inventory update (inventory_valuation_overrides, stage
+ * 031). Each is an exact before/after reset written in the same transaction as
+ * the inventory row, so replay can cross it the way it crosses the Wave 6 reset.
+ */
+async function loadValuationOverrides(
+  client: PoolClient,
+  companyId: number,
+  sourceCutoff: Date
+): Promise<ValuationOverrideRow[]> {
+  const exists = await client.query<{ present: string | null }>(
+    `SELECT to_regclass('public.inventory_valuation_overrides')::text AS present`
+  );
+  if (!exists.rows[0]?.present) return [];
+  const rows = await client.query<ValuationOverrideRow>(
+    `SELECT id,location_id,stock_item_id,source_type,
+            before_quantity::text,before_average_rate::text,before_total_value::text,
+            after_quantity::text,after_average_rate::text,after_total_value::text,
+            created_at
+       FROM inventory_valuation_overrides
+      WHERE company_id=$1
+        AND created_at <= $2
+      ORDER BY created_at,id`,
+    [companyId, sourceCutoff]
+  );
+  return rows.rows;
+}
+
 function offloadEvidenceKey(offloadId: string | number, stockItemId: string | number): string {
   return `${String(offloadId)}:${Number(stockItemId)}`;
 }
@@ -614,6 +657,7 @@ function historicalSalesCompanyEvidenceHash(input: {
   stockItems: StockItemRow[];
   offloadEvidence: OffloadValueEvidenceRow[];
   historicalMerges: HistoricalMergeRow[];
+  valuationOverrides: ValuationOverrideRow[];
 }): string {
   const payload = {
     companyId: input.companyId,
@@ -708,6 +752,15 @@ function historicalSalesCompanyEvidenceHash(input: {
     valuationResets: HISTORICAL_VALUATION_RESETS
       .filter((reset) => reset.companyId === input.companyId)
       .map((reset) => ({ ...reset })),
+    valuationOverrides: input.valuationOverrides.map((row) => ({
+      id: Number(row.id),
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      sourceType: row.source_type,
+      before: [row.before_quantity, row.before_average_rate, row.before_total_value].map(String),
+      after: [row.after_quantity, row.after_average_rate, row.after_total_value].map(String),
+      createdAt: iso(row.created_at),
+    })),
     historicalMerges: input.historicalMerges.map((merge) => ({
       aliasId: Number(merge.alias_id),
       aliasCode: merge.alias_code,
@@ -742,10 +795,11 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     loadOffloadValueEvidence(client, companyId, sourceCutoff),
     loadHistoricalMerges(client, companyId),
   ]);
-  const [canonical, legacy, manual] = await Promise.all([
+  const [canonical, legacy, manual, valuationOverrides] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+    loadValuationOverrides(client, companyId, sourceCutoff),
   ]);
   return historicalSalesCompanyEvidenceHash({
     companyId,
@@ -758,6 +812,7 @@ async function recomputeHistoricalSalesCompanyEvidenceHash(
     stockItems,
     offloadEvidence,
     historicalMerges,
+    valuationOverrides,
   });
 }
 
@@ -1980,11 +2035,31 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     loadHistoricalMerges(client, companyId),
   ]);
 
-  const [canonical, legacy, manual] = await Promise.all([
+  const [loadedCanonical, legacy, manual, valuationOverrides] = await Promise.all([
     loadCanonicalMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyMovements(client, companyId, canonicalStart, sourceCutoff),
     loadLegacyManualAdjustments(client, companyId, canonicalStart, sourceCutoff),
+    loadValuationOverrides(client, companyId, sourceCutoff),
   ]);
+  // A direct location inventory update journals its quantity change as a
+  // location_inventory_update movement in the same transaction as its
+  // valuation override. The override reset below carries that quantity change
+  // together with the exact valuation, so the journal row is replaced by it
+  // rather than applied twice.
+  const overrideTransactionKeys = new Set(
+    valuationOverrides.map(
+      (row) => `${Number(row.location_id)}:${Number(row.stock_item_id)}:${iso(row.created_at)}`
+    )
+  );
+  const canonical = loadedCanonical.filter(
+    (movement) =>
+      !(
+        movement.sourceType === "location_inventory_update" &&
+        overrideTransactionKeys.has(
+          `${movement.locationId}:${movement.stockItemId}:${movement.createdAt ?? movement.occurredAt}`
+        )
+      )
+  );
 
   const sourceEvidenceHash = historicalSalesCompanyEvidenceHash({
     companyId,
@@ -1997,6 +2072,7 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
     stockItems,
     offloadEvidence,
     historicalMerges,
+    valuationOverrides,
   });
   const offloadEvidenceByKey = new Map(
     offloadEvidence.map((row) => [
@@ -2113,6 +2189,30 @@ async function dryRunCompany(client: PoolClient, companyId: number, sourceCutoff
         sourceId: reset.sourceId,
         evidence: "legacy" as const,
       }));
+  valuationResetMovements.push(
+    ...valuationOverrides.map((row) => ({
+      movementId: `valuation-override:${row.id}`,
+      companyId,
+      locationId: Number(row.location_id),
+      stockItemId: Number(row.stock_item_id),
+      occurredAt: iso(row.created_at),
+      createdAt: iso(row.created_at),
+      sequence: Number(row.id) * 10 + 9,
+      quantityDelta: repairQuantity(d(row.after_quantity).minus(d(row.before_quantity))).toFixed(3),
+      unitCost: null,
+      valuationReset: {
+        beforeQuantity: String(row.before_quantity),
+        beforeAverageRate: String(row.before_average_rate),
+        beforeTotalValue: String(row.before_total_value),
+        afterQuantity: String(row.after_quantity),
+        afterAverageRate: String(row.after_average_rate),
+        afterTotalValue: String(row.after_total_value),
+      },
+      sourceType: "inventory-valuation-override",
+      sourceId: `${row.source_type}:${row.id}`,
+      evidence: "legacy" as const,
+    }))
+  );
 
   const legacyMovements: HistoricalSalesRepairMovement[] = [
     ...legacy

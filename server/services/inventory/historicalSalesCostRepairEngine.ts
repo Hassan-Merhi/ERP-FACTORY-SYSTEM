@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v37-unrecorded-revaluation-diagnostic";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v38-valuation-override-resets";
 
 const ZERO = new Decimal(0);
 
@@ -84,6 +84,20 @@ export type HistoricalSalesRepairMovement = {
     originalProfit: string;
   };
 };
+
+const EXACT_VALUATION_RESET_SOURCE_TYPES = new Set([
+  "inventory-valuation-wave6-reset",
+  "inventory-valuation-override",
+]);
+
+/** A recorded exact before/after valuation reset (Wave 6, or a stage-031 override). */
+function isExactValuationReset(
+  movement: HistoricalSalesRepairMovement
+): movement is HistoricalSalesRepairMovement & {
+  valuationReset: NonNullable<HistoricalSalesRepairMovement["valuationReset"]>;
+} {
+  return EXACT_VALUATION_RESET_SOURCE_TYPES.has(movement.sourceType) && Boolean(movement.valuationReset);
+}
 
 export type CanonicalPosRole = "sale-issue" | "edit-issue" | "edit-reversal";
 
@@ -343,7 +357,7 @@ export function applyHistoricalSalesRepairMovement(
   state: HistoricalInventoryState,
   movement: HistoricalSalesRepairMovement
 ): HistoricalInventoryState {
-  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+  if (isExactValuationReset(movement)) {
     const before = valuationResetState(movement.valuationReset, "before");
     return valuationResetStateMatches(state, before)
       ? valuationResetState(movement.valuationReset, "after")
@@ -530,7 +544,7 @@ export function applyHistoricalForwardReplayMovement(
   state: HistoricalForwardReplayState,
   movement: HistoricalSalesRepairMovement
 ): HistoricalForwardReplayState {
-  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+  if (isExactValuationReset(movement)) {
     return {
       inventory: applyHistoricalSalesRepairMovement(state.inventory, movement),
       negativeLayerQuantity: repairQuantity(state.negativeLayerQuantity),
@@ -1243,7 +1257,7 @@ export function reverseHistoricalSalesRepairMovement(
   );
   const delta = repairQuantity(movement.quantityDelta);
 
-  if (movement.sourceType === "inventory-valuation-wave6-reset" && movement.valuationReset) {
+  if (isExactValuationReset(movement)) {
     const expectedAfter = valuationResetState(movement.valuationReset, "after");
     if (!valuationResetStateMatches(stateAfter, expectedAfter)) {
       return { reversible: false, reason: "MOVEMENT_INVERSE_INVALID" };
