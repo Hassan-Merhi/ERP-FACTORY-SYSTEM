@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 
-export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v46-canonical-rate-dilution-fix";
+export const HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION = "2026-10-01-v47-closed-eras-branching-reanchor";
 
 const ZERO = new Decimal(0);
 
@@ -1702,55 +1702,83 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
     sensitivity: Map<number, Decimal>;
     stoppedAt: string | null;
   };
+  // V47: each value candidate is rewound as a set of branches. An issue at an
+  // unpinned live rate keeps every exact inverse (canonical era only, as in the
+  // checkpoint rewind); recorded live rates prune. A candidate whose branches
+  // exceed the cap is inconclusive, and the whole re-anchor then fails closed.
+  type Branch = { state: HistoricalInventoryState; sensitivity: Decimal; outcome: Outcome };
+  const BRANCH_CAP = 64;
   const outcomes: Outcome[] = [];
+  let inconclusive = false;
+  const outcomeKey = (branch: Branch) =>
+    `${branch.state.quantity.toFixed(3)}|${repairRate(branch.state.averageRate).toFixed(2)}|${repairMoney(
+      branch.state.totalValue
+    ).toFixed(2)}|` +
+    [...branch.outcome.proposals.entries()].map(([id, proposal]) => `${id}=${proposal.proposedCostPrice}`).join(",");
   for (const start of candidates) {
-    let state = start;
-    let sensitivity = quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1);
-    const outcome: Outcome = { proposals: new Map(), sensitivity: new Map(), stoppedAt: null };
-    let survived = true;
-    const forced = new Map<string, HistoricalInventoryState>();
+    let branches: Branch[] = [
+      {
+        state: start,
+        sensitivity: quantity.gt(0) ? new Decimal(1).dividedBy(quantity) : new Decimal(1),
+        outcome: { proposals: new Map(), sensitivity: new Map(), stoppedAt: null },
+      },
+    ];
     for (const movement of input.earlierMovementsDescending) {
-      if (movement.canonicalPosRole === "dropped-line" && !forced.has(movement.movementId)) {
-        const group = collapsedPosIssueGroup(input.earlierMovementsDescending, movement);
-        const solutions = reverseCollapsedPosIssueGroup(state, group);
-        if (solutions.length === 1) {
-          solutions[0].forEach((groupState, index) => forced.set(group[index].movementId, groupState));
-        } else if (solutions.length > 1) {
-          // Not unique inside a candidate rewind: this candidate proves nothing.
-          survived = false;
-          break;
+      const next: Branch[] = [];
+      for (const branch of branches) {
+        const befores: HistoricalInventoryState[] = [];
+        const reversed = reverseHistoricalSalesRepairMovement(branch.state, movement, {
+          priorCostMemoryRate: input.priorCostMemoryRateHints?.get(movement.movementId) ?? null,
+        });
+        if (reversed.reversible) befores.push(reversed.stateBefore);
+        else if (reversed.reason === "COST_MEMORY_IRREVERSIBLE") {
+          outcomes.push({ ...branch.outcome, stoppedAt: movement.movementId });
+        }
+        if (movement.evidence === "canonical") {
+          for (const candidate of historicalIssueInverseCandidates(branch.state, movement)) {
+            if (!befores.some((before) => statesEqual(before, candidate))) befores.push(candidate);
+          }
+        }
+        for (const before of befores) {
+          if (
+            isRecordedLiveRateObservation(movement) &&
+            !repairRate(movement.unitCost!).eq(repairRate(before.averageRate))
+          ) {
+            continue;
+          }
+          let sensitivity = branch.sensitivity;
+          const afterQty = repairQuantity(branch.state.quantity);
+          const beforeQty = repairQuantity(before.quantity);
+          if (decimal(movement.quantityDelta, "quantity delta").gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
+            sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
+          }
+          const outcome: Outcome = {
+            proposals: new Map(branch.outcome.proposals),
+            sensitivity: new Map(branch.outcome.sensitivity),
+            stoppedAt: null,
+          };
+          if (movement.sale && input.targetSaleIds.has(movement.sale.salesItemId)) {
+            outcome.proposals.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, before));
+            outcome.sensitivity.set(movement.sale.salesItemId, sensitivity);
+          }
+          next.push({ state: before, sensitivity, outcome });
         }
       }
-      const forcedState = forced.get(movement.movementId);
-      const reversed: HistoricalInventoryReverseResult = forcedState
-        ? { reversible: true, stateBefore: forcedState }
-        : reverseHistoricalSalesRepairMovement(state, movement, {
-            priorCostMemoryRate: input.priorCostMemoryRateHints?.get(movement.movementId) ?? null,
-          });
-      if (!reversed.reversible) {
-        if (reversed.reason === "COST_MEMORY_IRREVERSIBLE") outcome.stoppedAt = movement.movementId;
-        else survived = false;
-        break;
+      const seen = new Set<string>();
+      branches = next.filter((branch) => {
+        const key = outcomeKey(branch);
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (branches.length > BRANCH_CAP) {
+        inconclusive = true;
+        branches = [];
       }
-      if (
-        isRecordedLiveRateObservation(movement) &&
-        !repairRate(movement.unitCost!).eq(repairRate(reversed.stateBefore.averageRate))
-      ) {
-        survived = false;
-        break;
-      }
-      const afterQty = repairQuantity(state.quantity);
-      const beforeQty = repairQuantity(reversed.stateBefore.quantity);
-      if (decimal(movement.quantityDelta, "quantity delta").gt(0) && afterQty.gt(0) && beforeQty.gt(0)) {
-        sensitivity = Decimal.min(sensitivity.times(afterQty).dividedBy(beforeQty), new Decimal("1e15"));
-      }
-      if (movement.sale && input.targetSaleIds.has(movement.sale.salesItemId)) {
-        outcome.proposals.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, reversed.stateBefore));
-        outcome.sensitivity.set(movement.sale.salesItemId, sensitivity);
-      }
-      state = reversed.stateBefore;
+      if (branches.length === 0) break;
     }
-    if (survived) outcomes.push(outcome);
+    for (const branch of branches) outcomes.push(branch.outcome);
+    if (inconclusive) break;
   }
 
   const signature = (outcome: Outcome) =>
@@ -1760,7 +1788,7 @@ export function reanchorHistoricalRewindAtRecordedRate(input: {
       .map(([salesItemId, proposal]) => `${salesItemId}=${proposal.proposedCostPrice}`)
       .join(",");
   const distinct = new Set(outcomes.map(signature));
-  const proven = outcomes.length > 0 && distinct.size === 1 && outcomes[0].proposals.size > 0;
+  const proven = !inconclusive && outcomes.length > 0 && distinct.size === 1 && outcomes[0].proposals.size > 0;
   const sensitivity = new Map<number, Decimal>();
   if (proven) {
     for (const salesItemId of outcomes[0].proposals.keys()) {

@@ -605,4 +605,34 @@ describe("historical COGS reconstruction scenarios", () => {
     expect(byRate.get("79.10")).toBe("canonical:14647:78.24");
     expect(byRate.get("79.11")).toBe("ok");
   });
+
+  it("re-anchors through an ambiguous restored POS line by branching and recovers the true legacy cost", () => {
+    // Forward truth: 7 offloaded into empty stock, a legacy sale of 1, a
+    // canonical sale journaled 2 with a 3-unit line dropped, then the anchor.
+    const receipt = offload("re-1", "2026-08-01T08:00:00Z", "7", "1181.79");
+    const legacy = legacySale(901, "2026-08-02T08:00:00Z", "1");
+    let truth = applyHistoricalSalesRepairMovement(state("0", "0", "0"), receipt);
+    const legacyCost = truth.averageRate.toFixed(2);
+    truth = applyHistoricalSalesRepairMovement(truth, legacy);
+    const original = canonicalSale("26001", "2026-09-07T14:27:31Z", "2", truth.averageRate.toFixed(2));
+    truth = applyHistoricalSalesRepairMovement(truth, original);
+    const dropped = mv({
+      movementId: "canonical-dropped-line:26001:2",
+      occurredAt: "2026-09-07T14:27:31Z",
+      quantityDelta: "-3",
+      sourceType: "pos-sale",
+      evidence: "canonical",
+      canonicalPosRole: "dropped-line",
+    });
+    truth = applyHistoricalSalesRepairMovement(truth, dropped);
+
+    const result = reanchorHistoricalRewindAtRecordedRate({
+      anchorQuantity: truth.quantity,
+      recordedRate: truth.averageRate,
+      earlierMovementsDescending: [dropped, original, legacy, receipt],
+      targetSaleIds: new Set([901]),
+    });
+    expect(result.status).toBe("proven");
+    expect(result.proposals.get(901)?.proposedCostPrice).toBe(legacyCost);
+  });
 });
