@@ -37,9 +37,9 @@ export function useFactoryInvoiceDetailModel() {
   const [showProformaDialog, setShowProformaDialog] = useState(false);
   const [selectedProformaId, setSelectedProformaId] = useState<string>("");
   const inputRef = useRef<HTMLInputElement>(null);
-  const analyticsNoChargesView =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "no-charges";
-  useEscapeToParent(analyticsNoChargesView ? "/factory/analytics" : "/factory/invoicing?tab=invoices");
+  const fromAnalytics =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("from") === "analytics";
+  useEscapeToParent(fromAnalytics ? "/factory/analytics" : "/factory/invoicing?tab=invoices");
   const appMode = useAppMode();
   const modeApiRequest = getApiRequest(appMode);
   const [, params] = useRoute("/factory/sales/invoices/:id");
