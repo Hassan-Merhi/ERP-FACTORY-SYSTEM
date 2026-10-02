@@ -696,6 +696,16 @@ export async function buildCanonicalInvoicePdf(
   const usableWidth = pageRight - pageLeft;
   const rtl = language === "ar";
   const textAlign: "left" | "right" = rtl ? "right" : "left";
+  const normalFont = () => {
+    if (rtl) applyFactoryPdfLanguage(doc, language);
+    else doc.font("Helvetica");
+    return doc;
+  };
+  const boldFont = () => {
+    if (rtl) applyFactoryPdfLanguage(doc, language);
+    else doc.font("Helvetica-Bold");
+    return doc;
+  };
   const symbol = currencySymbol(document.baseCurrency);
   const money = (value: number) =>
     symbol === "CFA"
@@ -717,7 +727,7 @@ export async function buildCanonicalInvoicePdf(
         }
       }
     }
-    doc.fontSize(firstPage ? 14 : 10).font("Helvetica-Bold").fillColor("#000000");
+    boldFont().fontSize(firstPage ? 14 : 10).fillColor("#000000");
     doc.text(firstPage ? labels.invoice : `${labels.invoice} — ${document.invoiceNumber}`, pageLeft, y, {
       width: usableWidth,
       align: "center",
@@ -736,23 +746,23 @@ export async function buildCanonicalInvoicePdf(
         [labels.destination, document.destination || "-"],
         [labels.status, document.status.replaceAll("_", " ")],
       ];
-      doc.fontSize(8).fillColor("#000000");
+      normalFont().fontSize(8).fillColor("#000000");
       let metaY = y;
       for (let i = 0; i < Math.max(leftMeta.length, rightMeta.length); i++) {
         const left = leftMeta[i];
         const right = rightMeta[i];
         if (left) {
-          doc.font("Helvetica-Bold").text(`${left[0]}: `, pageLeft, metaY, { continued: true, width: usableWidth / 2 - 10 });
-          doc.font("Helvetica").text(left[1]);
+          boldFont().text(`${left[0]}: `, pageLeft, metaY, { continued: true, width: usableWidth / 2 - 10 });
+          normalFont().text(left[1]);
         }
         if (right) {
           const rightX = pageLeft + usableWidth / 2;
-          doc.font("Helvetica-Bold").text(`${right[0]}: `, rightX, metaY, {
+          boldFont().text(`${right[0]}: `, rightX, metaY, {
             continued: true,
             width: usableWidth / 2,
             align: textAlign,
           });
-          doc.font("Helvetica").text(right[1], { align: textAlign });
+          normalFont().text(right[1], { align: textAlign });
         }
         metaY += 13;
       }
@@ -791,7 +801,7 @@ export async function buildCanonicalInvoicePdf(
   const drawTableHeader = (y: number) => {
     const height = 18;
     doc.rect(pageLeft, y, usableWidth, height).fill("#1F3864");
-    doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7.5);
+    boldFont().fillColor("#ffffff").fontSize(7.5);
     let x = pageLeft;
     for (const column of columns) {
       doc.text(column.title, x + 2, y + 5, {
@@ -801,7 +811,7 @@ export async function buildCanonicalInvoicePdf(
       });
       x += column.width;
     }
-    doc.fillColor("#000000").font("Helvetica").fontSize(7.5);
+    normalFont().fillColor("#000000").fontSize(7.5);
     return y + height;
   };
 
@@ -861,7 +871,7 @@ export async function buildCanonicalInvoicePdf(
     y = drawTableHeader(drawPageBranding(false));
   }
   doc.rect(pageLeft, y, usableWidth, 18).fill("#EEF2F9");
-  doc.fillColor("#000000").font("Helvetica-Bold").fontSize(8);
+  boldFont().fillColor("#000000").fontSize(8);
   const totalValues: string[] = [
     "",
     "",
@@ -908,10 +918,10 @@ export async function buildCanonicalInvoicePdf(
       }
       if (grand) {
         doc.rect(boxX, y, boxWidth, 19).fill("#1F3864");
-        doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(9);
+        boldFont().fillColor("#ffffff").fontSize(9);
       } else {
         doc.moveTo(boxX, y + 18).lineTo(pageRight, y + 18).lineWidth(0.3).strokeColor("#cccccc").stroke();
-        doc.fillColor("#000000").font("Helvetica").fontSize(8.5);
+        normalFont().fillColor("#000000").fontSize(8.5);
       }
       doc.text(label, boxX + 7, y + 5, { width: boxWidth * 0.58, align: textAlign, lineBreak: false });
       doc.text(money(value), boxX + boxWidth * 0.6, y + 5, {
