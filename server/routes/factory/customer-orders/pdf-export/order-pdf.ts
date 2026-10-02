@@ -18,7 +18,7 @@ export function registerOrderPdfRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
-      if (orderId === null) return res.status(400).json({ message: "Invalid order ID" });
+      if (orderId === null) return res.status(400).json({ message: "Invalid id" });
 
       const document = await getCanonicalInvoiceDocument(orderId, companyId);
       if (!document) return res.status(404).json({ message: "Order not found" });
