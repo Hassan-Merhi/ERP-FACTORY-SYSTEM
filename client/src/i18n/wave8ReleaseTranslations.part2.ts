@@ -849,4 +849,39 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "الربح بالتكلفة المعدّلة",
     fr: "Bénéfice au coût ajusté",
   },
+  {
+    en: "Freight + Charges: Included",
+    ar: "الشحن + الرسوم: مشمولة",
+    fr: "Fret + frais : inclus",
+  },
+  {
+    en: "Freight + Charges: Excluded",
+    ar: "الشحن + الرسوم: مستبعدة",
+    fr: "Fret + frais : exclus",
+  },
+  {
+    en: "Invoice Total (With Charges)",
+    ar: "إجمالي الفاتورة (مع الرسوم)",
+    fr: "Total de la facture (avec frais)",
+  },
+  {
+    en: "Total Cost (With Charges)",
+    ar: "إجمالي التكلفة (مع الرسوم)",
+    fr: "Coût total (avec frais)",
+  },
+  {
+    en: "Expand a customer to see each loading, verified or finalized invoice. Totals below include freight and extra charges.",
+    ar: "وسّع العميل لعرض كل عملية تحميل أو فاتورة متحقق منها أو معتمدة. الإجماليات أدناه تشمل الشحن والرسوم الإضافية.",
+    fr: "Développez un client pour voir chaque chargement ou facture vérifiée ou finalisée. Les totaux ci-dessous incluent le fret et les frais supplémentaires.",
+  },
+  {
+    en: "Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight and extra charges.",
+    ar: "وسّع العميل لعرض كل عملية تحميل أو فاتورة متحقق منها أو معتمدة. الإجماليات أدناه تستثني الشحن والرسوم الإضافية.",
+    fr: "Développez un client pour voir chaque chargement ou facture vérifiée ou finalisée. Les totaux ci-dessous excluent le fret et les frais supplémentaires.",
+  },
+  {
+    en: "Invalid includeCharges filter",
+    ar: "عامل تصفية includeCharges غير صالح",
+    fr: "Filtre includeCharges non valide",
+  },
 ];

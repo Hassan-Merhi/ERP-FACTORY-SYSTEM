@@ -106,7 +106,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/salary-advances/:id",
   "DELETE /api/sp/migration/cutover",
   "DELETE /api/vouchers/:id",
-  "DELETE /api/waste-dispatches/:id",
   "PATCH /api/bales/:id",
   "PATCH /api/containers/:id/number",
   "PATCH /api/containers/:id/offload",
@@ -388,7 +387,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/sp/sales/:id/reverse",
   "POST /api/sp/setup",
   "POST /api/sp/setup/golden-coast",
-  "POST /api/stock-adjustments",
   "POST /api/stock-items/:id/merge",
   "POST /api/stock-items/bulk-merge",
   "POST /api/stock-items/merge-logs/:logId/unmerge",
@@ -410,7 +408,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/vouchers/journal",
   "POST /api/vouchers/payment-receipt",
   "POST /api/vouchers/with-entries",
-  "POST /api/waste-dispatches",
   "PUT /api/erp-user-hidden-costs/:userId",
   "PUT /api/erp-user-page-access/:userId",
   "PUT /api/factory/daybook/:entryId",
@@ -419,7 +416,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PUT /api/ledger-accounts/:id",
   "PUT /api/settings/role-permissions",
   "PUT /api/sp/migration/cutover",
-  "PUT /api/stock-adjustments/:id",
   "PUT /api/stock-transfers/:id",
   "PUT /api/vouchers/:id/with-entries",
 ] as const;
@@ -448,11 +444,24 @@ afterAll(() => {
  * unlike the retired stock-transfer-revision routes above, these still write
  * exactly what they wrote before. Narrowing the sweep to match the audit would
  * drop the one assertion that holds for them, so they are swept explicitly.
+ *
+ * The stock-adjustment and waste-dispatch routes joined them when Phase 5 made
+ * stock-adjustment totals atomic: server/routes/stockAdjustmentWasteRoutes.ts
+ * now hands its writes to stockAdjustmentCreateHandler and storage, so its own
+ * text no longer names a sensitive table, but the routes still move stock.
+ *
+ * POST /api/sales-report/recalculate-costs left the sensitive list outright, as
+ * the stock-transfer-revision routes did: historical sale costs are immutable,
+ * and the route now answers 409 HISTORICAL_SALE_COST_IMMUTABLE without writing.
  */
 const DELEGATED_WRITE_ROUTES = [
+  "DELETE /api/waste-dispatches/:id",
   "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/recover-bales",
   "POST /api/factory/customer-proformas/:id/create-loading",
+  "POST /api/stock-adjustments",
+  "POST /api/waste-dispatches",
+  "PUT /api/stock-adjustments/:id",
 ];
 
 describe("sensitive write-route guard sweep", () => {

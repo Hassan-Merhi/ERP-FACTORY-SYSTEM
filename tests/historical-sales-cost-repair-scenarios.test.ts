@@ -4,16 +4,18 @@ import {
   applyHistoricalSalesRepairMovement,
   createHistoricalInventoryStateFromSnapshot,
   historicalRateWithinEvidencedRange,
+  applyHistoricalForwardReplayMovement,
+  createHistoricalForwardReplayState,
+  type HistoricalInventoryState,
+  type HistoricalSalesRepairMovement,
+} from "../server/services/inventory/historicalSalesCostRepairEngine";
+import {
   historicalIssueInverseCandidates,
   historicalSaleProposalFromState,
   isRecordedLiveRateObservation,
   reanchorHistoricalRewindAtRecordedRate,
-  applyHistoricalForwardReplayMovement,
-  createHistoricalForwardReplayState,
-  reverseHistoricalSalesRepairMovement,
-  type HistoricalInventoryState,
-  type HistoricalSalesRepairMovement,
-} from "../server/services/inventory/historicalSalesCostRepairEngine";
+} from "../server/services/inventory/historicalSalesCostRepairEngineReplay";
+import { reverseHistoricalSalesRepairMovement } from "../server/services/inventory/historicalSalesCostRepairEngineReverse";
 
 /*
  * Historical COGS reconstruction scenarios. Every scenario asserts the actual
@@ -89,12 +91,7 @@ function offload(id: string, at: string, quantity: string, exactValue: string) {
   });
 }
 
-function valuationOverride(
-  id: string,
-  at: string,
-  before: [string, string, string],
-  after: [string, string, string]
-) {
+function valuationOverride(id: string, at: string, before: [string, string, string], after: [string, string, string]) {
   return mv({
     movementId: `valuation-override:${id}`,
     occurredAt: at,
@@ -160,7 +157,10 @@ function rewind(
       amplification = amplification.times(current.quantity).dividedBy(reversed.stateBefore.quantity);
     }
     if (movement.sale) {
-      costs.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, reversed.stateBefore).proposedCostPrice);
+      costs.set(
+        movement.sale.salesItemId,
+        historicalSaleProposalFromState(movement, reversed.stateBefore).proposedCostPrice
+      );
       sensitivity.set(movement.sale.salesItemId, amplification);
     }
     current = reversed.stateBefore;
@@ -170,10 +170,17 @@ function rewind(
 
 /** Forward replay through the production forward-proof path, per company/location/item. */
 function forwardCosts(
-  openings: Array<{ locationId?: number; companyId?: number; stockItemId?: number; quantity: string; averageRate: string }>,
+  openings: Array<{
+    locationId?: number;
+    companyId?: number;
+    stockItemId?: number;
+    quantity: string;
+    averageRate: string;
+  }>,
   movements: HistoricalSalesRepairMovement[]
 ): Map<number, string> {
-  const key = (companyId: number, locationId: number, stockItemId: number) => `${companyId}:${locationId}:${stockItemId}`;
+  const key = (companyId: number, locationId: number, stockItemId: number) =>
+    `${companyId}:${locationId}:${stockItemId}`;
   const states = new Map<string, ReturnType<typeof createHistoricalForwardReplayState>>();
   for (const opening of openings) {
     const quantity = new Decimal(opening.quantity);
@@ -186,13 +193,17 @@ function forwardCosts(
   }
   const costs = new Map<number, string>();
   const ordered = [...movements].sort(
-    (a, b) => Date.parse(a.createdAt ?? a.occurredAt) - Date.parse(b.createdAt ?? b.occurredAt) || a.sequence - b.sequence
+    (a, b) =>
+      Date.parse(a.createdAt ?? a.occurredAt) - Date.parse(b.createdAt ?? b.occurredAt) || a.sequence - b.sequence
   );
   for (const movement of ordered) {
     const k = key(movement.companyId, movement.locationId, movement.stockItemId);
     const current = states.get(k) ?? createHistoricalForwardReplayState(state("0", "0", "0"));
     if (movement.sale) {
-      costs.set(movement.sale.salesItemId, historicalSaleProposalFromState(movement, current.inventory).proposedCostPrice);
+      costs.set(
+        movement.sale.salesItemId,
+        historicalSaleProposalFromState(movement, current.inventory).proposedCostPrice
+      );
     }
     states.set(k, applyHistoricalForwardReplayMovement(current, movement));
   }
@@ -351,7 +362,12 @@ describe("historical COGS reconstruction scenarios", () => {
     const costs = forwardCosts(
       [{ quantity: "4", averageRate: "10" }],
       [
-        mv({ movementId: "adjust:9", occurredAt: "2026-03-01T08:00:00Z", quantityDelta: "2", sourceType: "legacy-adjustment" }),
+        mv({
+          movementId: "adjust:9",
+          occurredAt: "2026-03-01T08:00:00Z",
+          quantityDelta: "2",
+          sourceType: "legacy-adjustment",
+        }),
         legacySale(91, "2026-03-02T08:00:00Z", "1"),
       ]
     );
@@ -481,7 +497,11 @@ describe("historical COGS reconstruction scenarios", () => {
     const checkpoint = state("19", "169.23", "3215.37");
 
     // Without a cost-memory hint the rewind cannot cross the empty-stock offload.
-    expect(rewind(checkpoint, history)).toMatchObject({ ok: false, at: reset.movementId, reason: "COST_MEMORY_IRREVERSIBLE" });
+    expect(rewind(checkpoint, history)).toMatchObject({
+      ok: false,
+      at: reset.movementId,
+      reason: "COST_MEMORY_IRREVERSIBLE",
+    });
     // Even with the edit leg's old 168.83 line cost as the cost-memory hint,
     // the zero-crossing sale is inverted at its recorded 168.81, so the
     // legacy sale is priced from the recorded live rate, not from the hint.
@@ -515,9 +535,9 @@ describe("historical COGS reconstruction scenarios", () => {
     const drifted = rewind(state("1", "100.02", "100.02"), history);
     if (drifted.ok) {
       const earliest = new Decimal(drifted.costs.get(160)!);
-      expect(historicalRateWithinEvidencedRange(earliest, { min: new Decimal("100.00"), max: new Decimal("100.00") })).toBe(
-        false
-      );
+      expect(
+        historicalRateWithinEvidencedRange(earliest, { min: new Decimal("100.00"), max: new Decimal("100.00") })
+      ).toBe(false);
     } else {
       expect(drifted.reason).toMatch(/INVALID|IRREVERSIBLE/);
     }
@@ -583,12 +603,58 @@ describe("historical COGS reconstruction scenarios", () => {
   it("keeps every exact inverse of a large live-rate issue and lets a recorded live rate choose (1/134/113)", () => {
     const item = { locationId: 134, stockItemId: 113, evidence: "canonical" as const };
     const sale14647 = { ...canonicalSale("14647", "2026-08-28T13:57:21Z", "2", "78.25"), ...item };
-    const transfer15602 = mv({ movementId: "canonical:15602", occurredAt: "2026-08-29T10:06:06Z", quantityDelta: "-10", unitCost: "78.25", sourceType: "stock-transfer", ...item });
-    const offload18586 = mv({ movementId: "canonical:18586", occurredAt: "2026-09-02T07:19:11Z", quantityDelta: "10", unitCost: "84.31", exactValue: "843.10", sourceType: "container-offload", ...item });
-    const editReversal = mv({ movementId: "canonical:20609", occurredAt: "2026-09-03T07:42:37Z", quantityDelta: "2", unitCost: "78.81", sourceType: "pos-sale", canonicalPosRole: "edit-reversal", ...item });
-    const editIssue = mv({ movementId: "canonical:20635", occurredAt: "2026-09-03T07:42:37Z", quantityDelta: "-2", unitCost: "78.81", sourceType: "pos-sale", canonicalPosRole: "edit-issue", ...item });
-    const offload22587 = mv({ movementId: "canonical:22587", occurredAt: "2026-09-05T06:12:41Z", quantityDelta: "6", unitCost: "84.47", exactValue: "506.82", sourceType: "container-offload", ...item });
-    const transfer23667 = mv({ movementId: "canonical:23667", occurredAt: "2026-09-05T11:28:54Z", quantityDelta: "-100", unitCost: "78.81", sourceType: "stock-transfer", ...item });
+    const transfer15602 = mv({
+      movementId: "canonical:15602",
+      occurredAt: "2026-08-29T10:06:06Z",
+      quantityDelta: "-10",
+      unitCost: "78.25",
+      sourceType: "stock-transfer",
+      ...item,
+    });
+    const offload18586 = mv({
+      movementId: "canonical:18586",
+      occurredAt: "2026-09-02T07:19:11Z",
+      quantityDelta: "10",
+      unitCost: "84.31",
+      exactValue: "843.10",
+      sourceType: "container-offload",
+      ...item,
+    });
+    const editReversal = mv({
+      movementId: "canonical:20609",
+      occurredAt: "2026-09-03T07:42:37Z",
+      quantityDelta: "2",
+      unitCost: "78.81",
+      sourceType: "pos-sale",
+      canonicalPosRole: "edit-reversal",
+      ...item,
+    });
+    const editIssue = mv({
+      movementId: "canonical:20635",
+      occurredAt: "2026-09-03T07:42:37Z",
+      quantityDelta: "-2",
+      unitCost: "78.81",
+      sourceType: "pos-sale",
+      canonicalPosRole: "edit-issue",
+      ...item,
+    });
+    const offload22587 = mv({
+      movementId: "canonical:22587",
+      occurredAt: "2026-09-05T06:12:41Z",
+      quantityDelta: "6",
+      unitCost: "84.47",
+      exactValue: "506.82",
+      sourceType: "container-offload",
+      ...item,
+    });
+    const transfer23667 = mv({
+      movementId: "canonical:23667",
+      occurredAt: "2026-09-05T11:28:54Z",
+      quantityDelta: "-100",
+      unitCost: "78.81",
+      sourceType: "stock-transfer",
+      ...item,
+    });
 
     const candidates = historicalIssueInverseCandidates(state("14", "79.10", "1107.34"), transfer23667);
     expect(candidates.map((candidate) => candidate.averageRate.toFixed(2))).toEqual(
@@ -601,7 +667,9 @@ describe("historical COGS reconstruction scenarios", () => {
     });
     // The first exact inverse (79.10) the generic rewind takes contradicts the
     // recorded 78.25; the 79.11 branch replays every movement and agrees.
-    const byRate = new Map(candidates.map((candidate, index) => [candidate.averageRate.toFixed(2), reachedRates[index]]));
+    const byRate = new Map(
+      candidates.map((candidate, index) => [candidate.averageRate.toFixed(2), reachedRates[index]])
+    );
     expect(byRate.get("79.10")).toBe("canonical:14647:78.24");
     expect(byRate.get("79.11")).toBe("ok");
   });

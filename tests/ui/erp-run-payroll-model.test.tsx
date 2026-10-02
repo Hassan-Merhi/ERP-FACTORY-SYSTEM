@@ -233,6 +233,10 @@ describe("ERP payroll model positive paths", () => {
     // render's, whose closures see the preview built above.
     const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(-5);
 
+    // Each render registers five mutations; take the latest render's set so the
+    // draft mutation closes over the preview items built above.
+    const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(-5);
+
     await expect(saveDraft.mutationFn()).resolves.toEqual({ ok: true });
     expect(harness.apiRequest).toHaveBeenCalledWith(
       "POST",

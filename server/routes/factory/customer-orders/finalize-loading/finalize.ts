@@ -29,6 +29,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
+import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
 
 export function registerOrderFinalizeRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/finalize", requireAuth, async (req: Request, res: Response) => {
@@ -273,6 +274,21 @@ export function registerOrderFinalizeRoutes(app: Express) {
 
         return { ...finalOrder, lines: finalLines, bales: finalBales, charges: finalCharges };
       });
+
+      // Freeze the exact commercial document immediately after finalization.
+      // Exporters will keep using this snapshot even if catalog names, category
+      // assignments, customer details, weights or company currency change later.
+      try {
+        await freezeCanonicalInvoiceDocument(orderId, companyId, true);
+      } catch (snapshotError) {
+        // Finalization itself is already committed. Do not report it as failed;
+        // the first subsequent export will retry the same immutable snapshot write.
+        logger.error("[InvoiceSnapshot] Could not freeze finalized invoice immediately", {
+          orderId,
+          companyId,
+          error: snapshotError,
+        });
+      }
 
       const today = req.body.txDate || req.body.invoiceDate || getClientDate(req);
       // The transaction result spreads a customer_orders row, which keys the order

@@ -5,17 +5,19 @@ import { ensureHistoricalSalesCostRepairSchema } from "../server/services/invent
 import {
   HISTORICAL_SALES_COST_PARTIAL_APPLY_MODE,
   applyHistoricalSalesCostPartialWithClient,
-  partialApplyConfirmation,
-  partialRollbackConfirmation,
   previewHistoricalSalesCostPartialApplyWithClient,
   rollbackHistoricalSalesCostPartialWithClient,
-  rowSetIntegrityViolations,
-  tableWriteViolations,
   validatePartialApplyInput,
   validatePartialRollbackInput,
   verifyHistoricalSalesCostPartialApplyWithClient,
-  type PartialApplyDeps,
 } from "../server/services/inventory/historicalSalesCostPartialApply";
+import {
+  partialApplyConfirmation,
+  partialRollbackConfirmation,
+  rowSetIntegrityViolations,
+  tableWriteViolations,
+  type PartialApplyDeps,
+} from "../server/services/inventory/historicalSalesCostPartialApplyGuards";
 import { HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION } from "../server/services/inventory/historicalSalesCostRepairEngine";
 
 const AUDIT = "a".repeat(64);
