@@ -107,7 +107,7 @@ function naturalCompare(a: string, b: string): number {
 }
 
 function extractSeasonNumber(value: string): number | null {
-  const match = value.match(/\\b(?:summer|winter|number|no\\.?|n[°º]|#)\\s*[-:]?\\s*(\\d+)\\b/i);
+  const match = value.match(/\b(?:summer|winter|number|no\.?|n[°º]|#)\s*[-:]?\s*(\d+)\b/i);
   if (!match) return null;
   const parsed = Number.parseInt(match[1], 10);
   return Number.isFinite(parsed) ? parsed : null;
@@ -117,7 +117,7 @@ function extractCategoryNumber(value: string): number | null {
   const seasonNumber = extractSeasonNumber(value);
   if (seasonNumber !== null) return seasonNumber;
 
-  const match = value.match(/\\b(\\d+)\\b(?!\\s*(?:kg|kgs|kilograms?|lb|lbs)\\b)/i);
+  const match = value.match(/\b(\d+)\b(?!\s*(?:kg|kgs|kilograms?|lb|lbs)\b)/i);
   if (!match) return null;
   const parsed = Number.parseInt(match[1], 10);
   return Number.isFinite(parsed) ? parsed : null;
@@ -125,8 +125,8 @@ function extractCategoryNumber(value: string): number | null {
 
 function lineSeasonRank(line: CanonicalInvoiceLine): number {
   const value = `${line.category} ${line.productName}`.toLowerCase();
-  if (/\\bsummer\\b/.test(value)) return 0;
-  if (/\\bwinter\\b/.test(value)) return 1;
+  if (/\bsummer\b/.test(value)) return 0;
+  if (/\bwinter\b/.test(value)) return 1;
   return 2;
 }
 
@@ -150,7 +150,7 @@ export function buildInvoiceRenderGroups(
     let sortBucket: number;
     let sortNumber: number;
 
-    if (/\\bcream\\b/i.test(rawCategory)) {
+    if (/\bcream\b/i.test(rawCategory)) {
       key = "cream";
       label = extraLabels.creamGroup;
       sortBucket = 0;
