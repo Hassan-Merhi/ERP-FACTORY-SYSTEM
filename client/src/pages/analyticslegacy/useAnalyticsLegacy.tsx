@@ -459,12 +459,7 @@ export function useAnalyticsLegacy() {
   });
 
   const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
-    queryKey: [
-      "/api/factory/analytics/pos-summary",
-      selectedCompany?.id,
-      periodFilter.fromDate,
-      periodFilter.toDate,
-    ],
+    queryKey: ["/api/factory/analytics/pos-summary", selectedCompany?.id, periodFilter.fromDate, periodFilter.toDate],
     queryFn: async () => {
       const res = await fetch(buildFactorySalesUrl("/api/factory/analytics/pos-summary"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch factory POS summary");
