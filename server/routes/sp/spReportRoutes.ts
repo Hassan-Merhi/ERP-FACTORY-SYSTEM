@@ -116,6 +116,7 @@ export function registerSpReportRoutes(app: Express) {
           WHERE ve.ledger_account_id = ${sharedAcct.id}
             AND v.company_id         = ${companyId}
             AND v.deleted_at IS NULL
+            AND v.optional = false
             ${startDate ? sql`AND v.voucher_date >= ${startDate}` : sql``}
             ${endDate ? sql`AND v.voucher_date <= ${endDate}` : sql``}
         `);
