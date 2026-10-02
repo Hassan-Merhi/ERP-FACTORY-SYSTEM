@@ -145,6 +145,8 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS fiscal_closures_company_period_unique
       ON fiscal_period_closures (company_id, period_end_date);
+    ALTER TABLE fiscal_period_closures
+      ADD COLUMN IF NOT EXISTS opening_balance_snapshot JSONB;
 
     CREATE TABLE IF NOT EXISTS factory_status_builder_log (
       id           SERIAL PRIMARY KEY,

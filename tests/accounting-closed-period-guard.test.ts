@@ -180,7 +180,9 @@ describe("closed fiscal period lock — HTTP", () => {
       periodEndDate: "2024-12-31",
       retainedEarningsAccountId: retainedEarningsId,
     });
-    expect(response.status).toBe(409);
+    // Periods are contiguous: after FY2025 only 2026-01-01 can start the next.
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("2026-01-01");
   });
 });
 

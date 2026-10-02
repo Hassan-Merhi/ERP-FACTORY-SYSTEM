@@ -200,4 +200,79 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "لا يمكن إنشاء السندات إلا في الشركة المحددة",
     fr: "Les pièces ne peuvent être créées que dans la société sélectionnée",
   },
+  {
+    en: "Fiscal Period Reopened",
+    ar: "تمت إعادة فتح الفترة المالية",
+    fr: "Période fiscale rouverte",
+  },
+  {
+    en: "Reopen fiscal period",
+    ar: "إعادة فتح الفترة المالية",
+    fr: "Rouvrir la période fiscale",
+  },
+  {
+    en: "The period is open again.",
+    ar: "الفترة مفتوحة مجدداً.",
+    fr: "La période est de nouveau ouverte.",
+  },
+  {
+    en: "Reopen period",
+    ar: "إعادة فتح الفترة",
+    fr: "Rouvrir la période",
+  },
+  {
+    en: "Reopening...",
+    ar: "جارٍ إعادة الفتح...",
+    fr: "Réouverture...",
+  },
+  {
+    en: "Failed to reopen fiscal period",
+    ar: "فشلت إعادة فتح الفترة المالية",
+    fr: "Échec de la réouverture de la période fiscale",
+  },
+  {
+    en: "Reopening removes the closing journal, restores the income and expense opening balances, and unlocks the books for this period. Enter a reason; it is recorded in the audit log.",
+    ar: "تؤدي إعادة الفتح إلى إزالة قيد الإقفال واستعادة الأرصدة الافتتاحية للإيرادات والمصروفات وفتح الدفاتر لهذه الفترة. أدخل سبباً؛ سيُسجَّل في سجل التدقيق.",
+    fr: "La réouverture supprime l'écriture de clôture, rétablit les soldes d'ouverture des produits et charges et déverrouille les livres pour cette période. Saisissez un motif ; il est enregistré dans le journal d'audit.",
+  },
+  {
+    en: "A reason is required to reopen a fiscal period",
+    ar: "يلزم ذكر سبب لإعادة فتح فترة مالية",
+    fr: "Un motif est requis pour rouvrir une période fiscale",
+  },
+  {
+    en: "Invalid fiscal period closure ID",
+    ar: "معرّف إقفال الفترة المالية غير صالح",
+    fr: "Identifiant de clôture de période fiscale invalide",
+  },
+  {
+    en: "Only Admins can reopen fiscal periods",
+    ar: "يمكن للمسؤولين فقط إعادة فتح الفترات المالية",
+    fr: "Seuls les administrateurs peuvent rouvrir les périodes fiscales",
+  },
+  {
+    en: "Fiscal period closure not found",
+    ar: "لم يتم العثور على إقفال الفترة المالية",
+    fr: "Clôture de période fiscale introuvable",
+  },
+  {
+    en: "The books are closed through ${latest.periodEndDate}; the next period must start on ${expectedStart}",
+    ar: "الدفاتر مغلقة حتى {{0}}؛ يجب أن تبدأ الفترة التالية في {{1}}",
+    fr: "Les livres sont clôturés jusqu'au {{0}} ; la période suivante doit commencer le {{1}}",
+  },
+  {
+    en: "Income or expense entries exist from ${earliest}, before the period start. Start the first closed period on or before ${earliest}.",
+    ar: "توجد قيود إيرادات أو مصروفات منذ {{0}}، قبل بداية الفترة. ابدأ أول فترة مغلقة في {{1}} أو قبله.",
+    fr: "Des écritures de produits ou de charges existent depuis le {{0}}, avant le début de la période. Commencez la première période clôturée le {{1}} ou avant.",
+  },
+  {
+    en: "Only the latest closed period can be reopened (ending ${closures[0]?.periodEndDate})",
+    ar: "لا يمكن إعادة فتح إلا آخر فترة مغلقة (المنتهية في {{0}})",
+    fr: "Seule la dernière période clôturée peut être rouverte (se terminant le {{0}})",
+  },
+  {
+    en: "Account ${entry.accountId} has a new opening balance since the close; reopening would overwrite it",
+    ar: "للحساب {{0}} رصيد افتتاحي جديد منذ الإقفال؛ ستؤدي إعادة الفتح إلى استبداله",
+    fr: "Le compte {{0}} a un nouveau solde d'ouverture depuis la clôture ; la réouverture l'écraserait",
+  },
 ];

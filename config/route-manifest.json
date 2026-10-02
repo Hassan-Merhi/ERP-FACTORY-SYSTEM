@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2022,
+  "routeCount": 2023,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1430,6 +1430,7 @@
     "GET /api/voucher-entries/by-account/:accountId [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/voucher-entries/transfer-account [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/fiscal-period/close [requireAuth > <anonymous>]",
+    "POST /api/fiscal-period/:id/reopen [requireAuth > <anonymous>]",
     "GET /api/fiscal-period/closures [requireAuth > <anonymous>]",
     "GET /api/financial/sales [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/financial/sales/:locationId/details [requireAuth > checkPOSLocation > <anonymous>]",

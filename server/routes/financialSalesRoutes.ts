@@ -10,6 +10,8 @@ import { getErrorMessage, errorStatus } from "../lib/httpHandlers";
 import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
+import { FiscalPeriodCloseError } from "../storage/accounting/fiscal-periods";
+import { logAudit } from "./_helpers";
 import { requireAuth, requireNonPOS, checkPOSLocation } from "../auth";
 import { ledgerAccounts, locations, salesItems, stockItems, voucherEntries, vouchers } from "@shared/schema";
 
@@ -90,7 +92,48 @@ export function registerFinancialSalesRoutes(app: Express) {
 
       res.json(closure);
     } catch (error: unknown) {
-      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
+      const status = error instanceof FiscalPeriodCloseError ? error.status : errorStatus(error);
+      res.status(status).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Reopen the latest closed fiscal period (Admin). Soft-deletes the closing
+  // journal, restores the opening balances the close zeroed and lifts the lock
+  // back to the previous close. A reason is required and audited.
+  app.post("/api/fiscal-period/:id/reopen", requireAuth, async (req, res) => {
+    try {
+      const userRole = req.session.currentRole;
+      if (userRole !== "Admin" && userRole !== "Developer") {
+        return res.status(403).json({ message: "Only Admins can reopen fiscal periods" });
+      }
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const closureId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(closureId) || closureId <= 0) {
+        return res.status(400).json({ message: "Invalid fiscal period closure ID" });
+      }
+      const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : "";
+      if (!reason) return res.status(400).json({ message: "A reason is required to reopen a fiscal period" });
+
+      const closure = await storage.reopenFiscalPeriod(companyId, closureId);
+      await logAudit({
+        userId: req.session.userId!,
+        username: req.session.username || "unknown",
+        companyId,
+        action: "reverse",
+        tableName: "fiscal_period_closures",
+        recordId: closure.id,
+        recordIdentifier: `${closure.periodStartDate}..${closure.periodEndDate}`,
+        changes: {
+          status: { old: "CLOSED", new: "REOPENED" },
+          closingVoucherId: { old: closure.closingVoucherId, new: null },
+          reason: { old: undefined, new: reason },
+        },
+      });
+      res.json({ reopened: true, periodStartDate: closure.periodStartDate, periodEndDate: closure.periodEndDate });
+    } catch (error: unknown) {
+      const status = error instanceof FiscalPeriodCloseError ? error.status : errorStatus(error);
+      res.status(status).json({ message: getErrorMessage(error) });
     }
   });
 
