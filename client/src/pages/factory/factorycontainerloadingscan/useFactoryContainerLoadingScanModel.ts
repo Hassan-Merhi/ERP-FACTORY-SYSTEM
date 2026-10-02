@@ -106,6 +106,23 @@ export function useFactoryContainerLoadingScanModel() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const ignoreProformaRef = useRef(false);
   const scanSubmissionInFlightRef = useRef(false);
+  // The scan flash and result popups reset on timers that set state. Clear any
+  // still pending when the page unmounts so none fires into a torn-down tree.
+  const flashTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const scheduleFlashReset = useCallback((reset: () => void, delayMs: number) => {
+    const timer = setTimeout(() => {
+      flashTimersRef.current.delete(timer);
+      reset();
+    }, delayMs);
+    flashTimersRef.current.add(timer);
+  }, []);
+  useEffect(() => {
+    const timers = flashTimersRef.current;
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
 
   const toggleIgnoreProforma = useCallback(() => {
     const enabled = !ignoreProformaRef.current;
@@ -304,7 +321,7 @@ export function useFactoryContainerLoadingScanModel() {
       setScanFlash("success");
       setShowScanSuccessPopup(true);
       playScanBeep(SCAN_SUCCESS_TONE.frequency, SCAN_SUCCESS_TONE.durationMs);
-      setTimeout(() => {
+      scheduleFlashReset(() => {
         setScanFlash(null);
         setShowScanSuccessPopup(false);
       }, 500);
@@ -344,7 +361,7 @@ export function useFactoryContainerLoadingScanModel() {
         setPendingBypassBaleRef(null);
         setScanFlash("error");
         playScanBeep(SCAN_OVERLOAD_TONE.frequency, SCAN_OVERLOAD_TONE.durationMs);
-        setTimeout(() => setScanFlash(null), 600);
+        scheduleFlashReset(() => setScanFlash(null), 600);
         setScanCode("");
         return;
       }
@@ -353,14 +370,14 @@ export function useFactoryContainerLoadingScanModel() {
         setPendingBypassOverloadRef(null);
         setScanFlash("error");
         playScanBeep(SCAN_NOT_IN_PROFORMA_TONE.frequency, SCAN_NOT_IN_PROFORMA_TONE.durationMs);
-        setTimeout(() => setScanFlash(null), 600);
+        scheduleFlashReset(() => setScanFlash(null), 600);
         setScanCode("");
         return;
       }
       setScanFlash("error");
       setShowScanErrorPopup(true);
       playScanErrorSweep();
-      setTimeout(() => {
+      scheduleFlashReset(() => {
         setScanFlash(null);
         setShowScanErrorPopup(false);
       }, 1500);
