@@ -71,10 +71,6 @@ async function loadOrder(orderId: number, companyId: number) {
   return { order, lines, charges };
 }
 
-function currencySymbol(currency: unknown): string {
-  const code = String(currency || "USD").toUpperCase();
-  return ({ USD: "$", EUR: "€", GBP: "£", XOF: "CFA", XAF: "CFA", CFA: "CFA" } as Record<string, string>)[code] ?? code;
-}
 
 function safeNumber(value: unknown): number {
   const number = Number(value);
