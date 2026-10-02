@@ -7,7 +7,7 @@
 | Backend | `vitest.config.ts` | Node + PostgreSQL where required | APIs, accounting, inventory, security, static contracts, and integration flows |
 | Frontend | `vitest.config.frontend.ts` | jsdom | React rendering, interactions, responsive behaviour, RTL, and accessibility contracts |
 | Smoke sweep | `vitest.config.smoke-sweep.ts` | Built app + PostgreSQL | Registered API shapes and non-5xx behaviour |
-| Release | GitHub Actions + CircleCI | Node 24.19.0 + PostgreSQL 16 | Coverage, ratchets, build, security, migration, resilience, and exact-SHA certification |
+| Release | GitHub Actions + CircleCI | Node 24.21.0 + PostgreSQL 16 | Coverage, ratchets, build, security, migration, resilience, and exact-SHA certification |
 
 Do not record passing-test totals in this reference document. The suite changes
 frequently; the authoritative count is the output attached to the exact commit

@@ -215,7 +215,7 @@ Both contain explicit PR-aware logic, but neither currently declares a `pull_req
 
 ## Toolchain naming drift
 
-The actual canonical Node runtime used by current workflows is `24.21.0`, while several human-readable step names still say `Node.js 24.19.0`. This is label/documentation drift rather than a runtime mismatch and should be normalized during consolidation.
+The canonical Node runtime is `24.21.0`. Workflow step names and the deployment docs used to say `24.19.0`; they were normalized to `24.21.0` on 2026-10-02.
 
 ## Target ownership after consolidation
 

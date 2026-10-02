@@ -8,7 +8,7 @@ incidents into this reference.
 
 | Component | Required baseline |
 |---|---|
-| Node.js | 24.19.0 (`.node-version`, `.nvmrc`, CI, CircleCI, and Render) |
+| Node.js | 24.21.0 (`.node-version`, `.nvmrc`, CI, CircleCI, and Render) |
 | PostgreSQL | 16 |
 | Build | `npm ci --registry=https://registry.npmjs.org/ && npm run build` |
 | Start | `npm start` |
