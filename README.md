@@ -42,7 +42,12 @@ npm run dev
 ```
 
 Do not run `db:push` against a persistent or production database. The command is
-reserved for disposable CI/test databases while schema drift is being retired.
+reserved for disposable CI/test databases while schema drift is being retired:
+many tables are still created by runtime startup DDL rather than declared in
+`shared/schema` (listed in `config/runtime-only-tables.json`), and drizzle-kit
+would drop them. `npm run db:push` therefore refuses any database that already
+holds companies (override with `DB_PUSH_ALLOW_NONEMPTY=1` only if you are
+certain), and `drizzle.config.ts` limits drizzle-kit to declared tables.
 
 ### Environment variables
 
