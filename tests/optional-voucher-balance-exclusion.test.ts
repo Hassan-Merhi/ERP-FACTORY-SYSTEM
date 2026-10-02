@@ -108,4 +108,3 @@ describe("factory cash account balance", () => {
     expect(Number(after.body.balance) - start).toBeCloseTo(20, 2);
   });
 });
-
