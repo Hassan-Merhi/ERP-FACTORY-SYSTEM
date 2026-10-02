@@ -849,4 +849,39 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     ar: "الربح بالتكلفة المعدّلة",
     fr: "Bénéfice au coût ajusté",
   },
+  {
+    en: "Freight + Charges:",
+    ar: "الشحن + الرسوم:",
+    fr: "Fret + frais :",
+  },
+  {
+    en: "Included",
+    ar: "مشمولة",
+    fr: "Inclus",
+  },
+  {
+    en: "Excluded",
+    ar: "مستبعدة",
+    fr: "Exclus",
+  },
+  {
+    en: "include",
+    ar: "تشمل",
+    fr: "incluent",
+  },
+  {
+    en: "exclude",
+    ar: "تستثني",
+    fr: "excluent",
+  },
+  {
+    en: "With Charges",
+    ar: "مع الرسوم",
+    fr: "Avec frais",
+  },
+  {
+    en: "Invalid includeCharges filter",
+    ar: "عامل تصفية includeCharges غير صالح",
+    fr: "Filtre includeCharges non valide",
+  },
 ];
