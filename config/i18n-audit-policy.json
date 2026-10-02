@@ -28,6 +28,11 @@
       "reason": "Explicit translation source files are not untranslated interface consumers."
     },
     {
+      "pattern": "factoryDocumentLanguage\\.ts$",
+      "category": "translation-source",
+      "reason": "Factory invoice/loading document labels are an explicit English/Arabic/French translation dictionary."
+    },
+    {
       "pattern": "(^|/)(__tests__|fixtures|mocks)(/|$)|\\.(spec|test)\\.(ts|tsx)$",
       "category": "test-source",
       "reason": "Test and fixture prose is not shipped as application interface text."
