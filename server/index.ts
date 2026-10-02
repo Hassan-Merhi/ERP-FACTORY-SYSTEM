@@ -42,6 +42,7 @@ import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTracking
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
+import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -257,6 +258,8 @@ let migrationsDone = false;
       await ensureRuntimeSchema(pool);
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
+      await ensureFactoryInvoiceDocumentSnapshotStore(pool);
+      logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       await bootstrapRecurringJournalFromEnvironment();
       try {
         // Factory Production Targets and Attendance Register must be available
