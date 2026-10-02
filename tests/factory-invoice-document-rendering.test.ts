@@ -1,0 +1,129 @@
+import ExcelJS from "exceljs";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("../server/db", () => ({
+  db: { execute: vi.fn() },
+}));
+
+import {
+  buildCanonicalInvoiceExcel,
+  buildCanonicalInvoicePdf,
+  type CanonicalInvoiceDocument,
+} from "../server/services/factoryInvoiceDocumentService";
+
+const invoice: CanonicalInvoiceDocument = {
+  version: 1,
+  orderId: 11953,
+  companyId: 1,
+  invoiceNumber: "INV-011953",
+  orderDate: "2026-09-19",
+  status: "FINALIZED",
+  customerName: "HASSAN DAKIK CLIENT",
+  customerCode: "HDC",
+  baseCurrency: "USD",
+  containerNumber: "TCNU3846298",
+  destination: "MALI",
+  shippingCompany: "",
+  subtotalBales: 34755,
+  freightAmount: 3518,
+  otherChargesTotal: 708,
+  grandTotal: 38981,
+  totalQtyBales: 606,
+  lines: [
+    {
+      articleCode: "GS10001",
+      productName: "CREAM SUMMER 45KG",
+      productNameAr: null,
+      productNameFr: null,
+      category: "Cream Summer",
+      categoryAr: null,
+      categoryFr: null,
+      qty: 2,
+      weightPerBale: 45,
+      totalWeight: 90,
+      pricingMode: "per_bale",
+      pricePerBale: 120,
+      pricePerKg: 0,
+      unitPrice: 120,
+      totalPrice: 240,
+    },
+  ],
+  charges: [
+    { id: 1, name: "CLEARANCE", amount: 708, chargeType: "OTHER" },
+    { id: 2, name: "Freight", amount: 3518, chargeType: "FREIGHT" },
+  ],
+  frozenAt: "2026-09-19T12:00:00.000Z",
+};
+
+describe("canonical factory invoice rendering", () => {
+  it("renders Category in Excel and keeps quantitative cells numeric", async () => {
+    const { buffer, fileName } = await buildCanonicalInvoiceExcel(invoice, { language: "en" });
+
+    expect(fileName).toMatch(/\.xlsx$/);
+    expect(buffer.subarray(0, 2).toString("ascii")).toBe("PK");
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+    const sheet = workbook.worksheets[0];
+
+    let headerRowNumber = 0;
+    sheet.eachRow((row) => {
+      const values = (row.values as unknown[]).map((value) => String(value ?? ""));
+      if (values.includes("Category") && values.includes("Article Code")) headerRowNumber = row.number;
+    });
+
+    expect(headerRowNumber).toBeGreaterThan(0);
+    const header = sheet.getRow(headerRowNumber);
+    const headers = (header.values as unknown[]).map((value) => String(value ?? ""));
+    const categoryColumn = headers.indexOf("Category");
+    const qtyColumn = headers.indexOf("Qty");
+    const totalWeightColumn = headers.indexOf("Total Wt");
+    const unitPriceColumn = headers.indexOf("Price/Bale");
+    const totalColumn = headers.indexOf("Total");
+
+    const dataRow = sheet.getRow(headerRowNumber + 1);
+    expect(dataRow.getCell(categoryColumn).value).toBe("Cream Summer");
+    expect(dataRow.getCell(qtyColumn).value).toBe(2);
+    expect(dataRow.getCell(totalWeightColumn).value).toBe(90);
+    expect(dataRow.getCell(unitPriceColumn).value).toBe(120);
+    expect(dataRow.getCell(totalColumn).value).toBe(240);
+  });
+
+  it("renders the same canonical document as a valid PDF", async () => {
+    const { buffer, fileName } = await buildCanonicalInvoicePdf(invoice, { language: "en" });
+
+    expect(fileName).toMatch(/\.pdf$/);
+    expect(buffer.subarray(0, 4).toString("ascii")).toBe("%PDF");
+    expect(buffer.length).toBeGreaterThan(500);
+  });
+
+  it("uses a neutral Unit Price heading when pricing modes are mixed", async () => {
+    const mixed: CanonicalInvoiceDocument = {
+      ...invoice,
+      lines: [
+        invoice.lines[0],
+        {
+          ...invoice.lines[0],
+          articleCode: "GS10002",
+          productName: "SUMMER KG ITEM",
+          category: "Summer",
+          pricingMode: "per_kg",
+          pricePerBale: 0,
+          pricePerKg: 1.25,
+          unitPrice: 1.25,
+          totalPrice: 112.5,
+        },
+      ],
+    };
+
+    const { buffer } = await buildCanonicalInvoiceExcel(mixed, { language: "en" });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+    const values = workbook.worksheets[0]
+      .getSheetValues()
+      .flatMap((row: any) => (Array.isArray(row) ? row : []))
+      .map(String);
+
+    expect(values).toContain("Unit Price");
+  });
+});
