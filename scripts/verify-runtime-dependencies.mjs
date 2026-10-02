@@ -33,7 +33,7 @@
  */
 import { readFileSync, existsSync } from "fs";
 import { builtinModules } from "module";
-import { dirname, resolve } from "path";
+import { dirname, isAbsolute, relative, resolve } from "path";
 
 const ROOT = process.cwd();
 const META = resolve(ROOT, "dist/server-build-meta.json");
@@ -96,7 +96,22 @@ const STATIC_IMPORT_LINE = /^\s*import\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["']
 // dynamic - through every local module a preload reaches.
 const DYNAMIC_RELATIVE_IMPORT = /\bimport\(\s*["'](\.[^"']+)["']\s*\)/g;
 const visitedPreloadModules = new Set();
-const pendingPreloadModules = preloads.map((relative) => resolve(ROOT, relative));
+
+/** Resolves a preload module path and refuses anything outside the repository. */
+function resolvePreloadModule(base, specifier) {
+  // Specifiers come from this repo's package.json and source files, and the
+  // result is checked to stay inside ROOT below.
+  // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+  const resolved = resolve(base, specifier);
+  const fromRoot = relative(ROOT, resolved);
+  if (fromRoot.startsWith("..") || isAbsolute(fromRoot)) {
+    console.error(`❌  Preload module resolves outside the repository: ${specifier}`);
+    process.exit(1);
+  }
+  return resolved;
+}
+
+const pendingPreloadModules = preloads.map((preload) => resolvePreloadModule(ROOT, preload));
 while (pendingPreloadModules.length > 0) {
   const path = pendingPreloadModules.pop();
   if (visitedPreloadModules.has(path) || !existsSync(path)) continue;
@@ -109,7 +124,7 @@ while (pendingPreloadModules.length > 0) {
   }
   for (const [, specifier] of source.matchAll(DYNAMIC_RELATIVE_IMPORT)) relativeSpecifiers.push(specifier);
   for (const specifier of relativeSpecifiers) {
-    if (/\.m?js$/.test(specifier)) pendingPreloadModules.push(resolve(dirname(path), specifier));
+    if (/\.m?js$/.test(specifier)) pendingPreloadModules.push(resolvePreloadModule(dirname(path), specifier));
   }
 }
 
