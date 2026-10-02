@@ -1,4 +1,5 @@
 import { and, eq, inArray, or } from "drizzle-orm";
+import { softDeleteVoucherTx } from "./accounting/voucherSoftDelete";
 import { db, type DbTransaction } from "../db";
 import { reverseInventoryByExactValue } from "../inventoryHelper";
 import {
@@ -273,8 +274,7 @@ export async function deleteStockTransferVoucher(input: {
       const otherVoucherId = linked.fromVoucherId === voucherId ? linked.toVoucherId : linked.fromVoucherId;
       await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, linked.id));
       if (otherVoucherId && otherVoucherId !== voucherId) {
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
-        await tx.delete(vouchers).where(eq(vouchers.id, otherVoucherId));
+        await softDeleteVoucherTx(tx, otherVoucherId);
       }
     }
 

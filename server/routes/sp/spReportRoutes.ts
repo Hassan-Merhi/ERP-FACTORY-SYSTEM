@@ -243,6 +243,8 @@ export function registerSpReportRoutes(app: Express) {
           FROM voucher_entries ve
           JOIN vouchers v ON ve.voucher_id = v.id
           WHERE ve.ledger_account_id = ${payableAcct.id} AND v.company_id = ${companyId}
+            AND v.deleted_at IS NULL
+            AND v.optional = false
         `);
         const pr = resultRows(payRows)[0];
         paymentsTotal = parseNum(pr?.total_payments);
