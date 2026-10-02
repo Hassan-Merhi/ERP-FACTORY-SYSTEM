@@ -6,8 +6,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { DatePickerInput } from "@/components/ui/date-picker-input";
 import { ChevronRight } from "lucide-react";
 import { formatNumber } from "@/lib/formatNumber";
 
@@ -22,20 +20,11 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     factoryPosSummary,
     factoryCustomerOrderAnalytics,
     factoryCustomerOrderAnalyticsError,
-    factoryOrderCustomerSearch,
-    factoryOrderDestinationSearch,
-    factoryOrderItemSearch,
-    factoryOrderLocationSearch,
     factoryOrderPage,
-    factoryOrderStatus,
-    factorySalesByCustomer,
-    factorySalesEndDate,
-    factorySalesStartDate,
     formatAmount,
     formatDisplayDate,
     loadingFactoryPos,
     loadingFactoryCustomerOrders,
-    loadingFactorySales,
     rangeEnd,
     rangeStart,
     salesData,
@@ -43,14 +32,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     selectedLocationForDetails,
     selectedPeriod,
     setDetailsPeriod,
-    setFactoryOrderCustomerSearch,
-    setFactoryOrderDestinationSearch,
-    setFactoryOrderItemSearch,
-    setFactoryOrderLocationSearch,
     setFactoryOrderPage,
-    setFactoryOrderStatus,
-    setFactorySalesEndDate,
-    setFactorySalesStartDate,
     setRangeEnd,
     setRangeStart,
     setSelectedLocationForDetails,
@@ -77,29 +59,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
         <>
           {appMode === "factory" ? (
             <>
-              {/* ── Date filter row ─────────────────────────────── */}
-              <div className="flex flex-wrap items-center gap-3 mb-2">
-                <Label className="text-sm text-muted-foreground shrink-0">Date range:</Label>
-                <DatePickerInput
-                  value={factorySalesStartDate}
-                  onChange={setFactorySalesStartDate}
-                  placeholder="Start date"
-                />
-                <span className="text-muted-foreground text-sm">—</span>
-                <DatePickerInput value={factorySalesEndDate} onChange={setFactorySalesEndDate} placeholder="End date" />
-                {(factorySalesStartDate || factorySalesEndDate) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFactorySalesStartDate("");
-                      setFactorySalesEndDate("");
-                    }}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
+
 
               {/* ── Customer orders grouped by customer ─────────────── */}
               <Card className="p-4 md:p-6">
@@ -109,62 +69,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight
                     and extra charges.
                   </p>
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 mb-4">
-                  <Input
-                    value={factoryOrderItemSearch}
-                    onChange={(e) => {
-                      setFactoryOrderItemSearch(e.target.value);
-                      setFactoryOrderPage(1);
-                    }}
-                    placeholder="Item / article"
-                    data-testid="input-factory-order-item"
-                  />
-                  <Input
-                    value={factoryOrderCustomerSearch}
-                    onChange={(e) => {
-                      setFactoryOrderCustomerSearch(e.target.value);
-                      setFactoryOrderPage(1);
-                    }}
-                    placeholder="Customer"
-                    data-testid="input-factory-order-customer"
-                  />
-                  <Input
-                    value={factoryOrderDestinationSearch}
-                    onChange={(e) => {
-                      setFactoryOrderDestinationSearch(e.target.value);
-                      setFactoryOrderPage(1);
-                    }}
-                    placeholder="Destination"
-                    data-testid="input-factory-order-destination"
-                  />
-                  <Input
-                    value={factoryOrderLocationSearch}
-                    onChange={(e) => {
-                      setFactoryOrderLocationSearch(e.target.value);
-                      setFactoryOrderPage(1);
-                    }}
-                    placeholder="Location"
-                    data-testid="input-factory-order-location"
-                  />
-                  <Select
-                    value={factoryOrderStatus}
-                    onValueChange={(value) => {
-                      setFactoryOrderStatus(value);
-                      setFactoryOrderPage(1);
-                    }}
-                  >
-                    <SelectTrigger data-testid="select-factory-order-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Loading + Verified + Finalized</SelectItem>
-                      <SelectItem value="LOADING">Loading</SelectItem>
-                      <SelectItem value="VERIFIED">Verified</SelectItem>
-                      <SelectItem value="FINALIZED">Finalized</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 {loadingFactoryCustomerOrders ? (
@@ -224,7 +128,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
 
                     {factoryCustomerOrderAnalytics.rows.length === 0 ? (
                       <p className="text-sm text-muted-foreground text-center py-8">
-                        No customer invoices match these filters
+                        No customer invoices for this period
                       </p>
                     ) : (
                       <div className="table-responsive">
@@ -380,83 +284,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                 )}
               </Card>
 
-              {/* ── Factory OS – By Customer ─────────────────────── */}
-              <Card className="p-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-medium">Factory OS — By Customer</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Container sales from the factory system, grouped by customer
-                  </p>
-                </div>
-                {loadingFactorySales ? (
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((i) => (
-                      <Skeleton key={i} className="h-12 w-full" />
-                    ))}
-                  </div>
-                ) : factorySalesByCustomer.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-8">No factory OS sales data available</p>
-                ) : (
-                  <div className="table-responsive">
-                    <Table>
-                      <TableHeader className="sticky top-0 z-30 bg-background">
-                        <TableRow>
-                          <TableHead>Customer</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">Containers</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">Total Value</TableHead>
-                          <TableHead className="text-right hidden sm:table-cell">Paid</TableHead>
-                          <TableHead className="text-right">Outstanding</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {factorySalesByCustomer.map((row) => (
-                          <TableRow key={row.customerId ?? "null"}>
-                            <TableCell className="font-medium">
-                              {row.customerName || `Customer #${row.customerId}`}
-                            </TableCell>
-                            <TableCell className="text-right hidden sm:table-cell">{row.containers}</TableCell>
-                            <TableCell className="text-right font-mono hidden sm:table-cell">
-                              {formatAmount(parseFloat(row.totalAmount))}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-green-600 dark:text-green-400 hidden sm:table-cell">
-                              {formatAmount(parseFloat(row.paidAmount))}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-amber-600 dark:text-amber-400">
-                              {formatAmount(parseFloat(row.totalAmount) - parseFloat(row.paidAmount))}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                      <TableBody className="font-semibold border-t-2">
-                        <TableRow>
-                          <TableCell>Total</TableCell>
-                          <TableCell className="text-right hidden sm:table-cell">
-                            {factorySalesByCustomer.reduce((s: number, r) => s + Number(r.containers), 0)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono hidden sm:table-cell">
-                            {formatAmount(
-                              factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.totalAmount), 0)
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono hidden sm:table-cell">
-                            {formatAmount(
-                              factorySalesByCustomer.reduce((s: number, r) => s + parseFloat(r.paidAmount), 0)
-                            )}
-                          </TableCell>
-                          <TableCell className="text-right font-mono">
-                            {formatAmount(
-                              factorySalesByCustomer.reduce(
-                                (s: number, r) => s + parseFloat(r.totalAmount) - parseFloat(r.paidAmount),
-                                0
-                              )
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </Card>
 
               {/* ── Factory POS ──────────────────────────────────── */}
               <Card className="p-6">
