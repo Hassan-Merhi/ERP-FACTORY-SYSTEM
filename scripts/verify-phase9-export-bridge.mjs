@@ -13,8 +13,13 @@ process.env.EXPORT_CHUNK_BRIDGE_MIN_BYTES = "1";
 process.env.HEAVY_EXPORT_MAX_CONCURRENT = "1";
 
 const packageJson = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
-assert.match(packageJson.scripts.dev, /--import \.\/server\/exportBufferBridge\.mjs/);
-assert.match(packageJson.scripts.start, /--import \.\/server\/exportBufferBridge\.mjs/);
+// Bridges are preloaded through the ordered manifest (server/startupPreload.mjs).
+assert.match(packageJson.scripts.dev, /--import \.\/server\/startupPreload\.mjs/);
+assert.match(packageJson.scripts.start, /--import \.\/server\/startupPreload\.mjs/);
+assert.match(
+  await readFile(path.join(root, "server/startupPreload.mjs"), "utf8"),
+  /await import\("\.\/exportBufferBridge\.mjs"\);/
+);
 assert.match(packageJson.scripts.start, /--import \.\/server\/runtimeMemoryGuard\.mjs/);
 
 const bridgeSource = await readFile(path.join(root, "server", "exportBufferBridge.mjs"), "utf8");

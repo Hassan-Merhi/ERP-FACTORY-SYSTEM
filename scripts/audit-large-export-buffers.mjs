@@ -49,8 +49,11 @@ try {
 
 const devCommand = String(packageJson.scripts?.dev || "");
 const startCommand = String(packageJson.scripts?.start || "");
-const bridgePreloadedInDev = devCommand.includes("--import ./server/exportBufferBridge.mjs");
-const bridgePreloadedInProduction = startCommand.includes("--import ./server/exportBufferBridge.mjs");
+// Bridges are preloaded through the ordered manifest (server/startupPreload.mjs).
+const startupPreloadSource = await fs.readFile(path.join(SERVER_ROOT, "startupPreload.mjs"), "utf8").catch(() => "");
+const manifestLoadsExportBridge = startupPreloadSource.includes('await import("./exportBufferBridge.mjs");');
+const bridgePreloadedInDev = devCommand.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge;
+const bridgePreloadedInProduction = startCommand.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge;
 const bridgeImplementsWorkbookStreaming = bridgeSource.includes("exportAwareWriteBuffer");
 const bridgeImplementsChunkStreaming = bridgeSource.includes("bridgedBufferConcat");
 const bridgeReady =
