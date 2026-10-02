@@ -26,15 +26,16 @@ import {
   proformaCapacityArticles,
   type ProformaCapacitySnapshot,
 } from "@/lib/proformaCapacity";
-import type {
-  AddLoadingBaleInput,
-  AddLoadingBaleResponse,
-  BaleRemoval,
-  CreateLoadingOrderResponse,
-  Customer,
-  Location,
-  OrderDetail,
-  Proforma,
+import {
+  OPEN_ORDER_STATUSES,
+  type AddLoadingBaleInput,
+  type AddLoadingBaleResponse,
+  type BaleRemoval,
+  type CreateLoadingOrderResponse,
+  type Customer,
+  type Location,
+  type OrderDetail,
+  type Proforma,
 } from "./types";
 import {
   SCAN_NOT_IN_PROFORMA_TONE,
@@ -42,12 +43,10 @@ import {
   SCAN_SUCCESS_TONE,
   playScanBeep,
   playScanErrorSweep,
+  useScanFlashReset,
 } from "./scanFeedback";
 import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
 import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
-
-/** Statuses that mean an existing loading order is still open for this proforma. */
-const OPEN_ORDER_STATUSES = ["LOADING", "DRAFT", "PENDING_VERIFICATION"];
 
 export type { BaleGroup } from "./loadedBales";
 
@@ -106,23 +105,7 @@ export function useFactoryContainerLoadingScanModel() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const ignoreProformaRef = useRef(false);
   const scanSubmissionInFlightRef = useRef(false);
-  // The scan flash and result popups reset on timers that set state. Clear any
-  // still pending when the page unmounts so none fires into a torn-down tree.
-  const flashTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
-  const scheduleFlashReset = useCallback((reset: () => void, delayMs: number) => {
-    const timer = setTimeout(() => {
-      flashTimersRef.current.delete(timer);
-      reset();
-    }, delayMs);
-    flashTimersRef.current.add(timer);
-  }, []);
-  useEffect(() => {
-    const timers = flashTimersRef.current;
-    return () => {
-      for (const timer of timers) clearTimeout(timer);
-      timers.clear();
-    };
-  }, []);
+  const scheduleFlashReset = useScanFlashReset();
 
   const toggleIgnoreProforma = useCallback(() => {
     const enabled = !ignoreProformaRef.current;
