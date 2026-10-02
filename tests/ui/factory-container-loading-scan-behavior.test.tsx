@@ -289,6 +289,46 @@ describe("factory container loading scan behavior", () => {
     expect(localStorage.getItem("lastScannedBale_77")).toBeNull();
   });
 
+  it("clears pending scan flash timers when the page unmounts", async () => {
+    // A flash reset that outlived the page used to set state after the test
+    // environment was torn down and fail Main Certification's frontend run.
+    const realSetTimeout = globalThis.setTimeout;
+    const realClearTimeout = globalThis.clearTimeout;
+    const pending = new Set<ReturnType<typeof setTimeout>>();
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout").mockImplementation(((
+      callback: () => void,
+      delay?: number
+    ) => {
+      const fromScanModel = new Error().stack?.includes("useFactoryContainerLoadingScanModel") ?? false;
+      const timer: ReturnType<typeof setTimeout> = realSetTimeout(() => {
+        pending.delete(timer);
+        callback();
+      }, delay);
+      if (fromScanModel && (delay ?? 0) > 200) pending.add(timer);
+      return timer;
+    }) as typeof setTimeout);
+    const clearTimeoutSpy = vi.spyOn(globalThis, "clearTimeout").mockImplementation(((
+      timer: ReturnType<typeof setTimeout>
+    ) => {
+      pending.delete(timer);
+      return realClearTimeout(timer);
+    }) as typeof clearTimeout);
+    try {
+      const { unmount } = render(<FactoryContainerLoadingScan />);
+      const input = await screen.findByTestId("input-scan-code");
+      fireEvent.change(input, { target: { value: "REF-3" } });
+      fireEvent.keyDown(input, { key: "Enter" });
+      await waitFor(() => expect(pending.size).toBeGreaterThan(0));
+
+      unmount();
+
+      expect([...pending]).toEqual([]);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    }
+  });
+
   it("keeps the scanner disabled until loading order details are available", async () => {
     harness.orderDetailReady = false;
 

@@ -328,7 +328,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                 )}
               </Card>
 
-
               {/* ── Factory POS ──────────────────────────────────── */}
               <Card className="p-6">
                 <div className="mb-4">
