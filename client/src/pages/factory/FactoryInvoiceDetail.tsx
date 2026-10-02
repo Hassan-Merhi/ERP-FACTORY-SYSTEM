@@ -114,9 +114,11 @@ export default function FactoryInvoiceDetail() {
     handleExportLoadingStatus,
   } = model;
 
-  const viewWithoutCharges =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "no-charges";
-  const backTarget = viewWithoutCharges ? "/factory/analytics" : "/factory/invoicing?tab=invoices";
+  const invoiceQueryParams =
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const viewWithoutCharges = invoiceQueryParams.get("view") === "no-charges";
+  const fromAnalytics = invoiceQueryParams.get("from") === "analytics";
+  const backTarget = fromAnalytics ? "/factory/analytics" : "/factory/invoicing?tab=invoices";
 
   if (isLoading) {
     return (

@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2023,
+  "routeCount": 2029,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1405,6 +1405,12 @@
     "POST /api/vouchers/journal [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/vouchers/:id/journal [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/recurring-journals [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
+    "POST /api/recurring-journals/from-voucher-number [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
+    "GET /api/recurring-journals/by-voucher/:voucherId [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
+    "POST /api/recurring-journals/from-voucher/:voucherId [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
+    "PATCH /api/recurring-journals/:id [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
+    "GET /api/recurring-journals/:id/history [requireAuth > <anonymous> > requireNonPOS > <anonymous>]",
     "POST /api/vouchers/journal [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/vouchers/:id/journal [requireAuth > requireNonPOS > <anonymous>]",
     "DELETE /api/vouchers/:id [requireAuth > <anonymous> > <anonymous>]",

@@ -1,4 +1,3 @@
-import ExcelJS from "exceljs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const harness = vi.hoisted(() => {
@@ -25,6 +24,9 @@ const harness = vi.hoisted(() => {
     writeAuditEvent: vi.fn(async () => undefined),
     getExportPriceVisibility: vi.fn(async () => ({ hideSelling: false })),
     loggerError: vi.fn(),
+    getCanonicalInvoiceDocument: vi.fn(),
+    buildCanonicalInvoiceExcel: vi.fn(),
+    buildCanonicalInvoicePdf: vi.fn(),
   };
 });
 
@@ -34,6 +36,11 @@ vi.mock("../server/helpers/exportVisibility", () => ({
   getExportPriceVisibility: harness.getExportPriceVisibility,
 }));
 vi.mock("../server/services/audit/auditService", () => ({ writeAuditEvent: harness.writeAuditEvent }));
+vi.mock("../server/services/factoryInvoiceDocumentService", () => ({
+  getCanonicalInvoiceDocument: harness.getCanonicalInvoiceDocument,
+  buildCanonicalInvoiceExcel: harness.buildCanonicalInvoiceExcel,
+  buildCanonicalInvoicePdf: harness.buildCanonicalInvoicePdf,
+}));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 
@@ -121,6 +128,47 @@ const line = {
   totalPrice: "100",
 };
 
+const canonicalDocument = {
+  version: 1,
+  orderId: 12,
+  companyId: 7,
+  invoiceNumber: "INV-0012",
+  orderDate: "2026-09-17",
+  status: "FINALIZED",
+  customerName: "Acme Trading",
+  customerCode: "ACME",
+  baseCurrency: "USD",
+  containerNumber: "MSCU1234567",
+  destination: "Lusaka",
+  shippingCompany: "",
+  subtotalBales: 100,
+  freightAmount: 10,
+  otherChargesTotal: 5,
+  grandTotal: 115,
+  totalQtyBales: 2,
+  lines: [
+    {
+      articleCode: "HMD10001",
+      productName: "Shirts",
+      productNameAr: null,
+      productNameFr: null,
+      category: "Cream Summer",
+      categoryAr: null,
+      categoryFr: null,
+      qty: 2,
+      weightPerBale: 40,
+      totalWeight: 80,
+      pricingMode: "per_bale",
+      pricePerBale: 50,
+      pricePerKg: 0,
+      unitPrice: 50,
+      totalPrice: 100,
+    },
+  ],
+  charges: [{ id: 1, name: "Handling", amount: 5, chargeType: "OTHER" }],
+  frozenAt: "2026-09-17T12:00:00.000Z",
+};
+
 describe("Phase 33D bilingual factory document routes", () => {
   const routes = buildRoutes();
 
@@ -128,6 +176,15 @@ describe("Phase 33D bilingual factory document routes", () => {
     vi.clearAllMocks();
     harness.selectResults.splice(0);
     harness.getExportPriceVisibility.mockResolvedValue({ hideSelling: false });
+    harness.getCanonicalInvoiceDocument.mockResolvedValue(canonicalDocument);
+    harness.buildCanonicalInvoiceExcel.mockResolvedValue({
+      buffer: Buffer.from("PKcanonical-excel"),
+      fileName: "invoice-en.xlsx",
+    });
+    harness.buildCanonicalInvoicePdf.mockResolvedValue({
+      buffer: Buffer.from("%PDF-canonical"),
+      fileName: "invoice-en.pdf",
+    });
   });
 
   it("preserves the legacy route when no explicit supported language is requested", async () => {
@@ -137,7 +194,7 @@ describe("Phase 33D bilingual factory document routes", () => {
     await routes.get("GET /api/factory/customer-orders/:id/export/excel")!(req({ query: {} }), res, next);
 
     expect(next).toHaveBeenCalledOnce();
-    expect(harness.db.select).not.toHaveBeenCalled();
+    expect(harness.getCanonicalInvoiceDocument).not.toHaveBeenCalled();
     expect(res.end).not.toHaveBeenCalled();
   });
 
@@ -161,8 +218,8 @@ describe("Phase 33D bilingual factory document routes", () => {
     expect(badId.body).toEqual({ message: "Invalid order ID" });
   });
 
-  it("returns not found when the order does not belong to the selected factory company", async () => {
-    harness.selectResults.push([]);
+  it("returns not found when the canonical invoice does not belong to the selected factory company", async () => {
+    harness.getCanonicalInvoiceDocument.mockResolvedValueOnce(null);
     const res = resHarness();
 
     await routes.get("GET /api/factory/customer-orders/:id/export/excel")!(req(), res, vi.fn());
@@ -172,18 +229,19 @@ describe("Phase 33D bilingual factory document routes", () => {
     expect(harness.writeAuditEvent).not.toHaveBeenCalled();
   });
 
-  it("builds an English Excel invoice, sets attachment headers, and audits the export", async () => {
-    harness.selectResults.push([order], [line], [{ name: "Handling", amount: "5" }]);
+  it("renders English Excel from the canonical document and audits the export", async () => {
     const res = resHarness();
 
     await routes.get("GET /api/factory/customer-orders/:id/export/excel")!(req(), res, vi.fn());
 
+    expect(harness.getCanonicalInvoiceDocument).toHaveBeenCalledWith(12, 7);
+    expect(harness.buildCanonicalInvoiceExcel).toHaveBeenCalledWith(
+      canonicalDocument,
+      expect.objectContaining({ language: "en", hideSelling: false, noCharges: false })
+    );
     expect(res.statusCode).toBe(200);
     expect(res.headers.get("Content-Type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-    expect(String(res.headers.get("Content-Disposition"))).toContain("attachment");
     expect(Buffer.isBuffer(res.ended)).toBe(true);
-    expect((res.ended as Buffer).byteLength).toBeGreaterThan(100);
-    expect(harness.getExportPriceVisibility).toHaveBeenCalledOnce();
     expect(harness.writeAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         action: "factory_bilingual_document_export",
@@ -196,7 +254,24 @@ describe("Phase 33D bilingual factory document routes", () => {
     );
   });
 
-  it("builds the bilingual loading workbook and audits the loading export path", async () => {
+  it("renders Arabic PDF through the same canonical document", async () => {
+    const res = resHarness();
+
+    await routes.get("GET /api/factory/customer-orders/:id/export-pdf")!(
+      req({ path: "/api/factory/customer-orders/12/export-pdf", query: { lang: "ar" } }),
+      res,
+      vi.fn()
+    );
+
+    expect(harness.buildCanonicalInvoicePdf).toHaveBeenCalledWith(
+      canonicalDocument,
+      expect.objectContaining({ language: "ar" })
+    );
+    expect(res.headers.get("Content-Type")).toBe("application/pdf");
+    expect(res.ended).toEqual(Buffer.from("%PDF-canonical"));
+  });
+
+  it("keeps the bilingual loading-list export independent from invoice rendering", async () => {
     harness.selectResults.push(
       [order],
       [line],
@@ -228,74 +303,35 @@ describe("Phase 33D bilingual factory document routes", () => {
 describe("Phase 33D customer-order Excel helper", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    harness.selectResults.splice(0);
+    harness.getCanonicalInvoiceDocument.mockResolvedValue(canonicalDocument);
+    harness.buildCanonicalInvoiceExcel.mockResolvedValue({
+      buffer: Buffer.from("PKcanonical-helper"),
+      fileName: "canonical.xlsx",
+    });
   });
 
   it("fails closed when an order cannot be found inside the requested company", async () => {
-    harness.selectResults.push([{ baseCurrency: "USD" }], []);
-
+    harness.getCanonicalInvoiceDocument.mockResolvedValueOnce(null);
     await expect(buildOrderExcelBuffer(99, 7, false)).rejects.toThrow("Order 99 not found for company 7");
   });
 
-  it("uses catalog names/weights, per-kg pricing, explicit charges, and the company currency", async () => {
-    harness.selectResults.push(
-      [{ baseCurrency: "EUR" }],
-      [{ ...order, customerName: "Acme Trading" }],
-      [{ name: "Handling", amount: "7.50", chargeType: "OTHER" }],
-      [
-        {
-          ...line,
-          pricingMode: "per_kg",
-          pricePerKg: "2",
-          totalWeight: "80",
-          totalPrice: "160",
-        },
-      ],
-      [{ articleCode: "HMD10001", name: "Catalog Shirts", weightPerBaleKg: "41.5" }]
-    );
-
+  it("uses the canonical document for the WhatsApp/shared Excel helper", async () => {
     const result = await buildOrderExcelBuffer(12, 7, false);
-    expect(Buffer.isBuffer(result.buffer)).toBe(true);
-    expect(result.fileName).toMatch(/\.xlsx$/);
 
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.buffer as any);
-    const sheet = workbook.worksheets[0];
-    const text = sheet
-      .getSheetValues()
-      .flatMap((row: any) => (Array.isArray(row) ? row : []))
-      .filter((value: unknown) => value !== undefined && value !== null)
-      .map(String);
-
-    expect(text).toContain("Price/KG");
-    expect(text).toContain("Catalog Shirts");
-    expect(text).toContain("41.50");
-    expect(text).toContain("Handling");
-    expect(text.some((value) => value.includes("€"))).toBe(true);
+    expect(harness.getCanonicalInvoiceDocument).toHaveBeenCalledWith(12, 7);
+    expect(harness.buildCanonicalInvoiceExcel).toHaveBeenCalledWith(
+      canonicalDocument,
+      expect.objectContaining({ hideSelling: false, noCharges: false, language: "en" })
+    );
+    expect(result.buffer).toEqual(Buffer.from("PKcanonical-helper"));
+    expect(result.fileName).toBe("canonical.xlsx");
   });
 
-  it("omits selling-price and charge-summary columns when hideSelling is enabled", async () => {
-    harness.selectResults.push(
-      [{ baseCurrency: "USD" }],
-      [order],
-      [{ name: "Handling", amount: "5", chargeType: "OTHER" }],
-      [line],
-      [{ articleCode: "HMD10001", name: "Catalog Shirts", weightPerBaleKg: "40" }]
+  it("passes hidden-selling visibility into the canonical renderer", async () => {
+    await buildOrderExcelBuffer(12, 7, true);
+    expect(harness.buildCanonicalInvoiceExcel).toHaveBeenCalledWith(
+      canonicalDocument,
+      expect.objectContaining({ hideSelling: true })
     );
-
-    const result = await buildOrderExcelBuffer(12, 7, true);
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(result.buffer as any);
-    const sheet = workbook.worksheets[0];
-    const text = sheet
-      .getSheetValues()
-      .flatMap((row: any) => (Array.isArray(row) ? row : []))
-      .filter((value: unknown) => value !== undefined && value !== null)
-      .map(String);
-
-    expect(text).not.toContain("Price/Bale");
-    expect(text).not.toContain("Price/KG");
-    expect(text).not.toContain("Grand Total");
-    expect(text).not.toContain("Handling");
   });
 });

@@ -72,7 +72,7 @@ describe("Mobile responsiveness Phase 10 performance and offline behavior", () =
     const serviceWorker = source("client/public/sw.js");
 
     for (const token of [
-      'CACHE_VERSION = "erp-v11"',
+      'CACHE_VERSION = "erp-v12"',
       "navigationPreload",
       "event.preloadResponse",
       "networkOnlyApi(request)",
