@@ -75,6 +75,7 @@ export interface FactoryCustomerOrderCustomerRow {
 }
 
 export interface FactoryCustomerOrderAnalytics {
+  includeCharges: boolean;
   summary: {
     totalOrders: number;
     uniqueCustomers: number;
