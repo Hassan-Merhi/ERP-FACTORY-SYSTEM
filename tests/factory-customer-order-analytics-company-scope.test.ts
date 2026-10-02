@@ -28,6 +28,7 @@ registerFactoryAnalyticsRoutes(app as any);
 const tag = `CO-SCOPE-${process.pid}`;
 let companyA = 0;
 let companyB = 0;
+let ownOrderId = 0;
 
 async function maintenance<T>(work: (client: import("pg").PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
@@ -57,6 +58,7 @@ async function insertOrder(client: import("pg").PoolClient, companyId: number, c
      VALUES ($1, $2, $3, 1, 50, 50, 100, 100)`,
     [order.rows[0].id, article, article]
   );
+  return order.rows[0].id;
 }
 
 beforeAll(async () => {
@@ -75,7 +77,13 @@ beforeAll(async () => {
       `INSERT INTO customers (company_id, code, legal_name) VALUES ($1, $2, 'Foreign Customer') RETURNING id`,
       [companyB, `${tag}-FOREIGN`]
     );
-    await insertOrder(client, companyA, own.rows[0].id, `${tag}-OWN-ART`);
+    ownOrderId = await insertOrder(client, companyA, own.rows[0].id, `${tag}-OWN-ART`);
+    await client.query(
+      `UPDATE customer_orders
+       SET freight_amount = 20, other_charges_total = 5, grand_total = 125
+       WHERE id = $1`,
+      [ownOrderId]
+    );
     // An order row that points at another company's customer (integrity drift).
     await insertOrder(client, companyA, foreign.rows[0].id, `${tag}-DRIFT-ART`);
   });
@@ -114,5 +122,27 @@ describe("Factory customer order analytics company scope", () => {
     const names = (response.body.rows as Array<{ customerName: string | null }>).map((row) => row.customerName);
     expect(names).toContain("Own Customer");
     expect(names).not.toContain("Foreign Customer");
+  });
+
+  it("toggles freight and other charges without changing the no-charges default", async () => {
+    harness.session = { factoryCompanyId: companyA };
+
+    const withoutCharges = await request(app)
+      .get("/api/factory/analytics/customer-orders")
+      .query({ status: "all", customer: "Own Customer" });
+    expect(withoutCharges.status).toBe(200);
+    expect(withoutCharges.body.includeCharges).toBe(false);
+    expect(withoutCharges.body.summary.totalInvoiceAmount).toBe(100);
+    expect(withoutCharges.body.rows[0].invoiceTotal).toBe(100);
+    expect(withoutCharges.body.rows[0].orders[0].invoiceTotal).toBe(100);
+
+    const withCharges = await request(app)
+      .get("/api/factory/analytics/customer-orders")
+      .query({ status: "all", customer: "Own Customer", includeCharges: "true" });
+    expect(withCharges.status).toBe(200);
+    expect(withCharges.body.includeCharges).toBe(true);
+    expect(withCharges.body.summary.totalInvoiceAmount).toBe(125);
+    expect(withCharges.body.rows[0].invoiceTotal).toBe(125);
+    expect(withCharges.body.rows[0].orders[0].invoiceTotal).toBe(125);
   });
 });

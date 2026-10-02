@@ -389,6 +389,7 @@ export function useAnalyticsLegacy() {
 
   // ── Factory Analytics Queries ───────────────────────────────────────────
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
+  const [factoryOrderIncludeCharges, setFactoryOrderIncludeCharges] = useState(false);
 
   // The page-level PeriodFilter is the single date control for factory sales analytics.
   // Reset pagination whenever the selected period changes so a narrower range never
@@ -425,6 +426,7 @@ export function useAnalyticsLegacy() {
     if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
     if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
     params.append("status", "all");
+    params.append("includeCharges", String(factoryOrderIncludeCharges));
     params.append("page", String(factoryOrderPage));
     params.append("pageSize", "50");
     return `/api/factory/analytics/customer-orders?${params.toString()}`;
@@ -440,6 +442,7 @@ export function useAnalyticsLegacy() {
       selectedCompany?.id,
       periodFilter.fromDate,
       periodFilter.toDate,
+      factoryOrderIncludeCharges,
       factoryOrderPage,
     ],
     queryFn: async () => {
@@ -757,6 +760,8 @@ export function useAnalyticsLegacy() {
     buildContainerUrl,
     factoryOrderPage,
     setFactoryOrderPage,
+    factoryOrderIncludeCharges,
+    setFactoryOrderIncludeCharges,
     factoryCustomerOrderAnalytics,
     factoryCustomerOrderAnalyticsError,
     loadingFactoryCustomerOrders,
