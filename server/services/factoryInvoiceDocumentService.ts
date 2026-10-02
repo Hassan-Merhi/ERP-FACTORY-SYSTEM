@@ -723,14 +723,14 @@ export async function buildCanonicalInvoiceExcel(
     const subtotalRow = sheet.addRow(subtotalValues);
     subtotalRow.height = 22;
     subtotalRow.eachCell((cell) => {
-      cell.font = { bold: true, size: 10, color: { argb: "FF000000" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
+      cell.font = { bold: true, size: 10, color: { argb: DARK_BLUE } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
       cell.alignment = { vertical: "middle", wrapText: true };
       cell.border = {
-        top: { style: "thin", color: { argb: "FF70AD47" } },
-        bottom: { style: "thin", color: { argb: "FF70AD47" } },
-        left: { style: "thin", color: { argb: "FF70AD47" } },
-        right: { style: "thin", color: { argb: "FF70AD47" } },
+        top: { style: "thin", color: { argb: DARK_BLUE } },
+        bottom: { style: "thin", color: { argb: DARK_BLUE } },
+        left: { style: "thin", color: { argb: "FFDDDDDD" } },
+        right: { style: "thin", color: { argb: "FFDDDDDD" } },
       };
     });
     subtotalRow.getCell(3).alignment = { horizontal: "center", vertical: "middle" };
@@ -1042,8 +1042,8 @@ export async function buildCanonicalInvoicePdf(
       y = drawTableHeader(drawPageBranding(false));
     }
 
-    doc.rect(pageLeft, y, usableWidth, subtotalHeight).fill("#92D050");
-    boldFont().fillColor("#000000").fontSize(8);
+    doc.rect(pageLeft, y, usableWidth, subtotalHeight).fill("#F5F5F5");
+    boldFont().fillColor("#1F3864").fontSize(8);
     const subtotalValues: string[] = [
       "",
       "",
