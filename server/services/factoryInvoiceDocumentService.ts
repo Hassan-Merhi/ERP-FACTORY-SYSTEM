@@ -10,6 +10,7 @@ import {
   configureFactoryArabicWorksheet,
   type FactoryDocumentLanguage,
 } from "./factoryDocumentLanguage";
+import { FACTORY_INVOICE_EXTRA_LABELS } from "./factoryInvoiceTranslations";
 
 export interface CanonicalInvoiceLine {
   articleCode: string;
@@ -656,7 +657,7 @@ export async function buildCanonicalInvoiceExcel(
   const raw = await workbook.xlsx.writeBuffer();
   const buffer = Buffer.isBuffer(raw) ? Buffer.from(raw) : Buffer.from(raw as ArrayBuffer);
   if (buffer.length < 2 || buffer.subarray(0, 2).toString("ascii") !== "PK") {
-    throw new Error("Generated invoice workbook is invalid");
+    throw new Error(FACTORY_INVOICE_EXTRA_LABELS.en.invalidWorkbook);
   }
   return { buffer, fileName: buildCanonicalInvoiceFilename(document, "xlsx") };
 }
@@ -936,7 +937,7 @@ export async function buildCanonicalInvoicePdf(
   doc.end();
   const buffer = await completed;
   if (buffer.length < 5 || buffer.subarray(0, 4).toString("ascii") !== "%PDF") {
-    throw new Error("Generated invoice PDF is invalid");
+    throw new Error(FACTORY_INVOICE_EXTRA_LABELS.en.invalidPdf);
   }
   return { buffer, fileName: buildCanonicalInvoiceFilename(document, "pdf") };
 }
