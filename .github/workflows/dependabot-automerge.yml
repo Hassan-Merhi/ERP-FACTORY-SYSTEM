@@ -1,18 +1,29 @@
 name: Maintenance - Dependabot Auto Merge
 
+# Dependabot-triggered pull_request runs get no secrets, and their token is
+# limited to the permissions below. Auto-merge still waits for every required
+# check and review in branch protection; this only queues the merge.
 on:
-  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review]
 
-permissions:
-  contents: write
-  pull-requests: write
+concurrency:
+  group: dependabot-automerge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
   enable-automerge:
     if: >-
       github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]' &&
       github.event.pull_request.draft == false
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Detect Dependabot-authored head
         id: head

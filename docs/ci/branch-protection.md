@@ -73,11 +73,10 @@ The repository has 37 GitHub Actions workflow files plus CircleCI compatibility 
 | `browser-e2e.yml` | path-filtered main, manual | Transactional browser E2E | Heavy | Keep specialist coverage |
 | `build-windows.yml` | desktop tag, manual | Windows MSIX build | Medium | Keep release artifact workflow |
 | `ci-repair-bot.yml` | every 15 min, manual | Trusted-PR repair automation | Light/Medium | Separate automation |
-| `ci-repair-failure-trigger.yml` | manual only | Intended PR failure watcher | Up to 75 min | Broken trigger; retire or repair |
 | `ci-repair-sweep.yml` | `workflow_call` | Shared trusted-PR failure scan | Light | Keep if repair bot remains |
 | `ci.yml` | PR, main, manual | Audits, typecheck, lint/format, build, backend/frontend coverage, aggregate gate | Heavy | Target PR owner |
 | `codeql.yml` | main, weekly | CodeQL JS/TS | Medium | Keep specialist security |
-| `dependabot-automerge.yml` | manual only | Intended Dependabot auto-merge | Light | Broken trigger; retire or repair |
+| `dependabot-automerge.yml` | PR (Dependabot only) | Queues auto-merge for Dependabot patch/minor updates | Light | Keep |
 | `dependency-review.yml` | main, manual | Production dependency policy | Light/Medium | Duplicate security ownership |
 | `dependency-toolchain-health.yml` | path-filtered main, weekly, manual | Lockfile/toolchain/dependency health | Medium | Keep periodic/path-specific capability |
 | `dispatch-release-verification-once.yml` | main + historical phase branches | Dispatches Release Verification | Light | Remove from normal main path later |
@@ -172,6 +171,13 @@ Target: release verification should be explicit release/manual evidence, not con
 - `ci/circleci: security-readiness`
 
 These are not independent test coverage. The active ruleset must stop requiring them before the compatibility bridge is retired.
+
+## Trigger drift resolved (2026-10-03)
+
+- `ci-repair-failure-trigger.yml` was deleted. Only its manual job could run, and the guarded CI Repair Bot already scans every 15 minutes and can be dispatched directly.
+- `dependabot-automerge.yml` now runs on `pull_request`. Its job runs only for Dependabot PRs and pushes, holds write permissions at job level, and only queues auto-merge, which still waits for the required checks.
+
+The rest of this section is the original analysis, kept for history.
 
 ## Historical and dead automatic triggers
 
