@@ -107,10 +107,14 @@ describe("immutable stock transfer revision review lifecycle", () => {
 
   it("rejects a pending revision without mutating transfer quantities", async () => {
     harness.executeResults.push({ rows: [lockedRevision("pending")] }, { rows: [] });
-    harness.selectResults.push([
-      { quantity: "2", rate: "3.50" },
-      { quantity: "1", rate: "4" },
-    ]);
+    // Revision items are read before the transfer items they leave untouched.
+    harness.selectResults.push(
+      [],
+      [
+        { quantity: "2", rate: "3.50" },
+        { quantity: "1", rate: "4" },
+      ]
+    );
 
     const result = await rejectImmutableStockTransferRevision(4, 41, "reviewer-1", "  incorrect count  ");
 
@@ -123,13 +127,14 @@ describe("immutable stock transfer revision review lifecycle", () => {
       changedItemCount: 0,
       inventoryApplied: true,
       totalAmount: "11.00",
+      items: [],
     });
     expect(harness.execute).toHaveBeenCalledTimes(2);
   });
 
   it("treats repeated rejection as an idempotent no-op", async () => {
     harness.executeResults.push({ rows: [lockedRevision("rejected")] });
-    harness.selectResults.push([{ quantity: "5", rate: "2" }]);
+    harness.selectResults.push([], [{ quantity: "5", rate: "2" }]);
 
     await expect(rejectImmutableStockTransferRevision(4, 41, "reviewer-1")).resolves.toMatchObject({
       transition: "no-op",
