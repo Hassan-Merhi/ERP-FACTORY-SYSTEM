@@ -5,7 +5,7 @@ import { z } from "zod";
 import { stockAdjustmentVouchers, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
 import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
@@ -122,7 +122,7 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock adjustment data", errors: error.issues });
         }
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
     }
   );
@@ -182,7 +182,7 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
         if (error instanceof StockAdjustmentDeletionError) {
           return res.status(error.status).json({ message: error.message, code: error.code });
         }
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
     }
   );

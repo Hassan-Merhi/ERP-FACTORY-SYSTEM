@@ -9,9 +9,16 @@
  *
  * The properties worth holding:
  *
- *   - **An active voucher must balance.** Total debits and total credits are
- *     compared to a cent; an unbalanced batch is refused before anything is
- *     written. Optional (provisional) vouchers are exempt by design.
+ *   - **An active voucher must balance exactly.** Total debits and total
+ *     credits are compared as decimals with no tolerance; an unbalanced batch
+ *     is refused before anything is written. Optional (provisional) vouchers
+ *     are exempt from the balance rule by design.
+ *   - **Every line is a valid amount.** The central engine's line rules apply
+ *     to the payloads it hands down here: no negative amounts, no more than
+ *     two decimals (the column scale), exactly one side per line, and at least
+ *     two lines on an active voucher.
+ *   - **A foreign-currency line needs a rate.** It is refused rather than
+ *     stored as if its amount were USD.
  *   - **The header total is the larger side, not the sum.** `total_amount` is
  *     max(debits, credits); summing both would double every voucher.
  *   - **A rejected batch leaves nothing behind.** The header and entries share
@@ -25,7 +32,7 @@
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
@@ -189,27 +196,91 @@ describe("POST /api/vouchers/with-entries", () => {
     expect(await voucherCountFor(number)).toBe(0);
   });
 
-  it("tolerates a sub-cent rounding difference but not a whole cent", async () => {
-    const withinTolerance = voucherNumber();
-    const accepted = await postWithEntries({
-      voucher: { voucherNumber: withinTolerance, voucherType: "Journal", voucherDate: "2026-03-04" },
-      entries: [
-        { ledgerAccountId: ctx.cashAccountId, debitAmount: "100.001", creditAmount: "0" },
-        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "100.00" },
-      ],
-    });
-    expect(accepted.status).toBe(200);
-
-    const overTolerance = voucherNumber();
+  it("requires an exact decimal balance with no rounding tolerance", async () => {
+    const offByOneCent = voucherNumber();
     const refused = await postWithEntries({
-      voucher: { voucherNumber: overTolerance, voucherType: "Journal", voucherDate: "2026-03-04" },
+      voucher: { voucherNumber: offByOneCent, voucherType: "Journal", voucherDate: "2026-03-04" },
       entries: [
-        { ledgerAccountId: ctx.cashAccountId, debitAmount: "100.02", creditAmount: "0" },
+        { ledgerAccountId: ctx.cashAccountId, debitAmount: "100.01", creditAmount: "0" },
         { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "100.00" },
       ],
     });
     expect(refused.status).toBe(400);
-    expect(await voucherCountFor(overTolerance)).toBe(0);
+    expect(refused.body.code).toBe("POSTING_UNBALANCED");
+    expect(await voucherCountFor(offByOneCent)).toBe(0);
+
+    // Many float-unfriendly lines that balance exactly in decimal are accepted.
+    const exact = voucherNumber();
+    const accepted = await postWithEntries({
+      voucher: { voucherNumber: exact, voucherType: "Journal", voucherDate: "2026-03-04" },
+      entries: [
+        { ledgerAccountId: ctx.cashAccountId, debitAmount: "0.10", creditAmount: "0" },
+        { ledgerAccountId: ctx.cashAccountId, debitAmount: "0.20", creditAmount: "0" },
+        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "0.30" },
+      ],
+    });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.voucher.totalAmount).toBe("0.30");
+  });
+
+  it.each([
+    [
+      "a negative amount",
+      [
+        { debitAmount: "100.00", creditAmount: "0" },
+        { debitAmount: "-100.00", creditAmount: "0" },
+      ],
+      "POSTING_AMOUNT_INVALID",
+    ],
+    [
+      "more than two decimals",
+      [
+        { debitAmount: "100.001", creditAmount: "0" },
+        { debitAmount: "0", creditAmount: "100.001" },
+      ],
+      "POSTING_AMOUNT_PRECISION",
+    ],
+    [
+      "a line with both a debit and a credit",
+      [
+        { debitAmount: "50.00", creditAmount: "50.00" },
+        { debitAmount: "0", creditAmount: "0" },
+      ],
+      "POSTING_ENTRY_SIDE_INVALID",
+    ],
+    ["a single-line active voucher", [{ debitAmount: "50.00", creditAmount: "50.00" }], "POSTING_ENTRIES_REQUIRED"],
+    [
+      "a non-numeric amount",
+      [
+        { debitAmount: "abc", creditAmount: "0" },
+        { debitAmount: "0", creditAmount: "10.00" },
+      ],
+      "POSTING_AMOUNT_INVALID",
+    ],
+  ])("refuses %s and writes nothing", async (_label, amounts, code) => {
+    const number = voucherNumber();
+    const accounts = [ctx.cashAccountId, ctx.salesAccountId];
+    const response = await postWithEntries({
+      voucher: { voucherNumber: number, voucherType: "Journal", voucherDate: "2026-03-04" },
+      entries: amounts.map((amount, index) => ({ ledgerAccountId: accounts[index % 2], ...amount })),
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe(code);
+    expect(await voucherCountFor(number)).toBe(0);
+  });
+
+  it("refuses a foreign-currency voucher that has no exchange rate", async () => {
+    const number = voucherNumber();
+    const response = await postWithEntries({
+      voucher: { voucherNumber: number, voucherType: "Journal", voucherDate: "2026-03-04", currency: "EUR" },
+      entries: [
+        { ledgerAccountId: ctx.cashAccountId, debitAmount: "90.00", creditAmount: "0" },
+        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "90.00" },
+      ],
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.code).toBe("POSTING_EXCHANGE_RATE_REQUIRED");
+    expect(await voucherCountFor(number)).toBe(0);
   });
 
   it("lets a provisional voucher stay unbalanced", async () => {
@@ -374,7 +445,13 @@ describe("POST /api/vouchers/with-entries", () => {
     const number = voucherNumber();
 
     const response = await postWithEntries({
-      voucher: { voucherNumber: number, voucherType: "Journal", voucherDate: "2026-03-12", currency: "EUR" },
+      voucher: {
+        voucherNumber: number,
+        voucherType: "Journal",
+        voucherDate: "2026-03-12",
+        currency: "EUR",
+        exchangeRate: "0.9",
+      },
       entries: [
         {
           ledgerAccountId: ctx.cashAccountId,

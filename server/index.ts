@@ -33,6 +33,7 @@ import { capacitorCors } from "./middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/httpConventions";
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
 import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
+import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
@@ -255,6 +256,9 @@ let migrationsDone = false;
       // columns, fiscal/factory tables) — see startup/ensureRuntimeSchema.ts.
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
+      // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
+      // serving writes without the closed-period lock would let closed books change.
+      await ensureClosedPeriodGuard(pool);
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
       await bootstrapRecurringJournalFromEnvironment();

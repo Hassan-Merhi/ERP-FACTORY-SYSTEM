@@ -5,6 +5,7 @@ import {
 import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
 
 export async function closeFiscalPeriod(
   companyId: number,
@@ -15,6 +16,10 @@ export async function closeFiscalPeriod(
   notes?: string
 ): Promise<schema.FiscalPeriodClosure> {
   return await db.transaction(async (tx) => {
+    // Exclusive per-company lock: voucher writes hold the shared side (see
+    // closedPeriodGuard), so no write can land in the period while its
+    // balances are being totalled and closed.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${CLOSED_PERIOD_LOCK_NAMESPACE}, ${companyId})`);
     const existingClosure = await tx
       .select()
       .from(schema.fiscalPeriodClosures)

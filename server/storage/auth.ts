@@ -140,6 +140,9 @@ export async function deleteCompany(id: number): Promise<void> {
   );
   await safe(sql`DELETE FROM customer_proformas WHERE company_id = ${id}`);
   await safe(sql`DELETE FROM customer_invoice_sequences WHERE company_id = ${id}`);
+  // Closures go first: while one exists the closed-period guard refuses to
+  // delete the vouchers it covers, and the whole company is being removed.
+  await db.delete(schema.fiscalPeriodClosures).where(eq(schema.fiscalPeriodClosures.companyId, id));
   await safe(sql`DELETE FROM credit_note_items WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = ${id})`);
 
   await db.execute(
@@ -310,7 +313,6 @@ export async function deleteCompany(id: number): Promise<void> {
   await db.delete(schema.fixedAssets).where(eq(schema.fixedAssets.companyId, id));
   await db.delete(schema.ledgerAccounts).where(eq(schema.ledgerAccounts.companyId, id));
   await db.delete(schema.locations).where(eq(schema.locations.companyId, id));
-  await db.delete(schema.fiscalPeriodClosures).where(eq(schema.fiscalPeriodClosures.companyId, id));
   await db.delete(schema.dashboardCashAccounts).where(eq(schema.dashboardCashAccounts.companyId, id));
   await db.delete(schema.dashboardPayableAccounts).where(eq(schema.dashboardPayableAccounts.companyId, id));
   await safe(sql`DELETE FROM dashboard_account_selections WHERE company_id = ${id}`);

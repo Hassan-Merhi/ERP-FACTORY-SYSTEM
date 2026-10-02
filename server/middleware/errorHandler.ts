@@ -8,6 +8,7 @@
  */
 import type { Express, Request, Response, NextFunction } from "express";
 import { logger } from "../lib/logger";
+import { closedPeriodErrorResponse } from "../services/accounting/closedPeriodGuard";
 
 export function registerErrorHandler(app: Express): void {
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
@@ -34,6 +35,9 @@ export function registerErrorHandler(app: Express): void {
       });
       return res.status(503).json({ message: "Service temporarily unavailable — please retry." });
     }
+
+    const closedPeriod = closedPeriodErrorResponse(err);
+    if (closedPeriod) return res.status(closedPeriod.status).json(closedPeriod.body);
 
     const status = error.status || error.statusCode || 500;
     const isProduction = process.env.NODE_ENV === "production";

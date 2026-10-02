@@ -6,7 +6,7 @@
  * fiscalTransferRoutes.ts as a sub-registrar; behaviour is unchanged.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../lib/httpHandlers";
 import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
@@ -90,7 +90,7 @@ export function registerFinancialSalesRoutes(app: Express) {
 
       res.json(closure);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

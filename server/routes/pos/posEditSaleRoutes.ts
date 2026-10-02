@@ -1,5 +1,5 @@
 import { type Express, type Request, type Response } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireAuth, canModifyDate } from "../../auth";
 import { updatePosSale } from "../../services/pos/edit/updateSaleService";
@@ -97,6 +97,6 @@ export async function handlePosSaleEdit(
     if (getErrorMessage(error).includes("Insufficient stock")) {
       return res.status(400).json({ message: getErrorMessage(error) });
     }
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }

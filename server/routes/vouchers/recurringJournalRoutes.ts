@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { requireAuth, requireNonPOS, requireRole } from "../../auth";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import {
   RecurringJournalError,
   getRecurringJournalForSource,
@@ -21,7 +21,7 @@ function sendRecurringError(res: Response, error: unknown): void {
     res.status(error.status).json({ message: error.message, code: error.code });
     return;
   }
-  res.status(500).json({ message: getErrorMessage(error) });
+  res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
 }
 
 function currentCompanyId(req: Request): number | null {

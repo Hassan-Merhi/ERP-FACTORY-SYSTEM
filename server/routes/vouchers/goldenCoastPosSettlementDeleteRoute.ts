@@ -9,7 +9,7 @@ import {
 } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
@@ -67,7 +67,10 @@ function parseSettlementSourceId(sourceId: string): ParsedSettlementSource | nul
   if (parts.length >= 5 && parts[parts.length - 3] === "reversal") {
     const reversalRevision = Number(parts[parts.length - 2]);
     const digest = parts[parts.length - 4]?.trim();
-    const clientSaleId = parts.slice(0, parts.length - 4).join(":").trim();
+    const clientSaleId = parts
+      .slice(0, parts.length - 4)
+      .join(":")
+      .trim();
     if (!clientSaleId || !digest || !Number.isInteger(reversalRevision) || reversalRevision <= 0) return null;
     return {
       clientSaleId,
@@ -81,7 +84,10 @@ function parseSettlementSourceId(sourceId: string): ParsedSettlementSource | nul
 
   const revision = parts[parts.length - 2]?.trim() || "";
   const digest = parts[parts.length - 3]?.trim();
-  const clientSaleId = parts.slice(0, parts.length - 3).join(":").trim();
+  const clientSaleId = parts
+    .slice(0, parts.length - 3)
+    .join(":")
+    .trim();
   if (!clientSaleId || !digest || !/^(?:create|edit\d+)$/.test(revision)) return null;
   return { clientSaleId, digest, role, phase: "posting", revision, reversalRevision: null };
 }
@@ -500,7 +506,7 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
       durationMs: Date.now() - startedAt,
       error,
     });
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }
 

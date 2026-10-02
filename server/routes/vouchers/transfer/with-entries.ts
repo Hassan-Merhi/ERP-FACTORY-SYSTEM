@@ -5,7 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
@@ -311,7 +311,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
 
       res.json({ voucher: updatedVoucher, entries: createdEntries });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }
