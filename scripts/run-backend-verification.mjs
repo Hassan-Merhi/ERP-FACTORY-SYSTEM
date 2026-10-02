@@ -106,7 +106,7 @@ function bootstrapDatabase() {
   // repeating four idempotent database passes in every forked test file.
   run(
     process.execPath,
-    ["--import", "./server/supplierCompanyScopeBridge.mjs", "-e", ""],
+    ["--import", "./server/schemaPreload.mjs", "-e", ""],
     "database bootstrap"
   );
 }

@@ -30,11 +30,9 @@ describe("critical schema readiness", () => {
     const snapshot = completeSnapshot();
     snapshot.tables = snapshot.tables.filter((tableName) => tableName !== "fiscal_period_closures");
     snapshot.columns = snapshot.columns.filter(
-      ({ tableName, columnName }) => !(tableName === "voucher_entries" && columnName === "base_debit_amount"),
+      ({ tableName, columnName }) => !(tableName === "voucher_entries" && columnName === "base_debit_amount")
     );
-    snapshot.indexes = snapshot.indexes.filter(
-      (indexName) => indexName !== "exchange_rates_company_date_pair_unique",
-    );
+    snapshot.indexes = snapshot.indexes.filter((indexName) => indexName !== "exchange_rates_company_date_pair_unique");
 
     expect(evaluateCriticalSchema(snapshot)).toEqual({
       ok: false,
@@ -48,7 +46,7 @@ describe("critical schema readiness", () => {
     const snapshot = completeSnapshot();
     snapshot.columns = snapshot.columns.filter(
       ({ tableName, columnName }) =>
-        !(tableName === "factory_containers" && columnName === "json_cargo_last_checked_at"),
+        !(tableName === "factory_containers" && columnName === "json_cargo_last_checked_at")
     );
 
     expect(evaluateCriticalSchema(snapshot)).toMatchObject({
@@ -58,16 +56,15 @@ describe("critical schema readiness", () => {
   });
 
   it("preloads the factory container schema repair before the server entrypoint", () => {
-    const runtimeMemoryGuard = fs.readFileSync(
-      path.resolve(process.cwd(), "server/runtimeMemoryGuard.mjs"),
-      "utf8",
-    );
+    const startupPreload = fs.readFileSync(path.resolve(process.cwd(), "server/startupPreload.mjs"), "utf8");
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), "package.json"), "utf8"));
     const schemaBridge = fs.readFileSync(
       path.resolve(process.cwd(), "server/factoryContainerSchemaBridge.mjs"),
-      "utf8",
+      "utf8"
     );
 
-    expect(runtimeMemoryGuard).toContain('import "./factoryContainerSchemaBridge.mjs"');
+    expect(startupPreload).toContain('await import("./factoryContainerSchemaBridge.mjs");');
+    expect(packageJson.scripts.start).toContain("--import ./server/startupPreload.mjs");
     expect(schemaBridge).toContain('["json_cargo_last_checked_at", "TIMESTAMPTZ"]');
     expect(schemaBridge).toContain('["json_cargo_tracking_status", "TEXT"]');
     expect(schemaBridge).toContain('["json_cargo_error", "TEXT"]');
@@ -76,10 +73,7 @@ describe("critical schema readiness", () => {
 
   it("keeps Render on the schema-aware readiness endpoint", () => {
     const renderYaml = fs.readFileSync(path.resolve(process.cwd(), "render.yaml"), "utf8");
-    const runtimeGuard = fs.readFileSync(
-      path.resolve(process.cwd(), "server/runtimeHealthGuard.mjs"),
-      "utf8",
-    );
+    const runtimeGuard = fs.readFileSync(path.resolve(process.cwd(), "server/runtimeHealthGuard.mjs"), "utf8");
 
     expect(renderYaml).toContain("healthCheckPath: /api/health/ready");
     expect(runtimeGuard).toContain("database.schema?.ok === true");

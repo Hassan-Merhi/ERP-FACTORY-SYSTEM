@@ -8,6 +8,8 @@ const packageJson = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8
 const bundlePath = resolve(root, "dist/index.js");
 const requiredFiles = [
   bundlePath,
+  resolve(root, "server/startupPreload.mjs"),
+  resolve(root, "server/schemaPreload.mjs"),
   resolve(root, "server/exportBufferBridge.mjs"),
   resolve(root, "server/scheduledAttachmentBridge.mjs"),
   resolve(root, "server/apiPaginationBridge.mjs"),

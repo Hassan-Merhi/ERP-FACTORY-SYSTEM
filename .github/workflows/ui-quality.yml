@@ -281,11 +281,7 @@ jobs:
             stop_app
             printf '\n=== %s ===\n' "$suite" >> artifacts/ux-regression-startup/server.log
             node --expose-gc \
-              --import ./server/factoryContainerSchemaBridge.mjs \
-              --import ./server/supplierCompanyScopeBridge.mjs \
-              --import ./server/exportBufferBridge.mjs \
-              --import ./server/scheduledAttachmentBridge.mjs \
-              --import ./server/apiPaginationBridge.mjs \
+              --import ./server/startupPreload.mjs \
               --import ./server/runtimeMemoryGuard.mjs \
               dist/index.js >> artifacts/ux-regression-startup/server.log 2>&1 &
             app_pid=$!

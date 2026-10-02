@@ -33,7 +33,7 @@
  */
 import { readFileSync, existsSync } from "fs";
 import { builtinModules } from "module";
-import { resolve } from "path";
+import { dirname, resolve } from "path";
 
 const ROOT = process.cwd();
 const META = resolve(ROOT, "dist/server-build-meta.json");
@@ -91,12 +91,25 @@ const preloads = [...START_SCRIPT.matchAll(/--import\s+(\S+\.mjs)/g)].map((m) =>
 
 const STATIC_IMPORT_LINE = /^\s*import\s+(?:[\s\S]*?\s+from\s+)?["']([^"']+)["'];?\s*$/gm;
 
-for (const relative of preloads) {
-  const path = resolve(ROOT, relative);
-  if (!existsSync(path)) continue;
+// The preload entries are manifests (server/startupPreload.mjs) that load the
+// real bridges by relative import, so follow relative imports - static and
+// dynamic - through every local module a preload reaches.
+const DYNAMIC_RELATIVE_IMPORT = /\bimport\(\s*["'](\.[^"']+)["']\s*\)/g;
+const visitedPreloadModules = new Set();
+const pendingPreloadModules = preloads.map((relative) => resolve(ROOT, relative));
+while (pendingPreloadModules.length > 0) {
+  const path = pendingPreloadModules.pop();
+  if (visitedPreloadModules.has(path) || !existsSync(path)) continue;
+  visitedPreloadModules.add(path);
   const source = readFileSync(path, "utf8");
+  const relativeSpecifiers = [];
   for (const [, specifier] of source.matchAll(STATIC_IMPORT_LINE)) {
     if (isExternalPackage(specifier)) staticDeps.add(packageName(specifier));
+    else if (specifier.startsWith(".")) relativeSpecifiers.push(specifier);
+  }
+  for (const [, specifier] of source.matchAll(DYNAMIC_RELATIVE_IMPORT)) relativeSpecifiers.push(specifier);
+  for (const specifier of relativeSpecifiers) {
+    if (/\.m?js$/.test(specifier)) pendingPreloadModules.push(resolve(dirname(path), specifier));
   }
 }
 

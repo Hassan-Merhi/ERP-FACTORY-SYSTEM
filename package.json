@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "prepare": "node scripts/setup-git-hooks.mjs",
-    "dev": "node --import ./server/factoryContainerSchemaBridge.mjs --import ./server/supplierCompanyScopeBridge.mjs --import ./server/exportBufferBridge.mjs --import ./server/scheduledAttachmentBridge.mjs --import ./server/apiPaginationBridge.mjs ./node_modules/tsx/dist/cli.mjs server/index.ts",
+    "dev": "node --import ./server/startupPreload.mjs ./node_modules/tsx/dist/cli.mjs server/index.ts",
     "prebuild": "node -e \"require.resolve('vite'); require.resolve('esbuild'); console.log('Build dependencies OK')\" && node scripts/verify-lockfile-registry.mjs",
     "build": "node --max-old-space-size=2048 node_modules/vite/bin/vite.js build && node scripts/build-server.mjs && node scripts/verify-server-bundle.mjs && node scripts/verify-runtime-dependencies.mjs",
     "verify:lockfile": "node scripts/verify-lockfile-registry.mjs",
@@ -47,7 +47,7 @@
     "audit:coverage-ratchet": "node scripts/audit-coverage-ratchet.mjs",
     "audit:lint-ratchet": "node scripts/audit-lint-warnings.mjs",
     "audit:ux-consistency": "node scripts/audit-ux-module-consistency.mjs",
-    "start": "node --expose-gc --import ./server/factoryContainerSchemaBridge.mjs --import ./server/supplierCompanyScopeBridge.mjs --import ./server/exportBufferBridge.mjs --import ./server/scheduledAttachmentBridge.mjs --import ./server/apiPaginationBridge.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js",
+    "start": "node --expose-gc --import ./server/startupPreload.mjs --import ./server/runtimeMemoryGuard.mjs dist/index.js",
     "check": "node --max-old-space-size=4096 node_modules/.bin/tsc --noEmit",
     "verify:security-wave3": "node scripts/verify-security-wave3-closeout.mjs",
     "check:security": "node scripts/run-program-6-focused-security-checks.mjs",
