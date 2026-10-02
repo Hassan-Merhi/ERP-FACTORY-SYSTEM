@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
@@ -344,7 +344,7 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
       logger.info(`[Stock Transfer Edit] Successfully updated voucher ${id}`);
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

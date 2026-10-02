@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
@@ -152,7 +152,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       }
       res.json(updated[0]);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -371,7 +371,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       }
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

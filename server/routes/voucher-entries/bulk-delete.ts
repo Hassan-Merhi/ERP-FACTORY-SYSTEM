@@ -5,12 +5,13 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
 import {
   logAudit,
   syncEmployeeBalancesFromEntries,
@@ -65,6 +66,7 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
       const currentCompanyId = req.session.currentCompanyId;
       let deletedCount = 0;
       const errors: string[] = [];
+      const intercompanyDatesToRecalc = new Set<string>();
 
       // Process each voucher deletion using the same logic as single delete
       for (const voucherId of voucherIds) {
@@ -565,10 +567,19 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
             changes: buildVoucherChangesForDelete(voucher, _bulkEntriesSnap),
           });
 
+          if (voucher.voucherType === "Sales" && !voucher.optional) {
+            intercompanyDatesToRecalc.add(voucher.voucherDate);
+          }
           deletedCount++;
         } catch (err: unknown) {
           errors.push(`Failed to delete voucher ${id}: ${getErrorMessage(err)}`);
         }
+      }
+
+      // Deleted cash sales must leave the intercompany POS mirror; one atomic
+      // rebuild per affected date (never throws, logs on failure).
+      for (const date of intercompanyDatesToRecalc) {
+        await recalculateIntercompanyForDate(currentCompanyId, date);
       }
 
       res.json({
@@ -577,7 +588,7 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
         errors: errors.length > 0 ? errors : undefined,
       });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

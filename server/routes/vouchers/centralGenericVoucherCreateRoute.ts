@@ -3,7 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { customers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db, type DbTransaction } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import { PostingValidationError, postBalancedVoucherTx } from "../../services/accounting/centralPostingEngine";
@@ -191,7 +191,7 @@ async function createCentralGenericVoucher(req: Request, res: Response, next: Ne
       return;
     }
 
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }
 

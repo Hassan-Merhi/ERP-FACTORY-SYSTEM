@@ -9,7 +9,7 @@ import {
 } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
   PostingValidationError,
@@ -378,7 +378,7 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }
 

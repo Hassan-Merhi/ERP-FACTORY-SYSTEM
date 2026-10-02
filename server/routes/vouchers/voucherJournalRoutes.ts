@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -396,7 +396,7 @@ export function registerVoucherJournalRoutes(app: Express) {
         error,
       });
       logger.error("Error creating journal voucher:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -711,7 +711,7 @@ export function registerVoucherJournalRoutes(app: Express) {
         error,
       });
       logger.error("Error updating journal voucher:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

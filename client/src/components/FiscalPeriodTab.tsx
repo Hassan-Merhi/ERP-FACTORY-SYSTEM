@@ -377,6 +377,10 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
                 This action will close the fiscal period and create closing vouchers that transfer all Income and
                 Expense account balances to Retained Earnings. This operation cannot be undone.
               </p>
+              <p>
+                After closing, the books are locked through the period end date: no voucher dated on or before it can be
+                created, edited or deleted. Corrections must be posted in a later, open period.
+              </p>
               {pendingFormData && (
                 <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
                   <div>
