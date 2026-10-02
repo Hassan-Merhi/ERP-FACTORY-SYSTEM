@@ -135,4 +135,19 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "مساحة عمل المصنع والمخزون",
     fr: "Espace de travail usine et stock",
   },
+  {
+    en: "Accounting period closed: the books are closed through ${closedThrough}, so an entry dated ${entryDate} cannot be created, changed or deleted.",
+    ar: "الفترة المحاسبية مغلقة: الدفاتر مغلقة حتى {{0}}، لذلك لا يمكن إنشاء قيد بتاريخ {{1}} أو تعديله أو حذفه.",
+    fr: "Période comptable clôturée : les livres sont clôturés jusqu'au {{0}}, une écriture datée du {{1}} ne peut donc pas être créée, modifiée ou supprimée.",
+  },
+  {
+    en: "Accounting period closed.",
+    ar: "الفترة المحاسبية مغلقة.",
+    fr: "Période comptable clôturée.",
+  },
+  {
+    en: "After closing, the books are locked through the period end date: no voucher dated on or before it can be created, edited or deleted. Corrections must be posted in a later, open period.",
+    ar: "بعد الإغلاق تُقفل الدفاتر حتى تاريخ نهاية الفترة: لا يمكن إنشاء أو تعديل أو حذف أي سند مؤرخ في ذلك التاريخ أو قبله. يجب تسجيل التصحيحات في فترة لاحقة مفتوحة.",
+    fr: "Après la clôture, les livres sont verrouillés jusqu'à la date de fin de période : aucune pièce datée de ce jour ou antérieure ne peut être créée, modifiée ou supprimée. Les corrections doivent être passées dans une période ultérieure ouverte.",
+  },
 ];

@@ -80,9 +80,11 @@ async function runIntercompanyTransaction<T>(
 ): Promise<T> {
   const current = getDatabaseScopeRuntimeContext();
   if (current?.kind === "tenant" && current.companyId !== sourceCompanyId) {
-    throw new Error(
-      `Intercompany POS posting for company ${sourceCompanyId} refused inside company ${current.companyId}'s request scope`
-    );
+    logger.error("[IntercompanyPOS] Refused: posting company differs from the request scope", {
+      sourceCompanyId,
+      requestCompanyId: current.companyId,
+    });
+    throw new Error("intercompany_pos_scope_mismatch");
   }
   const scope = createTenantDatabaseScope(sourceCompanyId, [config.destCompanyId], "authorized-companies");
   return runWithDatabaseScopeRuntimeContext(scope, () =>
