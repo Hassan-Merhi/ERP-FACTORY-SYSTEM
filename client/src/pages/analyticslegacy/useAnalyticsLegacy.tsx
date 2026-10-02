@@ -388,50 +388,43 @@ export function useAnalyticsLegacy() {
   });
 
   // ── Factory Analytics Queries ───────────────────────────────────────────
-  const [factorySalesStartDate, setFactorySalesStartDate] = useState("");
-  const [factorySalesEndDate, setFactorySalesEndDate] = useState("");
-  const [factoryOrderItemSearch, setFactoryOrderItemSearch] = useState("");
-  const [factoryOrderCustomerSearch, setFactoryOrderCustomerSearch] = useState("");
-  const [factoryOrderDestinationSearch, setFactoryOrderDestinationSearch] = useState("");
-  const [factoryOrderLocationSearch, setFactoryOrderLocationSearch] = useState("");
-  const [factoryOrderStatus, setFactoryOrderStatus] = useState("all");
-  const [factoryOrderProfitFilter, setFactoryOrderProfitFilter] = useState("all");
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
+
+  // The page-level PeriodFilter is the single date control for factory sales analytics.
+  // Reset pagination whenever the selected period changes so a narrower range never
+  // leaves the table stranded on a page that no longer exists.
+  useEffect(() => {
+    setFactoryOrderPage(1);
+  }, [periodFilter.fromDate, periodFilter.toDate]);
 
   const buildFactorySalesUrl = (base: string) => {
     const params = new URLSearchParams();
-    if (factorySalesStartDate) params.append("startDate", factorySalesStartDate);
-    if (factorySalesEndDate) params.append("endDate", factorySalesEndDate);
+    if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
+    if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
     const qs = params.toString();
     return qs ? `${base}?${qs}` : base;
   };
 
-  const { data: factorySalesByCustomer = [], isLoading: loadingFactorySales } = useQuery<FactorySalesByCustomer[]>({
-    queryKey: [
-      "/api/factory/analytics/sales-by-customer",
-      selectedCompany?.id,
-      factorySalesStartDate,
-      factorySalesEndDate,
-    ],
+  // This list is only needed to populate the separate Container Report customer
+  // selector. Keep it unfiltered by the sales page's global period.
+  const { data: factorySalesByCustomer = [] } = useQuery<FactorySalesByCustomer[]>({
+    queryKey: ["/api/factory/analytics/sales-by-customer", selectedCompany?.id],
     queryFn: async () => {
-      const res = await fetch(buildFactorySalesUrl("/api/factory/analytics/sales-by-customer"), {
+      const res = await fetch("/api/factory/analytics/sales-by-customer", {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to fetch factory sales");
       return res.json();
     },
-    enabled: !!selectedCompany && appMode === "factory",
+    enabled: !!selectedCompany && appMode === "factory" && activeSection === "containers",
+    staleTime: 5 * 60 * 1000,
   });
 
   const buildFactoryOrderAnalyticsUrl = () => {
     const params = new URLSearchParams();
-    if (factorySalesStartDate) params.append("startDate", factorySalesStartDate);
-    if (factorySalesEndDate) params.append("endDate", factorySalesEndDate);
-    if (factoryOrderItemSearch.trim()) params.append("item", factoryOrderItemSearch.trim());
-    if (factoryOrderCustomerSearch.trim()) params.append("customer", factoryOrderCustomerSearch.trim());
-    if (factoryOrderDestinationSearch.trim()) params.append("destination", factoryOrderDestinationSearch.trim());
-    if (factoryOrderLocationSearch.trim()) params.append("location", factoryOrderLocationSearch.trim());
-    params.append("status", factoryOrderStatus);
+    if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
+    if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
+    params.append("status", "all");
     params.append("page", String(factoryOrderPage));
     params.append("pageSize", "50");
     return `/api/factory/analytics/customer-orders?${params.toString()}`;
@@ -445,13 +438,8 @@ export function useAnalyticsLegacy() {
     queryKey: [
       "/api/factory/analytics/customer-orders",
       selectedCompany?.id,
-      factorySalesStartDate,
-      factorySalesEndDate,
-      factoryOrderItemSearch,
-      factoryOrderCustomerSearch,
-      factoryOrderDestinationSearch,
-      factoryOrderLocationSearch,
-      factoryOrderStatus,
+      periodFilter.fromDate,
+      periodFilter.toDate,
       factoryOrderPage,
     ],
     queryFn: async () => {
@@ -466,13 +454,18 @@ export function useAnalyticsLegacy() {
   });
 
   const { data: factoryPosSummary, isLoading: loadingFactoryPos } = useQuery<FactoryPosSummary>({
-    queryKey: ["/api/factory/analytics/pos-summary", selectedCompany?.id, factorySalesStartDate, factorySalesEndDate],
+    queryKey: [
+      "/api/factory/analytics/pos-summary",
+      selectedCompany?.id,
+      periodFilter.fromDate,
+      periodFilter.toDate,
+    ],
     queryFn: async () => {
       const res = await fetch(buildFactorySalesUrl("/api/factory/analytics/pos-summary"), { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch factory POS summary");
       return res.json();
     },
-    enabled: !!selectedCompany && appMode === "factory",
+    enabled: !!selectedCompany && appMode === "factory" && activeSection === "sales",
   });
 
   const buildFactoryContainerSalesUrl = () => {
@@ -762,30 +755,11 @@ export function useAnalyticsLegacy() {
     transactionsLoading,
     buildStockMovementUrl,
     buildContainerUrl,
-    factorySalesStartDate,
-    setFactorySalesStartDate,
-    factorySalesEndDate,
-    setFactorySalesEndDate,
-    factoryOrderItemSearch,
-    setFactoryOrderItemSearch,
-    factoryOrderCustomerSearch,
-    setFactoryOrderCustomerSearch,
-    factoryOrderDestinationSearch,
-    setFactoryOrderDestinationSearch,
-    factoryOrderLocationSearch,
-    setFactoryOrderLocationSearch,
-    factoryOrderStatus,
-    setFactoryOrderStatus,
-    factoryOrderProfitFilter,
-    setFactoryOrderProfitFilter,
     factoryOrderPage,
     setFactoryOrderPage,
-    buildFactorySalesUrl,
-    buildFactoryOrderAnalyticsUrl,
     factoryCustomerOrderAnalytics,
     factoryCustomerOrderAnalyticsError,
     loadingFactoryCustomerOrders,
-    loadingFactorySales,
     factoryPosSummary,
     loadingFactoryPos,
     buildFactoryContainerSalesUrl,
