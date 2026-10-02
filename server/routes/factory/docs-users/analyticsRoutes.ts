@@ -167,6 +167,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
         destination,
         location,
         status = "all",
+        includeCharges = "false",
         page = "1",
         pageSize = "50",
       } = req.query as Record<string, string>;
@@ -174,6 +175,14 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       if (!["LOADING", "VERIFIED", "FINALIZED", "all"].includes(status)) {
         return res.status(400).json({ message: "Invalid status filter" });
       }
+      if (!["true", "false"].includes(includeCharges)) {
+        return res.status(400).json({ message: "Invalid includeCharges filter" });
+      }
+
+      const includeOrderCharges = includeCharges === "true";
+      const orderChargesSql = includeOrderCharges
+        ? sql`COALESCE(MAX(co.freight_amount::numeric), 0) + COALESCE(MAX(co.other_charges_total::numeric), 0)`
+        : sql`0`;
 
       const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
       const safePageSize = Math.min(100, Math.max(10, Number.parseInt(pageSize, 10) || 50));
@@ -240,7 +249,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
                      * COALESCE(col.total_weight::numeric, 0)
                 ELSE COALESCE(col.total_price::numeric, 0)
               END
-            ), 0) AS invoice_total
+            ), 0) + ${orderChargesSql} AS invoice_total
           FROM customer_orders co
           LEFT JOIN customers c ON c.id = co.customer_id AND c.company_id = co.company_id
           LEFT JOIN locations l ON l.id = co.location_id
@@ -374,6 +383,7 @@ export function registerFactoryAnalyticsRoutes(app: Express) {
       }));
 
       res.json({
+        includeCharges: includeOrderCharges,
         summary: {
           totalOrders: Number(rawSummary.totalOrders ?? 0),
           uniqueCustomers: Number(rawSummary.uniqueCustomers ?? 0),
