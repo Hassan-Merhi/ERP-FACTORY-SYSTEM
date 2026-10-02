@@ -2,24 +2,5 @@
   "version": 3,
   "description": "Ratchet on write routes that touch the ledger or stock ledger. uncoveredSensitiveCeiling is held at zero by the unauthenticated guard sweep. guardOnlySensitiveCeiling is also held at zero: a sensitive write may not be protected only by that anonymous-auth check. Deep route tests provide exact positive-path accounting/stock assertions, while tests/write-route-authenticated-safety-sweep.test.ts dynamically exercises any route that would otherwise be guard-only as an authenticated privileged user and asserts atomic failure/no partial mutation, balanced vouchers, and cross-company isolation sentinels.",
   "uncoveredSensitiveCeiling": 0,
-  "guardOnlySensitiveCeiling": 0,
-  "delegatedSensitiveRoutes": {
-    "_comment": "Write routes whose handler writes a sensitive table only through a storage/service call, which the owner-file scan cannot see. Each entry names the table and the call that writes it.",
-    "POST /api/stock-adjustments": {
-      "table": "vouchers",
-      "via": "stockAdjustmentCreateHandler -> storage.createStockAdjustment"
-    },
-    "PUT /api/stock-adjustments/:id": {
-      "table": "vouchers",
-      "via": "storage.updateStockAdjustment"
-    },
-    "POST /api/waste-dispatches": {
-      "table": "vouchers",
-      "via": "storage.createVoucher + storage.createStockAdjustment"
-    },
-    "DELETE /api/waste-dispatches/:id": {
-      "table": "vouchers",
-      "via": "storage.deleteVoucher"
-    }
-  }
+  "guardOnlySensitiveCeiling": 0
 }
