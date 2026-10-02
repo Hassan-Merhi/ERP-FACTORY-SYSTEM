@@ -75,6 +75,16 @@ When a container is offloaded (`POST /api/containers/:id/offload`):
 
 ---
 
+## Stock Adjustment Journals (Production / Consumption / Mixed)
+
+`createStockAdjustment` (`server/storage/stock-ops/transfers-create.ts`) posts only the profit-and-loss side of a stock adjustment: production value is credited and consumption value debited on the `STOCK_ADJUSTMENT` account. The inventory side lives in the `inventory` sub-ledger, which Net Position reports as "Stock In Hand" (`calculateHistoricalLocationInventory`).
+
+These vouchers therefore do **not** balance on their own, and that is by design: they balance against the sub-ledger, not inside `voucher_entries`. A per-voucher `SUM(debit) = SUM(credit)` check across the whole ledger will list them (171 posted vouchers in production as of 2026-10-02; every unbalanced posted voucher found was of these three types). Exclude these voucher types from such checks rather than "repairing" them.
+
+## Multi-Currency Rounding
+
+The `normalize_voucher_entry_currency_amounts` trigger (migration `20260720_005`) is installed in production. For non-USD vouchers it stores the USD base amount in `debit_amount` / `credit_amount`, converting and rounding each line separately. A voucher with several foreign-currency lines can therefore be a cent out of balance in USD even when it balances exactly in its own currency. As of 2026-10-02, none of the posted CFA, EUR or AUD vouchers in production were affected. If it starts to happen, the fix belongs in that trigger: allocate the per-line rounding so each side's USD total matches the rounded voucher total.
+
 ## Net Position
 
 The net position calculation (`server/netPositionHelper.ts`) aggregates ledger account balances across all companies. Accounts with type `"Intercompany"` are excluded from the net position total to avoid double-counting intercompany balances.
