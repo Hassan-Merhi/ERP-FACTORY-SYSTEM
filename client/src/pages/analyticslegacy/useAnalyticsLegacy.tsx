@@ -395,6 +395,7 @@ export function useAnalyticsLegacy() {
   const [factoryOrderDestinationSearch, setFactoryOrderDestinationSearch] = useState("");
   const [factoryOrderLocationSearch, setFactoryOrderLocationSearch] = useState("");
   const [factoryOrderStatus, setFactoryOrderStatus] = useState("all");
+  const [factoryOrderIncludeCharges, setFactoryOrderIncludeCharges] = useState(false);
   const [factoryOrderProfitFilter, setFactoryOrderProfitFilter] = useState("all");
   const [factoryOrderPage, setFactoryOrderPage] = useState(1);
 
@@ -432,6 +433,7 @@ export function useAnalyticsLegacy() {
     if (factoryOrderDestinationSearch.trim()) params.append("destination", factoryOrderDestinationSearch.trim());
     if (factoryOrderLocationSearch.trim()) params.append("location", factoryOrderLocationSearch.trim());
     params.append("status", factoryOrderStatus);
+    params.append("includeCharges", String(factoryOrderIncludeCharges));
     params.append("page", String(factoryOrderPage));
     params.append("pageSize", "50");
     return `/api/factory/analytics/customer-orders?${params.toString()}`;
@@ -452,6 +454,7 @@ export function useAnalyticsLegacy() {
       factoryOrderDestinationSearch,
       factoryOrderLocationSearch,
       factoryOrderStatus,
+      factoryOrderIncludeCharges,
       factoryOrderPage,
     ],
     queryFn: async () => {
@@ -776,6 +779,8 @@ export function useAnalyticsLegacy() {
     setFactoryOrderLocationSearch,
     factoryOrderStatus,
     setFactoryOrderStatus,
+    factoryOrderIncludeCharges,
+    setFactoryOrderIncludeCharges,
     factoryOrderProfitFilter,
     setFactoryOrderProfitFilter,
     factoryOrderPage,
