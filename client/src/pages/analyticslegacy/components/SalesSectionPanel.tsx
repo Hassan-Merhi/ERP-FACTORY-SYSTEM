@@ -26,6 +26,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     formatDisplayDate,
     loadingFactoryPos,
     loadingFactoryCustomerOrders,
+    periodFilter,
     rangeEnd,
     rangeStart,
     salesData,
@@ -411,8 +412,8 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
               <PosCustomerSalesDialog
                 customer={selectedPosCustomer}
                 onClose={() => setSelectedPosCustomer(null)}
-                startDate={factorySalesStartDate}
-                endDate={factorySalesEndDate}
+                startDate={periodFilter.fromDate}
+                endDate={periodFilter.toDate}
                 formatAmount={formatAmount}
                 formatDisplayDate={formatDisplayDate}
               />
