@@ -21,6 +21,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     factoryCustomerOrderAnalytics,
     factoryCustomerOrderAnalyticsError,
     factoryOrderPage,
+    factoryOrderIncludeCharges,
     formatAmount,
     formatDisplayDate,
     loadingFactoryPos,
@@ -33,6 +34,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     selectedPeriod,
     setDetailsPeriod,
     setFactoryOrderPage,
+    setFactoryOrderIncludeCharges,
     setRangeEnd,
     setRangeStart,
     setSelectedLocationForDetails,
@@ -63,12 +65,27 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
 
               {/* ── Customer orders grouped by customer ─────────────── */}
               <Card className="p-4 md:p-6">
-                <div className="flex flex-col gap-1 mb-4">
-                  <h3 className="text-lg font-medium">Customer Order Analytics</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight
-                    and extra charges.
-                  </p>
+                <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-lg font-medium">Customer Order Analytics</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Expand a customer to see each loading, verified or finalized invoice. Totals below{" "}
+                      {factoryOrderIncludeCharges ? "include" : "exclude"} freight and extra charges.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={factoryOrderIncludeCharges ? "default" : "outline"}
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() => {
+                      setFactoryOrderIncludeCharges((current) => !current);
+                      setFactoryOrderPage(1);
+                    }}
+                    data-testid="button-toggle-factory-order-charges"
+                  >
+                    Freight + Charges: {factoryOrderIncludeCharges ? "Included" : "Excluded"}
+                  </Button>
                 </div>
 
                 {loadingFactoryCustomerOrders ? (
@@ -119,7 +136,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         </div>
                       </div>
                       <div className="rounded-md border p-3">
-                        <div className="text-xs text-muted-foreground">Invoice Total (No Charges)</div>
+                        <div className="text-xs text-muted-foreground">
+                          Invoice Total ({factoryOrderIncludeCharges ? "With Charges" : "No Charges"})
+                        </div>
                         <div className="font-semibold font-mono">
                           {formatAmount(factoryCustomerOrderAnalytics.summary.totalInvoiceAmount)}
                         </div>
@@ -137,7 +156,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                             <TableRow>
                               <TableHead>Customer / Container</TableHead>
                               <TableHead className="text-right">Total Weight</TableHead>
-                              <TableHead className="text-right">Total Cost (No Charges)</TableHead>
+                              <TableHead className="text-right">
+                                Total Cost ({factoryOrderIncludeCharges ? "With Charges" : "No Charges"})
+                              </TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead className="text-right">Date</TableHead>
                             </TableRow>
@@ -208,7 +229,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                                                 className="font-mono font-semibold text-primary underline underline-offset-4 hover:no-underline"
                                                 onClick={() =>
                                                   navigate(
-                                                    `/factory/sales/invoices/${order.orderId}?view=no-charges&from=analytics`
+                                                    factoryOrderIncludeCharges
+                                                      ? `/factory/sales/invoices/${order.orderId}?from=analytics`
+                                                      : `/factory/sales/invoices/${order.orderId}?view=no-charges&from=analytics`
                                                   )
                                                 }
                                                 data-testid={`button-open-order-${order.orderId}`}
