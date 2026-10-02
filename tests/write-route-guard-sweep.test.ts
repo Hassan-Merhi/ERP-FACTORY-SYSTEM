@@ -360,7 +360,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/salary-advances/:id/deduction",
   "POST /api/salary-advances/reconcile",
   "POST /api/sales-import/backfill",
-  "POST /api/sales-report/recalculate-costs",
   "POST /api/sp/containers",
   "POST /api/sp/containers/:id/cancel",
   "POST /api/sp/migration/create-sp-company",

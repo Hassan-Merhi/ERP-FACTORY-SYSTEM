@@ -224,12 +224,14 @@ describe("ERP payroll model positive paths", () => {
 
   it("executes every payroll mutation contract and applies their success/error state transitions", async () => {
     const { result } = renderHook(() => useERPRunPayrollModel());
-    const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(0, 5);
 
     act(() => {
       result.current.toggleWorker(1);
     });
     act(() => result.current.enterPreview());
+    // Every render registers the hook's five mutations again; take the latest
+    // render's, whose closures see the preview built above.
+    const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(-5);
 
     await expect(saveDraft.mutationFn()).resolves.toEqual({ ok: true });
     expect(harness.apiRequest).toHaveBeenCalledWith(

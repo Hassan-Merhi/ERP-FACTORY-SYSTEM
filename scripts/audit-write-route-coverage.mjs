@@ -218,6 +218,11 @@ export function auditWriteRouteCoverage(options = {}) {
         break;
       }
     }
+    // Handlers that write only through a storage or service call are declared
+    // in config (delegatedSensitiveRoutes), since the owner-file scan above
+    // cannot follow the call.
+    const delegated = config.delegatedSensitiveRoutes?.[`${method} ${routePath}`];
+    if (!sensitiveTable && delegated?.table) sensitiveTable = delegated.table;
     const namedElsewhere = otherTestText.includes(routePath);
     const guardSweepReferenced = sweepText.includes(routePath);
     const referencedBeforeAuthenticatedSweep = namedElsewhere || guardSweepReferenced;
