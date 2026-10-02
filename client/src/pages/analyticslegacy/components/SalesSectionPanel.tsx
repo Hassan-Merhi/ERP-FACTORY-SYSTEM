@@ -69,8 +69,9 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                   <div className="flex flex-col gap-1">
                     <h3 className="text-lg font-medium">Customer Order Analytics</h3>
                     <p className="text-sm text-muted-foreground">
-                      Expand a customer to see each loading, verified or finalized invoice. Totals below{" "}
-                      {factoryOrderIncludeCharges ? "include" : "exclude"} freight and extra charges.
+                      {factoryOrderIncludeCharges
+                        ? "Expand a customer to see each loading, verified or finalized invoice. Totals below include freight and extra charges."
+                        : "Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight and extra charges."}
                     </p>
                   </div>
                   <Button
@@ -84,7 +85,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                     }}
                     data-testid="button-toggle-factory-order-charges"
                   >
-                    Freight + Charges: {factoryOrderIncludeCharges ? "Included" : "Excluded"}
+                    {factoryOrderIncludeCharges ? "Freight + Charges: Included" : "Freight + Charges: Excluded"}
                   </Button>
                 </div>
 
@@ -137,7 +138,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                       </div>
                       <div className="rounded-md border p-3">
                         <div className="text-xs text-muted-foreground">
-                          Invoice Total ({factoryOrderIncludeCharges ? "With Charges" : "No Charges"})
+                          {factoryOrderIncludeCharges ? "Invoice Total (With Charges)" : "Invoice Total (No Charges)"}
                         </div>
                         <div className="font-semibold font-mono">
                           {formatAmount(factoryCustomerOrderAnalytics.summary.totalInvoiceAmount)}
@@ -157,7 +158,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                               <TableHead>Customer / Container</TableHead>
                               <TableHead className="text-right">Total Weight</TableHead>
                               <TableHead className="text-right">
-                                Total Cost ({factoryOrderIncludeCharges ? "With Charges" : "No Charges"})
+                                {factoryOrderIncludeCharges ? "Total Cost (With Charges)" : "Total Cost (No Charges)"}
                               </TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead className="text-right">Date</TableHead>
