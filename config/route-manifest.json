@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2021,
+  "routeCount": 2022,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1165,6 +1165,7 @@
     "GET /api/intercompany-pos-config [requireAuth > requireNonPOS > <anonymous>]",
     "PUT /api/intercompany-pos-config [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/intercompany-pos-config/dest-accounts [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/intercompany-pos-config/rebuild [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/employees/:id/docs [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/employees/:id/docs [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/erp-worker-docs/:id [requireAuth > requireNonPOS > <anonymous>]",

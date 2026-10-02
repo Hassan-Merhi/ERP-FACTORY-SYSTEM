@@ -150,4 +150,54 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "بعد الإغلاق تُقفل الدفاتر حتى تاريخ نهاية الفترة: لا يمكن إنشاء أو تعديل أو حذف أي سند مؤرخ في ذلك التاريخ أو قبله. يجب تسجيل التصحيحات في فترة لاحقة مفتوحة.",
     fr: "Après la clôture, les livres sont verrouillés jusqu'à la date de fin de période : aucune pièce datée de ce jour ou antérieure ne peut être créée, modifiée ou supprimée. Les corrections doivent être passées dans une période ultérieure ouverte.",
   },
+  {
+    en: "Rebuild intercompany journals",
+    ar: "إعادة بناء قيود ما بين الشركات",
+    fr: "Reconstruire les écritures intersociétés",
+  },
+  {
+    en: "Rebuilds this company's intercompany POS journals from its cash sales for each date in the range. Use it to repair dates where the destination company's side is missing.",
+    ar: "يعيد بناء قيود نقاط البيع بين الشركات لهذه الشركة من مبيعاتها النقدية لكل تاريخ ضمن النطاق. استخدمه لإصلاح التواريخ التي ينقصها جانب الشركة المستلمة.",
+    fr: "Reconstruit les écritures PDV intersociétés de cette société à partir de ses ventes au comptant pour chaque date de la période. Utilisez-le pour réparer les dates où la partie de la société destinataire manque.",
+  },
+  {
+    en: "Rebuild complete",
+    ar: "اكتملت إعادة البناء",
+    fr: "Reconstruction terminée",
+  },
+  {
+    en: "Rebuild finished with errors",
+    ar: "انتهت إعادة البناء مع أخطاء",
+    fr: "Reconstruction terminée avec des erreurs",
+  },
+  {
+    en: "${result.datesRebuilt} of ${result.datesChecked} dates rebuilt.",
+    ar: "تمت إعادة بناء {{0}} من {{1}} تاريخ.",
+    fr: "{{0}} dates reconstruites sur {{1}}.",
+  },
+  {
+    en: 'Failed dates: ${result.failedDates.join(", ")}',
+    ar: "التواريخ الفاشلة: {{0}}",
+    fr: "Dates en échec : {{0}}",
+  },
+  {
+    en: "Intercompany POS is not enabled for this company",
+    ar: "نقاط البيع بين الشركات غير مفعّلة لهذه الشركة",
+    fr: "Le PDV intersociétés n'est pas activé pour cette société",
+  },
+  {
+    en: "The date range must run forwards and cover at most 366 days",
+    ar: "يجب أن يكون نطاق التاريخ تصاعدياً وألا يتجاوز 366 يوماً",
+    fr: "La période doit aller vers l'avant et couvrir au plus 366 jours",
+  },
+  {
+    en: "fromDate and toDate must be YYYY-MM-DD dates",
+    ar: "يجب أن يكون fromDate و toDate بتنسيق YYYY-MM-DD",
+    fr: "fromDate et toDate doivent être des dates AAAA-MM-JJ",
+  },
+  {
+    en: "Vouchers can only be created in the selected company",
+    ar: "لا يمكن إنشاء السندات إلا في الشركة المحددة",
+    fr: "Les pièces ne peuvent être créées que dans la société sélectionnée",
+  },
 ];

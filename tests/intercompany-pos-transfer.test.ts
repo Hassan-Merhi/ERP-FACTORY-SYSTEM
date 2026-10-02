@@ -233,3 +233,45 @@ describe("intercompany POS mirror", () => {
     );
   });
 });
+
+describe("intercompany POS rebuild endpoint", () => {
+  async function adminAgent() {
+    const agent = request.agent(a.app);
+    expect(
+      (await agent.post("/api/auth/login").send({ username: `${SOURCE_A}_testuser`, password: "testpassword123" }))
+        .status
+    ).toBe(200);
+    expect((await agent.post("/api/auth/set-company").send({ companyId: a.companyId })).status).toBe(200);
+    return agent;
+  }
+
+  it("restores a missing destination journal for every sales date in the range", async () => {
+    const date = "2026-04-10";
+    await postCashSale(a, `${SOURCE_A}-R1`, date, "25.00");
+    expect(await recalculateIntercompanyForDate(a.companyId, date)).toBe(true);
+    // Simulate the pre-fix state: the destination side was never written.
+    const dst = await journalByNumber(dest.companyId, dstNumber(a, date));
+    await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, dst!.voucher.id));
+    await db.delete(schema.vouchers).where(eq(schema.vouchers.id, dst!.voucher.id));
+
+    const agent = await adminAgent();
+    const response = await agent
+      .post("/api/intercompany-pos-config/rebuild")
+      .send({ fromDate: "2026-04-09", toDate: "2026-04-11" });
+    expect(response.status).toBe(200);
+    expect(response.body.failedDates).toEqual([]);
+    expect(response.body.datesRebuilt).toBe(response.body.datesChecked);
+    expect((await journalByNumber(dest.companyId, dstNumber(a, date)))!.voucher.totalAmount).toBe("25.00");
+  });
+
+  it("refuses malformed, backwards and oversized ranges", async () => {
+    const agent = await adminAgent();
+    for (const body of [
+      { fromDate: "2026-4-1", toDate: "2026-04-02" },
+      { fromDate: "2026-04-05", toDate: "2026-04-01" },
+      { fromDate: "2025-01-01", toDate: "2026-04-01" },
+    ]) {
+      expect((await agent.post("/api/intercompany-pos-config/rebuild").send(body)).status).toBe(400);
+    }
+  });
+});
