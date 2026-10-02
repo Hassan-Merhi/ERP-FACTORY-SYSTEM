@@ -89,6 +89,113 @@ describe("canonical factory invoice rendering", () => {
     expect(dataRow.getCell(totalColumn).value).toBe(240);
   });
 
+  it("groups Cream first, then Number 1/2, and writes green category subtotals", async () => {
+    const grouped: CanonicalInvoiceDocument = {
+      ...invoice,
+      lines: [
+        {
+          ...invoice.lines[0],
+          articleCode: "W2",
+          productName: "WINTER 2",
+          category: "Winter 2",
+          qty: 1,
+          totalWeight: 40,
+          pricingMode: "per_bale",
+          unitPrice: 80,
+          pricePerBale: 80,
+          totalPrice: 80,
+        },
+        {
+          ...invoice.lines[0],
+          articleCode: "W1",
+          productName: "WINTER 1",
+          category: "Winter 1",
+          qty: 2,
+          totalWeight: 80,
+          pricingMode: "per_kg",
+          unitPrice: 8.5,
+          pricePerKg: 8.5,
+          pricePerBale: 0,
+          totalPrice: 680,
+        },
+        {
+          ...invoice.lines[0],
+          articleCode: "C2",
+          productName: "CREAM WINTER",
+          category: "Cream Winter",
+          qty: 1,
+          totalWeight: 50,
+          pricingMode: "per_bale",
+          unitPrice: 100,
+          pricePerBale: 100,
+          totalPrice: 100,
+        },
+        {
+          ...invoice.lines[0],
+          articleCode: "S1",
+          productName: "SUMMER 1",
+          category: "Summer 1",
+          qty: 2,
+          totalWeight: 70,
+          pricingMode: "per_kg",
+          unitPrice: 8.5,
+          pricePerKg: 8.5,
+          pricePerBale: 0,
+          totalPrice: 595,
+        },
+        {
+          ...invoice.lines[0],
+          articleCode: "C1",
+          productName: "CREAM SUMMER",
+          category: "Cream Summer",
+          qty: 2,
+          totalWeight: 90,
+          pricingMode: "per_bale",
+          unitPrice: 120,
+          pricePerBale: 120,
+          totalPrice: 240,
+        },
+        {
+          ...invoice.lines[0],
+          articleCode: "S2",
+          productName: "SUMMER 2",
+          category: "Summer 2",
+          qty: 1,
+          totalWeight: 45,
+          pricingMode: "per_bale",
+          unitPrice: 90,
+          pricePerBale: 90,
+          totalPrice: 90,
+        },
+      ],
+    };
+
+    const { buffer } = await buildCanonicalInvoiceExcel(grouped, { language: "en" });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer as any);
+    const sheet = workbook.worksheets[0];
+
+    const rows = sheet.getSheetValues().filter(Array.isArray) as unknown[][];
+    const productCells = rows.map((row) => String(row?.[3] ?? ""));
+
+    const creamSubtotalIndex = productCells.indexOf("SUB-TOTAL CREAM");
+    const number1SubtotalIndex = productCells.indexOf("SUB-TOTAL NUMBER 1");
+    const number2SubtotalIndex = productCells.indexOf("SUB-TOTAL NUMBER 2");
+
+    expect(creamSubtotalIndex).toBeGreaterThan(0);
+    expect(number1SubtotalIndex).toBeGreaterThan(creamSubtotalIndex);
+    expect(number2SubtotalIndex).toBeGreaterThan(number1SubtotalIndex);
+
+    const number1Rows = rows.slice(creamSubtotalIndex + 1, number1SubtotalIndex);
+    expect(number1Rows.map((row) => String(row?.[3] ?? ""))).toEqual(["SUMMER 1", "WINTER 1"]);
+
+    const subtotalRow = rows[number1SubtotalIndex];
+    expect(subtotalRow?.[5]).toBe(4);
+    expect(subtotalRow?.[7]).toBe(150);
+    expect(subtotalRow?.[8]).toBe(8.5);
+    expect(subtotalRow?.[9]).toBe(1275);
+  });
+
   it("renders the same canonical document as a valid PDF", async () => {
     const { buffer, fileName } = await buildCanonicalInvoicePdf(invoice, { language: "en" });
 
