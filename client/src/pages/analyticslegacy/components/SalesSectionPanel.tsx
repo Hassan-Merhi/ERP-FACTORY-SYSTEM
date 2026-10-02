@@ -16,6 +16,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
   const {
     activeSection,
     appMode,
+    periodFilter,
     detailsPeriod,
     factoryPosSummary,
     factoryCustomerOrderAnalytics,
@@ -26,7 +27,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     formatDisplayDate,
     loadingFactoryPos,
     loadingFactoryCustomerOrders,
-    periodFilter,
     rangeEnd,
     rangeStart,
     salesData,
@@ -62,8 +62,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
         <>
           {appMode === "factory" ? (
             <>
-
-
               {/* ── Customer orders grouped by customer ─────────────── */}
               <Card className="p-4 md:p-6">
                 <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
