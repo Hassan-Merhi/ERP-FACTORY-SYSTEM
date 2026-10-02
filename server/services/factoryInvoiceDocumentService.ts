@@ -165,6 +165,132 @@ function localizedLineCategory(line: CanonicalInvoiceLine, language: FactoryDocu
   return line.category || "-";
 }
 
+interface InvoiceRenderGroup {
+  key: string;
+  label: string;
+  sortBucket: number;
+  sortNumber: number;
+  lines: CanonicalInvoiceLine[];
+  qty: number;
+  totalWeight: number;
+  totalPrice: number;
+  subtotalUnitPrice: number | null;
+}
+
+function naturalCompare(a: string, b: string): number {
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+function extractSeasonNumber(value: string): number | null {
+  const match = value.match(/\\b(?:summer|winter|number|no\\.?|n[°º]|#)\\s*[-:]?\\s*(\\d+)\\b/i);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function extractCategoryNumber(value: string): number | null {
+  const seasonNumber = extractSeasonNumber(value);
+  if (seasonNumber !== null) return seasonNumber;
+
+  const match = value.match(/\\b(\\d+)\\b(?!\\s*(?:kg|kgs|kilograms?|lb|lbs)\\b)/i);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1], 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function lineSeasonRank(line: CanonicalInvoiceLine): number {
+  const value = `${line.category} ${line.productName}`.toLowerCase();
+  if (/\\bsummer\\b/.test(value)) return 0;
+  if (/\\bwinter\\b/.test(value)) return 1;
+  return 2;
+}
+
+function buildInvoiceRenderGroups(
+  document: CanonicalInvoiceDocument,
+  language: FactoryDocumentLanguage
+): InvoiceRenderGroup[] {
+  const extraLabels = FACTORY_INVOICE_EXTRA_LABELS[language];
+  const groups = new Map<
+    string,
+    Omit<InvoiceRenderGroup, "qty" | "totalWeight" | "totalPrice" | "subtotalUnitPrice">
+  >();
+
+  for (const line of document.lines) {
+    const rawCategory = line.category.trim();
+    const categoryText = rawCategory.toLowerCase();
+    const seasonNumber = extractSeasonNumber(rawCategory) ?? extractSeasonNumber(line.productName);
+    const categoryNumber = extractCategoryNumber(rawCategory);
+    let key: string;
+    let label: string;
+    let sortBucket: number;
+    let sortNumber: number;
+
+    if (/\\bcream\\b/i.test(rawCategory)) {
+      key = "cream";
+      label = extraLabels.creamGroup;
+      sortBucket = 0;
+      sortNumber = 0;
+    } else if (categoryNumber !== null || seasonNumber !== null) {
+      const number = categoryNumber ?? seasonNumber!;
+      key = `number:${number}`;
+      label = `${extraLabels.numberGroup} ${number}`;
+      sortBucket = 1;
+      sortNumber = number;
+    } else {
+      const fallbackCategory = rawCategory || extraLabels.uncategorizedGroup;
+      key = `category:${categoryText || "__uncategorized__"}`;
+      label = rawCategory ? localizedLineCategory(line, language) : extraLabels.uncategorizedGroup;
+      sortBucket = 2;
+      sortNumber = Number.MAX_SAFE_INTEGER;
+    }
+
+    const existing = groups.get(key);
+    if (existing) {
+      existing.lines.push(line);
+    } else {
+      groups.set(key, { key, label, sortBucket, sortNumber, lines: [line] });
+    }
+  }
+
+  return [...groups.values()]
+    .map((group) => {
+      const lines = [...group.lines].sort((a, b) => {
+        const aNumber = extractSeasonNumber(a.category) ?? extractSeasonNumber(a.productName) ?? Number.MAX_SAFE_INTEGER;
+        const bNumber = extractSeasonNumber(b.category) ?? extractSeasonNumber(b.productName) ?? Number.MAX_SAFE_INTEGER;
+        if (aNumber !== bNumber) return aNumber - bNumber;
+
+        const seasonDiff = lineSeasonRank(a) - lineSeasonRank(b);
+        if (seasonDiff !== 0) return seasonDiff;
+
+        const productDiff = naturalCompare(localizedLineProduct(a, language), localizedLineProduct(b, language));
+        if (productDiff !== 0) return productDiff;
+        return naturalCompare(a.articleCode, b.articleCode);
+      });
+
+      const qty = lines.reduce((sum, line) => sum + line.qty, 0);
+      const totalWeight = lines.reduce((sum, line) => sum + line.totalWeight, 0);
+      const totalPrice = lines.reduce((sum, line) => sum + line.totalPrice, 0);
+      const modes = new Set(lines.map((line) => line.pricingMode));
+      const subtotalUnitPrice =
+        modes.size !== 1
+          ? null
+          : modes.has("per_kg")
+            ? totalWeight > 0
+              ? totalPrice / totalWeight
+              : null
+            : qty > 0
+              ? totalPrice / qty
+              : null;
+
+      return { ...group, lines, qty, totalWeight, totalPrice, subtotalUnitPrice };
+    })
+    .sort((a, b) => {
+      if (a.sortBucket !== b.sortBucket) return a.sortBucket - b.sortBucket;
+      if (a.sortNumber !== b.sortNumber) return a.sortNumber - b.sortNumber;
+      return naturalCompare(a.label, b.label);
+    });
+}
+
 function isCanonicalSnapshot(value: unknown): value is CanonicalInvoiceDocument {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<CanonicalInvoiceDocument>;
@@ -533,49 +659,88 @@ export async function buildCanonicalInvoiceExcel(
     };
   });
 
+  const renderGroups = buildInvoiceRenderGroups(document, language);
   let totalQty = 0;
   let totalWeight = 0;
   let totalAmount = 0;
-  document.lines.forEach((line, index) => {
-    totalQty += line.qty;
-    totalWeight += line.totalWeight;
-    totalAmount += line.totalPrice;
-    const values: Array<string | number> = [
-      index + 1,
-      line.articleCode,
-      localizedLineProduct(line, language),
-      localizedLineCategory(line, language),
-      line.qty,
-      line.weightPerBale,
-      line.totalWeight,
+  let lineNumber = 0;
+  let stripeIndex = 0;
+
+  for (const group of renderGroups) {
+    for (const line of group.lines) {
+      lineNumber += 1;
+      totalQty += line.qty;
+      totalWeight += line.totalWeight;
+      totalAmount += line.totalPrice;
+      const values: Array<string | number> = [
+        lineNumber,
+        line.articleCode,
+        localizedLineProduct(line, language),
+        localizedLineCategory(line, language),
+        line.qty,
+        line.weightPerBale,
+        line.totalWeight,
+      ];
+      if (!hideSelling) values.push(line.unitPrice, line.totalPrice);
+      const row = sheet.addRow(values);
+      row.height = 20;
+      row.eachCell((cell) => {
+        cell.font = { size: 10 };
+        cell.alignment = { vertical: "middle", wrapText: true };
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFDDDDDD" } },
+          bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
+          left: { style: "thin", color: { argb: "FFDDDDDD" } },
+          right: { style: "thin", color: { argb: "FFDDDDDD" } },
+        };
+      });
+      if (stripeIndex % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
+        });
+      }
+      stripeIndex += 1;
+      row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+      row.getCell(5).numFmt = "#,##0";
+      row.getCell(6).numFmt = "#,##0.00";
+      row.getCell(7).numFmt = "#,##0.00";
+      if (!hideSelling) {
+        row.getCell(8).numFmt = moneyFmt;
+        row.getCell(9).numFmt = moneyFmt;
+      }
+    }
+
+    const subtotalValues: Array<string | number> = [
+      "",
+      "",
+      `${FACTORY_INVOICE_EXTRA_LABELS[language].subtotalPrefix} ${group.label}`,
+      "",
+      group.qty,
+      "",
+      group.totalWeight,
     ];
-    if (!hideSelling) values.push(line.unitPrice, line.totalPrice);
-    const row = sheet.addRow(values);
-    row.height = 20;
-    row.eachCell((cell) => {
-      cell.font = { size: 10 };
+    if (!hideSelling) subtotalValues.push(group.subtotalUnitPrice ?? "", group.totalPrice);
+    const subtotalRow = sheet.addRow(subtotalValues);
+    subtotalRow.height = 22;
+    subtotalRow.eachCell((cell) => {
+      cell.font = { bold: true, size: 10, color: { argb: "FF000000" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF92D050" } };
       cell.alignment = { vertical: "middle", wrapText: true };
       cell.border = {
-        top: { style: "thin", color: { argb: "FFDDDDDD" } },
-        bottom: { style: "thin", color: { argb: "FFDDDDDD" } },
-        left: { style: "thin", color: { argb: "FFDDDDDD" } },
-        right: { style: "thin", color: { argb: "FFDDDDDD" } },
+        top: { style: "thin", color: { argb: "FF70AD47" } },
+        bottom: { style: "thin", color: { argb: "FF70AD47" } },
+        left: { style: "thin", color: { argb: "FF70AD47" } },
+        right: { style: "thin", color: { argb: "FF70AD47" } },
       };
     });
-    if (index % 2 === 1) {
-      row.eachCell((cell) => {
-        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: LIGHT_GRAY } };
-      });
-    }
-    row.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
-    row.getCell(5).numFmt = "#,##0";
-    row.getCell(6).numFmt = "#,##0.00";
-    row.getCell(7).numFmt = "#,##0.00";
+    subtotalRow.getCell(3).alignment = { horizontal: "center", vertical: "middle" };
+    subtotalRow.getCell(5).numFmt = "#,##0";
+    subtotalRow.getCell(7).numFmt = "#,##0.00";
     if (!hideSelling) {
-      row.getCell(8).numFmt = moneyFmt;
-      row.getCell(9).numFmt = moneyFmt;
+      subtotalRow.getCell(8).numFmt = moneyFmt;
+      subtotalRow.getCell(9).numFmt = moneyFmt;
     }
-  });
+  }
 
   const totalValues: Array<string | number> = ["", "", labels.totals, "", totalQty, "", totalWeight];
   if (!hideSelling) totalValues.push("", totalAmount);
@@ -819,51 +984,92 @@ export async function buildCanonicalInvoicePdf(
   let totalQty = 0;
   let totalWeight = 0;
   let totalAmount = 0;
+  let lineNumber = 0;
+  let stripeIndex = 0;
+  const renderGroups = buildInvoiceRenderGroups(document, language);
 
-  for (let index = 0; index < document.lines.length; index++) {
-    const line = document.lines[index];
-    totalQty += line.qty;
-    totalWeight += line.totalWeight;
-    totalAmount += line.totalPrice;
-    const product = localizedLineProduct(line, language);
-    const category = localizedLineCategory(line, language);
-    const productHeight = doc.heightOfString(product, { width: columns[2].width - 4, align: textAlign });
-    const categoryHeight = doc.heightOfString(category, { width: columns[3].width - 4, align: textAlign });
-    const rowHeight = Math.max(16, Math.min(34, Math.max(productHeight, categoryHeight) + 6));
+  for (const group of renderGroups) {
+    for (const line of group.lines) {
+      lineNumber += 1;
+      totalQty += line.qty;
+      totalWeight += line.totalWeight;
+      totalAmount += line.totalPrice;
+      const product = localizedLineProduct(line, language);
+      const category = localizedLineCategory(line, language);
+      const productHeight = doc.heightOfString(product, { width: columns[2].width - 4, align: textAlign });
+      const categoryHeight = doc.heightOfString(category, { width: columns[3].width - 4, align: textAlign });
+      const rowHeight = Math.max(16, Math.min(34, Math.max(productHeight, categoryHeight) + 6));
 
-    if (y + rowHeight > doc.page.height - 42) {
+      if (y + rowHeight > doc.page.height - 42) {
+        doc.addPage();
+        y = drawTableHeader(drawPageBranding(false));
+      }
+
+      if (stripeIndex % 2 === 1) {
+        doc.rect(pageLeft, y, usableWidth, rowHeight).fill("#F5F5F5");
+        doc.fillColor("#000000");
+      }
+      stripeIndex += 1;
+
+      const values: string[] = [
+        String(lineNumber),
+        line.articleCode,
+        product,
+        category,
+        number(line.qty),
+        number(line.weightPerBale),
+        number(line.totalWeight),
+        ...(hideSelling ? [] : [money(line.unitPrice), money(line.totalPrice)]),
+      ];
+
+      let x = pageLeft;
+      values.forEach((value, columnIndex) => {
+        const column = columns[columnIndex];
+        doc.text(value, x + 2, y + 4, {
+          width: column.width - 4,
+          align: column.align,
+          height: rowHeight - 6,
+          ellipsis: true,
+        });
+        x += column.width;
+      });
+      y += rowHeight;
+    }
+
+    const subtotalHeight = 18;
+    if (y + subtotalHeight > doc.page.height - 42) {
       doc.addPage();
       y = drawTableHeader(drawPageBranding(false));
     }
 
-    if (index % 2 === 1) {
-      doc.rect(pageLeft, y, usableWidth, rowHeight).fill("#F5F5F5");
-      doc.fillColor("#000000");
-    }
-
-    const values: string[] = [
-      String(index + 1),
-      line.articleCode,
-      product,
-      category,
-      number(line.qty),
-      number(line.weightPerBale),
-      number(line.totalWeight),
-      ...(hideSelling ? [] : [money(line.unitPrice), money(line.totalPrice)]),
+    doc.rect(pageLeft, y, usableWidth, subtotalHeight).fill("#92D050");
+    boldFont().fillColor("#000000").fontSize(8);
+    const subtotalValues: string[] = [
+      "",
+      "",
+      `${FACTORY_INVOICE_EXTRA_LABELS[language].subtotalPrefix} ${group.label}`,
+      "",
+      number(group.qty),
+      "",
+      number(group.totalWeight),
+      ...(hideSelling
+        ? []
+        : [group.subtotalUnitPrice == null ? "" : money(group.subtotalUnitPrice), money(group.totalPrice)]),
     ];
-
-    let x = pageLeft;
-    values.forEach((value, columnIndex) => {
+    let subtotalX = pageLeft;
+    subtotalValues.forEach((value, columnIndex) => {
       const column = columns[columnIndex];
-      doc.text(value, x + 2, y + 4, {
-        width: column.width - 4,
-        align: column.align,
-        height: rowHeight - 6,
-        ellipsis: true,
-      });
-      x += column.width;
+      if (value) {
+        doc.text(value, subtotalX + 2, y + 5, {
+          width: column.width - 4,
+          align: columnIndex === 2 ? "center" : column.align,
+          lineBreak: false,
+        });
+      }
+      subtotalX += column.width;
     });
-    y += rowHeight;
+    normalFont().fillColor("#000000").fontSize(7.5);
+    y += subtotalHeight;
   }
 
   if (y + 20 > doc.page.height - 42) {
