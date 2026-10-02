@@ -121,9 +121,7 @@ describe("customer order Excel export behavior", () => {
         res
       );
       expect(res.statusCode).toBe(200);
-      expect(res.headers.get("Content-Type")).toBe(
-        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
+      expect(res.headers.get("Content-Type")).toBe("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       expect(res.body).toEqual(Buffer.from("PKcanonical-invoice"));
     }
 

@@ -71,7 +71,6 @@ async function loadOrder(orderId: number, companyId: number) {
   return { order, lines, charges };
 }
 
-
 function safeNumber(value: unknown): number {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -148,40 +147,39 @@ async function sendLoadingExcel(req: Request, res: Response, data: NonNullable<A
 }
 
 export function registerFactoryBilingualDocumentRoutes(app: Express): void {
-  const invoiceHandler = (format: "pdf" | "excel") => async (req: Request, res: Response, next: import("express").NextFunction) => {
-    if (!hasExplicitLanguage(req)) return next();
-    try {
-      const companyId = companyIdFrom(req);
-      const orderId = orderIdFrom(req);
-      if (!companyId) return res.status(403).json({ message: "Factory company access required" });
-      if (!orderId) return res.status(400).json({ message: "Invalid order ID" });
-      const document = await getCanonicalInvoiceDocument(orderId, companyId);
-      if (!document) return res.status(404).json({ message: "Order not found" });
-      const language = parseFactoryDocumentLanguage(req.query.lang);
-      const { hideSelling } = await getExportPriceVisibility(req);
-      const noCharges = req.query.noCharges === "1";
-      const rendered =
-        format === "pdf"
-          ? await buildCanonicalInvoicePdf(document, { hideSelling, noCharges, language })
-          : await buildCanonicalInvoiceExcel(document, { hideSelling, noCharges, language });
-      res.status(200);
-      res.setHeader(
-        "Content-Type",
-        format === "pdf"
-          ? "application/pdf"
-          : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      );
-      res.setHeader("Content-Disposition", contentDisposition(rendered.fileName));
-      res.setHeader("Content-Length", String(rendered.buffer.length));
-      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-      res.setHeader("X-Content-Type-Options", "nosniff");
-      res.end(rendered.buffer);
-      await auditExport(req, companyId, orderId, format, language);
-    } catch (error) {
-      logger.error("Factory bilingual invoice export failed", { error });
-      if (!res.headersSent) res.status(500).json({ message: getErrorMessage(error) });
-    }
-  };
+  const invoiceHandler =
+    (format: "pdf" | "excel") => async (req: Request, res: Response, next: import("express").NextFunction) => {
+      if (!hasExplicitLanguage(req)) return next();
+      try {
+        const companyId = companyIdFrom(req);
+        const orderId = orderIdFrom(req);
+        if (!companyId) return res.status(403).json({ message: "Factory company access required" });
+        if (!orderId) return res.status(400).json({ message: "Invalid order ID" });
+        const document = await getCanonicalInvoiceDocument(orderId, companyId);
+        if (!document) return res.status(404).json({ message: "Order not found" });
+        const language = parseFactoryDocumentLanguage(req.query.lang);
+        const { hideSelling } = await getExportPriceVisibility(req);
+        const noCharges = req.query.noCharges === "1";
+        const rendered =
+          format === "pdf"
+            ? await buildCanonicalInvoicePdf(document, { hideSelling, noCharges, language })
+            : await buildCanonicalInvoiceExcel(document, { hideSelling, noCharges, language });
+        res.status(200);
+        res.setHeader(
+          "Content-Type",
+          format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        );
+        res.setHeader("Content-Disposition", contentDisposition(rendered.fileName));
+        res.setHeader("Content-Length", String(rendered.buffer.length));
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.end(rendered.buffer);
+        await auditExport(req, companyId, orderId, format, language);
+      } catch (error) {
+        logger.error("Factory bilingual invoice export failed", { error });
+        if (!res.headersSent) res.status(500).json({ message: getErrorMessage(error) });
+      }
+    };
 
   const loadingHandler = async (req: Request, res: Response, next: import("express").NextFunction) => {
     if (!hasExplicitLanguage(req)) return next();

@@ -133,15 +133,17 @@ function normalizePricingMode(value: unknown): "per_bale" | "per_kg" {
 export function currencySymbol(currency: unknown): string {
   const code = safeString(currency, "USD").toUpperCase();
   return (
-    {
-      USD: "$",
-      GBP: "£",
-      EUR: "€",
-      CFA: "CFA",
-      XOF: "CFA",
-      XAF: "CFA",
-    } as Record<string, string>
-  )[code] ?? code;
+    (
+      {
+        USD: "$",
+        GBP: "£",
+        EUR: "€",
+        CFA: "CFA",
+        XOF: "CFA",
+        XAF: "CFA",
+      } as Record<string, string>
+    )[code] ?? code
+  );
 }
 
 function excelMoneyFormat(currency: string): string {
@@ -372,10 +374,7 @@ async function buildLiveCanonicalInvoiceDocument(
   };
 }
 
-async function persistSnapshot(
-  document: CanonicalInvoiceDocument,
-  force: boolean
-): Promise<CanonicalInvoiceDocument> {
+async function persistSnapshot(document: CanonicalInvoiceDocument, force: boolean): Promise<CanonicalInvoiceDocument> {
   const frozen: CanonicalInvoiceDocument = {
     ...document,
     lines: document.lines.map((line) => ({ ...line })),
@@ -460,9 +459,7 @@ export async function buildCanonicalInvoiceExcel(
     views: language === "ar" ? [{ rightToLeft: true, showGridLines: false }] : [{ showGridLines: false }],
   });
 
-  const columns = hideSelling
-    ? [6, 16, 30, 18, 8, 11, 13]
-    : [6, 16, 28, 18, 8, 11, 13, 13, 14];
+  const columns = hideSelling ? [6, 16, 30, 18, 8, 11, 13] : [6, 16, 28, 18, 8, 11, 13, 13, 14];
   sheet.columns = columns.map((width) => ({ width }));
   const COL = columns.length;
   const DARK_BLUE = "FF1F3864";
@@ -728,7 +725,9 @@ export async function buildCanonicalInvoicePdf(
         }
       }
     }
-    boldFont().fontSize(firstPage ? 14 : 10).fillColor("#000000");
+    boldFont()
+      .fontSize(firstPage ? 14 : 10)
+      .fillColor("#000000");
     doc.text(firstPage ? labels.invoice : `${labels.invoice} — ${document.invoiceNumber}`, pageLeft, y, {
       width: usableWidth,
       align: "center",
@@ -921,7 +920,12 @@ export async function buildCanonicalInvoicePdf(
         doc.rect(boxX, y, boxWidth, 19).fill("#1F3864");
         boldFont().fillColor("#ffffff").fontSize(9);
       } else {
-        doc.moveTo(boxX, y + 18).lineTo(pageRight, y + 18).lineWidth(0.3).strokeColor("#cccccc").stroke();
+        doc
+          .moveTo(boxX, y + 18)
+          .lineTo(pageRight, y + 18)
+          .lineWidth(0.3)
+          .strokeColor("#cccccc")
+          .stroke();
         normalFont().fillColor("#000000").fontSize(8.5);
       }
       doc.text(label, boxX + 7, y + 5, { width: boxWidth * 0.58, align: textAlign, lineBreak: false });
