@@ -14,7 +14,7 @@ import {
 } from "../_helpers";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import { vouchers, voucherEntries, customers } from "@shared/schema";
+import { vouchers, voucherEntries, customers, type InsertVoucher } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 import Decimal from "decimal.js";
@@ -60,14 +60,52 @@ export function registerVoucherCreateRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid request data", field: missingVoucherField[0] });
       }
 
+      // The body used to be spread straight into the insert, so a caller could
+      // set any column (deleted_at, shift_id, source_module, ...). Only the
+      // header fields the voucher forms send are accepted, and the company is
+      // always the session's.
       const companyId = req.session.currentCompanyId;
-      const exchangeRate = companyId ? await getCurrentExchangeRate(companyId) : null;
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
+      if (req.body.companyId != null && Number(req.body.companyId) !== companyId) {
+        return res.status(403).json({ message: "Vouchers can only be created in the selected company" });
+      }
+      // Stock forms send float products (qty * rate); the column keeps cents,
+      // so round exactly as the database would rather than refuse them.
+      let totalAmount: string;
+      try {
+        const parsedTotal = new Decimal(String(req.body.totalAmount).trim());
+        if (!parsedTotal.isFinite() || parsedTotal.isNegative()) throw new Error("invalid");
+        totalAmount = parsedTotal.toFixed(2);
+      } catch {
+        return res.status(400).json({ message: "Invalid request data", field: "totalAmount" });
+      }
+      if (req.body.optional !== undefined && typeof req.body.optional !== "boolean") {
+        return res.status(400).json({ message: "Invalid request data", field: "optional" });
+      }
+      const textField = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
+      const exchangeRate = await getCurrentExchangeRate(companyId);
       const voucher = await storage.createVoucher({
-        ...req.body,
-        exchangeRate,
+        companyId,
+        voucherNumber: String(req.body.voucherNumber),
+        // insertVoucherSchema's enum omits types this route legitimately
+        // receives (StockTransfer/Transfer from POS, Production, Mixed).
+        voucherType: String(voucherType) as InsertVoucher["voucherType"],
+        voucherDate: String(req.body.voucherDate),
+        totalAmount,
+        description: textField(req.body.description),
+        optional: req.body.optional ?? false,
+        currency:
+          typeof req.body.currency === "string" && /^[A-Z]{3}$/.test(req.body.currency) ? req.body.currency : "USD",
+        locationId: Number.isInteger(req.body.locationId) ? req.body.locationId : undefined,
+        locationName: textField(req.body.locationName),
+        effectiveDate: textField(req.body.effectiveDate) ?? null,
+        exchangeRate: exchangeRate == null ? undefined : String(exchangeRate),
+        sourceModule: "ERP",
         postingSource: infrastructurePostingIdentity(
           "manual-voucher",
-          `${companyId ?? req.body.companyId}:${req.body.voucherNumber}`,
+          `${companyId}:${req.body.voucherNumber}`,
           "create"
         ),
       });

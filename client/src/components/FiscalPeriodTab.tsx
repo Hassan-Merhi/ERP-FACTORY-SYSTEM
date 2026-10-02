@@ -126,6 +126,29 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
     },
   });
 
+  const canReopen = userRole === "Admin" || userRole === "Developer";
+  const [reopenTarget, setReopenTarget] = useState<Serialized<FiscalPeriodClosure> | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
+
+  const reopenPeriodMutation = useMutation({
+    mutationFn: async ({ closureId, reason }: { closureId: number; reason: string }) => {
+      const res = await apiRequest("POST", `/api/fiscal-period/${closureId}/reopen`, { reason });
+      return await res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Fiscal Period Reopened", description: "The period is open again." });
+      queryClient.invalidateQueries({ queryKey: ["/api/fiscal-period/closures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
+      setReopenTarget(null);
+      setReopenReason("");
+    },
+    onError: (error: ClientErrorLike) => {
+      if ((error as { _handledGlobally?: boolean })?._handledGlobally) return;
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to reopen fiscal period" });
+    },
+  });
+
   const handleFormSubmit = (data: FiscalCloseFormData) => {
     setPendingFormData(data);
     setIsConfirmDialogOpen(true);
@@ -307,10 +330,11 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
                 <TableHead data-testid="header-net-income">Net Income</TableHead>
                 <TableHead data-testid="header-status">Status</TableHead>
                 <TableHead data-testid="header-notes">Notes</TableHead>
+                {canReopen && <TableHead data-testid="header-actions">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {closures.map((closure) => {
+              {closures.map((closure, index) => {
                 const netIncome = parseFloat(closure.netIncome || "0");
                 const isProfit = netIncome > 0;
 
@@ -356,6 +380,20 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
                       </Badge>
                     </TableCell>
                     <TableCell data-testid={`text-notes-${closure.id}`}>{closure.notes || "-"}</TableCell>
+                    {canReopen && (
+                      <TableCell>
+                        {index === 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setReopenTarget(closure)}
+                            data-testid={`button-reopen-${closure.id}`}
+                          >
+                            Reopen
+                          </Button>
+                        )}
+                      </TableCell>
+                    )}
                   </TableRow>
                 );
               })}
@@ -363,6 +401,45 @@ export function FiscalPeriodTab({ currentCompanyId, userRole }: FiscalPeriodTabP
           </Table>
         )}
       </Card>
+
+      <AlertDialog
+        open={reopenTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setReopenTarget(null);
+            setReopenReason("");
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reopen fiscal period</AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              Reopening removes the closing journal, restores the income and expense opening balances, and unlocks the
+              books for this period. Enter a reason; it is recorded in the audit log.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            value={reopenReason}
+            onChange={(event) => setReopenReason(event.target.value)}
+            placeholder="Reason"
+            data-testid="input-reopen-reason"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-reopen">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(event) => {
+                event.preventDefault();
+                if (reopenTarget) reopenPeriodMutation.mutate({ closureId: reopenTarget.id, reason: reopenReason });
+              }}
+              disabled={!reopenReason.trim() || reopenPeriodMutation.isPending}
+              data-testid="button-confirm-reopen"
+            >
+              {reopenPeriodMutation.isPending ? "Reopening..." : "Reopen period"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Confirmation Dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>

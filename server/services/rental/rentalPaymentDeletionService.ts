@@ -1,11 +1,11 @@
 import { and, eq, inArray, isNull, like, notInArray, or, sql } from "drizzle-orm";
+import { softDeleteVoucherTx } from "../accounting/voucherSoftDelete";
 import { db } from "../../db";
 import {
   interCompanyTransfers,
   propertyContracts,
   propertyMonthlyLedger,
   propertyPayments,
-  voucherEntries,
   vouchers,
 } from "@shared/schema";
 import { removeFactoryDaybookMirrorTx } from "../accounting/factoryDaybookMirrorRemoval";
@@ -115,13 +115,11 @@ export async function deleteRentalPaymentGroup(input: DeleteRentalPaymentInput):
       const toVoucherId = transfer.toVoucherId;
       await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
       if (fromVoucherId) {
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, fromVoucherId));
-        await tx.delete(vouchers).where(eq(vouchers.id, fromVoucherId));
+        await softDeleteVoucherTx(tx, fromVoucherId);
         await removeFactoryDaybookMirrorTx({ tx, voucherId: fromVoucherId });
       }
       if (toVoucherId) {
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, toVoucherId));
-        await tx.delete(vouchers).where(eq(vouchers.id, toVoucherId));
+        await softDeleteVoucherTx(tx, toVoucherId);
         await removeFactoryDaybookMirrorTx({ tx, voucherId: toVoucherId });
       }
     }

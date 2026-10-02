@@ -495,6 +495,63 @@ describe("POST /api/vouchers", () => {
     expect(await voucherCountFor(number)).toBe(1);
   });
 
+  it("ignores columns the voucher forms never send", async () => {
+    const number = voucherNumber();
+    const response = await agent.post("/api/vouchers").send({
+      voucherNumber: number,
+      voucherType: "Journal",
+      voucherDate: "2026-03-13",
+      totalAmount: "10.00",
+      deletedAt: "2026-01-01T00:00:00.000Z",
+      shiftId: 999,
+      sourceModule: "FACTORY",
+      isCreditSale: true,
+    });
+
+    expect(response.status).toBe(200);
+    const [stored] = await db.select().from(schema.vouchers).where(eq(schema.vouchers.id, response.body.id));
+    expect(stored.deletedAt).toBeNull();
+    expect(stored.shiftId).toBeNull();
+    expect(stored.sourceModule).toBe("ERP");
+    expect(stored.isCreditSale).toBe(false);
+    expect(stored.companyId).toBe(ctx.companyId);
+  });
+
+  it("refuses a companyId other than the selected company", async () => {
+    const number = voucherNumber();
+    const response = await agent.post("/api/vouchers").send({
+      companyId: ctx.companyId + 100000,
+      voucherNumber: number,
+      voucherType: "Journal",
+      voucherDate: "2026-03-13",
+      totalAmount: "0",
+    });
+    expect(response.status).toBe(403);
+    expect(await voucherCountFor(number)).toBe(0);
+  });
+
+  it("rounds a float total from the stock forms to cents and refuses a negative one", async () => {
+    const rounded = voucherNumber();
+    const accepted = await agent.post("/api/vouchers").send({
+      voucherNumber: rounded,
+      voucherType: "Stock Transfer",
+      voucherDate: "2026-03-13",
+      totalAmount: String(0.1 + 0.2),
+    });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.totalAmount).toBe("0.30");
+
+    const negative = voucherNumber();
+    const refused = await agent.post("/api/vouchers").send({
+      voucherNumber: negative,
+      voucherType: "Journal",
+      voucherDate: "2026-03-13",
+      totalAmount: "-5",
+    });
+    expect(refused.status).toBe(400);
+    expect(await voucherCountFor(negative)).toBe(0);
+  });
+
   it("refuses a POS user creating anything other than a stock transfer", async () => {
     await db.update(schema.userCompanyRoles).set({ role: "POS" }).where(eq(schema.userCompanyRoles.userId, ctx.userId));
     expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
