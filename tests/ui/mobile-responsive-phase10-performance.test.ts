@@ -71,8 +71,9 @@ describe("Mobile responsiveness Phase 10 performance and offline behavior", () =
   it("uses navigation preload while preserving network-only API behavior", () => {
     const serviceWorker = source("client/public/sw.js");
 
+    // Bumped with every service-worker change; the contract is that it is versioned.
+    expect(serviceWorker).toMatch(/CACHE_VERSION = "erp-v\d+"/);
     for (const token of [
-      'CACHE_VERSION = "erp-v11"',
       "navigationPreload",
       "event.preloadResponse",
       "networkOnlyApi(request)",

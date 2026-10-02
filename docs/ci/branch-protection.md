@@ -173,6 +173,16 @@ Target: release verification should be explicit release/manual evidence, not con
 
 These are not independent test coverage. The active ruleset must stop requiring them before the compatibility bridge is retired.
 
+## Removed workflows (2026-10-02)
+
+These workflows were deleted because they could never run again or duplicated another owner:
+
+- `pr-company-parent-verify.yml`, `pr-po-import-verify.yml`, `phase18-bootstrap.yml` (with `.github/scripts/apply_phase18.py` and `fix_phase18_generator.py`), `phase33-parallel-coverage.yml`, `phase33-shard7-diagnostic.yml`, `retail-wave3-finalize.yml`: push triggers on branches that no longer exist.
+- `pr1559-self-fix.yml`: one-shot manual repair for a single historical PR.
+- `maintenance-scorecard.yml`: duplicate OpenSSF Scorecard run; `scorecards.yml` remains the one owner.
+
+The trigger-drift workflows below (`ci-repair-failure-trigger.yml`, `dependabot-automerge.yml`) are kept: repairing them would enable automation that needs an owner's decision. The rest of this section is the original analysis, kept for history.
+
 ## Historical and dead automatic triggers
 
 The following branch-specific workflows target branches that no longer exist:

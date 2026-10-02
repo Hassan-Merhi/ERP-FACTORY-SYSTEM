@@ -58,8 +58,13 @@ if (connectivity.includes("setInterval(async () =>") || connectivity.includes("1
   failures.push("Legacy fixed connectivity polling is still present");
 }
 
+// The cache version is bumped with every service-worker change; the contract
+// is that it is versioned, not which version it is.
+if (!/CACHE_VERSION = "erp-v\d+"/.test(serviceWorker)) {
+  failures.push('Service worker performance contract missing: versioned CACHE_VERSION = "erp-vN"');
+}
+
 for (const token of [
-  'CACHE_VERSION = "erp-v11"',
   "navigationPreload",
   "event.preloadResponse",
   "networkOnlyApi(request)",

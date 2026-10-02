@@ -13,8 +13,7 @@ const coverage = process.argv.includes("--coverage");
 // Phase 33 coverage waves, at which point a 1/8 shard no longer fit the 210s
 // plain budget and certification aborted before the later shards ever ran.
 // Twelve shards restore the per-shard headroom the budget is meant to police;
-// workflows that pin their own matrix (phase33-parallel-coverage) still set
-// BACKEND_TEST_SHARDS explicitly.
+// a workflow that pins its own matrix can still set BACKEND_TEST_SHARDS.
 const SHARD_COUNT = Number(process.env.BACKEND_TEST_SHARDS ?? 12);
 // The budget belongs to the pass being run, not to the command line. --complete
 // runs a plain pass and then a coverage pass, and coverage instrumentation is
