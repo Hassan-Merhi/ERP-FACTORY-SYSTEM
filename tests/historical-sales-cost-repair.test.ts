@@ -9,12 +9,16 @@ import {
   createHistoricalForwardReplayState,
   createHistoricalInventoryState,
   createHistoricalInventoryStateFromSnapshot,
-  historicalSaleProposalFromState,
-  replayHistoricalSalesCosts,
-  reverseHistoricalInventoryMovement,
-  reverseHistoricalSalesRepairMovement,
   type HistoricalSalesRepairMovement,
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
+import {
+  historicalSaleProposalFromState,
+  replayHistoricalSalesCosts,
+} from "../server/services/inventory/historicalSalesCostRepairEngineReplay";
+import {
+  reverseHistoricalInventoryMovement,
+  reverseHistoricalSalesRepairMovement,
+} from "../server/services/inventory/historicalSalesCostRepairEngineReverse";
 
 function movement(
   overrides: Partial<HistoricalSalesRepairMovement> &
@@ -282,9 +286,10 @@ describe("historical sales cost repair replay", () => {
     // stays blocked, and with one the pre-state carries exactly that anchor.
     const before = createHistoricalInventoryStateFromSnapshot("-2", "10", "0");
     const after = applyHistoricalInventoryMovement(before, { quantityDelta: "5", unitCost: "12" });
-    expect(
-      reverseHistoricalInventoryMovement(after, { quantityDelta: "5", unitCost: "12" })
-    ).toEqual({ reversible: false, reason: "COST_MEMORY_IRREVERSIBLE" });
+    expect(reverseHistoricalInventoryMovement(after, { quantityDelta: "5", unitCost: "12" })).toEqual({
+      reversible: false,
+      reason: "COST_MEMORY_IRREVERSIBLE",
+    });
     const anchored = reverseHistoricalInventoryMovement(after, {
       quantityDelta: "5",
       unitCost: "12",
@@ -504,11 +509,8 @@ describe("historical sales cost repair replay", () => {
     expect(after.totalValue.toFixed(2)).toBe("1000.01");
   });
 
-
   it("replays the pre-March-13 signed-value inventory bug exactly", () => {
-    const start = createHistoricalForwardReplayState(
-      createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00")
-    );
+    const start = createHistoricalForwardReplayState(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"));
     const issue = applyHistoricalForwardReplayMovement(
       start,
       movement({
@@ -538,9 +540,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("replays the March-13 safety clamp before negative layers existed", () => {
-    const start = createHistoricalForwardReplayState(
-      createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00")
-    );
+    const start = createHistoricalForwardReplayState(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"));
     const next = applyHistoricalForwardReplayMovement(
       start,
       movement({
@@ -686,11 +686,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("recovers a failed positive POS reversal only when the unique unpriced rate-only inverse preserves quantity and value", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "455",
-      "59.63",
-      "27135.99"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("455", "59.63", "27135.99");
     const posReversal = movement({
       movementId: "canonical:13396",
       occurredAt: "2026-08-27T09:53:43.552Z",
@@ -710,11 +706,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("recovers a failed outbound stock transfer only when the unique source-rate inverse preserves quantity and value", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "462",
-      "59.63",
-      "27553.36"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("462", "59.63", "27553.36");
     const transferOut = movement({
       movementId: "canonical:9247",
       occurredAt: "2026-08-24T06:41:01.603Z",
@@ -734,11 +726,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("recovers a legacy sale issue only when the pre-sale rate is uniquely implied by quantity and value", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "62",
-      "94.62",
-      "5872.89"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("62", "94.62", "5872.89");
     const legacySale = movement({
       movementId: "sale-marker:88647",
       occurredAt: "2026-08-11T12:52:21.673Z",
@@ -758,11 +746,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("keeps an ambiguous legacy sale rate blocked", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "7",
-      "57.62",
-      "403.72"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("7", "57.62", "403.72");
     const ambiguousSale = movement({
       movementId: "sale-marker:89383",
       occurredAt: "2026-08-13T10:41:29.724Z",
@@ -777,11 +761,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("falls back to the value-derived center for a uniquely solvable POS reversal only after the stored-rate search finds none", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "14",
-      "128.85",
-      "1815.12"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("14", "128.85", "1815.12");
     const posReversal = movement({
       movementId: "canonical:29139",
       occurredAt: "2026-09-09T09:42:29.570Z",
@@ -801,11 +781,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("falls back to the value-derived center for a uniquely solvable legacy sale issue", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "9",
-      "19.62",
-      "675.19"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("9", "19.62", "675.19");
     const legacySale = movement({
       movementId: "sale-marker:51181",
       occurredAt: "2026-04-07T12:06:54.887Z",
@@ -825,11 +801,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("keeps a derived-center stock-transfer inverse blocked when more than one exact rate candidate exists", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "165",
-      "61.35",
-      "10056.39"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("165", "61.35", "10056.39");
     const transferOut = movement({
       movementId: "canonical:16798",
       occurredAt: "2026-08-31T13:01:41.856Z",
@@ -844,11 +816,7 @@ describe("historical sales cost repair replay", () => {
   });
 
   it("recovers a legacy offload from its exact stored value when only the reconstructed rate is stale", () => {
-    const staleAfter = createHistoricalInventoryStateFromSnapshot(
-      "115",
-      "78.25",
-      "8969.47"
-    );
+    const staleAfter = createHistoricalInventoryStateFromSnapshot("115", "78.25", "8969.47");
     const legacyOffload = movement({
       movementId: "offload:24505",
       occurredAt: "2026-08-15T00:00:00.000Z",
@@ -965,13 +933,8 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.reversible).toBe(false);
   });
 
-
   it("recovers an outbound stock-adjustment edit apply from its persisted canonical line value", () => {
-    const after = createHistoricalInventoryStateFromSnapshot(
-      "232",
-      "67.75",
-      "15757.78"
-    );
+    const after = createHistoricalInventoryStateFromSnapshot("232", "67.75", "15757.78");
     const editApply = movement({
       movementId: "canonical:21820",
       occurredAt: "2026-09-04T06:31:33.476Z",
@@ -990,13 +953,8 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("67.92");
   });
 
-
   it("prefers the canonical recorded sale rate when a zero-crossing issue leaves ambiguous cost memory", () => {
-    const after = createHistoricalInventoryStateFromSnapshot(
-      "0",
-      "72.56",
-      "0.00"
-    );
+    const after = createHistoricalInventoryStateFromSnapshot("0", "72.56", "0.00");
     const sale = movement({
       movementId: "canonical:recorded-rate-priority",
       occurredAt: "2026-09-01T10:00:00.000Z",
@@ -1014,7 +972,6 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("72.55");
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("72.55");
   });
-
 
   it("replays and rewinds the exact guarded Wave 6 valuation reset only on a matching state", () => {
     const reset = movement({
@@ -1035,11 +992,7 @@ describe("historical sales cost repair replay", () => {
       },
     });
 
-    const before = createHistoricalInventoryStateFromSnapshot(
-      "17",
-      "33.92",
-      "576.56"
-    );
+    const before = createHistoricalInventoryStateFromSnapshot("17", "33.92", "576.56");
     const after = applyHistoricalSalesRepairMovement(before, reset);
     expect(after.quantity.toFixed(3)).toBe("17.000");
     expect(after.averageRate.toFixed(2)).toBe("66.65");
@@ -1052,11 +1005,7 @@ describe("historical sales cost repair replay", () => {
     expect(reversed.stateBefore.averageRate.toFixed(2)).toBe("33.92");
     expect(reversed.stateBefore.totalValue.toFixed(2)).toBe("576.56");
 
-    const wrong = createHistoricalInventoryStateFromSnapshot(
-      "17",
-      "66.65",
-      "1133.04"
-    );
+    const wrong = createHistoricalInventoryStateFromSnapshot("17", "66.65", "1133.04");
     const rejected = reverseHistoricalSalesRepairMovement(wrong, reset);
     expect(rejected).toEqual({
       reversible: false,
@@ -1064,41 +1013,30 @@ describe("historical sales cost repair replay", () => {
     });
   });
 
-
   it("derives canonical POS roles from immutable idempotency keys", () => {
     expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13532:rev0:510")).toBe("sale-issue");
-    expect(
-      canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14743:rev46:issue:6421:line:1")
-    ).toBe("edit-issue");
-    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13559:rev57:issue:6310")).toBe(
-      "edit-issue"
-    );
-    expect(
-      canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14989:rev31:reverse:52:line:108419")
-    ).toBe("edit-reversal");
-    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13471:rev54:reverse:1521")).toBe(
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14743:rev46:issue:6421:line:1")).toBe("edit-issue");
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13559:rev57:issue:6310")).toBe("edit-issue");
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:14989:rev31:reverse:52:line:108419")).toBe(
       "edit-reversal"
     );
-    expect(canonicalPosRoleFromIdempotencyKey("stock-transfer", "pos-sale:1:rev1:reverse:2")).toBe(
-      undefined
-    );
+    expect(canonicalPosRoleFromIdempotencyKey("pos-sale", "pos-sale:13471:rev54:reverse:1521")).toBe("edit-reversal");
+    expect(canonicalPosRoleFromIdempotencyKey("stock-transfer", "pos-sale:1:rev1:reverse:2")).toBe(undefined);
   });
 
   it("accepts half-up and float-tie stored rates but rejects any other rate/value pair", () => {
     // 251.66 / 4 = 62.915 exactly: Decimal writers store 62.92, historical float
     // writers stored 62.91 (present in the immutable Phase 3 checkpoint).
-    expect(
-      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.92", "251.66"))
-    ).toBe(true);
-    expect(
-      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.91", "251.66"))
-    ).toBe(true);
-    expect(
-      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.90", "251.66"))
-    ).toBe(false);
-    expect(
-      historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("0", "70.00", "0"))
-    ).toBe(true);
+    expect(historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.92", "251.66"))).toBe(
+      true
+    );
+    expect(historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.91", "251.66"))).toBe(
+      true
+    );
+    expect(historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("4", "62.90", "251.66"))).toBe(
+      false
+    );
+    expect(historicalStateRateMatchesValue(createHistoricalInventoryStateFromSnapshot("0", "70.00", "0"))).toBe(true);
   });
 
   it("inverts a production POS edit pair at the live stored rate instead of the old line cost", () => {

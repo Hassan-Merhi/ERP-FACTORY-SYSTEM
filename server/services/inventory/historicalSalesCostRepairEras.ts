@@ -4,16 +4,18 @@ import Decimal from "decimal.js";
 import {
   applyHistoricalSalesRepairMovement,
   createHistoricalInventoryStateFromSnapshot,
-  historicalSaleProposalFromState,
   repairQuantity,
   posJournalCostIsNotInventoryRate,
   isExactValuationReset,
-  isRecordedLiveRateObservation,
   repairRate,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
+import {
+  historicalSaleProposalFromState,
+  isRecordedLiveRateObservation,
+} from "./historicalSalesCostRepairEngineReplay";
 import { RepairCheck, RewindAmplification, SaleRow } from "./historicalSalesCostRepairTypes";
 import { originalProposalForSale } from "./historicalSalesCostRepairEvidence";
 import { MergedRecoveryResult } from "./historicalSalesCostRepairRecovery";

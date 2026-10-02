@@ -7,7 +7,6 @@ import {
   createHistoricalInventoryStateFromSnapshot,
   createHistoricalSignedLocationImportState,
   historicalInventoryKey,
-  historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
   repairRate,
@@ -16,6 +15,7 @@ import {
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
+import { historicalSaleProposalFromState } from "./historicalSalesCostRepairEngineReplay";
 import {
   MONEY_TOLERANCE,
   QTY_TOLERANCE,

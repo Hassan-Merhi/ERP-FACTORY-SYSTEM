@@ -4,16 +4,18 @@ import Decimal from "decimal.js";
 import {
   applyHistoricalSalesRepairMovement,
   createHistoricalInventoryStateFromSnapshot,
-  historicalSaleProposalFromState,
   repairMoney,
   repairQuantity,
   posJournalCostIsNotInventoryRate,
-  reanchorHistoricalRewindAtRecordedRate,
   repairRate,
   type HistoricalInventoryState,
   type HistoricalSalesRepairMovement,
   type HistoricalSalesRepairProposal,
 } from "./historicalSalesCostRepairEngine";
+import {
+  historicalSaleProposalFromState,
+  reanchorHistoricalRewindAtRecordedRate,
+} from "./historicalSalesCostRepairEngineReplay";
 import {
   LegacyInverseAmbiguity,
   ReanchorRequest,
