@@ -88,3 +88,24 @@ describe("employee balance recalculation ignores optional vouchers", () => {
     expect(Number(employee.currentBalance)).toBeCloseTo(110, 2);
   });
 });
+
+describe("factory cash account balance", () => {
+  it("excludes optional and deleted vouchers", async () => {
+    const before = await agent.get(`/api/factory/cash-account-balance/${ctx.cashAccountId}`);
+    expect(before.status).toBe(200);
+    const start = Number(before.body.balance);
+
+    await postEmployeeCredit(`${TEST_PREFIX}-CASH-ACTIVE`, "20.00", false);
+    await postEmployeeCredit(`${TEST_PREFIX}-CASH-DRAFT`, "7.00", true);
+    await postEmployeeCredit(`${TEST_PREFIX}-CASH-DELETED`, "3.00", false);
+    await db
+      .update(schema.vouchers)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.vouchers.voucherNumber, `${TEST_PREFIX}-CASH-DELETED`));
+
+    const after = await agent.get(`/api/factory/cash-account-balance/${ctx.cashAccountId}`);
+    expect(after.status).toBe(200);
+    expect(Number(after.body.balance) - start).toBeCloseTo(20, 2);
+  });
+});
+
