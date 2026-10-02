@@ -1,4 +1,4 @@
-export const FACTORY_INVOICE_EXTRA_LABELS = {
+// Canonical invoice-only labels live here so document renderers share one trilingual source.\nexport const FACTORY_INVOICE_EXTRA_LABELS = {
   en: {
     category: "Category",
     unitPrice: "Unit Price",
