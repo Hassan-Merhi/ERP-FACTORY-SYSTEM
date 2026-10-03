@@ -157,6 +157,7 @@ export default function RetailInventory() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
+                  <th className="w-16 py-2">Image</th>
                   <th className="py-2"><span>Color</span></th>
                   <th><span>Size</span></th>
                   <th>Barcode</th>
@@ -169,6 +170,19 @@ export default function RetailInventory() {
               <tbody>
                 {detailProduct.variants.map((variant) => (
                   <tr key={variant.id} className="border-b last:border-0">
+                    <td className="py-3 pr-3">
+                      {variant.imageUrls[0] || detailProduct.imageUrls[0] ? (
+                        <img
+                          src={variant.imageUrls[0] || detailProduct.imageUrls[0]}
+                          alt={`${detailProduct.name} · ${variant.color} · ${variant.size}`}
+                          loading="lazy"
+                          decoding="async"
+                          className="h-11 w-11 rounded-md border object-cover"
+                        />
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td className="py-3 font-medium">{variant.color}</td>
                     <td>{variant.size}</td>
                     <td className="font-mono text-xs">{variant.barcode}</td>
