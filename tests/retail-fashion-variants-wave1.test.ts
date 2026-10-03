@@ -9,6 +9,7 @@ import {
 
 const root = process.cwd();
 const migrationPath = path.join(root, "migrations/20261003_001_retail_fashion_variants.sql");
+const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
 describe("retail fashion variants wave 1 schema", () => {
   it("defaults legacy variant color to Default and keeps variant images empty", () => {
@@ -123,5 +124,38 @@ describe("retail fashion variants wave 1 schema", () => {
     expect(sql).toContain("retail_product_variants_product_color_size_unique");
     expect(sql).toContain("color");
     expect(sql).toContain("image_urls");
+  });
+});
+
+describe("retail fashion variants wave 1 catalog and import contract", () => {
+  it("uses normalized color plus size as the in-product variant identity", () => {
+    const routes = read("server/routes/retailRoutes.ts");
+    expect(routes).toContain("const variantKey = `${normalize(variant.color)}|${normalize(variant.size)}`");
+    expect(routes).toContain("Duplicate color/size in product");
+  });
+
+  it("persists and returns color and variant images", () => {
+    const routes = read("server/routes/retailRoutes.ts");
+    expect(routes).toContain("color: retailProductVariants.color");
+    expect(routes).toContain("variantImageUrls: retailProductVariants.imageUrls");
+    expect(routes).toContain("color: variantInput.color");
+    expect(routes).toContain("imageUrls: variantInput.imageUrls");
+    expect(routes).toContain("availableColors");
+  });
+
+  it("groups imports by product, color and size while keeping legacy color defaults", () => {
+    const routes = read("server/routes/retailRoutes.ts");
+    expect(routes).toContain("${normalize(row.code)}|${normalize(row.color)}|${normalize(row.size)}");
+    expect(routes).toContain("${product.id}|${normalize(row.color)}|${normalize(row.size)}");
+    expect(routes).toContain("imageUrls: row.variantImageUrl ? [row.variantImageUrl] : []");
+  });
+
+  it("supports catalog color search, filtering and facets", () => {
+    const catalog = read("server/routes/retailCatalogRoutes.ts");
+    expect(catalog).toContain("color: normalize(req.query.color)");
+    expect(catalog).toContain("LOWER(color_variant.color)");
+    expect(catalog).toContain("v.color");
+    expect(catalog).toContain("availableColors");
+    expect(catalog).toContain("colors:");
   });
 });
