@@ -6,6 +6,10 @@ import {
   retailProductVariants,
   retailProductWriteSchema,
 } from "../shared/schema";
+import {
+  blankVariant,
+  MAX_VARIANT_IMAGES,
+} from "../client/src/pages/retail/retailInventoryTypes";
 
 const root = process.cwd();
 const migrationPath = path.join(root, "migrations/20261003_001_retail_fashion_variants.sql");
@@ -183,5 +187,39 @@ describe("retail fashion variants wave 1 POS and reporting contract", () => {
     expect(reporting.match(/v\.color/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
     expect(reporting).toContain("GROUP BY p.id, p.code, p.name, b.name, v.id, v.color, v.size, v.barcode");
     expect(reporting).toContain("GROUP BY v.id, p.id, p.code, p.name, b.name, v.color, v.size, v.barcode");
+  });
+});
+
+
+describe("retail fashion variants wave 1 inventory UI contract", () => {
+  it("defaults new client variants to Default color and no variant images", () => {
+    const variant = blankVariant();
+    expect(variant.color).toBe("Default");
+    expect(variant.imageUrls).toEqual([]);
+    expect(MAX_VARIANT_IMAGES).toBe(4);
+  });
+
+  it("preserves color and variant images through the product editor payload", () => {
+    const editor = read("client/src/pages/retail/RetailProductEditor.tsx");
+    expect(editor).toContain("color: variant.color");
+    expect(editor).toContain("imageUrls: [...(variant.imageUrls ?? [])]");
+    expect(editor).toContain("color: variant.color.trim()");
+    expect(editor).toContain("imageUrls: variant.imageUrls");
+    expect(editor).toContain("uploadVariantImages");
+    expect(editor).toContain("MAX_VARIANT_IMAGES");
+    expect(editor).toContain("<Label>Color *</Label>");
+    expect(editor).toContain("<Label>Variant images</Label>");
+  });
+
+  it("exposes color facets, filtering and separate color/size inventory display", () => {
+    const types = read("client/src/pages/retail/retailInventoryTypes.ts");
+    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
+    expect(types).toContain("availableColors: string[]");
+    expect(types).toContain("colors: string[]");
+    expect(inventory).toContain('const [color, setColor] = useState("")');
+    expect(inventory).toContain('params.set("color", color)');
+    expect(inventory).toContain("catalogFacets?.colors");
+    expect(inventory).toContain("{variant.color}");
+    expect(inventory).toContain("product.availableColors");
   });
 });
