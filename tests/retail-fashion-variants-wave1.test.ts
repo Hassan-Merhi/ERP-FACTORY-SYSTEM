@@ -304,3 +304,12 @@ describe("retail fashion variants wave 1 dashboard UI contract", () => {
     expect(dashboard).toContain('<th className="px-3 py-2">Size</th>');
   });
 });
+
+
+describe("retail fashion variants wave 1 variant image display contract", () => {
+  it("shows an exact variant image in inventory with product-image fallback", () => {
+    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
+    expect(inventory).toContain("variant.imageUrls[0] || detailProduct.imageUrls[0]");
+    expect(inventory).toContain('alt={`${detailProduct.name} · ${variant.color} · ${variant.size}`}');
+  });
+});
