@@ -151,6 +151,26 @@ async function inventoryQty(locationId: number, stockItemId: number): Promise<nu
   return result.rows[0] ? Number(result.rows[0].quantity) : 0;
 }
 
+async function setInventoryValuation(
+  locationId: number,
+  stockItemId: number,
+  quantity: number,
+  averageRate: number
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value, last_updated)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (location_id, stock_item_id)
+     DO UPDATE SET
+       company_id = EXCLUDED.company_id,
+       quantity = EXCLUDED.quantity,
+       average_rate = EXCLUDED.average_rate,
+       total_value = EXCLUDED.total_value,
+       last_updated = NOW()`,
+    [ctx.companyId, locationId, stockItemId, quantity, averageRate, quantity * averageRate]
+  );
+}
+
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
   agent = request.agent(ctx.app);
@@ -462,17 +482,19 @@ describe("PATCH /api/vouchers/:id/adjustment", () => {
     expect(await inventoryQty(ctx.locationId, ctx.stockItemIds[0])).toBeCloseTo(before + 6, 3);
   });
 
-  it("labels a Consumption voucher's header and reports an absolute total for negative lines", async () => {
+  it("labels a Consumption voucher's header and uses the saved inventory value instead of the submitted rate", async () => {
     const { voucher } = await seedAdjustment("Consumption");
+    await setInventoryValuation(ctx.locationId, ctx.stockItemIds[1], 100, 10);
     const before = await inventoryQty(ctx.locationId, ctx.stockItemIds[1]);
 
     const response = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
       locationId: ctx.locationId,
-      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "-4", rate: "10" }],
+      // Deliberately stale: consumption must resolve from the locked inventory
+      // value (10.00), not this submitted rate.
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "-4", rate: "1" }],
     });
 
     expect(response.status).toBe(200);
-    // Signed total is -40; a Consumption voucher reports magnitude.
     expect(response.body.totalAmount).toBe("40.00");
 
     const header = await pool.query<{ adjustment_type: string }>(
@@ -485,6 +507,7 @@ describe("PATCH /api/vouchers/:id/adjustment", () => {
 
   it("nets a Mixed voucher's lines instead of taking their magnitude", async () => {
     const { voucher } = await seedAdjustment("Mixed");
+    await setInventoryValuation(ctx.locationId, ctx.stockItemIds[1], 100, 10);
 
     const response = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
       locationId: ctx.locationId,
@@ -547,6 +570,58 @@ describe("PATCH /api/vouchers/:id/adjustment", () => {
     );
     expect(items.rows).toHaveLength(1);
     expect(Number(items.rows[0].quantity)).toBe(4);
+  });
+
+  it("rolls back an existing adjustment edit when the atomic voucher-header write fails", async () => {
+    const { voucher } = await seedAdjustment("Production");
+    const item = ctx.stockItemIds[2];
+
+    const first = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      voucherDate: "2026-02-01",
+      description: "Atomic baseline",
+      locationId: ctx.locationId,
+      items: [{ stockItemId: item, quantity: "5", rate: "20" }],
+    });
+    expect(first.status).toBe(200);
+
+    const inventoryBefore = await inventoryQty(ctx.locationId, item);
+    const voucherBefore = await voucherRow(voucher.id);
+    const linesBefore = await pool.query<{ quantity: string; total_amount: string }>(
+      `SELECT sai.quantity, sai.total_amount
+         FROM stock_adjustment_items sai
+         JOIN stock_adjustment_vouchers sav ON sav.id = sai.adjustment_id
+        WHERE sav.voucher_id = $1
+        ORDER BY sai.id`,
+      [voucher.id]
+    );
+
+    const failed = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      // z.string() accepts this, so PostgreSQL rejects it only when the voucher
+      // header is written at the end of the same stock transaction.
+      voucherDate: "not-a-date",
+      description: "must roll back",
+      locationId: ctx.locationId,
+      items: [{ stockItemId: item, quantity: "10", rate: "30" }],
+    });
+
+    expect(failed.status).toBe(500);
+    expect(await inventoryQty(ctx.locationId, item)).toBeCloseTo(inventoryBefore, 3);
+
+    const voucherAfter = await voucherRow(voucher.id);
+    expect(voucherAfter.totalAmount).toBe(voucherBefore.totalAmount);
+    expect(voucherAfter.locationId).toBe(voucherBefore.locationId);
+    expect(voucherAfter.description).toBe(voucherBefore.description);
+    expect(String(voucherAfter.voucherDate).slice(0, 10)).toBe(String(voucherBefore.voucherDate).slice(0, 10));
+
+    const linesAfter = await pool.query<{ quantity: string; total_amount: string }>(
+      `SELECT sai.quantity, sai.total_amount
+         FROM stock_adjustment_items sai
+         JOIN stock_adjustment_vouchers sav ON sav.id = sai.adjustment_id
+        WHERE sav.voucher_id = $1
+        ORDER BY sai.id`,
+      [voucher.id]
+    );
+    expect(linesAfter.rows).toEqual(linesBefore.rows);
   });
 
   it("requires a location and at least one item", async () => {
