@@ -140,7 +140,8 @@ function invoicingRequirement(path: string): FactoryApiAccessRequirement {
 
   if (hasPrefix(path, "/customer-orders")) {
     const loadingSpecific =
-      /\/(?:bales|loading-list|pending-export|verification-summary|loading-note|bale-removals|priority-scan-configs?)(?:\/|$)/.test(path) ||
+      /\/(?:bales|loading-list|pending-export|verification-summary|loading-note|bale-removals)(?:\/|$)/.test(path) ||
+      /\/priority-scan-configs?(?:\/|$)/.test(path) ||
       /\/create-loading(?:\/|$)/.test(path);
     if (loadingSpecific) {
       return requirement("factory/invoicing", ["hide_invoicing_loadings_tab"]);
@@ -275,7 +276,11 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
 
-  if (hasPrefix(path, "/invoice-container-tracking") || hasPrefix(path, "/shipping-container-rows") || hasPrefix(path, "/shipping-invoice-docs")) {
+  if (
+    hasPrefix(path, "/invoice-container-tracking") ||
+    hasPrefix(path, "/shipping-container-rows") ||
+    hasPrefix(path, "/shipping-invoice-docs")
+  ) {
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
