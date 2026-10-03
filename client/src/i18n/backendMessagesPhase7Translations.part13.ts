@@ -47,4 +47,69 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "رمز CSRF مفقود أو غير صالح.",
     fr: "Jeton CSRF manquant ou invalide.",
   },
+  {
+    en: "That color is already assigned to another active priority loading.",
+    ar: "هذا اللون مخصص بالفعل لعملية تحميل أخرى ذات أولوية نشطة.",
+    fr: "Cette couleur est déjà attribuée à un autre chargement prioritaire actif.",
+  },
+  {
+    en: "That priority is already assigned to another active priority loading.",
+    ar: "هذه الأولوية مخصصة بالفعل لعملية تحميل أخرى ذات أولوية نشطة.",
+    fr: "Cette priorité est déjà attribuée à un autre chargement prioritaire actif.",
+  },
+  {
+    en: "Priority Scan configuration changed at the same time. Please try again.",
+    ar: "تم تغيير إعدادات المسح حسب الأولوية في الوقت نفسه. يرجى المحاولة مرة أخرى.",
+    fr: "La configuration du scan prioritaire a été modifiée simultanément. Veuillez réessayer.",
+  },
+  {
+    en: "Failed to load Priority Scan configuration.",
+    ar: "تعذر تحميل إعدادات المسح حسب الأولوية.",
+    fr: "Impossible de charger la configuration du scan prioritaire.",
+  },
+  {
+    en: "Invalid loading id",
+    ar: "معرّف التحميل غير صالح",
+    fr: "Identifiant de chargement non valide",
+  },
+  {
+    en: "Color is required and must be 64 characters or fewer.",
+    ar: "اللون مطلوب ويجب ألا يتجاوز 64 حرفًا.",
+    fr: "La couleur est requise et doit contenir au maximum 64 caractères.",
+  },
+  {
+    en: "Priority must be a whole number between 1 and 10000.",
+    ar: "يجب أن تكون الأولوية عددًا صحيحًا بين 1 و10000.",
+    fr: "La priorité doit être un nombre entier compris entre 1 et 10000.",
+  },
+  {
+    en: "enabled must be true or false.",
+    ar: "يجب أن تكون قيمة enabled إما true أو false.",
+    fr: "La valeur enabled doit être true ou false.",
+  },
+  {
+    en: "Pending loading not found.",
+    ar: "لم يتم العثور على عملية التحميل المعلقة.",
+    fr: "Chargement en attente introuvable.",
+  },
+  {
+    en: "Only pending loadings in LOADING status can use Priority Scan.",
+    ar: "يمكن فقط لعمليات التحميل المعلقة بحالة LOADING استخدام المسح حسب الأولوية.",
+    fr: "Seuls les chargements en attente au statut LOADING peuvent utiliser le scan prioritaire.",
+  },
+  {
+    en: "Link a proforma before enabling Priority Scan for this loading.",
+    ar: "اربط فاتورة أولية قبل تفعيل المسح حسب الأولوية لهذا التحميل.",
+    fr: "Associez une proforma avant d’activer le scan prioritaire pour ce chargement.",
+  },
+  {
+    en: "Failed to save Priority Scan configuration.",
+    ar: "تعذر حفظ إعدادات المسح حسب الأولوية.",
+    fr: "Impossible d’enregistrer la configuration du scan prioritaire.",
+  },
+  {
+    en: "Failed to clear Priority Scan configuration.",
+    ar: "تعذر مسح إعدادات المسح حسب الأولوية.",
+    fr: "Impossible d’effacer la configuration du scan prioritaire.",
+  },
 ];
