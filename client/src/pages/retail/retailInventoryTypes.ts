@@ -1,5 +1,6 @@
 export const NO_BRAND = "Other / No Brand";
 export const MAX_PRODUCT_IMAGES = 8;
+export const MAX_VARIANT_IMAGES = 4;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
@@ -24,7 +25,9 @@ export interface RetailStock {
 
 export interface RetailVariant {
   id: number;
+  color: string;
   size: string;
+  imageUrls: string[];
   barcode: string;
   sku: string | null;
   cost: number;
@@ -44,6 +47,7 @@ export interface RetailProduct {
   active: boolean;
   brand: { id: number | null; name: string };
   variants: RetailVariant[];
+  availableColors: string[];
   availableSizes: string[];
   totalQuantity: number;
   minSellingPrice: number;
@@ -59,6 +63,7 @@ export interface RetailCatalogPage {
 }
 
 export interface RetailCatalogFacets {
+  colors: string[];
   sizes: string[];
   categories: string[];
 }
@@ -70,7 +75,9 @@ export interface DraftStock {
 
 export interface DraftVariant {
   id?: number;
+  color: string;
   size: string;
+  imageUrls: string[];
   barcode: string;
   sku: string;
   cost: number;
@@ -91,7 +98,9 @@ export interface ProductDraft {
 }
 
 export const blankVariant = (): DraftVariant => ({
+  color: "Default",
   size: "",
+  imageUrls: [],
   barcode: "",
   sku: "",
   cost: 0,
