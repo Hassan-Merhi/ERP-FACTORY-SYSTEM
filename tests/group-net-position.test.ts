@@ -116,7 +116,7 @@ describe("Group Net Position", () => {
     harness.erpResponse.mockImplementation(() => baseResponse());
   });
 
-  it("includes active ERP, retail, and Properties companies while excluding Supplier Partner and Factory modes", async () => {
+  it("includes normal active companies while excluding Supplier Partner, Factory, and JNAH", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI", companyType: "erp", active: true },
       { id: 2, code: "PROP", name: "Properties", companyType: "properties", active: true },
