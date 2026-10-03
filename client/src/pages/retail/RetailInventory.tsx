@@ -28,6 +28,7 @@ export default function RetailInventory() {
   const [editingProduct, setEditingProduct] = useState<RetailProduct | null>(null);
   const [search, setSearch] = useState("");
   const [brandId, setBrandId] = useState("");
+  const [color, setColor] = useState("");
   const [size, setSize] = useState("");
   const [category, setCategory] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -42,7 +43,7 @@ export default function RetailInventory() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, brandId, size, category, locationId, stockStatus]);
+  }, [debouncedSearch, brandId, color, size, category, locationId, stockStatus]);
 
   const retailEnabled = selectedCompany?.companyType === "retail";
   const companyKey = selectedCompany?.id ?? 0;
@@ -67,11 +68,12 @@ export default function RetailInventory() {
     const params = new URLSearchParams({ page: String(page), pageSize: "60", stockStatus });
     if (debouncedSearch) params.set("search", debouncedSearch);
     if (brandId) params.set("brandId", brandId);
+    if (color) params.set("color", color);
     if (size) params.set("size", size);
     if (category) params.set("category", category);
     if (locationId) params.set("locationId", locationId);
     return params.toString();
-  }, [page, debouncedSearch, brandId, size, category, locationId, stockStatus]);
+  }, [page, debouncedSearch, brandId, color, size, category, locationId, stockStatus]);
 
   const { data: catalogPage, isLoading } = useQuery<RetailCatalogPage>({
     queryKey: ["retail-products", "page", companyKey, catalogParams],
@@ -80,6 +82,7 @@ export default function RetailInventory() {
     placeholderData: (previous) => previous,
   });
   const products = catalogPage?.items ?? [];
+  const colors = catalogFacets?.colors ?? [];
   const sizes = catalogFacets?.sizes ?? [];
   const categories = catalogFacets?.categories ?? [];
 
@@ -148,13 +151,14 @@ export default function RetailInventory() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Stock by size</CardTitle>
+            <CardTitle>Stock by color and size</CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left">
-                  <th className="py-2">Size</th>
+                  <th className="py-2"><span>Color</span></th>
+                  <th><span>Size</span></th>
                   <th>Barcode</th>
                   <th>Cost</th>
                   <th>Selling price</th>
@@ -165,7 +169,8 @@ export default function RetailInventory() {
               <tbody>
                 {detailProduct.variants.map((variant) => (
                   <tr key={variant.id} className="border-b last:border-0">
-                    <td className="py-3 font-medium">{variant.size}</td>
+                    <td className="py-3 font-medium">{variant.color}</td>
+                    <td>{variant.size}</td>
                     <td className="font-mono text-xs">{variant.barcode}</td>
                     <td>{money(variant.cost)}</td>
                     <td>{money(variant.sellingPrice)}</td>
@@ -202,7 +207,7 @@ export default function RetailInventory() {
             <h1 className="text-2xl font-bold">Retail Inventory</h1>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Products grouped by brand with independent stock and barcodes for every size.
+            Products grouped by brand and style with exact color, size, stock and barcode variants.
           </p>
         </div>
         <div className="flex gap-2">
@@ -223,7 +228,7 @@ export default function RetailInventory() {
         </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-6">
+      <div className="grid gap-2 md:grid-cols-8">
         <Input
           placeholder="Search product or brand…"
           value={search}
@@ -240,6 +245,16 @@ export default function RetailInventory() {
             <option key={brand.id} value={brand.id}>
               {brand.name}
             </option>
+          ))}
+        </select>
+        <select
+          className="h-10 rounded-md border bg-background px-2 text-sm"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+        >
+          <option value="">All colors</option>
+          {colors.map((value) => (
+            <option key={value}>{value}</option>
           ))}
         </select>
         <select
@@ -290,12 +305,13 @@ export default function RetailInventory() {
 
       <Card>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <thead>
               <tr className="border-b bg-muted/40 text-left">
                 <th className="w-16 p-3">Image</th>
                 <th>Product</th>
                 <th>Brand</th>
+                <th>Available colors</th>
                 <th>Available sizes</th>
                 <th className="text-right">Total quantity</th>
                 <th className="text-right">Selling price</th>
@@ -305,13 +321,13 @@ export default function RetailInventory() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
                     Loading retail inventory…
                   </td>
                 </tr>
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
                     No products match these filters.
                   </td>
                 </tr>
@@ -329,6 +345,7 @@ export default function RetailInventory() {
                       <div className="font-medium">{product.name}</div>
                     </td>
                     <td>{product.brand.name}</td>
+                    <td>{product.availableColors.length ? product.availableColors.join(", ") : "—"}</td>
                     <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>
                     <td className="text-right font-medium">{product.totalQuantity}</td>
                     <td className="text-right">
