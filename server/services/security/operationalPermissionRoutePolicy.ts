@@ -344,15 +344,26 @@ const ROUTE_ENTRY =
 function compileRoutePath(path: string): RegExp {
   const source = path
     .split("/")
-    .map((segment) => (segment.startsWith(":") ? "[^/]+" : segment.replace(/[.]/g, "\\.")))
+    .map((segment) => (segment.startsWith(":") ? "[^/]+" : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
     .join("/");
   // Express defaults: case-insensitive, one optional trailing slash, whole path.
+  // The source is built from the static table above, validated by ROUTE_ENTRY
+  // and escaped segment by segment; no request data reaches it.
+  // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
   return new RegExp(`^${source}/?$`, "i");
+}
+
+/** A table entry that is not "METHOD /express/path"; thrown at module load. */
+export class OperationalPermissionRouteEntryError extends Error {
+  constructor(readonly entry: string) {
+    super(entry);
+    this.name = "OperationalPermissionRouteEntryError";
+  }
 }
 
 function compileEntry(entry: string, permission: OperationalPermissionRouteMatch | null): CompiledRoute {
   const parsed = ROUTE_ENTRY.exec(entry);
-  if (!parsed) throw new Error(`Invalid operational permission route entry: ${entry}`);
+  if (!parsed) throw new OperationalPermissionRouteEntryError(entry);
   return { method: parsed[1], pattern: compileRoutePath(parsed[2]), permission };
 }
 
