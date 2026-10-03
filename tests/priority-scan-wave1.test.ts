@@ -1,0 +1,149 @@
+import request from "supertest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { pool } from "../server/db";
+import { closeTestServer, cleanupTestData, seedTestData, type TestContext } from "./setup";
+
+const PREFIX = "priorityscanw1";
+let ctx: TestContext;
+let agent: request.SuperAgentTest;
+let customerId: number;
+let proformaId: number;
+
+async function createLoading(options: { status?: string; withProforma?: boolean } = {}): Promise<number> {
+  const status = options.status ?? "LOADING";
+  const withProforma = options.withProforma ?? true;
+  const result = await pool.query<{ id: number }>(
+    `INSERT INTO customer_orders (company_id, customer_id, order_date, status, proforma_id_used)
+     VALUES ($1, $2, '2026-10-03', $3, $4) RETURNING id`,
+    [ctx.companyId, customerId, status, withProforma ? proformaId : null]
+  );
+  return result.rows[0].id;
+}
+
+beforeAll(async () => {
+  ctx = await seedTestData(PREFIX);
+  agent = request.agent(ctx.app);
+  const login = await agent.post("/api/auth/login").send({
+    username: `${PREFIX}_testuser`,
+    password: "testpassword123",
+  });
+  if (login.status !== 200) throw new Error(`Login failed: ${login.status}`);
+  await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+
+  const customer = await pool.query<{ id: number }>(
+    `INSERT INTO customers (company_id, code, legal_name) VALUES ($1, $2, $3) RETURNING id`,
+    [ctx.companyId, `${PREFIX}-C1`, `${PREFIX} Customer`]
+  );
+  customerId = customer.rows[0].id;
+
+  const proforma = await pool.query<{ id: number }>(
+    `INSERT INTO customer_proformas (company_id, customer_id, name, is_active)
+     VALUES ($1, $2, $3, TRUE) RETURNING id`,
+    [ctx.companyId, customerId, `${PREFIX} Proforma`]
+  );
+  proformaId = proforma.rows[0].id;
+});
+
+afterAll(async () => {
+  if (ctx?.companyId) {
+    await pool.query(`DELETE FROM customer_order_priority_scan_configs WHERE company_id = $1`, [ctx.companyId]);
+  }
+  await cleanupTestData(PREFIX);
+  closeTestServer();
+}, 60000);
+
+describe("Priority Scan Wave 1 configuration foundation", () => {
+  it("creates, reads, and updates a loading priority without touching the loading itself", async () => {
+    const orderId = await createLoading();
+
+    const create = await agent
+      .put(`/api/factory/customer-orders/${orderId}/priority-scan-config`)
+      .send({ color: "Blue", priority: 1, enabled: true });
+
+    expect(create.status).toBe(200);
+    expect(create.body).toMatchObject({ orderId, color: "Blue", priority: 1, enabled: true });
+
+    const beforeOrder = await pool.query(
+      `SELECT status, proforma_id_used, total_qty_bales FROM customer_orders WHERE id = $1`,
+      [orderId]
+    );
+
+    const update = await agent
+      .put(`/api/factory/customer-orders/${orderId}/priority-scan-config`)
+      .send({ color: "Navy", priority: 3, enabled: true });
+
+    expect(update.status).toBe(200);
+    expect(update.body).toMatchObject({ orderId, color: "Navy", priority: 3, enabled: true });
+
+    const afterOrder = await pool.query(
+      `SELECT status, proforma_id_used, total_qty_bales FROM customer_orders WHERE id = $1`,
+      [orderId]
+    );
+    expect(afterOrder.rows[0]).toEqual(beforeOrder.rows[0]);
+
+    const list = await agent.get("/api/factory/customer-orders/priority-scan-configs");
+    expect(list.status).toBe(200);
+    expect(list.body.some((row: { orderId: number; color: string }) => row.orderId === orderId && row.color === "Navy")).toBe(true);
+  });
+
+  it("prevents duplicate active colors and priorities but frees them when disabled", async () => {
+    const first = await createLoading();
+    const second = await createLoading();
+
+    expect(
+      (await agent.put(`/api/factory/customer-orders/${first}/priority-scan-config`).send({ color: "Purple", priority: 10 })).status
+    ).toBe(200);
+
+    const duplicateColor = await agent
+      .put(`/api/factory/customer-orders/${second}/priority-scan-config`)
+      .send({ color: " purple ", priority: 11 });
+    expect(duplicateColor.status).toBe(409);
+    expect(String(duplicateColor.body.message)).toContain("color");
+
+    const duplicatePriority = await agent
+      .put(`/api/factory/customer-orders/${second}/priority-scan-config`)
+      .send({ color: "Gold", priority: 10 });
+    expect(duplicatePriority.status).toBe(409);
+    expect(String(duplicatePriority.body.message)).toContain("priority");
+
+    expect(
+      (await agent.put(`/api/factory/customer-orders/${first}/priority-scan-config`).send({ color: "Purple", priority: 10, enabled: false })).status
+    ).toBe(200);
+
+    expect(
+      (await agent.put(`/api/factory/customer-orders/${second}/priority-scan-config`).send({ color: "Purple", priority: 10, enabled: true })).status
+    ).toBe(200);
+  });
+
+  it("requires a real pending loading with a linked proforma before activation", async () => {
+    const draft = await createLoading({ status: "DRAFT" });
+    const noProforma = await createLoading({ withProforma: false });
+
+    const draftResponse = await agent
+      .put(`/api/factory/customer-orders/${draft}/priority-scan-config`)
+      .send({ color: "Green", priority: 20, enabled: true });
+    expect(draftResponse.status).toBe(409);
+
+    const noProformaResponse = await agent
+      .put(`/api/factory/customer-orders/${noProforma}/priority-scan-config`)
+      .send({ color: "Green", priority: 20, enabled: true });
+    expect(noProformaResponse.status).toBe(409);
+    expect(String(noProformaResponse.body.message)).toContain("proforma");
+  });
+
+  it("clears a configuration idempotently", async () => {
+    const orderId = await createLoading();
+    await agent
+      .put(`/api/factory/customer-orders/${orderId}/priority-scan-config`)
+      .send({ color: "Orange", priority: 30, enabled: true });
+
+    const first = await agent.delete(`/api/factory/customer-orders/${orderId}/priority-scan-config`);
+    expect(first.status).toBe(200);
+    expect(first.body).toEqual({ success: true, cleared: true });
+
+    const second = await agent.delete(`/api/factory/customer-orders/${orderId}/priority-scan-config`);
+    expect(second.status).toBe(200);
+    expect(second.body).toEqual({ success: true, cleared: false });
+  });
+});
