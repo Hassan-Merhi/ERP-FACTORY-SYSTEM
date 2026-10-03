@@ -93,10 +93,13 @@ describe("contentSecurityPolicy", () => {
 
       expect(response.text).toBe("");
       expect(logger.warn).toHaveBeenCalledTimes(1);
-      expect(logger.warn).toHaveBeenCalledWith("[CSP] enforced policy violation reported", {
-        directive: "script-src",
-        blocked: "https://evil.example/x.js",
-      });
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[CSP] enforced policy violation reported: script-src blocked https://evil.example/x.js",
+        {
+          directive: "script-src",
+          blocked: "https://evil.example/x.js",
+        }
+      );
     });
 
     it("throttles repeat violations so a flood cannot spam the logs", async () => {
@@ -117,10 +120,13 @@ describe("contentSecurityPolicy", () => {
         })
         .expect(204);
 
-      expect(logger.warn).toHaveBeenCalledWith("[CSP] enforced policy violation reported", {
-        directive: "connect-src",
-        blocked: "https://x.example/p",
-      });
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[CSP] enforced policy violation reported: connect-src blocked https://x.example/p",
+        {
+          directive: "connect-src",
+          blocked: "https://x.example/p",
+        }
+      );
     });
 
     it("records report-only observations at info rather than as warnings", async () => {
@@ -133,10 +139,13 @@ describe("contentSecurityPolicy", () => {
         .expect(204);
 
       expect(logger.warn).not.toHaveBeenCalled();
-      expect(logger.info).toHaveBeenCalledWith("[CSP] report-only policy observation", {
-        directive: "font-src",
-        blocked: "https://fonts.example/f.woff2",
-      });
+      expect(logger.info).toHaveBeenCalledWith(
+        "[CSP] report-only policy observation: font-src blocked https://fonts.example/f.woff2",
+        {
+          directive: "font-src",
+          blocked: "https://fonts.example/f.woff2",
+        }
+      );
     });
   });
 });

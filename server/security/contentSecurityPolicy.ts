@@ -105,10 +105,14 @@ export function registerCspReportRoute(app: Express): void {
           directive: directive || "unknown",
           blocked: blocked || "unknown",
         };
+        // The directive and blocked URI go in the message itself: the pretty log
+        // format prints only whitelisted context keys, so they would be dropped
+        // from the context alone, leaving reports that cannot be acted on.
+        const summary = `${detail.directive} blocked ${detail.blocked}`;
         if (resolveCspMode() === "enforce") {
-          logger.warn("[CSP] enforced policy violation reported", detail);
+          logger.warn(`[CSP] enforced policy violation reported: ${summary}`, detail);
         } else {
-          logger.info("[CSP] report-only policy observation", detail);
+          logger.info(`[CSP] report-only policy observation: ${summary}`, detail);
         }
       }
       // Reports are best-effort telemetry: always acknowledge.
