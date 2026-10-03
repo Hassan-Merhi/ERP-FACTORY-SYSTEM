@@ -93,6 +93,15 @@ function toNumber(value: string | number | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function resolveRetailItemImages(variantImageUrls: unknown, productImageUrls: unknown): string[] {
+  const variantImages = stringArray(variantImageUrls);
+  return variantImages.length ? variantImages : stringArray(productImageUrls);
+}
+
 function currentCompanyId(req: Request): number | null {
   const companyId = Number(req.session.currentCompanyId);
   return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
@@ -136,6 +145,7 @@ async function ensureVariant(companyId: number, variantId: number) {
     .select({
       id: retailProductVariants.id,
       productId: retailProductVariants.productId,
+      color: retailProductVariants.color,
       size: retailProductVariants.size,
       barcode: retailProductVariants.barcode,
       sku: retailProductVariants.sku,
@@ -259,10 +269,12 @@ async function loadSaleResponse(companyId: number, saleId: number) {
       unitPrice: retailPosSaleItems.unitPrice,
       name: retailProducts.name,
       code: retailProducts.code,
+      color: retailProductVariants.color,
       size: retailProductVariants.size,
       barcode: retailProductVariants.barcode,
       sku: retailProductVariants.sku,
-      imageUrls: retailProducts.imageUrls,
+      variantImageUrls: retailProductVariants.imageUrls,
+      productImageUrls: retailProducts.imageUrls,
       brand: retailBrands.name,
     })
     .from(retailPosSaleItems)
@@ -273,13 +285,17 @@ async function loadSaleResponse(companyId: number, saleId: number) {
   return {
     ...sale,
     totalAmount: toNumber(sale.totalAmount),
-    items: items.map((item) => ({
-      ...item,
-      quantity: toNumber(item.quantity),
-      returnedQuantity: toNumber(item.returnedQuantity),
-      unitPrice: toNumber(item.unitPrice),
-      brand: item.brand ?? "Other / No Brand",
-    })),
+    items: items.map((item) => {
+      const { variantImageUrls, productImageUrls, ...rest } = item;
+      return {
+        ...rest,
+        imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
+        quantity: toNumber(item.quantity),
+        returnedQuantity: toNumber(item.returnedQuantity),
+        unitPrice: toNumber(item.unitPrice),
+        brand: item.brand ?? "Other / No Brand",
+      };
+    }),
   };
 }
 
@@ -302,7 +318,9 @@ export function registerRetailPosRoutes(app: Express): void {
           code: retailProducts.code,
           name: retailProducts.name,
           brand: retailBrands.name,
-          imageUrls: retailProducts.imageUrls,
+          color: retailProductVariants.color,
+          variantImageUrls: retailProductVariants.imageUrls,
+          productImageUrls: retailProducts.imageUrls,
           size: retailProductVariants.size,
           sku: retailProductVariants.sku,
           barcode: retailProductVariants.barcode,
@@ -332,22 +350,27 @@ export function registerRetailPosRoutes(app: Express): void {
                   punctuationInsensitiveSearch(retailProducts.code, search),
                   punctuationInsensitiveSearch(retailProductVariants.sku, search),
                   punctuationInsensitiveSearch(retailProductVariants.barcode, search),
+                  punctuationInsensitiveSearch(retailProductVariants.color, search),
                   punctuationInsensitiveSearch(retailProductVariants.size, search),
                   punctuationInsensitiveSearch(retailBrands.name, search)
                 )
               : undefined
           )
         )
-        .orderBy(retailProducts.name, retailProductVariants.size)
+        .orderBy(retailProducts.name, retailProductVariants.color, retailProductVariants.size)
         .limit(limit);
 
       res.json(
-        rows.map((row) => ({
-          ...row,
-          brand: row.brand ?? "Other / No Brand",
-          price: toNumber(row.price),
-          quantity: toNumber(row.quantity),
-        }))
+        rows.map((row) => {
+          const { variantImageUrls, productImageUrls, ...rest } = row;
+          return {
+            ...rest,
+            imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
+            brand: row.brand ?? "Other / No Brand",
+            price: toNumber(row.price),
+            quantity: toNumber(row.quantity),
+          };
+        })
       );
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -372,7 +395,9 @@ export function registerRetailPosRoutes(app: Express): void {
           code: retailProducts.code,
           name: retailProducts.name,
           brand: retailBrands.name,
-          imageUrls: retailProducts.imageUrls,
+          color: retailProductVariants.color,
+          variantImageUrls: retailProductVariants.imageUrls,
+          productImageUrls: retailProducts.imageUrls,
           size: retailProductVariants.size,
           sku: retailProductVariants.sku,
           barcode: retailProductVariants.barcode,
@@ -400,8 +425,10 @@ export function registerRetailPosRoutes(app: Express): void {
         )
         .limit(1);
       if (!row) return res.status(404).json({ message: "Barcode not found" });
+      const { variantImageUrls, productImageUrls, ...rest } = row;
       res.json({
-        ...row,
+        ...rest,
+        imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
         brand: row.brand ?? "Other / No Brand",
         price: toNumber(row.price),
         quantity: toNumber(row.quantity),
