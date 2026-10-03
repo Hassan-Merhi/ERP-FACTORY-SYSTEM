@@ -145,7 +145,13 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS fiscal_closures_company_period_unique
       ON fiscal_period_closures (company_id, period_end_date);
+    -- Legacy production databases may already have fiscal_period_closures
+    -- from the older schema. CREATE TABLE IF NOT EXISTS does not add new
+    -- columns to an existing table, and the closed-period trigger reads
+    -- status on every voucher write. Keep the guard column in the always-on
+    -- runtime repair so voucher posting cannot be broken by schema drift.
     ALTER TABLE fiscal_period_closures
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'CLOSED',
       ADD COLUMN IF NOT EXISTS opening_balance_snapshot JSONB;
 
     CREATE TABLE IF NOT EXISTS factory_status_builder_log (
