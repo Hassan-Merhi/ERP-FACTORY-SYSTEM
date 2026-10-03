@@ -5,6 +5,7 @@ import { Redirect, Switch, Route } from "wouter";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfirmHost } from "@/components/ConfirmHost";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ConnectivityProvider } from "@/contexts/ConnectivityContext";
@@ -208,6 +209,7 @@ export default function App() {
               </Route>
             </Switch>
             <Toaster />
+            <ConfirmHost />
             <UpdateBanner />
           </ConnectivityProvider>
         </ThemeProvider>
