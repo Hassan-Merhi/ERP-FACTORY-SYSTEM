@@ -39,7 +39,9 @@ type NetProfitHandler = (
 
 const EXCLUDED_COMPANY_TYPES = new Set(["factory", "factory_v2", "supplier_partner"]);
 const EXCLUDED_COMPANY_TYPE_LIST = ["factory", "factory_v2", "supplier_partner"];
+const EXCLUDED_COMPANY_CODES = new Set(["JNAH"]);
 const GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
+const HADI_GROUP_INCLUDED_ACCOUNT_NAMES = new Set(["hmd international group lebanon credit"]);
 
 export class GroupHistoricalCurrencyError extends Error {
   constructor(
@@ -86,8 +88,15 @@ export interface GroupNetPositionSnapshot {
   };
 }
 
-export function isGroupNetPositionCompany(company: Pick<CompanyRecord, "active" | "companyType">): boolean {
-  return company.active !== false && !EXCLUDED_COMPANY_TYPES.has(company.companyType || "");
+export function isGroupNetPositionCompany(
+  company: Pick<CompanyRecord, "active" | "companyType" | "code">
+): boolean {
+  const companyCode = String(company.code ?? "").trim().toUpperCase();
+  return (
+    company.active !== false &&
+    !EXCLUDED_COMPANY_TYPES.has(company.companyType || "") &&
+    !EXCLUDED_COMPANY_CODES.has(companyCode)
+  );
 }
 
 /**
@@ -245,6 +254,13 @@ function normalizeAccountName(value: unknown): string {
     .replace(/\s+/g, " ");
 }
 
+function isHadiLshiCompany(company: Pick<CompanyRecord, "code" | "name"> | undefined): boolean {
+  if (!company) return false;
+  const companyCode = String(company.code ?? "").trim().toUpperCase();
+  const companyName = normalizeAccountName(company.name).replace(/[’‘]/g, "'");
+  return companyCode === "HADI" || companyName === "hadi l'shi";
+}
+
 /**
  * The shared ERP classifier already excludes accountType=Intercompany. Group
  * Net Position also has to remove the older ERP intercompany accounts that were
@@ -273,7 +289,11 @@ async function getGroupIntercompanyExclusions(
   return { accountIds, accountNames };
 }
 
-function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercompanyExclusions): boolean {
+function isGroupIntercompanyAccount(
+  account: unknown,
+  exclusions: GroupIntercompanyExclusions,
+  company: Pick<CompanyRecord, "code" | "name"> | undefined
+): boolean {
   const row = asRecord(account);
   const id = Number(row.id);
   const code = String(row.code ?? "")
@@ -281,6 +301,10 @@ function isGroupIntercompanyAccount(account: unknown, exclusions: GroupIntercomp
     .toUpperCase();
   const name = normalizeAccountName(row.name ?? row.label);
   const category = normalizeAccountName(row.category);
+
+  // HADI L'SHI must show this Lebanon credit in Group Net Position even though
+  // the same named account remains a group-only exclusion for other companies.
+  if (isHadiLshiCompany(company) && HADI_GROUP_INCLUDED_ACCOUNT_NAMES.has(name)) return false;
 
   if (Number.isInteger(id) && exclusions.accountIds.has(id)) return true;
   if (GROUP_ONLY_EXCLUDED_ACCOUNT_NAMES.has(name)) return true;
@@ -344,18 +368,23 @@ async function calculateErpNetPosition(
   const rawOnUsAccounts = Array.isArray(onUs.accounts) ? onUs.accounts : [];
 
   const exclusions = await getGroupIntercompanyExclusions(companyId, allCompanies);
+  const currentCompany = allCompanies.find((company) => company.id === companyId);
   const excludedForUsTotal = round2(
     rawForUsAccounts
-      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions, currentCompany))
       .reduce((sum, account) => sum + accountValue(account), 0)
   );
   const excludedOnUsTotal = round2(
     rawOnUsAccounts
-      .filter((account) => isGroupIntercompanyAccount(account, exclusions))
+      .filter((account) => isGroupIntercompanyAccount(account, exclusions, currentCompany))
       .reduce((sum, account) => sum + accountValue(account), 0)
   );
-  const forUsAccounts = rawForUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
-  const onUsAccounts = rawOnUsAccounts.filter((account) => !isGroupIntercompanyAccount(account, exclusions));
+  const forUsAccounts = rawForUsAccounts.filter(
+    (account) => !isGroupIntercompanyAccount(account, exclusions, currentCompany)
+  );
+  const onUsAccounts = rawOnUsAccounts.filter(
+    (account) => !isGroupIntercompanyAccount(account, exclusions, currentCompany)
+  );
   const forUsTotal = round2(rawForUsTotal - excludedForUsTotal);
   const onUsTotal = round2(rawOnUsTotal - excludedOnUsTotal);
   const netPosition = round2(forUsTotal - onUsTotal);
