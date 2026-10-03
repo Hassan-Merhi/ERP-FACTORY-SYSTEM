@@ -1,5 +1,5 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
-import type { Express, Response } from "express";
+import type { Express } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
