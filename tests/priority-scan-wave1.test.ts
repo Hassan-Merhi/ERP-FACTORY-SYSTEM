@@ -54,15 +54,37 @@ afterAll(async () => {
 }, 60000);
 
 describe("Priority Scan Wave 1 configuration foundation", () => {
-  it("creates, reads, and updates a loading priority without touching the loading itself", async () => {
+  it("creates, reads, and updates a loading priority without moving an already-scanned bale", async () => {
     const orderId = await createLoading();
+    const bale = await pool.query<{ id: number }>(
+      `INSERT INTO factory_bales
+         (company_id, bale_code, reference_number, weight_kg, cost_per_kg, total_cost, status)
+       VALUES ($1, $2, $2, '40.000', '1.00', '40.00', 'RESERVED_FOR_ORDER')
+       RETURNING id`,
+      [ctx.companyId, `${PREFIX}-B-W1`]
+    );
+    await pool.query(
+      `INSERT INTO customer_order_bales
+         (order_id, bale_id, bale_reference, location_id, weight, article_code, bale_name, price_used, scanned_by)
+       VALUES ($1, $2, $3, $4, '40.000', 'CCR', 'CCR - 40KG', '10.00', $5)`,
+      [orderId, bale.rows[0].id, `${PREFIX}-B-W1`, ctx.locationId, `${PREFIX}_testuser`]
+    );
 
     const create = await agent
       .put(`/api/factory/customer-orders/${orderId}/priority-scan-config`)
       .send({ color: "Blue", priority: 1, enabled: true });
 
     expect(create.status).toBe(200);
-    expect(create.body).toMatchObject({ orderId, color: "Blue", priority: 1, enabled: true });
+    expect(create.body).toMatchObject({
+      orderId,
+      color: "Blue",
+      priority: 1,
+      enabled: true,
+      createdBy: ctx.userId,
+      createdByName: `${PREFIX}_testuser`,
+      updatedBy: ctx.userId,
+      updatedByName: `${PREFIX}_testuser`,
+    });
 
     const beforeOrder = await pool.query(
       `SELECT status, proforma_id_used, total_qty_bales FROM customer_orders WHERE id = $1`,
@@ -74,13 +96,28 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       .send({ color: "Navy", priority: 3, enabled: true });
 
     expect(update.status).toBe(200);
-    expect(update.body).toMatchObject({ orderId, color: "Navy", priority: 3, enabled: true });
+    expect(update.body).toMatchObject({
+      orderId,
+      color: "Navy",
+      priority: 3,
+      enabled: true,
+      createdBy: create.body.createdBy,
+      createdByName: create.body.createdByName,
+      updatedBy: ctx.userId,
+      updatedByName: `${PREFIX}_testuser`,
+    });
 
     const afterOrder = await pool.query(
       `SELECT status, proforma_id_used, total_qty_bales FROM customer_orders WHERE id = $1`,
       [orderId]
     );
     expect(afterOrder.rows[0]).toEqual(beforeOrder.rows[0]);
+
+    const baleLink = await pool.query<{ order_id: number }>(
+      `SELECT order_id FROM customer_order_bales WHERE bale_id = $1`,
+      [bale.rows[0].id]
+    );
+    expect(baleLink.rows[0]?.order_id).toBe(orderId);
 
     const list = await agent.get("/api/factory/customer-orders/priority-scan-configs");
     expect(list.status).toBe(200);
