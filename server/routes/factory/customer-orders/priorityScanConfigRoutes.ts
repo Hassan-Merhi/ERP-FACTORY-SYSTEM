@@ -149,7 +149,11 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       const actorId = req.session.userId ?? null;
       const actorName = req.session.username ?? actorId ?? "unknown";
       const existing = await db
-        .select({ id: customerOrderPriorityScanConfigs.id, createdBy: customerOrderPriorityScanConfigs.createdBy, createdByName: customerOrderPriorityScanConfigs.createdByName })
+        .select({
+          id: customerOrderPriorityScanConfigs.id,
+          createdBy: customerOrderPriorityScanConfigs.createdBy,
+          createdByName: customerOrderPriorityScanConfigs.createdByName,
+        })
         .from(customerOrderPriorityScanConfigs)
         .where(
           and(
