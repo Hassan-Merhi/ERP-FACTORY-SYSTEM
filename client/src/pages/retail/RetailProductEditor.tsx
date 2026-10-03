@@ -15,6 +15,7 @@ import {
   buildInternalProductCode,
   MAX_IMAGE_BYTES,
   MAX_PRODUCT_IMAGES,
+  MAX_VARIANT_IMAGES,
   NO_BRAND,
   type Brand,
   type DraftVariant,
@@ -41,6 +42,7 @@ export function ProductEditor({
   const [addingBrand, setAddingBrand] = useState(false);
   const [newBrandName, setNewBrandName] = useState("");
   const [uploadingImages, setUploadingImages] = useState(false);
+  const [uploadingVariantIndex, setUploadingVariantIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -55,7 +57,9 @@ export function ProductEditor({
             active: product.active,
             variants: product.variants.map((variant) => ({
               id: variant.id,
+              color: variant.color,
               size: variant.size,
+              imageUrls: [...(variant.imageUrls ?? [])],
               barcode: variant.barcode,
               sku: variant.sku ?? "",
               cost: variant.cost,
@@ -148,11 +152,80 @@ export function ProductEditor({
     }
   };
 
+  const uploadVariantImages = async (variantIndex: number, files?: FileList | null) => {
+    if (!files?.length) return;
+    const currentImages = draft.variants[variantIndex]?.imageUrls ?? [];
+    const remaining = MAX_VARIANT_IMAGES - currentImages.length;
+    if (remaining <= 0) {
+      toast({
+        title: "Variant image limit reached",
+        description: `You can upload up to ${MAX_VARIANT_IMAGES} images per variant.`,
+      });
+      return;
+    }
+
+    const selected = Array.from(files).slice(0, remaining);
+    const invalidType = selected.find((file) => !ALLOWED_IMAGE_TYPES.has(file.type));
+    if (invalidType) {
+      toast({
+        title: "Unsupported image",
+        description: "Use JPG, PNG, WEBP or GIF images.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const tooLarge = selected.find((file) => file.size > MAX_IMAGE_BYTES);
+    if (tooLarge) {
+      toast({
+        title: "Image too large",
+        description: `${tooLarge.name} is larger than 10 MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingVariantIndex(variantIndex);
+    try {
+      const uploadedUrls: string[] = [];
+      for (const file of selected) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${file.name}`);
+        uploadedUrls.push(new URL(`/api/files/${body.id}/preview`, window.location.origin).toString());
+      }
+      setDraft((current) => ({
+        ...current,
+        variants: current.variants.map((variant, index) =>
+          index === variantIndex
+            ? { ...variant, imageUrls: [...variant.imageUrls, ...uploadedUrls].slice(0, MAX_VARIANT_IMAGES) }
+            : variant
+        ),
+      }));
+      toast({ title: selected.length === 1 ? "Variant image uploaded" : `${selected.length} variant images uploaded` });
+    } catch (error) {
+      toast({
+        title: "Variant image upload failed",
+        description: error instanceof Error ? error.message : "Could not upload variant image",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingVariantIndex(null);
+    }
+  };
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       const variants = draft.variants.map((variant) => ({
         id: variant.id,
+        color: variant.color.trim(),
         size: variant.size.trim(),
+        imageUrls: variant.imageUrls,
         barcode: variant.barcode.trim(),
         sku: variant.sku.trim() || null,
         cost: Number(variant.cost),
@@ -165,8 +238,8 @@ export function ProductEditor({
       }));
 
       if (!draft.name.trim()) throw new Error("Item name is required");
-      if (!variants.length || variants.some((variant) => !variant.size || !variant.barcode)) {
-        throw new Error("Every size needs a size value and barcode");
+      if (!variants.length || variants.some((variant) => !variant.color || !variant.size || !variant.barcode)) {
+        throw new Error("Every variant needs a color, size and barcode");
       }
 
       const selectedBrandName =
@@ -319,9 +392,9 @@ export function ProductEditor({
         <div className="space-y-3 border-t pt-4">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="font-semibold">Sizes / Variants</h3>
+              <h3 className="font-semibold">Colors / Sizes / Variants</h3>
               <p className="text-xs text-muted-foreground">
-                Each size has its own barcode, selling price, cost and location stock.
+                Each color and size combination has its own barcode, photos, pricing and location stock.
               </p>
             </div>
             <Button
@@ -329,14 +402,21 @@ export function ProductEditor({
               variant="outline"
               onClick={() => setDraft((current) => ({ ...current, variants: [...current.variants, blankVariant()] }))}
             >
-              <Plus className="mr-1 h-4 w-4" /> Add size
+              <Plus className="mr-1 h-4 w-4" /> Add variant
             </Button>
           </div>
 
           {draft.variants.map((variant, variantIndex) => (
             <Card key={variant.id ?? `new-${variantIndex}`}>
               <CardContent className="space-y-4 p-4">
-                <div className="grid gap-3 md:grid-cols-6">
+                <div className="grid gap-3 md:grid-cols-7">
+                  <div className="space-y-1">
+                    <Label>Color *</Label>
+                    <Input
+                      value={variant.color}
+                      onChange={(e) => updateVariant(variantIndex, { color: e.target.value })}
+                    />
+                  </div>
                   <div className="space-y-1">
                     <Label>Size *</Label>
                     <Input
@@ -381,6 +461,53 @@ export function ProductEditor({
                       onChange={(e) => updateVariant(variantIndex, { lowStockThreshold: Number(e.target.value) })}
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div>
+                    <Label>Variant images</Label>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Optional photos for this exact color and size. Up to {MAX_VARIANT_IMAGES} images.
+                    </p>
+                  </div>
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    multiple
+                    disabled={uploadingVariantIndex !== null || variant.imageUrls.length >= MAX_VARIANT_IMAGES}
+                    onChange={(e) => {
+                      void uploadVariantImages(variantIndex, e.target.files);
+                      e.currentTarget.value = "";
+                    }}
+                  />
+                  {uploadingVariantIndex === variantIndex && (
+                    <p className="text-sm text-muted-foreground">Uploading variant image…</p>
+                  )}
+                  {variant.imageUrls.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {variant.imageUrls.map((src, imageIndex) => (
+                        <div
+                          key={`${src}-${imageIndex}`}
+                          className="relative h-20 w-20 overflow-hidden rounded-md border bg-muted"
+                        >
+                          <img src={src} alt="" className="h-full w-full object-cover" />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="destructive"
+                            className="absolute right-1 top-1 h-6 w-6"
+                            onClick={() =>
+                              updateVariant(variantIndex, {
+                                imageUrls: variant.imageUrls.filter((_, index) => index !== imageIndex),
+                              })
+                            }
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -460,7 +587,7 @@ export function ProductEditor({
                       }))
                     }
                   >
-                    Remove size
+                    Remove variant
                   </Button>
                 )}
               </CardContent>
@@ -472,7 +599,10 @@ export function ProductEditor({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || uploadingImages}>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending || uploadingImages || uploadingVariantIndex !== null}
+          >
             {saveMutation.isPending ? "Saving…" : "Save product"}
           </Button>
         </div>

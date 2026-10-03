@@ -16,6 +16,7 @@ import { z } from "zod";
 import { companies, locations } from "./common";
 
 export const RETAIL_NO_BRAND_NAME = "Other / No Brand";
+export const RETAIL_DEFAULT_COLOR = "Default";
 
 export const retailBrands = pgTable(
   "retail_brands",
@@ -71,8 +72,10 @@ export const retailProductVariants = pgTable(
     productId: integer("product_id")
       .notNull()
       .references(() => retailProducts.id, { onDelete: "cascade" }),
+    color: varchar("color", { length: 100 }).notNull().default(RETAIL_DEFAULT_COLOR),
     size: varchar("size", { length: 100 }).notNull(),
     barcode: varchar("barcode", { length: 191 }).notNull(),
+    imageUrls: jsonb("image_urls").$type<string[]>().notNull().default([]),
     sku: varchar("sku", { length: 191 }),
     cost: decimal("cost", { precision: 20, scale: 6 }).notNull().default("0"),
     sellingPrice: decimal("selling_price", { precision: 20, scale: 6 }).notNull().default("0"),
@@ -86,7 +89,11 @@ export const retailProductVariants = pgTable(
     productIdx: index("retail_product_variants_product_idx").on(t.productId),
     companyBarcodeUnique: uniqueIndex("retail_product_variants_company_barcode_unique").on(t.companyId, t.barcode),
     companySkuUnique: uniqueIndex("retail_product_variants_company_sku_unique").on(t.companyId, t.sku),
-    productSizeUnique: uniqueIndex("retail_product_variants_product_size_unique").on(t.productId, t.size),
+    productColorSizeUnique: uniqueIndex("retail_product_variants_product_color_size_unique").on(
+      t.productId,
+      t.color,
+      t.size
+    ),
   })
 );
 
@@ -140,8 +147,10 @@ export const insertRetailProductSchema = createInsertSchema(retailProducts)
 
 export const retailVariantInputSchema = z.object({
   id: z.number().int().positive().optional(),
+  color: z.string().trim().min(1).max(100).optional().default(RETAIL_DEFAULT_COLOR),
   size: z.string().trim().min(1).max(100),
   barcode: z.string().trim().min(1).max(191),
+  imageUrls: z.array(z.string().trim().url()).max(4).optional().default([]),
   sku: z.string().trim().max(191).nullable().optional(),
   cost: z.coerce.number().finite().nonnegative(),
   sellingPrice: z.coerce.number().finite().nonnegative(),
@@ -174,6 +183,7 @@ export const retailImportRowSchema = z.object({
   code: z.string().trim().min(1),
   name: z.string().trim().min(1),
   brand: z.string().trim().optional().default(RETAIL_NO_BRAND_NAME),
+  color: z.string().trim().min(1).optional().default(RETAIL_DEFAULT_COLOR),
   size: z.string().trim().min(1),
   barcode: z.string().trim().min(1),
   cost: z.coerce.number().finite().nonnegative(),
@@ -183,6 +193,7 @@ export const retailImportRowSchema = z.object({
   category: z.string().trim().optional(),
   description: z.string().trim().optional(),
   imageUrl: z.string().trim().url().optional().or(z.literal("")),
+  variantImageUrl: z.string().trim().url().optional().or(z.literal("")),
 });
 
 export type RetailBrand = typeof retailBrands.$inferSelect;

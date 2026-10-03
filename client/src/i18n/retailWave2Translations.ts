@@ -175,6 +175,36 @@ export const retailWave2Translations: readonly Phase3SharedUiEntry[] = [
     ar: "كمية الإرجاع تتجاوز الكمية المباعة المتبقية",
     fr: "La quantité retournée dépasse la quantité vendue restante",
   },
+  {
+    en: "Scan barcode or search product / SKU / brand / color / size",
+    ar: "امسح الباركود أو ابحث عن المنتج / SKU / العلامة / اللون / المقاس",
+    fr: "Scannez le code-barres ou recherchez produit / SKU / marque / couleur / taille",
+  },
+  {
+    en: "Choose exact product + color + size",
+    ar: "اختر المنتج واللون والمقاس المحددين",
+    fr: "Choisissez le produit + la couleur + la taille exacts",
+  },
+  {
+    en: "Scan a barcode or search by name, SKU, barcode, brand, color, or size.",
+    ar: "امسح باركودًا أو ابحث بالاسم أو SKU أو الباركود أو العلامة أو اللون أو المقاس.",
+    fr: "Scannez un code-barres ou recherchez par nom, SKU, code-barres, marque, couleur ou taille.",
+  },
+  {
+    en: "Scan or select an exact color and size to start a sale.",
+    ar: "امسح أو اختر اللون والمقاس المحددين لبدء البيع.",
+    fr: "Scannez ou sélectionnez une couleur et une taille exactes pour commencer une vente.",
+  },
+  {
+    en: "${item.name} · ${item.color} · ${item.size}",
+    ar: "{{0}} · {{1}} · {{2}}",
+    fr: "{{0}} · {{1}} · {{2}}",
+  },
+  {
+    en: "The exact color and size were restored to this location.",
+    ar: "تمت إعادة اللون والمقاس المحددين إلى هذا الموقع.",
+    fr: "La couleur et la taille exactes ont été rétablies à cet emplacement.",
+  },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();

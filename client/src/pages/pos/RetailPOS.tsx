@@ -26,6 +26,7 @@ interface RetailPosItem {
   name: string;
   brand: string;
   imageUrls: string[];
+  color: string;
   size: string;
   sku: string | null;
   barcode: string;
@@ -45,6 +46,7 @@ interface SaleItem {
   unitPrice: number;
   name: string;
   code: string;
+  color: string;
   size: string;
   barcode: string;
   sku: string | null;
@@ -211,7 +213,7 @@ export default function RetailPOS() {
         `/api/pos/retail/barcodes/${encodeURIComponent(barcode)}?locationId=${selectedLocation.id}`
       );
       addItem(item);
-      toast({ title: `${item.name} · ${item.size}`, description: "Scanned into cart" });
+      toast({ title: `${item.name} · ${item.color} · ${item.size}`, description: "Scanned into cart" });
     } catch (error) {
       toast({
         title: "Barcode not found",
@@ -270,7 +272,7 @@ export default function RetailPOS() {
     },
     onSuccess: async () => {
       await refreshRetailPos();
-      toast({ title: "Return completed", description: "The exact size was restored to this location." });
+      toast({ title: "Return completed", description: "The exact color and size were restored to this location." });
     },
     onError: (error) => toast({ title: "Return failed", description: error.message, variant: "destructive" }),
   });
@@ -331,7 +333,7 @@ export default function RetailPOS() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Retail POS</h1>
           <p className="text-sm text-muted-foreground">
-            Scan a barcode or search by name, SKU, barcode, brand, or size.
+            Scan a barcode or search by name, SKU, barcode, brand, color, or size.
           </p>
         </div>
         <div className="w-full md:w-72">
@@ -373,7 +375,7 @@ export default function RetailPOS() {
                 autoFocus
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Scan barcode or search product / SKU / brand / size"
+                placeholder="Scan barcode or search product / SKU / brand / color / size"
                 className="pl-9"
               />
             </form>
@@ -398,7 +400,7 @@ export default function RetailPOS() {
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">{item.name}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {item.brand} · Size {item.size}
+                        {item.brand} · {item.color} · Size {item.size}
                       </span>
                       <span className="mt-1 flex items-center justify-between text-sm">
                         <strong>${money(item.price)}</strong>
@@ -432,7 +434,7 @@ export default function RetailPOS() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{line.name}</div>
                   <div className="text-xs text-muted-foreground">
-                    {line.brand} · {line.size} · {line.barcode}
+                    {line.brand} · {line.color} · {line.size} · {line.barcode}
                   </div>
                   <div className="mt-2 flex items-center gap-2">
                     <Button
@@ -470,7 +472,7 @@ export default function RetailPOS() {
             ))}
             {!cart.length && (
               <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Scan or select an exact size to start a sale.
+                Scan or select an exact color and size to start a sale.
               </div>
             )}
             <div className="flex items-center justify-between border-t pt-3 text-lg font-semibold">
@@ -515,7 +517,8 @@ export default function RetailPOS() {
                     return (
                       <div key={item.id} className="flex items-center gap-2 text-sm">
                         <span className="min-w-0 flex-1 truncate">
-                          {item.name} · {item.size} <span className="text-muted-foreground">× {item.quantity}</span>
+                          {item.name} · {item.color} · {item.size}{" "}
+                          <span className="text-muted-foreground">× {item.quantity}</span>
                         </span>
                         {item.returnedQuantity > 0 && (
                           <span className="text-xs text-muted-foreground">Returned {item.returnedQuantity}</span>
@@ -568,16 +571,16 @@ export default function RetailPOS() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Variant</Label>
+                <Label>Variant (Color · Size)</Label>
                 <select
                   value={transferVariantId}
                   onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
                   className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
                 >
-                  <option value="">Choose exact product + size</option>
+                  <option value="">Choose exact product + color + size</option>
                   {(itemsQuery.data ?? []).map((item) => (
                     <option key={item.variantId} value={item.variantId}>
-                      {item.name} · {item.brand} · {item.size} · Qty {item.quantity}
+                      {item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}
                     </option>
                   ))}
                 </select>

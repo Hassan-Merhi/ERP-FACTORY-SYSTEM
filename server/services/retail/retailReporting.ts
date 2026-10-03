@@ -158,6 +158,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
            p.id AS product_id,
            p.name AS product_name,
            p.code AS product_code,
+           v.color,
            v.size,
            COALESCE(b.name, 'Other / No Brand') AS brand_name,
            l.name AS location_name
@@ -219,6 +220,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          p.name,
          COALESCE(b.name, 'Other / No Brand') AS brand,
          v.id AS variant_id,
+         v.color,
          v.size,
          v.barcode,
          l.id AS location_id,
@@ -235,7 +237,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          AND p.active = true
          AND i.quantity > 0
          AND i.quantity <= v.low_stock_threshold${inventoryLocation}
-       ORDER BY (v.low_stock_threshold - i.quantity) DESC, p.name, v.size
+       ORDER BY (v.low_stock_threshold - i.quantity) DESC, p.name, v.color, v.size
        LIMIT ${limit}`,
       inventoryParams
     ),
@@ -246,6 +248,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          p.name,
          COALESCE(b.name, 'Other / No Brand') AS brand,
          v.id AS variant_id,
+         v.color,
          v.size,
          v.barcode,
          COALESCE(SUM(i.quantity), 0) AS quantity
@@ -258,9 +261,9 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
        WHERE v.company_id = $1
          AND v.active = true
          AND p.active = true
-       GROUP BY p.id, p.code, p.name, b.name, v.id, v.size, v.barcode
+       GROUP BY p.id, p.code, p.name, b.name, v.id, v.color, v.size, v.barcode
        HAVING COALESCE(SUM(i.quantity), 0) <= 0
-       ORDER BY p.name, v.size
+       ORDER BY p.name, v.color, v.size
        LIMIT ${limit}`,
       inventoryParams
     ),
@@ -272,6 +275,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
            p.code,
            p.name,
            COALESCE(b.name, 'Other / No Brand') AS brand,
+           v.color,
            v.size,
            v.barcode,
            COALESCE(SUM(i.quantity), 0) AS quantity
@@ -284,7 +288,7 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          WHERE v.company_id = $1
            AND v.active = true
            AND p.active = true
-         GROUP BY v.id, p.id, p.code, p.name, b.name, v.size, v.barcode
+         GROUP BY v.id, p.id, p.code, p.name, b.name, v.color, v.size, v.barcode
        ), last_sales AS (
          SELECT variant_id, MAX(created_at) AS last_sale_at
          FROM retail_stock_movements
