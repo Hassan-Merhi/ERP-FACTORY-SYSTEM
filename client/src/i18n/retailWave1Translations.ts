@@ -205,8 +205,16 @@ export const retailWave1Translations: readonly Phase3SharedUiEntry[] = [
     ar: "يمكنك رفع ما يصل إلى {{0}} صور لكل متغير.",
     fr: "Vous pouvez téléverser jusqu’à {{0}} images par variante.",
   },
-  { en: "Variant image upload failed", ar: "فشل رفع صورة المتغير", fr: "Échec du téléversement de l’image de variante" },
-  { en: "Could not upload variant image", ar: "تعذر رفع صورة المتغير", fr: "Impossible de téléverser l’image de variante" },
+  {
+    en: "Variant image upload failed",
+    ar: "فشل رفع صورة المتغير",
+    fr: "Échec du téléversement de l’image de variante",
+  },
+  {
+    en: "Could not upload variant image",
+    ar: "تعذر رفع صورة المتغير",
+    fr: "Impossible de téléverser l’image de variante",
+  },
   {
     en: "Every variant needs a color, size and barcode",
     ar: "كل متغير يحتاج إلى لون ومقاس وباركود",
