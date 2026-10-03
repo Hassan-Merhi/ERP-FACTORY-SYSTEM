@@ -1,9 +1,9 @@
 name: Retail Wave 1 Format Once
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/retail-fashion-variants-wave1
+      - main
     paths:
       - ".github/workflows/retail-wave1-format-once.yml"
 
