@@ -3,7 +3,6 @@
  * parseFloat( calls each server/shared source file has, and the counts can
  * only fall. Money is summed with server/lib/money.ts instead.
  */
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
@@ -15,12 +14,15 @@ const baseline = JSON.parse(fs.readFileSync(path.join(root, "config/float-money-
 };
 
 function currentCounts(): Record<string, number> {
-  const tracked = execFileSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "server", "shared"], {
-    cwd: root,
-    encoding: "utf8",
-  })
-    .split("\n")
-    .filter((file) => /\.(ts|tsx|mjs)$/.test(file) && !file.includes(".test.") && fs.existsSync(path.join(root, file)));
+  // CI checks the repository out as a tarball without .git, so walk the tree
+  // instead of asking git for the file list.
+  const tracked = ["server", "shared"]
+    .flatMap((dir) =>
+      (fs.readdirSync(path.join(root, dir), { recursive: true }) as string[]).map((file) =>
+        path.posix.join(dir, file.split(path.sep).join("/"))
+      )
+    )
+    .filter((file) => /\.(ts|tsx|mjs)$/.test(file) && !file.includes(".test."));
   const counts: Record<string, number> = {};
   for (const file of tracked) {
     const matches = fs.readFileSync(path.join(root, file), "utf8").match(/\bparseFloat\(/g);
