@@ -1,4 +1,5 @@
 import express from "express";
+import { createHttpApp } from "../server/httpApp";
 import session from "express-session";
 import { registerRoutes } from "../server/routes";
 import { db } from "../server/db";
@@ -82,7 +83,7 @@ function testCompanyType(prefix: string): "erp" | "factory" {
 }
 
 export async function setupTestApp(): Promise<express.Express> {
-  const app = express();
+  const app = createHttpApp();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
