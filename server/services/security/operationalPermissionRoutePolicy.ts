@@ -346,11 +346,12 @@ function compileRoutePath(path: string): RegExp {
     .split("/")
     .map((segment) => (segment.startsWith(":") ? "[^/]+" : segment.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")))
     .join("/");
-  // Express defaults: case-insensitive, one optional trailing slash, whole path.
+  // Matches the way the app routes: case-sensitive (createHttpApp), one
+  // optional trailing slash, whole path.
   // The source is built from the static table above, validated by ROUTE_ENTRY
   // and escaped segment by segment; no request data reaches it.
   // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-  return new RegExp(`^${source}/?$`, "i");
+  return new RegExp(`^${source}/?$`);
 }
 
 /** A table entry that is not "METHOD /express/path"; thrown at module load. */

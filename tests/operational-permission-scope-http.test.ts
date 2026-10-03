@@ -63,11 +63,10 @@ describe("operational permission scope", () => {
     expect(response.body.code).toBe("OPERATIONAL_ROLE_DENIED");
   });
 
-  it("checks an import reached through an upper-case URL", async () => {
+  it("does not reach the import handler through an upper-case URL", async () => {
     await setRole("View Only", ctx.companyId);
     const response = await agent.post("/api/STOCK-ITEMS/IMPORT").send({});
-    expect(response.status).toBe(403);
-    expect(response.body.code).toBe("OPERATIONAL_ROLE_DENIED");
+    expect(response.status).toBe(404);
   });
 
   it("leaves Admin and ordinary reads alone", async () => {

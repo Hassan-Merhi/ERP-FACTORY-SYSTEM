@@ -192,8 +192,10 @@ describe("operational permission route policy", () => {
     expect(classifyOperationalPermissionRoute("GET", "/api/pos/shifts/current")).toBeNull();
   });
 
-  it("matches the way Express routes: any letter case, a trailing slash, HEAD as GET, query ignored", () => {
-    expect(classifyOperationalPermissionRoute("POST", "/api/BALES/IMPORT")).toMatchObject({ operation: "import" });
+  it("matches the way the app routes: exact case, a trailing slash, HEAD as GET, query ignored", () => {
+    // Routing is case-sensitive (createHttpApp), so a differently-cased path
+    // reaches no handler and gets no permission check, only a 404.
+    expect(classifyOperationalPermissionRoute("POST", "/api/BALES/IMPORT")).toBeNull();
     expect(classifyOperationalPermissionRoute("POST", "/api/bales/import/")).toMatchObject({ operation: "import" });
     expect(classifyOperationalPermissionRoute("HEAD", "/api/pos/invoice/7/pdf")).toMatchObject({
       operation: "pdf-export",
