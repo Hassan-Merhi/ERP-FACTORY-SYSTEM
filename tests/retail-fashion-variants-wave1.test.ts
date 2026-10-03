@@ -1,15 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import {
-  retailImportRowSchema,
-  retailProductVariants,
-  retailProductWriteSchema,
-} from "../shared/schema";
-import {
-  blankVariant,
-  MAX_VARIANT_IMAGES,
-} from "../client/src/pages/retail/retailInventoryTypes";
+import { retailImportRowSchema, retailProductVariants, retailProductWriteSchema } from "../shared/schema";
+import { blankVariant, MAX_VARIANT_IMAGES } from "../client/src/pages/retail/retailInventoryTypes";
 
 const root = process.cwd();
 const migrationPath = path.join(root, "migrations/20261003_001_retail_fashion_variants.sql");
@@ -164,7 +157,6 @@ describe("retail fashion variants wave 1 catalog and import contract", () => {
   });
 });
 
-
 describe("retail fashion variants wave 1 POS and reporting contract", () => {
   it("returns exact variant color and prefers variant images with product fallback", () => {
     const pos = read("server/routes/pos/retailPosRoutes.ts");
@@ -189,7 +181,6 @@ describe("retail fashion variants wave 1 POS and reporting contract", () => {
     expect(reporting).toContain("GROUP BY v.id, p.id, p.code, p.name, b.name, v.color, v.size, v.barcode");
   });
 });
-
 
 describe("retail fashion variants wave 1 inventory UI contract", () => {
   it("defaults new client variants to Default color and no variant images", () => {
@@ -281,7 +272,6 @@ describe("retail fashion variants wave 1 POS UI contract", () => {
   });
 });
 
-
 describe("retail fashion variants wave 1 import UI contract", () => {
   it("includes color and variant image URL in the Excel template and mapping", () => {
     const importer = read("client/src/pages/retail/RetailImportDialog.tsx");
@@ -294,7 +284,6 @@ describe("retail fashion variants wave 1 import UI contract", () => {
   });
 });
 
-
 describe("retail fashion variants wave 1 dashboard UI contract", () => {
   it("shows color and size for stock-health variant rows", () => {
     const dashboard = read("client/src/pages/retail/RetailDashboard.tsx");
@@ -305,11 +294,10 @@ describe("retail fashion variants wave 1 dashboard UI contract", () => {
   });
 });
 
-
 describe("retail fashion variants wave 1 variant image display contract", () => {
   it("shows an exact variant image in inventory with product-image fallback", () => {
     const inventory = read("client/src/pages/retail/RetailInventory.tsx");
     expect(inventory).toContain("variant.imageUrls[0] || detailProduct.imageUrls[0]");
-    expect(inventory).toContain('alt={`${detailProduct.name} · ${variant.color} · ${variant.size}`}');
+    expect(inventory).toContain("alt={`${detailProduct.name} · ${variant.color} · ${variant.size}`}");
   });
 });

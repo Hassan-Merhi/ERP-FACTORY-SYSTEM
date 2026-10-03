@@ -158,8 +158,12 @@ export default function RetailInventory() {
               <thead>
                 <tr className="border-b text-left">
                   <th className="w-16 py-2">Image</th>
-                  <th className="py-2"><span>Color</span></th>
-                  <th><span>Size</span></th>
+                  <th className="py-2">
+                    <span>Color</span>
+                  </th>
+                  <th>
+                    <span>Size</span>
+                  </th>
                   <th>Barcode</th>
                   <th>Cost</th>
                   <th>Selling price</th>

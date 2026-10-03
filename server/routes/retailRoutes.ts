@@ -830,9 +830,7 @@ export function registerRetailRoutes(app: Express) {
 
           if (variant) {
             if (normalize(variant.barcode) !== normalize(row.barcode)) {
-              throw new Error(
-                `${row.color} / ${row.size} on ${row.code} already uses barcode ${variant.barcode}`
-              );
+              throw new Error(`${row.color} / ${row.size} on ${row.code} already uses barcode ${variant.barcode}`);
             }
           } else {
             if (barcodeOwner) throw new Error(`Barcode already exists on another variant: ${row.barcode}`);

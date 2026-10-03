@@ -474,9 +474,7 @@ export function ProductEditor({
                     type="file"
                     accept="image/jpeg,image/png,image/webp,image/gif"
                     multiple
-                    disabled={
-                      uploadingVariantIndex !== null || variant.imageUrls.length >= MAX_VARIANT_IMAGES
-                    }
+                    disabled={uploadingVariantIndex !== null || variant.imageUrls.length >= MAX_VARIANT_IMAGES}
                     onChange={(e) => {
                       void uploadVariantImages(variantIndex, e.target.files);
                       e.currentTarget.value = "";
