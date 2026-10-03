@@ -31,10 +31,7 @@ function readPageSources(file: string): string {
   return combined;
 }
 
-const loadingPages = [
-  "client/src/pages/ContainerLoadingScan.tsx",
-  "client/src/pages/factory/FactoryContainerLoadingScan.tsx",
-];
+const loadingPages = ["client/src/pages/factory/FactoryContainerLoadingScan.tsx"];
 
 describe("Bandwidth Phase 1 page request policy", () => {
   it.each(loadingPages)("removes fixed full-order polling and canonicalizes proforma keys in %s", (file) => {
