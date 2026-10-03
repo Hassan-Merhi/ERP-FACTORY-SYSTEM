@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -313,8 +314,10 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
               size="icon"
               variant="ghost"
               className="text-destructive"
-              onClick={() => {
-                if (confirm("Are you sure you want to delete this advance?")) {
+              onClick={async () => {
+                if (
+                  await confirmAction({ title: "Are you sure you want to delete this advance?", tone: "destructive" })
+                ) {
                   deleteAdvanceMutation.mutate(advance.id);
                 }
               }}
@@ -586,11 +589,12 @@ export function AdvancesTab({ cashAccounts = [] }: AdvancesTabProps) {
                             variant="ghost"
                             className="text-destructive"
                             disabled={deleteWorkerDeductionMutation.isPending}
-                            onClick={() => {
+                            onClick={async () => {
                               if (
-                                confirm(
-                                  `Delete this deduction of ${formatAmount(parseFloat(d.amount || "0"))} for ${d.workerName || "this worker"}?`
-                                )
+                                await confirmAction({
+                                  title: `Delete this deduction of ${formatAmount(parseFloat(d.amount || "0"))} for ${d.workerName || "this worker"}?`,
+                                  tone: "destructive",
+                                })
                               ) {
                                 deleteWorkerDeductionMutation.mutate({ workerId: d.workerId, deductionId: d.id });
                               }

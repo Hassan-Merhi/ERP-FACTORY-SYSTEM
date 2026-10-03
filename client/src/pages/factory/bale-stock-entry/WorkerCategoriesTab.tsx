@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, CheckCircle } from "lucide-react";
@@ -146,11 +147,8 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                             {w.fullName || w.name}
                           </Badge>
                         ))}
-                      {catWorkers.filter(
-                        (w) => w.active !== false && (cat.workerIds || []).includes(w.id)
-                      ).length === 0 && (
-                        <span className="text-xs text-muted-foreground italic">No workers assigned</span>
-                      )}
+                      {catWorkers.filter((w) => w.active !== false && (cat.workerIds || []).includes(w.id)).length ===
+                        0 && <span className="text-xs text-muted-foreground italic">No workers assigned</span>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -168,8 +166,9 @@ export function WorkerCategoriesManager({ compact = false }: { compact?: boolean
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-destructive"
-                        onClick={() => {
-                          if (confirm("Delete this group?")) deleteCatMutation.mutate(cat.id);
+                        onClick={async () => {
+                          if (await confirmAction({ title: "Delete this group?", tone: "destructive" }))
+                            deleteCatMutation.mutate(cat.id);
                         }}
                         data-testid={`button-delete-category-${cat.id}`}
                       >

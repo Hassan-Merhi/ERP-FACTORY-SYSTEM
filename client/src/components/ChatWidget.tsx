@@ -1,3 +1,4 @@
+import { toast } from "@/hooks/use-toast";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -296,7 +297,7 @@ export function ChatWidget() {
       if (!resp.ok) throw new Error(data.message || "Failed to parse file");
       setPoDraft(data as POImportDraft);
     } catch (err) {
-      alert(`Could not parse file: ${getErrorDetails(err).message}`);
+      toast({ title: "Could not parse file", description: getErrorDetails(err).message, variant: "destructive" });
     } finally {
       setPoDraftUploading(false);
     }

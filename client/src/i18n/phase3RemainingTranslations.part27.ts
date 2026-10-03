@@ -275,4 +275,54 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "للحساب {{0}} رصيد افتتاحي جديد منذ الإقفال؛ ستؤدي إعادة الفتح إلى استبداله",
     fr: "Le compte {{0}} a un nouveau solde d'ouverture depuis la clôture ; la réouverture l'écraserait",
   },
+  {
+    en: "Could not parse file",
+    ar: "تعذر تحليل الملف",
+    fr: "Impossible d'analyser le fichier",
+  },
+  {
+    en: "Archive ${position.name}?",
+    ar: "أرشفة {{0}}؟",
+    fr: "Archiver {{0}} ?",
+  },
+  {
+    en: "Historical rules and memberships will be kept.",
+    ar: "سيتم الاحتفاظ بالقواعد والعضويات السابقة.",
+    fr: "Les règles et appartenances historiques seront conservées.",
+  },
+  {
+    en: "Are you sure you want to delete this advance?",
+    ar: "هل أنت متأكد أنك تريد حذف هذه السلفة؟",
+    fr: "Voulez-vous vraiment supprimer cette avance ?",
+  },
+  {
+    en: "Are you sure you want to delete ${emp.firstName}?",
+    ar: "هل أنت متأكد أنك تريد حذف {{0}}؟",
+    fr: "Voulez-vous vraiment supprimer {{0}} ?",
+  },
+  {
+    en: "Clear offline data?",
+    ar: "مسح البيانات دون اتصال؟",
+    fr: "Effacer les données hors ligne ?",
+  },
+  {
+    en: "This will clear all offline IndexedDB data including sync queue and logs. The legacy localStorage queue will remain. Continue?",
+    ar: "سيؤدي هذا إلى مسح جميع بيانات IndexedDB دون اتصال، بما في ذلك قائمة انتظار المزامنة والسجلات. ستبقى قائمة انتظار localStorage القديمة. هل تريد المتابعة؟",
+    fr: "Cela effacera toutes les données IndexedDB hors ligne, y compris la file de synchronisation et les journaux. L'ancienne file localStorage sera conservée. Continuer ?",
+  },
+  {
+    en: "Enter a meaningful reason for this setup change (at least 5 characters):",
+    ar: "أدخل سببًا واضحًا لهذا التغيير في الإعداد (5 أحرف على الأقل):",
+    fr: "Saisissez une raison explicite pour cette modification de configuration (au moins 5 caractères) :",
+  },
+  {
+    en: "Reason for this setup change",
+    ar: "سبب هذا التغيير في الإعداد",
+    fr: "Raison de cette modification de configuration",
+  },
+  {
+    en: "Type exactly: CHANGE SP SETUP",
+    ar: "اكتب بالضبط: CHANGE SP SETUP",
+    fr: "Saisissez exactement : CHANGE SP SETUP",
+  },
 ];

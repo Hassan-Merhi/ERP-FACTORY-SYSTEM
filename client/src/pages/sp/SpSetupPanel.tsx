@@ -1,3 +1,4 @@
+import { confirmAction, promptText } from "@/components/ConfirmHost";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { releaseDebtEnglish } from "@/i18n/finalCloseoutTranslations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -83,21 +84,24 @@ function createFreshIdempotencyKey(scope: string): string {
   return uuid ? `${scope}:${uuid}` : `${scope}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 }
 
-function requestSetupConfirmation(actionLabel: string, targetCompanyId?: number): SetupConfirmationPayload | null {
-  if (typeof window === "undefined") return null;
-  const confirmation = window.prompt(`${actionLabel}\n\nType exactly: CHANGE SP SETUP`);
-  if (confirmation == null) return null;
-  if (confirmation.trim() !== "CHANGE SP SETUP") {
-    window.alert("Confirmation did not match. Type exactly: CHANGE SP SETUP");
-    return null;
-  }
+async function requestSetupConfirmation(
+  actionLabel: string,
+  targetCompanyId?: number
+): Promise<SetupConfirmationPayload | null> {
+  const confirmed = await confirmAction({
+    title: actionLabel,
+    description: "Type exactly: CHANGE SP SETUP",
+    requirePhrase: "CHANGE SP SETUP",
+    tone: "warning",
+  });
+  if (!confirmed) return null;
 
-  const reason =
-    window.prompt("Enter a meaningful reason for this setup change (at least 5 characters):")?.trim() ?? "";
-  if (reason.length < 5) {
-    window.alert("A meaningful reason of at least 5 characters is required.");
-    return null;
-  }
+  const reason = await promptText({
+    title: "Reason for this setup change",
+    label: "Enter a meaningful reason for this setup change (at least 5 characters):",
+    minLength: 5,
+  });
+  if (reason == null || reason.length < 5) return null;
 
   const idempotencyKey = createFreshIdempotencyKey("sp-setup");
   return {
@@ -301,8 +305,8 @@ export default function SpSetupPanel() {
           )}
 
           <Button
-            onClick={() => {
-              const payload = requestSetupConfirmation(
+            onClick={async () => {
+              const payload = await requestSetupConfirmation(
                 status?.isConfigured ? "Repair and re-run Supplier Partner setup" : "Initialize Supplier Partner setup"
               );
               if (payload) setupMutation.mutate(payload);
@@ -419,8 +423,8 @@ export default function SpSetupPanel() {
           </div>
 
           <Button
-            onClick={() => {
-              const payload = requestSetupConfirmation(
+            onClick={async () => {
+              const payload = await requestSetupConfirmation(
                 goldenCoastReady
                   ? "Re-verify Golden Coast and HADI accounting"
                   : "Provision Golden Coast and HADI accounting",

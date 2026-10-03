@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -11,10 +12,9 @@ interface UsePayrollWorkerMutationsArgs {
   modeApiRequest: ReturnType<typeof getApiRequest>;
   selectedCompanyId: number | undefined;
   setWorkerOverrides: (
-    updater: (previous: Record<number, { selected?: boolean; amount?: string; manuallyEdited?: boolean }>) => Record<
-      number,
-      { selected?: boolean; amount?: string; manuallyEdited?: boolean }
-    >
+    updater: (
+      previous: Record<number, { selected?: boolean; amount?: string; manuallyEdited?: boolean }>
+    ) => Record<number, { selected?: boolean; amount?: string; manuallyEdited?: boolean }>
   ) => void;
   setNewWorkerDialogOpen: (open: boolean) => void;
   newWorkerForm: { reset: () => void };
@@ -55,8 +55,8 @@ export function usePayrollWorkerMutations({
     }));
   };
 
-  const handleDeleteWorker = (worker: Employee) => {
-    if (confirm(`Delete worker ${worker.firstName} ${worker.lastName}?`)) {
+  const handleDeleteWorker = async (worker: Employee) => {
+    if (await confirmAction({ title: `Delete worker ${worker.firstName} ${worker.lastName}?`, tone: "destructive" })) {
       modeApiRequest("DELETE", `/api/employees/${worker.id}`, undefined)
         .then(() => {
           toast({ title: "Deleted", description: "Worker deleted" });

@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect } from "react";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
@@ -92,9 +93,12 @@ function OfflineSyncPanelContent() {
 
   const handleClearData = async () => {
     if (
-      !confirm(
-        "This will clear all offline IndexedDB data including sync queue and logs. The legacy localStorage queue will remain. Continue?"
-      )
+      !(await confirmAction({
+        title: "Clear offline data?",
+        description:
+          "This will clear all offline IndexedDB data including sync queue and logs. The legacy localStorage queue will remain. Continue?",
+        tone: "destructive",
+      }))
     )
       return;
     setClearing(true);
