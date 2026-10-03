@@ -34,7 +34,9 @@ function runtimeCreatedTables(): Set<string> {
   const names = new Set<string>();
   for (const file of files) {
     const source = fs.readFileSync(path.join(root, file), "utf8");
-    for (const match of source.matchAll(/CREATE TABLE IF NOT EXISTS\s+(?:public\.)?"?([a-z0-9_]+)"?/gi)) {
+    // Require the column list so prose in comments ("CREATE TABLE IF NOT
+    // EXISTS does not ...") is not read as a table.
+    for (const match of source.matchAll(/CREATE TABLE IF NOT EXISTS\s+(?:public\.)?"?([a-z0-9_]+)"?\s*\(/gi)) {
       names.add(match[1].toLowerCase());
     }
   }

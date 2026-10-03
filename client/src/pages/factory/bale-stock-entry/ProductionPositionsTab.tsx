@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Archive, CalendarClock, CheckCircle2, History, Pencil, Plus, Target, Users } from "lucide-react";
@@ -295,10 +296,15 @@ export function ProductionPositionsTab() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-destructive"
-                          onClick={() =>
-                            confirm(`Archive ${position.name}? Historical rules and memberships will be kept.`) &&
-                            archiveMutation.mutate(position.id)
-                          }
+                          onClick={async () => {
+                            if (
+                              await confirmAction({
+                                title: `Archive ${position.name}?`,
+                                description: "Historical rules and memberships will be kept.",
+                              })
+                            )
+                              archiveMutation.mutate(position.id);
+                          }}
                           title="Archive"
                         >
                           <Archive className="h-3.5 w-3.5" />
