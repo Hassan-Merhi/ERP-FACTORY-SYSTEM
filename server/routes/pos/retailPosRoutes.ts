@@ -17,11 +17,7 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import {
-  currentUserId,
-  ensureCompanyLocation,
-  requireRetailCompany,
-} from "./retailPosContext";
+import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import {
   aggregateRetailCartItems,
   nextRetailReturnQuantity,

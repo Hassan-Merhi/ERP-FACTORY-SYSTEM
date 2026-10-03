@@ -41,22 +41,28 @@ describe("retail fashion variants wave 1 behavior", () => {
     const base = {
       code: "IMAGE-TEE",
       name: "Image Tee",
-      variants: [{
-        color: "Black",
-        size: "M",
-        barcode: "IMAGE-001",
-        cost: 5,
-        sellingPrice: 10,
-        stocks: [],
-      }],
+      variants: [
+        {
+          color: "Black",
+          size: "M",
+          barcode: "IMAGE-001",
+          cost: 5,
+          sellingPrice: 10,
+          stocks: [],
+        },
+      ],
     };
     const four = retailProductWriteSchema.safeParse({
       ...base,
-      variants: [{ ...base.variants[0], imageUrls: Array.from({ length: 4 }, (_, i) => `https://example.com/${i}.jpg`) }],
+      variants: [
+        { ...base.variants[0], imageUrls: Array.from({ length: 4 }, (_, i) => `https://example.com/${i}.jpg`) },
+      ],
     });
     const five = retailProductWriteSchema.safeParse({
       ...base,
-      variants: [{ ...base.variants[0], imageUrls: Array.from({ length: 5 }, (_, i) => `https://example.com/${i}.jpg`) }],
+      variants: [
+        { ...base.variants[0], imageUrls: Array.from({ length: 5 }, (_, i) => `https://example.com/${i}.jpg`) },
+      ],
     });
     expect(four.success).toBe(true);
     expect(five.success).toBe(false);
