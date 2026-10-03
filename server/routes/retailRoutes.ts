@@ -23,68 +23,8 @@ type RetailQueryExecutor = Pick<typeof db, "select" | "insert" | "update" | "del
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
 
-type RetailTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
-async function writeVariantInventoryWithMovement(
-  tx: RetailTransaction,
-  input: {
-    companyId: number;
-    variantId: number;
-    cost: number;
-    stocks: RetailProductWrite["variants"][number]["stocks"];
-    createdBy: string;
-    referenceType: "retail_product_create" | "retail_product_edit";
-    referenceId: string;
-    eventPrefix: string;
-  }
-) {
-  const existingRows = await tx
-    .select({ locationId: retailVariantInventory.locationId, quantity: retailVariantInventory.quantity })
-    .from(retailVariantInventory)
-    .where(
-      and(eq(retailVariantInventory.companyId, input.companyId), eq(retailVariantInventory.variantId, input.variantId))
-    );
-  const existing = new Map(existingRows.map((row) => [row.locationId, asNumber(row.quantity)]));
-  const desired = new Map(input.stocks.map((stock) => [stock.locationId, Number(stock.quantity)]));
-  const locationIds = [...new Set([...existing.keys(), ...desired.keys()])].sort((a, b) => a - b);
-
-  for (const locationId of locationIds) {
-    const before = existing.get(locationId) ?? 0;
-    const after = desired.get(locationId) ?? 0;
-
-    await tx
-      .insert(retailVariantInventory)
-      .values({
-        companyId: input.companyId,
-        variantId: input.variantId,
-        locationId,
-        quantity: String(after),
-        averageCost: String(input.cost),
-      })
-      .onConflictDoUpdate({
-        target: [retailVariantInventory.variantId, retailVariantInventory.locationId],
-        set: { quantity: String(after), averageCost: String(input.cost), updatedAt: new Date() },
-      });
-
-    const delta = after - before;
-    if (Math.abs(delta) <= 0.000001) continue;
-
-    await tx.insert(retailStockMovements).values({
-      companyId: input.companyId,
-      variantId: input.variantId,
-      locationId,
-      movementType: "adjustment",
-      quantityDelta: String(delta),
-      quantityBefore: String(before),
-      quantityAfter: String(after),
-      eventKey: `${input.eventPrefix}:${input.variantId}:${locationId}`.slice(0, 255),
-      referenceType: input.referenceType,
-      referenceId: input.referenceId,
-      createdBy: input.createdBy,
-      metadata: { source: input.referenceType },
-    });
-  }
-}
+import { validateRetailVariantPayload } from "../services/retail/retailProductValidation";
+import { writeVariantInventoryWithMovement } from "../services/retail/retailProductStockWrites";
 
 async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
   const companyId = req.session.currentCompanyId;
@@ -147,32 +87,6 @@ async function resolveBrand(executor: RetailQueryExecutor, companyId: number, in
   }
 
   return getOrCreateBrand(executor, companyId, input.brandName);
-}
-
-function validateVariantPayload(input: RetailProductWrite) {
-  const barcodes = new Set<string>();
-  const variantKeys = new Set<string>();
-
-  for (const variant of input.variants) {
-    const barcode = normalize(variant.barcode);
-    const variantKey = `${normalize(variant.color)}|${normalize(variant.size)}`;
-
-    if (barcodes.has(barcode)) throw new Error(`Duplicate barcode in product: ${variant.barcode}`);
-    if (variantKeys.has(variantKey)) {
-      throw new Error(`Duplicate color/size in product: ${variant.color} / ${variant.size}`);
-    }
-
-    barcodes.add(barcode);
-    variantKeys.add(variantKey);
-
-    const locationIds = new Set<number>();
-    for (const stock of variant.stocks) {
-      if (locationIds.has(stock.locationId)) {
-        throw new Error(`Location ${stock.locationId} is repeated for size ${variant.size}`);
-      }
-      locationIds.add(stock.locationId);
-    }
-  }
 }
 
 async function validateLocations(executor: RetailQueryExecutor, companyId: number, input: RetailProductWrite) {
@@ -496,7 +410,7 @@ export function registerRetailRoutes(app: Express) {
       if (!companyId) return;
 
       const input = retailProductWriteSchema.parse(req.body);
-      validateVariantPayload(input);
+      validateRetailVariantPayload(input);
 
       const productId = await db.transaction(async (tx) => {
         await validateLocations(tx, companyId, input);
@@ -577,7 +491,7 @@ export function registerRetailRoutes(app: Express) {
       }
 
       const input = retailProductWriteSchema.parse(req.body);
-      validateVariantPayload(input);
+      validateRetailVariantPayload(input);
 
       const productEditKey = `product-edit:${productId}:${Date.now()}:${req.user!.id}`;
 

@@ -1,10 +1,8 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
-import type { Express, Request, Response } from "express";
+import type { Express, Response } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
-  companies,
-  locations,
   retailBrands,
   retailPosReturnItems,
   retailPosReturns,
@@ -19,6 +17,11 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import {
+  currentUserId,
+  ensureCompanyLocation,
+  requireRetailCompany,
+} from "./retailPosContext";
 import {
   aggregateRetailCartItems,
   nextRetailReturnQuantity,
@@ -100,44 +103,6 @@ function stringArray(value: unknown): string[] {
 function resolveRetailItemImages(variantImageUrls: unknown, productImageUrls: unknown): string[] {
   const variantImages = stringArray(variantImageUrls);
   return variantImages.length ? variantImages : stringArray(productImageUrls);
-}
-
-function currentCompanyId(req: Request): number | null {
-  const companyId = Number(req.session.currentCompanyId);
-  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
-}
-
-function currentUserId(req: Request): string {
-  const userId = req.user?.id ?? req.session.userId;
-  if (!userId) throw new Error("Authenticated user is required");
-  return String(userId);
-}
-
-async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
-  const companyId = currentCompanyId(req);
-  if (!companyId) {
-    res.status(400).json({ message: "No company selected" });
-    return null;
-  }
-  const [company] = await db
-    .select({ id: companies.id, companyType: companies.companyType })
-    .from(companies)
-    .where(eq(companies.id, companyId))
-    .limit(1);
-  if (!company || company.companyType !== "retail") {
-    res.status(409).json({ message: "Retail POS is only available for Retail / Variant Inventory companies" });
-    return null;
-  }
-  return companyId;
-}
-
-async function ensureCompanyLocation(companyId: number, locationId: number): Promise<void> {
-  const [location] = await db
-    .select({ id: locations.id })
-    .from(locations)
-    .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId), eq(locations.active, true)))
-    .limit(1);
-  if (!location) throw new Error("Location is not active or does not belong to the selected company");
 }
 
 async function ensureVariant(companyId: number, variantId: number) {
