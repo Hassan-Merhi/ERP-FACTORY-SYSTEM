@@ -8,7 +8,8 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db, type RawQueryRow } from "../../db";
-import { toFiniteNumber } from "@shared/typeGuards";
+import Decimal from "decimal.js";
+import { moneyString, sumMoney, toMoney } from "../../lib/money";
 
 /**
  * Per-account opening balance plus its posted debit/credit totals.
@@ -94,22 +95,24 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
               GROUP BY la.id, la.opening_balance, la.opening_balance_side
             `);
 
-          let totalBalance = 0;
+          let totalBalance = new Decimal(0);
           for (const row of rows.rows) {
-            const openingBalanceRaw = toFiniteNumber(row.opening_balance) ?? 0;
+            const openingBalanceRaw = toMoney(row.opening_balance);
             const openingSide = row.opening_balance_side || "Dr";
             const signedOpening = isLiability
               ? openingSide === "Cr"
                 ? openingBalanceRaw
-                : -openingBalanceRaw
+                : openingBalanceRaw.negated()
               : openingSide === "Dr"
                 ? openingBalanceRaw
-                : -openingBalanceRaw;
-            const debit = toFiniteNumber(row.total_debit) ?? 0;
-            const credit = toFiniteNumber(row.total_credit) ?? 0;
-            totalBalance += signedOpening + (isLiability ? credit - debit : debit - credit);
+                : openingBalanceRaw.negated();
+            const debit = toMoney(row.total_debit);
+            const credit = toMoney(row.total_credit);
+            totalBalance = totalBalance
+              .plus(signedOpening)
+              .plus(isLiability ? credit.minus(debit) : debit.minus(credit));
           }
-          return totalBalance;
+          return totalBalance.toNumber();
         };
 
         // Helper function: Get Import Charges balance (only under IMPORT_CHARGES parent account)
@@ -152,11 +155,11 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
 
           // Get opening balances
           let totalBalance = importChargeAccounts.reduce((sum, account) => {
-            const openingBalanceRaw = parseFloat(account.openingBalance || "0");
+            const openingBalanceRaw = toMoney(account.openingBalance);
             const openingSide = account.openingBalanceSide || "Dr";
             // Expense accounts: Dr opening = positive
-            return sum + (openingSide === "Dr" ? openingBalanceRaw : -openingBalanceRaw);
-          }, 0);
+            return sum.plus(openingSide === "Dr" ? openingBalanceRaw : openingBalanceRaw.negated());
+          }, new Decimal(0));
 
           // Get all voucher entries for these accounts
           const entries = await db
@@ -176,13 +179,13 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
             );
 
           // Expense accounts: Debits increase (positive), Credits decrease (negative)
-          totalBalance += entries.reduce((sum, entry) => {
-            const credit = parseFloat(entry.creditAmount || "0");
-            const debit = parseFloat(entry.debitAmount || "0");
-            return sum + debit - credit;
-          }, 0);
+          totalBalance = entries.reduce((sum, entry) => {
+            const credit = toMoney(entry.creditAmount);
+            const debit = toMoney(entry.debitAmount);
+            return sum.plus(debit).minus(credit);
+          }, totalBalance);
 
-          return totalBalance;
+          return totalBalance.toNumber();
         };
 
         // Calculate all balances (same logic as import-cycle-balance endpoint)
@@ -206,20 +209,21 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           );
 
         // Supplier is a liability: Credits increase (we owe more), Debits decrease (we paid)
-        const supplierBalance = supplierEntries.reduce((sum, entry) => {
-          const credit = parseFloat(entry.creditAmount || "0");
-          const debit = parseFloat(entry.debitAmount || "0");
-          return sum + credit - debit;
-        }, 0);
+        const supplierBalance = supplierEntries
+          .reduce(
+            (sum, entry) => sum.plus(toMoney(entry.creditAmount)).minus(toMoney(entry.debitAmount)),
+            new Decimal(0)
+          )
+          .toNumber();
 
         // 2. Stock OTW
         const otwContainers = await db
           .select()
           .from(containers)
           .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")));
-        const stockOtwValue = otwContainers.reduce((sum, container) => {
-          return sum + parseFloat(container.grandTotal || "0");
-        }, 0);
+        const stockOtwValue = otwContainers
+          .reduce((sum, container) => sum.plus(toMoney(container.grandTotal)), new Decimal(0))
+          .toNumber();
 
         // 3-10: All independent — run in parallel
         const [
@@ -276,16 +280,18 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         ]);
 
         const standaloneBankOpeningBalance = standaloneBankAccountsForBalance.reduce((sum, account) => {
-          const openingBalanceRaw = parseFloat(account.openingBalance || "0");
+          const openingBalanceRaw = toMoney(account.openingBalance);
           const openingSide = account.openingBalanceSide || "Dr";
-          return sum + (openingSide === "Dr" ? openingBalanceRaw : -openingBalanceRaw);
-        }, 0);
-        const standaloneBankVoucherBalance = standaloneBankAccountEntries.reduce((sum, entry) => {
-          const credit = parseFloat(entry.creditAmount || "0");
-          const debit = parseFloat(entry.debitAmount || "0");
-          return sum + debit - credit;
-        }, 0);
-        const bankBalance = ledgerBankBalance + standaloneBankOpeningBalance + standaloneBankVoucherBalance;
+          return sum.plus(openingSide === "Dr" ? openingBalanceRaw : openingBalanceRaw.negated());
+        }, new Decimal(0));
+        const standaloneBankVoucherBalance = standaloneBankAccountEntries.reduce(
+          (sum, entry) => sum.plus(toMoney(entry.debitAmount)).minus(toMoney(entry.creditAmount)),
+          new Decimal(0)
+        );
+        const bankBalance = toMoney(ledgerBankBalance)
+          .plus(standaloneBankOpeningBalance)
+          .plus(standaloneBankVoucherBalance)
+          .toNumber();
 
         // 11. Stock on Floor
         // Calculate from quantity * averageRate to ensure accuracy (totalValue can get out of sync)
@@ -298,11 +304,9 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .innerJoin(locations, eq(inventory.locationId, locations.id))
           .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
 
-        const stockOnFloorValue = inventoryItems.reduce((sum, item) => {
-          const qty = parseFloat(item.quantity || "0");
-          const rate = parseFloat(item.averageRate || "0");
-          return sum + qty * rate;
-        }, 0);
+        const stockOnFloorValue = inventoryItems
+          .reduce((sum, item) => sum.plus(toMoney(item.quantity).times(toMoney(item.averageRate))), new Decimal(0))
+          .toNumber();
 
         // 12. COGS
         const cogsData = await db
@@ -313,9 +317,9 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
           .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false)));
 
-        const cogsBalance = cogsData.reduce((sum, item) => {
-          return sum + parseFloat(item.totalCost || "0");
-        }, 0);
+        const cogsBalance = cogsData
+          .reduce((sum, item) => sum.plus(toMoney(item.totalCost)), new Decimal(0))
+          .toNumber();
 
         // 12b. Consumption expense (from stock adjustment items)
         // Includes: pure Consumption vouchers AND Mixed voucher items with negative quantity
@@ -337,16 +341,18 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
             )
           );
 
-        const consumptionBalance = consumptionData.reduce((sum, item) => {
-          const qty = parseFloat(item.quantity || "0");
-          const adjustmentType = (item.adjustmentType || "").toLowerCase();
-          // Pure Consumption: always count (totalAmount is positive, represents consumed value)
-          // Mixed: only count items with negative quantity (consumption items)
-          if (adjustmentType === "consumption" || (adjustmentType === "mixed" && qty < 0)) {
-            return sum + Math.abs(parseFloat(item.totalAmount || "0"));
-          }
-          return sum;
-        }, 0);
+        const consumptionBalance = consumptionData
+          .reduce((sum, item) => {
+            const qty = toMoney(item.quantity).toNumber();
+            const adjustmentType = (item.adjustmentType || "").toLowerCase();
+            // Pure Consumption: always count (totalAmount is positive, represents consumed value)
+            // Mixed: only count items with negative quantity (consumption items)
+            if (adjustmentType === "consumption" || (adjustmentType === "mixed" && qty < 0)) {
+              return sum.plus(toMoney(item.totalAmount).abs());
+            }
+            return sum;
+          }, new Decimal(0))
+          .toNumber();
 
         // 12c. Production balance (from stock adjustment items)
         // Includes: pure Production vouchers AND Mixed voucher items with positive quantity
@@ -368,16 +374,18 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
             )
           );
 
-        const productionBalance = productionData.reduce((sum, item) => {
-          const qty = parseFloat(item.quantity || "0");
-          const adjustmentType = (item.adjustmentType || "").toLowerCase();
-          // Pure Production: always count (totalAmount is positive, represents produced value)
-          // Mixed: only count items with positive quantity (production items)
-          if (adjustmentType === "production" || (adjustmentType === "mixed" && qty > 0)) {
-            return sum + parseFloat(item.totalAmount || "0");
-          }
-          return sum;
-        }, 0);
+        const productionBalance = productionData
+          .reduce((sum, item) => {
+            const qty = toMoney(item.quantity).toNumber();
+            const adjustmentType = (item.adjustmentType || "").toLowerCase();
+            // Pure Production: always count (totalAmount is positive, represents produced value)
+            // Mixed: only count items with positive quantity (production items)
+            if (adjustmentType === "production" || (adjustmentType === "mixed" && qty > 0)) {
+              return sum.plus(toMoney(item.totalAmount));
+            }
+            return sum;
+          }, new Decimal(0))
+          .toNumber();
 
         // 14. Salary Advances
         const advancesData = await db
@@ -387,9 +395,9 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .from(salaryAdvances)
           .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false)));
 
-        const salaryAdvancesBalance = advancesData.reduce((sum, advance) => {
-          return sum + parseFloat(advance.remainingBalance || "0");
-        }, 0);
+        const salaryAdvancesBalance = advancesData
+          .reduce((sum, advance) => sum.plus(toMoney(advance.remainingBalance)), new Decimal(0))
+          .toNumber();
 
         // 15. Payroll Liabilities
         const employeesData = await db
@@ -399,10 +407,12 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .from(employees)
           .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
 
-        const payrollLiabilitiesBalance = employeesData.reduce((sum, emp) => {
-          const balance = parseFloat(emp.currentBalance || "0");
-          return sum + (balance > 0 ? balance : 0);
-        }, 0);
+        const payrollLiabilitiesBalance = employeesData
+          .reduce((sum, emp) => {
+            const balance = toMoney(emp.currentBalance);
+            return balance.gt(0) ? sum.plus(balance) : sum;
+          }, new Decimal(0))
+          .toNumber();
 
         // 16-19. Other account type balances
         const assetBalance = await getAccountTypeBalance("Asset", false);
@@ -445,35 +455,37 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         // T003: directExpenseBalance is intentionally EXCLUDED here (matches the canonical import-cycle-balance formula).
         // Import charges (duties, transport, etc.) are already capitalized into stockOnFloorValue — including
         // them again in assets double-counts those costs and causes the profit recalculation to overshoot.
-        const totalAssets =
-          stockOtwValue +
-          cashBalance +
-          bankBalance +
-          stockOnFloorValue +
-          assetBalance +
-          indirectExpenseBalance +
-          governmentTaxesBalance +
-          cogsBalance +
-          salaryAdvancesBalance;
+        const totalAssets = sumMoney([
+          stockOtwValue,
+          cashBalance,
+          bankBalance,
+          stockOnFloorValue,
+          assetBalance,
+          indirectExpenseBalance,
+          governmentTaxesBalance,
+          cogsBalance,
+          salaryAdvancesBalance,
+        ]).toNumber();
 
         // Calculate liabilities WITHOUT profit (to avoid circular dependency)
-        const totalLiabilitiesWithoutProfit =
-          supplierBalance +
-          dutyAgentBalance +
-          transporterAgentBalance +
-          loansBalance +
-          liabilityBalance +
-          incomeBalance +
-          payrollLiabilitiesBalance;
+        const totalLiabilitiesWithoutProfit = sumMoney([
+          supplierBalance,
+          dutyAgentBalance,
+          transporterAgentBalance,
+          loansBalance,
+          liabilityBalance,
+          incomeBalance,
+          payrollLiabilitiesBalance,
+        ]).toNumber();
 
         // Total liabilities includes profit for display purposes
-        const totalLiabilities = totalLiabilitiesWithoutProfit + profitBalance;
+        const totalLiabilities = toMoney(totalLiabilitiesWithoutProfit).plus(profitBalance).toNumber();
 
         // Calculate the net import cycle balance (imbalance)
-        const netImportCycleBalance = totalAssets - totalLiabilities;
+        const netImportCycleBalance = toMoney(totalAssets).minus(totalLiabilities).toNumber();
 
         // The TARGET profit to zero the balance: Profit = Assets - Liabilities_without_profit
-        const targetProfitSigned = totalAssets - totalLiabilitiesWithoutProfit;
+        const targetProfitSigned = toMoney(totalAssets).minus(totalLiabilitiesWithoutProfit).toNumber();
 
         const componentsBreakdown = {
           assets: assetComponents,
@@ -510,7 +522,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         if (existingProfitAccounts.length > 0) {
           // Update the first/main Profit account instead of creating new
           const profitAccount = existingProfitAccounts[0];
-          const currentBalance = parseFloat(profitAccount.openingBalance || "0");
+          const currentBalance = toMoney(profitAccount.openingBalance).toNumber();
           const currentSide = profitAccount.openingBalanceSide || "Cr";
 
           // Calculate the current opening balance as a signed value
@@ -519,16 +531,16 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
 
           // profitBalance = opening balance + voucher entries
           // So netEntries = profitBalance - currentOpeningSigned
-          const netEntries = profitBalance - currentOpeningSigned;
+          const netEntries = toMoney(profitBalance).minus(currentOpeningSigned);
 
           // We want total Profit balance (opening + entries) = targetProfitSigned
           // So: newOpening + netEntries = targetProfitSigned
           // Therefore: newOpening = targetProfitSigned - netEntries
-          const newOpeningSigned = targetProfitSigned - netEntries;
+          const newOpeningSigned = toMoney(targetProfitSigned).minus(netEntries);
 
           // Convert to absolute value and side (positive = Cr for equity/profit accounts)
-          const newOpeningBalance = Math.abs(newOpeningSigned).toFixed(2);
-          const newOpeningBalanceSide: "Dr" | "Cr" = newOpeningSigned >= 0 ? "Cr" : "Dr";
+          const newOpeningBalance = moneyString(newOpeningSigned.abs());
+          const newOpeningBalanceSide: "Dr" | "Cr" = newOpeningSigned.gte(0) ? "Cr" : "Dr";
 
           // Update the account using raw query since storage.updateLedgerAccount may not support all fields
           await db
@@ -564,7 +576,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         // Set Profit = Assets - Liabilities_without_profit to zero the import cycle
         // Positive target = Cr (equity), Negative target = Dr
         const openingBalanceSide: "Dr" | "Cr" = targetProfitSigned >= 0 ? "Cr" : "Dr";
-        const openingBalanceAmount = Math.abs(targetProfitSigned).toFixed(2);
+        const openingBalanceAmount = moneyString(Math.abs(targetProfitSigned));
 
         // Create the Owner's Capital account
         await storage.createLedgerAccount({
