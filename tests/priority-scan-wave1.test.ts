@@ -116,6 +116,33 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     ).toBe(200);
   });
 
+  it("automatically releases active color and priority locks after a loading leaves LOADING", async () => {
+    const completed = await createLoading();
+    const nextLoading = await createLoading();
+
+    expect(
+      (
+        await agent
+          .put(`/api/factory/customer-orders/${completed}/priority-scan-config`)
+          .send({ color: "Blue", priority: 40, enabled: true })
+      ).status
+    ).toBe(200);
+
+    await pool.query(`UPDATE customer_orders SET status = 'PENDING_VERIFICATION' WHERE id = $1`, [completed]);
+
+    const reuse = await agent
+      .put(`/api/factory/customer-orders/${nextLoading}/priority-scan-config`)
+      .send({ color: "Blue", priority: 40, enabled: true });
+
+    expect(reuse.status).toBe(200);
+
+    const stale = await pool.query<{ enabled: boolean }>(
+      `SELECT enabled FROM customer_order_priority_scan_configs WHERE company_id = $1 AND order_id = $2`,
+      [ctx.companyId, completed]
+    );
+    expect(stale.rows[0]?.enabled).toBe(false);
+  });
+
   it("requires a real pending loading with a linked proforma before activation", async () => {
     const draft = await createLoading({ status: "DRAFT" });
     const noProforma = await createLoading({ withProforma: false });
