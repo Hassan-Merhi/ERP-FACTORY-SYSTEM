@@ -17,14 +17,13 @@ import { retailStockMovements } from "@shared/schema/retailPos";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { validateRetailVariantPayload } from "../services/retail/retailProductValidation";
+import { writeVariantInventoryWithMovement } from "../services/retail/retailProductStockWrites";
 
 type RetailQueryExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const asNumber = (value: unknown) => Number(value ?? 0);
-
-import { validateRetailVariantPayload } from "../services/retail/retailProductValidation";
-import { writeVariantInventoryWithMovement } from "../services/retail/retailProductStockWrites";
 
 async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
   const companyId = req.session.currentCompanyId;
