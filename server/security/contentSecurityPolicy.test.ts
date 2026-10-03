@@ -96,6 +96,7 @@ describe("contentSecurityPolicy", () => {
       expect(logger.warn).toHaveBeenCalledWith(
         "[CSP] enforced policy violation reported: script-src blocked https://evil.example/x.js",
         {
+          event: "security.csp_report",
           directive: "script-src",
           blocked: "https://evil.example/x.js",
         }
@@ -123,6 +124,7 @@ describe("contentSecurityPolicy", () => {
       expect(logger.warn).toHaveBeenCalledWith(
         "[CSP] enforced policy violation reported: connect-src blocked https://x.example/p",
         {
+          event: "security.csp_report",
           directive: "connect-src",
           blocked: "https://x.example/p",
         }
@@ -142,6 +144,7 @@ describe("contentSecurityPolicy", () => {
       expect(logger.info).toHaveBeenCalledWith(
         "[CSP] report-only policy observation: font-src blocked https://fonts.example/f.woff2",
         {
+          event: "security.csp_report",
           directive: "font-src",
           blocked: "https://fonts.example/f.woff2",
         }

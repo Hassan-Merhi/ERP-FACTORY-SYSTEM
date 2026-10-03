@@ -102,6 +102,7 @@ export function registerCspReportRoute(app: Express): void {
       const key = `${directive}|${blocked}`;
       if (shouldLogCspReport(key, Date.now())) {
         const detail = {
+          event: "security.csp_report",
           directive: directive || "unknown",
           blocked: blocked || "unknown",
         };

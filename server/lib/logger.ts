@@ -162,6 +162,9 @@ function parseAccessDeniedMessage(text: string): Record<string, unknown> | undef
 
 function resolveEffectiveLevel(level: LogLevel, message: string, ctx: LogContext): LogLevel {
   if (level !== "info") return level;
+  // Security events keep their level: their text can carry request-controlled
+  // values (a blocked URI ending in /heartbeat) that must not demote them.
+  if (typeof ctx.event === "string" && ctx.event.startsWith("security.")) return level;
   const text = message.trim();
   const moduleName = String(ctx.module || "").toLowerCase();
   const actionName = String(ctx.action || "").toLowerCase();

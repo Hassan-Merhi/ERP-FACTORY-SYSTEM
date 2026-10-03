@@ -78,6 +78,12 @@ describe("shared logger readability", () => {
     ).toBe("info");
   });
 
+  it("never demotes security events, whatever request-controlled text they carry", () => {
+    const message = "[CSP] report-only policy observation: connect-src blocked https://x.example/heartbeat";
+    expect(__loggerTesting.resolveEffectiveLevel("info", message, {})).toBe("debug");
+    expect(__loggerTesting.resolveEffectiveLevel("info", message, { event: "security.csp_report" })).toBe("info");
+  });
+
   it("moves the legacy duplicate Express slow line to DEBUG", () => {
     expect(
       __loggerTesting.resolveEffectiveLevel(
