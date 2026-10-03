@@ -31,7 +31,20 @@ const scope = includeDev ? "all dependencies" : "production dependencies";
  * An entry is NOT a way to silence a finding you have not investigated. If
  * an upstream fix appears, this script tells you to drop the exception.
  */
-const ACCEPTED = {};
+// One advisory, one dependency path: tailwindcss -> chokidar / fast-glob / micromatch -> braces.
+const BRACES_BUILD_ONLY = {
+  reason:
+    "braces has no patched release (GHSA-vfj7-8cjw-p6xm affects every version). It is reached only through tailwindcss 3, which runs at build time to scan this repository's own content globs; build tools are kept in dependencies because Render installs with NODE_ENV=production. No request input ever becomes a glob pattern, and the server bundle does not load tailwindcss, chokidar, fast-glob, micromatch or braces (scripts/verify-runtime-dependencies.mjs). npm's only remedy is the tailwindcss 4 major upgrade, tracked separately.",
+  reviewOn: "2026-11-03",
+};
+
+const ACCEPTED = {
+  braces: BRACES_BUILD_ONLY,
+  chokidar: BRACES_BUILD_ONLY,
+  "fast-glob": BRACES_BUILD_ONLY,
+  micromatch: BRACES_BUILD_ONLY,
+  tailwindcss: BRACES_BUILD_ONLY,
+};
 
 const BLOCKING = new Set(["high", "critical"]);
 
