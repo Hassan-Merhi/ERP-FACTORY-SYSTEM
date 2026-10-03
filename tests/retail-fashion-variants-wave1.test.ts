@@ -159,3 +159,29 @@ describe("retail fashion variants wave 1 catalog and import contract", () => {
     expect(catalog).toContain("colors:");
   });
 });
+
+
+describe("retail fashion variants wave 1 POS and reporting contract", () => {
+  it("returns exact variant color and prefers variant images with product fallback", () => {
+    const pos = read("server/routes/pos/retailPosRoutes.ts");
+    expect(pos).toContain("color: retailProductVariants.color");
+    expect(pos).toContain("variantImageUrls: retailProductVariants.imageUrls");
+    expect(pos).toContain("productImageUrls: retailProducts.imageUrls");
+    expect(pos).toContain("resolveRetailItemImages");
+    expect(pos).toContain("imageUrls: resolveRetailItemImages");
+  });
+
+  it("searches POS items by color and keeps exact color in sale history", () => {
+    const pos = read("server/routes/pos/retailPosRoutes.ts");
+    expect(pos).toContain("punctuationInsensitiveSearch(retailProductVariants.color, search)");
+    expect(pos).toContain("color: retailProductVariants.color");
+    expect(pos).toContain("loadSaleResponse");
+  });
+
+  it("exposes color on low-stock, out-of-stock and slow-moving reporting rows", () => {
+    const reporting = read("server/services/retail/retailReporting.ts");
+    expect(reporting.match(/v\.color/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+    expect(reporting).toContain("GROUP BY p.id, p.code, p.name, b.name, v.id, v.color, v.size, v.barcode");
+    expect(reporting).toContain("GROUP BY v.id, p.id, p.code, p.name, b.name, v.color, v.size, v.barcode");
+  });
+});
