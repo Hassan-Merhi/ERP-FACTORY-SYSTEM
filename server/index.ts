@@ -11,6 +11,7 @@
  *   - server/security/csrfProtection.ts     CSRF token + enforcement
  */
 import express from "express";
+import { createHttpApp } from "./httpApp";
 import compression from "compression";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
@@ -59,7 +60,7 @@ const BUILD_VERSION = process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT
 // stale Vite chunks in Replit's dev environment (where HMR WebSocket can't connect).
 const SERVER_BOOT_ID = Math.random().toString(36).slice(2);
 
-const app = express();
+const app = createHttpApp();
 
 // Compress text-based HTTP responses (gzip/deflate) — reduces bandwidth by 60-80%.
 // Binary/already-compressed types (xlsx, zip, pdf, images) are excluded because:

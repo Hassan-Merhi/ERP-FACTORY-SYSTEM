@@ -72,7 +72,9 @@ async function existingVoucherRequirements(req: Request, voucherId: number): Pro
  * explicitly identify as Factory mode or the user is Factory-only.
  */
 export async function resolveSharedFactoryRequirements(req: Request): Promise<SharedFactoryRequirement[] | null> {
-  const path = req.originalUrl.split("?", 1)[0] || req.path;
+  // Express routes paths case-insensitively, so match them the same way: an
+  // upper-case URL reaches the same handler and must meet the same rule.
+  const path = (req.originalUrl.split("?", 1)[0] || req.path).toLowerCase();
   const method = req.method.toUpperCase();
 
   if (

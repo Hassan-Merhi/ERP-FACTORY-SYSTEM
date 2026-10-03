@@ -14,6 +14,18 @@ function req(path: string, method = "GET", body: Record<string, unknown> = {}): 
 }
 
 describe("Wave 4 shared Factory API ownership", () => {
+  it("applies the same rules whatever the URL's letter case, as Express routing does", async () => {
+    for (const [lower, upper] of [
+      ["/api/accounts/all", "/api/ACCOUNTS/All"],
+      ["/api/daybook", "/API/Daybook"],
+      ["/api/vouchers/search", "/api/Vouchers/SEARCH"],
+    ]) {
+      const expected = await resolveSharedFactoryRequirements(req(lower));
+      expect(expected).not.toBeNull();
+      expect(await resolveSharedFactoryRequirements(req(upper))).toEqual(expected);
+    }
+  });
+
   it("allows account APIs only through owning Factory surfaces", async () => {
     expect(await resolveSharedFactoryRequirements(req("/api/accounts/all"))).toEqual(
       expect.arrayContaining([
