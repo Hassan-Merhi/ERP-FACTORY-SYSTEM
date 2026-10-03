@@ -11,7 +11,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { describe, it, expect } from "vitest";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -23,8 +22,14 @@ const baseline = JSON.parse(fs.readFileSync(path.join(root, "config/runtime-only
 };
 
 function runtimeCreatedTables(): Set<string> {
-  const files = execFileSync("git", ["ls-files", "server", "migrations"], { cwd: root, encoding: "utf8" })
-    .split("\n")
+  // CI checks the repository out as a tarball without .git, so walk the tree
+  // instead of asking git for the file list.
+  const files = ["server", "migrations"]
+    .flatMap((dir) =>
+      (fs.readdirSync(path.join(root, dir), { recursive: true }) as string[]).map((file) =>
+        path.posix.join(dir, file.split(path.sep).join("/"))
+      )
+    )
     .filter((file) => /\.(ts|mjs|sql)$/.test(file) && !file.includes(".test."));
   const names = new Set<string>();
   for (const file of files) {
