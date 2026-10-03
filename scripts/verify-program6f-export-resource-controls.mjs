@@ -19,8 +19,17 @@ const renderBlueprint = read("render.yaml");
 const hasRenderEnv = (key, value) =>
   renderBlueprint.includes(`- key: ${key}\n        value: "${value}"`);
 
-assert(dev.includes("--import ./server/exportBufferBridge.mjs"), "Export bridge must be preloaded in development.");
-assert(start.includes("--import ./server/exportBufferBridge.mjs"), "Export bridge must be preloaded in production.");
+// Bridges are preloaded through the ordered manifest (server/startupPreload.mjs).
+const startupPreload = read("server/startupPreload.mjs");
+const manifestLoadsExportBridge = startupPreload.includes('await import("./exportBufferBridge.mjs");');
+assert(
+  dev.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge,
+  "Export bridge must be preloaded in development."
+);
+assert(
+  start.includes("--import ./server/startupPreload.mjs") && manifestLoadsExportBridge,
+  "Export bridge must be preloaded in production."
+);
 assert(start.includes("--import ./server/runtimeMemoryGuard.mjs"), "Runtime memory guard must be preloaded in production.");
 
 assert(bridge.includes("HEAVY_EXPORT_MAX_CONCURRENT"), "Heavy exports must have a configurable concurrency limit.");

@@ -1,4 +1,3 @@
-import "./fxFetchTimeoutBridge.mjs";
 import process from "node:process";
 import pg from "pg";
 import { resolveDatabaseSsl } from "./lib/databaseSsl.mjs";
