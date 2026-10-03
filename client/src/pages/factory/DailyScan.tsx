@@ -88,6 +88,34 @@ interface ScanFeedback {
   message: string;
 }
 
+function getDailyScanPriority(bale: DayBale): number {
+  if (bale.is_deleted) return 2;
+
+  const status = (bale.status || "").toUpperCase();
+  if (status === "IN_STOCK") return 0;
+
+  if (
+    bale.is_in_loading_order ||
+    status === "LOADING" ||
+    status === "LOADED" ||
+    status === "PENDING" ||
+    status === "PENDING_LOADING" ||
+    status === "SOLD" ||
+    status === "DISPATCHED"
+  ) {
+    return 2;
+  }
+
+  return 1;
+}
+
+function prioritizeDailyScanBales(bales: DayBale[]): DayBale[] {
+  return bales
+    .map((bale, index) => ({ bale, index }))
+    .sort((a, b) => getDailyScanPriority(a.bale) - getDailyScanPriority(b.bale) || a.index - b.index)
+    .map(({ bale }) => bale);
+}
+
 export default function DailyScan() {
   const today = toLocalDateStr(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
@@ -137,8 +165,8 @@ export default function DailyScan() {
       scannedRefMap.set(bale.reference_number, { id: bale.scan_id, scanned_at: bale.scanned_at });
     }
   }
-  const unscanned = dayBales.filter((b) => b.scan_id == null);
-  const scanned = dayBales.filter((b) => b.scan_id != null);
+  const unscanned = prioritizeDailyScanBales(dayBales.filter((b) => b.scan_id == null));
+  const scanned = prioritizeDailyScanBales(dayBales.filter((b) => b.scan_id != null));
 
   const totalBales = dayBales.length;
   const totalKg = dayBales.reduce((s, b) => s + parseFloat(b.weight_kg || "0"), 0);

@@ -85,18 +85,6 @@ const PAGES: PageCase[] = [
     showsRows: true,
   },
   { name: "ConflictCenter", load: () => import("@/pages/ConflictCenter"), landmark: "btn-refresh-conflicts" },
-  { name: "CustomerInvoiceCreate", load: () => import("@/pages/CustomerInvoiceCreate"), landmark: "text-bales-header" },
-  {
-    name: "CustomerInvoiceDetail",
-    load: () => import("@/pages/CustomerInvoiceDetail"),
-    landmark: "button-back-to-list",
-  },
-  {
-    name: "CustomerInvoices",
-    load: () => import("@/pages/CustomerInvoices"),
-    landmark: "select-status-filter",
-    showsRows: true,
-  },
   { name: "Customers", load: () => import("@/pages/Customers"), landmark: "button-create-customer" },
   { name: "ImportCycleDiagnostics", load: () => import("@/pages/ImportCycleDiagnostics"), landmark: "button-refresh" },
   { name: "IntercompanyLinks", load: () => import("@/pages/IntercompanyLinks"), landmark: "button-create-link" },
@@ -138,11 +126,6 @@ const PAGES: PageCase[] = [
     landmark: "period-filter-stock-in-sales-comparison",
   },
   { name: "StockItemVouchers", load: () => import("@/pages/StockItemVouchers"), landmark: "period-filter" },
-  {
-    name: "StockTransferImport",
-    load: () => import("@/pages/StockTransferImport"),
-    landmark: "button-download-template",
-  },
   { name: "StockTransfers", load: () => import("@/pages/StockTransfers"), landmark: "period-filter-dropdown" },
   { name: "TransporterStatement", load: () => import("@/pages/TransporterStatement"), landmark: "trigger-transporter" },
   { name: "TabSummary", load: () => import("@/pages/git-mockup/TabSummary"), landmark: "summary-mode-selector" },
@@ -588,11 +571,6 @@ const PAGES: PageCase[] = [
     landmark: "button-back-to-sales-report",
   },
   {
-    name: "PendingInvoiceVerify",
-    load: () => import("@/pages/PendingInvoiceVerify"),
-    landmark: "text-total-loaded-bales",
-  },
-  {
     name: "SpreadsheetEditor",
     load: () => import("@/pages/SpreadsheetEditor"),
     landmark: "input-upload-xlsx",
@@ -648,7 +626,6 @@ const PAGES: PageCase[] = [
     landmark: "tab-wipers-re-entry",
     factory: true,
   },
-  { name: "ContainerLoadingScan", load: () => import("@/pages/ContainerLoadingScan"), landmark: "text-bales-header" },
   {
     name: "BaleProducts",
     load: () => import("@/pages/BaleProducts"),
@@ -713,7 +690,6 @@ const PAGES: PageCase[] = [
   { name: "SupplierProformas", load: () => import("@/pages/SupplierProformas"), landmark: "button-create-proforma" },
   { name: "DataToolsTab", load: () => import("@/pages/settings/DataToolsTab"), landmark: "button-open-stock-import" },
   { name: "ProductionBales", load: () => import("@/pages/ProductionBales"), landmark: "badge-finalize-mode" },
-  { name: "CustomerProformas", load: () => import("@/pages/CustomerProformas"), landmark: "select-customer" },
   { name: "CombinedInventory", load: () => import("@/pages/CombinedInventory"), landmark: "button-refresh-inventory" },
   { name: "Agents", load: () => import("@/pages/Agents"), landmark: "button-add-agent", showsRows: true },
   {

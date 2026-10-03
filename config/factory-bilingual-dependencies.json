@@ -114,8 +114,7 @@
         "client/src/pages/factory/CreateProformaV5Drawer.tsx",
         "client/src/pages/factory/EditProformaV5Drawer.tsx",
         "client/src/pages/factory/ProformaAddLine.tsx",
-        "client/src/pages/factory/CreateProformaDrawer.tsx",
-        "client/src/pages/CustomerProformas.tsx"
+        "client/src/pages/factory/CreateProformaDrawer.tsx"
       ]
     },
     {
@@ -162,10 +161,7 @@
       "files": [
         "server/routes/baleTransferRoutes.ts",
         "client/src/pages/BaleTransfers.tsx",
-        "client/src/pages/BaleLedger.tsx",
-        "client/src/pages/CustomerInvoiceCreate.tsx",
-        "client/src/pages/PendingInvoiceVerify.tsx",
-        "client/src/pages/ContainerLoadingScan.tsx"
+        "client/src/pages/BaleLedger.tsx"
       ]
     },
     {
