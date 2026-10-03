@@ -270,9 +270,7 @@ describe("retail fashion variants wave 1 POS UI contract", () => {
     const pos = read("client/src/pages/pos/RetailPOS.tsx");
     expect(pos).toContain("item.color");
     expect(pos).toContain("line.color");
-    expect(pos).toContain("item.color");
-    expect(pos).toContain("Color");
-    expect(pos).toContain("Size");
+    expect(pos).toContain("{item.name} · {item.color} · {item.size}");
   });
 
   it("identifies color plus size in cart, sale history, and transfers", () => {
