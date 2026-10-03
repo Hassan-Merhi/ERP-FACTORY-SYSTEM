@@ -121,16 +121,20 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
 
     const list = await agent.get("/api/factory/customer-orders/priority-scan-configs");
     expect(list.status).toBe(200);
-    expect(list.body.some((row: { orderId: number; color: string }) => row.orderId === orderId && row.color === "Navy")).toBe(true);
+    const listed = list.body.some(
+      (row: { orderId: number; color: string }) => row.orderId === orderId && row.color === "Navy"
+    );
+    expect(listed).toBe(true);
   });
 
   it("prevents duplicate active colors and priorities but frees them when disabled", async () => {
     const first = await createLoading();
     const second = await createLoading();
 
-    expect(
-      (await agent.put(`/api/factory/customer-orders/${first}/priority-scan-config`).send({ color: "Purple", priority: 10 })).status
-    ).toBe(200);
+    const firstCreate = await agent
+      .put(`/api/factory/customer-orders/${first}/priority-scan-config`)
+      .send({ color: "Purple", priority: 10 });
+    expect(firstCreate.status).toBe(200);
 
     const duplicateColor = await agent
       .put(`/api/factory/customer-orders/${second}/priority-scan-config`)
@@ -144,13 +148,15 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(duplicatePriority.status).toBe(409);
     expect(String(duplicatePriority.body.message)).toContain("priority");
 
-    expect(
-      (await agent.put(`/api/factory/customer-orders/${first}/priority-scan-config`).send({ color: "Purple", priority: 10, enabled: false })).status
-    ).toBe(200);
+    const disableFirst = await agent
+      .put(`/api/factory/customer-orders/${first}/priority-scan-config`)
+      .send({ color: "Purple", priority: 10, enabled: false });
+    expect(disableFirst.status).toBe(200);
 
-    expect(
-      (await agent.put(`/api/factory/customer-orders/${second}/priority-scan-config`).send({ color: "Purple", priority: 10, enabled: true })).status
-    ).toBe(200);
+    const reuse = await agent
+      .put(`/api/factory/customer-orders/${second}/priority-scan-config`)
+      .send({ color: "Purple", priority: 10, enabled: true });
+    expect(reuse.status).toBe(200);
   });
 
   it("automatically releases active color and priority locks after a loading leaves LOADING", async () => {
