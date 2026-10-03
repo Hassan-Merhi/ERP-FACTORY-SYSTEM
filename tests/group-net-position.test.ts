@@ -116,7 +116,7 @@ describe("Group Net Position", () => {
     harness.erpResponse.mockImplementation(() => baseResponse());
   });
 
-  it("includes active ERP, retail, and Properties companies while excluding Supplier Partner and Factory modes", async () => {
+  it("includes normal active companies while excluding Supplier Partner, Factory, and JNAH", async () => {
     harness.getAllCompanies.mockResolvedValue([
       { id: 1, code: "HADI", name: "HADI", companyType: "erp", active: true },
       { id: 2, code: "PROP", name: "Properties", companyType: "properties", active: true },
@@ -124,6 +124,7 @@ describe("Group Net Position", () => {
       { id: 4, code: "FAC2", name: "Factory V2", companyType: "factory_v2", active: true },
       { id: 5, code: "GC", name: "GC - LSHI", companyType: "supplier_partner", active: true },
       { id: 6, code: "OLD", name: "Inactive", companyType: "erp", active: false },
+      { id: 7, code: "JNAH", name: "POS - الجناح", companyType: "erp", active: true },
     ]);
 
     const result = await calculateGroupNetPosition("2026-09-10");
@@ -220,9 +221,9 @@ describe("Group Net Position", () => {
     );
   });
 
-  it("removes group-only accounts and legacy ERP intercompany credit accounts from both sides of the group", async () => {
+  it("excludes legacy intercompany balances while keeping HADI L'SHI's Lebanon credit visible", async () => {
     harness.getAllCompanies.mockResolvedValue([
-      { id: 1, code: "A", name: "Alpha", companyType: "erp", active: true, parentCompanyId: null },
+      { id: 1, code: "HADI", name: "HADI L'SHI", companyType: "erp", active: true, parentCompanyId: null },
       { id: 2, code: "B", name: "Beta", companyType: "erp", active: true, parentCompanyId: 1 },
     ]);
     harness.getCompanySettings.mockImplementation(async (companyId: number) =>
@@ -252,16 +253,23 @@ describe("Group Net Position", () => {
       }
 
       return {
-        ...baseResponse(80, 90, -10),
+        ...baseResponse(80, 140, -60),
         forUs: {
           total: 80,
           accounts: [{ id: 20, name: "Cash", code: "CASH", value: 80, category: "Cash" }],
         },
         onUs: {
-          total: 90,
+          total: 140,
           accounts: [
-            { id: 501, name: "Alpha Credit", code: "PARENT", value: 40, category: "Liability" },
+            { id: 501, name: "HADI L'SHI Credit", code: "PARENT", value: 40, category: "Liability" },
             { id: 502, name: "BANK LOAN", code: "BANKLOAN", value: 50, category: "Loans" },
+            {
+              id: 503,
+              name: "HMD INTERNATIONAL GROUP LEBANON CREDIT",
+              code: "HMDCREDIT",
+              value: 50,
+              category: "Liability",
+            },
           ],
         },
       };
@@ -271,14 +279,17 @@ describe("Group Net Position", () => {
     const alpha = result.companies.find((company) => company.companyId === 1)!;
     const beta = result.companies.find((company) => company.companyId === 2)!;
 
-    expect(alpha.forUsTotal).toBe(100);
-    expect(alpha.forUsLines.map((line) => line.label)).toEqual(["Cash"]);
+    expect(alpha.forUsTotal).toBe(150);
+    expect(alpha.forUsLines.map((line) => line.label)).toEqual([
+      "Cash",
+      "HMD INTERNATIONAL GROUP LEBANON CREDIT",
+    ]);
     expect(beta.onUsTotal).toBe(50);
     expect(beta.onUsLines.map((line) => line.label)).toEqual(["BANK LOAN"]);
     expect(result.totals).toMatchObject({
-      forUsTotal: 180,
+      forUsTotal: 230,
       onUsTotal: 50,
-      netPosition: 130,
+      netPosition: 180,
       netAdjustments: 0,
     });
   });
@@ -335,6 +346,7 @@ describe("Group Net Position", () => {
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "factory_v2" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: true, companyType: "properties" } as any)).toBe(true);
+    expect(isGroupNetPositionCompany({ active: true, companyType: "erp", code: "JNAH" } as any)).toBe(false);
     expect(isGroupNetPositionCompany({ active: false, companyType: "erp" } as any)).toBe(false);
   });
 });

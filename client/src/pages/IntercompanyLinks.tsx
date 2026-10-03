@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import type { ClientErrorLike } from "@/lib/clientError";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -360,8 +361,9 @@ export default function IntercompanyLinks() {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => {
-                            if (confirm("Delete this link?")) deleteMutation.mutate(link.id);
+                          onClick={async () => {
+                            if (await confirmAction({ title: "Delete this link?", tone: "destructive" }))
+                              deleteMutation.mutate(link.id);
                           }}
                           data-testid={`button-delete-${link.id}`}
                         >

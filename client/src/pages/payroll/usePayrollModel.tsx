@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useMemo, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -676,8 +677,8 @@ export function usePayrollModel() {
     win.print();
   };
 
-  const handleDeleteEmployee = (emp: Employee) => {
-    if (confirm(`Are you sure you want to delete ${emp.firstName}?`)) {
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (await confirmAction({ title: `Are you sure you want to delete ${emp.firstName}?`, tone: "destructive" })) {
       modeApiRequest("DELETE", `/api/employees/${emp.id}`, undefined)
         .then(() => {
           toast({ title: "Deleted", description: "Employee deleted" });

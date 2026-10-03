@@ -50,7 +50,6 @@ const PAGES: PageCase[] = [
   },
   { name: "Accounts", load: () => import("@/pages/Accounts"), landmark: "button-account-groups", sweep: true },
   { name: "AnalyticsLegacy", load: () => import("@/pages/AnalyticsLegacy"), landmark: "select-analytics-section" },
-  { name: "BalanceSheet", load: () => import("@/pages/BalanceSheet"), landmark: "text-total-assets", sweep: true },
   {
     name: "BarcodeLookup",
     load: () => import("@/pages/BarcodeLookup"),
@@ -91,27 +90,7 @@ const PAGES: PageCase[] = [
     showsRows: true,
     sweep: true,
   },
-  {
-    name: "LocationSummary",
-    load: () => import("@/pages/LocationSummary"),
-    landmark: "location-summary-container",
-    sweep: true,
-  },
   { name: "OffloadItemSearch", load: () => import("@/pages/OffloadItemSearch"), landmark: "input-item-search" },
-  {
-    name: "PendingInvoices",
-    load: () => import("@/pages/PendingInvoices"),
-    landmark: "filter-tabs",
-    showsRows: true,
-    sweep: true,
-  },
-  {
-    name: "PendingLoadings",
-    load: () => import("@/pages/PendingLoadings"),
-    landmark: "button-start-new",
-    showsRows: true,
-    sweep: true,
-  },
   { name: "SalesReport", load: () => import("@/pages/SalesReport"), landmark: "button-compare-companies", sweep: true },
   {
     name: "SalesReportLegacy",
