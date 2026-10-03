@@ -229,9 +229,6 @@ describe("ERP payroll model positive paths", () => {
       result.current.toggleWorker(1);
     });
     act(() => result.current.enterPreview());
-    // Every render registers the hook's five mutations again; take the latest
-    // render's, whose closures see the preview built above.
-    const [saveDraft, payRun, deleteRun, undoRun, migrate] = harness.mutationConfigs.slice(-5);
 
     // Each render registers five mutations; take the latest render's set so the
     // draft mutation closes over the preview items built above.
