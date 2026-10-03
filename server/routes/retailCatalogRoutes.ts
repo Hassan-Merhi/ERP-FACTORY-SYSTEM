@@ -259,7 +259,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
         variants: [],
         availableColors: [],
         availableSizes: [],
-        totalQuantity: 0;
+        totalQuantity: 0,
         minSellingPrice: 0,
         maxSellingPrice: 0,
       };
