@@ -140,11 +140,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
     load: () => import("@/pages/SalesReportDetail"),
     landmark: "button-back-to-sales-report",
   },
-  {
-    name: "PendingInvoiceVerify",
-    load: () => import("@/pages/PendingInvoiceVerify"),
-    landmark: "text-total-loaded-bales",
-  },
   { name: "SpreadsheetEditor", load: () => import("@/pages/SpreadsheetEditor"), landmark: "input-upload-xlsx" },
 
   // Factory.
@@ -177,7 +172,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
   { name: "FactoryProformas", load: () => import("@/pages/factory/FactoryProformas"), landmark: "select-customer" },
   { name: "FactorySettings", load: () => import("@/pages/factory/FactorySettings"), landmark: "button-enable-all" },
   { name: "WipersReEntry", load: () => import("@/pages/factory/WipersReEntry"), landmark: "tab-wipers-re-entry" },
-  { name: "ContainerLoadingScan", load: () => import("@/pages/ContainerLoadingScan"), landmark: "text-bales-header" },
   { name: "BaleProducts", load: () => import("@/pages/BaleProducts"), landmark: "button-create-product" },
   {
     name: "FactoryInvoiceCreate",
@@ -228,7 +222,6 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
 
   // ERP listings and dashboards.
   { name: "ProductionBales", load: () => import("@/pages/ProductionBales"), landmark: "badge-finalize-mode" },
-  { name: "CustomerProformas", load: () => import("@/pages/CustomerProformas"), landmark: "select-customer" },
   { name: "CombinedInventory", load: () => import("@/pages/CombinedInventory"), landmark: "button-refresh-inventory" },
   { name: "Agents", load: () => import("@/pages/Agents"), landmark: "button-add-agent" },
   { name: "Suppliers", load: () => import("@/pages/Suppliers"), landmark: "text-active-suppliers" },

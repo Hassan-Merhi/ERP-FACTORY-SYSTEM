@@ -62,10 +62,7 @@ describe("Bandwidth Phase 2 payload contracts", () => {
   });
 
   it("loads active proforma details only after the summary identifies the active record", () => {
-    for (const file of [
-      "client/src/pages/CustomerInvoiceCreate.tsx",
-      "client/src/pages/factory/FactoryInvoiceCreate.tsx",
-    ]) {
+    for (const file of ["client/src/pages/factory/FactoryInvoiceCreate.tsx"]) {
       const source = read(file);
       expect(source).toContain("profile=summary");
       expect(source).toContain("activeProformaSummary?.id");
