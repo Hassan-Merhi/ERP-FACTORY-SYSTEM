@@ -30,3 +30,4 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --bin-links=true
       - run: node node_modules/vitest/vitest.mjs run tests/retail-fashion-variants-wave1.test.ts
+      - run: npm run check
