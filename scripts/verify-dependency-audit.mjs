@@ -25,13 +25,29 @@ const scope = includeDev ? "all dependencies" : "production dependencies";
  * Vulnerabilities we have reviewed and accepted, keyed by package name.
  *
  * Every entry needs:
- *   reason    — why this is not exploitable here, or why we cannot act yet
- *   reviewOn  — YYYY-MM-DD to re-check; the build warns once this passes
+ *   advisories — the advisory IDs (GHSA-…) that were reviewed; any other
+ *                advisory on the package still fails the build
+ *   reason     — why this is not exploitable here, or why we cannot act yet
+ *   reviewOn   — YYYY-MM-DD to re-check; the build warns once this passes
  *
  * An entry is NOT a way to silence a finding you have not investigated. If
  * an upstream fix appears, this script tells you to drop the exception.
  */
-const ACCEPTED = {};
+// One advisory, one dependency path: tailwindcss -> chokidar / fast-glob / micromatch -> braces.
+const BRACES_BUILD_ONLY = {
+  advisories: ["GHSA-vfj7-8cjw-p6xm"],
+  reason:
+    "braces has no patched release (GHSA-vfj7-8cjw-p6xm affects every version). It is reached only through tailwindcss 3, which runs at build time to scan this repository's own content globs; build tools are kept in dependencies because Render installs with NODE_ENV=production. No request input ever becomes a glob pattern, and the server bundle does not load tailwindcss, chokidar, fast-glob, micromatch or braces (scripts/verify-runtime-dependencies.mjs). npm's only remedy is the tailwindcss 4 major upgrade, tracked separately.",
+  reviewOn: "2026-11-03",
+};
+
+const ACCEPTED = {
+  braces: BRACES_BUILD_ONLY,
+  chokidar: BRACES_BUILD_ONLY,
+  "fast-glob": BRACES_BUILD_ONLY,
+  micromatch: BRACES_BUILD_ONLY,
+  tailwindcss: BRACES_BUILD_ONLY,
+};
 
 const BLOCKING = new Set(["high", "critical"]);
 
@@ -64,14 +80,37 @@ try {
   process.exit(1);
 }
 
-const vulnerabilities = Object.values(report.vulnerabilities ?? {});
+const vulnerabilitiesByName = report.vulnerabilities ?? {};
+const vulnerabilities = Object.values(vulnerabilitiesByName);
 const blocking = [];
 const accepted = [];
 
+function advisoryId(entry) {
+  const match = String(entry.url ?? "").match(/GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}/i);
+  return match ? match[0].toUpperCase() : `npm:${entry.source ?? entry.title ?? "unknown"}`;
+}
+
+/**
+ * A finding is accepted only when everything behind it is a reviewed advisory:
+ * its own advisories must be listed in its exception, and a package it is
+ * vulnerable through (a string in `via`) must itself be accepted. A new
+ * advisory on an excepted package therefore still fails the build.
+ */
+function isAccepted(name, seen = new Set()) {
+  const exception = ACCEPTED[name];
+  const vulnerability = vulnerabilitiesByName[name];
+  if (!exception || !vulnerability) return false;
+  if (seen.has(name)) return true;
+  seen.add(name);
+  const reviewed = new Set(exception.advisories.map((id) => id.toUpperCase()));
+  return (vulnerability.via ?? []).every((entry) =>
+    typeof entry === "string" ? isAccepted(entry, seen) : reviewed.has(advisoryId(entry))
+  );
+}
+
 for (const vulnerability of vulnerabilities) {
   if (!BLOCKING.has(vulnerability.severity)) continue;
-  const exception = ACCEPTED[vulnerability.name];
-  if (exception) accepted.push({ vulnerability, exception });
+  if (isAccepted(vulnerability.name)) accepted.push({ vulnerability, exception: ACCEPTED[vulnerability.name] });
   else blocking.push(vulnerability);
 }
 
