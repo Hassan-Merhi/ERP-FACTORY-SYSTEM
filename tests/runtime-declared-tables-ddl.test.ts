@@ -9,7 +9,6 @@
  */
 import fs from "node:fs";
 import path from "node:path";
-import { execFileSync } from "node:child_process";
 import { describe, it, expect } from "vitest";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -20,8 +19,11 @@ const root = process.cwd();
 const CONSTRAINT_WORDS = new Set(["constraint", "primary", "unique", "foreign", "check", "exclude"]);
 
 function ddlSources(): string[] {
-  return execFileSync("git", ["ls-files", "server", "migrations"], { cwd: root, encoding: "utf8" })
-    .split("\n")
+  // CI checks the repository out as a tarball without .git, so walk the tree.
+  return ["server", "migrations"]
+    .flatMap((dir) =>
+      (fs.readdirSync(path.join(root, dir), { recursive: true }) as string[]).map((file) => path.join(dir, file))
+    )
     .filter((file) => /\.(ts|mjs|sql)$/.test(file) && !file.includes(".test."))
     .map((file) => fs.readFileSync(path.join(root, file), "utf8"));
 }
