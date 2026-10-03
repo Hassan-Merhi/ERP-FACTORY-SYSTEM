@@ -223,3 +223,37 @@ describe("retail fashion variants wave 1 inventory UI contract", () => {
     expect(inventory).toContain("product.availableColors");
   });
 });
+
+describe("retail fashion variants wave 1 inventory and editor contract", () => {
+  it("models color and variant images in client inventory types", () => {
+    const types = read("client/src/pages/retail/retailInventoryTypes.ts");
+    expect(types).toContain("MAX_VARIANT_IMAGES = 4");
+    expect(types).toContain("color: string;");
+    expect(types).toContain("imageUrls: string[];");
+    expect(types).toContain("availableColors: string[];");
+    expect(types).toContain("colors: string[];");
+    expect(types).toContain('color: "Default"');
+  });
+
+  it("preserves and saves color plus variant images in the product editor", () => {
+    const editor = read("client/src/pages/retail/RetailProductEditor.tsx");
+    expect(editor).toContain("color: variant.color");
+    expect(editor).toContain("imageUrls: [...(variant.imageUrls ?? [])]");
+    expect(editor).toContain("color: variant.color.trim()");
+    expect(editor).toContain("imageUrls: variant.imageUrls");
+    expect(editor).toContain("<Label>Color *</Label>");
+    expect(editor).toContain("MAX_VARIANT_IMAGES");
+    expect(editor).toContain('fetch("/api/files/upload"');
+  });
+
+  it("filters and displays inventory by color without losing size", () => {
+    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
+    expect(inventory).toContain('const [color, setColor] = useState("")');
+    expect(inventory).toContain('params.set("color", color)');
+    expect(inventory).toContain("catalogFacets?.colors");
+    expect(inventory).toContain("All colors");
+    expect(inventory).toContain("availableColors");
+    expect(inventory).toContain(">Color<");
+    expect(inventory).toContain(">Size<");
+  });
+});
