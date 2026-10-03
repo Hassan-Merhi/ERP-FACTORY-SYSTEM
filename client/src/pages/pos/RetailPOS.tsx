@@ -571,7 +571,7 @@ export default function RetailPOS() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <Label>Variant</Label>
+                <Label>Variant (Color · Size)</Label>
                 <select
                   value={transferVariantId}
                   onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
