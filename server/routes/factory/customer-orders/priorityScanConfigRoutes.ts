@@ -39,11 +39,32 @@ function sendPriorityConflict(res: Response, constraint: string | null) {
   return res.status(409).json({ message: "Priority Scan configuration changed at the same time. Please try again." });
 }
 
+async function disableStalePriorityScanConfigs(companyId: number): Promise<void> {
+  // A finished/cancelled/deleted loading must never keep a color or priority
+  // reserved forever. Cleanup runs before queue reads and writes so the active
+  // uniqueness constraints continue to describe the pending-loading queue.
+  await db.execute(sql`
+    UPDATE customer_order_priority_scan_configs AS config
+    SET enabled = FALSE,
+        updated_by = NULL,
+        updated_by_name = 'system',
+        updated_at = now()
+    FROM customer_orders AS order_row
+    WHERE config.order_id = order_row.id
+      AND config.company_id = ${companyId}
+      AND order_row.company_id = ${companyId}
+      AND config.enabled = TRUE
+      AND (order_row.status <> 'LOADING' OR order_row.deleted_at IS NOT NULL)
+  `);
+}
+
 export function registerPriorityScanConfigRoutes(app: Express) {
   app.get("/api/factory/customer-orders/priority-scan-configs", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      await disableStalePriorityScanConfigs(companyId);
 
       const rows = await db
         .select({
@@ -84,6 +105,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      await disableStalePriorityScanConfigs(companyId);
 
       const orderId = parseId(req.params.id);
       if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });
