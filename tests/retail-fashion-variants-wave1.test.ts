@@ -257,3 +257,28 @@ describe("retail fashion variants wave 1 inventory and editor contract", () => {
     expect(inventory).toContain(">Size<");
   });
 });
+
+describe("retail fashion variants wave 1 POS UI contract", () => {
+  it("threads color through POS item and sale item types", () => {
+    const pos = read("client/src/pages/pos/RetailPOS.tsx");
+    expect(pos).toContain("interface RetailPosItem");
+    expect(pos).toContain("interface SaleItem");
+    expect(pos.match(/color: string;/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+  });
+
+  it("shows color and size when scanning and browsing exact variants", () => {
+    const pos = read("client/src/pages/pos/RetailPOS.tsx");
+    expect(pos).toContain("item.color");
+    expect(pos).toContain("line.color");
+    expect(pos).toContain("item.color");
+    expect(pos).toContain("Color");
+    expect(pos).toContain("Size");
+  });
+
+  it("identifies color plus size in cart, sale history, and transfers", () => {
+    const pos = read("client/src/pages/pos/RetailPOS.tsx");
+    expect(pos).toContain("{line.brand} · {line.color} · {line.size} · {line.barcode}");
+    expect(pos).toContain("{item.name} · {item.color} · {item.size}");
+    expect(pos).toContain("{item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}");
+  });
+});
