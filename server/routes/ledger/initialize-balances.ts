@@ -8,8 +8,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db, type RawQueryRow } from "../../db";
-import Decimal from "decimal.js";
-import { moneyString, sumMoney, toMoney } from "../../lib/money";
+import { MoneyDecimal, moneyString, sumMoney, toMoney } from "../../lib/money";
 
 /**
  * Per-account opening balance plus its posted debit/credit totals.
@@ -95,7 +94,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
               GROUP BY la.id, la.opening_balance, la.opening_balance_side
             `);
 
-          let totalBalance = new Decimal(0);
+          let totalBalance = new MoneyDecimal(0);
           for (const row of rows.rows) {
             const openingBalanceRaw = toMoney(row.opening_balance);
             const openingSide = row.opening_balance_side || "Dr";
@@ -159,7 +158,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
             const openingSide = account.openingBalanceSide || "Dr";
             // Expense accounts: Dr opening = positive
             return sum.plus(openingSide === "Dr" ? openingBalanceRaw : openingBalanceRaw.negated());
-          }, new Decimal(0));
+          }, new MoneyDecimal(0));
 
           // Get all voucher entries for these accounts
           const entries = await db
@@ -212,7 +211,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         const supplierBalance = supplierEntries
           .reduce(
             (sum, entry) => sum.plus(toMoney(entry.creditAmount)).minus(toMoney(entry.debitAmount)),
-            new Decimal(0)
+            new MoneyDecimal(0)
           )
           .toNumber();
 
@@ -222,7 +221,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .from(containers)
           .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")));
         const stockOtwValue = otwContainers
-          .reduce((sum, container) => sum.plus(toMoney(container.grandTotal)), new Decimal(0))
+          .reduce((sum, container) => sum.plus(toMoney(container.grandTotal)), new MoneyDecimal(0))
           .toNumber();
 
         // 3-10: All independent — run in parallel
@@ -283,10 +282,10 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           const openingBalanceRaw = toMoney(account.openingBalance);
           const openingSide = account.openingBalanceSide || "Dr";
           return sum.plus(openingSide === "Dr" ? openingBalanceRaw : openingBalanceRaw.negated());
-        }, new Decimal(0));
+        }, new MoneyDecimal(0));
         const standaloneBankVoucherBalance = standaloneBankAccountEntries.reduce(
           (sum, entry) => sum.plus(toMoney(entry.debitAmount)).minus(toMoney(entry.creditAmount)),
-          new Decimal(0)
+          new MoneyDecimal(0)
         );
         const bankBalance = toMoney(ledgerBankBalance)
           .plus(standaloneBankOpeningBalance)
@@ -305,7 +304,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
 
         const stockOnFloorValue = inventoryItems
-          .reduce((sum, item) => sum.plus(toMoney(item.quantity).times(toMoney(item.averageRate))), new Decimal(0))
+          .reduce((sum, item) => sum.plus(toMoney(item.quantity).times(toMoney(item.averageRate))), new MoneyDecimal(0))
           .toNumber();
 
         // 12. COGS
@@ -318,7 +317,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false)));
 
         const cogsBalance = cogsData
-          .reduce((sum, item) => sum.plus(toMoney(item.totalCost)), new Decimal(0))
+          .reduce((sum, item) => sum.plus(toMoney(item.totalCost)), new MoneyDecimal(0))
           .toNumber();
 
         // 12b. Consumption expense (from stock adjustment items)
@@ -351,7 +350,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
               return sum.plus(toMoney(item.totalAmount).abs());
             }
             return sum;
-          }, new Decimal(0))
+          }, new MoneyDecimal(0))
           .toNumber();
 
         // 12c. Production balance (from stock adjustment items)
@@ -384,7 +383,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
               return sum.plus(toMoney(item.totalAmount));
             }
             return sum;
-          }, new Decimal(0))
+          }, new MoneyDecimal(0))
           .toNumber();
 
         // 14. Salary Advances
@@ -396,7 +395,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .where(and(eq(salaryAdvances.companyId, companyId), eq(salaryAdvances.fullyPaid, false)));
 
         const salaryAdvancesBalance = advancesData
-          .reduce((sum, advance) => sum.plus(toMoney(advance.remainingBalance)), new Decimal(0))
+          .reduce((sum, advance) => sum.plus(toMoney(advance.remainingBalance)), new MoneyDecimal(0))
           .toNumber();
 
         // 15. Payroll Liabilities
@@ -411,7 +410,7 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .reduce((sum, emp) => {
             const balance = toMoney(emp.currentBalance);
             return balance.gt(0) ? sum.plus(balance) : sum;
-          }, new Decimal(0))
+          }, new MoneyDecimal(0))
           .toNumber();
 
         // 16-19. Other account type balances

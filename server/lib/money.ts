@@ -13,27 +13,35 @@ export type MoneyInput = Decimal.Value | null | undefined;
 
 export const MONEY_DECIMAL_PLACES = 2;
 
+/**
+ * decimal.js rounds to 20 significant digits by default, and a numeric(20, 2)
+ * amount can already use all 20, so sums near that size would round before the
+ * final cents conversion. Money arithmetic runs at 40 digits instead; start
+ * accumulators with new MoneyDecimal(0) (or toMoney) so operations inherit it.
+ */
+export const MoneyDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
+
 /** A finite Decimal for any money input; empty, invalid or non-finite input is zero. */
 export function toMoney(value: MoneyInput): Decimal {
-  if (value === null || value === undefined || value === "") return new Decimal(0);
+  if (value === null || value === undefined || value === "") return new MoneyDecimal(0);
   try {
-    const decimal = new Decimal(value);
-    return decimal.isFinite() ? decimal : new Decimal(0);
+    const decimal = new MoneyDecimal(value);
+    return decimal.isFinite() ? decimal : new MoneyDecimal(0);
   } catch {
-    return new Decimal(0);
+    return new MoneyDecimal(0);
   }
 }
 
 /** Exact sum of money values. */
 export function sumMoney(values: Iterable<MoneyInput>): Decimal {
-  let total = new Decimal(0);
+  let total = new MoneyDecimal(0);
   for (const value of values) total = total.plus(toMoney(value));
   return total;
 }
 
 /** Exact debit minus credit over ledger lines (positive = debit balance). */
 export function debitMinusCredit(lines: Iterable<{ debitAmount?: MoneyInput; creditAmount?: MoneyInput }>): Decimal {
-  let total = new Decimal(0);
+  let total = new MoneyDecimal(0);
   for (const line of lines) total = total.plus(toMoney(line.debitAmount)).minus(toMoney(line.creditAmount));
   return total;
 }
@@ -46,5 +54,5 @@ export function signedOpeningBalance(amount: MoneyInput, side: string | null | u
 
 /** Rounded to cents (half up) as the string a numeric(…, 2) column stores. */
 export function moneyString(value: MoneyInput): string {
-  return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES, Decimal.ROUND_HALF_UP).toFixed(MONEY_DECIMAL_PLACES);
+  return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES, MoneyDecimal.ROUND_HALF_UP).toFixed(MONEY_DECIMAL_PLACES);
 }

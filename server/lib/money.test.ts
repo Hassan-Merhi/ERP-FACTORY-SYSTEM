@@ -26,6 +26,14 @@ describe("money helpers", () => {
     expect(signedOpeningBalance("40", null).toFixed(2)).toBe("40.00");
   });
 
+  it("keeps full precision for amounts at the numeric(20, 2) limit", () => {
+    const largest = "999999999999999999.99";
+    expect(sumMoney([largest, "0.02", `-${largest}`]).toFixed(2)).toBe("0.02");
+    expect(
+      debitMinusCredit([{ debitAmount: largest }, { creditAmount: largest }, { debitAmount: "0.01" }]).toFixed(2)
+    ).toBe("0.01");
+  });
+
   it("rounds to cents half up for storage", () => {
     expect(moneyString("1.005")).toBe("1.01");
     expect(moneyString("-1.005")).toBe("-1.01");
