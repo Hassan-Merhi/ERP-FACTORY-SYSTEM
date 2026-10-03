@@ -282,3 +282,16 @@ describe("retail fashion variants wave 1 POS UI contract", () => {
     expect(pos).toContain("{item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}");
   });
 });
+
+
+describe("retail fashion variants wave 1 import UI contract", () => {
+  it("includes color and variant image URL in the Excel template and mapping", () => {
+    const importer = read("client/src/pages/retail/RetailImportDialog.tsx");
+    expect(importer).toContain('Color: "Black"');
+    expect(importer).toContain('VariantImageUrl: "https://example.com/runner-black.jpg"');
+    expect(importer).toContain('color: String(row.get("color") ?? "Default").trim() || "Default"');
+    expect(importer).toContain('variantImageUrl: String(row.get("variantimageurl") ?? "").trim() || undefined');
+    expect(importer).toContain("Name | Brand | Color | Size");
+    expect(importer).toContain("VariantImageUrl");
+  });
+});
