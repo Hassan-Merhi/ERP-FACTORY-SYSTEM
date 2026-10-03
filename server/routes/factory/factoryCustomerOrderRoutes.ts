@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { registerOrderCrudRoutes } from "./customer-orders/orderCrudRoutes";
+import { registerPriorityScanConfigRoutes } from "./customer-orders/priorityScanConfigRoutes";
 import { registerBaleScanningRoutes } from "./customer-orders/bale-scanning";
 import { registerChargeLedgerPrerequisite } from "./customer-orders/chargeLedgerPrerequisite";
 import { registerOrderChargesRoutes } from "./customer-orders/orderChargesRoutes";
@@ -10,6 +11,7 @@ import { registerOrderTrackingRoutes } from "./customer-orders/orderTrackingRout
 
 export function registerFactoryCustomerOrderRoutes(app: Express) {
   registerOrderCrudRoutes(app);
+  registerPriorityScanConfigRoutes(app);
   registerBaleScanningRoutes(app);
   registerChargeLedgerPrerequisite(app);
   registerOrderChargesRoutes(app);
