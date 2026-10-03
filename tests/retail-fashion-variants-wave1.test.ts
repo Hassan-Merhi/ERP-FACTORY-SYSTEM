@@ -293,3 +293,14 @@ describe("retail fashion variants wave 1 import UI contract", () => {
     expect(importer).toContain("VariantImageUrl");
   });
 });
+
+
+describe("retail fashion variants wave 1 dashboard UI contract", () => {
+  it("shows color and size for stock-health variant rows", () => {
+    const dashboard = read("client/src/pages/retail/RetailDashboard.tsx");
+    expect(dashboard).toContain("color?: string;");
+    expect(dashboard).toContain('<th className="px-3 py-2">Color</th>');
+    expect(dashboard).toContain('{row.color ?? "—"}');
+    expect(dashboard).toContain('<th className="px-3 py-2">Size</th>');
+  });
+});
