@@ -88,10 +88,10 @@ export interface GroupNetPositionSnapshot {
   };
 }
 
-export function isGroupNetPositionCompany(
-  company: Pick<CompanyRecord, "active" | "companyType" | "code">
-): boolean {
-  const companyCode = String(company.code ?? "").trim().toUpperCase();
+export function isGroupNetPositionCompany(company: Pick<CompanyRecord, "active" | "companyType" | "code">): boolean {
+  const companyCode = String(company.code ?? "")
+    .trim()
+    .toUpperCase();
   return (
     company.active !== false &&
     !EXCLUDED_COMPANY_TYPES.has(company.companyType || "") &&
@@ -256,7 +256,9 @@ function normalizeAccountName(value: unknown): string {
 
 function isHadiLshiCompany(company: Pick<CompanyRecord, "code" | "name"> | undefined): boolean {
   if (!company) return false;
-  const companyCode = String(company.code ?? "").trim().toUpperCase();
+  const companyCode = String(company.code ?? "")
+    .trim()
+    .toUpperCase();
   const companyName = normalizeAccountName(company.name).replace(/[’‘]/g, "'");
   return companyCode === "HADI" || companyName === "hadi l'shi";
 }

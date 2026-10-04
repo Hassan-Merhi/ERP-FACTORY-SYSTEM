@@ -10,12 +10,13 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  jsonb,
   check,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { locations } from "../common";
+import { companies, locations } from "../common";
 import { customers, vouchers } from "../erp";
 
 // ─── Customer Proformas ───────────────────────────────────────────────────────
@@ -177,6 +178,7 @@ export const insertCustomerOrderSchema = createInsertSchema(customerOrders)
 
 export type InsertCustomerOrder = z.infer<typeof insertCustomerOrderSchema>;
 export type CustomerOrder = typeof customerOrders.$inferSelect;
+
 
 // ─── Priority Scan Loading Configuration ─────────────────────────────────────
 // Wave 1 foundation for the Priority Scan workflow. This table is deliberately
@@ -371,3 +373,27 @@ export const customerInvoiceSequences = pgTable(
 );
 
 export type CustomerInvoiceSequence = typeof customerInvoiceSequences.$inferSelect;
+
+// ─── Frozen invoice documents ─────────────────────────────────────────────────
+// One canonical invoice document per finalized order, so every later Excel/PDF
+// export reproduces what was finalized. Written by
+// server/services/factoryInvoiceDocumentService.ts, which also creates the table
+// at startup.
+export const factoryInvoiceDocumentSnapshots = pgTable(
+  "factory_invoice_document_snapshots",
+  {
+    orderId: integer("order_id")
+      .primaryKey()
+      .references(() => customerOrders.id, { onDelete: "cascade" }),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    snapshot: jsonb("snapshot").notNull(),
+    frozenAt: timestamp("frozen_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    companyOrderIdx: index("factory_invoice_document_snapshots_company_idx").on(t.companyId, t.orderId),
+  })
+);

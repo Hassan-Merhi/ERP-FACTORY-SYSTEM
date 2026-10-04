@@ -280,10 +280,7 @@ describe("Group Net Position", () => {
     const beta = result.companies.find((company) => company.companyId === 2)!;
 
     expect(alpha.forUsTotal).toBe(150);
-    expect(alpha.forUsLines.map((line) => line.label)).toEqual([
-      "Cash",
-      "HMD INTERNATIONAL GROUP LEBANON CREDIT",
-    ]);
+    expect(alpha.forUsLines.map((line) => line.label)).toEqual(["Cash", "HMD INTERNATIONAL GROUP LEBANON CREDIT"]);
     expect(beta.onUsTotal).toBe(50);
     expect(beta.onUsLines.map((line) => line.label)).toEqual(["BANK LOAN"]);
     expect(result.totals).toMatchObject({
