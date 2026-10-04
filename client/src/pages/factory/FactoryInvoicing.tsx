@@ -7,12 +7,16 @@ import FactoryPriorityScan from "@/pages/factory/FactoryPriorityScan";
 import { FileText } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePriorityScanText } from "@/i18n/priorityScanTranslations";
 
 type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending" | "priority";
 type TabDef = { key: InvoicingTab; label: string };
 const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending", "priority"];
 
 export default function FactoryInvoicing() {
+  const { language } = useApplicationLanguage();
+  const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
@@ -39,7 +43,7 @@ export default function FactoryInvoicing() {
     { key: "invoices", label: "Invoices" },
     { key: "loadings", label: "Container Loadings" },
     { key: "pending", label: "Pending Loadings" },
-    { key: "priority", label: "Priority Scan" },
+    { key: "priority", label: priorityScanLabel },
   ];
   const tabs = allTabs.filter((tab) => {
     if (tab.key === "proformas") return showProformas;
