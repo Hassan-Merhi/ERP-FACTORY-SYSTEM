@@ -9,6 +9,7 @@ import { getErrorMessage } from "../lib/httpHandlers";
 interface CatalogQuery {
   search: string;
   brandId?: number;
+  color: string;
   size: string;
   category: string;
   locationId?: number;
@@ -28,7 +29,9 @@ interface CatalogProductRow {
   brand_id: number | null;
   brand_name: string | null;
   variant_id: number | null;
+  color: string | null;
   size: string | null;
+  variant_image_urls: unknown;
   barcode: string | null;
   sku: string | null;
   cost: string | number | null;
@@ -67,6 +70,7 @@ function parseCatalogQuery(req: Request): CatalogQuery {
   return {
     search: normalize(req.query.search),
     brandId: positiveInteger(req.query.brandId),
+    color: normalize(req.query.color),
     size: normalize(req.query.size),
     category: normalize(req.query.category),
     locationId: positiveInteger(req.query.locationId),
@@ -117,10 +121,36 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
         '',
         'g'
       ) LIKE ${compactToken}
+      OR EXISTS (
+        SELECT 1
+        FROM retail_product_variants search_variant
+        WHERE search_variant.company_id = p.company_id
+          AND search_variant.product_id = p.id
+          AND search_variant.active = true
+          AND (
+            LOWER(CONCAT_WS(' ', search_variant.color, search_variant.size, search_variant.barcode, COALESCE(search_variant.sku, ''))) LIKE ${token}
+            OR regexp_replace(
+              lower(CONCAT_WS(' ', search_variant.color, search_variant.size, search_variant.barcode, COALESCE(search_variant.sku, ''))),
+              '[^[:alnum:]]+',
+              '',
+              'g'
+            ) LIKE ${compactToken}
+          )
+      )
     )`);
   }
   if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
   if (query.category) where.push(`LOWER(COALESCE(p.category, '')) = ${add(query.category)}`);
+  if (query.color) {
+    where.push(`EXISTS (
+      SELECT 1
+      FROM retail_product_variants color_variant
+      WHERE color_variant.company_id = p.company_id
+        AND color_variant.product_id = p.id
+        AND color_variant.active = true
+        AND LOWER(color_variant.color) = ${add(query.color)}
+    )`);
+  }
   if (query.size) {
     where.push(`EXISTS (
       SELECT 1
@@ -190,7 +220,9 @@ function assembleProducts(rows: CatalogProductRow[]) {
     brand: { id: number | null; name: string };
     variants: Array<{
       id: number;
+      color: string;
       size: string;
+      imageUrls: string[];
       barcode: string;
       sku: string | null;
       cost: number;
@@ -200,6 +232,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
       quantity: number;
       stocks: Array<{ locationId: number; locationName: string; quantity: number }>;
     }>;
+    availableColors: string[];
     availableSizes: string[];
     totalQuantity: number;
     minSellingPrice: number;
@@ -224,6 +257,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
         active: row.active,
         brand: { id: row.brand_id, name: row.brand_name ?? "Other / No Brand" },
         variants: [],
+        availableColors: [],
         availableSizes: [],
         totalQuantity: 0,
         minSellingPrice: 0,
@@ -239,7 +273,11 @@ function assembleProducts(rows: CatalogProductRow[]) {
     if (!variant) {
       variant = {
         id: row.variant_id,
+        color: row.color ?? "Default",
         size: row.size ?? "",
+        imageUrls: Array.isArray(row.variant_image_urls)
+          ? row.variant_image_urls.filter((value): value is string => typeof value === "string")
+          : [],
         barcode: row.barcode ?? "",
         sku: row.sku,
         cost: numberValue(row.cost),
@@ -266,7 +304,8 @@ function assembleProducts(rows: CatalogProductRow[]) {
 
   for (const product of products.values()) {
     const activeVariants = product.variants.filter((variant) => variant.active);
-    product.availableSizes = activeVariants.map((variant) => variant.size);
+    product.availableColors = [...new Set(activeVariants.map((variant) => variant.color))];
+    product.availableSizes = [...new Set(activeVariants.map((variant) => variant.size))];
     product.totalQuantity = activeVariants.reduce((sum, variant) => sum + variant.quantity, 0);
     const prices = activeVariants.map((variant) => variant.sellingPrice);
     product.minSellingPrice = prices.length ? Math.min(...prices) : 0;
@@ -282,7 +321,14 @@ export function registerRetailCatalogRoutes(app: Express): void {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
 
-      const [sizes, categories] = await Promise.all([
+      const [colors, sizes, categories] = await Promise.all([
+        pool.query<{ color: string }>(
+          `SELECT DISTINCT color
+           FROM retail_product_variants
+           WHERE company_id = $1 AND active = true AND NULLIF(BTRIM(color), '') IS NOT NULL
+           ORDER BY color`,
+          [companyId]
+        ),
         pool.query<{ size: string }>(
           `SELECT DISTINCT size
            FROM retail_product_variants
@@ -300,6 +346,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
       ]);
 
       res.json({
+        colors: colors.rows.map((row) => row.color),
         sizes: sizes.rows.map((row) => row.size),
         categories: categories.rows.map((row) => row.category),
       });
@@ -356,7 +403,9 @@ export function registerRetailCatalogRoutes(app: Express): void {
            b.id AS brand_id,
            b.name AS brand_name,
            v.id AS variant_id,
+           v.color,
            v.size,
+           v.image_urls AS variant_image_urls,
            v.barcode,
            v.sku,
            v.cost,
@@ -372,7 +421,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
          LEFT JOIN retail_variant_inventory i ON i.variant_id = v.id AND i.company_id = p.company_id
          LEFT JOIN locations l ON l.id = i.location_id AND l.company_id = p.company_id
          WHERE p.company_id = $1 AND p.id = ANY($2::int[])
-         ORDER BY ARRAY_POSITION($2::int[], p.id), v.size, l.name`,
+         ORDER BY ARRAY_POSITION($2::int[], p.id), v.color, v.size, l.name`,
         [companyId, productIds]
       );
 

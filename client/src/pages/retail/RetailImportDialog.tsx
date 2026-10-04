@@ -18,6 +18,7 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
       {
         Name: "Runner",
         Brand: "Acme",
+        Color: "Black",
         Size: "42",
         Barcode: "6001234567890",
         Cost: 25,
@@ -25,10 +26,12 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
         Qty: 12,
         Location: "MAIN",
         Category: "Shoes",
+        VariantImageUrl: "https://example.com/runner-black.jpg",
       },
       {
         Name: "Runner",
         Brand: "Acme",
+        Color: "White",
         Size: "43",
         Barcode: "6001234567891",
         Cost: 25,
@@ -92,6 +95,8 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           qty: Number(row.get("qty") ?? 0),
           location: String(row.get("location") ?? "").trim(),
           category: String(row.get("category") ?? "").trim() || undefined,
+          color: String(row.get("color") ?? "Default").trim() || "Default",
+          variantImageUrl: String(row.get("variantimageurl") ?? "").trim() || undefined,
         };
       });
       const required = ["name", "size", "barcode", "location"] as const;
@@ -117,8 +122,9 @@ export function ImportDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <DialogTitle>Import Retail Products</DialogTitle>
         </DialogHeader>
         <p className="text-sm text-muted-foreground">
-          Columns: Name | Brand | Size | Barcode | Cost | Price | Qty | Location | Category. Brand can be left blank for
-          Other / No Brand. Rows with the same product name and brand are grouped together automatically.
+          Columns: Name | Brand | Color | Size | Barcode | Cost | Price | Qty | Location | Category | VariantImageUrl.
+          Brand can be left blank for Other / No Brand. Color defaults to Default for legacy files. Rows with the same
+          product name and brand are grouped together automatically.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadTemplate}>

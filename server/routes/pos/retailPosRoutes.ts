@@ -1,10 +1,8 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
-import type { Express, Request, Response } from "express";
+import type { Express } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
-  companies,
-  locations,
   retailBrands,
   retailPosReturnItems,
   retailPosReturns,
@@ -19,6 +17,7 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import {
   aggregateRetailCartItems,
   nextRetailReturnQuantity,
@@ -93,42 +92,13 @@ function toNumber(value: string | number | null | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function currentCompanyId(req: Request): number | null {
-  const companyId = Number(req.session.currentCompanyId);
-  return Number.isInteger(companyId) && companyId > 0 ? companyId : null;
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
 }
 
-function currentUserId(req: Request): string {
-  const userId = req.user?.id ?? req.session.userId;
-  if (!userId) throw new Error("Authenticated user is required");
-  return String(userId);
-}
-
-async function requireRetailCompany(req: Request, res: Response): Promise<number | null> {
-  const companyId = currentCompanyId(req);
-  if (!companyId) {
-    res.status(400).json({ message: "No company selected" });
-    return null;
-  }
-  const [company] = await db
-    .select({ id: companies.id, companyType: companies.companyType })
-    .from(companies)
-    .where(eq(companies.id, companyId))
-    .limit(1);
-  if (!company || company.companyType !== "retail") {
-    res.status(409).json({ message: "Retail POS is only available for Retail / Variant Inventory companies" });
-    return null;
-  }
-  return companyId;
-}
-
-async function ensureCompanyLocation(companyId: number, locationId: number): Promise<void> {
-  const [location] = await db
-    .select({ id: locations.id })
-    .from(locations)
-    .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId), eq(locations.active, true)))
-    .limit(1);
-  if (!location) throw new Error("Location is not active or does not belong to the selected company");
+function resolveRetailItemImages(variantImageUrls: unknown, productImageUrls: unknown): string[] {
+  const variantImages = stringArray(variantImageUrls);
+  return variantImages.length ? variantImages : stringArray(productImageUrls);
 }
 
 async function ensureVariant(companyId: number, variantId: number) {
@@ -136,6 +106,7 @@ async function ensureVariant(companyId: number, variantId: number) {
     .select({
       id: retailProductVariants.id,
       productId: retailProductVariants.productId,
+      color: retailProductVariants.color,
       size: retailProductVariants.size,
       barcode: retailProductVariants.barcode,
       sku: retailProductVariants.sku,
@@ -259,10 +230,12 @@ async function loadSaleResponse(companyId: number, saleId: number) {
       unitPrice: retailPosSaleItems.unitPrice,
       name: retailProducts.name,
       code: retailProducts.code,
+      color: retailProductVariants.color,
       size: retailProductVariants.size,
       barcode: retailProductVariants.barcode,
       sku: retailProductVariants.sku,
-      imageUrls: retailProducts.imageUrls,
+      variantImageUrls: retailProductVariants.imageUrls,
+      productImageUrls: retailProducts.imageUrls,
       brand: retailBrands.name,
     })
     .from(retailPosSaleItems)
@@ -273,13 +246,17 @@ async function loadSaleResponse(companyId: number, saleId: number) {
   return {
     ...sale,
     totalAmount: toNumber(sale.totalAmount),
-    items: items.map((item) => ({
-      ...item,
-      quantity: toNumber(item.quantity),
-      returnedQuantity: toNumber(item.returnedQuantity),
-      unitPrice: toNumber(item.unitPrice),
-      brand: item.brand ?? "Other / No Brand",
-    })),
+    items: items.map((item) => {
+      const { variantImageUrls, productImageUrls, ...rest } = item;
+      return {
+        ...rest,
+        imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
+        quantity: toNumber(item.quantity),
+        returnedQuantity: toNumber(item.returnedQuantity),
+        unitPrice: toNumber(item.unitPrice),
+        brand: item.brand ?? "Other / No Brand",
+      };
+    }),
   };
 }
 
@@ -302,7 +279,9 @@ export function registerRetailPosRoutes(app: Express): void {
           code: retailProducts.code,
           name: retailProducts.name,
           brand: retailBrands.name,
-          imageUrls: retailProducts.imageUrls,
+          color: retailProductVariants.color,
+          variantImageUrls: retailProductVariants.imageUrls,
+          productImageUrls: retailProducts.imageUrls,
           size: retailProductVariants.size,
           sku: retailProductVariants.sku,
           barcode: retailProductVariants.barcode,
@@ -332,22 +311,27 @@ export function registerRetailPosRoutes(app: Express): void {
                   punctuationInsensitiveSearch(retailProducts.code, search),
                   punctuationInsensitiveSearch(retailProductVariants.sku, search),
                   punctuationInsensitiveSearch(retailProductVariants.barcode, search),
+                  punctuationInsensitiveSearch(retailProductVariants.color, search),
                   punctuationInsensitiveSearch(retailProductVariants.size, search),
                   punctuationInsensitiveSearch(retailBrands.name, search)
                 )
               : undefined
           )
         )
-        .orderBy(retailProducts.name, retailProductVariants.size)
+        .orderBy(retailProducts.name, retailProductVariants.color, retailProductVariants.size)
         .limit(limit);
 
       res.json(
-        rows.map((row) => ({
-          ...row,
-          brand: row.brand ?? "Other / No Brand",
-          price: toNumber(row.price),
-          quantity: toNumber(row.quantity),
-        }))
+        rows.map((row) => {
+          const { variantImageUrls, productImageUrls, ...rest } = row;
+          return {
+            ...rest,
+            imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
+            brand: row.brand ?? "Other / No Brand",
+            price: toNumber(row.price),
+            quantity: toNumber(row.quantity),
+          };
+        })
       );
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -372,7 +356,9 @@ export function registerRetailPosRoutes(app: Express): void {
           code: retailProducts.code,
           name: retailProducts.name,
           brand: retailBrands.name,
-          imageUrls: retailProducts.imageUrls,
+          color: retailProductVariants.color,
+          variantImageUrls: retailProductVariants.imageUrls,
+          productImageUrls: retailProducts.imageUrls,
           size: retailProductVariants.size,
           sku: retailProductVariants.sku,
           barcode: retailProductVariants.barcode,
@@ -400,8 +386,10 @@ export function registerRetailPosRoutes(app: Express): void {
         )
         .limit(1);
       if (!row) return res.status(404).json({ message: "Barcode not found" });
+      const { variantImageUrls, productImageUrls, ...rest } = row;
       res.json({
-        ...row,
+        ...rest,
+        imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
         brand: row.brand ?? "Other / No Brand",
         price: toNumber(row.price),
         quantity: toNumber(row.quantity),
@@ -454,7 +442,7 @@ export function registerRetailPosRoutes(app: Express): void {
             after = nextRetailSaleQuantity(stock.quantity, item.quantity, canSellNegativeStock);
           } catch {
             throw new Error(
-              `Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`
+              `Insufficient stock for ${variant.productName} / ${variant.color} / ${variant.size}. Available: ${stock.quantity}`
             );
           }
           await setInventoryQuantity(tx, companyId, item.variantId, body.locationId, after);
