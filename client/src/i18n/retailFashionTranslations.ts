@@ -457,8 +457,15 @@ for (const entry of retailFashionTranslations) {
 }
 const templateTranslator = createPhase3TemplateTranslator(retailFashionTranslations);
 
+/**
+ * Whether the text is approved retail copy, which the interface translator may
+ * translate even inside table cells and options. Single-word labels ("Reports",
+ * "Inventory", "Receive"…) are excluded: they still translate in buttons, labels
+ * and headings, but a table cell or option holding such a word is business data.
+ */
 export function isRetailFashionText(value: string): boolean {
   const normalized = value.trim();
+  if (!/\s/.test(normalized)) return false;
   return exactTranslations.has(normalized) || templateTranslator.matches(normalized);
 }
 

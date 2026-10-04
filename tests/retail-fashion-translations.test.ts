@@ -52,4 +52,11 @@ describe("retail fashion EN / FR / AR copy", () => {
       expect(translateRetailFashionText(text, "ar"), text).toBeNull();
     }
   });
+
+  it("keeps single-word labels out of the approved set so table data is never rewritten", () => {
+    expect(isRetailFashionText("Reports")).toBe(false);
+    expect(isRetailFashionText("Inventory")).toBe(false);
+    // ...while they still translate in eligible UI elements.
+    expect(translateRetailFashionText("Reports", "fr")).toBe("Rapports");
+  });
 });
