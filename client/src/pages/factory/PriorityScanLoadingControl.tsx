@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Palette, Trash2 } from "lucide-react";
 
@@ -17,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const DEFAULT_COLOR = "#2563eb";
@@ -56,6 +58,12 @@ function normalizeColorKey(value: string): string {
 }
 
 export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlProps) {
+  const { language } = useApplicationLanguage();
+  const tr = useCallback(
+    (key: PriorityScanTranslationKey, params?: Record<string, string | number>) =>
+      translatePriorityScanText(key, language, params),
+    [language]
+  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -105,19 +113,19 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
       await refreshQueue();
       setDialogOpen(false);
       toast({
-        title: `Priority #${saved.priority} saved`,
-        description: `Loading #${load.id} is now in the Priority Scan queue.`,
+        title: tr("prioritySaved", { priority: saved.priority }),
+        description: tr("loadingNowQueued", { orderId: load.id }),
       });
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
-      toast({ title: "Priority update failed", description: error.message, variant: "destructive" });
+      toast({ title: tr("priorityUpdateFailed"), description: error.message, variant: "destructive" });
     },
   });
 
   const moveMutation = useMutation({
     mutationFn: async (priority: number) => {
-      if (!activeConfig) throw new Error("Priority is not active.");
+      if (!activeConfig) throw new Error(tr("priorityNotActive"));
       const res = await apiRequest(
         "PUT",
         `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`,
@@ -128,7 +136,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     onSuccess: refreshQueue,
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
-      toast({ title: "Could not move priority", description: error.message, variant: "destructive" });
+      toast({ title: tr("couldNotMove"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -139,11 +147,11 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     onSuccess: async () => {
       await refreshQueue();
       setDialogOpen(false);
-      toast({ title: "Priority removed", description: `Loading #${load.id} was removed from the Priority Scan queue.` });
+      toast({ title: tr("priorityRemoved"), description: tr("loadingRemovedFromQueue", { orderId: load.id }) });
     },
     onError: (error: Error) => {
       if ((error as { _handledGlobally?: boolean })._handledGlobally) return;
-      toast({ title: "Could not remove priority", description: error.message, variant: "destructive" });
+      toast({ title: tr("couldNotRemove"), description: error.message, variant: "destructive" });
     },
   });
 
@@ -168,14 +176,14 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               onClick={openEditor}
               disabled={busy}
               data-testid={`button-priority-config-${load.id}`}
-              title="Edit Priority Scan color and position"
+              title={tr("editPriorityTitle")}
             >
               <span
                 className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-sm"
                 style={{ backgroundColor: activeConfig.color }}
                 aria-hidden="true"
               />
-              Priority #{activeConfig.priority}
+              {tr("priorityNumber", { priority: activeConfig.priority })}
             </Button>
             <Button
               type="button"
@@ -185,7 +193,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               onClick={() => moveMutation.mutate(activeConfig.priority - 1)}
               disabled={busy || activeConfig.priority <= 1}
               data-testid={`button-priority-up-${load.id}`}
-              title="Move up in Priority Scan queue"
+              title={tr("moveUp")}
             >
               <ArrowUp className="h-3.5 w-3.5" />
             </Button>
@@ -197,7 +205,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               onClick={() => moveMutation.mutate(activeConfig.priority + 1)}
               disabled={busy || activeConfig.priority >= activeConfigs.length}
               data-testid={`button-priority-down-${load.id}`}
-              title="Move down in Priority Scan queue"
+              title={tr("moveDown")}
             >
               <ArrowDown className="h-3.5 w-3.5" />
             </Button>
@@ -210,10 +218,10 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
             onClick={openEditor}
             disabled={busy || !load.proformaIdUsed}
             data-testid={`button-set-priority-${load.id}`}
-            title={load.proformaIdUsed ? "Add to Priority Scan queue" : "Link a proforma before setting Priority Scan"}
+            title={load.proformaIdUsed ? tr("addToQueue") : tr("linkProformaFirst")}
           >
             <Palette className="h-4 w-4 mr-1.5" />
-            Set Priority
+            {tr("setPriority")}
           </Button>
         )}
       </div>
@@ -221,22 +229,21 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
       <Dialog open={dialogOpen} onOpenChange={(open) => !busy && setDialogOpen(open)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Priority Scan — Loading #{load.id}</DialogTitle>
+            <DialogTitle>{tr("dialogTitle", { orderId: load.id })}</DialogTitle>
             <DialogDescription>
-              Choose the color and queue position for <strong>{load.customerName}</strong>. Moving this loading into an
-              occupied position automatically shifts the other priorities.
+              {tr("dialogDescription", { customer: load.customerName })}
             </DialogDescription>
           </DialogHeader>
 
           {!load.proformaIdUsed && (
             <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">
-              Link a proforma to this loading before enabling Priority Scan.
+              {tr("linkProformaWarning")}
             </div>
           )}
 
           <div className="space-y-5 py-2">
             <div className="space-y-2">
-              <Label>Priority color</Label>
+              <Label>{tr("priorityColorLabel")}</Label>
               <div className="flex flex-wrap items-center gap-2">
                 {COLOR_PRESETS.map((color) => {
                   const unavailable = usedColorKeys.has(normalizeColorKey(color));
@@ -249,8 +256,8 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                       style={{ backgroundColor: color }}
                       onClick={() => !unavailable && setSelectedColor(color)}
                       disabled={unavailable}
-                      aria-label={`Use color ${color}`}
-                      title={unavailable ? "Color already used by another priority" : color}
+                      aria-label={tr("useColor", { color })}
+                      title={unavailable ? tr("colorUsed") : color}
                     />
                   );
                 })}
@@ -261,7 +268,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                     onChange={(event) => setSelectedColor(event.target.value)}
                     className="h-9 w-12 cursor-pointer rounded border border-border bg-transparent p-0.5"
                     data-testid={`input-priority-color-${load.id}`}
-                    aria-label="Choose custom priority color"
+                    aria-label={tr("chooseCustomColor")}
                   />
                   <Badge variant="outline" className="font-mono text-xs">
                     {selectedColor.toUpperCase()}
@@ -269,12 +276,12 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 </div>
               </div>
               {selectedColorInUse && (
-                <p className="text-xs text-destructive">That color is already assigned to another active priority.</p>
+                <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>
               )}
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor={`priority-position-${load.id}`}>Queue position</Label>
+              <Label htmlFor={`priority-position-${load.id}`}>{tr("queuePosition")}</Label>
               <Select value={String(selectedPriority)} onValueChange={(value) => setSelectedPriority(Number(value))}>
                 <SelectTrigger id={`priority-position-${load.id}`} data-testid={`select-priority-${load.id}`}>
                   <SelectValue />
@@ -282,13 +289,13 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 <SelectContent>
                   {Array.from({ length: maxSelectablePriority }, (_, index) => index + 1).map((position) => (
                     <SelectItem key={position} value={String(position)}>
-                      Priority #{position}
+                      {tr("priorityNumber", { priority: position })}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Priority #1 is first. Fully satisfied loadings leave the queue automatically and the remaining priorities move up.
+                {tr("autoAdvanceHint")}
               </p>
             </div>
           </div>
@@ -305,13 +312,13 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   data-testid={`button-remove-priority-${load.id}`}
                 >
                   <Trash2 className="h-4 w-4 mr-1.5" />
-                  Remove Priority
+                  {tr("removePriority")}
                 </Button>
               )}
             </div>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)} disabled={busy}>
-                Cancel
+                {tr("cancel")}
               </Button>
               <Button
                 type="button"
@@ -319,7 +326,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 disabled={busy || !load.proformaIdUsed || selectedColorInUse}
                 data-testid={`button-save-priority-${load.id}`}
               >
-                {saveMutation.isPending ? "Saving…" : config ? "Save Priority" : "Add to Queue"}
+                {saveMutation.isPending ? tr("saving") : config ? tr("savePriority") : tr("addToQueue")}
               </Button>
             </div>
           </DialogFooter>
