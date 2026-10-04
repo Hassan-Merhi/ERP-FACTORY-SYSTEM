@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { apiRequest, keyStartsWith } from "@/lib/queryClient";
 import { Textarea } from "@/components/ui/textarea";
+import { PriorityScanLoadingControl } from "./PriorityScanLoadingControl";
 
 const UNDO_TIMEOUT_MS = 8000;
 
@@ -445,6 +446,13 @@ export default function FactoryPendingLoadings() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
+                      <PriorityScanLoadingControl
+                        load={{
+                          id: load.id,
+                          customerName: load.customerName || `Customer #${load.customerId}`,
+                          proformaIdUsed: load.proformaIdUsed,
+                        }}
+                      />
                       <Button
                         variant="outline"
                         size="icon"
