@@ -53,6 +53,7 @@ export function ProductEditor({
             name: product.name,
             brandId: product.brand.name === NO_BRAND ? "" : (product.brand.id ?? ""),
             category: product.category ?? "",
+            description: product.description ?? "",
             imageUrls: [...(product.imageUrls ?? [])],
             active: product.active,
             variants: product.variants.map((variant) => ({
@@ -67,7 +68,11 @@ export function ProductEditor({
               lowStockThreshold: variant.lowStockThreshold,
               active: variant.active,
               stocks: variant.stocks.length
-                ? variant.stocks.map((stock) => ({ locationId: stock.locationId, quantity: stock.quantity }))
+                ? variant.stocks.map((stock) => ({
+                    locationId: stock.locationId,
+                    quantity: stock.quantity,
+                    expectedQuantity: stock.quantity,
+                  }))
                 : [{ locationId: "", quantity: 0 }],
             })),
           }
@@ -234,7 +239,11 @@ export function ProductEditor({
         active: variant.active,
         stocks: variant.stocks
           .filter((stock) => stock.locationId !== "")
-          .map((stock) => ({ locationId: Number(stock.locationId), quantity: Number(stock.quantity) })),
+          .map((stock) => ({
+            locationId: Number(stock.locationId),
+            quantity: Number(stock.quantity),
+            expectedQuantity: stock.expectedQuantity,
+          })),
       }));
 
       if (!draft.name.trim()) throw new Error("Item name is required");
@@ -251,7 +260,8 @@ export function ProductEditor({
         brandId: draft.brandId === "" ? undefined : Number(draft.brandId),
         brandName: draft.brandId === "" ? NO_BRAND : undefined,
         category: draft.category.trim() || null,
-        description: null,
+        // Description is not edited here; keep whatever the product already has (quick add / import).
+        description: draft.description.trim() || null,
         imageUrls: draft.imageUrls,
         active: draft.active,
         variants,

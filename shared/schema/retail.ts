@@ -161,6 +161,9 @@ export const retailVariantInputSchema = z.object({
       z.object({
         locationId: z.number().int().positive(),
         quantity: z.coerce.number().finite(),
+        // Quantity the editor loaded. When present, the write is rejected if POS
+        // activity changed the stock in the meantime instead of overwriting it.
+        expectedQuantity: z.coerce.number().finite().optional(),
       })
     )
     .optional()

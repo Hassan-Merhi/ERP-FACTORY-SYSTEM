@@ -18,7 +18,10 @@ import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { validateRetailVariantPayload } from "../services/retail/retailProductValidation";
-import { writeVariantInventoryWithMovement } from "../services/retail/retailProductStockWrites";
+import {
+  RetailStockConflictError,
+  writeVariantInventoryWithMovement,
+} from "../services/retail/retailProductStockWrites";
 
 type RetailQueryExecutor = Pick<typeof db, "select" | "insert" | "update" | "delete">;
 
@@ -603,7 +606,7 @@ export function registerRetailRoutes(app: Express) {
       const [product] = await loadProducts(companyId, productId);
       res.json(product);
     } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(error instanceof RetailStockConflictError ? 409 : 400).json({ message: getErrorMessage(error) });
     }
   });
 

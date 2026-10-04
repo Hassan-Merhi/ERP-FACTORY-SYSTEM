@@ -43,6 +43,7 @@ export interface RetailProduct {
   code: string;
   name: string;
   category: string | null;
+  description?: string | null;
   imageUrls: string[];
   active: boolean;
   brand: { id: number | null; name: string };
@@ -71,6 +72,8 @@ export interface RetailCatalogFacets {
 export interface DraftStock {
   locationId: number | "";
   quantity: number;
+  /** Quantity loaded from the server; lets the API reject edits that would overwrite newer POS activity. */
+  expectedQuantity?: number;
 }
 
 export interface DraftVariant {
@@ -92,6 +95,7 @@ export interface ProductDraft {
   name: string;
   brandId: number | "";
   category: string;
+  description: string;
   imageUrls: string[];
   active: boolean;
   variants: DraftVariant[];
@@ -115,6 +119,7 @@ export const blankDraft = (): ProductDraft => ({
   name: "",
   brandId: "",
   category: "",
+  description: "",
   imageUrls: [],
   active: true,
   variants: [blankVariant()],

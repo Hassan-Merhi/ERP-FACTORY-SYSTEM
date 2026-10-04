@@ -442,7 +442,7 @@ export function registerRetailPosRoutes(app: Express): void {
             after = nextRetailSaleQuantity(stock.quantity, item.quantity, canSellNegativeStock);
           } catch {
             throw new Error(
-              `Insufficient stock for ${variant.productName} / ${variant.size}. Available: ${stock.quantity}`
+              `Insufficient stock for ${variant.productName} / ${variant.color} / ${variant.size}. Available: ${stock.quantity}`
             );
           }
           await setInventoryQuantity(tx, companyId, item.variantId, body.locationId, after);

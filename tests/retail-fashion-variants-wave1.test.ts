@@ -89,4 +89,22 @@ describe("retail fashion variants wave 1 behavior", () => {
     expect(blankVariant()).toMatchObject({ color: "Default", imageUrls: [] });
     expect(MAX_VARIANT_IMAGES).toBe(4);
   });
+
+  it("carries the loaded stock quantity so edits cannot overwrite newer POS activity", () => {
+    const parsed = retailProductWriteSchema.parse({
+      code: "STALE-TEE",
+      name: "Stale Tee",
+      variants: [
+        {
+          color: "Black",
+          size: "M",
+          barcode: "STALE-001",
+          cost: 5,
+          sellingPrice: 10,
+          stocks: [{ locationId: 1, quantity: 3, expectedQuantity: 1 }],
+        },
+      ],
+    });
+    expect(parsed.variants[0].stocks[0]).toEqual({ locationId: 1, quantity: 3, expectedQuantity: 1 });
+  });
 });

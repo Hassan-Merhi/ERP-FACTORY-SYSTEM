@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { retailVariantInventory, type RetailProductWrite } from "@shared/schema";
 import { retailStockMovements } from "@shared/schema/retailPos";
 import { db } from "../../db";
@@ -6,6 +6,10 @@ import { db } from "../../db";
 type RetailTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 const asNumber = (value: unknown) => Number(value ?? 0);
+
+export class RetailStockConflictError extends Error {
+  readonly status = 409;
+}
 
 export async function writeVariantInventoryWithMovement(
   tx: RetailTransaction,
@@ -20,6 +24,11 @@ export async function writeVariantInventoryWithMovement(
     eventPrefix: string;
   }
 ) {
+  // Lock the variant's stock rows so a concurrent POS sale cannot interleave
+  // between reading the current quantity and writing the edited one.
+  await tx.execute(
+    sql`select id from retail_variant_inventory where company_id = ${input.companyId} and variant_id = ${input.variantId} order by location_id for update`
+  );
   const existingRows = await tx
     .select({ locationId: retailVariantInventory.locationId, quantity: retailVariantInventory.quantity })
     .from(retailVariantInventory)
@@ -28,6 +37,15 @@ export async function writeVariantInventoryWithMovement(
     );
   const existing = new Map(existingRows.map((row) => [row.locationId, asNumber(row.quantity)]));
   const desired = new Map(input.stocks.map((stock) => [stock.locationId, Number(stock.quantity)]));
+  for (const stock of input.stocks) {
+    if (stock.expectedQuantity === undefined) continue;
+    const current = existing.get(stock.locationId) ?? 0;
+    if (Math.abs(current - Number(stock.expectedQuantity)) > 0.000001) {
+      throw new RetailStockConflictError(
+        `Stock changed while you were editing (location ${stock.locationId}: now ${current}, expected ${stock.expectedQuantity}). Reload the product and try again.`
+      );
+    }
+  }
   const locationIds = [...new Set([...existing.keys(), ...desired.keys()])].sort((a, b) => a - b);
 
   for (const locationId of locationIds) {

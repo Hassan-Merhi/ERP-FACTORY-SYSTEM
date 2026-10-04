@@ -87,7 +87,7 @@ export default function RetailInventory() {
   const categories = catalogFacets?.categories ?? [];
 
   const productId = detailMatch ? Number(detailParams?.id) : 0;
-  const { data: detailProduct } = useQuery<RetailProduct>({
+  const { data: detailProduct, isError: detailFailed } = useQuery<RetailProduct>({
     queryKey: ["retail-product", companyKey, productId],
     queryFn: () => getJson(`/api/retail/products/${productId}`),
     enabled: retailEnabled && productId > 0,
@@ -106,7 +106,18 @@ export default function RetailInventory() {
   }
 
   if (detailMatch) {
-    if (!detailProduct) return <div className="p-6 text-sm text-muted-foreground">Loading product…</div>;
+    if (!detailProduct) {
+      return (
+        <div className="space-y-3 p-6 text-sm text-muted-foreground">
+          <p data-i18n-ui>{detailFailed ? "Retail product not found" : "Loading product…"}</p>
+          {detailFailed && (
+            <Button variant="outline" onClick={() => navigate("/retail/inventory")}>
+              <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
+            </Button>
+          )}
+        </div>
+      );
+    }
     return (
       <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
         <div className="flex items-center justify-between gap-3">
@@ -248,7 +259,7 @@ export default function RetailInventory() {
 
       <div className="grid gap-2 md:grid-cols-8">
         <Input
-          placeholder="Search product or brand…"
+          placeholder="Search style, brand, barcode, SKU, color or size…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="md:col-span-2"
