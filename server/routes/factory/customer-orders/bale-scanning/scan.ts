@@ -286,7 +286,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
           allowBypassOverload: !isPriorityScan && req.body.allowBypassOverload === true,
-          isReinstatingRemovedBale: bale.removedFromThisOrder,
+          isReinstatingRemovedBale: !isPriorityScan && bale.removedFromThisOrder,
         });
 
         let priceUsed = bale.productSellingPrice || "0";
