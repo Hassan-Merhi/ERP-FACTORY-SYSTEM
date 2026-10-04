@@ -22,16 +22,7 @@ import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i1
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const DEFAULT_COLOR = "#2563eb";
-const COLOR_PRESETS = [
-  "#2563eb",
-  "#16a34a",
-  "#dc2626",
-  "#f59e0b",
-  "#7c3aed",
-  "#0891b2",
-  "#db2777",
-  "#111827",
-];
+const COLOR_PRESETS = ["#2563eb", "#16a34a", "#dc2626", "#f59e0b", "#7c3aed", "#0891b2", "#db2777", "#111827"];
 
 interface PriorityScanConfig {
   id: number;
@@ -81,17 +72,10 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   );
   const config = configs.find((item) => item.orderId === load.id);
   const activeConfig = config?.enabled ? config : undefined;
-  const maxSelectablePriority = Math.max(
-    1,
-    activeConfigs.filter((item) => item.orderId !== load.id).length + 1
-  );
+  const maxSelectablePriority = Math.max(1, activeConfigs.filter((item) => item.orderId !== load.id).length + 1);
   const usedColorKeys = useMemo(
     () =>
-      new Set(
-        activeConfigs
-          .filter((item) => item.orderId !== load.id)
-          .map((item) => normalizeColorKey(item.color))
-      ),
+      new Set(activeConfigs.filter((item) => item.orderId !== load.id).map((item) => normalizeColorKey(item.color))),
     [activeConfigs, load.id]
   );
   const selectedColorInUse = usedColorKeys.has(normalizeColorKey(selectedColor));
@@ -102,11 +86,11 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
   const saveMutation = useMutation({
     mutationFn: async ({ color, priority }: { color: string; priority: number }) => {
-      const res = await apiRequest(
-        "PUT",
-        `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`,
-        { color, priority, enabled: true }
-      );
+      const res = await apiRequest("PUT", `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`, {
+        color,
+        priority,
+        enabled: true,
+      });
       return res.json() as Promise<PriorityScanConfig>;
     },
     onSuccess: async (saved) => {
@@ -126,11 +110,11 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   const moveMutation = useMutation({
     mutationFn: async (priority: number) => {
       if (!activeConfig) throw new Error(tr("priorityNotActive"));
-      const res = await apiRequest(
-        "PUT",
-        `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`,
-        { color: activeConfig.color, priority, enabled: true }
-      );
+      const res = await apiRequest("PUT", `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`, {
+        color: activeConfig.color,
+        priority,
+        enabled: true,
+      });
       return res.json() as Promise<PriorityScanConfig>;
     },
     onSuccess: refreshQueue,
@@ -230,9 +214,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{tr("dialogTitle", { orderId: load.id })}</DialogTitle>
-            <DialogDescription>
-              {tr("dialogDescription", { customer: load.customerName })}
-            </DialogDescription>
+            <DialogDescription>{tr("dialogDescription", { customer: load.customerName })}</DialogDescription>
           </DialogHeader>
 
           {!load.proformaIdUsed && (
@@ -275,9 +257,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   </Badge>
                 </div>
               </div>
-              {selectedColorInUse && (
-                <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>
-              )}
+              {selectedColorInUse && <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>}
             </div>
 
             <div className="space-y-2">
@@ -294,9 +274,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                {tr("autoAdvanceHint")}
-              </p>
+              <p className="text-xs text-muted-foreground">{tr("autoAdvanceHint")}</p>
             </div>
           </div>
 

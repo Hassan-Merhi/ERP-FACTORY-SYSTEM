@@ -52,10 +52,7 @@ export async function rewriteActivePriorityQueue(
     .update(customerOrderPriorityScanConfigs)
     .set({ enabled: false })
     .where(
-      and(
-        eq(customerOrderPriorityScanConfigs.companyId, companyId),
-        eq(customerOrderPriorityScanConfigs.enabled, true)
-      )
+      and(eq(customerOrderPriorityScanConfigs.companyId, companyId), eq(customerOrderPriorityScanConfigs.enabled, true))
     );
 
   for (let index = 0; index < orderedIds.length; index += 1) {
@@ -199,9 +196,8 @@ export async function advanceSatisfiedPriorityScanConfigs(
       await rewriteActivePriorityQueue(tx, companyId, remainingIds, null, "system:auto-advance");
     }
 
-    const activeOrderId = remainingIds.length > 0
-      ? activeRows.find((row) => row.id === remainingIds[0])?.orderId ?? null
-      : null;
+    const activeOrderId =
+      remainingIds.length > 0 ? (activeRows.find((row) => row.id === remainingIds[0])?.orderId ?? null) : null;
 
     return {
       completedOrderIds,

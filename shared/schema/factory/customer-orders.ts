@@ -179,7 +179,6 @@ export const insertCustomerOrderSchema = createInsertSchema(customerOrders)
 export type InsertCustomerOrder = z.infer<typeof insertCustomerOrderSchema>;
 export type CustomerOrder = typeof customerOrders.$inferSelect;
 
-
 // ─── Priority Scan Loading Configuration ─────────────────────────────────────
 // Wave 1 foundation for the Priority Scan workflow. This table is deliberately
 // separate from customer_order_bales: changing a color, priority, or enabled

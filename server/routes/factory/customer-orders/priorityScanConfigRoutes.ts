@@ -84,7 +84,6 @@ class PriorityScanConfigError extends Error {
   }
 }
 
-
 export function registerPriorityScanConfigRoutes(app: Express) {
   app.get(PRIORITY_SCAN_ROUTE_PATH, requireAuth, async (req: Request, res: Response) => {
     try {
@@ -218,7 +217,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
 
       if (candidates.length === 0) {
         return res.status(409).json({
-          message: "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
+          message:
+            "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
           referenceNumber: bale.referenceNumber,
           articleCode: effectiveArticleCode,
         });
@@ -371,14 +371,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           .limit(1);
 
         const activeRows = await loadActivePriorityRows(tx, companyId);
-        if (
-          enabled &&
-          activeRows.some((row) => row.orderId !== orderId && row.colorKey === normalizedColor.colorKey)
-        ) {
-          throw new PriorityScanConfigError(
-            409,
-            "That color is already assigned to another active priority loading."
-          );
+        if (enabled && activeRows.some((row) => row.orderId !== orderId && row.colorKey === normalizedColor.colorKey)) {
+          throw new PriorityScanConfigError(409, "That color is already assigned to another active priority loading.");
         }
 
         // Temporarily keep the target disabled while the active queue is rewritten.
@@ -493,5 +487,4 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       }
     }
   );
-
 }

@@ -73,7 +73,11 @@ const priorityScanTranslations = {
     ar: "المرجع والمنتج فقط.",
     fr: "Référence et produit uniquement.",
   },
-  scanToBegin: { en: "Scan a reference to begin.", ar: "امسح مرجعًا للبدء.", fr: "Scannez une référence pour commencer." },
+  scanToBegin: {
+    en: "Scan a reference to begin.",
+    ar: "امسح مرجعًا للبدء.",
+    fr: "Scannez une référence pour commencer.",
+  },
   unnamedProduct: { en: "Unnamed product", ar: "منتج بدون اسم", fr: "Produit sans nom" },
   priorityColor: { en: "Priority color {color}", ar: "لون الأولوية {color}", fr: "Couleur de priorité {color}" },
   noActivePriority: {
@@ -117,8 +121,16 @@ const priorityScanTranslations = {
     ar: "تعديل لون وموقع المسح حسب الأولوية",
     fr: "Modifier la couleur et la position du scan prioritaire",
   },
-  moveUp: { en: "Move up in Priority Scan queue", ar: "نقل للأعلى في قائمة الأولويات", fr: "Monter dans la file prioritaire" },
-  moveDown: { en: "Move down in Priority Scan queue", ar: "نقل للأسفل في قائمة الأولويات", fr: "Descendre dans la file prioritaire" },
+  moveUp: {
+    en: "Move up in Priority Scan queue",
+    ar: "نقل للأعلى في قائمة الأولويات",
+    fr: "Monter dans la file prioritaire",
+  },
+  moveDown: {
+    en: "Move down in Priority Scan queue",
+    ar: "نقل للأسفل في قائمة الأولويات",
+    fr: "Descendre dans la file prioritaire",
+  },
   linkProformaFirst: {
     en: "Link a proforma before setting Priority Scan",
     ar: "اربط بروفرما قبل تحديد المسح حسب الأولوية",
@@ -146,7 +158,11 @@ const priorityScanTranslations = {
     ar: "اللون مستخدم بالفعل لأولوية أخرى",
     fr: "Couleur déjà utilisée par une autre priorité",
   },
-  chooseCustomColor: { en: "Choose custom priority color", ar: "اختر لون أولوية مخصصًا", fr: "Choisir une couleur de priorité personnalisée" },
+  chooseCustomColor: {
+    en: "Choose custom priority color",
+    ar: "اختر لون أولوية مخصصًا",
+    fr: "Choisir une couleur de priorité personnalisée",
+  },
   colorAlreadyAssigned: {
     en: "That color is already assigned to another active priority.",
     ar: "هذا اللون مخصص بالفعل لأولوية نشطة أخرى.",
@@ -163,13 +179,21 @@ const priorityScanTranslations = {
   saving: { en: "Saving…", ar: "جارٍ الحفظ…", fr: "Enregistrement…" },
   savePriority: { en: "Save Priority", ar: "حفظ الأولوية", fr: "Enregistrer la priorité" },
   addToQueue: { en: "Add to Queue", ar: "إضافة إلى القائمة", fr: "Ajouter à la file" },
-  prioritySaved: { en: "Priority #{priority} saved", ar: "تم حفظ الأولوية #{priority}", fr: "Priorité #{priority} enregistrée" },
+  prioritySaved: {
+    en: "Priority #{priority} saved",
+    ar: "تم حفظ الأولوية #{priority}",
+    fr: "Priorité #{priority} enregistrée",
+  },
   loadingNowQueued: {
     en: "Loading #{orderId} is now in the Priority Scan queue.",
     ar: "أصبح التحميل #{orderId} الآن في قائمة المسح حسب الأولوية.",
     fr: "Le chargement #{orderId} est maintenant dans la file de scan prioritaire.",
   },
-  priorityUpdateFailed: { en: "Priority update failed", ar: "فشل تحديث الأولوية", fr: "Échec de la mise à jour de la priorité" },
+  priorityUpdateFailed: {
+    en: "Priority update failed",
+    ar: "فشل تحديث الأولوية",
+    fr: "Échec de la mise à jour de la priorité",
+  },
   priorityNotActive: { en: "Priority is not active.", ar: "الأولوية غير نشطة.", fr: "La priorité n’est pas active." },
   couldNotMove: { en: "Could not move priority", ar: "تعذر نقل الأولوية", fr: "Impossible de déplacer la priorité" },
   priorityRemoved: { en: "Priority removed", ar: "تمت إزالة الأولوية", fr: "Priorité retirée" },
@@ -178,7 +202,11 @@ const priorityScanTranslations = {
     ar: "تمت إزالة التحميل #{orderId} من قائمة المسح حسب الأولوية.",
     fr: "Le chargement #{orderId} a été retiré de la file de scan prioritaire.",
   },
-  couldNotRemove: { en: "Could not remove priority", ar: "تعذر إزالة الأولوية", fr: "Impossible de retirer la priorité" },
+  couldNotRemove: {
+    en: "Could not remove priority",
+    ar: "تعذر إزالة الأولوية",
+    fr: "Impossible de retirer la priorité",
+  },
 } as const;
 
 export type PriorityScanTranslationKey = keyof typeof priorityScanTranslations;

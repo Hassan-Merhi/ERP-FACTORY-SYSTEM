@@ -48,10 +48,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
 
       const isPriorityScan = req.body.priorityScan === true;
-      if (
-        isPriorityScan &&
-        (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)
-      ) {
+      if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
         return res.status(400).json({
           message:
             "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",

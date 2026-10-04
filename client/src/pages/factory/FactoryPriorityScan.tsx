@@ -273,11 +273,11 @@ export default function FactoryPriorityScan() {
                 <ScanLine className="h-5 w-5 text-primary" />
                 <h2 className="text-lg font-semibold">{tr("priorityScan")}</h2>
               </div>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {tr("scanDescription")}
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">{tr("scanDescription")}</p>
             </div>
-            <Badge variant="outline">{tr(activeQueue.length === 1 ? "activePriority" : "activePriorities", { count: activeQueue.length })}</Badge>
+            <Badge variant="outline">
+              {tr(activeQueue.length === 1 ? "activePriority" : "activePriorities", { count: activeQueue.length })}
+            </Badge>
           </div>
 
           <div className="mt-5 flex gap-2">
@@ -310,12 +310,8 @@ export default function FactoryPriorityScan() {
           </div>
 
           <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-            <p>
-              {tr("routeHint")}
-            </p>
-            <p>
-              {tr("manualExceptionHint")}
-            </p>
+            <p>{tr("routeHint")}</p>
+            <p>{tr("manualExceptionHint")}</p>
           </div>
 
           {feedback && (
@@ -344,7 +340,9 @@ export default function FactoryPriorityScan() {
         </section>
 
         <section className="rounded-xl border bg-card p-5">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{tr("currentPriority")}</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {tr("currentPriority")}
+          </div>
           {isLoading ? (
             <div className="mt-3 space-y-2">
               <Skeleton className="h-7 w-32" />
@@ -360,7 +358,9 @@ export default function FactoryPriorityScan() {
                 />
                 <div>
                   <div className="text-2xl font-bold">{tr("priorityNumber", { priority: current.priority })}</div>
-                  <div className="text-sm text-muted-foreground">{tr("loadingNumber", { orderId: current.orderId })}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {tr("loadingNumber", { orderId: current.orderId })}
+                  </div>
                 </div>
               </div>
               <div className="mt-4 text-sm">
@@ -377,9 +377,7 @@ export default function FactoryPriorityScan() {
               </div>
             </div>
           ) : (
-            <div className="mt-3 text-sm text-muted-foreground">
-              {tr("noPriorityQueue")}
-            </div>
+            <div className="mt-3 text-sm text-muted-foreground">{tr("noPriorityQueue")}</div>
           )}
         </section>
       </div>
@@ -459,7 +457,8 @@ export default function FactoryPriorityScan() {
                     aria-hidden="true"
                   />
                   <Badge variant="outline">
-                    {tr("priorityNumber", { priority: scan.priority })} · {tr("loadingNumber", { orderId: scan.orderId })}
+                    {tr("priorityNumber", { priority: scan.priority })} ·{" "}
+                    {tr("loadingNumber", { orderId: scan.orderId })}
                   </Badge>
                 </div>
               </div>
