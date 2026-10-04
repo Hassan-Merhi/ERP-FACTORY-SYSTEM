@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertCircle, CheckCircle2, PackageCheck, ScanLine } from "lucide-react";
 
@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PENDING_LOADS_URL = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
@@ -82,6 +84,12 @@ interface ScanFeedback {
 }
 
 export default function FactoryPriorityScan() {
+  const { language } = useApplicationLanguage();
+  const tr = useCallback(
+    (key: PriorityScanTranslationKey, params?: Record<string, string | number>) =>
+      translatePriorityScanText(key, language, params),
+    [language]
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scanSubmissionInFlightRef = useRef(false);
@@ -143,7 +151,7 @@ export default function FactoryPriorityScan() {
       { credentials: "include" }
     );
     if (!response.ok) {
-      let message = "Could not route this reference.";
+      let message = tr("couldNotRoute");
       let errorCode: string | undefined;
       try {
         const payload = (await response.json()) as { message?: string; code?: string };
@@ -191,7 +199,7 @@ export default function FactoryPriorityScan() {
       }
     }
 
-    throw new Error("Could not find an available Priority Scan destination.");
+    throw new Error(tr("noDestination"));
   };
 
   const handleScan = async () => {
@@ -204,7 +212,7 @@ export default function FactoryPriorityScan() {
       showFeedback({
         type: "error",
         referenceNumber,
-        message: "No active Priority Scan loading is configured.",
+        message: tr("noActivePriority"),
       });
       focusScanner();
       return;
@@ -214,7 +222,7 @@ export default function FactoryPriorityScan() {
       showFeedback({
         type: "warn",
         referenceNumber,
-        message: "Already scanned in this Priority Scan session.",
+        message: tr("alreadyScannedSession"),
       });
       focusScanner();
       return;
@@ -250,9 +258,15 @@ export default function FactoryPriorityScan() {
       const completedThisLoading = routed.advance?.completedOrderIds.includes(routed.target.orderId) === true;
       const message = completedThisLoading
         ? routed.advance?.activeOrderId
-          ? `Loading #${routed.target.orderId} is satisfied. Advanced to Loading #${routed.advance.activeOrderId}.`
-          : `Loading #${routed.target.orderId} is satisfied. Priority queue is complete.`
-        : `Added to Priority #${routed.target.priority} — Loading #${routed.target.orderId}.`;
+          ? tr("loadingSatisfiedAdvance", {
+              orderId: routed.target.orderId,
+              nextOrderId: routed.advance.activeOrderId,
+            })
+          : tr("loadingSatisfiedComplete", { orderId: routed.target.orderId })
+        : tr("addedToPriority", {
+            priority: routed.target.priority,
+            orderId: routed.target.orderId,
+          });
 
       showFeedback({
         type: "success",
@@ -263,7 +277,7 @@ export default function FactoryPriorityScan() {
       showFeedback({
         type: "error",
         referenceNumber,
-        message: error instanceof Error ? error.message : "Could not route this reference.",
+        message: error instanceof Error ? error.message : tr("couldNotRoute"),
       });
     } finally {
       scanSubmissionInFlightRef.current = false;
@@ -282,13 +296,13 @@ export default function FactoryPriorityScan() {
             <div>
               <div className="flex items-center gap-2">
                 <ScanLine className="h-5 w-5 text-primary" />
-                <h2 className="text-lg font-semibold">Priority Scan</h2>
+                <h2 className="text-lg font-semibold">{tr("priorityScan")}</h2>
               </div>
               <p className="mt-1 text-sm text-muted-foreground">
-                Scan a bale reference. This page keeps the queue visible while you work.
+                {tr("scanDescription")}
               </p>
             </div>
-            <Badge variant="outline">{activeQueue.length} active priorit{activeQueue.length === 1 ? "y" : "ies"}</Badge>
+            <Badge variant="outline">{tr("activePriorities", { count: activeQueue.length })}</Badge>
           </div>
 
           <div className="mt-5 flex gap-2">
@@ -302,7 +316,7 @@ export default function FactoryPriorityScan() {
                   void handleScan();
                 }
               }}
-              placeholder="Scan reference..."
+              placeholder={tr("scanPlaceholder")}
               autoComplete="off"
               className="h-12 text-base font-mono"
               disabled={scanning}
@@ -316,16 +330,16 @@ export default function FactoryPriorityScan() {
               data-testid="button-priority-scan"
             >
               <ScanLine className="h-4 w-4 mr-2" />
-              {scanning ? "Checking…" : "Scan"}
+              {scanning ? tr("checking") : tr("scan")}
             </Button>
           </div>
 
           <div className="mt-2 space-y-1 text-xs text-muted-foreground">
             <p>
-              Each reference goes to the highest-priority loading that still needs it; satisfied loadings advance automatically.
+              {tr("routeHint")}
             </p>
             <p>
-              Overload or items not requested on the proforma must be scanned from the normal Pending Loading scanner.
+              {tr("manualExceptionHint")}
             </p>
           </div>
 
@@ -355,7 +369,7 @@ export default function FactoryPriorityScan() {
         </section>
 
         <section className="rounded-xl border bg-card p-5">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Current priority</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{tr("currentPriority")}</div>
           {isLoading ? (
             <div className="mt-3 space-y-2">
               <Skeleton className="h-7 w-32" />
@@ -370,26 +384,26 @@ export default function FactoryPriorityScan() {
                   aria-hidden="true"
                 />
                 <div>
-                  <div className="text-2xl font-bold">Priority #{current.priority}</div>
-                  <div className="text-sm text-muted-foreground">Loading #{current.orderId}</div>
+                  <div className="text-2xl font-bold">{tr("priorityNumber", { priority: current.priority })}</div>
+                  <div className="text-sm text-muted-foreground">{tr("loadingNumber", { orderId: current.orderId })}</div>
                 </div>
               </div>
               <div className="mt-4 text-sm">
                 <div className="font-medium">
-                  {current.load?.customerName || `Customer loading #${current.orderId}`}
+                  {current.load?.customerName || tr("customerLoading", { orderId: current.orderId })}
                 </div>
                 <div className="text-muted-foreground">
-                  {current.load?.proformaName || `Proforma #${current.proformaIdUsed ?? "—"}`}
+                  {current.load?.proformaName || tr("proformaNumber", { proformaId: current.proformaIdUsed ?? "—" })}
                 </div>
                 <div className="mt-2 flex items-center gap-2 text-muted-foreground">
                   <PackageCheck className="h-4 w-4" />
-                  {current.load?.totalQtyBales ?? 0} bales already scanned
+                  {tr("balesAlreadyScanned", { count: current.load?.totalQtyBales ?? 0 })}
                 </div>
               </div>
             </div>
           ) : (
             <div className="mt-3 text-sm text-muted-foreground">
-              No Priority Scan queue yet. Set colors and priorities from Pending Loadings.
+              {tr("noPriorityQueue")}
             </div>
           )}
         </section>
@@ -398,8 +412,8 @@ export default function FactoryPriorityScan() {
       <section className="rounded-xl border overflow-hidden">
         <div className="px-4 py-3 border-b bg-muted/20 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-semibold">Priority queue</h3>
-            <p className="text-xs text-muted-foreground">The first row is the active priority.</p>
+            <h3 className="font-semibold">{tr("priorityQueue")}</h3>
+            <p className="text-xs text-muted-foreground">{tr("firstRowActive")}</p>
           </div>
           <Badge variant="secondary">{activeQueue.length}</Badge>
         </div>
@@ -411,7 +425,7 @@ export default function FactoryPriorityScan() {
             ))}
           </div>
         ) : activeQueue.length === 0 ? (
-          <div className="p-8 text-center text-sm text-muted-foreground">No loadings have Priority Scan enabled.</div>
+          <div className="p-8 text-center text-sm text-muted-foreground">{tr("noPrioritiesEnabled")}</div>
         ) : (
           <div className="divide-y">
             {activeQueue.map((item, index) => (
@@ -424,22 +438,22 @@ export default function FactoryPriorityScan() {
                 <span
                   className="h-5 w-5 rounded-full border border-black/10 shrink-0"
                   style={{ backgroundColor: item.color }}
-                  aria-label={`Priority color ${item.color}`}
+                  aria-label={tr("priorityColor", { color: item.color })}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="font-medium truncate">
-                    {item.load?.customerName || `Loading #${item.orderId}`}
+                    {item.load?.customerName || tr("loadingNumber", { orderId: item.orderId })}
                   </div>
                   <div className="text-xs text-muted-foreground truncate">
-                    Loading #{item.orderId}
+                    {tr("loadingNumber", { orderId: item.orderId })}
                     {item.load?.proformaName ? ` · ${item.load.proformaName}` : ""}
                   </div>
                 </div>
                 <div className="text-right shrink-0">
                   <div className="font-medium">{item.load?.totalQtyBales ?? 0}</div>
-                  <div className="text-xs text-muted-foreground">scanned</div>
+                  <div className="text-xs text-muted-foreground">{tr("scanned")}</div>
                 </div>
-                {index === 0 && <Badge>Active</Badge>}
+                {index === 0 && <Badge>{tr("active")}</Badge>}
               </div>
             ))}
           </div>
@@ -448,13 +462,13 @@ export default function FactoryPriorityScan() {
 
       <section className="rounded-xl border overflow-hidden flex-1 min-h-[220px]">
         <div className="px-4 py-3 border-b bg-muted/20">
-          <h3 className="font-semibold">This scan session</h3>
-          <p className="text-xs text-muted-foreground">Reference and product only.</p>
+          <h3 className="font-semibold">{tr("thisSession")}</h3>
+          <p className="text-xs text-muted-foreground">{tr("referenceProductOnly")}</p>
         </div>
         {sessionScans.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center text-muted-foreground">
             <ScanLine className="h-10 w-10 opacity-30" />
-            <p className="mt-2 text-sm">Scan a reference to begin.</p>
+            <p className="mt-2 text-sm">{tr("scanToBegin")}</p>
           </div>
         ) : (
           <div className="divide-y">
@@ -462,14 +476,16 @@ export default function FactoryPriorityScan() {
               <div key={scan.id} className="px-4 py-3 flex items-center gap-3">
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                 <div className="font-mono font-medium min-w-[150px]">{scan.referenceNumber}</div>
-                <div className="flex-1 min-w-0 text-sm truncate">{scan.productName || "Unnamed product"}</div>
+                <div className="flex-1 min-w-0 text-sm truncate">{scan.productName || tr("unnamedProduct")}</div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span
                     className="h-3.5 w-3.5 rounded-full border border-black/10"
                     style={{ backgroundColor: scan.color }}
                     aria-hidden="true"
                   />
-                  <Badge variant="outline">#{scan.priority} · Loading {scan.orderId}</Badge>
+                  <Badge variant="outline">
+                    {tr("priorityNumber", { priority: scan.priority })} · {tr("loadingNumber", { orderId: scan.orderId })}
+                  </Badge>
                 </div>
               </div>
             ))}
