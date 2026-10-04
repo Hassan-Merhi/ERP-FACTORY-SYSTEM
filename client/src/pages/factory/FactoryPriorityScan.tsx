@@ -230,6 +230,14 @@ export default function FactoryPriorityScan() {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] }),
         queryClient.invalidateQueries({ queryKey: [PRIORITY_SCAN_CONFIGS_URL] }),
+        queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-orders", routed.target.orderId],
+          exact: true,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: ["/api/factory/customer-proformas/capacity", routed.target.proformaId],
+        }),
+        queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-stock-count"] }),
       ]);
 
       const completedThisLoading = routed.advance?.completedOrderIds.includes(routed.target.orderId) === true;
@@ -304,9 +312,14 @@ export default function FactoryPriorityScan() {
             </Button>
           </div>
 
-          <p className="mt-2 text-xs text-muted-foreground">
-            Each reference goes to the highest-priority loading that still needs it; satisfied loadings advance automatically.
-          </p>
+          <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+            <p>
+              Each reference goes to the highest-priority loading that still needs it; satisfied loadings advance automatically.
+            </p>
+            <p>
+              Overload or items not requested on the proforma must be scanned from the normal Pending Loading scanner.
+            </p>
+          </div>
 
           {feedback && (
             <div
