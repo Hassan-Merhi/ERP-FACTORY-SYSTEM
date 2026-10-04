@@ -5,7 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
@@ -423,7 +423,7 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
       if ((error as { name?: string }).name === "ValidationError") {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

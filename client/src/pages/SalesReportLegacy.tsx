@@ -280,15 +280,15 @@ export default function SalesReport() {
       configuredProfit: acc.configuredProfit + group.configuredProfit,
       totalQty: acc.totalQty + group.totalQty,
     }),
-    { totalSales: 0, totalCost: 0, totalConfiguredCost: 0, costProfit: 0, configuredProfit: 0, totalQty: 0 }
+    {
+      totalSales: 0,
+      totalCost: 0,
+      totalConfiguredCost: 0,
+      costProfit: 0,
+      configuredProfit: 0,
+      totalQty: 0,
+    }
   );
-
-  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
-  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
-  const displayedCostProfit =
-    isAllTimeReconciliationView && cogsReconciliation
-      ? cogsReconciliation.adjustedCostProfit
-      : totals.costProfit;
 
   const handleClearFilters = () => {
     setPeriodFilter(getDefaultPeriodValue("today"));
@@ -298,6 +298,11 @@ export default function SalesReport() {
     setProfitFilter("all");
     setSelectedCompanies([]);
   };
+
+  // Keep the reconciliation calculation in the background, but expose one Cost Profit KPI.
+  // On the all-time view this is the reconciled/adjusted profit; filtered views keep their scoped profit.
+  const displayedCostProfit =
+    isAllTimeReconciliationView && cogsReconciliation ? cogsReconciliation.adjustedCostProfit : totals.costProfit;
 
   // Declared after handleClearFilters: the build-time bandwidth transform
   // replaces the block that ends there. Counts what "Clear filters" resets;

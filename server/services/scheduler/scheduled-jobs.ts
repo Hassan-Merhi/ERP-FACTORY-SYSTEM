@@ -298,6 +298,19 @@ export function startScheduler() {
     }
   );
 
+  // Recurring journal catch-up. Run hourly so month-end posting follows each
+  // template's own timezone and a deploy/restart cannot permanently miss the
+  // boundary. The posting key is deterministic per recurrence + scheduled date,
+  // so retries or overlapping instances cannot create a duplicate voucher.
+  cron.schedule(
+    "20 * * * *",
+    createSchedulerTick("recurringJournals", async () => {
+      const { runDueRecurringJournals } = await import("../accounting/recurringJournalService");
+      await runDueRecurringJournals();
+    }),
+    { timezone: "UTC" }
+  );
+
   // Run every day at 6:00 AM ET. Rental contracts can bill on the 1st, 20th,
   // or any other day, so daily catch-up is required for correct monthly expense
   // recognition. The posting functions are idempotent and skip completed rows.
@@ -397,29 +410,39 @@ export function startScheduler() {
     }
   );
 
-  // Container auto-tracking — runs every 6 hours (00:00, 06:00, 12:00, 18:00 EST)
-  cron.schedule(
-    "0 */6 * * *",
-    createSchedulerTick("containerTracking", async () => {
-      // ERP and factory tracking are reported separately on purpose: one
-      // failing is not a reason to skip the other.
-      try {
-        const { trackDueContainers } = await import("../container-tracking");
-        await trackDueContainers();
-      } catch (err: unknown) {
-        logger.error("cron containerTracking (ERP) failed", {
-          module: "scheduler",
-          action: "containerTracking",
-          error: err,
-        });
+  // Container auto-tracking — runs every 6 hours (00:00, 06:00, 12:00, 18:00 EST).
+  // This global switch pauses both ERP and Factory auto-tracking without affecting
+  // manual "Track Now" actions or any of the other scheduled jobs.
+  const containerAutoTrackingEnabled = process.env.ENABLE_CONTAINER_AUTO_TRACKING !== "false";
+  if (containerAutoTrackingEnabled) {
+    cron.schedule(
+      "0 */6 * * *",
+      createSchedulerTick("containerTracking", async () => {
+        // ERP and factory tracking are reported separately on purpose: one
+        // failing is not a reason to skip the other.
+        try {
+          const { trackDueContainers } = await import("../container-tracking");
+          await trackDueContainers();
+        } catch (err: unknown) {
+          logger.error("cron containerTracking (ERP) failed", {
+            module: "scheduler",
+            action: "containerTracking",
+            error: err,
+          });
+        }
+        const { trackDueFactoryContainers } = await import("../factory-container-tracking");
+        await trackDueFactoryContainers();
+      }),
+      {
+        timezone: "America/New_York",
       }
-      const { trackDueFactoryContainers } = await import("../factory-container-tracking");
-      await trackDueFactoryContainers();
-    }),
-    {
-      timezone: "America/New_York",
-    }
-  );
+    );
+  } else {
+    logger.info("Container auto-tracking disabled by ENABLE_CONTAINER_AUTO_TRACKING=false", {
+      module: "scheduler",
+      action: "containerTracking",
+    });
+  }
 
   logger.info("All scheduled jobs registered", {
     module: "scheduler",
@@ -427,6 +450,7 @@ export function startScheduler() {
     jobs: [
       "monthlyNetPositionWhatsApp(1st 07:00 EST)",
       "dailyRentalAccrual(daily 06:00 ET)",
+      "recurringJournals(hourly :20 UTC; per-template timezone)",
       "hourlyStockReport(hourly :00 ET)",
       "hourlyNetPositionExport(hourly :05 ET)",
       "scheduledDailyExport(:10/:25/:40/:55 ET; active only in configured hour)",
@@ -434,7 +458,7 @@ export function startScheduler() {
       "convergenceReconciliation(daily 03:30 ET)",
       "overdueCustomers(daily 09:00 EST)",
       "softDeletePurge(daily 02:00 EST)",
-      "containerTracking(every 6h EST)",
+      ...(containerAutoTrackingEnabled ? ["containerTracking(every 6h EST)"] : []),
     ],
   });
 }

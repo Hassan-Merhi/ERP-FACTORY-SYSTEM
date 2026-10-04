@@ -313,6 +313,7 @@ export const factoryWorkerDeductions = pgTable(
     deductionDate: date("deduction_date").notNull(),
     applied: boolean("applied").notNull().default(false),
     payrollId: integer("payroll_id"),
+    erpPayrollRunId: integer("erp_payroll_run_id"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({

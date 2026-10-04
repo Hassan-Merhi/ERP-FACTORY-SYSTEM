@@ -7,6 +7,7 @@
  */
 export * from "./parties";
 export * from "./vouchers";
+export * from "./recurring-journals";
 export * from "./accounting-posting-requests";
 export * from "./stock-movements";
 export * from "./sales-intercompany";

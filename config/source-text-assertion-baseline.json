@@ -135,7 +135,6 @@
     "tests/company-scope-rls-migration.test.ts",
     "tests/company-scope-rls-runtime.test.ts",
     "tests/configuration-secret-hygiene.test.ts",
-    "tests/customer-order-excel-export-behavior.test.ts",
     "tests/excel-helper.test.ts",
     "tests/factory-bilingual-schema.test.ts",
     "tests/factory-historical-replay-no-apply.test.ts",

@@ -6,7 +6,7 @@ const harness = vi.hoisted(() => ({
   warn: vi.fn(),
 }));
 
-vi.mock("../server/routes/helpers/auditHelpers", () => ({
+vi.mock("../server/routes/helpers/auditWriteAdapter", () => ({
   logAudit: harness.logAudit,
 }));
 

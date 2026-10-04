@@ -178,7 +178,7 @@ describe("compact sales-report routes are mounted by the live registry", () => {
     const sourceBindings = declaredBindings(source);
     const builtBindings = declaredBindings(built);
     const builtReferences = referencedIdentifiers(built);
-    for (const name of ["isAllTimeReconciliationView", "cogsReconciliation"]) {
+    for (const name of ["isAllTimeReconciliationView", "cogsReconciliation", "displayedCostProfit"]) {
       expect(builtBindings.has(name), `${name} must stay declared`).toBe(true);
       expect(builtReferences.has(name), `${name} must stay in use`).toBe(true);
     }

@@ -1,4 +1,5 @@
 import express from "express";
+import { createHttpApp } from "../server/httpApp";
 import session from "express-session";
 import { registerRoutes } from "../server/routes";
 import { db } from "../server/db";
@@ -82,7 +83,7 @@ function testCompanyType(prefix: string): "erp" | "factory" {
 }
 
 export async function setupTestApp(): Promise<express.Express> {
-  const app = express();
+  const app = createHttpApp();
   app.use(express.json());
   app.use(express.urlencoded({ extended: false }));
 
@@ -152,6 +153,9 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     .where(sql`${schema.companies.name} LIKE ${"%" + prefix + "%"}`);
 
   for (const company of companies) {
+    // A closed fiscal period makes the closed-period guard refuse to delete the
+    // vouchers it covers, so lift any closure before the voucher deletes below.
+    await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
     await db.delete(schema.inventory).where(eq(schema.inventory.companyId, company.id));

@@ -5,12 +5,13 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
 import {
   logAudit,
   syncEmployeeBalancesFromEntries,
@@ -488,9 +489,16 @@ export function registerVoucherDeleteRoutes(app: Express) {
         changes: buildVoucherChangesForDelete(voucher, _delEntriesSnap),
       });
 
+      // A deleted cash sale must leave the intercompany POS mirror for its date.
+      // The rebuild is atomic and never throws; a failure is logged and leaves
+      // the previous mirror in place for a later recalculation.
+      if (voucher.voucherType === "Sales" && !voucher.optional) {
+        await recalculateIntercompanyForDate(companyId, voucher.voucherDate);
+      }
+
       res.json({ message: "Voucher deleted successfully" });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

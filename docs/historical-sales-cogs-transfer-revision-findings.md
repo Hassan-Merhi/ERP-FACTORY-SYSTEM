@@ -1,0 +1,372 @@
+# Historical sales COGS repair — stock-transfer revision findings
+
+Status: research only. No repair-algorithm change. APPLY stays disabled.
+Date: 2026-10-01. Baseline: dry-run #33, `2026-09-30-v30-wave6-valuation-reset`
+(72,755 rows, 30,811 changed, 21,900 blocked, 1,139 blocked keys).
+
+## Why this note exists
+
+The V27 handoff proposed a replay of transfer revisions: emit the reconstructed
+original quantity at the transfer's creation time, then emit each approved
+revision's `delta` at `revision_date`. Production data and code history show that
+this model doesn't match how pre-canonical transfers changed inventory.
+Implementing it as written would invent movements, which breaks the fail-closed
+rule.
+
+## How large the lead is
+
+In run #33, blocked checks whose boundary is a legacy transfer movement:
+
+| boundary on            | COST_MEMORY_IRREVERSIBLE | MOVEMENT_INVERSE_INVALID |
+|------------------------|-------------------------:|-------------------------:|
+| revised transfer       | 2,116 (138 boundaries)   | 803 (36 boundaries)      |
+| non-revised transfer   | 662 (62 boundaries)      | 521 (14 boundaries)      |
+
+Revised transfers are still the biggest transfer-related cluster.
+
+## What really happened to pre-canonical revised transfers
+
+1. **Every revised transfer has a later full-replace save.** For all of them, every
+   `stock_transfer_items` row has the same `created_at`, and it is after the last
+   revision (often by 1–2 days). The old `PUT /api/stock-transfers/:id`
+   (`storage.updateStockTransfer`) reversed every old line, deleted all lines,
+   re-inserted them, and re-applied them. So the loader's
+   `GREATEST(sti.created_at, …)` is the **last save time**. It is not the
+   creation time.
+
+2. **Most were optional drafts.** From May to July, 39 of 48 revised pre-canonical
+   transfers that have voucher audit rows flipped `optional: true → false` *after*
+   their first revision. 29 flipped at or after their last revision. Draft PUTs
+   skip inventory (`isOptional`), so **draft-era revisions never moved stock**.
+   Inventory was first applied by `PATCH /api/vouchers/:id` at finalization
+   (`!willBeOptional && !inventoryApplied`: source issue at the running average,
+   destination receipt at `item.rate`). Flipping a voucher back to optional
+   reversed it. April has no voucher audit rows, so finalization can't be
+   observed there.
+
+3. **At least four mutation semantics existed for revisions:**
+   - draft revisions: record only, no inventory effect;
+   - admin "Save as Revision" on a finalized transfer: client PATCH voucher →
+     full PUT (source receipt of each old line at its old stored rate,
+     destination issue at the running average; then source issue at the average,
+     destination receipt at the new rate) → POST revision record;
+   - POS `optional=true` revisions (present by mid-May): record only until an
+     admin approved them, then the **net delta** was applied with
+     `adjustInventory`. The approval time was **not stored**. `revision_date` is
+     the submission time. Migration 011 later relabelled these as
+     `status='approved'` with `reviewed_at IS NULL`, so they look identical to
+     admin revisions;
+   - August lifecycle (`reviewed_at` set): delta applied at approval. Since
+     2026-08-17, `journalStockTransferLeg` journals it canonically as
+     `stock-transfer` / `source_id = transferId`.
+
+4. **The evidence has gaps:**
+   - plain saves (PUT with no revision row) changed quantities without a record;
+   - `DELETE /api/stock-transfer-revisions/:id` (added 2026-04-11) deleted
+     revision rows without touching inventory;
+   - migration 011 renumbered `revision_number` sequentially, which hides gaps
+     from deleted revisions;
+   - revision items carry no `rate`.
+
+   The voucher audit (`audit_log`, `table_name='vouchers'`, from about July)
+   timestamps every client save, because the client PATCHes the voucher before
+   each PUT. Even so, it can't separate saves from other voucher edits, and it
+   can't recover the quantities of plain saves.
+
+5. **Rates.** The April–July client preloaded each existing line's stored rate and
+   kept it across edits. New lines took the source location's rate when they were
+   added, and there was no rate input. This suggests that a line which survives to
+   the final row kept `final rate` throughout. That hasn't been verified for every
+   client version, and it says nothing about lines that were removed.
+
+## Consequences
+
+- The handoff's "original quantity at creation + delta at `revision_date`" model is
+  wrong for drafts, which are most cases, and for POS-approved revisions, where the
+  timestamp is wrong. It would add phantom destination stock before finalization.
+- The current loader, which puts the final quantity at the last save, is roughly
+  right when finalization happened at the last save. It is wrong when saves
+  happened after finalization. In that window the true quantities were the
+  finalization-time quantities, followed by full reverse and reapply at each
+  later save.
+- Because of the gaps above, the intermediate quantities are **not provable in
+  general**. They can only be proven for transfers where every save after
+  finalization is accounted for.
+
+## Proposed safe path
+
+1. Classify each pre-canonical revised transfer from immutable evidence: draft
+   window (voucher audit optional flips), finalization time, saves after
+   finalization (voucher audit rows), and admin versus POS revision (`created_by`,
+   with save timestamps matching to the millisecond, since the client's PATCH
+   comes right before the revision row).
+2. Build a candidate lifecycle only for transfers where:
+   - finalization is observed;
+   - every save after finalization pairs with a revision row (or is shown to be
+     quantity-neutral);
+   - the quantity chain reconciles: `original_quantity` equals the prior
+     `new_quantity`, and the last `new_quantity` equals the final row's quantity;
+   - no removed line needs an unknown rate.
+
+   Model the candidate as: apply at finalization, then a full reverse and reapply
+   at each later save, using the engine's existing receipt and issue semantics.
+3. Use the candidate **only** as an alternative in the opening-forward proof, the
+   same way `pos-sale-normalized` is used. Accept it only when it reproduces the
+   immutable Phase 3 checkpoint exactly. Everything else stays blocked. Suggested
+   blocker codes: `LEGACY_TRANSFER_REVISION_TIMESTAMP_AMBIGUOUS` (POS approvals,
+   April), `LEGACY_TRANSFER_REVISION_CHAIN_INVALID`,
+   `LEGACY_TRANSFER_REVISION_RATE_EVIDENCE_MISSING`,
+   `LEGACY_TRANSFER_UNRECORDED_SAVE`.
+4. Before step 2, check the `updateStockTransfer`, voucher PATCH, and POS approval
+   code at every deploy between 2026-04-10 and 2026-08-17. The reversal guard
+   `inventoryApplied || !isOptional` and the finalize path changed during that
+   period (for example `398244eb3`, 2026-07-23, and Phase 7 `2e2fc03eb`,
+   2026-07-22).
+
+## Side lead
+
+The legacy transfer `NOT EXISTS` excludes a legacy leg whenever *any* canonical
+`stock-transfer` row exists for the same transfer, item, and location. Only one
+pre-canonical revised transfer (770, created 2026-08-12, last saved in the
+canonical era) is affected. Check whether its pre-canonical application is
+missing from the replay.
+
+## Rewind divergence: company 1, location 134, item 702 (runs #33–#36)
+
+- Every historical sale at this location stores cost_price 107.34. That is the
+  locked live rate of canonical sale 13471 on 2026-09-04, stamped onto older
+  sales. This is the corruption the repair exists to fix.
+- Stock never reaches zero. Starting from the item opening of 1 @ 92.11, it hovers
+  at 1–5 units and returns to exactly 1 unit dozens of times from January to
+  September. Because there is no reset, the checkpoint rewind must cross every
+  receipt. Each rewound receipt multiplies the reconstructed rate's sensitivity
+  to any value error by Q_after/Q_before (often 2–6×). A 2-cent drift became
+  110 → 157 → 471 → 6,031 → … → 536,372,383.50/unit by January. Every local
+  inverse step still replayed exactly, so only the V32 evidenced-rate-range
+  guard caught it.
+- A forward replay from the opening is stable and plausible (92 → 107), but it
+  ends at 1|107.07|107.07 against checkpoint 1|107.05|107.05. Canonical sale
+  issues show production 1–2 cents away from the replay as early as 2026-08-17
+  (recorded 106.68 vs replay 106.66).
+- Emulating pre-2026-08-02 float rounding (adjustInventory moved to decimal.js in
+  3635b8c36) does not close the gap. The drift sits in August. The likely cause
+  is ordering: legacy offloads are placed at their user-entered `offloaded_at`
+  date (midnight), and `container_offloads` has no entry timestamp. Candidate
+  evidence for the real entry time is the "Freight for offloaded container"
+  journal vouchers (from 2026-04-29), but they link to offloads only through
+  description text, so they need a proof-grade link before use.
+- V34 adds a `REWIND_ERROR_AMPLIFICATION` warning (worst sensitivity per key) to
+  measure this conditioning problem across all keys before choosing a blocking
+  threshold.
+
+## POS sale-cost mismatches (run #39: 12,811 blocked rows on 317 keys)
+
+The blocker fires when the checkpoint rewind reaches an original POS sale issue
+(`pos-sale:V:revN:ITEM`, which journals the locked live rate) and infers a
+different pre-sale rate. A forward replay of sampled keys shows two causes.
+
+1. **Unrecorded revaluations (≈35 keys).** Company 10 (Golden Coast), key
+   132/6282, sold at a recorded 33.15–33.16 through 2026-08-31 and at 37.07 from
+   2026-09-01, with no stock movement in between. Location 131 jumped to the same
+   37.07 at the same moment. Across the canonical journal there are 45 such
+   jumps (two consecutive original sale issues at a key, no movement between,
+   recorded rates more than 0.02 apart). 35 of them fall on 2026-09-01 – 09-04,
+   mostly company 10, often moving an item to one identical rate across
+   locations 131/132/133.
+   - Writers in the code that change average_rate/total_value without a
+     movement or an audit row: `updateCostPricesByBarcode` (location
+     cost-price import: rate = price, value = qty × price) and direct
+     location inventory imports.
+   - No surviving evidence of when they ran or what they wrote was found:
+     audit_log has nothing, Render request logs do not reach back that far, and
+     `sp_migration_cutover_stock_deltas` is empty (the SP Phase 4 migration
+     never ran). The cash/bank "revaluation service" is FX only.
+   - Sales before such a jump cannot be proven by rewinding from the
+     checkpoint, so the blocks are correct. V37 labels these boundaries
+     `UNRECORDED_REVALUATION_DETECTED` (warning) so they are not confused
+     with model drift.
+   - Possible recovery to explore: re-anchor the rewind at the last pre-jump
+     original sale (rate pinned, value within ±0.005×qty) and accept a value
+     candidate only if it is unique against every earlier recorded live rate.
+2. **Cent-level drift (most of the rest).** Mismatches of 0.01–0.05, the same
+   pattern as item 702: forward replays stay within a few cents of production,
+   but the rewind cannot reach the recorded rate exactly. Causes still open.
+   Float rounding (pre-2026-08-02) and legacy offload ordering (fixed in V36)
+   were ruled out or corrected for the cases examined.
+   - The same writers above mean that undetected revaluations before canonical
+     journaling (2026-08-15) can exist anywhere. The V32 evidenced-rate range
+     and V35 amplification guards are the safety net for those.
+
+## Direct-revaluation writer inventory (2026-10-01)
+
+Code paths, current and deleted, that rewrite `inventory.average_rate` / `total_value`
+without a stock movement:
+
+| Writer | Effect | Persisted evidence before V38 |
+|---|---|---|
+| `updateCostPricesByBarcode` (`POST /api/locations/:id/import-cost-prices`) | rate = imported price (2dp), value = qty × price | none |
+| `updateInventory` (direct location import) | quantity journaled only; rate/value overwritten | quantity row only |
+| `applyInventoryRateDeltaAndSync` (offload charge edit `PATCH /api/containers/:id/offload`) | rate += per-bale delta, value = qty × rate; container vouchers deleted | none |
+| `syncSalesItemCostsForStockItems` | stamps every historical `sales_items.cost_price` at the key with today's rate | none (this is the corruption being repaired) |
+| `POST /api/admin/repair-inventory-values` | zero/negative rows: rate and value set to 0 (erases cost memory) | log line only |
+| `POST /api/admin/rebuild-inventory` | quantity and value rebuilt from vouchers | none |
+| `POST /api/admin/fix-sales-inventory` | negative quantities set to 0 | none |
+
+Since V38, the two import writers record `inventory_valuation_overrides`. Render
+request logs keep 30 days, which doesn't reach the 2026-09-01 company 10 rewrites. So
+those rewrites can be crossed only through recorded live rates: the V39/V41 re-anchor.
+
+## Dropped POS lines (V41)
+
+From 2026-08-13 (`123d9eedc`) to 2026-09-26 (`2e4d483fa`), the original POS issue
+key was `pos-sale:V:rev0:ITEM`, with no line suffix. When a sale had two lines of the
+same item, the second line's journal insert collided with the first line's key. The
+journal kept only the first line, but inventory was deducted for every line. In
+production, all 812 unedited multi-line sales journal exactly the first line's
+quantity, and none journal the total. Edit legs gained `:line:` suffixes on
+2026-09-09.
+
+The lifecycle correction added the missing quantity at the voucher's *latest*
+mutation, which overstated stock between the sale and that mutation. Of the 315
+`CANONICAL_SALE_COST_EVIDENCE_MISMATCH` groups in run #48, 191 (9,719 rows) carry
+such a correction. Example: company 1/135/730, voucher 12782 (lines of 1 + 2, journaled
+−1, corrected −2 on 09-10). That correction put 3 units ahead of canonical sale 30043
+instead of 1.
+
+V41 restores dropped lines at the original issue instant, as unpriced live-rate
+issues, only where the original lines are proven. That means (a) the voucher was never
+edited or deleted, so the current lines are the original lines, or (b) the first edit
+of the voucher/item journals line-level reversal legs. In both cases the journaled
+quantity must equal the first line. Vouchers first edited before 2026-09-09 keep the
+previous behaviour, because their original lines are unknown.
+
+## Valuation eras (V41)
+
+A priced receipt into zero or negative stock, or a pinned valuation reset, erases cost
+memory. Above such a boundary the checkpoint holds no information about the earlier
+rate. When the checkpoint rewind then reaches an original canonical sale whose recorded
+live rate disagrees, V41 re-anchors at that sale, using the V39 unique-value proof. It
+does not block outright. Disagreements without such a boundary or an unrecorded
+revaluation stay blocked. A priced receipt into exactly empty stock now also has to
+reproduce the rewound after-state, so a contradiction there is reported as an invalid
+inverse, not as missing cost memory.
+
+## V42–V46 (2026-10-01)
+
+- **V42.** Restored lines carry their journal row's id, so the checkpoint cutoff no
+  longer filters them out of the rewind.
+- **V43, two-sided check.** An impossible inverse below already-priced legacy sales
+  showed that those sales came from a contradicted state. A sale is now kept only when
+  a forward replay from a priced receipt into exactly empty stock reaches the same
+  cost. In run #51, 274 of 2,632 such sales agreed; the rest are blocked as
+  `CHECKPOINT_REWIND_CONTRADICTED_BELOW`.
+- **V45, branching rewind.** An issue at an unpinned live rate can have several exact
+  inverses. Examples are a transfer source leg, a POS edit re-issue and a restored
+  line. In 1/134/113, transfer 23667 took 100 units from 14 @ 79.10 and inverts at
+  either 79.10 or 79.11. Only 79.11 replays to the recorded 78.25 at sale 14647. Every
+  exact inverse is now kept as a branch, and recorded live rates and exact inverses
+  prune them. Legacy sales are priced only when all branches agree. In run #52, 157
+  branches were promoted and mismatch rows fell from 12,351 to 9,268. Branching is
+  canonical-era only: legacy-era issues still take the primary inverse, which can be
+  one of several cent-apart consistent rates.
+- **V46, regression fix.** Since V41 a restored line counted toward the issued
+  quantity but not the journaled value, which diluted direct canonical proposals.
+  Runs #49–#52 marked 969 canonical rows ready at wrong costs: 57.86 off on average,
+  222.94 at most, never applied. A comparison of ready rows across runs found it. A
+  canonical proposal must now lie within its voucher's journaled live rates.
+
+## V27 versus later classifications
+
+Comparing run #30 (V27) with run #46 (V38), 9,393 rows went from ready to blocked.
+Their V27 proposals were unsafe:
+
+| V38 blocker | rows | V27 proposal >50% from original | V27 COGS delta |
+|---|---:|---:|---:|
+| rate hull | 5,688 | 615 | +52,363.55 |
+| canonical mismatch | 2,803 | 427 (137 above 1,000/unit) | +1,390,789.13 |
+| amplification >100× | 370 | 102 | +3,218,270,158.46 |
+| other | 532 | 9 | -4,236.22 |
+
+V27's "ready" set was not safe to apply.
+
+## V47–V49 (2026-10-01)
+
+- **rev0 edit legs.** Vouchers created before canonical journaling journal their
+  first edit as `rev0:reverse`/`rev0:issue`. V41 had read those `rev0:issue` legs as
+  original sale issues, which caused false mismatches (voucher 12219, six groups).
+  Lifecycle corrections priced from edit legs (old line cost) are now unpriced
+  live-rate movements.
+- **Closed zero-stock eras.** An era runs from a priced receipt into exactly empty
+  stock until stock is exactly zero again, and a forward replay prices the sales in
+  it. Run #54 used 866 eras to price 4,003 previously blocked sales. In none of them
+  did the era's cost disagree with a sale the checkpoint rewind had already priced.
+  An era is rejected if stock goes negative or a recorded live rate inside it
+  disagrees. The rate hull now blocks era-proven sales only when their own cost is
+  outside the range.
+- **Branching re-anchor and merged item.** The re-anchor and the merged-item kept
+  rewind now branch like the checkpoint rewind. Merged item 228 still ends with 3
+  exact states at the merge, and the zero-opening contribution doesn't single one
+  out, so it stays blocked.
+- **Stability.** Every sale ready in two consecutive runs from #53 to #56 kept
+  exactly the same cost.
+- **Residual legacy ambiguity (not blocked).** 1,521 rewound legacy sales in 831
+  groups also admit another exact pre-issue rate. They are priced on the
+  rate-unchanged inverse. The alternative is 1 cent away for 1,266 of them, 2–5 cents
+  for 240, and 6–10 cents for 15. `LEGACY_SALE_INVERSE_NOT_UNIQUE` warnings list them.
+
+## Remaining blockers after run #56
+
+The rows carrying the 8,285 canonical mismatches sit in 218 groups:
+- 151 groups have no detected transition: unexplained value drift in the canonical
+  era, often a few dollars across large quantities.
+- 67 groups sit below a detected revaluation or cost-memory reset, where the
+  re-anchor isn't unique.
+
+The legacy cost-memory, invalid-inverse and rate-hull groups need value evidence from
+before 2026-08-15 that was never recorded: the unrecorded direct revaluation writers
+listed above.
+
+## V50–V54 (2026-10-01)
+
+- **V50, strict proof.** A legacy sale whose own inverse admits more than one exact
+  pre-sale rate is blocked (`LEGACY_SALE_INVERSE_NOT_UNIQUE`). This applies in the
+  checkpoint rewind, the re-anchor and the merged-item source rewind.
+- **V51, observed open era.** From the last priced receipt into empty stock before the
+  first recorded live rate, a forward replay that reproduces the first two recorded
+  rates prices the legacy sales before them. Run #58: 20 eras, 123 sales, 0 conflicts.
+- **V52.** A closed era ends at the sale that takes stock to zero or below.
+- **V53/V54, opening eras (rejected as evidence).** Seeding each location with its
+  checkpoint-implied opening at the pinned item rate disagreed with checkpoint-proven
+  sales 765 times and agreed 78 times in run #60. The "location opened at the item
+  rate" assumption doesn't hold, so these eras are now diagnostic only
+  (`OPENING_ERA_UNVALIDATED`). Opening eras that reproduce two recorded live rates are
+  still used.
+- **Reliability evidence for the forward proofs kept.** In run #60:
+  - receipt-started closed eras (917 eras): 166 overlaps with checkpoint-proven
+    sales, 0 conflicts;
+  - observed eras (20 eras): 47 overlaps, 0 conflicts.
+- **Coverage gap.** Run #59: about 19,800 remaining rewind-failure sales have no
+  receipt into empty stock before them, because stock never ran out after the
+  opening. They need an evidenced per-location opening value, which doesn't exist.
+
+Run #61 (V54): 73,088 rows, 24,670 ready, 19,357 unchanged, 29,061 blocked across
+1,622 groups.
+
+## Evidence sources checked after V54 (all rejected)
+
+- **Import tables.** `import_batches` and `ai_import_jobs` are empty. `import_logs`
+  (564 files) hold container packing lists, not location openings.
+- **Bulk price updates in `audit_log`** (company 1 on 2026-05-29; companies 9 and 17
+  on 2026-08-19). These come from `bulk-ops.ts` and change selling prices only, not
+  inventory cost.
+- **Stock-transfer document rates as live-rate observations.** In the canonical era,
+  a transfer issued right after a sale carries exactly that sale's recorded live rate
+  in 226 of 276 cases (82%), and within a cent in 250 (90%). One in ten is off by
+  more, so these are not strict evidence.
+- **Single-location openings.** The run #60 opening-era conflicts are not caused by
+  splitting an item opening across locations. Single-location items show 378
+  conflicts against 68 agreements. The pinned item opening rate itself does not match
+  the January inventory rate, so openings cannot anchor a forward proof.
+- **Canonical container offloads into empty stock that contradict the rewind** (81
+  groups). Most differ from the receipt by one cent at one unit. The sales after them
+  are covered by closed eras; the sales before them have no determined start.

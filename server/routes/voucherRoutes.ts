@@ -26,6 +26,7 @@ import { registerStockTransferLifecycleRoutes } from "./vouchers/stockTransferLi
 import { registerStockTransferRevisionLifecycleRoutes } from "./vouchers/stockTransferRevisionLifecycleRoutes";
 import { registerImmutableStockTransferRevisionRoutes } from "./vouchers/immutableStockTransferRevisionRoutes";
 import { registerAdminPostUpdateStockTransferRevisionRoute } from "./vouchers/adminPostUpdateStockTransferRevisionRoute";
+import { registerRecurringJournalRoutes } from "./vouchers/recurringJournalRoutes";
 
 function registerVoucherDetailCompatibility(app: Express) {
   app.get("/api/vouchers/:id", (_req, res, next) => {
@@ -121,6 +122,7 @@ export function registerVoucherRoutes(app: Express) {
 
   registerCentralJournalCreateRoute(app);
   registerCentralJournalLifecycleRoutes(app);
+  registerRecurringJournalRoutes(app);
   registerVoucherJournalRoutes(app);
 
   // Stock Transfer deletion must run before the generic voucher delete routes,

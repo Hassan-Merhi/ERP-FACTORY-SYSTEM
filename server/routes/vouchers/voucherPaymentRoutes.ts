@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
@@ -435,7 +435,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
       res.json({ ...result, whatsapp: waResult });
     } catch (error: unknown) {
       logger.error("Error creating payment/receipt voucher:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -705,7 +705,7 @@ export function registerVoucherPaymentRoutes(app: Express) {
       res.json({ voucher: result.voucher, entries: result.entries, whatsapp: waResultPatch });
     } catch (error: unknown) {
       logger.error("Error updating payment/receipt voucher:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

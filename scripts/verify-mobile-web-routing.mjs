@@ -68,6 +68,10 @@ for (const token of [
   'fetch(request.clone(), { cache: "no-store" })',
   'await cache.put("/", response.clone())',
   'contentType.includes("text/html")',
+  'const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-09-30-v1"',
+  "IOS_FORCE_UPDATE_MARKER_CACHE",
+  "runOneTimeIosForceUpdate(clients)",
+  'url.searchParams.set("_pwa_update", IOS_FORCE_UPDATE_CAMPAIGN)',
 ]) {
   if (!serviceWorker.includes(token)) failures.push(`Service-worker recovery contract missing: ${token}`);
 }
@@ -80,6 +84,7 @@ for (const token of [
   'type: "CLEAR_APP_CACHES"',
   'currentUrl.searchParams.set("_asset_recovery"',
   'url.searchParams.delete("_sw")',
+  'url.searchParams.delete("_pwa_update")',
   "showStaleAssetRecoveryMessage()",
   "removeRecoveryMarkersAfterStableLoad()",
 ]) {
@@ -96,7 +101,11 @@ if (!indexHtml.includes('<script type="module" src="/src/registerServiceWorker.t
 
 for (const token of [
   'register("/sw.js", { updateViaCache: "none" })',
-  'return navigator.serviceWorker.register("/sw.js")',
+  'return await navigator.serviceWorker.register("/sw.js")',
+  "activeRegistration.update()",
+  '"controllerchange"',
+  '"visibilitychange"',
+  "UPDATE_CHECK_INTERVAL_MS",
 ]) {
   if (!serviceWorkerRegistration.includes(token)) {
     failures.push(`Service-worker registration contract missing: ${token}`);

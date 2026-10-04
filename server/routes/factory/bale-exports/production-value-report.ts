@@ -12,7 +12,9 @@ import { requireAuth } from "../../../auth";
 import { getLockedSupplierRatesReadOnlyBulk } from "../../../services/factory/rawStockLockedRateBulk";
 import {
   BatchRateDecimal,
+  calculateCumulativeBatchRate,
   calculateProductionProfit,
+  calculateProductionWeightCost,
   resolveProductionBalanceWeight,
 } from "./production-value-math";
 import {
@@ -270,7 +272,8 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
             wgMap.set(catName, { subType, qty: 1, totalWeightKg: wt, totalValue: value });
           }
         } else {
-          // Regular bale. Profit always uses selling value, even when the report is viewing cost price.
+          // Track both catalog values; the active valuation mode decides which one
+          // becomes Production Value and therefore which one drives Profit.
           totalSellingValue += sellingPrice;
           totalProductionCostValue += costPrice;
           if (!(price > 0)) missingSelectedPriceBales += 1;
@@ -404,67 +407,69 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
       }, 0);
 
       // ── Balance on table ──
-      // All Time keeps the factory-wide physical balance. Date-filtered Production reports
-      // must instead use the remaining material from the batches in that filter. Mixing the
-      // all-time quantity with a daily blended rate made a normal ~11k batch show ~73k profit.
-      const [mixAllTimeResult, baleAllTimeResult] = await Promise.all([
+      // Balance on Table is an "as-of" snapshot. The report's start date never limits
+      // this card: we cumulatively include factory history through the selected END date.
+      // With no end date (All Time), the queries naturally include all available history.
+      const [mixAsOfResult, baleAsOfResult] = await Promise.all([
         db.execute(sql`
-          SELECT COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg
+          SELECT
+            COALESCE(SUM(total_weight_kg::numeric), 0) AS mix_kg,
+            COALESCE(SUM(total_cost::numeric), 0) AS mix_cost
           FROM factory_mix_batches
           WHERE company_id        = ${companyId}
             AND carry_forward_from_id IS NULL
             AND deleted_at        IS NULL
+            ${to ? sql`AND COALESCE(batch_date, DATE(created_at)) <= ${to}` : sql``}
         `),
         db.execute(sql`
           SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS bale_kg
           FROM factory_bales b
           WHERE b.company_id = ${companyId}
             AND b.status NOT IN ('DELETED', 'REMOVED', 'REPACKED')
+            ${to ? sql`AND COALESCE(DATE(b.stock_entry_date), DATE(b.created_at)) <= ${to}` : sql``}
         `),
       ]);
 
-      const mixAllTimeRow = resultRows(mixAllTimeResult)[0] ?? {};
-      const baleAllTimeRow = resultRows(baleAllTimeResult)[0] ?? {};
-      const allTimeMixKgDecimal = new BatchRateDecimal(String(mixAllTimeRow.mix_kg ?? "0"));
-      const allTimeBaleKgDecimal = new BatchRateDecimal(String(baleAllTimeRow.bale_kg ?? "0"));
+      const mixAsOfRow = resultRows(mixAsOfResult)[0] ?? {};
+      const baleAsOfRow = resultRows(baleAsOfResult)[0] ?? {};
+      const mixAsOfKgDecimal = new BatchRateDecimal(String(mixAsOfRow.mix_kg ?? "0"));
+      const mixAsOfCostDecimal = new BatchRateDecimal(String(mixAsOfRow.mix_cost ?? "0"));
+      const baleAsOfKgDecimal = new BatchRateDecimal(String(baleAsOfRow.bale_kg ?? "0"));
 
-      // Batch rates are calculation values, not display values. Keep up to 10 digits
-      // after the decimal point in the backend. The frontend still formats these rates
-      // to a maximum of 4 decimal places for display.
+      // Original Batches in the selected period keep their own historical blended rate.
+      // This remains useful in the filtered detail cards/table.
       const blendedCostPerKgDecimal = totalMixWeightDecimal.gt(0)
         ? totalMixCostDecimal.dividedBy(totalMixWeightDecimal).toDecimalPlaces(10)
         : new BatchRateDecimal(0);
-
-      // Convert the visible rate to a JSON number only at the response boundary;
-      // backend calculations below continue to use Decimal.
       const blendedCostPerKg = blendedCostPerKgDecimal.toNumber();
 
+      // Balance on Table uses the cumulative historical batch rate through the selected
+      // end date, not merely the batches inside the visible period.
+      const balanceBatchRateDecimal = calculateCumulativeBatchRate({
+        cumulativeMixCost: mixAsOfCostDecimal,
+        cumulativeMixWeightKg: mixAsOfKgDecimal,
+      });
       const balanceWeightDecimal = resolveProductionBalanceWeight({
-        isAllTime: !from && !to,
-        allTimeMixWeightKg: allTimeMixKgDecimal,
-        allTimeBaleWeightKg: allTimeBaleKgDecimal,
-        periodOnTableKg,
+        cumulativeMixWeightKg: mixAsOfKgDecimal,
+        cumulativeBaleWeightKg: baleAsOfKgDecimal,
       });
       const balanceWeightKg = balanceWeightDecimal.toNumber();
-
-      // Keep the Balance on Table rate identical to Original Batches for every filter.
-      // Only the quantity changes between a filtered period and All Time.
-      const balanceCostPerKg = blendedCostPerKg;
-      const balanceValueDecimal = balanceWeightDecimal.times(blendedCostPerKgDecimal);
+      const balanceCostPerKg = balanceBatchRateDecimal.toNumber();
+      const balanceValueDecimal = balanceWeightDecimal.times(balanceBatchRateDecimal);
       const balanceValue = balanceValueDecimal.toDecimalPlaces(2).toNumber();
 
-      // Profit is authoritative on the backend:
-      // selling value - (selected batch cost - selected remaining material value).
-      // Never reconstruct this from a global Balance on Table value in the client.
-      const {
-        remainingMaterialValue,
-        consumedMaterialCost,
-        profitValue,
-        profitMarginPct,
-      } = calculateProductionProfit({
-        sellingValue: totalSellingValue,
-        batchCost: totalMixCostDecimal,
-        remainingMaterialValue: balanceValueDecimal,
+      // Weight Cost follows the same historical batch-rate cutoff shown in Balance on Table:
+      // bales produced in the selected period × cumulative batch rate through that period's end.
+      const weightCostDecimal = calculateProductionWeightCost({
+        producedWeightKg: totalBaleWeightKg,
+        batchRateCost: balanceBatchRateDecimal,
+      });
+      // Profit follows the active valuation mode:
+      // Cost Price: cost production value - Weight Cost
+      // Selling Price: selling production value - Weight Cost
+      const { weightCost, profitValue, profitMarginPct } = calculateProductionProfit({
+        productionValue: totalProductionValue,
+        weightCost: weightCostDecimal,
       });
       const statusValue = profitValue;
 
@@ -656,19 +661,22 @@ export function registerFactoryProductionValueReportRoutes(app: Express) {
         },
         balanceOnTable: {
           weightKg: balanceWeightKg,
-          // Must match the Original Batches blended rate; only the remaining quantity changes.
-          // The Selling / Cost toggle only changes finished-production valuation.
+          // Historical as-of snapshot through the selected end date. The Selling / Cost
+          // toggle only changes finished-production valuation; table material stays at cost.
           costPerKg: hideReportCosts ? 0 : balanceCostPerKg,
           value: hideReportCosts ? 0 : balanceValue,
         },
         summary: {
-          batchCost: hideReportCosts ? 0 : totalMixCost,
+          // Keep batchCost as a compatibility alias for older clients. It now carries the
+          // same value as Weight Cost; new clients should read weightCost.
+          batchCost: hideReportCosts ? 0 : weightCost,
+          weightCost: hideReportCosts ? 0 : weightCost,
           productionValue: hideReportCosts ? 0 : totalProductionValue,
           statusValue: hideReportCosts ? 0 : statusValue,
           costValue: hideReportCosts ? 0 : totalProductionCostValue,
           sellingValue: hideReportCosts ? 0 : totalSellingValue,
-          remainingMaterialValue: hideReportCosts ? 0 : remainingMaterialValue,
-          consumedMaterialCost: hideReportCosts ? 0 : consumedMaterialCost,
+          remainingMaterialValue: hideReportCosts ? 0 : balanceValue,
+          consumedMaterialCost: hideReportCosts ? 0 : weightCost,
           profitValue: hideReportCosts ? 0 : profitValue,
           profitMarginPct: hideReportCosts ? 0 : profitMarginPct,
           missingSelectedPriceBales: hideReportCosts ? 0 : missingSelectedPriceBales,

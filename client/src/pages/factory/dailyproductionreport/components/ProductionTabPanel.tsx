@@ -217,10 +217,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         <div className="w-px h-5 bg-border" />
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Batch Cost
+                            Weight Cost
                           </span>
-                          <span className="text-base font-bold" data-testid="text-batch-cost">
-                            {fmtMoney(data?.summary.batchCost ?? 0)}
+                          <span className="text-base font-bold" data-testid="text-weight-cost">
+                            {fmtMoney(data?.summary.weightCost ?? data?.summary.batchCost ?? 0)}
                           </span>
                         </div>
                         <div className="w-px h-5 bg-border" />

@@ -10,6 +10,8 @@ import {
   creditNoteItems,
   locations,
   salesItems,
+  stockAdjustmentItems,
+  stockAdjustmentVouchers,
   stockGroups,
   stockItems,
   vouchers,
@@ -75,6 +77,7 @@ interface ItemAggregateRow {
   stockInQty?: string | number | null;
   stockInValue?: string | number | null;
   stockOutQty?: string | number | null;
+  stockOutValue?: string | number | null;
   totalSales?: string | number | null;
   costOfSales?: string | number | null;
   costProfit?: string | number | null;
@@ -89,6 +92,7 @@ interface MutableItemMetrics {
   stockInQty: Decimal;
   stockInValue: Decimal;
   stockOutQty: Decimal;
+  stockOutValue: Decimal;
   totalSales: Decimal;
   costOfSales: Decimal;
   costProfit: Decimal;
@@ -225,6 +229,70 @@ async function loadStockInItemRows(
     .execute();
 }
 
+async function loadAdjustmentItemRows(
+  filters: StockInSalesComparisonFilters,
+  side: StockInSalesComparisonSideFilters
+): Promise<ItemAggregateRow[]> {
+  const conditions: SQL[] = [
+    eq(vouchers.companyId, filters.companyId),
+    eq(vouchers.optional, false),
+    isNull(vouchers.deletedAt),
+    eq(stockItems.companyId, filters.companyId),
+    eq(locations.companyId, filters.companyId),
+  ];
+  if (filters.startDate) conditions.push(gte(vouchers.voucherDate, filters.startDate));
+  if (filters.endDate) conditions.push(lte(vouchers.voucherDate, filters.endDate));
+  addItemFilters(
+    conditions,
+    filters,
+    side,
+    eq(stockAdjustmentVouchers.locationId, side.locationId),
+    filters.search ? [punctuationInsensitiveSearch(vouchers.voucherNumber, filters.search)] : []
+  );
+
+  return db
+    .select({
+      stockItemId: stockItems.id,
+      stockItemCode: stockItems.code,
+      stockItemName: stockItems.name,
+      stockGroupId: stockGroups.id,
+      stockGroupName: stockGroups.name,
+      stockInQty: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.quantity})
+        ELSE 0
+      END), 0)`,
+      stockInValue: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.totalAmount})
+        ELSE 0
+      END), 0)`,
+      stockOutQty: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.quantity})
+      END), 0)`,
+      stockOutValue: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.totalAmount})
+      END), 0)`,
+    })
+    .from(stockAdjustmentItems)
+    .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
+    .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
+    .innerJoin(stockItems, eq(stockAdjustmentItems.stockItemId, stockItems.id))
+    .innerJoin(locations, eq(stockAdjustmentVouchers.locationId, locations.id))
+    .leftJoin(stockGroups, eq(stockItems.stockGroupId, stockGroups.id))
+    .where(and(...conditions))
+    .groupBy(stockItems.id, stockItems.code, stockItems.name, stockGroups.id, stockGroups.name)
+    .execute();
+}
+
 async function loadSalesItemRows(
   filters: StockInSalesComparisonFilters,
   side: StockInSalesComparisonSideFilters
@@ -259,6 +327,7 @@ async function loadSalesItemRows(
       stockGroupId: stockGroups.id,
       stockGroupName: stockGroups.name,
       stockOutQty: sql<string>`COALESCE(SUM(${salesItems.quantity}), 0)`,
+      stockOutValue: sql<string>`COALESCE(SUM(${salesItems.totalCost}), 0)`,
       totalSales: sql<string>`COALESCE(SUM(${salesItems.totalSales}), 0)`,
       costOfSales: sql<string>`COALESCE(SUM(${salesItems.totalCost}), 0)`,
       costProfit: sql<string>`COALESCE(SUM(${salesItems.profit}), 0)`,
@@ -306,6 +375,7 @@ async function loadNoteItemRows(
       stockGroupId: stockGroups.id,
       stockGroupName: stockGroups.name,
       stockOutQty: sql<string>`COALESCE(SUM((${sign}) * ${creditNoteItems.quantity}), 0)`,
+      stockOutValue: sql<string>`COALESCE(SUM((${sign}) * ${inventoryValue}), 0)`,
       totalSales: sql<string>`COALESCE(SUM((${sign}) * ${creditNoteItems.totalValue}), 0)`,
       costOfSales: sql<string>`COALESCE(SUM((${sign}) * ${inventoryValue}), 0)`,
       costProfit: sql<string>`COALESCE(SUM((${sign}) * ${noteProfit}), 0)`,
@@ -331,6 +401,7 @@ function mergeItemRows(target: Map<number, MutableItemMetrics>, rows: ItemAggreg
       stockInQty: ZERO,
       stockInValue: ZERO,
       stockOutQty: ZERO,
+      stockOutValue: ZERO,
       totalSales: ZERO,
       costOfSales: ZERO,
       costProfit: ZERO,
@@ -338,6 +409,7 @@ function mergeItemRows(target: Map<number, MutableItemMetrics>, rows: ItemAggreg
     current.stockInQty = current.stockInQty.plus(decimal(row.stockInQty));
     current.stockInValue = current.stockInValue.plus(decimal(row.stockInValue));
     current.stockOutQty = current.stockOutQty.plus(decimal(row.stockOutQty));
+    current.stockOutValue = current.stockOutValue.plus(decimal(row.stockOutValue));
     current.totalSales = current.totalSales.plus(decimal(row.totalSales));
     current.costOfSales = current.costOfSales.plus(decimal(row.costOfSales));
     current.costProfit = current.costProfit.plus(decimal(row.costProfit));
@@ -349,6 +421,7 @@ function itemMetricsToReportMetrics(item: MutableItemMetrics): StockInSalesRepor
   const stockInQty = toNumber(item.stockInQty, 3);
   const stockInValue = toNumber(item.stockInValue, 2);
   const stockOutQty = toNumber(item.stockOutQty, 3);
+  const stockOutValue = toNumber(item.stockOutValue, 2);
   const totalSales = toNumber(item.totalSales, 2);
   const costOfSales = toNumber(item.costOfSales, 2);
   const costProfit = toNumber(item.costProfit, 2);
@@ -362,9 +435,9 @@ function itemMetricsToReportMetrics(item: MutableItemMetrics): StockInSalesRepor
     stockAdjustmentValue: 0,
     totalAvailableQty: stockInQty,
     stockOutQty,
-    stockOutValue: costOfSales,
+    stockOutValue,
     closingStockQty: toNumber(new Decimal(stockInQty).minus(stockOutQty), 3),
-    closingStockValue: toNumber(new Decimal(stockInValue).minus(costOfSales), 2),
+    closingStockValue: toNumber(new Decimal(stockInValue).minus(stockOutValue), 2),
     totalSales,
     costOfSales,
     costProfit,
@@ -376,13 +449,15 @@ async function getItemMetricsBySide(
   filters: StockInSalesComparisonFilters,
   side: StockInSalesComparisonSideFilters
 ): Promise<Map<number, MutableItemMetrics>> {
-  const [stockInRows, salesRows, noteRows] = await Promise.all([
+  const [stockInRows, adjustmentRows, salesRows, noteRows] = await Promise.all([
     loadStockInItemRows(filters, side),
+    loadAdjustmentItemRows(filters, side),
     loadSalesItemRows(filters, side),
     loadNoteItemRows(filters, side),
   ]);
   const result = new Map<number, MutableItemMetrics>();
   mergeItemRows(result, stockInRows);
+  mergeItemRows(result, adjustmentRows);
   mergeItemRows(result, salesRows);
   mergeItemRows(result, noteRows);
   return result;

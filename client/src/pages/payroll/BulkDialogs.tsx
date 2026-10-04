@@ -30,6 +30,8 @@ interface BulkDialogsProps {
   setBulkDepositNotes: (v: string) => void;
   employeeStaff: PayrollModel["employeeStaff"];
   bulkDepositSelections: Record<number, boolean>;
+  bulkDepositAmounts: Record<number, string>;
+  setBulkDepositAmounts: PayrollModel["setBulkDepositAmounts"];
   handleSelectAllEmployees: PayrollModel["handleSelectAllEmployees"];
   handleToggleEmployeeDeposit: (id: number) => void;
   bulkDepositTotal: number;
@@ -87,6 +89,8 @@ export function BulkDialogs({
   setBulkDepositNotes,
   employeeStaff,
   bulkDepositSelections,
+  bulkDepositAmounts,
+  setBulkDepositAmounts,
   handleSelectAllEmployees,
   handleToggleEmployeeDeposit,
   bulkDepositTotal,
@@ -147,7 +151,7 @@ export function BulkDialogs({
           <DialogHeader>
             <DialogTitle>Bulk Salary Deposit</DialogTitle>
             <DialogDescription>
-              Select employees and deposit their monthly salary. Leave an employee unchecked to skip them.
+              Select employees, then edit the deposit amount for this payment if needed. The saved monthly salary is only used as the default.
             </DialogDescription>
           </DialogHeader>
 
@@ -189,6 +193,7 @@ export function BulkDialogs({
                       </TableHead>
                       <TableHead>Employee</TableHead>
                       <TableHead className="text-right">Monthly Salary</TableHead>
+                      <TableHead className="text-right min-w-[150px]">Deposit Amount</TableHead>
                       <TableHead className="text-right">Current Balance</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -216,10 +221,30 @@ export function BulkDialogs({
                             </div>
                             {emp.code && <div className="text-xs text-muted-foreground">{emp.code}</div>}
                             {!hasValidSalary && (
-                              <div className="text-xs text-destructive">No salary set — will be skipped</div>
+                              <div className="text-xs text-muted-foreground">No default salary set — enter an amount manually</div>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(salary)}</TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              inputMode="decimal"
+                              value={bulkDepositAmounts[emp.id] ?? emp.monthlySalary ?? ""}
+                              disabled={!bulkDepositSelections[emp.id]}
+                              onClick={(event) => event.stopPropagation()}
+                              onChange={(event) =>
+                                setBulkDepositAmounts((previous) => ({
+                                  ...previous,
+                                  [emp.id]: event.target.value,
+                                }))
+                              }
+                              className="ml-auto h-8 w-32 text-right font-mono"
+                              aria-label={`Deposit amount for ${emp.firstName} ${emp.lastName}`}
+                              data-testid={`input-bulk-deposit-amount-${emp.id}`}
+                            />
+                          </TableCell>
                           <TableCell className="text-right font-mono text-muted-foreground">
                             {formatAmount(parseFloat(emp.calculatedBalance || "0"))}
                           </TableCell>

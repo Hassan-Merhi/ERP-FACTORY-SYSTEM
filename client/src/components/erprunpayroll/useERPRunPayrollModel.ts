@@ -89,9 +89,9 @@ export function useERPRunPayrollModel() {
   });
 
   const { data: workerDeductionsRaw = [] } = useQuery<WorkerDeductionRow[]>({
-    queryKey: ["/api/factory/worker-deductions", companyId],
+    queryKey: ["/api/payroll/worker-deductions", companyId],
     queryFn: async () => {
-      const res = await fetch("/api/factory/worker-deductions", { credentials: "include" });
+      const res = await fetch(`/api/payroll/worker-deductions?companyId=${companyId}`, { credentials: "include" });
       if (!res.ok) return [];
       return res.json();
     },
@@ -199,9 +199,13 @@ export function useERPRunPayrollModel() {
 
   function enterPreview() {
     const items: PreviewItem[] = [];
+    // A worker can belong to more than one worker group. Payroll is per employee,
+    // so never add the same employee twice just because they have multiple memberships.
+    const addedEmployeeIds = new Set<number>();
     function addGroup(label: string, memberIds: number[]) {
       for (const id of memberIds) {
-        if (!selectedWorkers.has(id) || !workerById[id]) continue;
+        if (!selectedWorkers.has(id) || !workerById[id] || addedEmployeeIds.has(id)) continue;
+        addedEmployeeIds.add(id);
         const w = workerById[id];
         const salary = parseFloat(w.monthlySalary || "0");
         const deduction = Math.min(advanceBalanceByEmployee[id] || 0, salary);
@@ -254,6 +258,7 @@ export function useERPRunPayrollModel() {
           groupName: it.groupName,
           baseSalary: it.baseSalary.toFixed(2),
           deduction: it.deduction.toFixed(2),
+          payrollDeduction: it.pendingDeductions.toFixed(2),
           netPay: it.netPay.toFixed(2),
         })),
       });
@@ -285,6 +290,7 @@ export function useERPRunPayrollModel() {
     onSuccess: (_data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll/worker-deductions"] });
       toast({ title: "Payroll paid", description: "Ledger entries created successfully." });
       setPayDialogRun(null);
       setPayAccountId("");
@@ -324,6 +330,7 @@ export function useERPRunPayrollModel() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/payroll/runs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/salary-advances"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/payroll/worker-deductions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/vouchers"] });
       queryClient.invalidateQueries({ queryKey: ["/api/ledger-accounts"] });
       toast({
@@ -400,8 +407,10 @@ export function useERPRunPayrollModel() {
     const items = run.items || [];
     const totalBase = items.reduce((s, it) => s + parseFloat(it.baseSalary || "0"), 0);
     const totalDed = items.reduce((s, it) => s + parseFloat(it.deduction || "0"), 0);
+    const totalPayrollDed = items.reduce((s, it) => s + parseFloat(it.payrollDeduction || "0"), 0);
     const totalNet = items.reduce((s, it) => s + parseFloat(it.netPay || "0"), 0);
     const hasDed = totalDed > 0;
+    const hasPayrollDed = totalPayrollDed > 0;
     const cur = selectedCompany?.displayCurrency || "$";
     const fmt = (n: number) =>
       `${cur}\u00A0${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -415,13 +424,15 @@ export function useERPRunPayrollModel() {
       `<th style="background:#111;color:#fff;font-weight:700;font-size:10px;padding:6px 8px;text-align:${align};border:1px solid #333;white-space:nowrap">${txt}</th>`;
 
     const headerCols = [TH("Name", "left"), TH("Group", "left"), TH("Base Salary")];
-    if (hasDed) headerCols.push(TH("Deduction"));
+    if (hasDed) headerCols.push(TH("Advance Deduction"));
+    if (hasPayrollDed) headerCols.push(TH("Payroll Deduction"));
     headerCols.push(TH("Net Pay"));
 
     const bodyRows = items
       .map((it, i) => {
         const bg = i % 2 === 0 ? "#fff" : "#f5f5f5";
         const ded = parseFloat(it.deduction || "0");
+        const payrollDed = parseFloat(it.payrollDeduction || "0");
         const TD = (txt: string, align = "right", bold = false) =>
           `<td style="border:1px solid #ccc;padding:5px 8px;text-align:${align};background:${bg};font-size:10px;${bold ? "font-weight:700;" : ""}">${txt}</td>`;
         const cells = [
@@ -430,6 +441,7 @@ export function useERPRunPayrollModel() {
           TD(fmt(parseFloat(it.baseSalary || "0"))),
         ];
         if (hasDed) cells.push(TD(ded > 0 ? `<span style="color:#b91c1c">-${fmt(ded)}</span>` : "—"));
+        if (hasPayrollDed) cells.push(TD(payrollDed > 0 ? `<span style="color:#c2410c">-${fmt(payrollDed)}</span>` : "—"));
         cells.push(TD(`<strong>${fmt(parseFloat(it.netPay || "0"))}</strong>`));
         return `<tr>${cells.join("")}</tr>`;
       })
@@ -442,6 +454,10 @@ export function useERPRunPayrollModel() {
     if (hasDed)
       totalCells.push(
         `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:10px;background:#b91c1c;color:#fff;text-align:right">-${fmt(totalDed)}</td>`
+      );
+    if (hasPayrollDed)
+      totalCells.push(
+        `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:10px;background:#c2410c;color:#fff;text-align:right">-${fmt(totalPayrollDed)}</td>`
       );
     totalCells.push(
       `<td style="border:1px solid #333;padding:5px 8px;font-weight:700;font-size:11px;background:#16a34a;color:#fff;text-align:right">${fmt(totalNet)}</td>`

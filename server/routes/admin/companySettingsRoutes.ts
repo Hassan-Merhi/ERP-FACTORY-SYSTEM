@@ -10,6 +10,23 @@ import { requireAuth, requireRole } from "../../auth";
 import { stockItems, containers, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
 import { eq, and, inArray, sql, isNotNull } from "drizzle-orm";
 
+/**
+ * Both resets delete vouchers in bulk. The closed-period guard refuses any of
+ * them dated inside closed books, which mid-loop would leave a partial reset,
+ * so refuse up front instead.
+ */
+async function closedBooksResetRefusal(companyId: number): Promise<string | null> {
+  const closures = await storage.getFiscalPeriodClosures(companyId);
+  const closedThrough = closures
+    .filter((closure) => closure.status === "CLOSED")
+    .map((closure) => String(closure.periodEndDate))
+    .sort()
+    .pop();
+  return closedThrough
+    ? `This company's books are closed through ${closedThrough}. A data reset would delete closed-period vouchers, so it is not allowed.`
+    : null;
+}
+
 export function registerCompanySettingsRoutes(app: Express) {
   app.post("/api/admin/reset-company-data", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
@@ -22,6 +39,11 @@ export function registerCompanySettingsRoutes(app: Express) {
       const company = await storage.getCompanyById(companyId);
       if (!company) {
         return res.status(400).json({ message: "Company not found." });
+      }
+
+      const closedRefusal = await closedBooksResetRefusal(Number(companyId));
+      if (closedRefusal) {
+        return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
       }
 
       // Define voucher types to DELETE (Payment, Receipt, Journal - excluding POS, Production, Consumption, Stock Transfer)
@@ -144,6 +166,11 @@ export function registerCompanySettingsRoutes(app: Express) {
 
       if (!companyId || !Array.isArray(accountIds)) {
         return res.status(400).json({ message: "companyId and accountIds array are required" });
+      }
+
+      const closedRefusal = await closedBooksResetRefusal(Number(companyId));
+      if (closedRefusal) {
+        return res.status(409).json({ message: closedRefusal, code: "ACCOUNTING_PERIOD_CLOSED" });
       }
 
       const results = {

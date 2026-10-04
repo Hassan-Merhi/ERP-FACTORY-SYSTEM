@@ -146,19 +146,15 @@ describe("ERP data tools behavior", () => {
     expect(screen.getByTestId("bulk-rename-dialog")).toBeInTheDocument();
   });
 
-  it("runs the sales cost repair mutation and invalidates the sales report", async () => {
+  it("does not expose the retired current-rate sales cost repair action", () => {
     render(<DataToolsTab />);
-    fireEvent.click(screen.getByTestId("button-fix-cost-prices"));
 
-    await waitFor(() =>
-      expect(harness.apiRequest).toHaveBeenCalledWith("POST", "/api/sales-report/recalculate-costs", {})
-    );
-    await waitFor(() => {
-      expect(harness.invalidateQueries).toHaveBeenCalledWith({ queryKey: ["/api/sales-report"] });
-      expect(harness.toast).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "Cost Prices Updated", description: "Updated 4 of 5 sales items" })
-      );
-    });
+    expect(screen.queryByTestId("button-fix-cost-prices")).not.toBeInTheDocument();
+    expect(
+      harness.apiRequest.mock.calls.some(
+        ([method, url]: [string, string]) => method === "POST" && url === "/api/sales-report/recalculate-costs"
+      )
+    ).toBe(false);
   });
 
   it("builds and applies a silent production adjustment from live location stock", async () => {

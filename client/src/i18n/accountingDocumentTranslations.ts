@@ -34,6 +34,78 @@ const entries: Entry[] = [
   { en: "Reverse Voucher", ar: "عكس السند", fr: "Contrepasser la pièce" },
   { en: "Voucher Number", ar: "رقم السند", fr: "Numéro de pièce" },
 
+  // Recurring journals
+  { en: "Recurring Journal", ar: "قيد يومية متكرر", fr: "Écriture récurrente" },
+  { en: "Recurring Journals", ar: "القيود اليومية المتكررة", fr: "Écritures récurrentes" },
+  { en: "Schedule", ar: "الجدول", fr: "Planification" },
+  { en: "Last day of every month", ar: "اليوم الأخير من كل شهر", fr: "Dernier jour de chaque mois" },
+  { en: "Next posting", ar: "الترحيل التالي", fr: "Prochaine comptabilisation" },
+  { en: "Last posting", ar: "آخر ترحيل", fr: "Dernière comptabilisation" },
+  { en: "Add recurring journal", ar: "إضافة قيد يومية متكرر", fr: "Ajouter une écriture récurrente" },
+  { en: "Source journal voucher number", ar: "رقم سند القيد المصدر", fr: "Numéro de la pièce de journal source" },
+  {
+    en: "Description template (optional)",
+    ar: "قالب الوصف (اختياري)",
+    fr: "Modèle de description (facultatif)",
+  },
+  {
+    en: "Could not load recurring journals.",
+    ar: "تعذر تحميل القيود اليومية المتكررة.",
+    fr: "Impossible de charger les écritures récurrentes.",
+  },
+  {
+    en: "No recurring journals yet",
+    ar: "لا توجد قيود يومية متكررة حتى الآن",
+    fr: "Aucune écriture récurrente pour le moment",
+  },
+  {
+    en: "Add one above using an existing posted Journal voucher.",
+    ar: "أضف واحدًا أعلاه باستخدام سند قيد مرحّل موجود.",
+    fr: "Ajoutez-en une ci-dessus à partir d’une pièce de journal existante comptabilisée.",
+  },
+  { en: "Recurring journal updated", ar: "تم تحديث القيد المتكرر", fr: "Écriture récurrente mise à jour" },
+  {
+    en: "Accounts and amounts refreshed",
+    ar: "تم تحديث الحسابات والمبالغ",
+    fr: "Comptes et montants actualisés",
+  },
+  {
+    en: "Future automatic journals now use the current source voucher entries.",
+    ar: "ستستخدم القيود التلقائية المستقبلية الآن قيود السند المصدر الحالية.",
+    fr: "Les futures écritures automatiques utilisent désormais les lignes actuelles de la pièce source.",
+  },
+  { en: "Refresh failed", ar: "فشل التحديث", fr: "Échec de l’actualisation" },
+  { en: "Recurring journal created", ar: "تم إنشاء القيد المتكرر", fr: "Écriture récurrente créée" },
+  { en: "Timezone", ar: "المنطقة الزمنية", fr: "Fuseau horaire" },
+  { en: "End date (optional)", ar: "تاريخ الانتهاء (اختياري)", fr: "Date de fin (facultatif)" },
+  { en: "Description template", ar: "قالب الوصف", fr: "Modèle de description" },
+  { en: "Generated vouchers", ar: "السندات المُنشأة", fr: "Pièces générées" },
+  { en: "Save Settings", ar: "حفظ الإعدادات", fr: "Enregistrer les paramètres" },
+  {
+    en: "Could not load recurring journal settings.",
+    ar: "تعذر تحميل إعدادات القيد المتكرر.",
+    fr: "Impossible de charger les paramètres de l’écriture récurrente.",
+  },
+  {
+    en: "Copy the current voucher's accounts and amounts into the recurring template",
+    ar: "نسخ حسابات ومبالغ السند الحالي إلى القالب المتكرر",
+    fr: "Copier les comptes et montants de la pièce actuelle dans le modèle récurrent",
+  },
+  { en: "Savings Kinshasa {{month}}", ar: "مدخرات كينشاسا {{month}}", fr: "Épargne Kinshasa {{month}}" },
+  {
+    en: 'Next automatic posting: ${data.recurring?.nextRunDate || "month-end"}.',
+    ar: "الترحيل التلقائي التالي: {0}.",
+    fr: "Prochaine comptabilisation automatique : {0}.",
+  },
+  { en: "Recurring journal failed", ar: "فشل القيد المتكرر", fr: "Échec de l’écriture récurrente" },
+  { en: "Recurring journal not found", ar: "القيد المتكرر غير موجود", fr: "Écriture récurrente introuvable" },
+  { en: "Invalid voucher id", ar: "معرّف السند غير صالح", fr: "Identifiant de pièce invalide" },
+  {
+    en: "Invalid recurring journal id",
+    ar: "معرّف القيد المتكرر غير صالح",
+    fr: "Identifiant d’écriture récurrente invalide",
+  },
+
   // Historical documents and exports
   { en: "Invoice", ar: "فاتورة", fr: "Facture" },
   { en: "Proforma Invoice", ar: "فاتورة أولية", fr: "Facture proforma" },
