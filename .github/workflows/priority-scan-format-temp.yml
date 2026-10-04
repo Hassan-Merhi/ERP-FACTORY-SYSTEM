@@ -1,0 +1,68 @@
+name: Priority Scan Temporary Formatter
+
+on:
+  push:
+    branches:
+      - feat/priority-scan-wave-1
+    paths:
+      - ".github/workflows/priority-scan-format-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/priority-scan-wave-1
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.21.0
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Format Priority Scan files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/i18n/priorityScanTranslations.ts \
+            client/src/pages/factory/FactoryPriorityScan.tsx \
+            client/src/pages/factory/PriorityScanLoadingControl.tsx \
+            client/src/pages/factory/FactoryLoadingsHub.tsx \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-orders/bale-scanning/remove.ts \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/priorityScanConfigRoutes.ts \
+            server/routes/factory/customer-orders/priorityScanQueue.ts \
+            shared/schema/factory/customer-orders.ts \
+            client/src/i18n/backendMessagesPhase7Translations.part13.ts
+
+      - name: Commit formatted files
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            client/src/i18n/priorityScanTranslations.ts \
+            client/src/pages/factory/FactoryPriorityScan.tsx \
+            client/src/pages/factory/PriorityScanLoadingControl.tsx \
+            client/src/pages/factory/FactoryLoadingsHub.tsx \
+            server/routes/factory/customer-orders/bale-scanning/bulk-import.ts \
+            server/routes/factory/customer-orders/bale-scanning/remove.ts \
+            server/routes/factory/customer-orders/bale-scanning/scan.ts \
+            server/routes/factory/customer-orders/priorityScanConfigRoutes.ts \
+            server/routes/factory/customer-orders/priorityScanQueue.ts \
+            shared/schema/factory/customer-orders.ts \
+            client/src/i18n/backendMessagesPhase7Translations.part13.ts
+          git commit -m "Format Priority Scan verification fixes"
+          git push origin HEAD:feat/priority-scan-wave-1
