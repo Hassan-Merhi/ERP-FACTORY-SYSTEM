@@ -18,6 +18,7 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
+import { addMovement, lockInventoryRow, setInventoryQuantity } from "../../services/retail/retailStockLedger";
 import {
   aggregateRetailCartItems,
   nextRetailReturnQuantity,
@@ -85,8 +86,6 @@ const cancelSchema = z.object({
   reason: z.string().trim().min(1).max(500).optional(),
 });
 
-type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
 function toNumber(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -129,89 +128,6 @@ async function ensureVariant(companyId: number, variantId: number) {
     .limit(1);
   if (!variant) throw new Error("Retail variant not found or inactive");
   return variant;
-}
-
-async function lockInventoryRow(
-  tx: Transaction,
-  companyId: number,
-  variantId: number,
-  locationId: number
-): Promise<{ quantity: number; averageCost: number }> {
-  await tx
-    .insert(retailVariantInventory)
-    .values({ companyId, variantId, locationId, quantity: "0", averageCost: "0" })
-    .onConflictDoNothing({ target: [retailVariantInventory.variantId, retailVariantInventory.locationId] });
-
-  await tx.execute(
-    sql`select id from retail_variant_inventory where company_id = ${companyId} and variant_id = ${variantId} and location_id = ${locationId} for update`
-  );
-
-  const [inventory] = await tx
-    .select({ quantity: retailVariantInventory.quantity, averageCost: retailVariantInventory.averageCost })
-    .from(retailVariantInventory)
-    .where(
-      and(
-        eq(retailVariantInventory.companyId, companyId),
-        eq(retailVariantInventory.variantId, variantId),
-        eq(retailVariantInventory.locationId, locationId)
-      )
-    )
-    .limit(1);
-
-  if (!inventory) throw new Error("Retail inventory row could not be created");
-  return { quantity: toNumber(inventory.quantity), averageCost: toNumber(inventory.averageCost) };
-}
-
-async function setInventoryQuantity(
-  tx: Transaction,
-  companyId: number,
-  variantId: number,
-  locationId: number,
-  quantity: number
-): Promise<void> {
-  await tx
-    .update(retailVariantInventory)
-    .set({ quantity: String(quantity), updatedAt: new Date() })
-    .where(
-      and(
-        eq(retailVariantInventory.companyId, companyId),
-        eq(retailVariantInventory.variantId, variantId),
-        eq(retailVariantInventory.locationId, locationId)
-      )
-    );
-}
-
-async function addMovement(
-  tx: Transaction,
-  input: {
-    companyId: number;
-    variantId: number;
-    locationId: number;
-    movementType: string;
-    quantityDelta: number;
-    before: number;
-    after: number;
-    eventKey: string;
-    referenceType?: string;
-    referenceId?: string | number;
-    createdBy: string;
-    metadata?: Record<string, unknown>;
-  }
-): Promise<void> {
-  await tx.insert(retailStockMovements).values({
-    companyId: input.companyId,
-    variantId: input.variantId,
-    locationId: input.locationId,
-    movementType: input.movementType,
-    quantityDelta: String(input.quantityDelta),
-    quantityBefore: String(input.before),
-    quantityAfter: String(input.after),
-    eventKey: input.eventKey,
-    referenceType: input.referenceType ?? null,
-    referenceId: input.referenceId == null ? null : String(input.referenceId),
-    createdBy: input.createdBy,
-    metadata: input.metadata ?? {},
-  });
 }
 
 async function loadSaleResponse(companyId: number, saleId: number) {

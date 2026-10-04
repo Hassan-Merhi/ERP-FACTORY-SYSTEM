@@ -23,6 +23,7 @@ export const RETAIL_STOCK_MOVEMENT_TYPES = [
   "transfer_in",
   "cancellation",
   "reversal",
+  "receive",
 ] as const;
 
 export type RetailStockMovementType = (typeof RETAIL_STOCK_MOVEMENT_TYPES)[number];

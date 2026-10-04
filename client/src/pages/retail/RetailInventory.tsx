@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, Pencil, Plus, ShoppingCart, Upload } from "lucide-react";
+import { ArrowLeft, Boxes, Camera, Pencil, Plus, ShoppingCart, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { ImportDialog } from "./RetailImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
 import { ProductImage } from "./RetailProductImage";
+import { RetailNav } from "./RetailNav";
 import {
   getJson,
   money,
@@ -229,6 +230,7 @@ export default function RetailInventory() {
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6">
+      <RetailNav />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -247,12 +249,16 @@ export default function RetailInventory() {
             <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
           <Button
+            variant="outline"
             onClick={() => {
               setEditingProduct(null);
               setEditorOpen(true);
             }}
           >
             <Plus className="mr-2 h-4 w-4" /> Add Product
+          </Button>
+          <Button onClick={() => navigate("/retail/quick-add")}>
+            <Camera className="mr-2 h-4 w-4" /> Quick add
           </Button>
         </div>
       </div>

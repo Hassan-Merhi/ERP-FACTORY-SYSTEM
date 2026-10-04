@@ -10,12 +10,13 @@ export function validateRetailVariantPayload(input: RetailProductWrite): void {
     const barcode = normalize(variant.barcode);
     const variantKey = `${normalize(variant.color)}|${normalize(variant.size)}`;
 
-    if (barcodes.has(barcode)) throw new Error(`Duplicate barcode in product: ${variant.barcode}`);
+    // Blank barcodes are issued by the server, so only typed barcodes can collide here.
+    if (barcode && barcodes.has(barcode)) throw new Error(`Duplicate barcode in product: ${variant.barcode}`);
     if (variantKeys.has(variantKey)) {
       throw new Error(`Duplicate color/size in product: ${variant.color} / ${variant.size}`);
     }
 
-    barcodes.add(barcode);
+    if (barcode) barcodes.add(barcode);
     variantKeys.add(variantKey);
 
     const locationIds = new Set<number>();

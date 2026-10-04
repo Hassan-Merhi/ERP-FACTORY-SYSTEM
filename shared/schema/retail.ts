@@ -75,6 +75,8 @@ export const retailProductVariants = pgTable(
     color: varchar("color", { length: 100 }).notNull().default(RETAIL_DEFAULT_COLOR),
     size: varchar("size", { length: 100 }).notNull(),
     barcode: varchar("barcode", { length: 191 }).notNull(),
+    // manual = typed/scanned supplier barcode, generated = issued by this system, import = spreadsheet
+    barcodeSource: varchar("barcode_source", { length: 20 }).notNull().default("manual"),
     imageUrls: jsonb("image_urls").$type<string[]>().notNull().default([]),
     sku: varchar("sku", { length: 191 }),
     cost: decimal("cost", { precision: 20, scale: 6 }).notNull().default("0"),
@@ -149,7 +151,8 @@ export const retailVariantInputSchema = z.object({
   id: z.number().int().positive().optional(),
   color: z.string().trim().min(1).max(100).optional().default(RETAIL_DEFAULT_COLOR),
   size: z.string().trim().min(1).max(100),
-  barcode: z.string().trim().min(1).max(191),
+  // Leave empty to have the server issue a unique in-store barcode for the variant.
+  barcode: z.string().trim().max(191).optional().default(""),
   imageUrls: z.array(z.string().trim().url()).max(4).optional().default([]),
   sku: z.string().trim().max(191).nullable().optional(),
   cost: z.coerce.number().finite().nonnegative(),

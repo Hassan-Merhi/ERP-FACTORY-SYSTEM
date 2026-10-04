@@ -33,6 +33,7 @@ interface CatalogProductRow {
   size: string | null;
   variant_image_urls: unknown;
   barcode: string | null;
+  barcode_source: string | null;
   sku: string | null;
   cost: string | number | null;
   selling_price: string | number | null;
@@ -224,6 +225,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
       size: string;
       imageUrls: string[];
       barcode: string;
+      barcodeSource: string;
       sku: string | null;
       cost: number;
       sellingPrice: number;
@@ -279,6 +281,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
           ? row.variant_image_urls.filter((value): value is string => typeof value === "string")
           : [],
         barcode: row.barcode ?? "",
+        barcodeSource: row.barcode_source ?? "manual",
         sku: row.sku,
         cost: numberValue(row.cost),
         sellingPrice: numberValue(row.selling_price),
@@ -407,6 +410,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
            v.size,
            v.image_urls AS variant_image_urls,
            v.barcode,
+           v.barcode_source,
            v.sku,
            v.cost,
            v.selling_price,
