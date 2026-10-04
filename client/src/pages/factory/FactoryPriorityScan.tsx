@@ -55,6 +55,16 @@ interface PriorityScanRequestError extends Error {
   notInProforma?: unknown;
 }
 
+interface PriorityScanAdvanceResult {
+  completedOrderIds: number[];
+  activeOrderId: number | null;
+  activePriority: number | null;
+}
+
+interface PriorityScanAllocation extends PriorityRouteResolution {
+  advance: PriorityScanAdvanceResult | null;
+}
+
 interface SessionScan {
   id: number;
   referenceNumber: string;
@@ -145,17 +155,28 @@ export default function FactoryPriorityScan() {
     return response.json() as Promise<PriorityRouteResolution>;
   };
 
-  const allocatePriorityScan = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
+  const allocatePriorityScan = async (referenceNumber: string): Promise<PriorityScanAllocation> => {
     const maxAttempts = Math.max(1, activeQueue.length + 1);
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const route = await resolvePriorityRoute(referenceNumber);
       try {
-        await apiRequest("POST", `/api/factory/customer-orders/${route.target.orderId}/bales`, {
-          scanCode: route.referenceNumber,
-          locationId: route.locationId,
-        });
-        return route;
+        const allocationResponse = await apiRequest(
+          "POST",
+          `/api/factory/customer-orders/${route.target.orderId}/bales`,
+          {
+            scanCode: route.referenceNumber,
+            locationId: route.locationId,
+            priorityScan: true,
+          }
+        );
+        const allocation = (await allocationResponse.json()) as {
+          priorityScanAdvance?: PriorityScanAdvanceResult | null;
+        };
+        return {
+          ...route,
+          advance: allocation.priorityScanAdvance ?? null,
+        };
       } catch (error) {
         const requestError = error as PriorityScanRequestError;
         const routeMayHaveChanged =
@@ -206,12 +227,22 @@ export default function FactoryPriorityScan() {
       };
       setSessionScans((currentScans) => [scan, ...currentScans].slice(0, 30));
 
-      await queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] }),
+        queryClient.invalidateQueries({ queryKey: [PRIORITY_SCAN_CONFIGS_URL] }),
+      ]);
+
+      const completedThisLoading = routed.advance?.completedOrderIds.includes(routed.target.orderId) === true;
+      const message = completedThisLoading
+        ? routed.advance?.activeOrderId
+          ? `Loading #${routed.target.orderId} is satisfied. Advanced to Loading #${routed.advance.activeOrderId}.`
+          : `Loading #${routed.target.orderId} is satisfied. Priority queue is complete.`
+        : `Added to Priority #${routed.target.priority} — Loading #${routed.target.orderId}.`;
 
       showFeedback({
         type: "success",
         referenceNumber: routed.referenceNumber,
-        message: `Added to Priority #${routed.target.priority} — Loading #${routed.target.orderId}.`,
+        message,
       });
     } catch (error) {
       showFeedback({
@@ -274,7 +305,7 @@ export default function FactoryPriorityScan() {
           </div>
 
           <p className="mt-2 text-xs text-muted-foreground">
-            Each reference is routed automatically to the highest-priority loading that still requires its article.
+            Each reference goes to the highest-priority loading that still needs it; satisfied loadings advance automatically.
           </p>
 
           {feedback && (
