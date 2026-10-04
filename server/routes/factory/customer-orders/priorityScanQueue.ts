@@ -4,6 +4,7 @@ import { db } from "../../../db";
 import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
+import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
 
 export const PRIORITY_SCAN_LOCK_NAMESPACE = 73202;
 
@@ -20,6 +21,7 @@ export async function loadActivePriorityRows(tx: PriorityScanTransaction, compan
     .select({
       id: customerOrderPriorityScanConfigs.id,
       orderId: customerOrderPriorityScanConfigs.orderId,
+      color: customerOrderPriorityScanConfigs.color,
       colorKey: customerOrderPriorityScanConfigs.colorKey,
       priority: customerOrderPriorityScanConfigs.priority,
       proformaIdUsed: customerOrders.proformaIdUsed,
@@ -72,6 +74,57 @@ export async function rewriteActivePriorityQueue(
         )
       );
   }
+}
+
+export interface PriorityScanArticleTarget {
+  orderId: number;
+  priority: number;
+  color: string;
+  proformaId: number;
+  remainingQty: number;
+}
+
+/**
+ * Resolve the authoritative Priority Scan target while the caller holds the
+ * company Priority Scan advisory lock. Proforma capacity locks are acquired in
+ * queue order, so concurrent Priority Scan writers cannot cross or reorder one
+ * another and config edits use the same priority->proforma lock order.
+ */
+export async function resolvePriorityScanArticleTarget(
+  tx: PriorityScanTransaction,
+  companyId: number,
+  articleCode: string
+): Promise<PriorityScanArticleTarget | null> {
+  const activeRows = await loadActivePriorityRows(tx, companyId);
+
+  for (const row of activeRows) {
+    if (!row.proformaIdUsed) continue;
+
+    await acquireProformaCapacityTransactionLock(tx, {
+      companyId,
+      proformaId: row.proformaIdUsed,
+    });
+
+    const snapshot = await getProformaCapacitySnapshot(tx, {
+      companyId,
+      proformaId: row.proformaIdUsed,
+      currentOrderId: row.orderId,
+    });
+    if (!snapshot) continue;
+
+    const decision = evaluateProformaArticleCapacity(snapshot, articleCode, 1, "per_loading");
+    if (!decision.allowed) continue;
+
+    return {
+      orderId: row.orderId,
+      priority: row.priority,
+      color: row.color,
+      proformaId: row.proformaIdUsed,
+      remainingQty: decision.remainingQty,
+    };
+  }
+
+  return null;
 }
 
 /**
