@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema";
@@ -34,7 +34,8 @@ export async function loadActivePriorityRows(tx: PriorityScanTransaction, compan
         eq(customerOrderPriorityScanConfigs.enabled, true),
         eq(customerOrders.companyId, companyId),
         eq(customerOrders.status, "LOADING"),
-        isNull(customerOrders.deletedAt)
+        isNull(customerOrders.deletedAt),
+        isNotNull(customerOrders.proformaIdUsed)
       )
     )
     .orderBy(asc(customerOrderPriorityScanConfigs.priority), asc(customerOrderPriorityScanConfigs.orderId));
