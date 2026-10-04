@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ean13CheckDigit,
   formatGeneratedRetailBarcode,
@@ -120,10 +120,16 @@ describe("retail quick add intake contract", () => {
 describe("retail idempotency keys", () => {
   it("are prefixed, unique and built from Web Crypto only", async () => {
     const { makeRetailIdempotencyKey } = await import("../client/src/pages/retail/retailIdempotency");
-    const keys = new Set(Array.from({ length: 200 }, () => makeRetailIdempotencyKey("retail-sale")));
-    expect(keys.size).toBe(200);
-    for (const key of keys) expect(key).toMatch(/^retail-sale-[0-9a-f-]{32,36}$/);
-    const source = (await import("node:fs")).readFileSync("client/src/pages/retail/retailIdempotency.ts", "utf8");
-    expect(source).not.toContain("Math.random");
+    // Math.random is not a secure source; key generation must never reach it.
+    const random = vi.spyOn(Math, "random").mockImplementation(() => {
+      throw new Error("Math.random used");
+    });
+    try {
+      const keys = new Set(Array.from({ length: 200 }, () => makeRetailIdempotencyKey("retail-sale")));
+      expect(keys.size).toBe(200);
+      for (const key of keys) expect(key).toMatch(/^retail-sale-[0-9a-f-]{32,36}$/);
+    } finally {
+      random.mockRestore();
+    }
   });
 });
