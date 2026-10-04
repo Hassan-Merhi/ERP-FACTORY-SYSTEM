@@ -70,7 +70,7 @@ export default function FactoryInvoicing() {
           </div>
         </div>
 
-        <div className="flex gap-0 px-4" role="tablist">
+        <div className="flex gap-0 px-4 overflow-x-auto" role="tablist">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             return (
