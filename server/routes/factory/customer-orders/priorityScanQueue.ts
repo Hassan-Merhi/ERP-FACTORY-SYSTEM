@@ -1,8 +1,9 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 
 export const PRIORITY_SCAN_LOCK_NAMESPACE = 73202;
 
@@ -30,7 +31,8 @@ export async function loadActivePriorityRows(tx: PriorityScanTransaction, compan
         eq(customerOrderPriorityScanConfigs.companyId, companyId),
         eq(customerOrderPriorityScanConfigs.enabled, true),
         eq(customerOrders.companyId, companyId),
-        eq(customerOrders.status, "LOADING")
+        eq(customerOrders.status, "LOADING"),
+        isNull(customerOrders.deletedAt)
       )
     )
     .orderBy(asc(customerOrderPriorityScanConfigs.priority), asc(customerOrderPriorityScanConfigs.orderId));
@@ -103,6 +105,10 @@ export async function advanceSatisfiedPriorityScanConfigs(
     for (const row of activeRows) {
       if (!row.proformaIdUsed) continue;
 
+      await acquireProformaCapacityTransactionLock(tx, {
+        companyId,
+        proformaId: row.proformaIdUsed,
+      });
       const snapshot = await getProformaCapacitySnapshot(tx, {
         companyId,
         proformaId: row.proformaIdUsed,
