@@ -16,7 +16,7 @@ const PRIORITY_SCAN_ORDER_PATH = "/api/factory/customer-orders/:id/loading-list/
 
 function normalizeColor(raw: unknown): { color: string; colorKey: string } | null {
   if (typeof raw !== "string") return null;
-  const color = raw.trim().replace(/\\s+/g, " ");
+  const color = raw.trim().replace(/\s+/g, " ");
   if (!color || color.length > MAX_COLOR_LENGTH) return null;
   return { color, colorKey: color.toLocaleLowerCase("en-US") };
 }
