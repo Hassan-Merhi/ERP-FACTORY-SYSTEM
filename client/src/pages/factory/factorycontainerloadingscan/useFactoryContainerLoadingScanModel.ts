@@ -52,6 +52,11 @@ export type { BaleGroup } from "./loadedBales";
 
 export type ProformaLineStatus = "fulfilled" | "overloaded" | "short" | "none";
 
+const PENDING_LOADINGS_SUMMARY_QUERY =
+  "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
+const PRIORITY_SCAN_CONFIGS_QUERY =
+  "/api/factory/customer-orders/loading-list/priority-scan-configs";
+
 export function useFactoryContainerLoadingScanModel() {
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -232,6 +237,17 @@ export function useFactoryContainerLoadingScanModel() {
     proformaCapacity?.proformaId === selectedCapacityProformaId &&
     proformaCapacity.remainingTotalQty <= 0;
 
+  const refreshSharedLoadingQueues = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: [PENDING_LOADINGS_SUMMARY_QUERY],
+      refetchType: "active",
+    });
+    void queryClient.invalidateQueries({
+      queryKey: [PRIORITY_SCAN_CONFIGS_QUERY],
+      refetchType: "active",
+    });
+  }, []);
+
   const { data: baleRemovals = [] } = useQuery<BaleRemoval[]>({
     queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
     queryFn: async () => {
@@ -327,6 +343,11 @@ export function useFactoryContainerLoadingScanModel() {
         });
       }
       queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], data);
+      refreshSharedLoadingQueues();
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/bale-stock-count"],
+        refetchType: "active",
+      });
       if (capacityProformaId) {
         queryClient.setQueryData<ProformaCapacitySnapshot>(
           ["/api/factory/customer-proformas/capacity", capacityProformaId, orderId],
@@ -401,6 +422,11 @@ export function useFactoryContainerLoadingScanModel() {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
       });
+      refreshSharedLoadingQueues();
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/bale-stock-count"],
+        refetchType: "active",
+      });
       if (capacityProformaId) {
         void queryClient.invalidateQueries({
           queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
@@ -433,6 +459,7 @@ export function useFactoryContainerLoadingScanModel() {
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/customer-orders", orderId, "bale-removals"],
       });
+      refreshSharedLoadingQueues();
       queryClient.invalidateQueries({
         queryKey: ["/api/factory/bale-stock-count"],
         refetchType: "active",
@@ -494,6 +521,11 @@ export function useFactoryContainerLoadingScanModel() {
         { queryKey: ["/api/factory/customer-orders", orderId], exact: true, refetchType: "active" },
         { cancelRefetch: false }
       );
+      refreshSharedLoadingQueues();
+      void queryClient.invalidateQueries({
+        queryKey: ["/api/factory/bale-stock-count"],
+        refetchType: "active",
+      });
       if (capacityProformaId) {
         void queryClient.invalidateQueries({
           queryKey: ["/api/factory/customer-proformas/capacity", capacityProformaId],
