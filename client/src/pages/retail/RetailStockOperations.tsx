@@ -14,6 +14,7 @@ import { RetailNav } from "./RetailNav";
 import { RetailMovementHistory } from "./RetailMovementHistory";
 import { RetailLabelPrintDialog } from "./retailLabels";
 import { getJson, money, type Location } from "./retailInventoryTypes";
+import { makeRetailIdempotencyKey } from "./retailIdempotency";
 
 type Mode = "receive" | "transfer" | "adjust" | "history";
 
@@ -43,11 +44,7 @@ const MODES: Array<{ id: Mode; label: string; icon: typeof PackagePlus }> = [
   { id: "history", label: "History", icon: History },
 ];
 
-function makeKey(prefix: string) {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  return `${prefix}-${uuid}`.slice(0, 191);
-}
+const makeKey = makeRetailIdempotencyKey;
 
 function initialParams() {
   const params = new URLSearchParams(window.location.search);

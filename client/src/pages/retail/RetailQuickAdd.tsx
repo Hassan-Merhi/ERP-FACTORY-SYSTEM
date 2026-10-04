@@ -22,6 +22,7 @@ import {
   type Location,
   type RetailCatalogFacets,
 } from "./retailInventoryTypes";
+import { makeRetailIdempotencyKey } from "./retailIdempotency";
 
 const QUICK_SIZES = ["XS", "S", "M", "L", "XL", "XXL"];
 const COMMON_COLORS = ["Black", "White", "Beige", "Navy", "Grey", "Brown", "Blue", "Red", "Green", "Pink", "Cream"];
@@ -77,11 +78,7 @@ const blankQuickVariant = (patch: Partial<QuickVariant> = {}): QuickVariant => (
 const variantKey = (variant: Pick<QuickVariant, "color" | "size">) =>
   `${variant.color.trim().toLowerCase().replace(/\s+/g, " ")}|${variant.size.trim().toLowerCase().replace(/\s+/g, " ")}`;
 
-function makeIdempotencyKey() {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  return `retail-quick-add-${uuid}`.slice(0, 191);
-}
+const makeIdempotencyKey = () => makeRetailIdempotencyKey("retail-quick-add");
 
 function readStoredLocation(): number | "" {
   try {

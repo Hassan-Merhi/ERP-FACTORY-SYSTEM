@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { makeRetailIdempotencyKey } from "@/pages/retail/retailIdempotency";
 
 export interface Location {
   id: number;
@@ -69,9 +70,7 @@ export async function readJson<T>(url: string): Promise<T> {
 }
 
 export function makeKey(prefix: string): string {
-  const uuid =
-    typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-  return `${prefix}-${uuid}`.slice(0, 191);
+  return makeRetailIdempotencyKey(prefix);
 }
 
 export function money(value: number): string {
