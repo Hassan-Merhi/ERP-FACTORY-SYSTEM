@@ -35,14 +35,12 @@ interface LookupBale {
   referenceNumber: string;
   baleCode: string;
   productName: string | null;
-  status: string;
 }
 
 interface SessionScan {
   id: number;
   referenceNumber: string;
   productName: string | null;
-  checkedAt: string;
 }
 
 interface ScanFeedback {
@@ -169,7 +167,6 @@ export default function FactoryPriorityScan() {
         id: bale.id,
         referenceNumber: bale.referenceNumber,
         productName: bale.productName,
-        checkedAt: new Date().toISOString(),
       };
       setSessionScans((currentScans) => [scan, ...currentScans].slice(0, 30));
       showFeedback({
@@ -240,7 +237,7 @@ export default function FactoryPriorityScan() {
           </div>
 
           <p className="mt-2 text-xs text-muted-foreground">
-            Reference validation is active on this wave. Automatic container routing is wired in the next wave.
+            Scans are validated against available stock and kept ready for Priority Scan routing.
           </p>
 
           {feedback && (
