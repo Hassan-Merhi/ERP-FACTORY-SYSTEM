@@ -10,6 +10,7 @@ import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
+const PRIORITY_SCAN_LOCK_NAMESPACE = 73202;
 const PRIORITY_SCAN_LIST_PATH = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PRIORITY_SCAN_ORDER_PATH = "/api/factory/customer-orders/:id/loading-list/priority-scan-config";
 
@@ -58,6 +59,71 @@ async function disableStalePriorityScanConfigs(companyId: number): Promise<void>
       AND config.enabled = TRUE
       AND (order_row.status <> 'LOADING' OR order_row.deleted_at IS NOT NULL)
   `);
+}
+
+type PriorityScanTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+class PriorityScanConfigError extends Error {
+  constructor(
+    readonly status: number,
+    message: string
+  ) {
+    super(message);
+  }
+}
+
+async function loadActivePriorityRows(tx: PriorityScanTransaction, companyId: number) {
+  return tx
+    .select({
+      id: customerOrderPriorityScanConfigs.id,
+      orderId: customerOrderPriorityScanConfigs.orderId,
+      colorKey: customerOrderPriorityScanConfigs.colorKey,
+      priority: customerOrderPriorityScanConfigs.priority,
+    })
+    .from(customerOrderPriorityScanConfigs)
+    .where(
+      and(
+        eq(customerOrderPriorityScanConfigs.companyId, companyId),
+        eq(customerOrderPriorityScanConfigs.enabled, true)
+      )
+    )
+    .orderBy(asc(customerOrderPriorityScanConfigs.priority), asc(customerOrderPriorityScanConfigs.orderId));
+}
+
+async function rewriteActivePriorityQueue(
+  tx: PriorityScanTransaction,
+  companyId: number,
+  orderedIds: number[],
+  actorId: string | null,
+  actorName: string
+): Promise<void> {
+  await tx
+    .update(customerOrderPriorityScanConfigs)
+    .set({ enabled: false })
+    .where(
+      and(
+        eq(customerOrderPriorityScanConfigs.companyId, companyId),
+        eq(customerOrderPriorityScanConfigs.enabled, true)
+      )
+    );
+
+  for (let index = 0; index < orderedIds.length; index += 1) {
+    await tx
+      .update(customerOrderPriorityScanConfigs)
+      .set({
+        priority: index + 1,
+        enabled: true,
+        updatedBy: actorId,
+        updatedByName: actorName,
+        updatedAt: sql`now()`,
+      })
+      .where(
+        and(
+          eq(customerOrderPriorityScanConfigs.companyId, companyId),
+          eq(customerOrderPriorityScanConfigs.id, orderedIds[index])
+        )
+      );
+  }
 }
 
 export function registerPriorityScanConfigRoutes(app: Express) {
@@ -128,73 +194,123 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       }
       const enabled = req.body?.enabled !== false;
 
-      const [order] = await db
-        .select({
-          id: customerOrders.id,
-          status: customerOrders.status,
-          proformaIdUsed: customerOrders.proformaIdUsed,
-        })
-        .from(customerOrders)
-        .where(
-          and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId), isNull(customerOrders.deletedAt))
-        )
-        .limit(1);
+      const actorId = req.session.userId == null ? null : String(req.session.userId);
+      const actorName = String(req.session.username ?? req.session.userId ?? "unknown");
 
-      if (!order) return res.status(404).json({ message: "Pending loading not found." });
-      if (order.status !== "LOADING") {
-        return res.status(409).json({ message: "Only pending loadings in LOADING status can use Priority Scan." });
-      }
-      if (enabled && !order.proformaIdUsed) {
-        return res.status(409).json({ message: "Link a proforma before enabling Priority Scan for this loading." });
-      }
+      const saved = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
 
-      const actorId = req.session.userId ?? null;
-      const actorName = req.session.username ?? actorId ?? "unknown";
-      const existing = await db
-        .select({
-          id: customerOrderPriorityScanConfigs.id,
-          createdBy: customerOrderPriorityScanConfigs.createdBy,
-          createdByName: customerOrderPriorityScanConfigs.createdByName,
-        })
-        .from(customerOrderPriorityScanConfigs)
-        .where(
-          and(
-            eq(customerOrderPriorityScanConfigs.companyId, companyId),
-            eq(customerOrderPriorityScanConfigs.orderId, orderId)
+        const [order] = await tx
+          .select({
+            id: customerOrders.id,
+            status: customerOrders.status,
+            proformaIdUsed: customerOrders.proformaIdUsed,
+          })
+          .from(customerOrders)
+          .where(
+            and(
+              eq(customerOrders.id, orderId),
+              eq(customerOrders.companyId, companyId),
+              isNull(customerOrders.deletedAt)
+            )
           )
-        )
-        .limit(1);
+          .limit(1);
 
-      const [saved] = await db
-        .insert(customerOrderPriorityScanConfigs)
-        .values({
-          companyId,
-          orderId,
-          color: normalizedColor.color,
-          colorKey: normalizedColor.colorKey,
-          priority,
-          enabled,
-          createdBy: existing[0]?.createdBy ?? actorId,
-          createdByName: existing[0]?.createdByName ?? actorName,
-          updatedBy: actorId,
-          updatedByName: actorName,
-        })
-        .onConflictDoUpdate({
-          target: [customerOrderPriorityScanConfigs.companyId, customerOrderPriorityScanConfigs.orderId],
-          set: {
+        if (!order) throw new PriorityScanConfigError(404, "Pending loading not found.");
+        if (order.status !== "LOADING") {
+          throw new PriorityScanConfigError(409, "Only pending loadings in LOADING status can use Priority Scan.");
+        }
+        if (enabled && !order.proformaIdUsed) {
+          throw new PriorityScanConfigError(409, "Link a proforma before enabling Priority Scan for this loading.");
+        }
+
+        const existing = await tx
+          .select({
+            id: customerOrderPriorityScanConfigs.id,
+            createdBy: customerOrderPriorityScanConfigs.createdBy,
+            createdByName: customerOrderPriorityScanConfigs.createdByName,
+            enabled: customerOrderPriorityScanConfigs.enabled,
+          })
+          .from(customerOrderPriorityScanConfigs)
+          .where(
+            and(
+              eq(customerOrderPriorityScanConfigs.companyId, companyId),
+              eq(customerOrderPriorityScanConfigs.orderId, orderId)
+            )
+          )
+          .limit(1);
+
+        const activeRows = await loadActivePriorityRows(tx, companyId);
+        if (
+          enabled &&
+          activeRows.some((row) => row.orderId !== orderId && row.colorKey === normalizedColor.colorKey)
+        ) {
+          throw new PriorityScanConfigError(
+            409,
+            "That color is already assigned to another active priority loading."
+          );
+        }
+
+        // Temporarily keep the target disabled while the active queue is rewritten.
+        // This releases the partial unique indexes so moving #2 to #1 can be done
+        // atomically without transient duplicate-priority failures.
+        const [target] = await tx
+          .insert(customerOrderPriorityScanConfigs)
+          .values({
+            companyId,
+            orderId,
             color: normalizedColor.color,
             colorKey: normalizedColor.colorKey,
             priority,
-            enabled,
+            enabled: false,
+            createdBy: existing[0]?.createdBy ?? actorId,
+            createdByName: existing[0]?.createdByName ?? actorName,
             updatedBy: actorId,
             updatedByName: actorName,
-            updatedAt: sql`now()`,
-          },
-        })
-        .returning();
+          })
+          .onConflictDoUpdate({
+            target: [customerOrderPriorityScanConfigs.companyId, customerOrderPriorityScanConfigs.orderId],
+            set: {
+              color: normalizedColor.color,
+              colorKey: normalizedColor.colorKey,
+              priority,
+              enabled: false,
+              updatedBy: actorId,
+              updatedByName: actorName,
+              updatedAt: sql`now()`,
+            },
+          })
+          .returning();
+
+        const remainingActiveIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
+
+        if (enabled) {
+          const insertAt = Math.min(Math.max(priority - 1, 0), remainingActiveIds.length);
+          const orderedIds = [...remainingActiveIds];
+          orderedIds.splice(insertAt, 0, target.id);
+          await rewriteActivePriorityQueue(tx, companyId, orderedIds, actorId, actorName);
+        } else if (existing[0]?.enabled) {
+          await rewriteActivePriorityQueue(tx, companyId, remainingActiveIds, actorId, actorName);
+        }
+
+        const [result] = await tx
+          .select()
+          .from(customerOrderPriorityScanConfigs)
+          .where(
+            and(
+              eq(customerOrderPriorityScanConfigs.companyId, companyId),
+              eq(customerOrderPriorityScanConfigs.orderId, orderId)
+            )
+          )
+          .limit(1);
+        return result;
+      });
 
       return res.json(saved);
     } catch (error: unknown) {
+      if (error instanceof PriorityScanConfigError) {
+        return res.status(error.status).json({ message: error.message });
+      }
       const constraint = uniqueConstraint(error);
       if (constraint) return sendPriorityConflict(res, constraint);
       logger.error("Error saving Priority Scan config", { error: getErrorMessage(error) });
@@ -213,21 +329,39 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         const orderId = parseId(req.params.id);
         if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });
 
-        const deleted = await db
-          .delete(customerOrderPriorityScanConfigs)
-          .where(
-            and(
-              eq(customerOrderPriorityScanConfigs.companyId, companyId),
-              eq(customerOrderPriorityScanConfigs.orderId, orderId)
-            )
-          )
-          .returning({ id: customerOrderPriorityScanConfigs.id });
+        const actorId = req.session.userId == null ? null : String(req.session.userId);
+        const actorName = String(req.session.username ?? req.session.userId ?? "unknown");
 
-        return res.json({ success: true, cleared: deleted.length > 0 });
+        const cleared = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+
+          const activeRows = await loadActivePriorityRows(tx, companyId);
+          const targetWasActive = activeRows.some((row) => row.orderId === orderId);
+
+          const deleted = await tx
+            .delete(customerOrderPriorityScanConfigs)
+            .where(
+              and(
+                eq(customerOrderPriorityScanConfigs.companyId, companyId),
+                eq(customerOrderPriorityScanConfigs.orderId, orderId)
+              )
+            )
+            .returning({ id: customerOrderPriorityScanConfigs.id });
+
+          if (targetWasActive) {
+            const remainingIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
+            await rewriteActivePriorityQueue(tx, companyId, remainingIds, actorId, actorName);
+          }
+
+          return deleted.length > 0;
+        });
+
+        return res.json({ success: true, cleared });
       } catch (error: unknown) {
         logger.error("Error clearing Priority Scan config", { error: getErrorMessage(error) });
         return res.status(500).json({ message: "Failed to clear Priority Scan configuration." });
       }
     }
   );
+
 }
