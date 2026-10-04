@@ -169,7 +169,7 @@ export default function FactoryPriorityScan() {
   };
 
   const allocatePriorityScan = async (referenceNumber: string): Promise<PriorityScanAllocation> => {
-    const maxAttempts = Math.max(1, activeQueue.length + 1);
+    const maxAttempts = Math.max(3, activeQueue.length + 1);
 
     for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const route = await resolvePriorityRoute(referenceNumber);
@@ -213,16 +213,6 @@ export default function FactoryPriorityScan() {
         type: "error",
         referenceNumber,
         message: tr("noActivePriority"),
-      });
-      focusScanner();
-      return;
-    }
-
-    if (sessionScans.some((scan) => scan.referenceNumber === referenceNumber)) {
-      showFeedback({
-        type: "warn",
-        referenceNumber,
-        message: tr("alreadyScannedSession"),
       });
       focusScanner();
       return;
