@@ -5,11 +5,15 @@ import FactoryPriorityScan from "./FactoryPriorityScan";
 import { Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePriorityScanText } from "@/i18n/priorityScanTranslations";
 
 type LoadingsTab = "loadings" | "pending" | "priority";
 const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending", "priority"];
 
 export default function FactoryLoadingsHub() {
+  const { language } = useApplicationLanguage();
+  const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
