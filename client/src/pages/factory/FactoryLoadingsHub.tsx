@@ -57,11 +57,11 @@ export default function FactoryLoadingsHub() {
           </div>
           <div>
             <h1 className="text-base font-semibold leading-tight">Loadings</h1>
-            <p className="text-xs text-muted-foreground">Container loading and pending sessions</p>
+            <p className="text-xs text-muted-foreground">Container loading, pending sessions and priority scanning</p>
           </div>
         </div>
         {/* Tab row */}
-        <div className="flex gap-0 px-4" role="tablist">
+        <div className="flex gap-0 px-4 overflow-x-auto" role="tablist">
           {showLoadings && <button
             role="tab"
             aria-selected={effectiveActiveTab === "loadings"}
