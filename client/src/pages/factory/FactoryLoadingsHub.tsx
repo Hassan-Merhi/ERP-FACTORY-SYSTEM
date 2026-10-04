@@ -61,7 +61,7 @@ export default function FactoryLoadingsHub() {
           </div>
           <div>
             <h1 className="text-base font-semibold leading-tight">Loadings</h1>
-            <p className="text-xs text-muted-foreground">Container loading, pending sessions and priority scanning</p>
+            <p className="text-xs text-muted-foreground">{translatePriorityScanText("loadingsHubSubtitle", language)}</p>
           </div>
         </div>
         {/* Tab row */}
