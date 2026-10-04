@@ -18,7 +18,11 @@ import {
   shouldRequireProformaMembership,
 } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
-import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
+import {
+  advanceSatisfiedPriorityScanConfigs,
+  PRIORITY_SCAN_LOCK_NAMESPACE,
+  resolvePriorityScanArticleTarget,
+} from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
@@ -121,11 +125,13 @@ export function registerOrderBaleScanRoutes(app: Express) {
         | { ok: false; httpStatus: number; body: Record<string, unknown> };
 
       const result: PickResult = await db.transaction(async (tx) => {
-        // Proforma lock first, then the order row, then the bale row. Every
-        // capacity-changing writer takes these in the same order, so a scan
-        // racing an import, an exchange or a finalization on this proforma
-        // waits here instead of measuring capacity mid-write, and no two paths
-        // can take the same resources in reverse and deadlock.
+        // Priority Scan serializes queue routing before taking any proforma
+        // capacity locks. Config edits use the same priority -> proforma order.
+        // Normal loading scans keep their established proforma-first path.
+        if (isPriorityScan) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        }
+
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
             companyId,
@@ -155,6 +161,21 @@ export function registerOrderBaleScanRoutes(app: Express) {
             ok: false,
             httpStatus: 400,
             body: { message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" },
+          };
+        }
+        if (
+          isPriorityScan &&
+          (currentOrder.status !== "LOADING" ||
+            !currentOrder.proformaIdUsed ||
+            currentOrder.proformaIdUsed !== order.proformaIdUsed)
+        ) {
+          return {
+            ok: false,
+            httpStatus: 409,
+            body: {
+              code: "PRIORITY_SCAN_ROUTE_CHANGED",
+              message: "Priority Scan loading changed while the reference was routing. Scan again.",
+            },
           };
         }
 
@@ -235,6 +256,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
           };
         }
 
+        if (
+          isPriorityScan &&
+          bale.referenceNumber.toLowerCase() !== scanLower &&
+          bale.baleCode.toLowerCase() !== scanLower
+        ) {
+          return {
+            ok: false,
+            httpStatus: 400,
+            body: { message: "Priority Scan requires an exact bale reference or bale code." },
+          };
+        }
+
         if (bale.status === "RESERVED_FOR_ORDER") {
           const reservedBale = bale;
           if (reservedBale.reservedInThisOrder) {
@@ -282,6 +315,25 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
+
+        if (isPriorityScan) {
+          const authoritativeTarget = effectiveArticleCode
+            ? await resolvePriorityScanArticleTarget(tx, companyId, effectiveArticleCode)
+            : null;
+          if (!authoritativeTarget || authoritativeTarget.orderId !== orderId) {
+            return {
+              ok: false,
+              httpStatus: 409,
+              body: {
+                code: "PRIORITY_SCAN_ROUTE_CHANGED",
+                message: authoritativeTarget
+                  ? `Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.`
+                  : "This reference is no longer required by an active Priority Scan loading.",
+              },
+            };
+          }
+        }
+
         const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
