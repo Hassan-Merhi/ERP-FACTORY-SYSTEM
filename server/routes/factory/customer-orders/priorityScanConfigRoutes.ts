@@ -67,7 +67,11 @@ async function disableStalePriorityScanConfigs(companyId: number): Promise<void>
       AND config.company_id = ${companyId}
       AND order_row.company_id = ${companyId}
       AND config.enabled = TRUE
-      AND (order_row.status <> 'LOADING' OR order_row.deleted_at IS NOT NULL)
+      AND (
+        order_row.status <> 'LOADING'
+        OR order_row.deleted_at IS NOT NULL
+        OR order_row.proforma_id_used IS NULL
+      )
   `);
 }
 
