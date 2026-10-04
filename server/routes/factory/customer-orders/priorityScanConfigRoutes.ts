@@ -8,6 +8,7 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { firstRow } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
 import {
   advanceSatisfiedPriorityScanConfigs,
@@ -329,6 +330,23 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         }
         if (enabled && !order.proformaIdUsed) {
           throw new PriorityScanConfigError(409, "Link a proforma before enabling Priority Scan for this loading.");
+        }
+        if (enabled && order.proformaIdUsed) {
+          await acquireProformaCapacityTransactionLock(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+          });
+          const snapshot = await getProformaCapacitySnapshot(tx, {
+            companyId,
+            proformaId: order.proformaIdUsed,
+            currentOrderId: orderId,
+          });
+          if (snapshot && snapshot.requestedTotalQty > 0 && snapshot.remainingTotalQty <= 0) {
+            throw new PriorityScanConfigError(
+              409,
+              "This loading already satisfies its linked proforma and does not need Priority Scan."
+            );
+          }
         }
 
         const existing = await tx
