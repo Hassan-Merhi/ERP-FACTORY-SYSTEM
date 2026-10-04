@@ -1,5 +1,6 @@
 export const NO_BRAND = "Other / No Brand";
 export const MAX_PRODUCT_IMAGES = 8;
+export const MAX_VARIANT_IMAGES = 4;
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 export const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
@@ -24,7 +25,9 @@ export interface RetailStock {
 
 export interface RetailVariant {
   id: number;
+  color: string;
   size: string;
+  imageUrls: string[];
   barcode: string;
   sku: string | null;
   cost: number;
@@ -40,10 +43,12 @@ export interface RetailProduct {
   code: string;
   name: string;
   category: string | null;
+  description?: string | null;
   imageUrls: string[];
   active: boolean;
   brand: { id: number | null; name: string };
   variants: RetailVariant[];
+  availableColors: string[];
   availableSizes: string[];
   totalQuantity: number;
   minSellingPrice: number;
@@ -59,6 +64,7 @@ export interface RetailCatalogPage {
 }
 
 export interface RetailCatalogFacets {
+  colors: string[];
   sizes: string[];
   categories: string[];
 }
@@ -66,11 +72,15 @@ export interface RetailCatalogFacets {
 export interface DraftStock {
   locationId: number | "";
   quantity: number;
+  /** Quantity loaded from the server; lets the API reject edits that would overwrite newer POS activity. */
+  expectedQuantity?: number;
 }
 
 export interface DraftVariant {
   id?: number;
+  color: string;
   size: string;
+  imageUrls: string[];
   barcode: string;
   sku: string;
   cost: number;
@@ -85,13 +95,16 @@ export interface ProductDraft {
   name: string;
   brandId: number | "";
   category: string;
+  description: string;
   imageUrls: string[];
   active: boolean;
   variants: DraftVariant[];
 }
 
 export const blankVariant = (): DraftVariant => ({
+  color: "Default",
   size: "",
+  imageUrls: [],
   barcode: "",
   sku: "",
   cost: 0,
@@ -106,6 +119,7 @@ export const blankDraft = (): ProductDraft => ({
   name: "",
   brandId: "",
   category: "",
+  description: "",
   imageUrls: [],
   active: true,
   variants: [blankVariant()],

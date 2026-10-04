@@ -91,6 +91,8 @@ These describe work in progress and carry live figures bound to their sources.
 | [erp-90-phases-3-6.md](erp-90-phases-3-6.md) | ERP 90/100 Phases 3–6: tenant isolation, accounting and inventory convergence |
 | [god-file-split-program.md](god-file-split-program.md) | Splitting oversized files, and the harness that makes a split provable |
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
+| [Retail fashion variants Wave 1 spec](superpowers/specs/2026-10-03-retail-fashion-variants-wave1-design.md) | Current Retail color + size variant and variant-image contract |
+| [Retail fashion variants Wave 1 plan](superpowers/plans/2026-10-03-retail-fashion-variants-wave1.md) | Implementation and verification plan for the current Retail fashion-variant rollout |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
 | [performance-wave5-production-certification.md](performance-wave5-production-certification.md) | Production performance certification and remaining measurement gates |
 | [remote-support-phase-17-transport-resilience.md](remote-support-phase-17-transport-resilience.md) | Remote-support Phase 17: binary transport with a conditional HTTP polling fallback |
