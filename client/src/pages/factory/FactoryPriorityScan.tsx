@@ -51,6 +51,7 @@ interface PriorityRouteResolution {
 
 interface PriorityScanRequestError extends Error {
   status?: number;
+  code?: string;
   overloaded?: unknown;
   notInProforma?: unknown;
 }
@@ -83,6 +84,7 @@ interface ScanFeedback {
 export default function FactoryPriorityScan() {
   const inputRef = useRef<HTMLInputElement>(null);
   const feedbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanSubmissionInFlightRef = useRef(false);
   const [scanInput, setScanInput] = useState("");
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
@@ -142,14 +144,17 @@ export default function FactoryPriorityScan() {
     );
     if (!response.ok) {
       let message = "Could not route this reference.";
+      let errorCode: string | undefined;
       try {
-        const payload = (await response.json()) as { message?: string };
+        const payload = (await response.json()) as { message?: string; code?: string };
         if (payload.message) message = payload.message;
+        if (payload.code) errorCode = payload.code;
       } catch {
         // Keep the stable fallback.
       }
       const error = new Error(message) as PriorityScanRequestError;
       error.status = response.status;
+      error.code = errorCode;
       throw error;
     }
     return response.json() as Promise<PriorityRouteResolution>;
@@ -180,7 +185,8 @@ export default function FactoryPriorityScan() {
       } catch (error) {
         const requestError = error as PriorityScanRequestError;
         const routeMayHaveChanged =
-          requestError.status === 400 && (requestError.overloaded === true || requestError.notInProforma === true);
+          requestError.code === "PRIORITY_SCAN_ROUTE_CHANGED" ||
+          (requestError.status === 400 && (requestError.overloaded === true || requestError.notInProforma === true));
         if (!routeMayHaveChanged || attempt === maxAttempts - 1) throw error;
       }
     }
@@ -190,7 +196,7 @@ export default function FactoryPriorityScan() {
 
   const handleScan = async () => {
     const referenceNumber = scanInput.trim().toUpperCase();
-    if (!referenceNumber || scanning) return;
+    if (!referenceNumber || scanning || scanSubmissionInFlightRef.current) return;
 
     setScanInput("");
 
@@ -214,6 +220,7 @@ export default function FactoryPriorityScan() {
       return;
     }
 
+    scanSubmissionInFlightRef.current = true;
     setScanning(true);
     try {
       const routed = await allocatePriorityScan(referenceNumber);
@@ -259,6 +266,7 @@ export default function FactoryPriorityScan() {
         message: error instanceof Error ? error.message : "Could not route this reference.",
       });
     } finally {
+      scanSubmissionInFlightRef.current = false;
       setScanning(false);
       focusScanner();
     }
