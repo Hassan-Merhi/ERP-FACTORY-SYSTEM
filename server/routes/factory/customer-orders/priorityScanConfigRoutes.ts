@@ -9,11 +9,16 @@ import { parseId } from "../../../lib/parseId";
 import { firstRow } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
+import {
+  advanceSatisfiedPriorityScanConfigs,
+  loadActivePriorityRows,
+  PRIORITY_SCAN_LOCK_NAMESPACE,
+  rewriteActivePriorityQueue,
+} from "./priorityScanQueue";
 import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
-const PRIORITY_SCAN_LOCK_NAMESPACE = 73202;
 const PRIORITY_SCAN_LIST_PATH = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PRIORITY_SCAN_ORDER_PATH = "/api/factory/customer-orders/:id/loading-list/priority-scan-config";
 const PRIORITY_SCAN_ROUTE_PATH = "/api/factory/customer-orders/loading-list/priority-scan-route";
@@ -65,8 +70,6 @@ async function disableStalePriorityScanConfigs(companyId: number): Promise<void>
   `);
 }
 
-type PriorityScanTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
-
 class PriorityScanConfigError extends Error {
   constructor(
     readonly status: number,
@@ -76,59 +79,6 @@ class PriorityScanConfigError extends Error {
   }
 }
 
-async function loadActivePriorityRows(tx: PriorityScanTransaction, companyId: number) {
-  return tx
-    .select({
-      id: customerOrderPriorityScanConfigs.id,
-      orderId: customerOrderPriorityScanConfigs.orderId,
-      colorKey: customerOrderPriorityScanConfigs.colorKey,
-      priority: customerOrderPriorityScanConfigs.priority,
-    })
-    .from(customerOrderPriorityScanConfigs)
-    .where(
-      and(
-        eq(customerOrderPriorityScanConfigs.companyId, companyId),
-        eq(customerOrderPriorityScanConfigs.enabled, true)
-      )
-    )
-    .orderBy(asc(customerOrderPriorityScanConfigs.priority), asc(customerOrderPriorityScanConfigs.orderId));
-}
-
-async function rewriteActivePriorityQueue(
-  tx: PriorityScanTransaction,
-  companyId: number,
-  orderedIds: number[],
-  actorId: string | null,
-  actorName: string
-): Promise<void> {
-  await tx
-    .update(customerOrderPriorityScanConfigs)
-    .set({ enabled: false })
-    .where(
-      and(
-        eq(customerOrderPriorityScanConfigs.companyId, companyId),
-        eq(customerOrderPriorityScanConfigs.enabled, true)
-      )
-    );
-
-  for (let index = 0; index < orderedIds.length; index += 1) {
-    await tx
-      .update(customerOrderPriorityScanConfigs)
-      .set({
-        priority: index + 1,
-        enabled: true,
-        updatedBy: actorId,
-        updatedByName: actorName,
-        updatedAt: sql`now()`,
-      })
-      .where(
-        and(
-          eq(customerOrderPriorityScanConfigs.companyId, companyId),
-          eq(customerOrderPriorityScanConfigs.id, orderedIds[index])
-        )
-      );
-  }
-}
 
 export function registerPriorityScanConfigRoutes(app: Express) {
   app.get(PRIORITY_SCAN_ROUTE_PATH, requireAuth, async (req: Request, res: Response) => {
@@ -137,6 +87,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       await disableStalePriorityScanConfigs(companyId);
+      await advanceSatisfiedPriorityScanConfigs(companyId);
 
       const rawCode = typeof req.query.code === "string" ? req.query.code.trim() : "";
       if (!rawCode) return res.status(400).json({ message: "code is required" });
