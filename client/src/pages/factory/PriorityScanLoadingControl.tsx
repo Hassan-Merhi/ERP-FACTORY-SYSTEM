@@ -288,7 +288,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                Priority #1 is fulfilled first. Later waves will use this order for automatic scan routing.
+                Priority #1 is first. Fully satisfied loadings leave the queue automatically and the remaining priorities move up.
               </p>
             </div>
           </div>
