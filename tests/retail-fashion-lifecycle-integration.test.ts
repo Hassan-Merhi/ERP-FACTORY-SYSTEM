@@ -139,6 +139,10 @@ describeWithDatabase("Retail fashion lifecycle (PostgreSQL)", () => {
     const [blackM, beigeS] = added.body.variants as Array<{ variantId: number; barcode: string }>;
     // Wave 3: generated, valid, unique in-store barcodes.
     expect(isValidEan13(blackM.barcode) && blackM.barcode.startsWith("2")).toBe(true);
+    // The intake response carries the received units so labels can be printed one per unit.
+    expect(added.body.variants.map((variant: { receivedQuantity: number }) => variant.receivedQuantity)).toEqual([
+      1, 1,
+    ]);
     expect(blackM.barcode).not.toBe(beigeS.barcode);
 
     const duplicate = await manager.post("/api/retail/quick-add").send({
@@ -283,6 +287,42 @@ describeWithDatabase("Retail fashion lifecycle (PostgreSQL)", () => {
     expect(archivedScan.body.code).toBe("ITEM_INACTIVE");
     expect((await manager.get(`/api/retail/variants/${blackM.variantId}/movements`)).body.length).toBeGreaterThan(0);
     await manager.patch(`/api/retail/variants/${blackM.variantId}/active`).send({ active: true });
+
+    // A sale that is partially returned and then canceled leaves the variant sales report unchanged.
+    const salesBefore = (await manager.get(`/api/retail/reporting/variant-sales`)).body.find(
+      (row: { variantId: number }) => row.variantId === blackM.variantId
+    );
+    await manager.post("/api/pos/retail/receipts").send({
+      idempotencyKey: "rfl-receive-0002",
+      variantId: blackM.variantId,
+      locationId: mainId,
+      quantity: 1,
+    });
+    const twoUnits = await manager.post("/api/pos/retail/sales").send({
+      locationId: mainId,
+      idempotencyKey: "rfl-sale-0004",
+      items: [{ variantId: blackM.variantId, quantity: 2 }],
+    });
+    expect(twoUnits.status).toBe(201);
+    await manager.post(`/api/pos/retail/sales/${twoUnits.body.sale.id}/returns`).send({
+      locationId: mainId,
+      idempotencyKey: "rfl-return-0002",
+      items: [{ saleItemId: twoUnits.body.sale.items[0].id, quantity: 1 }],
+    });
+    const canceled = await manager.post(`/api/pos/retail/sales/${twoUnits.body.sale.id}/cancel`).send({
+      locationId: mainId,
+      idempotencyKey: "rfl-cancel-0001",
+    });
+    expect(canceled.status).toBe(201);
+    const salesAfter = (await manager.get(`/api/retail/reporting/variant-sales`)).body.find(
+      (row: { variantId: number }) => row.variantId === blackM.variantId
+    );
+    expect(salesAfter).toMatchObject({
+      soldQuantity: salesBefore.soldQuantity,
+      returnedQuantity: salesBefore.returnedQuantity,
+      netRevenue: salesBefore.netRevenue,
+    });
+    expect(await stockAt(blackM.barcode, mainId)).toBe(2);
 
     // Permissions: cashiers sell but cannot receive or read reports.
     expect(

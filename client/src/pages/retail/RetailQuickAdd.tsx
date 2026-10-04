@@ -53,6 +53,7 @@ interface QuickAddResult {
     barcode: string;
     barcodeSource: string;
     sellingPrice: number;
+    receivedQuantity?: number;
   }>;
 }
 
@@ -314,7 +315,7 @@ export default function RetailQuickAdd() {
         variantId: variant.variantId,
         title: `${variant.brand ?? NO_BRAND} · ${variant.name} · ${variant.color} · ${variant.size}`,
         barcode: variant.barcode,
-        stockQuantity: 1,
+        stockQuantity: Math.max(1, variant.receivedQuantity ?? 1),
       }))
     );
     setLabelOpen(true);

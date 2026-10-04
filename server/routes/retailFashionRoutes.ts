@@ -330,7 +330,16 @@ export function registerRetailFashionRoutes(app: Express): void {
       const variants = result.variantIds.length ? await loadLabelRows(companyId, result.variantIds) : [];
       res.status(result.replayed ? 200 : 201).json({
         ...result,
-        variants: variants.map((variant) => ({ ...variant, sellingPrice: toNumber(variant.sellingPrice) })),
+        variants: variants.map((variant) => ({
+          ...variant,
+          sellingPrice: toNumber(variant.sellingPrice),
+          // Units received in this intake, so the label dialog can print one tag per unit.
+          receivedQuantity:
+            input.variants.find(
+              (entry) =>
+                normalize(entry.color) === normalize(variant.color) && normalize(entry.size) === normalize(variant.size)
+            )?.quantity ?? 0,
+        })),
       });
     } catch (error) {
       if (error instanceof RetailQuickAddConflictError) {

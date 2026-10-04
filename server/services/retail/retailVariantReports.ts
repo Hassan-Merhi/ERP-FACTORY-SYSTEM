@@ -148,7 +148,8 @@ export async function getRetailVariantSalesReport(filters: RetailVariantReportFi
        JOIN retail_pos_returns r ON r.id = ri.return_id AND r.company_id = ri.company_id
        JOIN retail_pos_sale_items si ON si.id = ri.sale_item_id
        JOIN retail_pos_sales s ON s.id = r.sale_id AND s.company_id = r.company_id
-       WHERE ri.company_id = $1
+       -- Canceled sales are excluded from "sold", so their earlier returns are excluded too.
+       WHERE ri.company_id = $1 AND s.status = 'completed'
          AND r.created_at >= ${fromParam} AND r.created_at < ${toParam} ${locationClause}
        GROUP BY ri.variant_id
      )
