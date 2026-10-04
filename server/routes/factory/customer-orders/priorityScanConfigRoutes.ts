@@ -214,7 +214,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
 
       if (candidates.length === 0) {
         return res.status(409).json({
-          message: "This reference is not required by any active Priority Scan loading.",
+          message: "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
           referenceNumber: bale.referenceNumber,
           articleCode: effectiveArticleCode,
         });
