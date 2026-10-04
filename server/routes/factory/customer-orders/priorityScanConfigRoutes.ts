@@ -9,7 +9,7 @@ import { parseId } from "../../../lib/parseId";
 import { firstRow } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
-import { customerOrderBales, customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
+import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
@@ -152,7 +152,6 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           productName: factoryBales.productName,
           productId: factoryBales.productId,
           erpLocationId: factoryBales.erpLocationId,
-          status: factoryBales.status,
           canonicalArticleCode: sql<string | null>`(
             SELECT fbp.article_code
             FROM factory_bale_products fbp
@@ -216,7 +215,6 @@ export function registerPriorityScanConfigRoutes(app: Express) {
 
       const queue = await db
         .select({
-          configId: customerOrderPriorityScanConfigs.id,
           orderId: customerOrderPriorityScanConfigs.orderId,
           color: customerOrderPriorityScanConfigs.color,
           priority: customerOrderPriorityScanConfigs.priority,
