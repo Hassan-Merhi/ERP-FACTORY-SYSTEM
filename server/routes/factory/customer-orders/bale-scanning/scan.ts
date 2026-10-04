@@ -409,16 +409,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
       }
 
       let priorityScanAdvance = null;
-      try {
-        priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
-      } catch (advanceError) {
-        // The bale allocation has already committed. Never turn a successful
-        // physical scan into a retryable 500 just because queue advancement
-        // failed; the next Priority Scan route resolution will reconcile it.
-        logger.error("Priority Scan auto-advance failed after bale allocation", {
-          orderId,
-          error: getErrorMessage(advanceError),
-        });
+      if (req.body.priorityScan === true) {
+        try {
+          priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+        } catch (advanceError) {
+          // The bale allocation has already committed. Never turn a successful
+          // physical scan into a retryable 500 just because queue advancement
+          // failed; the next Priority Scan route resolution will reconcile it.
+          logger.error("Priority Scan auto-advance failed after bale allocation", {
+            orderId,
+            error: getErrorMessage(advanceError),
+          });
+        }
       }
 
       return res.json({
