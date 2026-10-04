@@ -2,6 +2,11 @@ import type { ApplicationLanguage } from "@shared/applicationLanguageContract";
 
 const priorityScanTranslations = {
   priorityScan: { en: "Priority Scan", ar: "المسح حسب الأولوية", fr: "Scan prioritaire" },
+  loadingsHubSubtitle: {
+    en: "Container loading, pending sessions and priority scanning",
+    ar: "تحميل الحاويات والجلسات المعلقة والمسح حسب الأولوية",
+    fr: "Chargement des conteneurs, sessions en attente et scan prioritaire",
+  },
   scanDescription: {
     en: "Scan a bale reference. The priority queue stays visible while you work.",
     ar: "امسح مرجع البالة. تبقى قائمة الأولويات ظاهرة أثناء العمل.",
