@@ -167,4 +167,9 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "تغيّر توجيه المسح حسب الأولوية إلى التحميل #{0}. جارٍ إعادة التوجيه.",
     fr: "Le routage du scan prioritaire a changé vers le chargement #{0}. Nouvel acheminement en cours.",
   },
+  {
+    en: "Bale ${bale.referenceNumber} is already in ${orderRef} (${duplicate.status}).",
+    ar: "البالة {0} موجودة بالفعل في {1} ({2}).",
+    fr: "La balle {0} se trouve déjà dans {1} ({2}).",
+  },
 ];
