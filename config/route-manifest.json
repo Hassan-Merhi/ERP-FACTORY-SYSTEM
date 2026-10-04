@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2029,
+  "routeCount": 2033,
   "middlewareMountCount": 131,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -319,6 +319,10 @@
     "POST /api/factory/customer-price-lists/:customerId/from-proforma/:proformaId [requireAuth > <anonymous>]",
     "PUT /api/factory/customer-price-lists/:customerId [requireAuth > <anonymous>]",
     "DELETE /api/factory/customer-price-lists/:customerId/:articleCode [requireAuth > <anonymous>]",
+    "GET /api/factory/customer-orders/loading-list/priority-scan-route [requireAuth > <anonymous>]",
+    "GET /api/factory/customer-orders/loading-list/priority-scan-configs [requireAuth > <anonymous>]",
+    "PUT /api/factory/customer-orders/:id/loading-list/priority-scan-config [requireAuth > <anonymous>]",
+    "DELETE /api/factory/customer-orders/:id/loading-list/priority-scan-config [requireAuth > <anonymous>]",
     "GET /api/factory/customer-orders [requireAuth > <anonymous>]",
     "GET /api/factory/customer-orders/:id [requireAuth > <anonymous>]",
     "PATCH /api/factory/customer-orders/:id/hidden [requireAuth > <anonymous>]",

@@ -18,6 +18,11 @@ import {
   shouldRequireProformaMembership,
 } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import {
+  advanceSatisfiedPriorityScanConfigs,
+  PRIORITY_SCAN_LOCK_NAMESPACE,
+  resolvePriorityScanArticleTarget,
+} from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
@@ -41,6 +46,14 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
       const { scanCode, locationId } = req.body;
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
+
+      const isPriorityScan = req.body.priorityScan === true;
+      if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
+        return res.status(400).json({
+          message:
+            "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
+        });
+      }
 
       const parsedLocationId = Number.parseInt(String(locationId), 10);
       if (!Number.isInteger(parsedLocationId) || parsedLocationId <= 0) {
@@ -109,11 +122,13 @@ export function registerOrderBaleScanRoutes(app: Express) {
         | { ok: false; httpStatus: number; body: Record<string, unknown> };
 
       const result: PickResult = await db.transaction(async (tx) => {
-        // Proforma lock first, then the order row, then the bale row. Every
-        // capacity-changing writer takes these in the same order, so a scan
-        // racing an import, an exchange or a finalization on this proforma
-        // waits here instead of measuring capacity mid-write, and no two paths
-        // can take the same resources in reverse and deadlock.
+        // Priority Scan serializes queue routing before taking any proforma
+        // capacity locks. Config edits use the same priority -> proforma order.
+        // Normal loading scans keep their established proforma-first path.
+        if (isPriorityScan) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        }
+
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
             companyId,
@@ -143,6 +158,21 @@ export function registerOrderBaleScanRoutes(app: Express) {
             ok: false,
             httpStatus: 400,
             body: { message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" },
+          };
+        }
+        if (
+          isPriorityScan &&
+          (currentOrder.status !== "LOADING" ||
+            !currentOrder.proformaIdUsed ||
+            currentOrder.proformaIdUsed !== order.proformaIdUsed)
+        ) {
+          return {
+            ok: false,
+            httpStatus: 409,
+            body: {
+              code: "PRIORITY_SCAN_ROUTE_CHANGED",
+              message: "Priority Scan loading changed while the reference was routing. Scan again.",
+            },
           };
         }
 
@@ -223,6 +253,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
           };
         }
 
+        if (
+          isPriorityScan &&
+          bale.referenceNumber.toLowerCase() !== scanLower &&
+          bale.baleCode.toLowerCase() !== scanLower
+        ) {
+          return {
+            ok: false,
+            httpStatus: 400,
+            body: { message: "Priority Scan requires an exact bale reference or bale code." },
+          };
+        }
+
         if (bale.status === "RESERVED_FOR_ORDER") {
           const reservedBale = bale;
           if (reservedBale.reservedInThisOrder) {
@@ -270,11 +312,30 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
-        const ignoreProforma = req.body.allowBypassProforma === true;
+
+        if (isPriorityScan) {
+          const authoritativeTarget = effectiveArticleCode
+            ? await resolvePriorityScanArticleTarget(tx, companyId, effectiveArticleCode)
+            : null;
+          if (!authoritativeTarget || authoritativeTarget.orderId !== orderId) {
+            return {
+              ok: false,
+              httpStatus: 409,
+              body: {
+                code: "PRIORITY_SCAN_ROUTE_CHANGED",
+                message: authoritativeTarget
+                  ? `Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.`
+                  : "This reference is no longer required by an active Priority Scan loading.",
+              },
+            };
+          }
+        }
+
+        const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
-          allowBypassOverload: req.body.allowBypassOverload === true,
-          isReinstatingRemovedBale: bale.removedFromThisOrder,
+          allowBypassOverload: !isPriorityScan && req.body.allowBypassOverload === true,
+          isReinstatingRemovedBale: !isPriorityScan && bale.removedFromThisOrder,
         });
 
         let priceUsed = bale.productSellingPrice || "0";
@@ -407,6 +468,21 @@ export function registerOrderBaleScanRoutes(app: Express) {
         return res.status(result.httpStatus).json(result.body);
       }
 
+      let priorityScanAdvance = null;
+      if (req.body.priorityScan === true) {
+        try {
+          priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+        } catch (advanceError) {
+          // The bale allocation has already committed. Never turn a successful
+          // physical scan into a retryable 500 just because queue advancement
+          // failed; the next Priority Scan route resolution will reconcile it.
+          logger.error("Priority Scan auto-advance failed after bale allocation", {
+            orderId,
+            error: getErrorMessage(advanceError),
+          });
+        }
+      }
+
       return res.json({
         compactBaleScan: true,
         orderId,
@@ -417,6 +493,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         bale: result.bale,
         line: result.line,
         totals: result.totals,
+        priorityScanAdvance,
       });
     } catch (error: unknown) {
       logger.error("Error adding bale to order:", { error });
