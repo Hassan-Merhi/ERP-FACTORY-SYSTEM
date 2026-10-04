@@ -31,6 +31,25 @@ export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool):
   logger.info("[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured");
 }
 
+/**
+ * Retail fashion variants (migrations/20261003_001_retail_fashion_variants.sql).
+ * No wired runner executes that file and production disables the bulk startup
+ * pass, so the always-on guard applies it. Every statement is idempotent, and
+ * the new unique index is looser than the one it replaces, so existing rows
+ * cannot violate it.
+ */
+export async function ensureRetailVariantSchema(pool: Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE retail_product_variants
+      ADD COLUMN IF NOT EXISTS color VARCHAR(100) NOT NULL DEFAULT 'Default',
+      ADD COLUMN IF NOT EXISTS image_urls JSONB NOT NULL DEFAULT '[]'::jsonb;
+    DROP INDEX IF EXISTS retail_product_variants_product_size_unique;
+    CREATE UNIQUE INDEX IF NOT EXISTS retail_product_variants_product_color_size_unique
+      ON retail_product_variants (product_id, color, size);
+  `);
+  logger.info("[startup] ✓ Retail variant color and image columns ensured");
+}
+
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
     await pool.query(
@@ -181,6 +200,12 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     logger.info("[startup] ✓ Multi-currency schema columns ensured");
   } catch (colErr: unknown) {
     logger.error("[startup] ✗ Could not ensure multi-currency columns:", { error: getErrorMessage(colErr) });
+  }
+
+  try {
+    await ensureRetailVariantSchema(pool);
+  } catch (retailErr: unknown) {
+    logger.error("[startup] ✗ Could not ensure retail variant columns:", { error: getErrorMessage(retailErr) });
   }
 
   // Scheduled WhatsApp claims are a correctness boundary: production disables
