@@ -50,16 +50,7 @@ interface PosContainerTrackingResponse {
 }
 
 type ColumnKey =
-  | "container"
-  | "supplier"
-  | "status"
-  | "eta"
-  | "truck"
-  | "location"
-  | "agent"
-  | "transporter"
-  | "docs"
-  | "docsSent";
+  "container" | "supplier" | "status" | "eta" | "truck" | "location" | "agent" | "transporter" | "docs" | "docsSent";
 
 const COLUMN_PREF_KEY = "pos-container-tracking-visible-columns-v2";
 

@@ -301,7 +301,7 @@ export function registerRetailFashionRoutes(app: Express): void {
 
           const stock = await lockInventoryRow(tx, companyId, created.id, input.locationId);
           const after = stock.quantity + variant.quantity;
-          await setInventoryQuantity(tx, companyId, created.id, input.locationId, after);
+          await setInventoryQuantity(tx, companyId, created.id, input.locationId, after, variant.cost);
           if (variant.quantity > 0) {
             await addMovement(tx, {
               companyId,

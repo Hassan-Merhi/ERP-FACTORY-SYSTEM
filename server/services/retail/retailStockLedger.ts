@@ -50,11 +50,16 @@ export async function setInventoryQuantity(
   companyId: number,
   variantId: number,
   locationId: number,
-  quantity: number
+  quantity: number,
+  averageCost?: number
 ): Promise<void> {
   await tx
     .update(retailVariantInventory)
-    .set({ quantity: String(quantity), updatedAt: new Date() })
+    .set({
+      quantity: String(quantity),
+      ...(averageCost === undefined ? {} : { averageCost: String(averageCost) }),
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(retailVariantInventory.companyId, companyId),
@@ -62,6 +67,19 @@ export async function setInventoryQuantity(
         eq(retailVariantInventory.locationId, locationId)
       )
     );
+}
+
+/** Weighted average cost after receiving `quantity` units at `unitCost`. */
+export function nextAverageCost(
+  beforeQuantity: number,
+  beforeAverage: number,
+  quantity: number,
+  unitCost: number
+): number {
+  const base = Math.max(0, beforeQuantity);
+  if (base + quantity <= 0) return unitCost;
+  if (base <= 0 || beforeAverage <= 0) return unitCost;
+  return (base * beforeAverage + quantity * unitCost) / (base + quantity);
 }
 
 export async function addMovement(
