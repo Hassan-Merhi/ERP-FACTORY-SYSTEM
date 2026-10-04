@@ -241,6 +241,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       await disableStalePriorityScanConfigs(companyId);
+      await advanceSatisfiedPriorityScanConfigs(companyId);
 
       const rows = await db
         .select({
