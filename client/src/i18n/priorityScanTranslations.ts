@@ -7,6 +7,11 @@ const priorityScanTranslations = {
     ar: "امسح مرجع البالة. تبقى قائمة الأولويات ظاهرة أثناء العمل.",
     fr: "Scannez une référence de balle. La file de priorités reste visible pendant le travail.",
   },
+  activePriority: {
+    en: "{count} active priority",
+    ar: "{count} أولوية نشطة",
+    fr: "{count} priorité active",
+  },
   activePriorities: {
     en: "{count} active priorities",
     ar: "{count} أولوية نشطة",
