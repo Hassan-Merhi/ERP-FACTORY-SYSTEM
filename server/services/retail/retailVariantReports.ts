@@ -61,6 +61,8 @@ export async function getRetailStockReport(filters: RetailVariantReportFilters) 
       `COALESCE(SUM(i.quantity), 0) > 0 AND (MAX(ls.last_sale_at) IS NULL OR MAX(ls.last_sale_at) < now() - (${slowParam} || ' days')::interval)`
     );
   }
+  // Built outside the SQL template: the production artifact verifier's tokenizer cannot follow nested template literals.
+  const havingClause = having.length ? "HAVING " + having.join(" AND ") : "";
   const result = await pool.query(
     `WITH last_sales AS (
        SELECT variant_id, MAX(created_at) AS last_sale_at
@@ -94,7 +96,7 @@ export async function getRetailStockReport(filters: RetailVariantReportFilters) 
      LEFT JOIN last_sales ls ON ls.variant_id = v.id
      WHERE ${where.join(" AND ")}
      GROUP BY v.id, p.id, b.name
-     ${having.length ? `HAVING ${having.join(" AND ")}` : ""}
+     ${havingClause}
      ORDER BY LOWER(COALESCE(b.name, '')), LOWER(p.name), LOWER(v.color), v.size
      LIMIT ${limit}`,
     params
@@ -148,7 +150,7 @@ export async function getRetailVariantSalesReport(filters: RetailVariantReportFi
        JOIN retail_pos_returns r ON r.id = ri.return_id AND r.company_id = ri.company_id
        JOIN retail_pos_sale_items si ON si.id = ri.sale_item_id
        JOIN retail_pos_sales s ON s.id = r.sale_id AND s.company_id = r.company_id
-       -- Canceled sales are excluded from "sold", so their earlier returns are excluded too.
+       -- Canceled sales are left out of the sold CTE, so their earlier returns are left out too.
        WHERE ri.company_id = $1 AND s.status = 'completed'
          AND r.created_at >= ${fromParam} AND r.created_at < ${toParam} ${locationClause}
        GROUP BY ri.variant_id

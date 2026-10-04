@@ -180,7 +180,8 @@ export function registerRetailFashionRoutes(app: Express): void {
         }
 
         // Serialize intake for the same company style so two phones cannot create twin styles.
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`retail-style:${companyId}:${brand.id}`}))`);
+        const styleLockKey = "retail-style:" + companyId + ":" + brand.id;
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${styleLockKey}))`);
         const [existingProduct] = await tx
           .select({ id: retailProducts.id, code: retailProducts.code, active: retailProducts.active })
           .from(retailProducts)

@@ -246,7 +246,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           saleId: body.saleId,
           locationId: body.locationId,
           idempotencyKey: `${body.idempotencyKey}:return`.slice(0, 191),
-          notes: `Exchange #${operation.id}${body.notes ? ` · ${body.notes}` : ""}`,
+          notes: "Exchange #" + operation.id + (body.notes ? " · " + body.notes : ""),
           items: body.returnItems,
           userId,
           metadata: { exchangeOperationId: operation.id },
