@@ -162,4 +162,9 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "هذا التحميل يحقق بالفعل متطلبات البروفرما المرتبطة ولا يحتاج إلى المسح حسب الأولوية.",
     fr: "Ce chargement satisfait déjà sa proforma liée et n’a pas besoin du scan prioritaire.",
   },
+  {
+    en: "Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.",
+    ar: "تغيّر توجيه المسح حسب الأولوية إلى التحميل #{0}. جارٍ إعادة التوجيه.",
+    fr: "Le routage du scan prioritaire a changé vers le chargement #{0}. Nouvel acheminement en cours.",
+  },
 ];
