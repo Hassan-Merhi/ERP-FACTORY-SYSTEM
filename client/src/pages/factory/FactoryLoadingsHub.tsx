@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import FactoryContainerLoadingScan from "./FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "./FactoryPendingLoadings";
+import FactoryPriorityScan from "./FactoryPriorityScan";
 import { Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
-type LoadingsTab = "loadings" | "pending";
-const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending"];
+type LoadingsTab = "loadings" | "pending" | "priority";
+const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending", "priority"];
 
 export default function FactoryLoadingsHub() {
 
@@ -28,10 +29,12 @@ export default function FactoryLoadingsHub() {
   const showLoadings = !hiddenTabs.includes("hide_invoicing_loadings_tab");
   const showPending =
     settings?.loadingsTabPendingEnabled !== false && !hiddenTabs.includes("hide_tab_loadings_pending");
+  const showPriority = showLoadings && showPending;
 
   const visibleTabs: LoadingsTab[] = [
     ...(showLoadings ? (["loadings"] as const) : []),
     ...(showPending ? (["pending"] as const) : []),
+    ...(showPriority ? (["priority"] as const) : []),
   ];
   const [effectiveActiveTab, setActiveTab] = useHubQueryState<LoadingsTab>({
     key: "tab",
@@ -89,6 +92,22 @@ export default function FactoryLoadingsHub() {
               Pending Loadings
             </button>
           )}
+          {showPriority && (
+            <button
+              role="tab"
+              aria-selected={effectiveActiveTab === "priority"}
+              data-testid="tab-priority-scan"
+              onClick={() => handleTabChange("priority")}
+              className={[
+                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                effectiveActiveTab === "priority"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              Priority Scan
+            </button>
+          )}
         </div>
       </div>
 
@@ -98,6 +117,7 @@ export default function FactoryLoadingsHub() {
         )}
         {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
         {effectiveActiveTab === "pending" && showPending && <FactoryPendingLoadings />}
+        {effectiveActiveTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>
     </div>
   );
