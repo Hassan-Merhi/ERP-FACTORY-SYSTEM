@@ -18,6 +18,7 @@ import {
   shouldRequireProformaMembership,
 } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
@@ -407,6 +408,19 @@ export function registerOrderBaleScanRoutes(app: Express) {
         return res.status(result.httpStatus).json(result.body);
       }
 
+      let priorityScanAdvance = null;
+      try {
+        priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+      } catch (advanceError) {
+        // The bale allocation has already committed. Never turn a successful
+        // physical scan into a retryable 500 just because queue advancement
+        // failed; the next Priority Scan route resolution will reconcile it.
+        logger.error("Priority Scan auto-advance failed after bale allocation", {
+          orderId,
+          error: getErrorMessage(advanceError),
+        });
+      }
+
       return res.json({
         compactBaleScan: true,
         orderId,
@@ -417,6 +431,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         bale: result.bale,
         line: result.line,
         totals: result.totals,
+        priorityScanAdvance,
       });
     } catch (error: unknown) {
       logger.error("Error adding bale to order:", { error });
