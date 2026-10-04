@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { visibleTabInterval } from "@/lib/queryPolicies";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PENDING_LOADS_URL = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
@@ -30,17 +31,37 @@ interface PendingLoad {
   status: string;
 }
 
-interface LookupBale {
-  id: number;
+interface PriorityRouteTarget {
+  orderId: number;
+  priority: number;
+  color: string;
+  proformaId: number;
+  remainingQty: number;
+}
+
+interface PriorityRouteResolution {
   referenceNumber: string;
-  baleCode: string;
+  baleId: number;
   productName: string | null;
+  articleCode: string;
+  locationId: number;
+  target: PriorityRouteTarget;
+  candidates: PriorityRouteTarget[];
+}
+
+interface PriorityScanRequestError extends Error {
+  status?: number;
+  overloaded?: unknown;
+  notInProforma?: unknown;
 }
 
 interface SessionScan {
   id: number;
   referenceNumber: string;
   productName: string | null;
+  orderId: number;
+  priority: number;
+  color: string;
 }
 
 interface ScanFeedback {
@@ -104,6 +125,48 @@ export default function FactoryPriorityScan() {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  const resolvePriorityRoute = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
+    const response = await fetch(
+      `/api/factory/customer-orders/loading-list/priority-scan-route?code=${encodeURIComponent(referenceNumber)}`,
+      { credentials: "include" }
+    );
+    if (!response.ok) {
+      let message = "Could not route this reference.";
+      try {
+        const payload = (await response.json()) as { message?: string };
+        if (payload.message) message = payload.message;
+      } catch {
+        // Keep the stable fallback.
+      }
+      const error = new Error(message) as PriorityScanRequestError;
+      error.status = response.status;
+      throw error;
+    }
+    return response.json() as Promise<PriorityRouteResolution>;
+  };
+
+  const allocatePriorityScan = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
+    const maxAttempts = Math.max(1, activeQueue.length + 1);
+
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const route = await resolvePriorityRoute(referenceNumber);
+      try {
+        await apiRequest("POST", `/api/factory/customer-orders/${route.target.orderId}/bales`, {
+          scanCode: route.referenceNumber,
+          locationId: route.locationId,
+        });
+        return route;
+      } catch (error) {
+        const requestError = error as PriorityScanRequestError;
+        const routeMayHaveChanged =
+          requestError.status === 400 && (requestError.overloaded === true || requestError.notInProforma === true);
+        if (!routeMayHaveChanged || attempt === maxAttempts - 1) throw error;
+      }
+    }
+
+    throw new Error("Could not find an available Priority Scan destination.");
+  };
+
   const handleScan = async () => {
     const referenceNumber = scanInput.trim().toUpperCase();
     if (!referenceNumber || scanning) return;
@@ -124,7 +187,7 @@ export default function FactoryPriorityScan() {
       showFeedback({
         type: "warn",
         referenceNumber,
-        message: "Already checked in this Priority Scan session.",
+        message: "Already scanned in this Priority Scan session.",
       });
       focusScanner();
       return;
@@ -132,55 +195,29 @@ export default function FactoryPriorityScan() {
 
     setScanning(true);
     try {
-      const response = await fetch(`/api/factory/bale-lookup?code=${encodeURIComponent(referenceNumber)}`, {
-        credentials: "include",
-      });
-
-      if (!response.ok) {
-        let message = "Reference is not available in stock.";
-        try {
-          const payload = (await response.json()) as { message?: string };
-          if (payload.message) message = payload.message;
-        } catch {
-          // Keep the stable fallback message.
-        }
-        showFeedback({ type: "error", referenceNumber, message });
-        return;
-      }
-
-      const matches = (await response.json()) as LookupBale[];
-      const bale =
-        matches.find((item) => item.referenceNumber.toUpperCase() === referenceNumber) ??
-        matches.find((item) => item.baleCode.toUpperCase() === referenceNumber) ??
-        matches[0];
-
-      if (!bale) {
-        showFeedback({
-          type: "error",
-          referenceNumber,
-          message: "Reference is not available in stock.",
-        });
-        return;
-      }
-
+      const routed = await allocatePriorityScan(referenceNumber);
       const scan: SessionScan = {
-        id: bale.id,
-        referenceNumber: bale.referenceNumber,
-        productName: bale.productName,
+        id: routed.baleId,
+        referenceNumber: routed.referenceNumber,
+        productName: routed.productName,
+        orderId: routed.target.orderId,
+        priority: routed.target.priority,
+        color: routed.target.color,
       };
       setSessionScans((currentScans) => [scan, ...currentScans].slice(0, 30));
+
+      await queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] });
+
       showFeedback({
         type: "success",
-        referenceNumber: bale.referenceNumber,
-        message: current
-          ? `Reference ready. Current priority is #${current.priority} — Loading #${current.orderId}.`
-          : "Reference ready for Priority Scan.",
+        referenceNumber: routed.referenceNumber,
+        message: `Added to Priority #${routed.target.priority} — Loading #${routed.target.orderId}.`,
       });
-    } catch {
+    } catch (error) {
       showFeedback({
         type: "error",
         referenceNumber,
-        message: "Could not look up this reference.",
+        message: error instanceof Error ? error.message : "Could not route this reference.",
       });
     } finally {
       setScanning(false);
@@ -237,7 +274,7 @@ export default function FactoryPriorityScan() {
           </div>
 
           <p className="mt-2 text-xs text-muted-foreground">
-            Scans are validated against available stock and kept ready for Priority Scan routing.
+            Each reference is routed automatically to the highest-priority loading that still requires its article.
           </p>
 
           {feedback && (
@@ -374,7 +411,14 @@ export default function FactoryPriorityScan() {
                 <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                 <div className="font-mono font-medium min-w-[150px]">{scan.referenceNumber}</div>
                 <div className="flex-1 min-w-0 text-sm truncate">{scan.productName || "Unnamed product"}</div>
-                <Badge variant="outline">Ready</Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <span
+                    className="h-3.5 w-3.5 rounded-full border border-black/10"
+                    style={{ backgroundColor: scan.color }}
+                    aria-hidden="true"
+                  />
+                  <Badge variant="outline">#{scan.priority} · Loading {scan.orderId}</Badge>
+                </div>
               </div>
             ))}
           </div>
