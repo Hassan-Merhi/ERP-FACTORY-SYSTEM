@@ -13,6 +13,7 @@ import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
 import { normalizeLoadingArticleCode } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import { advanceSatisfiedPriorityScanConfigs } from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
@@ -448,6 +449,15 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
       }
 
       await recalculateOrderTotals(db, orderId);
+
+      try {
+        await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+      } catch (advanceError) {
+        logger.error("Priority Scan auto-advance failed after bulk bale allocation", {
+          orderId,
+          error: getErrorMessage(advanceError),
+        });
+      }
 
       const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
       const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
