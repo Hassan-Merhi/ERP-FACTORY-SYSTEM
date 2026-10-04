@@ -39,7 +39,7 @@ export function RetailMovementHistory({ variantId, companyKey }: { variantId: nu
   if (!data.length) return <p className="text-sm text-muted-foreground">No stock movements yet.</p>;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[640px] text-sm">
+      <table className="w-full min-w-[640px] text-sm [&_td]:px-1.5 [&_th]:px-1.5">
         <thead>
           <tr className="border-b text-left text-xs text-muted-foreground">
             <th className="py-2">Date</th>
@@ -87,6 +87,46 @@ export function RetailMovementHistory({ variantId, companyKey }: { variantId: nu
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+interface RetailLabelEvent {
+  id: number;
+  barcode: string;
+  copies: number;
+  layout: string;
+  isReprint: boolean;
+  createdAt: string;
+  createdBy: string | null;
+}
+
+/** Barcode label print / reprint audit for one variant. */
+export function RetailLabelHistory({ variantId, companyKey }: { variantId: number; companyKey: number }) {
+  const { data = [] } = useQuery<RetailLabelEvent[]>({
+    queryKey: ["retail-variant-labels", companyKey, variantId],
+    queryFn: () => getJson(`/api/retail/variants/${variantId}/labels`),
+    enabled: variantId > 0,
+  });
+  return (
+    <div className="space-y-1">
+      <h3 className="text-sm font-semibold">Label prints</h3>
+      {data.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No labels printed yet.</p>
+      ) : (
+        <ul className="space-y-0.5 text-sm">
+          {data.map((event) => (
+            <li key={event.id} className="flex flex-wrap gap-x-2">
+              <span>{new Date(event.createdAt).toLocaleString()}</span>
+              <span data-i18n-ui>{event.isReprint ? "Reprint" : "First print"}</span>
+              <span>× {event.copies}</span>
+              <span className="text-muted-foreground">{event.layout}</span>
+              <span className="font-mono text-muted-foreground">{event.barcode}</span>
+              <span className="text-muted-foreground">{event.createdBy ?? ""}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

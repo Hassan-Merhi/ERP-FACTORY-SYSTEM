@@ -29,6 +29,7 @@ export interface RetailVariant {
   size: string;
   imageUrls: string[];
   barcode: string;
+  barcodeSource?: string;
   sku: string | null;
   cost: number;
   sellingPrice: number;
@@ -148,4 +149,24 @@ export function buildInternalProductCode(name: string, brand: string) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
   return `RTL-${identity || "item"}`.slice(0, 100);
+}
+
+const SIZE_RANK = ["XXXS", "XXS", "XS", "S", "M", "L", "XL", "XXL", "2XL", "XXXL", "3XL", "4XL", "5XL"];
+
+/** Orders clothing sizes the way a shop floor does: XS, S, M, L, XL…, then numeric sizes, then the rest. */
+export function compareRetailSizes(a: string, b: string): number {
+  const rank = (value: string) => SIZE_RANK.indexOf(value.trim().toUpperCase());
+  const ra = rank(a);
+  const rb = rank(b);
+  if (ra !== -1 || rb !== -1) return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb);
+  const na = Number.parseFloat(a);
+  const nb = Number.parseFloat(b);
+  if (Number.isFinite(na) && Number.isFinite(nb) && na !== nb) return na - nb;
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+}
+
+export function sortRetailVariants<T extends { color: string; size: string }>(variants: T[]): T[] {
+  return [...variants].sort(
+    (a, b) => a.color.localeCompare(b.color, undefined, { sensitivity: "base" }) || compareRetailSizes(a.size, b.size)
+  );
 }

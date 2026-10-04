@@ -251,14 +251,17 @@ export function registerScreenFeedRoutes(app: Express) {
     const userId = String(getSessionUserId(req));
     const tabId = requestTabId(req);
     const key = screenFeedStoreKey(userId, tabId);
-    const wantsEventStream = String(req.headers.accept ?? "").toLowerCase().includes("text/event-stream");
+    const wantsEventStream = String(req.headers.accept ?? "")
+      .toLowerCase()
+      .includes("text/event-stream");
     if (!wantsEventStream) {
       res.setHeader("Cache-Control", "no-store");
       return res.json({ watched: isFeedBeingWatched(userId, tabId), fast: true, tabId });
     }
     openEventStream(res);
     recordRemoteSupportMetric("liveStatusConnected");
-    const sendStatus = () => writeEvent(res, "status", { watched: isFeedBeingWatched(userId, tabId), fast: true, tabId });
+    const sendStatus = () =>
+      writeEvent(res, "status", { watched: isFeedBeingWatched(userId, tabId), fast: true, tabId });
     const unsubscribeStatus = screenFeedLiveHub.subscribeStatus(key, sendStatus);
     let unsubscribeDisconnect = () => {};
     let closed = false;
@@ -307,8 +310,12 @@ export function registerScreenFeedRoutes(app: Express) {
     const unsubscribeFrames = screenFeedLiveHub.subscribeFrames(key, (nextFrame) => {
       writeEvent(res, "frame", serializeFrame(nextFrame, screenFeedFailureStore.get(key)));
     });
-    const unsubscribeCursors = screenFeedLiveHub.subscribeCursors(key, (cursor) => writeEvent(res, "cursor", serializeCursor(cursor)));
-    const unsubscribeFailures = screenFeedLiveHub.subscribeFailures(key, (failure) => writeEvent(res, "capture-failure", serializeFailure(failure)));
+    const unsubscribeCursors = screenFeedLiveHub.subscribeCursors(key, (cursor) =>
+      writeEvent(res, "cursor", serializeCursor(cursor))
+    );
+    const unsubscribeFailures = screenFeedLiveHub.subscribeFailures(key, (failure) =>
+      writeEvent(res, "capture-failure", serializeFailure(failure))
+    );
     let unsubscribeDisconnect = () => {};
     let closed = false;
 
@@ -470,7 +477,9 @@ export function registerScreenFeedRoutes(app: Express) {
     const failure = screenFeedFailureStore.get(key);
     if (isDev) {
       const frameAgeMs = frame ? Date.now() - frame.capturedAt.getTime() : null;
-      logger.info(`[ScreenFeed] legacy GET userId=${watchedUserId} tabId=${tabId} hasFrame=${!!frame} frameAgeMs=${frameAgeMs}`);
+      logger.info(
+        `[ScreenFeed] legacy GET userId=${watchedUserId} tabId=${tabId} hasFrame=${!!frame} frameAgeMs=${frameAgeMs}`
+      );
     }
 
     void beginScreenWatch({

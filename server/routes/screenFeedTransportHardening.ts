@@ -102,7 +102,9 @@ function clearTransportPressureState(pathname: string, method: string): void {
   const runtimeMutation =
     (method === "PATCH" && pathname === "/api/screen-feed/admin/runtime") ||
     (method === "POST" &&
-      ["/api/screen-feed/admin/runtime/emergency-stop", "/api/screen-feed/admin/runtime/restore-defaults"].includes(pathname));
+      ["/api/screen-feed/admin/runtime/emergency-stop", "/api/screen-feed/admin/runtime/restore-defaults"].includes(
+        pathname
+      ));
   if (runtimeMutation) lastFastUploadAt.clear();
 }
 

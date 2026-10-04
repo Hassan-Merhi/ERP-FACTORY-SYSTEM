@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCompany } from "@/contexts/CompanyContext";
+import { RetailNav } from "./RetailNav";
+import { RetailVariantReports } from "./RetailVariantReports";
 
 interface Location {
   id: number;
@@ -296,6 +298,7 @@ export default function RetailDashboard() {
 
   return (
     <div className="mx-auto max-w-[1700px] space-y-5 p-4 md:p-6">
+      <RetailNav />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -492,6 +495,8 @@ export default function RetailDashboard() {
           </div>
         </>
       ) : null}
+
+      <RetailVariantReports companyKey={companyKey} />
     </div>
   );
 }

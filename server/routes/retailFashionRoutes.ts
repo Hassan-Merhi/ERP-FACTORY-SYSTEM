@@ -448,4 +448,57 @@ export function registerRetailFashionRoutes(app: Express): void {
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
+
+  /**
+   * Archive / restore. Archiving only hides an item from selling and browsing; it never
+   * deletes the variant, its barcode, sales lines, returns or stock movements.
+   */
+  const activeSchema = z.object({ active: z.boolean() });
+
+  app.patch("/api/retail/variants/:id/active", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const variantId = Number(req.params.id);
+      if (!Number.isInteger(variantId) || variantId <= 0) return res.status(400).json({ message: "Invalid variant" });
+      const { active } = activeSchema.parse(req.body);
+      const [updated] = await db
+        .update(retailProductVariants)
+        .set({ active, updatedAt: new Date() })
+        .where(and(eq(retailProductVariants.id, variantId), eq(retailProductVariants.companyId, companyId)))
+        .returning({ id: retailProductVariants.id, productId: retailProductVariants.productId });
+      if (!updated) return res.status(404).json({ message: "Retail variant not found" });
+      if (active) {
+        // Restoring a variant makes its style sellable again.
+        await db
+          .update(retailProducts)
+          .set({ active: true, updatedAt: new Date() })
+          .where(and(eq(retailProducts.id, updated.productId), eq(retailProducts.companyId, companyId)));
+      }
+      res.json({ id: updated.id, active });
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.patch("/api/retail/products/:id/active", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const productId = Number(req.params.id);
+      if (!Number.isInteger(productId) || productId <= 0) {
+        return res.status(400).json({ message: "Invalid product ID" });
+      }
+      const { active } = activeSchema.parse(req.body);
+      const [updated] = await db
+        .update(retailProducts)
+        .set({ active, updatedAt: new Date() })
+        .where(and(eq(retailProducts.id, productId), eq(retailProducts.companyId, companyId)))
+        .returning({ id: retailProducts.id });
+      if (!updated) return res.status(404).json({ message: "Retail product not found" });
+      res.json({ id: updated.id, active });
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
 }
