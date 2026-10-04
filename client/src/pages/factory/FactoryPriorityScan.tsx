@@ -146,25 +146,10 @@ export default function FactoryPriorityScan() {
   };
 
   const resolvePriorityRoute = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
-    const response = await fetch(
-      `/api/factory/customer-orders/loading-list/priority-scan-route?code=${encodeURIComponent(referenceNumber)}`,
-      { credentials: "include" }
+    const response = await apiRequest(
+      "GET",
+      `/api/factory/customer-orders/loading-list/priority-scan-route?code=${encodeURIComponent(referenceNumber)}`
     );
-    if (!response.ok) {
-      let message = tr("couldNotRoute");
-      let errorCode: string | undefined;
-      try {
-        const payload = (await response.json()) as { message?: string; code?: string };
-        if (payload.message) message = payload.message;
-        if (payload.code) errorCode = payload.code;
-      } catch {
-        // Keep the stable fallback.
-      }
-      const error = new Error(message) as PriorityScanRequestError;
-      error.status = response.status;
-      error.code = errorCode;
-      throw error;
-    }
     return response.json() as Promise<PriorityRouteResolution>;
   };
 
@@ -292,7 +277,7 @@ export default function FactoryPriorityScan() {
                 {tr("scanDescription")}
               </p>
             </div>
-            <Badge variant="outline">{tr("activePriorities", { count: activeQueue.length })}</Badge>
+            <Badge variant="outline">{tr(activeQueue.length === 1 ? "activePriority" : "activePriorities", { count: activeQueue.length })}</Badge>
           </div>
 
           <div className="mt-5 flex gap-2">
