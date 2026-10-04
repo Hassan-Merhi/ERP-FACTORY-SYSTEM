@@ -112,4 +112,54 @@ export const backendMessagesPhase7TranslationsPart13: readonly Phase7BackendMess
     ar: "تعذر مسح إعدادات المسح حسب الأولوية.",
     fr: "Impossible d’effacer la configuration du scan prioritaire.",
   },
+  {
+    en: "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
+    ar: "لا يمكن للمسح حسب الأولوية تجاوز متطلبات البروفرما أو حدود التحميل. استخدم ماسح التحميلات المعلقة العادي للاستثناءات اليدوية.",
+    fr: "Le scan prioritaire ne peut pas contourner les exigences de proforma ni les limites de chargement. Utilisez le scanner normal des chargements en attente pour les exceptions manuelles.",
+  },
+  {
+    en: "Priority Scan loading changed while the reference was routing. Scan again.",
+    ar: "تغيّر تحميل المسح حسب الأولوية أثناء توجيه المرجع. امسح المرجع مرة أخرى.",
+    fr: "Le chargement du scan prioritaire a changé pendant l’acheminement de la référence. Scannez à nouveau.",
+  },
+  {
+    en: "Priority Scan requires an exact bale reference or bale code.",
+    ar: "يتطلب المسح حسب الأولوية مرجع بالة أو رمز بالة مطابقًا تمامًا.",
+    fr: "Le scan prioritaire exige une référence de balle ou un code de balle exact.",
+  },
+  {
+    en: "This reference is no longer required by an active Priority Scan loading.",
+    ar: "لم يعد هذا المرجع مطلوبًا في أي تحميل نشط للمسح حسب الأولوية.",
+    fr: "Cette référence n’est plus requise par un chargement actif du scan prioritaire.",
+  },
+  {
+    en: "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
+    ar: "هذا المرجع غير مطلوب في أي تحميل نشط للمسح حسب الأولوية. استخدم ماسح التحميلات المعلقة العادي للتحميل الزائد أو الأصناف غير المطلوبة في البروفرما.",
+    fr: "Cette référence n’est requise par aucun chargement actif du scan prioritaire. Utilisez le scanner normal des chargements en attente pour les surcharges ou les articles non demandés sur la proforma.",
+  },
+  {
+    en: "Reference is not available in stock.",
+    ar: "المرجع غير متوفر في المخزون.",
+    fr: "La référence n’est pas disponible en stock.",
+  },
+  {
+    en: "Reference has no stock location and cannot be routed.",
+    ar: "لا يوجد موقع مخزون لهذا المرجع ولا يمكن توجيهه.",
+    fr: "La référence n’a pas d’emplacement de stock et ne peut pas être acheminée.",
+  },
+  {
+    en: "Reference has no article code and cannot be matched to a priority.",
+    ar: "لا يحتوي المرجع على رمز صنف ولا يمكن مطابقته مع أولوية.",
+    fr: "La référence n’a pas de code article et ne peut pas être associée à une priorité.",
+  },
+  {
+    en: "Failed to resolve Priority Scan destination.",
+    ar: "تعذر تحديد وجهة المسح حسب الأولوية.",
+    fr: "Impossible de déterminer la destination du scan prioritaire.",
+  },
+  {
+    en: "This loading already satisfies its linked proforma and does not need Priority Scan.",
+    ar: "هذا التحميل يحقق بالفعل متطلبات البروفرما المرتبطة ولا يحتاج إلى المسح حسب الأولوية.",
+    fr: "Ce chargement satisfait déjà sa proforma liée et n’a pas besoin du scan prioritaire.",
+  },
 ];
