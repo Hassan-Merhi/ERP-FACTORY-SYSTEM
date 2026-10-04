@@ -9,6 +9,7 @@ import { Writable } from "stream";
 import { finished } from "stream/promises";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import {
@@ -210,8 +211,10 @@ export function registerShippingZipPackageRoutes(app: Express) {
 
       if (fileIds.includes("statement_pdf")) {
         if (pdfBuf && pdfBuf.length > 0) {
-          const safeClient = (row.clientName || "client").replace(/[^\w-]/g, "_");
-          entries.push({ name: `Customer_Statement_${safeClient}.pdf`, data: pdfBuf });
+          entries.push({
+            name: buildZipFilename([row.clientName || "client", getClientDate(req)], "pdf"),
+            data: pdfBuf,
+          });
         } else {
           missingFiles.push("Customer Statement");
         }

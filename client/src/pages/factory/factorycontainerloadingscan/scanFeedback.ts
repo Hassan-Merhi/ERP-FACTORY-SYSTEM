@@ -1,11 +1,13 @@
 /**
- * Audible scan feedback for the container loading scanner.
+ * Scan feedback for the container loading scanner.
  *
  * The floor loader works with the screen out of view, so every scan outcome
  * gets its own tone. Extracted verbatim from FactoryContainerLoadingScan.tsx —
  * same frequencies, same durations, same silent fallback when the browser has
- * no AudioContext.
+ * no AudioContext. The on-screen flash and result popups clear on timers
+ * scheduled through useScanFlashReset.
  */
+import { useCallback, useEffect, useRef } from "react";
 
 function createAudioContext(): AudioContext | null {
   try {
@@ -62,3 +64,26 @@ export function playScanErrorSweep(): void {
 export const SCAN_SUCCESS_TONE = { frequency: 1000, durationMs: 120 };
 export const SCAN_OVERLOAD_TONE = { frequency: 550, durationMs: 180 };
 export const SCAN_NOT_IN_PROFORMA_TONE = { frequency: 600, durationMs: 180 };
+
+/**
+ * Schedules the scan flash and result-popup resets. They are timers that set
+ * state, so any still pending are cleared when the page unmounts and none can
+ * fire into a torn-down tree.
+ */
+export function useScanFlashReset(): (reset: () => void, delayMs: number) => void {
+  const timersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      for (const timer of timers) clearTimeout(timer);
+      timers.clear();
+    };
+  }, []);
+  return useCallback((reset: () => void, delayMs: number) => {
+    const timer = setTimeout(() => {
+      timersRef.current.delete(timer);
+      reset();
+    }, delayMs);
+    timersRef.current.add(timer);
+  }, []);
+}

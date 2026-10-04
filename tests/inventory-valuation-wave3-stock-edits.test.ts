@@ -80,6 +80,33 @@ async function countStockAdjustmentVoucherEntries(voucherId: number): Promise<nu
   return Number(firstRow<CountRow>(result)?.count ?? 0);
 }
 
+async function readVoucherTotal(voucherId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT total_amount
+    FROM vouchers
+    WHERE id = ${voucherId}
+  `);
+  return Number(firstRow<{ total_amount: string | number }>(result)?.total_amount ?? 0);
+}
+
+async function countStockAdjustmentsForVoucher(voucherId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int AS count
+    FROM stock_adjustment_vouchers
+    WHERE voucher_id = ${voucherId}
+  `);
+  return Number(firstRow<CountRow>(result)?.count ?? 0);
+}
+
+async function countStockAdjustmentItems(adjustmentId: number): Promise<number> {
+  const result = await db.execute(sql`
+    SELECT COUNT(*)::int AS count
+    FROM stock_adjustment_items
+    WHERE adjustment_id = ${adjustmentId}
+  `);
+  return Number(firstRow<CountRow>(result)?.count ?? 0);
+}
+
 function expectSameInventory(before: InventorySnapshot, after: InventorySnapshot): void {
   expect(Number(after.quantity)).toBeCloseTo(Number(before.quantity), 3);
   expect(Number(after.total_value)).toBeCloseTo(Number(before.total_value), 2);
@@ -103,6 +130,99 @@ beforeEach(async () => {
 });
 
 describe("Wave 3 exact-value transfer and adjustment edits", () => {
+  it("uses the saved consumption value for the voucher header on create and edit", async () => {
+    const stockItemId = ctx.stockItemIds[0];
+    await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+
+    const voucherId = await createVoucher("Consumption", ctx.locationId);
+    const created = await createStockAdjustment(voucherId, ctx.locationId, "Consumption", "original", [
+      // Deliberately wrong submitted rate. Consumption must use the locked
+      // inventory value and the header must follow the saved line value.
+      { stockItemId, quantity: "10.000", rate: "1.00" },
+    ]);
+
+    expect(Number(created.items[0].totalAmount)).toBeCloseTo(100, 2);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(100, 2);
+
+    const updated = await updateStockAdjustment(created.adjustment.id, ctx.locationId, "Consumption", "edited", [
+      { stockItemId, quantity: "20.000", rate: "1.00" },
+    ]);
+
+    expect(Number(updated.items[0].totalAmount)).toBeCloseTo(200, 2);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(200, 2);
+  });
+
+  it("nets mixed headers from the saved production and consumption values", async () => {
+    const productionItemId = ctx.stockItemIds[0];
+    const consumptionItemId = ctx.stockItemIds[2];
+    await seedInventory(ctx.locationId, consumptionItemId, 100, 10, 1000);
+
+    const voucherId = await createVoucher("Mixed", ctx.locationId);
+    const created = await createStockAdjustment(voucherId, ctx.locationId, "Mixed", "mixed totals", [
+      { stockItemId: productionItemId, quantity: "2.000", rate: "20.00" },
+      // Submitted rate is intentionally stale; saved consumption value resolves
+      // from inventory at 10.00, so the authoritative net is 40 - 30 = 10.
+      { stockItemId: consumptionItemId, quantity: "-3.000", rate: "1.00" },
+    ]);
+
+    const productionLine = created.items.find((item) => item.stockItemId === productionItemId);
+    const consumptionLine = created.items.find((item) => item.stockItemId === consumptionItemId);
+    expect(Number(productionLine?.totalAmount ?? 0)).toBeCloseTo(40, 2);
+    expect(Number(consumptionLine?.totalAmount ?? 0)).toBeCloseTo(30, 2);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(10, 2);
+  });
+
+  it("rolls back stock and adjustment rows when the atomic header write fails", async () => {
+    const stockItemId = ctx.stockItemIds[1];
+    await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+    const before = await readInventory(ctx.locationId, stockItemId);
+    const voucherId = await createVoucher("Production", ctx.locationId);
+
+    await expect(
+      createStockAdjustment(
+        voucherId,
+        ctx.locationId,
+        "Production",
+        "force header failure",
+        [{ stockItemId, quantity: "5.000", rate: "20.00" }],
+        undefined,
+        { currency: "TOOLONG" }
+      )
+    ).rejects.toThrow();
+
+    const after = await readInventory(ctx.locationId, stockItemId);
+    expectSameInventory(before, after);
+    expect(await countStockAdjustmentsForVoucher(voucherId)).toBe(0);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(0, 2);
+  });
+
+  it("rolls back a partially-started edit when the replacement header/location cannot be saved", async () => {
+    const stockItemId = ctx.stockItemIds[2];
+    await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);
+
+    const voucherId = await createVoucher("Production", ctx.locationId);
+    const created = await createStockAdjustment(voucherId, ctx.locationId, "Production", "original", [
+      { stockItemId, quantity: "5.000", rate: "20.00" },
+    ]);
+    const before = await readInventory(ctx.locationId, stockItemId);
+    const headerBefore = await readVoucherTotal(voucherId);
+    const itemCountBefore = await countStockAdjustmentItems(created.adjustment.id);
+
+    // This fails after the transaction has begun reversing the historical
+    // adjustment. The FK-invalid replacement location proves every reversal,
+    // item delete, ledger rewrite, and header change is rolled back together.
+    await expect(
+      updateStockAdjustment(created.adjustment.id, 2_147_483_647, "Production", "invalid replacement", [
+        { stockItemId, quantity: "10.000", rate: "30.00" },
+      ])
+    ).rejects.toThrow();
+
+    const after = await readInventory(ctx.locationId, stockItemId);
+    expectSameInventory(before, after);
+    expect(await readVoucherTotal(voucherId)).toBeCloseTo(headerBefore, 2);
+    expect(await countStockAdjustmentItems(created.adjustment.id)).toBe(itemCountBefore);
+  });
+
   it("keeps a production adjustment no-op edit valuation-neutral after later stock changes", async () => {
     const stockItemId = ctx.stockItemIds[0];
     await seedInventory(ctx.locationId, stockItemId, 100, 10, 1000);

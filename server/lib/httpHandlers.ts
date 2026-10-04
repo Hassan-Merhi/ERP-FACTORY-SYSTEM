@@ -1,4 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
+import { closedPeriodErrorResponse } from "./closedPeriodError";
 
 // Intersect with the globally-augmented `Request["user"]` shape (see the
 // Express namespace augmentation in server/index.ts) so this stays a valid
@@ -13,7 +14,7 @@ export interface AuthenticatedRequest extends Request {
 export class HttpError extends Error {
   constructor(
     public readonly statusCode: number,
-    message: string,
+    message: string
   ) {
     super(message);
     this.name = "HttpError";
@@ -29,12 +30,25 @@ export function getAuthenticatedUserId(request: AuthenticatedRequest): string {
 }
 
 export function getErrorMessage(error: unknown): string {
+  // The closed-period guard's reason sits under Drizzle's "Failed query"
+  // wrapper; surface the reason instead of the SQL text.
+  const closedPeriod = closedPeriodErrorResponse(error);
+  if (closedPeriod) return closedPeriod.body.message;
   return error instanceof Error ? error.message : "Unexpected server error";
 }
 
 // Legacy route registrars still call this helper as a global. Keep one shared
 // implementation while those registrars are migrated to explicit imports.
 (globalThis as typeof globalThis & { getErrorMessage?: typeof getErrorMessage }).getErrorMessage = getErrorMessage;
+
+/**
+ * HTTP status for an error caught by a route: 409 when the closed-period guard
+ * refused the write (the request conflicts with closed books), otherwise the
+ * route's fallback.
+ */
+export function errorStatus(error: unknown, fallback = 500): number {
+  return closedPeriodErrorResponse(error) ? 409 : fallback;
+}
 
 export function getErrorStack(error: unknown): string | undefined {
   return error instanceof Error ? error.stack : undefined;
@@ -111,7 +125,7 @@ export function sendHttpError(response: Response, error: unknown): void {
 }
 
 export function asyncRoute(
-  handler: (request: Request, response: Response, next: NextFunction) => Promise<unknown>,
+  handler: (request: Request, response: Response, next: NextFunction) => Promise<unknown>
 ): RequestHandler {
   return (request, response, next) => {
     Promise.resolve(handler(request, response, next)).catch(next);

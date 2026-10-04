@@ -79,9 +79,10 @@ export function PurchaseVoucherEntries({
               variant="outline"
               size="sm"
               onClick={() => {
-                onOpenChange(false);
-                navigate(
-                  `/containers/${purchaseOrderData.containerId}/verification?autoCompare=true&supplierId=${purchaseOrderData.supplierId}`
+                window.open(
+                  `/containers/${purchaseOrderData.containerId}/verification?autoCompare=true&supplierId=${purchaseOrderData.supplierId}`,
+                  "_blank",
+                  "noopener,noreferrer"
                 );
               }}
               data-testid="button-compare-po"

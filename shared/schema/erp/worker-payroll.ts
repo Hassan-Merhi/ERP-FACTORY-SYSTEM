@@ -74,6 +74,7 @@ export const erpPayrollRunItems = pgTable("erp_payroll_run_items", {
   groupName: text("group_name"),
   baseSalary: decimal("base_salary", { precision: 18, scale: 2 }).notNull(),
   deduction: decimal("deduction", { precision: 18, scale: 2 }).notNull().default("0"),
+  payrollDeduction: decimal("payroll_deduction", { precision: 18, scale: 2 }).notNull().default("0"),
   netPay: decimal("net_pay", { precision: 18, scale: 2 }).notNull(),
 });
 

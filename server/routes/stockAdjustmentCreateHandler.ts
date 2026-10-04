@@ -47,21 +47,6 @@ function normalizeAdjustmentItems(items: IncomingAdjustmentItem[]) {
   });
 }
 
-function actualAdjustmentTotal(
-  adjustmentType: AdjustmentType,
-  items: Array<{ quantity: string | null; totalAmount: string | null }>
-): number {
-  if (adjustmentType === "Mixed") {
-    return items.reduce((sum, item) => {
-      const quantity = Number(item.quantity || 0);
-      const amount = Math.abs(Number(item.totalAmount || 0));
-      return sum + (quantity > 0 ? amount : -amount);
-    }, 0);
-  }
-
-  return items.reduce((sum, item) => sum + Math.abs(Number(item.totalAmount || 0)), 0);
-}
-
 /**
  * Corrected POST /api/stock-adjustments handler.
  *
@@ -137,11 +122,6 @@ export async function stockAdjustmentCreateHandler(req: Request, res: Response) 
     // just-created orphan voucher so Daybook can never keep an empty shell.
     cleanupVoucherOnFailure = true;
 
-    // Stock adjustment item rates/totals are native inventory values. Keep the
-    // voucher currency aligned with the company's native/base currency instead
-    // of the user's temporary UI display-currency toggle.
-    await db.update(vouchers).set({ currency: nativeCurrency, locationId }).where(eq(vouchers.id, voucherId));
-
     logger.info("stock adjustment create started", {
       module: "stockAdjustment",
       action: "create",
@@ -158,23 +138,12 @@ export async function stockAdjustmentCreateHandler(req: Request, res: Response) 
       locationId,
       adjustmentType,
       notes,
-      normalizedItems
+      normalizedItems,
+      undefined,
+      { currency: nativeCurrency }
     );
 
     cleanupVoucherOnFailure = false;
-
-    // Recalculate from the rates actually applied by the storage layer. For a
-    // consumption this may be the inventory average rate, not the rate sent by
-    // the browser, so Daybook's header and item rows remain consistent.
-    const totalAmount = actualAdjustmentTotal(adjustmentType, adjustment.items);
-    await db
-      .update(vouchers)
-      .set({
-        currency: nativeCurrency,
-        locationId,
-        totalAmount: totalAmount.toFixed(2),
-      })
-      .where(eq(vouchers.id, voucherId));
 
     logger.info("stock adjustment create succeeded", {
       module: "stockAdjustment",

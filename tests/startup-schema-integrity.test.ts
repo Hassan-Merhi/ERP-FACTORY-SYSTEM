@@ -113,7 +113,7 @@ import { startupMigrations } from "../server/startup-schema";
  * / (user_id, last_seen), appended after stage 028, taking the count from 1363
  * to 1366. Nothing before them moved.
  *
- * Re-pinned for the per-user hidden All Daybook rows (2eb4ffd): one
+ * Re-pinned for stage 030, durable scheduled WhatsApp occurrence and attachment\n * tracking: two tables plus three indexes, appended after stage 029. This takes\n * the composed array from 1371 to 1376 without moving any earlier statement.\n *\n * Re-pinned for the per-user hidden All Daybook rows (2eb4ffd): one
  * ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS
  * hidden_transaction_journal_voucher_ids, added to 001-core-tables-and-columns
  * next to the other user columns, taking the count from 1366 to 1367.
@@ -127,9 +127,20 @@ import { startupMigrations } from "../server/startup-schema";
  * 'factory-permission-canonicalization-v2' migrations_log row. That takes the
  * count from 1367 to 1371. Nothing else moved; the rows these statements leave
  * are asserted in tests/factory-permission-canonicalization-migration.test.ts.
+ *
+ * Re-pinned for stage 031, append-only inventory valuation override evidence:
+ * one table plus one index, appended after stage 030 without moving any
+ * earlier statement. main already assembled 1378 statements while this file
+ * still pinned 1376 (an earlier change landed without re-pinning); with stage
+ * 031 the reviewed count is 1380.
+ *
+ * Re-pinned for the ERP payroll deduction changes (#1976, #1977), which added
+ * three statements to 004-post-deploy-tables and
+ * 010-security-notifications-and-precision without re-pinning, taking the
+ * count from 1380 to 1383.
  */
-const EXPECTED_STATEMENT_COUNT = 1371;
-const EXPECTED_CONTENT_HASH = "2b91fef354770d28098e7d4fc966a3b01b71f16890f2a9d30055953c58b4f969";
+const EXPECTED_STATEMENT_COUNT = 1383;
+const EXPECTED_CONTENT_HASH = "a52a03f379162f3a504a3a2f16b72d2cfc65062a6216a78ff15da7e8455232c0";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

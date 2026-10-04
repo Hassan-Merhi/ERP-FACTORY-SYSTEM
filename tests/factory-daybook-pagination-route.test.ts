@@ -125,6 +125,10 @@ describe("factory Daybook pagination route", () => {
     const [query, values] = harness.poolQuery.mock.calls[0];
     expect(query).toContain("source integrity condition");
     expect(query).toContain("f.created_by =");
+    expect(query).toContain("LEFT JOIN factory_raw_stock offload_raw_stock");
+    expect(query).toContain("LEFT JOIN factory_containers offload_container");
+    expect(query).toContain("LEFT JOIN factory_suppliers offload_supplier");
+    expect(query).toContain("' - ' || BTRIM(offload_supplier.name)");
     expect(query).toContain("optional = false");
     expect(query).toContain("ORDER BY sort_date ASC");
     expect(values).toEqual(

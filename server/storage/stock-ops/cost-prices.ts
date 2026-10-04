@@ -6,6 +6,7 @@ import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { getStockItemByCodeOrAlias } from "../inventory";
 import { toFiniteNumber } from "@shared/typeGuards";
 import { lockInventoryRow } from "../inventoryRowLock";
+import { recordInventoryValuationOverride } from "../../services/inventory/recordInventoryValuationOverride";
 
 // ---------------------------------------------------------------------------
 
@@ -46,6 +47,25 @@ export async function updateCostPricesByBarcode(
               lastUpdated: new Date(),
             })
             .where(eq(schema.inventory.id, inventory.id));
+          // This overwrite has no stock movement, so record the exact before
+          // and after valuation as evidence for historical cost replay.
+          await recordInventoryValuationOverride(tx, {
+            companyId,
+            locationId,
+            stockItemId: stockItem.id,
+            inventoryId: inventory.id,
+            sourceType: "location-cost-price-import",
+            before: {
+              quantity: inventory.quantity,
+              averageRate: inventory.average_rate,
+              totalValue: inventory.total_value,
+            },
+            after: {
+              quantity: inventory.quantity,
+              averageRate: update.costPrice.toFixed(2),
+              totalValue: newTotalValue,
+            },
+          });
           updated++;
         } else {
           errors.push(`Item not found in inventory for barcode: ${update.barcode}`);

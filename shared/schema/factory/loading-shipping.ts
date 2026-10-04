@@ -344,6 +344,8 @@ export const factoryShippingAvailability = pgTable(
     shippingCompany: text("shipping_company").notNull(),
     availableContainers: integer("available_containers").notNull().default(0),
     note: text("note"),
+    isArchived: boolean("is_archived").notNull().default(false),
+    archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
@@ -354,6 +356,8 @@ export const factoryShippingAvailability = pgTable(
 export const insertFactoryShippingAvailabilitySchema = createInsertSchema(factoryShippingAvailability)
   .omit({
     id: true,
+    isArchived: true,
+    archivedAt: true,
     createdAt: true,
   })
   .extend({

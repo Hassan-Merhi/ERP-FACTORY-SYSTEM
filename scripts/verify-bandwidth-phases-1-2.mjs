@@ -186,12 +186,12 @@ requireText(
 );
 requireText(
   payloadGuard,
-  'first === "/api/containers"',
+  'pathname === "/api/containers"',
   "Full container list query keys must be cleared outside OTW."
 );
 requireText(
   payloadGuard,
-  '/^\\/api\\/containers\\/\\d+$/.test(first)',
+  '/^\\/api\\/containers\\/\\d+$/.test(pathname)',
   "Container detail query keys must be cleared outside OTW."
 );
 

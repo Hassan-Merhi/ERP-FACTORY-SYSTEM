@@ -47,6 +47,12 @@ jobs:
       CSRF_ENFORCE: "0"
       ENABLE_SCHEDULERS: "false"
       PORT: "5000"
+      # One developer session drives every case back to back (~650 API calls in
+      # under two minutes on a CI runner), which crosses the production budget of
+      # 600 per user per minute and fails the last case with 429s. Match the UI
+      # Quality browser job and lift the flood guard for this harness only.
+      API_RATE_LIMIT_MAX: "100000"
+      API_RATE_LIMIT_ANON_MAX: "100000"
       ERP_E2E_USERNAME: phase7_ci_${{ github.run_id }}
       ERP_E2E_POS_USERNAME: phase7_pos_${{ github.run_id }}
     steps:

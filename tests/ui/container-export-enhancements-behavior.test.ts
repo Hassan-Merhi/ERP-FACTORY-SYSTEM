@@ -46,12 +46,18 @@ const exportPayload = {
   supplier: { code: "SUP-9", legalName: "Supplier Nine" },
   purchaseOrders: [
     {
+      freight: "100.00",
+      surcharge: "0",
+      fumigation: "25.00",
+      documentCharges: "10.00",
+      discount: "5.00",
+      otherCharges: "2.50",
       lineItems: [
         { stockItemName: "Zeta shoes", quantity: "3" },
         { stockItemName: "alpha bags", quantity: "1,200" },
       ],
     },
-    { lineItems: [{ stockItemName: "Mid coats", quantity: 5 }] },
+    { surcharge: "7.50", lineItems: [{ stockItemName: "Mid coats", quantity: 5 }] },
   ],
 };
 
@@ -109,9 +115,31 @@ describe("Container Items Excel export", () => {
     expect(ws.getCell("A6").value).toBe("TOTAL");
     expect(ws.getCell("D6").value).toBe(1203);
     expect(ws.getCell("F6").value).toBe(630);
-    expect(ws.pageSetup.printArea).toBe("A1:F6");
+    // Whole-number rates/totals no longer display unnecessary .00, while
+    // fractional values still keep the decimals they actually need.
+    expect(ws.getCell("E4").numFmt).toBe("#,##0.##");
+    expect(ws.getCell("F4").numFmt).toBe("#,##0.##");
+    expect(ws.getCell("F6").numFmt).toBe("#,##0.##");
+
+    expect(ws.getCell("D7").value).toBe("EXTRA CHARGES");
+    expect(ws.getCell("D8").value).toBe("FREIGHT");
+    expect(ws.getCell("F8").value).toBe(100);
+    expect(ws.getCell("D9").value).toBe("SURCHARGE");
+    expect(ws.getCell("F9").value).toBe(7.5);
+    expect(ws.getCell("D10").value).toBe("FUMIGATION");
+    expect(ws.getCell("F10").value).toBe(25);
+    expect(ws.getCell("D11").value).toBe("DOCUMENT CHARGES");
+    expect(ws.getCell("F11").value).toBe(10);
+    expect(ws.getCell("D12").value).toBe("OTHER CHARGES");
+    expect(ws.getCell("F12").value).toBe(2.5);
+    expect(ws.getCell("D13").value).toBe("DISCOUNT");
+    expect(ws.getCell("F13").value).toBe(-5);
+    expect(ws.getCell("D14").value).toBe("TOTAL EXTRA CHARGES");
+    expect(ws.getCell("F14").value).toBe(140);
+    expect(ws.getCell("F14").numFmt).toBe("#,##0.##");
+    expect(ws.pageSetup.printArea).toBe("A1:F14");
     // Nothing from the raw export survives above or below the rebuilt sheet.
-    expect(ws.rowCount).toBe(6);
+    expect(ws.rowCount).toBe(14);
   });
 
   it("leaves other sheets and differently-shaped exports alone", async () => {

@@ -6,16 +6,19 @@
 
 import type {DateEntry, WorkerReportRow} from "./types";
 
+function formatLocalIsoDate(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 export /* ── Helpers ────────────────────────────────────────────────────────────────── */
 function isoToday() {
-  const d = new Date();
-  return d.toISOString().substring(0, 10);
+  return formatLocalIsoDate(new Date());
 }
 
 export function isoYesterday() {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().substring(0, 10);
+  return formatLocalIsoDate(d);
 }
 
 export function isoMonthStart() {
@@ -26,7 +29,7 @@ export function isoMonthStart() {
 export function isoMonthEnd() {
   const d = new Date();
   const last = new Date(d.getFullYear(), d.getMonth() + 1, 0);
-  return last.toISOString().substring(0, 10);
+  return formatLocalIsoDate(last);
 }
 
 export function workerCodeNum(code: string | null): number {

@@ -10,6 +10,7 @@ import {
   timestamp,
   uniqueIndex,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -240,6 +241,12 @@ export const insertCreditNoteItemSchema = createInsertSchema(creditNoteItems)
 export type InsertCreditNoteItem = z.infer<typeof insertCreditNoteItemSchema>;
 export type CreditNoteItem = typeof creditNoteItems.$inferSelect;
 
+export interface FiscalCloseOpeningBalance {
+  accountId: number;
+  openingBalance: string;
+  openingBalanceSide: string;
+}
+
 export const fiscalPeriodClosures = pgTable(
   "fiscal_period_closures",
   {
@@ -265,6 +272,8 @@ export const fiscalPeriodClosures = pgTable(
     netIncome: decimal("net_income", { precision: 15, scale: 2 }).notNull(),
     status: text("status").notNull().default("CLOSED"),
     notes: text("notes"),
+    /** Income/Expense opening balances the close zeroed, so a reopen can restore them. */
+    openingBalanceSnapshot: jsonb("opening_balance_snapshot").$type<FiscalCloseOpeningBalance[]>(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({

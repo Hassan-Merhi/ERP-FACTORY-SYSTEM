@@ -316,6 +316,7 @@ async function gcSalesCashDebitBalance(tx: DatabaseTransaction, companyId: numbe
         WHERE ve.ledger_account_id = ${accountId}
           AND v.company_id = ${companyId}
           AND v.deleted_at IS NULL
+          AND v.optional = false
       ), 0)
     )::text AS debit_minus_credit
     FROM ledger_accounts la

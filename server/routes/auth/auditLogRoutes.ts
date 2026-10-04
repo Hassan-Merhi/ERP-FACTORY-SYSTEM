@@ -7,7 +7,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { requireExportAccess } from "../../lib/permissionMiddleware";
-import { auditLog, companies, factoryUserProfiles, users } from "@shared/schema";
+import { auditLog, companies, factoryUserProfiles, stockTransferRevisionItems, users } from "@shared/schema";
 import { and, desc, eq, gte, lte, or, sql } from "drizzle-orm";
 import { resolveActiveCompanyId } from "../helpers/resolveActiveCompanyId";
 
@@ -20,6 +20,7 @@ const moduleLabels: Record<string, string> = {
   stock_items: "Stock Items",
   inventory: "Inventory",
   stock_transfers: "Stock Transfers",
+  stock_transfer_revisions: "Stock Transfer Revisions",
   containers: "Containers",
   factory_containers: "Factory Containers",
   factory_offload_charges: "Post-Offload Charges",
@@ -42,6 +43,7 @@ const actionLabels: Record<string, string> = {
   restore: "Restored",
   reverse: "Reversed",
   void: "Voided",
+  return: "Returned",
   recalculate: "Recalculated",
   repair: "Repaired",
   import: "Imported",
@@ -102,6 +104,70 @@ function formatAuditRow(row: { id: number; userId: string; storedUsername: strin
   };
 }
 
+type FormattedAuditRow = ReturnType<typeof formatAuditRow>;
+
+function auditChangesRecord(changes: unknown): Record<string, unknown> {
+  return changes && typeof changes === "object" && !Array.isArray(changes)
+    ? { ...(changes as Record<string, unknown>) }
+    : {};
+}
+
+/**
+ * Older stock-transfer revision audit rows only stored status/count/route even
+ * though the immutable revision item rows still contain the exact line-level
+ * snapshot. Enrich detail reads only (never the paginated list) so historical
+ * audit records immediately become useful without rewriting audit_log.
+ *
+ * This is safe for stock_transfer_revisions because their item rows are
+ * immutable lifecycle history. Do not use mutable live document tables here to
+ * reconstruct historical voucher state.
+ */
+async function enrichHistoricalAuditDetail(detail: FormattedAuditRow): Promise<FormattedAuditRow> {
+  if (
+    detail.tableName !== "stock_transfer_revisions" ||
+    !detail.recordId ||
+    !Number.isInteger(Number(detail.recordId))
+  ) {
+    return detail;
+  }
+
+  const changes = auditChangesRecord(detail.changes);
+  if (Array.isArray((changes.items as { new?: unknown } | undefined)?.new)) return detail;
+
+  const items = await db
+    .select({
+      stockItemId: stockTransferRevisionItems.stockItemId,
+      stockItemName: stockTransferRevisionItems.stockItemName,
+      sourceLocationId: stockTransferRevisionItems.sourceLocationId,
+      sourceLocationName: stockTransferRevisionItems.sourceLocationName,
+      originalQuantity: stockTransferRevisionItems.originalQuantity,
+      newQuantity: stockTransferRevisionItems.newQuantity,
+      delta: stockTransferRevisionItems.delta,
+    })
+    .from(stockTransferRevisionItems)
+    .where(eq(stockTransferRevisionItems.revisionId, Number(detail.recordId)));
+
+  if (items.length === 0) return detail;
+
+  return {
+    ...detail,
+    changes: {
+      ...changes,
+      items: {
+        new: items.map((item) => ({
+          stockItemId: Number(item.stockItemId),
+          stockItemName: item.stockItemName,
+          sourceLocationId: item.sourceLocationId == null ? null : Number(item.sourceLocationId),
+          sourceLocationName: item.sourceLocationName,
+          originalQuantity: Number(item.originalQuantity),
+          newQuantity: Number(item.newQuantity),
+          delta: Number(item.delta),
+        })),
+      },
+    },
+  };
+}
+
 export function registerAuthAuditLogRoutes(app: Express) {
   app.get("/api/audit-log", requireAuth, requireExportAccess("exp_audit_log"), async (req, res) => {
     try {
@@ -114,18 +180,11 @@ export function registerAuthAuditLogRoutes(app: Express) {
       const resolvedTable = query.tableName || query.module || "";
       const resolvedFrom = query.dateFrom || query.from || "";
       const resolvedTo = query.dateTo || query.to || "";
-      const excludedActions = [
-        "create",
-        "delete",
-        "login",
-        "import",
-        "export",
-        "send_whatsapp",
-        "send_email",
-        "permission_change",
-        "settings_change",
-        "approve",
-      ];
+      // Daybook exposes filters for create/delete/import/export/approval/etc.
+      // Those actions must stay in the result set or the corresponding filters
+      // are dead controls. Login noise remains outside the business activity
+      // stream; security events and Developer activity are excluded separately.
+      const excludedActions = ["login"];
       const baseConditions = [
         sql`${auditLog.userId} NOT IN (SELECT user_id FROM user_company_roles WHERE role = 'Developer')`,
         sql`${auditLog.tableName} != 'security_events'`,
@@ -206,7 +265,7 @@ export function registerAuthAuditLogRoutes(app: Express) {
           .where(and(...baseConditions, eq(auditLog.id, detailId)))
           .limit(1);
         if (!rawDetail) return res.status(404).json({ message: releaseDebtEnglish("Audit log entry not found") });
-        return res.json(formatAuditRow(rawDetail));
+        return res.json(await enrichHistoricalAuditDetail(formatAuditRow(rawDetail)));
       }
 
       const whereClause = and(...baseConditions, ...filterConditions);

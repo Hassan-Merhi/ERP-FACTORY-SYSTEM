@@ -10,7 +10,7 @@ import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { erpPayrollRunItems, erpPayrollRuns, salaryAdvanceDeductions, salaryAdvances, vouchers } from "@shared/schema";
+import { erpPayrollRunItems, erpPayrollRuns, factoryWorkerDeductions, salaryAdvanceDeductions, salaryAdvances, vouchers } from "@shared/schema";
 
 export function registerPayrollRunLifecycleRoutes(app: Express) {
   // Delete a DRAFT payroll run
@@ -103,7 +103,18 @@ export function registerPayrollRunLifecycleRoutes(app: Express) {
           }
         }
 
-        // 3. Reset run to DRAFT
+        // 3. Restore one-time worker deductions applied by this ERP payroll run.
+        await tx
+          .update(factoryWorkerDeductions)
+          .set({ applied: false, erpPayrollRunId: null })
+          .where(
+            and(
+              eq(factoryWorkerDeductions.companyId, companyId),
+              eq(factoryWorkerDeductions.erpPayrollRunId, runId)
+            )
+          );
+
+        // 4. Reset run to DRAFT
         await tx
           .update(erpPayrollRuns)
           .set({ status: "DRAFT", paymentAccountId: null, paidAt: null })

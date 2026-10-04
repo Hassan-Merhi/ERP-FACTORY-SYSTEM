@@ -1,4 +1,5 @@
 import type { Express, Request, Response } from "express";
+import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
@@ -23,8 +24,6 @@ import {
   propertyMonthlyLedger,
   propertyPayments,
   ledgerAccounts,
-  vouchers,
-  voucherEntries,
   interCompanyTransfers,
 } from "@shared/schema";
 import { parseId } from "../../lib/parseId";
@@ -278,8 +277,8 @@ export function registerRentalPaymentsAccrualRoutes(
         }
 
         // 3. Reverse any auto-transfers that were created for this payment
-        //    Hard-delete both sides (entries + voucher) so the destination company's
-        //    books are fully clean — matching the simple-company-transfer pattern.
+        //    Both sides are soft-deleted: they leave every balance but keep their
+        //    entries for the audit trail.
         const linkedTransfers = await tx
           .select()
           .from(interCompanyTransfers)
@@ -291,14 +290,8 @@ export function registerRentalPaymentsAccrualRoutes(
           // Delete the transfer record FIRST to release FK "restrict" constraints
           // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
           await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-          if (fvid) {
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, fvid));
-            await tx.delete(vouchers).where(eq(vouchers.id, fvid));
-          }
-          if (tvid) {
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, tvid));
-            await tx.delete(vouchers).where(eq(vouchers.id, tvid));
-          }
+          if (fvid) await softDeleteVoucherTx(tx, fvid);
+          if (tvid) await softDeleteVoucherTx(tx, tvid);
         }
 
         // 4. Delete the payment row itself

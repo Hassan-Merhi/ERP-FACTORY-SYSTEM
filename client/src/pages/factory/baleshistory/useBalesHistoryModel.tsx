@@ -164,7 +164,7 @@ export function useBalesHistoryModel() {
     staleTime: 2 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
-    refetchOnMount: false,
+    refetchOnMount: true,
     placeholderData: (prev) => prev,
   });
 

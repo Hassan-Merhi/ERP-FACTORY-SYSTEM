@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Loader2, ArrowLeftRight } from "lucide-react";
 import {
   insertUserSchema,
@@ -161,6 +162,30 @@ export function IntercompanyPosTab() {
     },
   });
 
+  const [rebuildFrom, setRebuildFrom] = useState("");
+  const [rebuildTo, setRebuildTo] = useState("");
+  const rebuildMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/intercompany-pos-config/rebuild", {
+        fromDate: rebuildFrom,
+        toDate: rebuildTo,
+      });
+      return (await res.json()) as { datesChecked: number; datesRebuilt: number; failedDates: string[] };
+    },
+    onSuccess: (result) => {
+      toast({
+        title: result.failedDates.length ? "Rebuild finished with errors" : "Rebuild complete",
+        description: result.failedDates.length
+          ? `Failed dates: ${result.failedDates.join(", ")}`
+          : `${result.datesRebuilt} of ${result.datesChecked} dates rebuilt.`,
+        variant: result.failedDates.length ? "destructive" : "default",
+      });
+    },
+    onError: (err: ClientErrorLike) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const otherCompanies = allCompanies.filter((c) => c.id !== selectedCompany?.id);
   const canSave = destCompanyId && sourceIntercoAccountId && destIntercoAccountId;
 
@@ -302,6 +327,49 @@ export function IntercompanyPosTab() {
           )}
         </CardContent>
       </Card>
+
+      {config?.enabled && (
+        <Card>
+          <CardContent className="pt-6 space-y-3">
+            <p className="text-sm font-medium">Rebuild intercompany journals</p>
+            <p className="text-xs text-muted-foreground">
+              Rebuilds this company&apos;s intercompany POS journals from its cash sales for each date in the range. Use
+              it to repair dates where the destination company&apos;s side is missing.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="interco-rebuild-from">From</Label>
+                <Input
+                  id="interco-rebuild-from"
+                  type="date"
+                  value={rebuildFrom}
+                  onChange={(event) => setRebuildFrom(event.target.value)}
+                  data-testid="input-interco-rebuild-from"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="interco-rebuild-to">To</Label>
+                <Input
+                  id="interco-rebuild-to"
+                  type="date"
+                  value={rebuildTo}
+                  onChange={(event) => setRebuildTo(event.target.value)}
+                  data-testid="input-interco-rebuild-to"
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => rebuildMutation.mutate()}
+                disabled={!rebuildFrom || !rebuildTo || rebuildMutation.isPending}
+                data-testid="button-interco-rebuild"
+              >
+                {rebuildMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Rebuild
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {config && (
         <Card>

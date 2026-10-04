@@ -80,6 +80,20 @@ async function inventoryQuantity(): Promise<number> {
   return Number(rows[0]?.quantity ?? 0);
 }
 
+async function inventorySnapshot(): Promise<{ quantity: number; averageRate: number; totalValue: number }> {
+  const { rows } = await pool.query(
+    `SELECT quantity, average_rate, total_value
+       FROM inventory
+      WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3`,
+    [ctx.companyId, ctx.locationId, ctx.stockItemIds[0]]
+  );
+  return {
+    quantity: Number(rows[0]?.quantity ?? 0),
+    averageRate: Number(rows[0]?.average_rate ?? 0),
+    totalValue: Number(rows[0]?.total_value ?? 0),
+  };
+}
+
 async function resetInventory(): Promise<void> {
   await pool.query(
     `UPDATE inventory SET quantity = $1, average_rate = '10.00', total_value = $2
@@ -144,6 +158,23 @@ describe("container offload concurrency", () => {
 
     const { rows: containerRows } = await pool.query(`SELECT status FROM containers WHERE id = $1`, [containerId]);
     expect(containerRows[0].status).toBe("OFFLOADED");
+  }, 120000);
+
+  it("does not capitalize stale value when zero stock receives a container", async () => {
+    await pool.query(
+      `UPDATE inventory
+          SET quantity = '0.000', average_rate = '94.40', total_value = '188.80'
+        WHERE company_id = $1 AND location_id = $2 AND stock_item_id = $3`,
+      [ctx.companyId, ctx.locationId, ctx.stockItemIds[0]]
+    );
+    const containerId = await createContainerWithPurchaseOrder();
+
+    await executeContainerOffloadLifecycle(offloadInput(containerId));
+
+    const snapshot = await inventorySnapshot();
+    expect(snapshot.quantity).toBeCloseTo(Number(OFFLOAD_QTY), 3);
+    expect(snapshot.averageRate).toBeCloseTo(Number(OFFLOAD_RATE), 2);
+    expect(snapshot.totalValue).toBeCloseTo(Number(OFFLOAD_QTY) * Number(OFFLOAD_RATE), 2);
   }, 120000);
 
   it("does not duplicate charge vouchers when two offloads race", async () => {

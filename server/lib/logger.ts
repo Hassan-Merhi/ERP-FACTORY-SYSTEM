@@ -162,6 +162,9 @@ function parseAccessDeniedMessage(text: string): Record<string, unknown> | undef
 
 function resolveEffectiveLevel(level: LogLevel, message: string, ctx: LogContext): LogLevel {
   if (level !== "info") return level;
+  // Security events keep their level: their text can carry request-controlled
+  // values (a blocked URI ending in /heartbeat) that must not demote them.
+  if (typeof ctx.event === "string" && ctx.event.startsWith("security.")) return level;
   const text = message.trim();
   const moduleName = String(ctx.module || "").toLowerCase();
   const actionName = String(ctx.action || "").toLowerCase();
@@ -274,6 +277,17 @@ function humanizeLegacyMessage(message: string, ctx: LogContext): string {
 function shouldLog(level: LogLevel): boolean {
   return LEVEL_WEIGHT[level] >= LEVEL_WEIGHT[minimumLevel];
 }
+function formatPrettyValue(value: unknown): string {
+  if (value != null && typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 function formatPrettyContext(ctx: Record<string, unknown>): string[] {
   const keys = [
     "event",
@@ -295,13 +309,27 @@ function formatPrettyContext(ctx: Record<string, unknown>): string[] {
     "dbQueryCount",
     "dbDurationMs",
     "buildVersion",
+    "issueCount",
+    "issueCodes",
+    "issues",
+    "checked",
+    "discrepancyCount",
+    "discrepancyCodes",
+    "accountingSnapshots",
+    "stockSnapshots",
+    "companies",
+    "clean",
+    "withDiscrepancies",
+    "rejected",
+    "failed",
+    "discrepancies",
   ];
   return keys.flatMap((key) => {
     const value = ctx[key];
     if (value == null || value === "") return [];
     if (["durationMs", "dbDurationMs", "thresholdMs"].includes(key)) return [`${key}=${formatDuration(value)}`];
     if (["responseBytes", "budgetBytes"].includes(key)) return [`${key}=${formatBytes(value)}`];
-    return [`${key}=${String(value)}`];
+    return [`${key}=${formatPrettyValue(value)}`];
   });
 }
 
@@ -377,6 +405,8 @@ export const __loggerTesting = {
   humanizeLegacyMessage,
   resolveEffectiveLevel,
   resolveEvent,
+  formatPrettyContext,
+  sanitiseContext,
   outputFormat,
   minimumLevel,
   redactionEnabled,

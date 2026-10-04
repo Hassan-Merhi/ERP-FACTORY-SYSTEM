@@ -14,10 +14,13 @@ export interface ReportData {
   valuationMode: ProductionValuationMode;
   summary: {
     batchCost: number;
+    weightCost: number;
     productionValue: number;
     statusValue: number;
     costValue: number;
     sellingValue: number;
+    remainingMaterialValue: number;
+    consumedMaterialCost: number;
     profitValue: number;
     profitMarginPct: number;
     missingSelectedPriceBales: number;

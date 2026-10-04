@@ -1,5 +1,10 @@
-const CACHE_VERSION = "erp-v11";
+const CACHE_VERSION = "erp-v12";
 const CACHE_PREFIX = "erp-";
+// One-time campaign marker kept outside CACHE_PREFIX so normal ERP cache cleanup
+// cannot erase it and accidentally trigger this migration again later.
+const IOS_FORCE_UPDATE_CAMPAIGN = "ios-pwa-2026-09-30-v1";
+const IOS_FORCE_UPDATE_MARKER_CACHE = `hmd-force-update-${IOS_FORCE_UPDATE_CAMPAIGN}`;
+const IOS_FORCE_UPDATE_MARKER_URL = "/__pwa_force_update_applied__";
 const APP_SHELL = ["/", "/manifest.json"];
 const MAX_STATIC_CACHE_ENTRIES = 200;
 const HASHED_ASSET_RE =
@@ -20,11 +25,11 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     Promise.all([deleteErpCachesExcept(CACHE_VERSION), navigationPreload.catch(() => {})])
       .then(() => self.clients.claim())
-      .then(() =>
-        self.clients.matchAll({ type: "window" }).then((clients) =>
-          clients.forEach((client) => client.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION }))
-        )
-      )
+      .then(async () => {
+        const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+        clients.forEach((client) => client.postMessage({ type: "SW_UPDATED", version: CACHE_VERSION }));
+        await runOneTimeIosForceUpdate(clients);
+      })
   );
 });
 
@@ -73,6 +78,41 @@ async function deleteErpCachesExcept(keepName) {
   const keys = await caches.keys();
   await Promise.all(
     keys.filter((key) => key.startsWith(CACHE_PREFIX) && key !== keepName).map((key) => caches.delete(key))
+  );
+}
+
+function isIosWebAppRuntime() {
+  const userAgent = self.navigator?.userAgent || "";
+  return /iPad|iPhone|iPod/i.test(userAgent) || (/Macintosh/i.test(userAgent) && /Mobile/i.test(userAgent));
+}
+
+async function runOneTimeIosForceUpdate(windowClients) {
+  if (!isIosWebAppRuntime()) return;
+
+  const markerCache = await caches.open(IOS_FORCE_UPDATE_MARKER_CACHE);
+  if (await markerCache.match(IOS_FORCE_UPDATE_MARKER_URL)) return;
+
+  // Write the marker before navigating. If iOS re-fires lifecycle events while
+  // replacing the page, the same campaign can never become a refresh loop.
+  await markerCache.put(
+    IOS_FORCE_UPDATE_MARKER_URL,
+    new Response(IOS_FORCE_UPDATE_CAMPAIGN, {
+      headers: { "Content-Type": "text/plain", "Cache-Control": "no-store" },
+    })
+  );
+
+  await Promise.all(
+    windowClients.map(async (client) => {
+      if (typeof client.navigate !== "function") return;
+      try {
+        const url = new URL(client.url);
+        if (url.origin !== self.location.origin) return;
+        url.searchParams.set("_pwa_update", IOS_FORCE_UPDATE_CAMPAIGN);
+        await client.navigate(url.toString());
+      } catch {
+        // The next launch still gets the new worker and network-first HTML.
+      }
+    })
   );
 }
 

@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 /**
  * advanceAccountingRoutes: AdvanceCash endpoints.
  *
@@ -10,7 +11,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { ledgerAccounts, bankAccounts, vouchers, voucherEntries } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
@@ -54,13 +55,22 @@ export function registerAdvanceCashRoutes(app: Express) {
         })
         .from(voucherEntries)
         .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(eq(voucherEntries.ledgerAccountId, accountId), eq(vouchers.companyId, companyId)));
+        .where(
+          and(
+            eq(voucherEntries.ledgerAccountId, accountId),
+            eq(vouchers.companyId, companyId),
+            eq(vouchers.optional, false),
+            isNull(vouchers.deletedAt)
+          )
+        );
 
-      let totalDebit = parseFloat(ledgerTotals.totalDebit);
-      let totalCredit = parseFloat(ledgerTotals.totalCredit);
-      let openingBal = parseFloat(acct.openingBalance || "0");
-      const openingSign = acct.openingBalanceSide === "Cr" ? -1 : 1;
-      openingBal = openingBal * openingSign;
+      // Deleted and optional (provisional) vouchers are outside every ledger
+      // balance; this one is shown before posting cash adjustments.
+      const signed = (amount: string | null, side: string | null) =>
+        side === "Cr" ? new Decimal(amount || "0").negated() : new Decimal(amount || "0");
+      let balance = signed(acct.openingBalance, acct.openingBalanceSide)
+        .plus(ledgerTotals.totalDebit)
+        .minus(ledgerTotals.totalCredit);
 
       // Also sum entries via bankAccountId for each linked bank account
       for (const bank of linkedBanks) {
@@ -71,16 +81,20 @@ export function registerAdvanceCashRoutes(app: Express) {
           })
           .from(voucherEntries)
           .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(eq(voucherEntries.bankAccountId, bank.id), eq(vouchers.companyId, companyId)));
-        totalDebit += parseFloat(bankTotals.totalDebit);
-        totalCredit += parseFloat(bankTotals.totalCredit);
-        // Add bank's own opening balance
-        const bOB = parseFloat(bank.openingBalance || "0");
-        const bSign = bank.openingBalanceSide === "Cr" ? -1 : 1;
-        openingBal += bOB * bSign;
+          .where(
+            and(
+              eq(voucherEntries.bankAccountId, bank.id),
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt)
+            )
+          );
+        balance = balance
+          .plus(bankTotals.totalDebit)
+          .minus(bankTotals.totalCredit)
+          .plus(signed(bank.openingBalance, bank.openingBalanceSide));
       }
 
-      const balance = openingBal + totalDebit - totalCredit;
       res.json({ accountId, name: acct.name, balance: balance.toFixed(2) });
     } catch (error: unknown) {
       logger.error("Error fetching account balance:", { error: error });

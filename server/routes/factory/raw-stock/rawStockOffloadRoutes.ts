@@ -19,6 +19,7 @@ import {
   factoryOffloadAdditionalCharges,
   vouchers,
   factoryContainerReceipts,
+  factorySuppliers,
 } from "@shared/schema";
 import { eq, and, or, inArray, ilike } from "drizzle-orm";
 import { registerRawStockReverseOffloadRoute } from "./rawStockReverseOffloadRoute";
@@ -73,6 +74,21 @@ export function registerRawStockOffloadRoutes(app: Express) {
         .where(and(eq(factoryContainers.id, containerId), eq(factoryContainers.companyId, companyId)));
 
       if (!container) return res.status(404).json({ message: "Container not found" });
+
+      const [materialSupplier] = container.supplierId
+        ? await db
+            .select({ name: factorySuppliers.name })
+            .from(factorySuppliers)
+            .where(
+              and(
+                eq(factorySuppliers.id, container.supplierId),
+                eq(factorySuppliers.companyId, companyId)
+              )
+            )
+        : [];
+      const supplierNarrationSuffix = materialSupplier?.name?.trim()
+        ? ` - ${materialSupplier.name.trim()}`
+        : "";
 
       const [existingRawStock] = await db
         .select()
@@ -227,6 +243,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
             reqDestination,
             idempotencyKey,
             userId: req.session.userId || null,
+            supplierName: materialSupplier?.name ?? null,
           });
           return; // Skip all other financial posting — already done on first receipt
         }
@@ -430,7 +447,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
           txType: "OFFLOAD_RAW_STOCK",
           referenceId: rawStock!.id,
           referenceTable: "factory_raw_stock",
-          description: `Offloaded container ${container.containerNumber}: ${dReceivedKg.toDecimalPlaces(3).toFixed(3)} kg at ${dInclusiveCostPerKg.toDecimalPlaces(6).toFixed(6)}/kg (inclusive)`,
+          description: `Offloaded container ${container.containerNumber}${supplierNarrationSuffix}: ${dReceivedKg.toDecimalPlaces(3).toFixed(3)} kg at ${dInclusiveCostPerKg.toDecimalPlaces(6).toFixed(6)}/kg (inclusive)`,
           currencyCode,
           amountCurrency: dReceivedKg.times(dInclusiveCostPerKg).toDecimalPlaces(6).toNumber(),
           fxRateToUsd: fxRate,

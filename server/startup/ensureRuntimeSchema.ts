@@ -7,6 +7,29 @@
 import type { Pool } from "pg";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
+import { scheduledWhatsAppDeliveryTracking } from "../startup-schema/030-scheduled-whatsapp-delivery-tracking";
+
+export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool): Promise<void> {
+  for (const statement of scheduledWhatsAppDeliveryTracking) {
+    await pool.query(statement);
+  }
+
+  const verification = await pool.query<{
+    occurrences_table: string | null;
+    attachments_table: string | null;
+  }>(
+    `SELECT
+       to_regclass('public.scheduled_whatsapp_occurrences')::text AS occurrences_table,
+       to_regclass('public.scheduled_whatsapp_attachments')::text AS attachments_table`
+  );
+
+  const row = verification.rows[0];
+  if (!row?.occurrences_table || !row?.attachments_table) {
+    throw new Error("SCHEDULED_WHATSAPP_DELIVERY_TRACKING_SCHEMA_UNAVAILABLE");
+  }
+
+  logger.info("[startup] ✓ Scheduled WhatsApp delivery tracking schema ensured");
+}
 
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
@@ -122,6 +145,14 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS fiscal_closures_company_period_unique
       ON fiscal_period_closures (company_id, period_end_date);
+    -- Legacy production databases may already have fiscal_period_closures
+    -- from the older schema. CREATE TABLE IF NOT EXISTS does not add new
+    -- columns to an existing table, and the closed-period trigger reads
+    -- status on every voucher write. Keep the guard column in the always-on
+    -- runtime repair so voucher posting cannot be broken by schema drift.
+    ALTER TABLE fiscal_period_closures
+      ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'CLOSED',
+      ADD COLUMN IF NOT EXISTS opening_balance_snapshot JSONB;
 
     CREATE TABLE IF NOT EXISTS factory_status_builder_log (
       id           SERIAL PRIMARY KEY,
@@ -152,6 +183,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     logger.error("[startup] ✗ Could not ensure multi-currency columns:", { error: getErrorMessage(colErr) });
   }
 
+  // Scheduled WhatsApp claims are a correctness boundary: production disables
+  // the bulk startup migration pass, so these tables must be guaranteed by the
+  // always-on pre-listen schema guard.
+  await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
+
   // Phase 3 historical repairs are part of the blocking pre-listen path. Both
   // passes are idempotent and evidence-gated; ambiguous accounting causes a
   // throw so Render keeps the previous healthy instance live.
@@ -167,4 +203,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await import("../services/accounting/ensurePhase3InventoryValuationSchema");
   const baselinesCreated = await ensurePhase3InventoryValuationSchema(pool);
   logger.info("[startup] ✓ Phase 3 inventory valuation cutovers ensured", { baselinesCreated });
+
+  // Disabled by default. This one-shot control exists so an explicitly reviewed
+  // historical-sales repair can be dry-run/applied on Render without exposing
+  // database credentials or turning the repair into normal startup behavior.
+  const { maybeRunHistoricalSalesCostRepairFromEnv } =
+    await import("../services/inventory/historicalSalesCostRepairStartup");
+  await maybeRunHistoricalSalesCostRepairFromEnv();
 }

@@ -316,8 +316,42 @@ async function getAdjustmentRows(filters: StockInSalesReportFilters): Promise<Ag
   return db
     .select({
       periodKey,
-      stockAdjustmentQty: sql<string>`COALESCE(SUM(${stockAdjustmentItems.quantity}), 0)`,
-      stockAdjustmentValue: sql<string>`COALESCE(SUM(${stockAdjustmentItems.quantity} * ${stockAdjustmentItems.rate}), 0)`,
+      stockInQty: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.quantity})
+        ELSE 0
+      END), 0)`,
+      stockInValue: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.totalAmount})
+        ELSE 0
+      END), 0)`,
+      stockOutQty: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.quantity})
+      END), 0)`,
+      stockOutValue: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN 0
+        ELSE ABS(${stockAdjustmentItems.totalAmount})
+      END), 0)`,
+      stockAdjustmentQty: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.quantity})
+        ELSE -ABS(${stockAdjustmentItems.quantity})
+      END), 0)`,
+      stockAdjustmentValue: sql<string>`COALESCE(SUM(CASE
+        WHEN ${stockAdjustmentVouchers.adjustmentType} = 'Production'
+          OR (${stockAdjustmentVouchers.adjustmentType} = 'Mixed' AND ${stockAdjustmentItems.quantity} > 0)
+        THEN ABS(${stockAdjustmentItems.totalAmount})
+        ELSE -ABS(${stockAdjustmentItems.totalAmount})
+      END), 0)`,
     })
     .from(stockAdjustmentItems)
     .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
@@ -481,12 +515,12 @@ async function getOpeningBalance(filters: StockInSalesReportFilters, asOfDate: s
 }
 
 function toMetrics(metrics: MutableMetrics, opening: InventoryBalance): StockInSalesReportMetrics {
-  const totalAvailableQty = opening.quantity.plus(metrics.stockInQty).plus(metrics.stockAdjustmentQty);
+  // Positive stock adjustments are part of Stock In and consumption adjustments
+  // are part of Stock Out. stockAdjustment* remains a net informational measure,
+  // so it must not be added again here.
+  const totalAvailableQty = opening.quantity.plus(metrics.stockInQty);
   const closingStockQty = totalAvailableQty.minus(metrics.stockOutQty);
-  const closingStockValue = opening.value
-    .plus(metrics.stockInValue)
-    .plus(metrics.stockAdjustmentValue)
-    .minus(metrics.stockOutValue);
+  const closingStockValue = opening.value.plus(metrics.stockInValue).minus(metrics.stockOutValue);
   return {
     openingStockQty: toNumber(opening.quantity, 3),
     openingStockValue: toNumber(opening.value, 2),
@@ -539,7 +573,14 @@ export async function getStockInSalesReport(filters: StockInSalesReportFilters):
   void transferInRows;
   void transferOutRows;
 
-  mergeAggregateRows(buckets, adjustmentRows, ["stockAdjustmentQty", "stockAdjustmentValue"]);
+  mergeAggregateRows(buckets, adjustmentRows, [
+    "stockInQty",
+    "stockInValue",
+    "stockAdjustmentQty",
+    "stockAdjustmentValue",
+    "stockOutQty",
+    "stockOutValue",
+  ]);
   mergeAggregateRows(buckets, salesRows, ["stockOutQty", "stockOutValue", "totalSales", "costOfSales", "costProfit"]);
   mergeAggregateRows(buckets, noteRows, ["stockOutQty", "stockOutValue", "totalSales", "costOfSales", "costProfit"]);
 

@@ -31,6 +31,8 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [accounting-flow.md](accounting-flow.md) | Voucher types, posting, the ledger |
 | [inventory-flow.md](inventory-flow.md) | Stock data model and cost calculation |
 | [inventory-cost-memory-policy.md](inventory-cost-memory-policy.md) | Cost-memory rules for the current implementation |
+| [historical-sales-cogs-transfer-revision-findings.md](historical-sales-cogs-transfer-revision-findings.md) | Historical sales COGS repair: evidence findings and remaining blockers |
+| [historical-sales-cogs-partial-apply-runbook.md](historical-sales-cogs-partial-apply-runbook.md) | Historical sales COGS: proven-rows-only partial apply and rollback |
 | [vouchers-flow.md](vouchers-flow.md) | Voucher lifecycle |
 | [containers-flow.md](containers-flow.md) | Import shipments, PO to warehouse receipt |
 | [factory-flow.md](factory-flow.md) | Bales, production, payroll, raw materials |
@@ -65,6 +67,7 @@ failure, so a correct document cannot quietly become undiscoverable.
 | [ci/branch-protection.md](ci/branch-protection.md) | Required checks on `main` |
 | [mobile-tablet-web-regression.md](mobile-tablet-web-regression.md) | Browser regression checklist |
 | [erp-mobile-program.md](erp-mobile-program.md) | ERP phone contracts, route certification and phase status |
+| [factory-mobile-audit.md](factory-mobile-audit.md) | Factory mode phone layouts and mobile audit status |
 | [ux-consistency-program.md](ux-consistency-program.md) | Shared responsive, translation, route-boundary, and filter-state contracts |
 | [api-quickstart.md](api-quickstart.md) | Calling the API |
 | [compatibility.md](compatibility.md) | Supported browsers and platforms |

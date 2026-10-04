@@ -43,7 +43,7 @@ function mutatesStock(file, source) {
   return writesTable(source, "inventory", "inventory") || STOCK_BALANCE_HELPER.test(source);
 }
 
-const JOURNAL_WRITER = /\b(?:postStockMovementTx|journalStockTransferLeg)\b/;
+const JOURNAL_WRITER = /\b(?:postStockMovementTx|journalStockTransferLeg|applyStockTransferInventoryTx)\b/;
 
 const REQUEST_IDENTITY =
   /\b(?:clientRequestId|resolveStockDocumentRequestId|stockDocumentIdempotencyKey|postBalancedVoucherTx|insertInfrastructureVoucherTx|insertInfrastructureVoucher|withDurableFinancialOperation|resolveFinancialOperationKey|financialOperationFingerprint)\b/;

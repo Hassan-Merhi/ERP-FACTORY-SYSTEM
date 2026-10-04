@@ -38,6 +38,8 @@ function bale(i: number, scanned: boolean) {
     product_name: `Product ${i}`,
     weight_kg: "50.5",
     status: "in_stock",
+    is_in_loading_order: false,
+    is_deleted: false,
     date_bale_produced: "2026-09-23",
     worker_name: "Ali",
     scan_id: scanned ? 100 + i : null,
@@ -79,6 +81,37 @@ describe("Daily Scan", () => {
     ]);
     expect(rows[3][4]).toBe(101);
     expect(rows[3][7]).toBe("1/2 scanned");
+  });
+
+  it("keeps in-stock bales above sold, pending, deleted, and dispatched bales", async () => {
+    (global as any).fetch = vi.fn(async (url: string) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        String(url).startsWith("/api/factory/daily-bale-scans")
+          ? [
+              { ...bale(1, false), status: "sold" },
+              { ...bale(2, false), status: "loading", is_in_loading_order: true },
+              { ...bale(3, false), status: "in_stock" },
+              { ...bale(4, false), status: "dispatched" },
+              { ...bale(5, false), status: "in_stock" },
+              { ...bale(6, false), is_deleted: true },
+            ]
+          : [],
+    }));
+
+    renderWithProviders(<DailyScan />);
+    await screen.findByText("REF-3");
+
+    const rows = screen.getAllByTestId(/^row-unscanned-bale-/);
+    expect(rows.map((row) => row.textContent?.includes("REF-3") || row.textContent?.includes("REF-5"))).toEqual([
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+    ]);
   });
 
   it("posts a scan for the typed reference", async () => {

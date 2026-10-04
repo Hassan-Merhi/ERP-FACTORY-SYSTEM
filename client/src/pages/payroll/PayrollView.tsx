@@ -91,6 +91,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
     setWorkerDeductionDate,
     bulkDepositSelections,
     setBulkDepositSelections,
+    bulkDepositAmounts,
+    setBulkDepositAmounts,
     bulkDepositDialogOpen,
     setBulkDepositDialogOpen,
     bulkDepositDate,
@@ -252,6 +254,7 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
               setGroupMembersDialogOpen={setGroupMembersDialogOpen}
               pendingBonuses={pendingBonuses}
               setBulkDepositSelections={setBulkDepositSelections}
+              setBulkDepositAmounts={setBulkDepositAmounts}
               setBulkDepositDialogOpen={setBulkDepositDialogOpen}
               setBulkBonusAmounts={setBulkBonusAmounts}
               setBulkBonusStep={setBulkBonusStep}
@@ -318,6 +321,8 @@ export function PayrollView({ model }: { model: ReturnType<typeof usePayrollMode
           setBulkDepositNotes={setBulkDepositNotes}
           employeeStaff={employeeStaff}
           bulkDepositSelections={bulkDepositSelections}
+          bulkDepositAmounts={bulkDepositAmounts}
+          setBulkDepositAmounts={setBulkDepositAmounts}
           handleSelectAllEmployees={handleSelectAllEmployees}
           handleToggleEmployeeDeposit={handleToggleEmployeeDeposit}
           bulkDepositTotal={bulkDepositTotal}

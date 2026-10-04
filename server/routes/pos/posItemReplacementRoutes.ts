@@ -2,7 +2,7 @@ import { type Express, type Request, type Response } from "express";
 import { z } from "zod";
 import { requireAuth } from "../../auth";
 import { pool } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { storage } from "../../storage";
 import { applyPosItemReplacements, listPosItemReplacementCandidates } from "../../services/pos/itemReplacementService";
@@ -78,7 +78,7 @@ export function registerPosItemReplacementRoutes(app: Express): void {
         userId: req.session.userId,
         error,
       });
-      return res.status(500).json({ message: getErrorMessage(error) });
+      return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -122,7 +122,7 @@ export function registerPosItemReplacementRoutes(app: Express): void {
         userId: req.session.userId,
         error,
       });
-      return res.status(500).json({ message: getErrorMessage(error) });
+      return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

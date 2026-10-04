@@ -40,6 +40,8 @@ import { poImportParentCompany } from "./026-po-import-parent-company";
 import { factoryStaffTrackingSchema } from "./027-factory-staff-tracking";
 import { supplierTrackingDefaultsSchema } from "./028-supplier-tracking-defaults";
 import { userPresenceComplianceIndexes } from "./029-user-presence-compliance-indexes";
+import { scheduledWhatsAppDeliveryTracking } from "./030-scheduled-whatsapp-delivery-tracking";
+import { inventoryValuationOverrides } from "./031-inventory-valuation-overrides";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -77,6 +79,9 @@ export const startupMigrations: string[] = [
   ...factoryStaffTrackingSchema,
   ...supplierTrackingDefaultsSchema,
   ...userPresenceComplianceIndexes,
+  ...scheduledWhatsAppDeliveryTracking,
+  // Appended last: references companies, locations and stock_items.
+  ...inventoryValuationOverrides,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it

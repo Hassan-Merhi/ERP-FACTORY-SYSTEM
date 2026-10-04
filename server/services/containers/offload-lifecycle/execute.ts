@@ -241,7 +241,10 @@ export async function executeContainerOffloadLifecycle(
           nextValue = 0;
         } else if (nextQuantity < 0) {
           nextValue = nextQuantity * adjustedRate;
-        } else if (currentQuantity < 0) {
+        } else if (currentQuantity <= 0) {
+          // Non-positive inventory carries no asset value. If an old workflow
+          // left a stale total_value behind at exactly zero quantity, never
+          // capitalize that stale amount into the new receipt.
           nextValue = nextQuantity * Math.max(adjustedRate, 0);
         } else {
           nextValue = currentValue + offloadValue;

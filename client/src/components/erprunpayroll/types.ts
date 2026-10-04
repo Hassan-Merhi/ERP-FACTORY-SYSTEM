@@ -76,5 +76,6 @@ export interface PayrollRunItem {
   groupName: string | null;
   baseSalary: string;
   deduction: string;
+  payrollDeduction: string;
   netPay: string;
 }

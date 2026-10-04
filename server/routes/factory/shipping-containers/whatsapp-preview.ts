@@ -7,6 +7,8 @@
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { buildSafeFilename } from "../../../lib/contentDisposition";
+import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import {
@@ -76,7 +78,7 @@ export function registerShippingWhatsappPreviewRoutes(app: Express) {
           },
           {
             id: "statement_pdf",
-            name: `Customer Statement — ${row.clientName || "Customer"}`,
+            name: buildSafeFilename([row.clientName || "Customer", getClientDate(req)], "pdf"),
             fileType: "PDF",
             source: "Customer Statement",
             available: !!row.customerId,

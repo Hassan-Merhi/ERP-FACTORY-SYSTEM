@@ -1,6 +1,6 @@
 import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { logger } from "../../lib/logger";
@@ -14,10 +14,16 @@ import {
 } from "../_helpers";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
-import { vouchers, voucherEntries, customers } from "@shared/schema";
+import { vouchers, voucherEntries, customers, type InsertVoucher } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
+import Decimal from "decimal.js";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
+import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
+import {
+  validateManualVoucherEntryAmounts,
+  type ValidatedManualVoucherTotals,
+} from "../../services/accounting/manualVoucherEntryValidation";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -54,20 +60,58 @@ export function registerVoucherCreateRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid request data", field: missingVoucherField[0] });
       }
 
+      // The body used to be spread straight into the insert, so a caller could
+      // set any column (deleted_at, shift_id, source_module, ...). Only the
+      // header fields the voucher forms send are accepted, and the company is
+      // always the session's.
       const companyId = req.session.currentCompanyId;
-      const exchangeRate = companyId ? await getCurrentExchangeRate(companyId) : null;
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
+      if (req.body.companyId != null && Number(req.body.companyId) !== companyId) {
+        return res.status(403).json({ message: "Vouchers can only be created in the selected company" });
+      }
+      // Stock forms send float products (qty * rate); the column keeps cents,
+      // so round exactly as the database would rather than refuse them.
+      let totalAmount: string;
+      try {
+        const parsedTotal = new Decimal(String(req.body.totalAmount).trim());
+        if (!parsedTotal.isFinite() || parsedTotal.isNegative()) throw new Error("invalid");
+        totalAmount = parsedTotal.toFixed(2);
+      } catch {
+        return res.status(400).json({ message: "Invalid request data", field: "totalAmount" });
+      }
+      if (req.body.optional !== undefined && typeof req.body.optional !== "boolean") {
+        return res.status(400).json({ message: "Invalid request data", field: "optional" });
+      }
+      const textField = (value: unknown) => (typeof value === "string" && value.trim() ? value : undefined);
+      const exchangeRate = await getCurrentExchangeRate(companyId);
       const voucher = await storage.createVoucher({
-        ...req.body,
-        exchangeRate,
+        companyId,
+        voucherNumber: String(req.body.voucherNumber),
+        // insertVoucherSchema's enum omits types this route legitimately
+        // receives (StockTransfer/Transfer from POS, Production, Mixed).
+        voucherType: String(voucherType) as InsertVoucher["voucherType"],
+        voucherDate: String(req.body.voucherDate),
+        totalAmount,
+        description: textField(req.body.description),
+        optional: req.body.optional ?? false,
+        currency:
+          typeof req.body.currency === "string" && /^[A-Z]{3}$/.test(req.body.currency) ? req.body.currency : "USD",
+        locationId: Number.isInteger(req.body.locationId) ? req.body.locationId : undefined,
+        locationName: textField(req.body.locationName),
+        effectiveDate: textField(req.body.effectiveDate) ?? null,
+        exchangeRate: exchangeRate == null ? undefined : String(exchangeRate),
+        sourceModule: "ERP",
         postingSource: infrastructurePostingIdentity(
           "manual-voucher",
-          `${companyId ?? req.body.companyId}:${req.body.voucherNumber}`,
+          `${companyId}:${req.body.voucherNumber}`,
           "create"
         ),
       });
       res.json(voucher);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -94,15 +138,16 @@ export function registerVoucherCreateRoutes(app: Express) {
         return res.status(400).json({ message: "Voucher and entries are required" });
       }
 
-      // Validate that debits equal credits (only for non-optional vouchers)
-      const totalDebits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-      const totalCredits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
-
-      // For active (non-optional) vouchers, enforce debit=credit balance
-      if (!voucher.optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
-        return res.status(400).json({
-          message: "Total debits must equal total credits for active vouchers",
-        });
+      // Payloads the central engine does not take land here, so apply its
+      // amount rules: exact decimal balance, no negative or both-sided lines.
+      let validatedTotals: ValidatedManualVoucherTotals;
+      try {
+        validatedTotals = validateManualVoucherEntryAmounts(entries, { optional: voucher.optional === true });
+      } catch (validationError: unknown) {
+        if (validationError instanceof PostingValidationError) {
+          return res.status(400).json({ message: validationError.message, code: validationError.code });
+        }
+        throw validationError;
       }
 
       // Get current exchange rate before starting the transaction
@@ -131,7 +176,7 @@ export function registerVoucherCreateRoutes(app: Express) {
             voucherType: voucher.voucherType,
             voucherDate: voucher.voucherDate,
             description: voucher.description || null,
-            totalAmount: Math.max(totalDebits, totalCredits).toFixed(2),
+            totalAmount: Decimal.max(validatedTotals.debitTotal, validatedTotals.creditTotal).toFixed(2),
             optional: voucher.optional ?? false,
             currency: voucherCurrency,
             exchangeRate: voucherHistoricalRate,
@@ -200,9 +245,16 @@ export function registerVoucherCreateRoutes(app: Express) {
                   rateConvention: norm.rateConvention,
                 };
               }
-            } catch (_normErr) {
-              // Non-fatal: normalization can fail for entries without a rate (USD-only companies).
-              // Entry is still inserted with legacy debitAmount/creditAmount only.
+            } catch (normErr: unknown) {
+              // A USD entry without a company rate can still post its amounts
+              // as-is. A foreign-currency entry cannot: without a rate its
+              // amount would be stored as if it were USD.
+              if (voucherCurrency.toUpperCase() !== "USD") {
+                throw new PostingValidationError(
+                  "POSTING_EXCHANGE_RATE_REQUIRED",
+                  `Cannot post a ${voucherCurrency} voucher without a valid exchange rate: ${getErrorMessage(normErr)}`
+                );
+              }
             }
           } else {
             // Caller provided full dual-currency data (new frontend)
@@ -304,7 +356,10 @@ export function registerVoucherCreateRoutes(app: Express) {
         durationMs: Date.now() - _t,
         error,
       });
-      res.status(500).json({ message: getErrorMessage(error) });
+      if (error instanceof PostingValidationError) {
+        return res.status(400).json({ message: error.message, code: error.code });
+      }
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

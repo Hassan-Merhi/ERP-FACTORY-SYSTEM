@@ -43,7 +43,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
     data,
     isLoading,
     presets,
-    profitValue,
     valuationMode,
     setValuationMode,
   } = report;
@@ -52,13 +51,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
   const isOwner = effectiveRole === "Owner";
   const costsHidden = Boolean(data?.costsHidden);
   const showMoneySummary = !costsHidden && (!isOwner || valuationMode === "cost");
-  // Top Profit KPI only:
-  // selected bales value - (mix-batch value - remaining-on-table value).
-  // The selected bales value follows the active Cost/Selling toggle.
-  const selectedBalesValue = data?.production.totalValue ?? 0;
-  const consumedMixValue = (data?.rawMaterial.totalCost ?? 0) - (data?.balanceOnTable.value ?? 0);
-  const productionProfitValue = selectedBalesValue - consumedMixValue;
-  const productionProfitMarginPct = selectedBalesValue > 0 ? (productionProfitValue / selectedBalesValue) * 100 : 0;
+  // Profit is calculated once on the backend from the period-scoped remaining
+  // material value. Do not rebuild it from the Balance on Table card here.
+  const productionProfitValue = data?.summary.profitValue ?? 0;
+  const productionProfitMarginPct = data?.summary.profitMarginPct ?? 0;
   return (
     <>
       {/* ── Production tab ── */}
@@ -221,10 +217,10 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                         <div className="w-px h-5 bg-border" />
                         <div className="flex items-center gap-2">
                           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            Batch Cost
+                            Weight Cost
                           </span>
-                          <span className="text-base font-bold" data-testid="text-batch-cost">
-                            {fmtMoney(data?.summary.batchCost ?? 0)}
+                          <span className="text-base font-bold" data-testid="text-weight-cost">
+                            {fmtMoney(data?.summary.weightCost ?? data?.summary.batchCost ?? 0)}
                           </span>
                         </div>
                         <div className="w-px h-5 bg-border" />
@@ -524,25 +520,6 @@ export function ProductionTabPanel({ report }: { report: DailyProductionReportSt
                     <>
                       <StatRow label="Batch Rate" value={fmtRate(data?.balanceOnTable.costPerKg ?? 0)} sub="per kg" />
                       <StatRow label="Value" value={fmtMoney(data?.balanceOnTable.value ?? 0)} />
-                      {!isOwner && (
-                        <div className="mt-2 pt-2 border-t border-violet-200 dark:border-violet-800/40 flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wide text-violet-700 dark:text-violet-400">
-                            Production Profit
-                          </span>
-                          <span
-                            className={`text-sm font-extrabold tabular-nums ${
-                              profitValue > 0
-                                ? "text-emerald-600 dark:text-emerald-400"
-                                : profitValue < 0
-                                  ? "text-red-500 dark:text-red-400"
-                                  : "text-muted-foreground"
-                            }`}
-                          >
-                            {profitValue > 0 ? "+" : ""}
-                            {fmtMoney(profitValue)}
-                          </span>
-                        </div>
-                      )}
                     </>
                   )}
                 </>

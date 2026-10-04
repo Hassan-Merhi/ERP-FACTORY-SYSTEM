@@ -205,11 +205,13 @@ export const securityNotificationsAndPrecision: string[] = [
       deduction_date date NOT NULL,
       applied boolean NOT NULL DEFAULT false,
       payroll_id integer,
+      erp_payroll_run_id integer,
       created_at timestamp NOT NULL DEFAULT now()
     )`,
   `CREATE INDEX IF NOT EXISTS factory_worker_deductions_company_idx ON factory_worker_deductions (company_id)`,
   `CREATE INDEX IF NOT EXISTS factory_worker_deductions_worker_idx ON factory_worker_deductions (worker_id)`,
   `ALTER TABLE factory_worker_deductions ADD COLUMN IF NOT EXISTS payroll_id integer`,
+  `ALTER TABLE factory_worker_deductions ADD COLUMN IF NOT EXISTS erp_payroll_run_id integer`,
   `CREATE TABLE IF NOT EXISTS supplier_profit_po_overrides (
       id serial PRIMARY KEY,
       supplier_id integer NOT NULL,

@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { voucherEntries, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
@@ -290,7 +290,7 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
       res.status(400).json({ message: error.message, code: error.code });
       return;
     }
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }
 

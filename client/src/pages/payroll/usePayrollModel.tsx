@@ -1,3 +1,4 @@
+import { confirmAction } from "@/components/ConfirmHost";
 import { useMemo, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -93,6 +94,8 @@ export function usePayrollModel() {
     workerDeductionDate,
     bulkDepositSelections,
     setBulkDepositSelections,
+    bulkDepositAmounts,
+    setBulkDepositAmounts,
     setBulkDepositDialogOpen,
     bulkDepositDate,
     bulkDepositNotes,
@@ -459,35 +462,55 @@ export function usePayrollModel() {
   };
 
   // ── Bulk deposit helpers ─────────────────────────────────────────────────
+  const getBulkDepositAmount = (employee: Employee): string =>
+    bulkDepositAmounts[employee.id] ?? employee.monthlySalary ?? "";
+
   const handleSelectAllEmployees = (checked: boolean | "indeterminate") => {
     if (checked) {
       const all: Record<number, boolean> = {};
+      const amounts: Record<number, string> = { ...bulkDepositAmounts };
       employeeStaff.forEach((e) => {
         all[e.id] = true;
+        if (amounts[e.id] === undefined) amounts[e.id] = e.monthlySalary ?? "";
       });
       setBulkDepositSelections(all);
+      setBulkDepositAmounts(amounts);
     } else {
       setBulkDepositSelections({});
     }
   };
 
   const handleToggleEmployeeDeposit = (id: number) => {
+    const employee = employeeStaff.find((e) => e.id === id);
     setBulkDepositSelections((prev: Record<number, boolean>) => ({ ...prev, [id]: !prev[id] }));
+    if (employee && bulkDepositAmounts[id] === undefined) {
+      setBulkDepositAmounts((prev) => ({ ...prev, [id]: employee.monthlySalary ?? "" }));
+    }
   };
 
   const validSelectedEmployees = useMemo(
-    () => employeeStaff.filter((e) => bulkDepositSelections[e.id] && parseFloat(e.monthlySalary || "0") > 0),
-    [employeeStaff, bulkDepositSelections]
+    () =>
+      employeeStaff.filter(
+        (e) => bulkDepositSelections[e.id] && parseFloat(bulkDepositAmounts[e.id] ?? e.monthlySalary ?? "0") > 0
+      ),
+    [employeeStaff, bulkDepositSelections, bulkDepositAmounts]
   );
 
   const bulkDepositTotal = useMemo(
-    () => validSelectedEmployees.reduce((s, e) => s + parseFloat(e.monthlySalary || "0"), 0),
-    [validSelectedEmployees]
+    () =>
+      validSelectedEmployees.reduce(
+        (sum, employee) => sum + parseFloat(bulkDepositAmounts[employee.id] ?? employee.monthlySalary ?? "0"),
+        0
+      ),
+    [validSelectedEmployees, bulkDepositAmounts]
   );
 
   const bulkDepositMutation = useMutation({
     mutationFn: async () => {
-      const deposits = validSelectedEmployees.map((e) => ({ employeeId: e.id, amount: e.monthlySalary }));
+      const deposits = validSelectedEmployees.map((employee) => ({
+        employeeId: employee.id,
+        amount: getBulkDepositAmount(employee),
+      }));
       return modeApiRequest("POST", "/api/payroll/bulk-deposit-employees", {
         deposits,
         date: bulkDepositDate,
@@ -499,6 +522,7 @@ export function usePayrollModel() {
       queryClient.invalidateQueries({ queryKey: ["/api/employees", selectedCompany?.id] });
       setBulkDepositDialogOpen(false);
       setBulkDepositSelections({});
+      setBulkDepositAmounts({});
     },
     onError: showError,
   });
@@ -653,8 +677,8 @@ export function usePayrollModel() {
     win.print();
   };
 
-  const handleDeleteEmployee = (emp: Employee) => {
-    if (confirm(`Are you sure you want to delete ${emp.firstName}?`)) {
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (await confirmAction({ title: `Are you sure you want to delete ${emp.firstName}?`, tone: "destructive" })) {
       modeApiRequest("DELETE", `/api/employees/${emp.id}`, undefined)
         .then(() => {
           toast({ title: "Deleted", description: "Employee deleted" });

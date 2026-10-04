@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, Search, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Search, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -245,7 +245,7 @@ export function AuditLog({
           <div className={inline ? "relative flex-1 min-w-[180px]" : "relative"}>
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search user, module, action, record…"
+              placeholder="Search user, module or action…"
               value={filterSearch}
               onChange={(event) => handleSearchChange(event.target.value)}
               className={inline ? "pl-9 h-8 text-sm" : "pl-9 text-sm"}
@@ -326,7 +326,7 @@ export function AuditLog({
 
         if (inline) {
           return (
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/70 p-3 shadow-sm">
               {searchControl}
               {filterControls}
 
@@ -376,17 +376,21 @@ export function AuditLog({
       })()}
 
       {selectedCompany && (
-        <p className="text-xs text-muted-foreground">
-          Company: <span className="font-medium text-foreground">{selectedCompany.name}</span>
-          {selectedCompany.code ? ` (${selectedCompany.code})` : ""}
-          {total !== null && !activityLoading
-            ? total === 0
-              ? " — no results"
-              : ` — ${total.toLocaleString()} record${total !== 1 ? "s" : ""}${
-                  totalPages > 1 ? ` — page ${page} of ${totalPages}` : ""
-                }`
-            : ""}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+          <span>
+            <span className="font-medium text-foreground">{selectedCompany.name}</span>
+            {selectedCompany.code ? ` · ${selectedCompany.code}` : ""}
+          </span>
+          {total !== null && !activityLoading && (
+            <span className="tabular-nums">
+              {total === 0
+                ? "No results"
+                : `${total.toLocaleString()} activit${total === 1 ? "y" : "ies"}${
+                    totalPages > 1 ? ` · Page ${page} of ${totalPages}` : ""
+                  }`}
+            </span>
+          )}
+        </div>
       )}
 
       {activityLoading ? (
@@ -425,20 +429,18 @@ export function AuditLog({
             <ErpMobileRecordGroup key={`day-${dateKey}`} label={dateLabel} meta={logs.length}>
               <ErpMobileRecordList>
                 {logs.map((log) => {
-                  const detail = log.changeSummary || getDetailsSentence(log);
                   const time = new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                  const moduleName = log.moduleLabel || tableShortName(log.tableName);
                   return (
                     <ErpMobileRecordCard
                       key={log.id}
                       data-testid={`activity-card-${log.id}`}
-                      title={getRecordLabel(log)}
+                      title={moduleName}
                       subtitle={
                         <>
                           <span className="font-mono tabular-nums">{time}</span>
                           {" · "}
                           {log.username || (log.userId ? `User #${String(log.userId).slice(0, 8)}` : "Unknown")}
-                          {" · "}
-                          {log.moduleLabel || tableShortName(log.tableName)}
                         </>
                       }
                       badges={
@@ -446,13 +448,9 @@ export function AuditLog({
                           {actionLabel(log.action)}
                         </Badge>
                       }
-                      fields={
-                        detail
-                          ? [{ label: "Details", value: <span className="line-clamp-2">{detail}</span>, wide: true }]
-                          : []
-                      }
+                      fields={[]}
                       onOpen={() => setSelectedLog(log)}
-                      openLabel={`Open activity: ${actionLabel(log.action)} ${getRecordLabel(log)}`}
+                      openLabel={`Open activity: ${actionLabel(log.action)} ${moduleName}`}
                     />
                   );
                 })}
@@ -461,26 +459,35 @@ export function AuditLog({
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-md border">
+        <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[160px] whitespace-nowrap">Date & Time</TableHead>
-                <TableHead className="w-[130px]">User</TableHead>
-                <TableHead className="w-[125px]">Action</TableHead>
-                <TableHead className="w-[150px]">Module</TableHead>
-                <TableHead className="w-[180px]">Record</TableHead>
-                <TableHead>Details</TableHead>
+              <TableRow className="bg-muted/30 hover:bg-muted/30">
+                <TableHead className="w-[150px] h-10 pl-5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Time
+                </TableHead>
+                <TableHead className="w-[220px] h-10 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  User
+                </TableHead>
+                <TableHead className="w-[170px] h-10 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Action
+                </TableHead>
+                <TableHead className="h-10 pr-5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Module
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {groupedDays.map(({ dateKey, dateLabel, logs }) => (
                 <Fragment key={`day-${dateKey}`}>
-                  <TableRow className="bg-muted/60 hover:bg-muted/60 pointer-events-none select-none">
-                    <TableCell colSpan={6} className="py-2 px-4 font-semibold text-sm text-foreground">
+                  <TableRow className="bg-muted/20 hover:bg-muted/20 pointer-events-none select-none border-y">
+                    <TableCell colSpan={4} className="py-2.5 px-5 font-semibold text-sm text-foreground">
                       <span className="flex items-center gap-2">
                         <CalendarDays className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                         {dateLabel}
+                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                          {logs.length} {logs.length === 1 ? "activity" : "activities"}
+                        </span>
                       </span>
                     </TableCell>
                   </TableRow>
@@ -488,38 +495,26 @@ export function AuditLog({
                   {logs.map((log) => (
                     <TableRow
                       key={log.id}
-                      className="group cursor-pointer hover:bg-muted/50 transition-colors"
+                      className="cursor-pointer border-b last:border-b-0 hover:bg-muted/30 transition-colors"
                       onClick={() => setSelectedLog(log)}
+                      title="Open activity"
                     >
-                      <TableCell className="text-xs font-mono text-muted-foreground whitespace-nowrap">
-                        {fmtDate(log.createdAt)}
+                      <TableCell className="py-3 pl-5 text-xs font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </TableCell>
-                      <TableCell className="text-sm font-medium truncate max-w-[130px]">
+                      <TableCell className="py-3 text-sm font-medium">
                         {log.username || (log.userId ? `User #${String(log.userId).slice(0, 8)}` : "Unknown")}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="py-3">
                         <Badge
                           variant={actionBadgeVariant(log.action)}
-                          className="text-[10px] min-h-5 max-w-[120px] whitespace-normal break-words leading-tight"
+                          className="text-[10px] min-h-5 max-w-[140px] whitespace-normal break-words leading-tight"
                         >
                           {actionLabel(log.action)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      <TableCell className="py-3 pr-5 text-sm text-muted-foreground">
                         {log.moduleLabel || tableShortName(log.tableName)}
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[180px]">
-                        <span className="truncate block" title={getRecordLabel(log)}>
-                          {getRecordLabel(log)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground max-w-[420px]">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="truncate min-w-0" title={log.changeSummary || getDetailsSentence(log)}>
-                            {log.changeSummary || getDetailsSentence(log)}
-                          </span>
-                          <ExternalLink className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-50" />
-                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

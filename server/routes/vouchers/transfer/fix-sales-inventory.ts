@@ -5,7 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
@@ -124,7 +124,7 @@ export function registerSalesInventoryFixRoutes(app: Express) {
       });
     } catch (error: unknown) {
       logger.error("[Fix Sales Inventory] Error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 

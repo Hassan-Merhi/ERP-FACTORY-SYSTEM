@@ -13,12 +13,15 @@ import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { adjustInventory } from "../../inventoryHelper";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
-import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import { DuplicateStockTransferError } from "../../storage/stock-ops/transfers-create";
+import {
+  applyStockTransferInventoryTx,
+  assertTransferCompanyScopeTx,
+  DuplicateStockTransferError,
+  StockTransferPolicyError,
+} from "../../storage/stock-ops/transfers-create";
+import { lockInventoryRow } from "../../storage/inventoryRowLock";
 import {
   findExistingStockDocumentTx,
   recordStockDocumentTx,
@@ -26,8 +29,6 @@ import {
   stockDocumentIdempotencyKey,
   StockDocumentIdempotencyError,
 } from "../../services/inventory/stockDocumentIdempotency";
-
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 async function resolvePosTransferRecipientLocationId(req: Request): Promise<number | null> {
   const context = await getActiveCompanyPermissionContext(req);
@@ -74,7 +75,8 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Branch: Create new transfer from scratch (sourceLocationId provided, no voucherId)
       if (
         !voucherId &&
-        (sourceLocationId || (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
+        (sourceLocationId ||
+          (items && items.length > 0 && items.every((i: { sourceLocationId?: unknown }) => i.sourceLocationId)))
       ) {
         if (!companyId) {
           return res.status(400).json({ message: "No company selected" });
@@ -178,6 +180,17 @@ export function registerStockTransferCreateRoutes(app: Express) {
             }
           }
 
+          const normalizedMovementItems = [...items]
+            .map((item) => ({
+              sourceLocationId: Number(item.sourceLocationId || sourceLocationId),
+              stockItemId: Number(item.stockItemId),
+              quantity: String(item.quantity),
+              rate: item.rate == null ? "0" : String(item.rate),
+            }))
+            .sort((a, b) => a.sourceLocationId - b.sourceLocationId || a.stockItemId - b.stockItemId);
+
+          await assertTransferCompanyScopeTx(tx, companyId, Number(destinationLocationId), normalizedMovementItems);
+
           const [newVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -205,21 +218,11 @@ export function registerStockTransferCreateRoutes(app: Express) {
           let totalAmount = 0;
           const transferItems = [];
 
-          for (const item of items) {
+          for (const item of normalizedMovementItems) {
             const quantity = parseFloat(item.quantity);
-
-            const [sourceInv] = await tx
-              .select({ averageRate: inventory.averageRate, quantity: inventory.quantity })
-              .from(inventory)
-              .where(
-                and(
-                  eq(inventory.locationId, item.sourceLocationId || sourceLocationId),
-                  eq(inventory.stockItemId, item.stockItemId)
-                )
-              )
-              .limit(1);
-
-            const rate = parseFloat(sourceInv?.averageRate || "0");
+            const sourceInv = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
+            const rateText = sourceInv?.average_rate ?? item.rate ?? "0";
+            const rate = parseFloat(String(rateText || "0"));
             const totalItemAmount = quantity * rate;
             totalAmount += totalItemAmount;
 
@@ -228,7 +231,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
               .values({
                 transferId: transfer.id,
                 stockItemId: item.stockItemId,
-                sourceLocationId: item.sourceLocationId || sourceLocationId,
+                sourceLocationId: item.sourceLocationId,
                 quantity: quantity.toString(),
                 rate: rate.toFixed(2),
                 totalAmount: totalItemAmount.toFixed(2),
@@ -236,48 +239,22 @@ export function registerStockTransferCreateRoutes(app: Express) {
               .returning();
 
             transferItems.push(insertedItem);
+          }
 
-            // Only update inventory for non-optional (confirmed) transfers
-            if (!optional) {
-              // Deduct from source location (transfer out = negative delta)
-              await adjustInventory(
-                tx,
-                item.sourceLocationId || sourceLocationId,
-                item.stockItemId,
-                -quantity,
-                companyId!
-              );
-
-              // Add to destination location (transfer in = positive delta with rate)
-              await adjustInventory(tx, destinationLocationId, item.stockItemId, quantity, companyId!, rate);
-
-              // Canonical evidence for this leg, written inside the same
-              // transaction that just applied the inventory above, so evidence
-              // and effect commit or roll back together. Reconciliation reads
-              // these rows; without them an applied transfer looks unevidenced.
-              await postStockMovementTx(
-                tx,
-                {
-                  companyId: companyId!,
-                  stockItemId: item.stockItemId,
-                  kind: "transfer",
-                  quantity: quantity.toString(),
-                  unitCost: rate.toFixed(2),
-                  fromLocationId: item.sourceLocationId || sourceLocationId,
-                  toLocationId: destinationLocationId,
-                  occurredAt: new Date().toISOString(),
-                  source: {
-                    sourceType: "stock-transfer",
-                    sourceId: String(transfer.id),
-                    idempotencyKey: `stock-transfer:${transfer.id}:${item.stockItemId}`,
-                  },
-                  // The journal records what the transfer did; it does not add
-                  // a negative-stock rule the transfer does not itself enforce.
-                  allowNegativeStock: true,
-                },
-                canonicalStockMovementAdapter
-              );
-            }
+          if (!optional) {
+            await applyStockTransferInventoryTx(tx, {
+              companyId,
+              transferId: transfer.id,
+              sourceVoucherId: newVoucher.id,
+              destinationLocationId: Number(destinationLocationId),
+              items: transferItems.map((item) => ({
+                sourceLocationId: item.sourceLocationId!,
+                stockItemId: item.stockItemId,
+                quantity: item.quantity,
+                rate: item.rate,
+              })),
+              allowNegativeInventory: allowNegativeInventory !== false,
+            });
           }
 
           await tx
@@ -350,6 +327,9 @@ export function registerStockTransferCreateRoutes(app: Express) {
       }
 
       // Original flow: Use existing voucher (voucherId required)
+      if (!companyId) {
+        return res.status(400).json({ message: "No company selected" });
+      }
       if (!voucherId) {
         return res.status(400).json({ message: "Either voucherId or sourceLocationId is required" });
       }
@@ -418,26 +398,16 @@ export function registerStockTransferCreateRoutes(app: Express) {
               .from(inventory)
               .where(and(eq(inventory.locationId, item.sourceLocationId), eq(inventory.stockItemId, item.stockItemId)))
               .limit(1);
-            const resolvedRate = parseFloat(invRow?.averageRate ?? "0");
-            return { ...item, rate: resolvedRate.toFixed(2) };
+            return { ...item, rate: String(invRow?.averageRate ?? "0") };
           }
-          return item;
+          return { ...item, rate: String(item.rate) };
         })
       );
 
-      const transfer = await storage.createStockTransfer(voucherId, destinationLocationId, notes || "", itemsWithRate);
-
-      // Update voucher totalAmount based on actual rates (important for POS transfers where rate starts at 0)
-      const actualTotal = itemsWithRate.reduce((sum: number, item) => {
-        return sum + parseFloat(item.quantity) * parseFloat(item.rate);
-      }, 0);
-      await db
-        .update(vouchers)
-        .set({
-          description: notes || null,
-          ...(actualTotal > 0 ? { totalAmount: actualTotal.toFixed(2) } : {}),
-        })
-        .where(eq(vouchers.id, voucherId));
+      const transfer = await storage.createStockTransfer(voucherId, destinationLocationId, notes || "", itemsWithRate, {
+        allowNegativeInventory: allowNegativeInventory !== false,
+        activeCompanyId: companyId,
+      });
 
       logger.info("[Stock Transfer] Transfer created successfully:", {
         transferId: transfer.transfer.id,
@@ -491,6 +461,17 @@ export function registerStockTransferCreateRoutes(app: Express) {
           }
         });
     } catch (error: unknown) {
+      if (error instanceof StockTransferPolicyError) {
+        logger.warn("stock transfer create rejected by inventory policy", {
+          module: "stockTransfer",
+          action: "create",
+          userId: _uid,
+          companyId: _cid,
+          code: error.code,
+        });
+        const status = error.code === "STOCK_TRANSFER_NEGATIVE_STOCK_DISABLED" ? 409 : 400;
+        return res.status(status).json({ code: error.code, message: error.message });
+      }
       if (error instanceof DuplicateStockTransferError) {
         // The voucher already carries a transfer. Building a second one would
         // move the same stock twice under one document number.

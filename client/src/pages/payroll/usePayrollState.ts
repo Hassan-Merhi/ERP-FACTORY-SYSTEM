@@ -54,6 +54,7 @@ export function usePayrollState() {
   const [workerDeductionReason, setWorkerDeductionReason] = useState("");
   const [workerDeductionDate, setWorkerDeductionDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [bulkDepositSelections, setBulkDepositSelections] = useState<Record<number, boolean>>({});
+  const [bulkDepositAmounts, setBulkDepositAmounts] = useState<Record<number, string>>({});
   const [bulkDepositDialogOpen, setBulkDepositDialogOpen] = useState(false);
   const [bulkDepositDate, setBulkDepositDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [bulkDepositNotes, setBulkDepositNotes] = useState("");
@@ -185,6 +186,8 @@ export function usePayrollState() {
     setWorkerDeductionDate,
     bulkDepositSelections,
     setBulkDepositSelections,
+    bulkDepositAmounts,
+    setBulkDepositAmounts,
     bulkDepositDialogOpen,
     setBulkDepositDialogOpen,
     bulkDepositDate,

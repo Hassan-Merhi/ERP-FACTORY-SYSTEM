@@ -20,12 +20,21 @@ import {
   type LockedTransferRow,
   type NormalizedImmutableRevisionItem,
 } from "./immutableStockTransferRevisionInput";
-import { resultRows } from "../lib/queryResult";
+import {
+  firstRow,
+  lifecycleError,
+  positiveInteger,
+  rows,
+  type StockTransferRevisionStatus,
+} from "./immutableStockTransferRevisionQueries";
 
 export { normalizeImmutableRevisionItems } from "./immutableStockTransferRevisionInput";
 export type { ImmutableRevisionItemInput } from "./immutableStockTransferRevisionInput";
-
-export type StockTransferRevisionStatus = "pending" | "approved" | "rejected" | "cancelled" | "superseded";
+export {
+  listImmutableStockTransferRevisions,
+  resolveTransferIdByVoucher,
+  type StockTransferRevisionStatus,
+} from "./immutableStockTransferRevisionQueries";
 
 export interface CreateImmutableRevisionInput {
   companyId: number;
@@ -53,6 +62,17 @@ export interface ImmutableRevisionResult {
   items: Array<typeof stockTransferRevisionItems.$inferSelect>;
 }
 
+export interface RevisionAuditItem {
+  stockItemId: number;
+  stockItemName: string;
+  sourceLocationId: number;
+  sourceLocationName: string | null;
+  originalQuantity: number;
+  newQuantity: number;
+  delta: number;
+  rate?: number;
+}
+
 export interface ReviewImmutableRevisionResult {
   revisionId: number;
   transferId: number;
@@ -64,26 +84,27 @@ export interface ReviewImmutableRevisionResult {
   appliedRevisionCount?: number;
   inventoryApplied: boolean;
   totalAmount: string;
+  /** Bounded business snapshot used by the audit trail/detail dialog. */
+  items: RevisionAuditItem[];
 }
 
-function rows<T extends Record<string, unknown> = Record<string, unknown>>(result: unknown): T[] {
-  return resultRows<T>(result);
-}
-
-function firstRow<T extends Record<string, unknown> = Record<string, unknown>>(result: unknown): T | undefined {
-  return rows<T>(result)[0];
-}
-
-function positiveInteger(value: unknown, label: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${label} must be a positive integer`);
-  return parsed;
-}
-
-function lifecycleError(message: string, code: string): LifecycleError {
-  const error: LifecycleError = new Error(message);
-  error.code = code;
-  return error;
+function toRevisionAuditItems(
+  items: Array<typeof stockTransferRevisionItems.$inferSelect>,
+  rates?: Map<string, number>
+): RevisionAuditItem[] {
+  return items.map((item) => {
+    const key = `${item.stockItemId}:${item.sourceLocationId ?? ""}`;
+    return {
+      stockItemId: Number(item.stockItemId),
+      stockItemName: String(item.stockItemName || `Item #${item.stockItemId}`),
+      sourceLocationId: Number(item.sourceLocationId || 0),
+      sourceLocationName: item.sourceLocationName ? String(item.sourceLocationName) : null,
+      originalQuantity: Number(item.originalQuantity || 0),
+      newQuantity: Number(item.newQuantity || 0),
+      delta: Number(item.delta || 0),
+      ...(rates?.has(key) ? { rate: rates.get(key)! } : {}),
+    };
+  });
 }
 
 async function lockTransfer(tx: Parameters<Parameters<typeof db.transaction>[0]>[0], transferId: number) {
@@ -411,6 +432,10 @@ export async function approveImmutableStockTransferRevision(
         .select({ quantity: stockTransferItems.quantity, rate: stockTransferItems.rate })
         .from(stockTransferItems)
         .where(eq(stockTransferItems.transferId, transferId));
+      const currentRevisionItems = await tx
+        .select()
+        .from(stockTransferRevisionItems)
+        .where(eq(stockTransferRevisionItems.revisionId, revisionId));
       return {
         revisionId,
         transferId,
@@ -418,10 +443,12 @@ export async function approveImmutableStockTransferRevision(
         revisionNumber,
         transition: "no-op",
         changedItemCount: 0,
+        appliedRevisionCount: 0,
         inventoryApplied,
         totalAmount: currentItems
           .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
           .toFixed(2),
+        items: toRevisionAuditItems(currentRevisionItems),
       };
     }
     if (requested.status !== "pending") {
@@ -692,6 +719,9 @@ export async function approveImmutableStockTransferRevision(
         AND status = 'pending'
     `);
 
+    const auditRates = new Map(
+      changes.map((change) => [`${change.stockItemId}:${change.sourceLocationId}`, change.rate] as const)
+    );
     return {
       revisionId,
       transferId,
@@ -702,6 +732,7 @@ export async function approveImmutableStockTransferRevision(
       appliedRevisionCount: pendingIds.length - overriddenRevisionIds.length,
       inventoryApplied,
       totalAmount,
+      items: toRevisionAuditItems(revisionItems, auditRates),
     };
   });
 }
@@ -728,6 +759,10 @@ export async function rejectImmutableStockTransferRevision(
     const voucherId = Number(requested.voucher_id);
     const revisionNumber = Number(requested.revision_number);
     const inventoryApplied = Boolean(requested.inventory_applied);
+    const rejectedRevisionItems = await tx
+      .select()
+      .from(stockTransferRevisionItems)
+      .where(eq(stockTransferRevisionItems.revisionId, revisionId));
 
     if (requested.status === "rejected") {
       const currentItems = await tx
@@ -745,6 +780,7 @@ export async function rejectImmutableStockTransferRevision(
         totalAmount: currentItems
           .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
           .toFixed(2),
+        items: toRevisionAuditItems(rejectedRevisionItems),
       };
     }
     if (requested.status !== "pending") {
@@ -779,106 +815,7 @@ export async function rejectImmutableStockTransferRevision(
       totalAmount: currentItems
         .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
         .toFixed(2),
-    };
-  });
-}
-
-export async function resolveTransferIdByVoucher(
-  companyIdInput: number,
-  voucherIdInput: number
-): Promise<number | null> {
-  const companyId = positiveInteger(companyIdInput, "Company ID");
-  const voucherId = positiveInteger(voucherIdInput, "Voucher ID");
-  const row = firstRow(
-    await db.execute(sql`
-      SELECT transfer.id
-      FROM stock_transfer_vouchers transfer
-      JOIN vouchers voucher ON voucher.id = transfer.voucher_id
-      WHERE transfer.voucher_id = ${voucherId}
-        AND voucher.company_id = ${companyId}
-        AND voucher.deleted_at IS NULL
-      LIMIT 1
-    `)
-  );
-  return row ? Number(row.id) : null;
-}
-
-export async function listImmutableStockTransferRevisions(companyIdInput: number, transferIdInput: number) {
-  const companyId = positiveInteger(companyIdInput, "Company ID");
-  const transferId = positiveInteger(transferIdInput, "Transfer ID");
-  const revisionRows = rows(
-    await db.execute(sql`
-      SELECT
-        revision.id,
-        revision.transfer_id,
-        revision.revision_number,
-        revision.note,
-        revision.optional,
-        revision.revision_date,
-        revision.created_by,
-        revision.status,
-        revision.reviewed_at,
-        revision.reviewed_by,
-        revision.rejection_reason,
-        revision.superseded_by_revision_id,
-        transfer.source_location_id,
-        source.name AS source_location_name,
-        transfer.destination_location_id,
-        destination.name AS destination_location_name
-      FROM stock_transfer_revisions revision
-      JOIN stock_transfer_vouchers transfer ON transfer.id = revision.transfer_id
-      JOIN vouchers voucher ON voucher.id = transfer.voucher_id
-      LEFT JOIN locations source ON source.id = transfer.source_location_id
-      JOIN locations destination ON destination.id = transfer.destination_location_id
-      WHERE revision.transfer_id = ${transferId}
-        AND voucher.company_id = ${companyId}
-        AND voucher.deleted_at IS NULL
-      ORDER BY revision.revision_number DESC, revision.id DESC
-    `)
-  );
-  if (revisionRows.length === 0) return [];
-
-  const revisionIds = revisionRows.map((revision) => Number(revision.id));
-  const itemRows = await db
-    .select()
-    .from(stockTransferRevisionItems)
-    .where(inArray(stockTransferRevisionItems.revisionId, revisionIds));
-  const byRevision = new Map<number, typeof itemRows>();
-  for (const item of itemRows) {
-    const group = byRevision.get(item.revisionId) || [];
-    group.push(item);
-    byRevision.set(item.revisionId, group);
-  }
-
-  return revisionRows.map((revision) => {
-    const items = byRevision.get(Number(revision.id)) || [];
-    const sourceNames = Array.from(
-      new Set(items.map((item) => item.sourceLocationName).filter((name): name is string => Boolean(name)))
-    );
-    return {
-      id: Number(revision.id),
-      transferId: Number(revision.transfer_id),
-      revisionNumber: Number(revision.revision_number),
-      note: revision.note,
-      optional: revision.status === "pending",
-      status: revision.status as StockTransferRevisionStatus,
-      revisionDate: revision.revision_date,
-      createdAt: revision.revision_date,
-      createdBy: revision.created_by,
-      reviewedAt: revision.reviewed_at,
-      reviewedBy: revision.reviewed_by,
-      rejectionReason: revision.rejection_reason,
-      supersededByRevisionId: revision.superseded_by_revision_id ? Number(revision.superseded_by_revision_id) : null,
-      sourceLocationId: revision.source_location_id ? Number(revision.source_location_id) : null,
-      sourceLocationName:
-        sourceNames.length === 1
-          ? sourceNames[0]
-          : sourceNames.length > 1
-            ? "Multiple Sources"
-            : revision.source_location_name || "Unknown",
-      destinationLocationId: Number(revision.destination_location_id),
-      destinationLocationName: revision.destination_location_name || "Unknown",
-      items,
+      items: toRevisionAuditItems(rejectedRevisionItems),
     };
   });
 }

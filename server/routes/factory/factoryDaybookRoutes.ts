@@ -10,6 +10,9 @@ import {
   customerOrders,
   factoryDaybookEntries,
   factoryUserProfiles,
+  factoryRawStock,
+  factoryContainers,
+  factorySuppliers,
   vouchers,
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
@@ -88,6 +91,70 @@ export function registerFactoryDaybookRoutes(app: Express) {
         .from(factoryDaybookEntries)
         .where(and(...conditions))
         .orderBy(desc(factoryDaybookEntries.txDate), desc(factoryDaybookEntries.id));
+
+      // Enrich raw-stock offload narrations with the current material supplier.
+      // This also upgrades historical entries at read time without mutating their
+      // original audit rows.
+      const offloadRawStockRefIds = daybookRows
+        .filter((r) => r.txType === "OFFLOAD_RAW_STOCK" && r.referenceId != null)
+        .map((r) => r.referenceId as number);
+      const offloadSupplierByRawStockId = new Map<
+        number,
+        { containerNumber: string; supplierName: string | null }
+      >();
+      if (offloadRawStockRefIds.length > 0) {
+        const offloadSupplierRows = await db
+          .select({
+            rawStockId: factoryRawStock.id,
+            containerNumber: factoryContainers.containerNumber,
+            supplierName: factorySuppliers.name,
+          })
+          .from(factoryRawStock)
+          .innerJoin(
+            factoryContainers,
+            and(
+              eq(factoryContainers.id, factoryRawStock.containerId),
+              eq(factoryContainers.companyId, companyId)
+            )
+          )
+          .leftJoin(
+            factorySuppliers,
+            and(
+              eq(factorySuppliers.id, factoryContainers.supplierId),
+              eq(factorySuppliers.companyId, companyId)
+            )
+          )
+          .where(
+            and(
+              eq(factoryRawStock.companyId, companyId),
+              inArray(factoryRawStock.id, offloadRawStockRefIds)
+            )
+          );
+
+        for (const row of offloadSupplierRows) {
+          offloadSupplierByRawStockId.set(row.rawStockId, {
+            containerNumber: row.containerNumber,
+            supplierName: row.supplierName,
+          });
+        }
+      }
+
+      const enrichOffloadNarration = (description: string, referenceId: number | null) => {
+        if (!referenceId) return description;
+        const info = offloadSupplierByRawStockId.get(referenceId);
+        const supplierName = info?.supplierName?.trim();
+        if (!info || !supplierName) return description;
+
+        const marker = `container ${info.containerNumber}`;
+        const markerIndex = description.indexOf(marker);
+        if (markerIndex < 0) return description;
+
+        const suffixStart = markerIndex + marker.length;
+        const colonIndex = description.indexOf(":", suffixStart);
+        if (colonIndex < 0) return description;
+
+        return `${description.slice(0, suffixStart)} - ${supplierName}${description.slice(colonIndex)}`;
+      };
 
       // ── 1b. Safety-net: drop real daybook entries whose source voucher was deleted ─
       // Also fetch `optional` flag for voucher-backed rows
@@ -177,7 +244,14 @@ export function registerFactoryDaybookRoutes(app: Express) {
                 : {}),
             };
           }
-          return { ...r, optional: false };
+          return {
+            ...r,
+            optional: false,
+            description:
+              r.txType === "OFFLOAD_RAW_STOCK"
+                ? enrichOffloadNarration(r.description, r.referenceId)
+                : r.description,
+          };
         });
 
       // ── 2. Query vouchers directly (to catch pre-fix historical entries) ───

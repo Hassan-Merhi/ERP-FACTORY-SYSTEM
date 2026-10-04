@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { buildSafeFilename, contentDisposition } from "../../../lib/contentDisposition";
+import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import {
@@ -270,7 +271,7 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
       res.setHeader(
         "Content-Disposition",
         contentDisposition(
-          buildSafeFilename([customer.legalName || customer.code || String(customerId)], "") + "_Statement.pdf"
+          buildSafeFilename([customer.legalName || customer.code || String(customerId), getClientDate(req)], "pdf")
         )
       );
       doc.pipe(res);

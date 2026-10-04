@@ -116,11 +116,26 @@ export function registerFactoryStockQueryRoutes(app: Express) {
           stockEntryDate: factoryBales.stockEntryDate,
           finalizedAt: factoryBales.finalizedAt,
           workerName: factoryBales.workerName,
-          productionDate: factoryBales.finalizedAt,
+          productionDate: sql<string | null>`COALESCE(
+            ${factoryBales.stockEntryDate}::text,
+            ${factoryBales.pressedAt}::date::text,
+            ${factoryBales.finalizedAt}::date::text,
+            ${factoryBales.createdAt}::date::text
+          )`,
         })
         .from(factoryBales)
         .where(and(...conditions))
-        .orderBy(asc(factoryBales.finalizedAt), asc(factoryBales.referenceNumber));
+        .orderBy(
+          asc(
+            sql`COALESCE(
+              ${factoryBales.stockEntryDate},
+              ${factoryBales.pressedAt}::date,
+              ${factoryBales.finalizedAt}::date,
+              ${factoryBales.createdAt}::date
+            )`
+          ),
+          asc(factoryBales.referenceNumber)
+        );
 
       // Filter out bales currently locked in an active LOADING order
       const baleIds = bales.map((b) => b.id).filter((id): id is number => id != null);
