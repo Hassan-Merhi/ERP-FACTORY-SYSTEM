@@ -10,7 +10,7 @@ import {
 } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
@@ -239,7 +239,7 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
       durationMs: Date.now() - startedAt,
       error,
     });
-    res.status(500).json({ message: getErrorMessage(error) });
+    res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
   }
 }
 

@@ -26,15 +26,16 @@ import {
   proformaCapacityArticles,
   type ProformaCapacitySnapshot,
 } from "@/lib/proformaCapacity";
-import type {
-  AddLoadingBaleInput,
-  AddLoadingBaleResponse,
-  BaleRemoval,
-  CreateLoadingOrderResponse,
-  Customer,
-  Location,
-  OrderDetail,
-  Proforma,
+import {
+  OPEN_ORDER_STATUSES,
+  type AddLoadingBaleInput,
+  type AddLoadingBaleResponse,
+  type BaleRemoval,
+  type CreateLoadingOrderResponse,
+  type Customer,
+  type Location,
+  type OrderDetail,
+  type Proforma,
 } from "./types";
 import {
   SCAN_NOT_IN_PROFORMA_TONE,
@@ -42,12 +43,10 @@ import {
   SCAN_SUCCESS_TONE,
   playScanBeep,
   playScanErrorSweep,
+  useScanFlashReset,
 } from "./scanFeedback";
 import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
 import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
-
-/** Statuses that mean an existing loading order is still open for this proforma. */
-const OPEN_ORDER_STATUSES = ["LOADING", "DRAFT", "PENDING_VERIFICATION"];
 
 export type { BaleGroup } from "./loadedBales";
 
@@ -106,6 +105,7 @@ export function useFactoryContainerLoadingScanModel() {
   const importFileRef = useRef<HTMLInputElement>(null);
   const ignoreProformaRef = useRef(false);
   const scanSubmissionInFlightRef = useRef(false);
+  const scheduleFlashReset = useScanFlashReset();
 
   const toggleIgnoreProforma = useCallback(() => {
     const enabled = !ignoreProformaRef.current;
@@ -304,7 +304,7 @@ export function useFactoryContainerLoadingScanModel() {
       setScanFlash("success");
       setShowScanSuccessPopup(true);
       playScanBeep(SCAN_SUCCESS_TONE.frequency, SCAN_SUCCESS_TONE.durationMs);
-      setTimeout(() => {
+      scheduleFlashReset(() => {
         setScanFlash(null);
         setShowScanSuccessPopup(false);
       }, 500);
@@ -344,7 +344,7 @@ export function useFactoryContainerLoadingScanModel() {
         setPendingBypassBaleRef(null);
         setScanFlash("error");
         playScanBeep(SCAN_OVERLOAD_TONE.frequency, SCAN_OVERLOAD_TONE.durationMs);
-        setTimeout(() => setScanFlash(null), 600);
+        scheduleFlashReset(() => setScanFlash(null), 600);
         setScanCode("");
         return;
       }
@@ -353,14 +353,14 @@ export function useFactoryContainerLoadingScanModel() {
         setPendingBypassOverloadRef(null);
         setScanFlash("error");
         playScanBeep(SCAN_NOT_IN_PROFORMA_TONE.frequency, SCAN_NOT_IN_PROFORMA_TONE.durationMs);
-        setTimeout(() => setScanFlash(null), 600);
+        scheduleFlashReset(() => setScanFlash(null), 600);
         setScanCode("");
         return;
       }
       setScanFlash("error");
       setShowScanErrorPopup(true);
       playScanErrorSweep();
-      setTimeout(() => {
+      scheduleFlashReset(() => {
         setScanFlash(null);
         setShowScanErrorPopup(false);
       }, 1500);

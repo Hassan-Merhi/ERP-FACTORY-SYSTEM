@@ -5,7 +5,7 @@ import { z } from "zod";
 import { stockTransferVouchers, vouchers } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { storage } from "../../storage";
 
 const bodySchema = z.object({
@@ -123,7 +123,7 @@ export function registerExactStockTransferEditRoute(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock transfer data", errors: error.issues });
         }
-        return res.status(500).json({ message: getErrorMessage(error) });
+        return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
     }
   );

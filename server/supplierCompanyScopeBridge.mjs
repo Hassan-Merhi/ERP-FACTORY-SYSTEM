@@ -1,6 +1,3 @@
-import "./factoryBilingualSchemaBridge.mjs";
-import "./factoryTrilingualSchemaBridge.mjs";
-import "./companyScopeRlsBridge.mjs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 import pg from "pg";

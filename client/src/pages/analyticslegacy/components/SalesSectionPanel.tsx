@@ -16,17 +16,18 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
   const {
     activeSection,
     appMode,
+    periodFilter,
     detailsPeriod,
     factoryPosSummary,
     factoryCustomerOrderAnalytics,
     factoryCustomerOrderAnalyticsError,
     factoryOrderPage,
+    factoryOrderStatus,
     factoryOrderIncludeCharges,
     formatAmount,
     formatDisplayDate,
     loadingFactoryPos,
     loadingFactoryCustomerOrders,
-    periodFilter,
     rangeEnd,
     rangeStart,
     salesData,
@@ -35,6 +36,7 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
     selectedPeriod,
     setDetailsPeriod,
     setFactoryOrderPage,
+    setFactoryOrderStatus,
     setFactoryOrderIncludeCharges,
     setRangeEnd,
     setRangeStart,
@@ -62,8 +64,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
         <>
           {appMode === "factory" ? (
             <>
-
-
               {/* ── Customer orders grouped by customer ─────────────── */}
               <Card className="p-4 md:p-6">
                 <div className="flex flex-col gap-3 mb-4 sm:flex-row sm:items-start sm:justify-between">
@@ -75,19 +75,38 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                         : "Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight and extra charges."}
                     </p>
                   </div>
-                  <Button
-                    type="button"
-                    variant={factoryOrderIncludeCharges ? "default" : "outline"}
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() => {
-                      setFactoryOrderIncludeCharges((current) => !current);
-                      setFactoryOrderPage(1);
-                    }}
-                    data-testid="button-toggle-factory-order-charges"
-                  >
-                    {factoryOrderIncludeCharges ? "Freight + Charges: Included" : "Freight + Charges: Excluded"}
-                  </Button>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select
+                      value={factoryOrderStatus}
+                      onValueChange={(value) => {
+                        setFactoryOrderStatus(value);
+                        setFactoryOrderPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="w-full sm:w-[190px]" data-testid="select-factory-order-status">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="LOADING">Loading</SelectItem>
+                        <SelectItem value="VERIFIED">Verified</SelectItem>
+                        <SelectItem value="FINALIZED">Finalized</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant={factoryOrderIncludeCharges ? "default" : "outline"}
+                      size="sm"
+                      className="shrink-0"
+                      onClick={() => {
+                        setFactoryOrderIncludeCharges((current) => !current);
+                        setFactoryOrderPage(1);
+                      }}
+                      data-testid="button-toggle-factory-order-charges"
+                    >
+                      {factoryOrderIncludeCharges ? "Freight + Charges: Included" : "Freight + Charges: Excluded"}
+                    </Button>
+                  </div>
                 </div>
 
                 {loadingFactoryCustomerOrders ? (
@@ -308,7 +327,6 @@ export function SalesSectionPanel({ analytics }: { analytics: AnalyticsLegacySta
                   </>
                 )}
               </Card>
-
 
               {/* ── Factory POS ──────────────────────────────────── */}
               <Card className="p-6">

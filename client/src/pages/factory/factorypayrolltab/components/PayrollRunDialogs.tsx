@@ -505,7 +505,10 @@ export function PayrollRunDialogs({ payroll }: { payroll: FactoryPayrollState })
                   a.click();
                   URL.revokeObjectURL(url);
                 } catch (err) {
-                  alert(getErrorDetails(err).optionalMessage || "Failed to export Excel");
+                  toast({
+                    title: getErrorDetails(err).optionalMessage || "Failed to export Excel",
+                    variant: "destructive",
+                  });
                 }
               }}
               data-testid="button-export-payroll-excel"

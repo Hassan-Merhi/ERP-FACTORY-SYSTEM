@@ -11,6 +11,7 @@
  *   - server/security/csrfProtection.ts     CSRF token + enforcement
  */
 import express from "express";
+import { createHttpApp } from "./httpApp";
 import compression from "compression";
 import helmet from "helmet";
 import { registerRoutes } from "./routes";
@@ -33,6 +34,7 @@ import { capacitorCors } from "./middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/httpConventions";
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
 import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
+import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
@@ -42,6 +44,7 @@ import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTracking
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
+import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
 import {
   startupMigrations,
   ensureCanonicalStockMovementJournal,
@@ -57,7 +60,7 @@ const BUILD_VERSION = process.env.BUILD_VERSION || process.env.RENDER_GIT_COMMIT
 // stale Vite chunks in Replit's dev environment (where HMR WebSocket can't connect).
 const SERVER_BOOT_ID = Math.random().toString(36).slice(2);
 
-const app = express();
+const app = createHttpApp();
 
 // Compress text-based HTTP responses (gzip/deflate) — reduces bandwidth by 60-80%.
 // Binary/already-compressed types (xlsx, zip, pdf, images) are excluded because:
@@ -255,8 +258,13 @@ let migrationsDone = false;
       // columns, fiscal/factory tables) — see startup/ensureRuntimeSchema.ts.
       await ensureCanonicalStockMovementJournal(pool);
       await ensureRuntimeSchema(pool);
+      // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
+      // serving writes without the closed-period lock would let closed books change.
+      await ensureClosedPeriodGuard(pool);
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
+      await ensureFactoryInvoiceDocumentSnapshotStore(pool);
+      logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
       await bootstrapRecurringJournalFromEnvironment();
       try {
         // Factory Production Targets and Attendance Register must be available

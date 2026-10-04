@@ -44,6 +44,9 @@ export interface OrderBale {
   scannedAt?: string | null;
 }
 
+/** Statuses that mean an existing loading order is still open for this proforma. */
+export const OPEN_ORDER_STATUSES = ["LOADING", "DRAFT", "PENDING_VERIFICATION"];
+
 export interface OrderDetail {
   id: number;
   customerId: number;

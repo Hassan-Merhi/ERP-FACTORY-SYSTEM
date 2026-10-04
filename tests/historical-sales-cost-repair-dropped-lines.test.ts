@@ -9,14 +9,22 @@ import {
 } from "../server/services/inventory/historicalSalesCostRepair";
 import {
   canonicalPosRoleFromIdempotencyKey,
-  collapsedPosIssueGroup,
   createHistoricalInventoryStateFromSnapshot,
-  reverseCollapsedPosIssueGroup,
-  reverseHistoricalSalesRepairMovement,
   type HistoricalSalesRepairMovement,
 } from "../server/services/inventory/historicalSalesCostRepairEngine";
+import {
+  collapsedPosIssueGroup,
+  reverseCollapsedPosIssueGroup,
+} from "../server/services/inventory/historicalSalesCostRepairEngineReplay";
+import { reverseHistoricalSalesRepairMovement } from "../server/services/inventory/historicalSalesCostRepairEngineReverse";
 
-function canonicalPos(id: number, key: string, quantity: string, unitCost: string, at: string): HistoricalSalesRepairMovement {
+function canonicalPos(
+  id: number,
+  key: string,
+  quantity: string,
+  unitCost: string,
+  at: string
+): HistoricalSalesRepairMovement {
   return {
     movementId: `canonical:${id}`,
     companyId: 1,
@@ -54,16 +62,47 @@ describe("V41 dropped POS line restoration", () => {
   it("restores the second line of an edited sale at the original instant from line-level reversal legs", () => {
     // Production voucher 12782: lines 93306 (1) and 93307 (2); the rev0 key was
     // per item, so only -1 was journaled. The rev72 edit reversed both lines.
-    const original = canonicalPos(9989, "pos-sale:12782:rev0:730", "-1.000000", "167.520000", "2026-08-24T13:13:14.825Z");
-    const reversalA = canonicalPos(30863, "pos-sale:12782:rev72:reverse:730:line:93306", "1.000000", "168.830000", "2026-09-10T08:16:33.480Z");
-    const reversalB = canonicalPos(30864, "pos-sale:12782:rev72:reverse:730:line:93307", "2.000000", "168.830000", "2026-09-10T08:16:33.480Z");
-    const issueA = canonicalPos(30942, "pos-sale:12782:rev72:issue:730:line:1", "-1.000000", "168.830000", "2026-09-10T08:16:33.480Z");
-    const issueB = canonicalPos(30943, "pos-sale:12782:rev72:issue:730:line:2", "-2.000000", "168.830000", "2026-09-10T08:16:33.480Z");
+    const original = canonicalPos(
+      9989,
+      "pos-sale:12782:rev0:730",
+      "-1.000000",
+      "167.520000",
+      "2026-08-24T13:13:14.825Z"
+    );
+    const reversalA = canonicalPos(
+      30863,
+      "pos-sale:12782:rev72:reverse:730:line:93306",
+      "1.000000",
+      "168.830000",
+      "2026-09-10T08:16:33.480Z"
+    );
+    const reversalB = canonicalPos(
+      30864,
+      "pos-sale:12782:rev72:reverse:730:line:93307",
+      "2.000000",
+      "168.830000",
+      "2026-09-10T08:16:33.480Z"
+    );
+    const issueA = canonicalPos(
+      30942,
+      "pos-sale:12782:rev72:issue:730:line:1",
+      "-1.000000",
+      "168.830000",
+      "2026-09-10T08:16:33.480Z"
+    );
+    const issueB = canonicalPos(
+      30943,
+      "pos-sale:12782:rev72:issue:730:line:2",
+      "-2.000000",
+      "168.830000",
+      "2026-09-10T08:16:33.480Z"
+    );
 
-    const result = droppedPosLineMovements(1, [original, reversalA, reversalB, issueA, issueB], [
-      saleLine(101714, 12782, "1"),
-      saleLine(101715, 12782, "2"),
-    ]);
+    const result = droppedPosLineMovements(
+      1,
+      [original, reversalA, reversalB, issueA, issueB],
+      [saleLine(101714, 12782, "1"), saleLine(101715, 12782, "2")]
+    );
     expect(result.movements).toHaveLength(1);
     expect(result.movements[0]).toMatchObject({
       quantityDelta: "-2.000",
@@ -75,20 +114,37 @@ describe("V41 dropped POS line restoration", () => {
     expect(result.movements[0].sequence).toBeGreaterThan(original.sequence);
     // The restored line sits on the same side of the checkpoint cutoff as its journal row.
     expect(canonicalMovementNumericId(result.movements[0])).toBe(9989);
-    expect(result.checks[0]).toMatchObject({ code: "CANONICAL_POS_DROPPED_LINE_RESTORED", status: "pass", expected: "3.000" });
+    expect(result.checks[0]).toMatchObject({
+      code: "CANONICAL_POS_DROPPED_LINE_RESTORED",
+      status: "pass",
+      expected: "3.000",
+    });
   });
 
   it("restores dropped lines of an unedited sale from its current lines", () => {
     const original = canonicalPos(500, "pos-sale:900:rev0:730", "-2.000000", "10.000000", "2026-08-20T10:00:00Z");
-    const result = droppedPosLineMovements(1, [original], [saleLine(1, 900, "2"), saleLine(2, 900, "3"), saleLine(3, 900, "1")]);
+    const result = droppedPosLineMovements(
+      1,
+      [original],
+      [saleLine(1, 900, "2"), saleLine(2, 900, "3"), saleLine(3, 900, "1")]
+    );
     expect(result.movements.map((movement) => movement.quantityDelta)).toEqual(["-3.000", "-1.000"]);
   });
 
   it("does not restore anything without line evidence or when the journal is not the first line", () => {
     // Pre-2026-09-09 edit legs are per item too, so the original lines are unknown.
     const original = canonicalPos(600, "pos-sale:901:rev0:730", "-1.000000", "10.000000", "2026-08-20T10:00:00Z");
-    const collapsedReversal = canonicalPos(700, "pos-sale:901:rev3:reverse:730", "1.000000", "10.000000", "2026-08-25T10:00:00Z");
-    expect(droppedPosLineMovements(1, [original, collapsedReversal], [saleLine(1, 901, "1"), saleLine(2, 901, "2")]).movements).toHaveLength(0);
+    const collapsedReversal = canonicalPos(
+      700,
+      "pos-sale:901:rev3:reverse:730",
+      "1.000000",
+      "10.000000",
+      "2026-08-25T10:00:00Z"
+    );
+    expect(
+      droppedPosLineMovements(1, [original, collapsedReversal], [saleLine(1, 901, "1"), saleLine(2, 901, "2")])
+        .movements
+    ).toHaveLength(0);
 
     const mismatched = canonicalPos(601, "pos-sale:902:rev0:730", "-2.000000", "10.000000", "2026-08-20T10:00:00Z");
     const result = droppedPosLineMovements(1, [mismatched], [saleLine(5, 902, "1"), saleLine(6, 902, "2")]);
@@ -129,7 +185,13 @@ describe("V41 dropped POS line restoration", () => {
   it("inverts an original issue jointly with its restored line and pins the recorded live rate", () => {
     // Production voucher 13581 at 1/135/730: journaled 2 @ 168.82, a 3-unit
     // line dropped; the rewound state after the sale is 1 @ 168.81.
-    const original = canonicalPos(25305, "pos-sale:13581:rev0:730", "-2.000000", "168.820000", "2026-09-07T14:27:31.246Z");
+    const original = canonicalPos(
+      25305,
+      "pos-sale:13581:rev0:730",
+      "-2.000000",
+      "168.820000",
+      "2026-09-07T14:27:31.246Z"
+    );
     const dropped = droppedPosLineMovements(1, [original], [saleLine(99052, 13581, "2"), saleLine(99053, 13581, "3")])
       .movements[0];
     const group = collapsedPosIssueGroup([dropped, original], dropped);
@@ -154,16 +216,28 @@ describe("V41 dropped POS line restoration", () => {
     const original = canonicalPos(1, "pos-sale:5:rev0:730", "-1.000000", "20.000000", "2026-08-20T10:00:00Z");
     const dropped = droppedPosLineMovements(1, [original], [saleLine(1, 5, "1"), saleLine(2, 5, "1")]).movements[0];
     expect(
-      reverseCollapsedPosIssueGroup(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"), [dropped, original])
+      reverseCollapsedPosIssueGroup(createHistoricalInventoryStateFromSnapshot("1", "10.00", "10.00"), [
+        dropped,
+        original,
+      ])
     ).toEqual([]);
   });
 
   it("prices a canonical sale from its journaled lines only, not diluted by restored lines", () => {
     // Regression for runs #49-#52: the restored line counted in the quantity
     // but not in the value, so 2 @ 168.82 + 3 restored priced at 67.53.
-    const original = canonicalPos(25305, "pos-sale:13581:rev0:730", "-2.000000", "168.820000", "2026-09-07T14:27:31.246Z");
-    const dropped = droppedPosLineMovements(1, [original], [saleLine(99052, 13581, "2"), saleLine(99053, 13581, "3")])
-      .movements;
+    const original = canonicalPos(
+      25305,
+      "pos-sale:13581:rev0:730",
+      "-2.000000",
+      "168.820000",
+      "2026-09-07T14:27:31.246Z"
+    );
+    const dropped = droppedPosLineMovements(
+      1,
+      [original],
+      [saleLine(99052, 13581, "2"), saleLine(99053, 13581, "3")]
+    ).movements;
     const evidence = activeCanonicalSaleEvidence([original, ...dropped]).get("13581:135:730")!;
     expect(evidence.latestNegativeRate?.toFixed(2)).toBe("168.82");
     expect(evidence.latestNegativeQuantity.toFixed(3)).toBe("5.000");

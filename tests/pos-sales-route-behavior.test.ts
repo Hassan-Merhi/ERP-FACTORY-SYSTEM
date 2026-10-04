@@ -20,6 +20,7 @@ vi.mock("../server/lib/logger", () => ({
 }));
 vi.mock("../server/lib/httpHandlers", () => ({
   getErrorMessage: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  errorStatus: (_error: unknown, fallback = 500) => fallback,
 }));
 vi.mock("../server/services/pos/createSaleService", () => ({
   createPosSale: harness.createPosSale,

@@ -55,6 +55,7 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
           AND e.employee_type = 'Employee'
           AND e.deleted_at IS NULL
           AND v.deleted_at IS NULL
+          AND v.optional = false
         GROUP BY ve.employee_id
       `);
 
@@ -126,6 +127,7 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
         INNER JOIN vouchers v ON v.id = ve.voucher_id
         WHERE ve.employee_id = ${empId}
           AND v.deleted_at IS NULL
+          AND v.optional = false
       `);
 
       const row = firstRow<{ total_credits: string | null; total_debits: string | null }>(entrySums);

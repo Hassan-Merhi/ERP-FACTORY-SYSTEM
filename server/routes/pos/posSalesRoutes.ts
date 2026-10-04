@@ -1,5 +1,5 @@
 import { type Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
@@ -97,7 +97,7 @@ export function registerPosSalesRoutes(app: Express): void {
       ) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }
