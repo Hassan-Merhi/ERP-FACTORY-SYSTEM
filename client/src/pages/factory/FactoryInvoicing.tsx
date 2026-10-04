@@ -3,13 +3,14 @@ import FactoryProformas from "@/pages/factory/FactoryProformas";
 import FactoryInvoices from "@/pages/factory/FactoryInvoices";
 import FactoryContainerLoadingScan from "@/pages/factory/FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "@/pages/factory/FactoryPendingLoadings";
+import FactoryPriorityScan from "@/pages/factory/FactoryPriorityScan";
 import { FileText } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
 
-type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending";
+type InvoicingTab = "proformas" | "invoices" | "loadings" | "pending" | "priority";
 type TabDef = { key: InvoicingTab; label: string };
-const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending"];
+const ALL_INVOICING_TABS: readonly InvoicingTab[] = ["proformas", "invoices", "loadings", "pending", "priority"];
 
 export default function FactoryInvoicing() {
 
@@ -31,18 +32,21 @@ export default function FactoryInvoicing() {
   });
   const showPending =
     showLoadings && settings?.loadingsTabPendingEnabled !== false && !hidden.includes("hide_tab_loadings_pending");
+  const showPriority = showPending;
 
   const allTabs: TabDef[] = [
     { key: "proformas", label: "Proformas" },
     { key: "invoices", label: "Invoices" },
     { key: "loadings", label: "Container Loadings" },
     { key: "pending", label: "Pending Loadings" },
+    { key: "priority", label: "Priority Scan" },
   ];
   const tabs = allTabs.filter((tab) => {
     if (tab.key === "proformas") return showProformas;
     if (tab.key === "invoices") return showInvoices;
     if (tab.key === "loadings") return showLoadings;
-    return showPending;
+    if (tab.key === "pending") return showPending;
+    return showPriority;
   });
 
   const visibleTabKeys = tabs.map((tab) => tab.key);
@@ -98,6 +102,7 @@ export default function FactoryInvoicing() {
         {activeTab === "invoices" && showInvoices && <FactoryInvoices />}
         {activeTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
         {activeTab === "pending" && showPending && <FactoryPendingLoadings />}
+        {activeTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>
     </div>
   );
