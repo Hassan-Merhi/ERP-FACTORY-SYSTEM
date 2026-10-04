@@ -109,7 +109,7 @@ export default function FactoryLoadingsHub() {
                   : "border-transparent text-muted-foreground hover:text-foreground",
               ].join(" ")}
             >
-              Priority Scan
+              {priorityScanLabel}
             </button>
           )}
         </div>
