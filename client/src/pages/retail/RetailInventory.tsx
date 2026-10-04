@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { ArrowLeft, Boxes, Camera, Pencil, Plus, Printer, ShoppingCart, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -182,7 +183,7 @@ export default function RetailInventory() {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center gap-2">
           <span className="flex-1 text-sm" data-i18n-ui>
-            {selected.size} selected
+            Selected for labels: {selected.size}
           </span>
           <Button variant="ghost" onClick={() => setSelected(new Set())}>
             Clear
@@ -440,7 +441,7 @@ export default function RetailInventory() {
       </div>
 
       <label className="flex items-center gap-2 text-sm text-muted-foreground">
-        <input type="checkbox" checked={showArchived} onChange={(event) => setShowArchived(event.target.checked)} />
+        <Checkbox checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)} />
         <span>Show archived items</span>
       </label>
 

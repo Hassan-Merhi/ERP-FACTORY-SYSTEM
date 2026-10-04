@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -284,7 +285,7 @@ export function RetailLabelPrintDialog({
               </div>
             </div>
             <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={showPrice} onChange={(event) => setShowPrice(event.target.checked)} />
+              <Checkbox checked={showPrice} onCheckedChange={(value) => setShowPrice(value === true)} />
               <span>Show selling price on label</span>
             </label>
             <div className="space-y-2">
@@ -343,7 +344,7 @@ export function RetailLabelPrintDialog({
               </Button>
               <Button onClick={() => void submit()} disabled={busy || !items.length}>
                 <Printer className="mr-2 h-4 w-4" />
-                {busy ? "Preparing…" : `Print ${totalLabels} label${totalLabels === 1 ? "" : "s"}`}
+                {busy ? "Preparing…" : `Print labels (${totalLabels})`}
               </Button>
             </div>
           </div>

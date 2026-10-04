@@ -1,5 +1,6 @@
 import { Archive, ArchiveRestore, ArrowRightLeft, History, Pencil, Printer, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ProductImage } from "./RetailProductImage";
@@ -149,10 +150,9 @@ export function RetailCatalogList({
                   {rows.length > 0 && (
                     <div className="divide-y rounded-md border">
                       <label className="flex items-center gap-2 bg-muted/40 px-2 py-1.5 text-xs text-muted-foreground">
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={allSelected}
-                          onChange={(event) => onToggleProduct(rowIds, event.target.checked)}
+                          onCheckedChange={(value) => onToggleProduct(rowIds, value === true)}
                         />
                         <span>Select all sizes</span>
                       </label>
@@ -168,11 +168,10 @@ export function RetailCatalogList({
                             )}
                             data-testid="variant-row"
                           >
-                            <input
-                              type="checkbox"
+                            <Checkbox
                               aria-label="Select for labels"
                               checked={selected.has(variant.id)}
-                              onChange={() => onToggle(variant.id)}
+                              onCheckedChange={() => onToggle(variant.id)}
                             />
                             {image ? (
                               <img

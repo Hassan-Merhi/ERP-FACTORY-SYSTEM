@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRightLeft, History, ImageIcon, PackagePlus, Printer, ScanLine, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -300,7 +301,7 @@ export default function RetailStockOperations() {
       </form>
       {mode === "receive" && (
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={quickReceive} onChange={(event) => setQuickReceive(event.target.checked)} />
+          <Checkbox checked={quickReceive} onCheckedChange={(value) => setQuickReceive(value === true)} />
           <span>Quick receive: every scan adds 1 unit to the selected location</span>
         </label>
       )}

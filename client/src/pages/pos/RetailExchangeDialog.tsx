@@ -108,7 +108,7 @@ export function RetailExchangeDialog({
         title: result.replayed ? "Exchange already recorded" : "Exchange completed",
         description:
           result.balanceDue > 0
-            ? `Customer pays ${money(result.balanceDue)}`
+            ? `Customer pays: ${money(result.balanceDue)}`
             : result.balanceDue < 0
               ? `Refund ${money(-result.balanceDue)}`
               : "Even exchange",

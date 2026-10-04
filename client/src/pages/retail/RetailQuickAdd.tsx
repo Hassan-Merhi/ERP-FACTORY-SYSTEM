@@ -494,7 +494,7 @@ export default function RetailQuickAdd() {
             data-testid="quick-variant"
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-base">Variant {index + 1}</CardTitle>
+              <CardTitle className="text-base">Variant #{index + 1}</CardTitle>
               {variants.length > 1 && (
                 <Button
                   type="button"
