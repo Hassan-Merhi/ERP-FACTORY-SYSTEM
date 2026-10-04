@@ -43,6 +43,17 @@ export function registerOrderBaleScanRoutes(app: Express) {
       const { scanCode, locationId } = req.body;
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
 
+      const isPriorityScan = req.body.priorityScan === true;
+      if (
+        isPriorityScan &&
+        (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)
+      ) {
+        return res.status(400).json({
+          message:
+            "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
+        });
+      }
+
       const parsedLocationId = Number.parseInt(String(locationId), 10);
       if (!Number.isInteger(parsedLocationId) || parsedLocationId <= 0) {
         return res.status(400).json({ message: "scanCode and locationId are required" });
@@ -271,10 +282,10 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
-        const ignoreProforma = req.body.allowBypassProforma === true;
+        const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
-          allowBypassOverload: req.body.allowBypassOverload === true,
+          allowBypassOverload: !isPriorityScan && req.body.allowBypassOverload === true,
           isReinstatingRemovedBale: bale.removedFromThisOrder,
         });
 
