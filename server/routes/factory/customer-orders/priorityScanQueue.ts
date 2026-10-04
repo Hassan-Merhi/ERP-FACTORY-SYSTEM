@@ -132,8 +132,10 @@ export async function advanceSatisfiedPriorityScanConfigs(
         );
     }
 
-    const remainingIds = activeRows.filter((row) => !completedIds.has(row.id)).map((row) => row.id);
-    if (completedIds.size > 0) {
+    const remainingRows = activeRows.filter((row) => !completedIds.has(row.id));
+    const remainingIds = remainingRows.map((row) => row.id);
+    const queueHasGaps = remainingRows.some((row, index) => row.priority !== index + 1);
+    if (completedIds.size > 0 || queueHasGaps) {
       await rewriteActivePriorityQueue(tx, companyId, remainingIds, null, "system:auto-advance");
     }
 
