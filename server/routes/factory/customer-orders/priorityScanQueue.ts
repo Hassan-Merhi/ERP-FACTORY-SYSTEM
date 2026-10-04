@@ -78,13 +78,23 @@ export async function rewriteActivePriorityQueue(
  * proforma has at least one requested bale and this loading itself has consumed
  * every requested quantity.
  */
-export async function advanceSatisfiedPriorityScanConfigs(companyId: number): Promise<PriorityScanAdvanceResult> {
+export async function advanceSatisfiedPriorityScanConfigs(
+  companyId: number,
+  triggerOrderId?: number
+): Promise<PriorityScanAdvanceResult> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
 
     const activeRows = await loadActivePriorityRows(tx, companyId);
     if (activeRows.length === 0) {
       return { completedOrderIds: [], activeOrderId: null, activePriority: null };
+    }
+    if (triggerOrderId != null && !activeRows.some((row) => row.orderId === triggerOrderId)) {
+      return {
+        completedOrderIds: [],
+        activeOrderId: activeRows[0]?.orderId ?? null,
+        activePriority: activeRows.length > 0 ? 1 : null,
+      };
     }
 
     const completedIds = new Set<number>();
