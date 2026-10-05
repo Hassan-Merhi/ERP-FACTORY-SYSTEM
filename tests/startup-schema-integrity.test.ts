@@ -147,9 +147,16 @@ import { startupMigrations } from "../server/startup-schema";
  * Re-pinned for 66c6aa5, which disabled automated container tracking and
  * added five statements forcing the ERP and factory tracking defaults and
  * existing flags off, without re-pinning: 1400 to 1405.
+ *
+ * Re-pinned when the Sheets & Sacks block in
+ * 010-security-notifications-and-precision moved to
+ * server/startup/factorySheetsSacksSchema.ts, which 010 now spreads in the
+ * same position: the 9 statements became 17 (the kept updated_at column, the
+ * guarded convergence of a legacy log and seven legacy index drops, replacing
+ * the fss_log_color block), 1405 to 1413. Nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1405;
-const EXPECTED_CONTENT_HASH = "ab81231d3e037b271912876516f5ca3ad6d13734b1cce89e0680b9e117529610";
+const EXPECTED_STATEMENT_COUNT = 1413;
+const EXPECTED_CONTENT_HASH = "1cd4323d10c5f370593713dd2d0baf74aa98b9fe0ce6e5dbb0a5b66279908e2d";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

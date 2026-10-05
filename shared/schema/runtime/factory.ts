@@ -411,6 +411,49 @@ export const factoryProductionPositionPlanEntries = pgTable(
   ]
 );
 
+export const factorySheetsSacks = pgTable(
+  "factory_sheets_sacks",
+  {
+    id: serial().primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    type: text().default("Sheet").notNull(),
+    name: text().notNull(),
+    size: text(),
+    quantity: numeric({ precision: 15, scale: 3 }).default("0").notNull(),
+    unitPrice: numeric("unit_price", { precision: 15, scale: 2 }).default("0").notNull(),
+    notes: text(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    packQty: integer("pack_qty"),
+    pcsPerPack: integer("pcs_per_pack"),
+    rowColor: text("row_color"),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [index("idx_factory_sheets_sacks_company").using("btree", table.companyId)]
+);
+
+export const factorySheetsSacksLog = pgTable(
+  "factory_sheets_sacks_log",
+  {
+    id: serial().primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    itemId: integer("item_id").notNull(),
+    itemName: text("item_name").notNull(),
+    itemType: text("item_type").notNull(),
+    action: text().notNull(),
+    pieces: integer().default(0).notNull(),
+    packs: integer(),
+    unitPrice: numeric("unit_price", { precision: 20, scale: 6 }),
+    totalValue: numeric("total_value", { precision: 20, scale: 4 }),
+    notes: text(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_fss_log_company_created").using("btree", table.companyId, table.createdAt.desc()),
+    index("idx_fss_log_item").using("btree", table.itemId),
+    check("factory_sheets_sacks_log_action_check", sql`action IN ('IN', 'OUT', 'ADJUST')`),
+  ]
+);
+
 /** Raw-stock recalc and exact Historical Replay undo log (startup-schema/032). */
 export const factoryRecalcUndoLog = pgTable(
   "factory_recalc_undo_log",
