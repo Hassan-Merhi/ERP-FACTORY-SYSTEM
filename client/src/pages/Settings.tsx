@@ -103,7 +103,7 @@ export default function Settings() {
       label: "General",
       items: [
         { key: "companies", label: "Companies", icon: Building2 },
-        { key: "preferences", label: "Preferences", icon: Settings2, devOnly: true },
+        { key: "preferences", label: "Preferences", icon: Settings2 },
       ],
     },
     {
