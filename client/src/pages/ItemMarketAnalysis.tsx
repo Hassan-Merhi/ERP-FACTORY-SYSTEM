@@ -611,8 +611,12 @@ export default function ItemMarketAnalysis() {
                 {multiCompany && <TableHead>Company</TableHead>}
                 <TableHead className="text-right">Imports</TableHead>
                 <TableHead className="text-right">Imported Qty</TableHead>
-                <TableHead className="text-right">{includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}</TableHead>
-                <TableHead className="text-right">{includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}</TableHead>
+                <TableHead className="text-right">
+                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                </TableHead>
+                <TableHead className="text-right">
+                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                </TableHead>
                 <TableHead className="text-right">Sold Qty</TableHead>
                 <TableHead className="text-right">Avg Sell</TableHead>
                 <TableHead className="text-right">Revenue</TableHead>
@@ -724,8 +728,12 @@ export default function ItemMarketAnalysis() {
                                       <TableHead>Company</TableHead>
                                       <TableHead className="text-right">Imports</TableHead>
                                       <TableHead className="text-right">Imported Qty</TableHead>
-                                      <TableHead className="text-right">{includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}</TableHead>
-                                      <TableHead className="text-right">{includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}</TableHead>
+                                      <TableHead className="text-right">
+                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                </TableHead>
+                                      <TableHead className="text-right">
+                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                </TableHead>
                                       <TableHead className="text-right">Sold Qty</TableHead>
                                       <TableHead className="text-right">Avg Sell</TableHead>
                                       <TableHead className="text-right">Revenue</TableHead>
@@ -770,7 +778,9 @@ export default function ItemMarketAnalysis() {
                                               <span className="text-xs text-muted-foreground">Mixed currencies</span>
                                             ) : (
                                               formatNativePurchase(
-                                                includeOffloadingCost ? row.purchaseValueWithOffloading : row.purchaseValue,
+                                                includeOffloadingCost
+                                                  ? row.purchaseValueWithOffloading
+                                                  : row.purchaseValue,
                                                 row.purchaseCurrencies
                                               )
                                             )}
