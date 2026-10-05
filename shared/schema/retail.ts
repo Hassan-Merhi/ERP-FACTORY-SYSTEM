@@ -18,6 +18,22 @@ import { companies, locations } from "./common";
 export const RETAIL_NO_BRAND_NAME = "Other / No Brand";
 export const RETAIL_DEFAULT_COLOR = "Default";
 
+export const retailImageUrlSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      if (/^\/api\/retail\/media\/\d+$/.test(value)) return true;
+      try {
+        const parsed = new URL(value);
+        return parsed.protocol === "http:" || parsed.protocol === "https:";
+      } catch {
+        return false;
+      }
+    },
+    { message: "Invalid retail image URL" }
+  );
+
 export const retailBrands = pgTable(
   "retail_brands",
   {
@@ -144,7 +160,7 @@ export const insertRetailProductSchema = createInsertSchema(retailProducts)
     brandId: z.number().int().positive().nullable().optional(),
     category: z.string().trim().max(160).nullable().optional(),
     description: z.string().trim().max(5000).nullable().optional(),
-    imageUrls: z.array(z.string().trim().url()).max(8).optional().default([]),
+    imageUrls: z.array(retailImageUrlSchema).max(8).optional().default([]),
   });
 
 export const retailVariantInputSchema = z.object({
@@ -153,7 +169,7 @@ export const retailVariantInputSchema = z.object({
   size: z.string().trim().min(1).max(100),
   // Leave empty to have the server issue a unique in-store barcode for the variant.
   barcode: z.string().trim().max(191).optional().default(""),
-  imageUrls: z.array(z.string().trim().url()).max(4).optional().default([]),
+  imageUrls: z.array(retailImageUrlSchema).max(4).optional().default([]),
   sku: z.string().trim().max(191).nullable().optional(),
   cost: z.coerce.number().finite().nonnegative(),
   sellingPrice: z.coerce.number().finite().nonnegative(),
@@ -180,7 +196,7 @@ export const retailProductWriteSchema = z.object({
   brandName: z.string().trim().min(1).max(120).optional(),
   category: z.string().trim().max(160).nullable().optional(),
   description: z.string().trim().max(5000).nullable().optional(),
-  imageUrls: z.array(z.string().trim().url()).max(8).optional().default([]),
+  imageUrls: z.array(retailImageUrlSchema).max(8).optional().default([]),
   active: z.boolean().optional().default(true),
   variants: z.array(retailVariantInputSchema).min(1),
 });
