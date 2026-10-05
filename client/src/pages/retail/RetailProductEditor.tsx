@@ -527,7 +527,7 @@ export function ProductEditor({
                           key={`${src}-${imageIndex}`}
                           className="relative h-20 w-20 overflow-hidden rounded-md border bg-muted"
                         >
-                          <img src={src} alt="" className="h-full w-full object-cover" />
+                          <img src={normalizeRetailImageUrl(src)} alt="" className="h-full w-full object-cover" />
                           <Button
                             type="button"
                             size="icon"
