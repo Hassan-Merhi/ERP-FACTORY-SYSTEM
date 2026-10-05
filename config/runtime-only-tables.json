@@ -3,8 +3,6 @@
   "tables": [
     "factory_recalc_undo_log",
     "factory_replay_consumed_tokens",
-    "factory_sheets_sacks",
-    "factory_sheets_sacks_log",
     "financial_periods",
     "immutable_financial_audit_events",
     "one_time_migrations",
