@@ -251,25 +251,7 @@ export function ContainerDrawer({
           daysDelayed={daysDelayed}
         />
 
-        <ContainerDrawerTracking
-          container={container}
-          trackEnabled={trackEnabled}
-          setTrackEnabled={setTrackEnabled}
-          trackAutoUpdate={trackAutoUpdate}
-          setTrackAutoUpdate={setTrackAutoUpdate}
-          trackCarrierHint={trackCarrierHint}
-          setTrackCarrierHint={setTrackCarrierHint}
-          trackingSettingsMutation={trackingSettingsMutation}
-          trackNowMutation={trackNowMutation}
-          trackNowResult={trackNowMutation.data}
-          trackProgress={trackProgress}
-          trackingStatus={trackingStatus}
-          showEvents={showEvents}
-          setShowEvents={setShowEvents}
-          events={events}
-          eventsLoading={eventsLoading}
-          canEdit={canEdit}
-        />
+        {/* Automated carrier tracking is disabled; manual workbook fields remain above. */}
 
         <div className="pt-4 sticky bottom-0 bg-background pb-2">
           <Button
