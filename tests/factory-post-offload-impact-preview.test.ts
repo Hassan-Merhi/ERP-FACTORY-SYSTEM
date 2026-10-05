@@ -59,7 +59,7 @@ describe("post-offload impact preview", () => {
     const client = read("client/src/lib/factoryApi.ts");
 
     expect(client).toContain('delegate("POST", `${pathWithoutQuery}/preview`, data)');
-    expect(client).toContain("window.confirm(buildPostOffloadImpactConfirmation(prepared.preview))");
+    expect(client).toContain("description: buildPostOffloadImpactConfirmation(prepared.preview)");
     expect(client).toContain("impactPreviewVersion: 1");
     expect(client).toContain("impactPreviewToken: prepared.confirmationToken");
     expect(client).toContain("finalized bale(s) are excluded from automatic replay");

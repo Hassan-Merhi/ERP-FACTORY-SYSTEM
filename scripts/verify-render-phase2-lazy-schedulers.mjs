@@ -112,7 +112,8 @@ for (const [specifier, label] of [
 
 // Schedule expressions are part of behavior. Keep the scheduler verifier aligned
 // with the intentional daily rental-accrual catch-up while preserving every other
-// Phase 2 scheduling invariant.
+// Phase 2 scheduling invariant. The six-hourly container-tracking schedule is
+// gone: automated carrier tracking was permanently disabled (66c6aa5).
 for (const cronExpression of [
   '"0 7 1 * *"',
   '"0 6 * * *"',
@@ -120,7 +121,6 @@ for (const cronExpression of [
   '"30 3 * * *"',
   '"0 9 * * *"',
   '"0 2 * * *"',
-  '"0 */6 * * *"',
 ]) {
   requireText(scheduledJobs, cronExpression, `scheduler cron expression changed: ${cronExpression}`);
 }

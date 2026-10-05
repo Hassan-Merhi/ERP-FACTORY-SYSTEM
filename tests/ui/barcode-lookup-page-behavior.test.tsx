@@ -152,7 +152,9 @@ describe("barcode lookup page behavior", () => {
     expect(screen.getByTestId("text-ref-article-code")).toHaveTextContent("SH-1");
     expect(screen.getByTestId("text-bale-product-name")).toHaveTextContent("Shirts");
     expect(screen.getByTestId("bale-status")).toHaveTextContent("IN_STOCK");
-    expect(screen.getByText("Date Produced:2026-08-10")).toBeInTheDocument();
+    // Prefers the stock-entry date (08-10) over finalizedAt (08-11), formatted
+    // the way the page formats dates.
+    expect(screen.getByText(`Date Produced:${new Date("2026-08-10").toLocaleDateString()}`)).toBeInTheDocument();
   });
 
   it("auto-detects article mode and lists every matching bale reference", async () => {

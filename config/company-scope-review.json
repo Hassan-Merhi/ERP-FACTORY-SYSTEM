@@ -175,6 +175,10 @@
       "reason": "Factory reconciliation receives the active factory company from the offload transaction."
     },
     {
+      "path": "server/services/inventory/exactValueInventory.ts",
+      "reason": "Exact-value inventory restoration for document reversals. The row is resolved by SELECT ... FOR UPDATE filtered on company_id, location_id and stock_item_id, so the follow-up UPDATE ... WHERE id can only reach that already-company-scoped locked row; the insert branch writes company_id explicitly."
+    },
+    {
       "path": "server/services/pos/buildSaleItems.ts",
       "reason": "POS sale item construction runs inside the assigned POS company transaction."
     },
@@ -195,8 +199,16 @@
       "reason": "Startup orphan repair is controlled maintenance, not caller-driven data access."
     },
     {
+      "path": "server/startup-schema/008-pos-exports-and-dispatch.ts",
+      "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
+    },
+    {
       "path": "server/startup-schema/010-security-notifications-and-precision.ts",
       "reason": "Startup schema maintenance is controlled and idempotent, not caller-driven data access."
+    },
+    {
+      "path": "server/startup/postStartupJobs.ts",
+      "reason": "Product policy disables automated carrier tracking for every company, so these statements deliberately clear the tracking flags on all rows; they touch no other column and read nothing back."
     },
     {
       "path": "server/startup/runServerStartupMigrations.ts",
@@ -213,10 +225,6 @@
     {
       "path": "server/storage/accounting/vouchers.ts",
       "reason": "Voucher storage reads are reached after the owning company scope is established."
-    },
-    {
-      "path": "server/services/inventory/exactValueInventory.ts",
-      "reason": "Exact-value inventory restoration for document reversals. The row is resolved by SELECT ... FOR UPDATE filtered on company_id, location_id and stock_item_id, so the follow-up UPDATE ... WHERE id can only reach that already-company-scoped locked row; the insert branch writes company_id explicitly."
     },
     {
       "path": "server/storage/inventoryRowLock.ts",

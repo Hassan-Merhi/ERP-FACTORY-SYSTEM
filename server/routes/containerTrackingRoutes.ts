@@ -8,41 +8,24 @@
 
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { logger } from "../lib/logger";
 import { db } from "../db";
 import { requireAuth } from "../auth";
-import { containers, containerTrackingEvents } from "../../shared/schema";
+import { containerTrackingEvents } from "../../shared/schema";
 import { eq, desc } from "drizzle-orm";
-import { z } from "zod";
 import {
-  trackOneContainerById,
-  trackAllEnabledNow,
-  isBulkTrackingRunning,
   getBulkProgress,
-  setBulkTrackingEnabled,
   getParcelsAppUsageStats,
   get17trackUsageStats,
   getTrackingProgress,
-  isTrackingAtCapacity,
 } from "../services/container-tracking";
-import { testConnection } from "../lib/parcelsAppClient";
 import { isConfigured as isMaerskConfigured } from "../lib/trackingProviders/maerskProvider";
-import {
-  isEnabled as isMaerskPublicEnabled,
-  track as maerskPublicTrack,
-} from "../lib/trackingProviders/maerskPublicProvider";
+import { isEnabled as isMaerskPublicEnabled } from "../lib/trackingProviders/maerskPublicProvider";
 import { isEnabled as isCmaPublicEnabled } from "../lib/trackingProviders/cmaPublicProvider";
 import { isConfigured as is17trackConfigured } from "../lib/trackingProviders/seventeenTrackProvider";
 import { isScraperAvailable } from "../lib/parcelsAppScraper";
 import { isHttpScraperAvailable } from "../lib/httpTrackingScraper";
-import { scrapeMaerskDirect, isMaerskDirectScraperAvailable, deepScanForEta } from "../lib/maerskDirectScraper";
 
 const ALLOWED_ROLES = ["Admin", "Developer", "Owner"] as const;
-
-const INACTIVE_LOWER = ["offloaded", "closed", "completed"];
-function isInactiveStatus(status: string): boolean {
-  return INACTIVE_LOWER.includes(status.toLowerCase());
-}
 
 function requireAllowedRole(req: Request, res: Response): boolean {
   const role = req.user?.role;
@@ -52,25 +35,6 @@ function requireAllowedRole(req: Request, res: Response): boolean {
   }
   return true;
 }
-
-function anyProviderAvailable(): boolean {
-  return (
-    isMaerskConfigured() ||
-    isMaerskPublicEnabled() ||
-    isCmaPublicEnabled() ||
-    !!process.env.PARCELSAPP_API_KEY ||
-    is17trackConfigured() ||
-    isScraperAvailable() ||
-    isHttpScraperAvailable() // always true — built-in HTTP endpoints need no config
-  );
-}
-
-const updateTrackingSettingsSchema = z.object({
-  trackingEnabled: z.boolean().optional(),
-  trackingAutoUpdate: z.boolean().optional(),
-  trackingCarrierHint: z.string().max(100).nullable().optional(),
-  trackingProvider: z.string().max(50).nullable().optional(),
-});
 
 export function registerContainerTrackingRoutes(app: Express) {
   // GET /api/container-tracking/:id/progress — live progress for in-flight Track Now
@@ -160,97 +124,19 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/test-connection — verify ParcelsApp key works
   app.post("/api/container-tracking/test-connection", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-    try {
-      const result = await testConnection();
-      res.json(result);
-    } catch (err: unknown) {
-      res.status(500).json({ ok: false, error: getErrorMessage(err) });
-    }
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+    });
   });
 
   // POST /api/container-tracking/:id/track-now — immediately track a single container
   app.post("/api/container-tracking/:id/track-now", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-
-    const containerId = parseInt(req.params.id, 10);
-    if (isNaN(containerId)) {
-      res.status(400).json({ message: "Invalid container ID" });
-      return;
-    }
-
-    if (!anyProviderAvailable()) {
-      res.status(400).json({
-        message:
-          "No tracking provider is configured. Add MAERSK_CONSUMER_KEY / MAERSK_CONSUMER_SECRET, " +
-          "enable PUBLIC_CARRIER_TRACKING_ENABLED=true, or add PARCELSAPP_API_KEY.",
-      });
-      return;
-    }
-
-    try {
-      const [row] = await db
-        .select({ id: containers.id, containerNumber: containers.containerNumber, status: containers.status })
-        .from(containers)
-        .where(eq(containers.id, containerId))
-        .limit(1);
-
-      if (!row) {
-        res.status(404).json({ message: "Container not found" });
-        return;
-      }
-
-      // Case-insensitive inactive check
-      if (isInactiveStatus(row.status)) {
-        res.status(409).json({
-          message: "Tracking is disabled for offloaded/closed/completed containers.",
-        });
-        return;
-      }
-
-      // Quota check — only hard-block if ALL fallback providers are also unavailable
-      const { used, limit } = await getParcelsAppUsageStats();
-      const remaining = Math.max(0, limit - used);
-      const hasDirectProvider = isMaerskConfigured() || isMaerskPublicEnabled() || isCmaPublicEnabled();
-      const hasFallbackProvider = is17trackConfigured() || isScraperAvailable() || isHttpScraperAvailable();
-
-      if (remaining === 0 && !hasDirectProvider && !hasFallbackProvider) {
-        res.status(402).json({
-          message: `ParcelsApp monthly quota exhausted (${used}/${limit}) and no alternative providers are configured. Track Now is not available.`,
-        });
-        return;
-      }
-
-      // Reject early when the server is already at its concurrent tracking cap.
-      if (isTrackingAtCapacity()) {
-        res.status(429).json({
-          message: "Server is busy — too many tracking jobs in flight. Try again shortly.",
-          code: "TRACKING_BUSY",
-        });
-        return;
-      }
-
-      // Fire tracking in the background — providers (especially Puppeteer/scraper) can
-      // take well over 2 minutes, so we return 202 immediately and let the client poll.
-      logger.info(`[TrackNow] ${row.containerNumber}: starting background track...`);
-      res.status(202).json({ started: true, containerNumber: row.containerNumber });
-
-      trackOneContainerById(containerId)
-        .then((r) => {
-          logger.info(
-            `[TrackNow] ${row.containerNumber}: done — success=${r.success} ` +
-              `provider=${r.provider ?? "none"} oldEta=${r.oldEta ?? "null"} newEta=${r.newEta ?? "null"}`
-          );
-        })
-        .catch((err) => {
-          logger.error(`[TrackNow] ${row.containerNumber}: background error —`, { error: err?.message ?? err });
-        });
-    } catch (err: unknown) {
-      if (!res.headersSent) {
-        res.status(500).json({ message: getErrorMessage(err) ?? "Tracking failed" });
-      }
-    }
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+    });
   });
 
   // GET /api/container-tracking/:id/events — list recent tracking events
@@ -279,20 +165,10 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/bulk-settings
   app.post("/api/container-tracking/bulk-settings", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-
-    const { trackingEnabled } = req.body;
-    if (typeof trackingEnabled !== "boolean") {
-      res.status(400).json({ message: "trackingEnabled must be a boolean" });
-      return;
-    }
-
-    try {
-      const updated = await setBulkTrackingEnabled(trackingEnabled);
-      res.json({ updated, trackingEnabled });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) ?? "Bulk update failed" });
-    }
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+    });
   });
 
   // GET /api/container-tracking/bulk-progress — live progress of the current bulk run
@@ -304,34 +180,10 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/bulk-track-now
   app.post("/api/container-tracking/bulk-track-now", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-
-    if (!anyProviderAvailable()) {
-      res.status(400).json({
-        message:
-          "No tracking provider configured. Add PARCELSAPP_API_KEY or ensure Chrome is available for Maersk direct tracking.",
-      });
-      return;
-    }
-
-    // Reject duplicate bulk runs immediately so the client gets a clear message
-    if (isBulkTrackingRunning()) {
-      res.status(409).json({ message: "A bulk tracking run is already in progress. Please wait for it to finish." });
-      return;
-    }
-
-    try {
-      const queued = await trackAllEnabledNow();
-      res.json({
-        queued,
-        message:
-          queued === 0
-            ? "No containers eligible for tracking (all may be offloaded or have invalid numbers)."
-            : `Tracking started for ${queued} container${queued !== 1 ? "s" : ""}. Results will appear shortly.`,
-      });
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) ?? "Bulk track failed" });
-    }
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+    });
   });
 
   // POST /api/container-tracking/:id/debug-eta
@@ -340,144 +192,18 @@ export function registerContainerTrackingRoutes(app: Express) {
   // each provider returned and where the ETA was or was not found.
   app.post("/api/container-tracking/:id/debug-eta", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-    const containerId = parseInt(req.params.id, 10);
-    if (isNaN(containerId)) {
-      res.status(400).json({ message: "Invalid container ID" });
-      return;
-    }
-
-    const [row] = await db
-      .select({ containerNumber: containers.containerNumber, eta: containers.eta })
-      .from(containers)
-      .where(eq(containers.id, containerId))
-      .limit(1);
-
-    if (!row) {
-      res.status(404).json({ message: "Container not found" });
-      return;
-    }
-
-    const { containerNumber, eta: currentEta } = row;
-    const providersAttempted: Array<Record<string, unknown>> = [];
-    let finalEta: string | null = null;
-    let finalReason = "No provider returned an ETA";
-
-    // ── maersk_direct ─────────────────────────────────────────────────────────
-    const directAvailable = isMaerskDirectScraperAvailable();
-    if (directAvailable) {
-      logger.info(`[DebugEta] ${containerNumber}: running maersk_direct…`);
-      try {
-        const r = await scrapeMaerskDirect(containerNumber);
-        const deepEta = !r.eta ? deepScanForEta(r.raw ?? {}) : null;
-        const etaFound = r.eta ?? deepEta?.value ?? null;
-        if (etaFound && !finalEta) {
-          finalEta = etaFound;
-          finalReason = `maersk_direct returned ETA=${etaFound}`;
-        }
-        providersAttempted.push({
-          provider: "maersk_direct",
-          success: r.success,
-          etaFound,
-          status: r.latestStatus,
-          error: r.error ?? null,
-          deepScanPath: deepEta?.path ?? null,
-          blocked: r.blocked ?? false,
-        });
-      } catch (e: unknown) {
-        providersAttempted.push({
-          provider: "maersk_direct",
-          success: false,
-          etaFound: null,
-          error: getErrorMessage(e),
-        });
-      }
-    } else {
-      providersAttempted.push({
-        provider: "maersk_direct",
-        success: false,
-        etaFound: null,
-        error: "puppeteer_not_available",
-      });
-    }
-
-    // ── maersk_public ─────────────────────────────────────────────────────────
-    logger.info(`[DebugEta] ${containerNumber}: running maersk_public…`);
-    try {
-      const r = await maerskPublicTrack(containerNumber);
-      const deepEta = !r.eta ? deepScanForEta(r.raw ?? {}) : null;
-      const etaFound = r.eta ?? deepEta?.value ?? null;
-      if (etaFound && !finalEta) {
-        finalEta = etaFound;
-        finalReason = `maersk_public returned ETA=${etaFound}`;
-      }
-      providersAttempted.push({
-        provider: "maersk_public",
-        success: r.success,
-        etaFound,
-        status: r.latestStatus,
-        error: r.error ?? null,
-        deepScanPath: deepEta?.path ?? null,
-        blocked: r.blocked ?? false,
-      });
-    } catch (e: unknown) {
-      providersAttempted.push({ provider: "maersk_public", success: false, etaFound: null, error: getErrorMessage(e) });
-    }
-
-    res.json({
-      containerNumber,
-      currentEtaInDb: currentEta ?? null,
-      providersAttempted,
-      finalEta,
-      reason: finalReason,
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
     });
   });
 
   // PATCH /api/container-tracking/:id/settings
   app.patch("/api/container-tracking/:id/settings", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
-    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
-
-    const containerId = parseInt(req.params.id, 10);
-    if (isNaN(containerId)) {
-      res.status(400).json({ message: "Invalid container ID" });
-      return;
-    }
-
-    const parsed = updateTrackingSettingsSchema.safeParse(req.body);
-    if (!parsed.success) {
-      res.status(400).json({ message: "Invalid body", errors: parsed.error.flatten() });
-      return;
-    }
-
-    const updates: Record<string, unknown> = {};
-    const data = parsed.data;
-    if (data.trackingEnabled !== undefined) updates.trackingEnabled = data.trackingEnabled;
-    if (data.trackingAutoUpdate !== undefined) updates.trackingAutoUpdate = data.trackingAutoUpdate;
-    if ("trackingCarrierHint" in data) updates.trackingCarrierHint = data.trackingCarrierHint ?? null;
-    if ("trackingProvider" in data) updates.trackingProvider = data.trackingProvider ?? null;
-
-    if (Object.keys(updates).length === 0) {
-      res.status(400).json({ message: "No valid fields to update" });
-      return;
-    }
-
-    try {
-      const [updated] = await db.update(containers).set(updates).where(eq(containers.id, containerId)).returning({
-        id: containers.id,
-        trackingEnabled: containers.trackingEnabled,
-        trackingAutoUpdate: containers.trackingAutoUpdate,
-        trackingCarrierHint: containers.trackingCarrierHint,
-        trackingProvider: containers.trackingProvider,
-      });
-
-      if (!updated) {
-        res.status(404).json({ message: "Container not found" });
-        return;
-      }
-      res.json(updated);
-    } catch (err: unknown) {
-      res.status(500).json({ message: getErrorMessage(err) ?? "Update failed" });
-    }
+    return res.status(410).json({
+      message:
+        "Automated container tracking is disabled. Update container tracking fields manually or by Excel import.",
+    });
   });
 }

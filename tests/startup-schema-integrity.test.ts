@@ -143,9 +143,13 @@ import { startupMigrations } from "../server/startup-schema";
  * (factory_recalc_undo_log, factory_replay_consumed_tokens and their indexes,
  * the 17 statements of migrations/0007), appended after stage 031 without
  * moving any earlier statement: 1383 to 1400.
+ *
+ * Re-pinned for 66c6aa5, which disabled automated container tracking and
+ * added five statements forcing the ERP and factory tracking defaults and
+ * existing flags off, without re-pinning: 1400 to 1405.
  */
-const EXPECTED_STATEMENT_COUNT = 1400;
-const EXPECTED_CONTENT_HASH = "a5f07623661d5eab676b726db7d4aee8afaead2e07e051a94277b6860c387749";
+const EXPECTED_STATEMENT_COUNT = 1405;
+const EXPECTED_CONTENT_HASH = "ab81231d3e037b271912876516f5ca3ad6d13734b1cce89e0680b9e117529610";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
