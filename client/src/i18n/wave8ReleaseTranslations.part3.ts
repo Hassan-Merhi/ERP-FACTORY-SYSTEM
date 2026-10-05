@@ -67,4 +67,19 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "عامل تصفية includeCharges غير صالح",
     fr: "Filtre includeCharges non valide",
   },
+  {
+    en: "Invalid payroll salary amounts",
+    ar: "مبالغ رواتب غير صالحة في كشف الرواتب",
+    fr: "Montants de salaire de paie non valides",
+  },
+  {
+    en: "Commission amount must be a number",
+    ar: "يجب أن يكون مبلغ العمولة رقماً",
+    fr: "Le montant de la commission doit être un nombre",
+  },
+  {
+    en: "Commission FX rate must be a number",
+    ar: "يجب أن يكون سعر صرف العمولة رقماً",
+    fr: "Le taux de change de la commission doit être un nombre",
+  },
 ];

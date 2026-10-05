@@ -649,9 +649,12 @@ export function registerRawStockReceiptRoutes(app: Express) {
       const deductKgInput = kg ? parseMoneyInput(kg) : null;
       if (deductKgInput === null || deductKgInput.lte(0)) return res.status(400).json({ message: "kg must be > 0" });
 
-      const deductKg = deductKgInput;
+      const deductKgExact = deductKgInput;
       // A cost that does not parse leaves no daybook entry, as NaN > 0 did.
-      const costPerKgNum = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
+      const costPerKgExact = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
+      // Plain numbers for stored text and descriptions, as before.
+      const deductKg = deductKgExact.toNumber();
+      const costPerKgNum = costPerKgExact.toNumber();
       const ccy = currencyCode || "USD";
       const today = txDate || getClientDate(req);
 
@@ -699,7 +702,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
       // Allow over-use: no guard here — deduction can drive remaining stock negative
 
       // Deduct from rows newest-first; allow received to go below used (negative stock)
-      let remaining: Decimal = deductKg;
+      let remaining: Decimal = deductKgExact;
       const updates: { id: number; newReceived: Decimal }[] = [];
       for (const row of rows) {
         if (remaining.lte(0)) break;
@@ -716,7 +719,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
       const adjDeductKg = remaining.gt("0.001") ? remaining : ZERO;
 
       let fxRate = 1;
-      if (ccy !== "USD" && costPerKgNum.gt(0)) {
+      if (ccy !== "USD" && costPerKgExact.gt(0)) {
         try {
           fxRate = toMoney(await getOrFetchFxRateToUsd(companyId, ccy, today)).toNumber();
         } catch {
@@ -735,14 +738,14 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
         // 1b. Record a DEDUCT history entry for the amount taken from container rows
         // DEDUCT type is skipped in all balance calculations — it only exists for history visibility.
-        const rowDeductKg = deductKg.minus(adjDeductKg);
+        const rowDeductKg = deductKgExact.minus(adjDeductKg);
         if (rowDeductKg.gt("0.001")) {
           await tx.insert(factoryRawMaterialAdjustments).values({
             companyId,
             date: today,
             type: "DEDUCT",
             kg: rowDeductKg.toFixed(3),
-            costPerKg: costPerKgNum.gt(0) ? String(costPerKgNum.toNumber()) : "0",
+            costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
             currencyCode: ccy,
             supplierId: Number(supplierId),
             notes: notes || null,
@@ -760,7 +763,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
               date: today,
               type: "REMOVE",
               kg: adjDeductKg.toFixed(3),
-              costPerKg: costPerKgNum.gt(0) ? String(costPerKgNum.toNumber()) : "0",
+              costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
               currencyCode: ccy,
               supplierId: Number(supplierId),
               notes: notes ? `${notes} (auto-adj)` : "Deduct from received (auto-adj)",
@@ -770,8 +773,8 @@ export function registerRawStockReceiptRoutes(app: Express) {
         }
 
         // 3. Write daybook entry for the balance update (if costPerKg provided)
-        if (costPerKgNum.gt(0)) {
-          const totalValue = deductKg.times(costPerKgNum);
+        if (costPerKgExact.gt(0)) {
+          const totalValue = deductKgExact.times(costPerKgExact);
           const totalValueUsd = totalValue.times(fxRate);
 
           const [sup] = await tx
@@ -786,7 +789,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
             txDate: today,
             txType: "RAW_DEDUCT_RECEIVED",
             referenceId: Number(supplierId),
-            description: `Deduct from received: ${deductKg.toNumber()} kg @ ${costPerKgNum.toNumber()} ${ccy} — ${supplierName}${notes ? ` (${notes})` : ""}`,
+            description: `Deduct from received: ${deductKg} kg @ ${costPerKgNum} ${ccy} — ${supplierName}${notes ? ` (${notes})` : ""}`,
             currencyCode: ccy,
             amountCurrency: totalValue.negated().toNumber(),
             fxRateToUsd: fxRate,
@@ -795,7 +798,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
         }
       });
 
-      res.json({ deducted: deductKg.toNumber(), rowsUpdated: updates.length, adjCreated: adjDeductKg.gt(0) });
+      res.json({ deducted: deductKg, rowsUpdated: updates.length, adjCreated: adjDeductKg.gt(0) });
     } catch (error: unknown) {
       logger.error("Error deducting received kg:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });

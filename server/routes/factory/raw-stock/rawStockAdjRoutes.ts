@@ -249,7 +249,7 @@ export function registerRawStockAdjRoutes(app: Express) {
       if (kgInput === null || kgInput.lte(0)) return res.status(400).json({ message: "kg must be > 0" });
       if (!date) return res.status(400).json({ message: "date is required" });
 
-      const kgNum = kgInput;
+      const kgExact = kgInput;
       const ccy = currencyCode || "USD";
       const resolvedSupplierId = supplierId ? Number(supplierId) : null;
 
@@ -261,7 +261,7 @@ export function registerRawStockAdjRoutes(app: Express) {
       // authorized to set it. A supplier-less (MANUAL) adjustment isn't tied to a
       // locked rate, so the client-supplied cost is still accepted there.
       // A cost that does not parse is treated as no cost, as NaN > 0 was.
-      let costNum: Decimal = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
+      let costExact: Decimal = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
       if (type === "ADD" && resolvedSupplierId) {
         const lockedRate = toMoney(await getLockedSupplierRate(db, companyId, resolvedSupplierId));
         if (lockedRate.lte(0)) {
@@ -270,13 +270,16 @@ export function registerRawStockAdjRoutes(app: Express) {
               "This supplier has no established raw-material rate yet. Use a container offload or the opening-balance workflow to record the first receipt.",
           });
         }
-        costNum = lockedRate;
+        costExact = lockedRate;
       }
-      const totalAmount = kgNum.times(costNum);
+      const totalAmount = kgExact.times(costExact);
+      // Plain numbers for stored text and descriptions, as before.
+      const kgNum = kgExact.toNumber();
+      const costNum = costExact.toNumber();
 
       // Pre-fetch ledger account IDs before transaction (getOrCreateLedgerAccount must run outside tx)
       let rawMaterialAcctId: number | null = null;
-      if (createVoucher && resolvedSupplierId && type === "ADD" && costNum.gt(0)) {
+      if (createVoucher && resolvedSupplierId && type === "ADD" && costExact.gt(0)) {
         rawMaterialAcctId = await getOrCreateLedgerAccount(
           companyId,
           "FACTORY_RAW_MATERIAL_STOCK",
@@ -302,8 +305,8 @@ export function registerRawStockAdjRoutes(app: Express) {
             companyId,
             date,
             type,
-            kg: String(kgNum.toNumber()),
-            costPerKg: costNum.gt(0) ? String(costNum.toNumber()) : "0",
+            kg: String(kgNum),
+            costPerKg: costNum > 0 ? String(costNum) : "0",
             currencyCode: ccy,
             supplierId: resolvedSupplierId,
             materialLabel: materialLabel || null,
@@ -330,7 +333,7 @@ export function registerRawStockAdjRoutes(app: Express) {
               voucherType: "Journal",
               voucherNumber: voucherNum,
               voucherDate: date,
-              description: `Manual raw material purchase: ${kgNum.toNumber()} kg @ ${costNum.toNumber()}/${ccy} — ${supplierName}`,
+              description: `Manual raw material purchase: ${kgNum} kg @ ${costNum}/${ccy} — ${supplierName}`,
               totalAmount: moneyString(totalAmount),
               currency: ccy,
               exchangeRate: String(fxRate),
@@ -344,7 +347,7 @@ export function registerRawStockAdjRoutes(app: Express) {
             ledgerAccountId: rawMaterialAcctId,
             debitAmount: moneyString(totalAmount),
             creditAmount: "0",
-            narration: `Raw material stock — ${kgNum.toNumber()} kg from ${supplierName}`,
+            narration: `Raw material stock — ${kgNum} kg from ${supplierName}`,
           });
 
           // Cr Supplier
@@ -362,7 +365,7 @@ export function registerRawStockAdjRoutes(app: Express) {
             txType: "OFFLOAD_RAW_STOCK",
             referenceId: inserted.id,
             referenceTable: "factory_raw_stock",
-            description: `Manual purchase: ${kgNum.toNumber()} kg @ ${costNum.toNumber()} ${ccy} from ${supplierName}`,
+            description: `Manual purchase: ${kgNum} kg @ ${costNum} ${ccy} from ${supplierName}`,
             currencyCode: ccy,
             amountCurrency: totalAmount.toNumber(),
             fxRateToUsd: fxRate,

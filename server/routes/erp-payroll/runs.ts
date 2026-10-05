@@ -99,7 +99,7 @@ export function registerPayrollRunRoutes(app: Express) {
         return res.status(400).json({ message: "date and items are required" });
       const checked = payrollItemRows(items, 0);
       if ("invalidEmployee" in checked)
-        return res.status(400).json({ message: `Invalid salary amounts for ${checked.invalidEmployee}` });
+        return res.status(400).json({ message: "Invalid payroll salary amounts", employee: checked.invalidEmployee });
       const createdAt = new Date().toISOString();
       const [run] = await db
         .insert(erpPayrollRuns)
@@ -361,7 +361,7 @@ export function registerPayrollRunRoutes(app: Express) {
         if (date) updates.date = date;
         const checked = Array.isArray(items) && items.length > 0 ? payrollItemRows(items, runId) : null;
         if (checked && "invalidEmployee" in checked)
-          return res.status(400).json({ message: `Invalid salary amounts for ${checked.invalidEmployee}` });
+          return res.status(400).json({ message: "Invalid payroll salary amounts", employee: checked.invalidEmployee });
         if (Object.keys(updates).length)
           await db.update(erpPayrollRuns).set(updates).where(eq(erpPayrollRuns.id, runId));
         if (checked) {
