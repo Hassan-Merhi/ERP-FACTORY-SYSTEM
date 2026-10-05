@@ -20,6 +20,10 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { registerStockSummaryLocationRoutes } from "./stock-summary-location";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+
+const ZERO = new MoneyDecimal(0);
 
 export function registerStockSummaryRoutes(app: Express) {
   app.get("/api/stock-items/:id/monthly-summary", requireAuth, async (req, res) => {
@@ -175,97 +179,91 @@ export function registerStockSummaryRoutes(app: Express) {
         );
 
       // Initialize monthly buckets
-      const monthBuckets: Record<number, { inQty: number; inVal: number; outQty: number; outVal: number }> = {};
+      const monthBuckets: Record<number, { inQty: Decimal; inVal: Decimal; outQty: Decimal; outVal: Decimal }> = {};
       for (let m = 1; m <= 12; m++) {
-        monthBuckets[m] = { inQty: 0, inVal: 0, outQty: 0, outVal: 0 };
+        monthBuckets[m] = { inQty: ZERO, inVal: ZERO, outQty: ZERO, outVal: ZERO };
       }
+      const addIn = (month: number, qty: Decimal, val: Decimal) => {
+        monthBuckets[month].inQty = monthBuckets[month].inQty.plus(qty);
+        monthBuckets[month].inVal = monthBuckets[month].inVal.plus(val);
+      };
+      const addOut = (month: number, qty: Decimal, val: Decimal) => {
+        monthBuckets[month].outQty = monthBuckets[month].outQty.plus(qty);
+        monthBuckets[month].outVal = monthBuckets[month].outVal.plus(val);
+      };
 
       // Process Container Offload Inwards — modern method (exact inventory values)
       for (const row of modernPoInwards) {
         const month = Number(row.month);
-        monthBuckets[month].inQty += parseFloat(row.quantity);
-        monthBuckets[month].inVal += parseFloat(row.totalValue);
+        addIn(month, toMoney(row.quantity), toMoney(row.totalValue));
       }
 
       // Legacy fallback — older offloads without containerOffloadItems records
       for (const row of legacyPoInwards) {
         if (modernPoOffloadIds.has(row.offloadId)) continue;
         const month = Number(row.month);
-        const qty = parseFloat(row.quantity);
-        const baseValue = parseFloat(row.lineTotal);
-        const additionalCost = parseFloat(row.additionalCostPerBale || "0") * qty;
-        monthBuckets[month].inQty += qty;
-        monthBuckets[month].inVal += baseValue + additionalCost;
+        const qty = toMoney(row.quantity);
+        addIn(month, qty, toMoney(row.lineTotal).plus(toMoney(row.additionalCostPerBale).times(qty)));
       }
 
       // Process Credit / Debit Notes
       // Credit Notes = customer returned goods = INWARD; Debit Notes = stock reduced = OUTWARD
       for (const row of creditDebitNotes) {
         const month = Number(row.month);
-        const qty = parseFloat(row.quantity);
-        const val = parseFloat(row.inventoryCost || "0") * qty;
-        if (row.noteType === "Credit Note") {
-          monthBuckets[month].inQty += qty;
-          monthBuckets[month].inVal += val;
-        } else {
-          monthBuckets[month].outQty += qty;
-          monthBuckets[month].outVal += val;
-        }
+        const qty = toMoney(row.quantity);
+        const val = toMoney(row.inventoryCost).times(qty);
+        if (row.noteType === "Credit Note") addIn(month, qty, val);
+        else addOut(month, qty, val);
       }
 
       // Process Stock Adjustments
       for (const row of stockAdjustments) {
         const month = Number(row.month);
-        const qty = Math.abs(parseFloat(row.quantity));
-        const val = parseFloat(row.totalAmount);
-        if (row.adjustmentType === "Production" || parseFloat(row.quantity) > 0) {
-          monthBuckets[month].inQty += qty;
-          monthBuckets[month].inVal += val;
-        } else {
-          monthBuckets[month].outQty += qty;
-          monthBuckets[month].outVal += val;
-        }
+        const signedQty = toMoney(row.quantity);
+        const qty = signedQty.abs();
+        const val = toMoney(row.totalAmount);
+        if (row.adjustmentType === "Production" || signedQty.gt(0)) addIn(month, qty, val);
+        else addOut(month, qty, val);
       }
 
       // Process Sales (always outward) — value = selling revenue
       for (const row of salesData) {
         const month = Number(row.month);
-        monthBuckets[month].outQty += parseFloat(row.quantity);
-        monthBuckets[month].outVal += parseFloat(row.totalSales);
+        addOut(month, toMoney(row.quantity), toMoney(row.totalSales));
       }
 
       // Calculate running closing balance
-      let runningQty = 0;
-      let runningVal = 0;
+      let runningQty: Decimal = ZERO;
+      let runningVal: Decimal = ZERO;
 
       // Get opening balance from inventory or assume 0 for start of year
       // For simplicity, we'll calculate it as prior year closing balance would be opening
 
       for (let m = 1; m <= 12; m++) {
         const bucket = monthBuckets[m];
-        runningQty += bucket.inQty - bucket.outQty;
-        runningVal += bucket.inVal - bucket.outVal;
+        runningQty = runningQty.plus(bucket.inQty).minus(bucket.outQty);
+        runningVal = runningVal.plus(bucket.inVal).minus(bucket.outVal);
 
         monthlyData.push({
           month: m,
           monthName: monthNames[m - 1],
-          inwardQty: bucket.inQty,
-          inwardValue: bucket.inVal,
-          outwardQty: bucket.outQty,
-          outwardValue: bucket.outVal,
-          closingQty: runningQty,
-          closingValue: runningVal,
+          inwardQty: bucket.inQty.toNumber(),
+          inwardValue: bucket.inVal.toNumber(),
+          outwardQty: bucket.outQty.toNumber(),
+          outwardValue: bucket.outVal.toNumber(),
+          closingQty: runningQty.toNumber(),
+          closingValue: runningVal.toNumber(),
         });
       }
 
       // Calculate grand totals
       const grandTotal = {
-        inwardQty: Object.values(monthBuckets).reduce((s, b) => s + b.inQty, 0),
-        inwardValue: Object.values(monthBuckets).reduce((s, b) => s + b.inVal, 0),
-        outwardQty: Object.values(monthBuckets).reduce((s, b) => s + b.outQty, 0),
-        outwardValue: Object.values(monthBuckets).reduce((s, b) => s + b.outVal, 0),
-        closingQty: runningQty,
-        closingValue: runningVal,
+        inwardQty: sumMoney(Object.values(monthBuckets).map((b) => b.inQty)).toNumber(),
+        inwardValue: sumMoney(Object.values(monthBuckets).map((b) => b.inVal)).toNumber(),
+        outwardQty: sumMoney(Object.values(monthBuckets).map((b) => b.outQty)).toNumber(),
+        outwardValue: sumMoney(Object.values(monthBuckets).map((b) => b.outVal)).toNumber(),
+        closingQty: runningQty.toNumber(),
+        closingValue: runningVal.toNumber(),
       };
 
       res.json({
@@ -302,8 +300,8 @@ export function registerStockSummaryRoutes(app: Express) {
       const monthStartStr = monthStart.toISOString().split("T")[0];
 
       // ============ CALCULATE OPENING BALANCE (all transactions BEFORE selected month) ============
-      let openingQty = 0;
-      let openingValue = 0;
+      let openingQty: Decimal = ZERO;
+      let openingValue: Decimal = ZERO;
 
       // Opening from PO Line Items
       const priorPOItems = await db
@@ -323,45 +321,12 @@ export function registerStockSummaryRoutes(app: Express) {
         );
 
       for (const item of priorPOItems) {
-        openingQty += parseFloat(item.quantity);
-        openingValue += parseFloat(item.lineTotal);
+        openingQty = openingQty.plus(toMoney(item.quantity));
+        openingValue = openingValue.plus(toMoney(item.lineTotal));
       }
 
-      // Opening from Stock Transfers (net effect - transfers IN minus transfers OUT)
-      const priorTransfers = await db
-        .select({
-          quantity: stockTransferItems.quantity,
-          totalAmount: stockTransferItems.totalAmount,
-          sourceLocationId: stockTransferItems.sourceLocationId,
-          destinationLocationId: stockTransferVouchers.destinationLocationId,
-        })
-        .from(stockTransferItems)
-        .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
-        .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(stockTransferItems.stockItemId, stockItemId),
-            eq(vouchers.companyId, companyId),
-            isNull(vouchers.deletedAt),
-            eq(vouchers.optional, false),
-            sql`${vouchers.voucherDate}::date < ${monthStartStr}::date`
-          )
-        );
-
-      // Stock transfers: each transfer creates both an outward (from source) and inward (to destination)
-      // For company-wide view, these cancel out (net zero) but we process them for consistency
-      // This mirrors how in-month transfers are handled in the running balance calculation
-      for (const item of priorTransfers) {
-        const qty = parseFloat(item.quantity);
-        const val = parseFloat(item.totalAmount);
-        // Outward from source: -qty, -val
-        openingQty -= qty;
-        openingValue -= val;
-        // Inward to destination: +qty, +val
-        openingQty += qty;
-        openingValue += val;
-        // Net effect: 0 (correct for company-wide view)
-      }
+      // Stock transfers before the month move stock between locations and net to
+      // zero for the company-wide view, so they do not enter the opening balance.
 
       // Opening from Stock Adjustments (Production adds, Consumption subtracts)
       const priorAdjustments = await db
@@ -385,8 +350,8 @@ export function registerStockSummaryRoutes(app: Express) {
       // totalAmount is already signed (positive for production, negative for consumption)
       // Just add the signed values directly
       for (const item of priorAdjustments) {
-        openingQty += parseFloat(item.quantity);
-        openingValue += parseFloat(item.totalAmount);
+        openingQty = openingQty.plus(toMoney(item.quantity));
+        openingValue = openingValue.plus(toMoney(item.totalAmount));
       }
 
       // Opening from Sales (reduces stock)
@@ -408,11 +373,12 @@ export function registerStockSummaryRoutes(app: Express) {
         );
 
       for (const item of priorSales) {
-        openingQty -= parseFloat(item.quantity);
-        openingValue -= parseFloat(item.totalCost);
+        openingQty = openingQty.minus(toMoney(item.quantity));
+        openingValue = openingValue.minus(toMoney(item.totalCost));
       }
 
-      const openingRate = openingQty > 0 ? openingValue / openingQty : 0;
+      const openingRate = openingQty.gt(0) ? openingValue.div(openingQty) : ZERO;
+      const opening = { qty: openingQty.toNumber(), rate: openingRate.toNumber(), value: openingValue.toNumber() };
 
       // ============ COLLECT CURRENT MONTH TRANSACTIONS ============
       const transactions: Array<{
@@ -464,9 +430,9 @@ export function registerStockSummaryRoutes(app: Express) {
           vchType: "PURCHASE IMPORT",
           voucherId: 0,
           poId: item.poId,
-          inwardQty: parseFloat(item.quantity),
-          inwardRate: parseFloat(item.rate),
-          inwardValue: parseFloat(item.lineTotal),
+          inwardQty: toMoney(item.quantity).toNumber(),
+          inwardRate: toMoney(item.rate).toNumber(),
+          inwardValue: toMoney(item.lineTotal).toNumber(),
           outwardQty: 0,
           outwardRate: 0,
           outwardValue: 0,
@@ -515,9 +481,9 @@ export function registerStockSummaryRoutes(app: Express) {
       }
 
       for (const item of transferItems) {
-        const qty = parseFloat(item.quantity);
-        const rate = parseFloat(item.rate);
-        const val = parseFloat(item.totalAmount);
+        const qty = toMoney(item.quantity).toNumber();
+        const rate = toMoney(item.rate).toNumber();
+        const val = toMoney(item.totalAmount).toNumber();
         const sourceName = item.sourceLocationId ? locationMap[item.sourceLocationId] || "Unknown" : "Unknown";
         const destName = locationMap[item.destinationLocationId] || "Unknown";
 
@@ -579,14 +545,14 @@ export function registerStockSummaryRoutes(app: Express) {
         .orderBy(vouchers.voucherDate);
 
       for (const item of adjustmentItems) {
-        const rawQty = parseFloat(item.quantity);
-        const rawValue = parseFloat(item.totalAmount);
-        const qty = Math.abs(rawQty);
-        const rate = parseFloat(item.rate);
+        const rawQty = toMoney(item.quantity);
+        const rawValue = toMoney(item.totalAmount).toNumber();
+        const qty = rawQty.abs().toNumber();
+        const rate = toMoney(item.rate).toNumber();
         const value = Math.abs(rawValue); // Use absolute value for outward
         const locName =
           locationMap[item.locationId] || (await storage.getLocationById(item.locationId))?.name || "Unknown";
-        const isProduction = rawQty > 0;
+        const isProduction = rawQty.gt(0);
 
         transactions.push({
           date: item.voucherDate,
@@ -638,9 +604,9 @@ export function registerStockSummaryRoutes(app: Express) {
           item.locationName ||
           (item.locationId ? (await storage.getLocationById(item.locationId))?.name : null) ||
           "Cash";
-        const qty = parseFloat(item.quantity);
-        const sellingRate = parseFloat(item.sellingPrice);
-        const totalSalesValue = parseFloat(item.totalSales);
+        const qty = toMoney(item.quantity).toNumber();
+        const sellingRate = toMoney(item.sellingPrice).toNumber();
+        const totalSalesValue = toMoney(item.totalSales).toNumber();
 
         transactions.push({
           date: item.voucherDate,
@@ -686,7 +652,7 @@ export function registerStockSummaryRoutes(app: Express) {
 
       // Add Opening Balance row (only if there's a prior balance or prior transactions)
       // Per Tally's format: Opening Balance shows values in CLOSING columns only, not Inwards/Outwards
-      if (openingQty !== 0 || openingValue !== 0) {
+      if (!openingQty.isZero() || !openingValue.isZero()) {
         transactionsWithBalance.push({
           date: monthStartStr,
           particulars: "Opening Balance",
@@ -698,9 +664,9 @@ export function registerStockSummaryRoutes(app: Express) {
           outwardQty: 0,
           outwardRate: 0,
           outwardValue: 0,
-          closingQty: openingQty, // Only Closing columns show values
-          closingRate: openingRate,
-          closingValue: openingValue,
+          closingQty: opening.qty, // Only Closing columns show values
+          closingRate: opening.rate,
+          closingValue: opening.value,
           isOpeningBalance: true,
         });
       }
@@ -711,53 +677,54 @@ export function registerStockSummaryRoutes(app: Express) {
 
       for (const t of transactions) {
         // Calculate current weighted average rate BEFORE processing this transaction
-        const currentAvgRate = runningQty > 0 ? runningValue / runningQty : 0;
+        const currentAvgRate = runningQty.gt(0) ? runningValue.div(runningQty) : ZERO;
+        const outwardQty = toMoney(t.outwardQty);
 
         // Update running quantity
-        runningQty += t.inwardQty - t.outwardQty;
+        runningQty = runningQty.plus(toMoney(t.inwardQty)).minus(outwardQty);
 
         // For value:
         // - Inward: add the actual transaction value (brings in inventory at transaction's rate)
         // - Outward: deduct at the CURRENT weighted average rate (not the stored transaction rate)
         // This ensures closing value = closingQty × closingRate (consistency)
-        const actualOutwardCost = t.outwardQty * currentAvgRate;
-        runningValue += t.inwardValue - actualOutwardCost;
+        const actualOutwardCost = outwardQty.times(currentAvgRate);
+        runningValue = runningValue.plus(toMoney(t.inwardValue)).minus(actualOutwardCost);
 
         // Weighted average rate after this transaction
-        const avgClosingRate = runningQty > 0 ? runningValue / runningQty : 0;
+        const avgClosingRate = runningQty.gt(0) ? runningValue.div(runningQty) : ZERO;
 
         // ALL outward transactions use weighted average cost for rate/value
-        const displayOutwardRate = t.outwardQty !== 0 ? currentAvgRate : 0;
-        const displayOutwardValue = t.outwardQty !== 0 ? actualOutwardCost : 0;
+        const displayOutwardRate = outwardQty.isZero() ? 0 : currentAvgRate.toNumber();
+        const displayOutwardValue = outwardQty.isZero() ? 0 : actualOutwardCost.toNumber();
 
         transactionsWithBalance.push({
           ...t,
           outwardRate: displayOutwardRate,
           outwardValue: displayOutwardValue,
-          closingQty: runningQty,
-          closingRate: avgClosingRate,
-          closingValue: runningValue,
+          closingQty: runningQty.toNumber(),
+          closingRate: avgClosingRate.toNumber(),
+          closingValue: runningValue.toNumber(),
         });
       }
 
       // Calculate totals from processed transactions (all now using cost basis)
       const processedTransactions = transactionsWithBalance.filter((t) => !t.isOpeningBalance);
-      const inwardQtyTotal = processedTransactions.reduce((s, t) => s + t.inwardQty, 0);
-      const inwardValueTotal = processedTransactions.reduce((s, t) => s + t.inwardValue, 0);
-      const outwardQtyTotal = processedTransactions.reduce((s, t) => s + t.outwardQty, 0);
-      const outwardValueTotal = processedTransactions.reduce((s, t) => s + t.outwardValue, 0);
+      const inwardQtyTotal = sumMoney(processedTransactions.map((t) => t.inwardQty));
+      const inwardValueTotal = sumMoney(processedTransactions.map((t) => t.inwardValue));
+      const outwardQtyTotal = sumMoney(processedTransactions.map((t) => t.outwardQty));
+      const outwardValueTotal = sumMoney(processedTransactions.map((t) => t.outwardValue));
 
       // Closing totals should be the FINAL running balance (same as last row)
       const totals = {
-        inwardQty: inwardQtyTotal,
-        inwardRate: inwardQtyTotal > 0 ? inwardValueTotal / inwardQtyTotal : 0,
-        inwardValue: inwardValueTotal,
-        outwardQty: outwardQtyTotal,
-        outwardRate: outwardQtyTotal > 0 ? outwardValueTotal / outwardQtyTotal : 0,
-        outwardValue: outwardValueTotal,
-        closingQty: runningQty,
-        closingRate: runningQty > 0 ? runningValue / runningQty : 0,
-        closingValue: runningValue,
+        inwardQty: inwardQtyTotal.toNumber(),
+        inwardRate: inwardQtyTotal.gt(0) ? inwardValueTotal.div(inwardQtyTotal).toNumber() : 0,
+        inwardValue: inwardValueTotal.toNumber(),
+        outwardQty: outwardQtyTotal.toNumber(),
+        outwardRate: outwardQtyTotal.gt(0) ? outwardValueTotal.div(outwardQtyTotal).toNumber() : 0,
+        outwardValue: outwardValueTotal.toNumber(),
+        closingQty: runningQty.toNumber(),
+        closingRate: runningQty.gt(0) ? runningValue.div(runningQty).toNumber() : 0,
+        closingValue: runningValue.toNumber(),
       };
 
       const monthNames = [
@@ -780,11 +747,7 @@ export function registerStockSummaryRoutes(app: Express) {
         year,
         month,
         monthName: monthNames[month - 1],
-        openingBalance: {
-          qty: openingQty,
-          rate: openingRate,
-          value: openingValue,
-        },
+        openingBalance: opening,
         transactions: transactionsWithBalance,
         totals,
       });

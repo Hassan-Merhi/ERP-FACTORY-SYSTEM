@@ -3,6 +3,18 @@ import { sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { resultRows } from "../../../lib/queryResult";
 import { factoryContainers } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+
+const ZERO = new MoneyDecimal(0);
+/** A numeric column from a raw query row, exactly (missing or unparsable is zero). */
+const col = (value: unknown) => toMoney(value as string | number | null | undefined);
+/**
+ * Rounded half up to the cent from the exact value. Rounding a binary float
+ * instead sends a half-cent (999.995) either way depending on its binary
+ * representation.
+ */
+const cents = (value: Decimal) => value.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
 
 /**
  * The four inventory valuations in the factory net-position report: finished
@@ -17,7 +29,6 @@ import { factoryContainers } from "@shared/schema";
 export interface NetPositionInventoryContext {
   companyId: number;
   asOf: string;
-  round2: (n: number) => number;
   getConfigFx: (cc: string) => number;
   configFxRates: Record<string, number>;
   supplierLockedRateMapNp: Map<number, number>;
@@ -32,6 +43,19 @@ export interface NetPositionInventory {
   stockOtwValue: number;
   balanceOnTableValue: number;
   balanceOnTableSellingValue: number;
+}
+
+/**
+ * Usage not tied to a specific container draws the supplier's remaining stock
+ * down at that stock's current blended remaining cost/kg.
+ */
+function drawDown(stock: { recv: Decimal; used: Decimal; remValUsd: Decimal; remValLocal: Decimal }, kg: Decimal) {
+  const remainingKgBefore = stock.recv.minus(stock.used);
+  const avgCostUsdBefore = remainingKgBefore.gt(0) ? stock.remValUsd.div(remainingKgBefore) : ZERO;
+  const avgCostLocalBefore = remainingKgBefore.gt(0) ? stock.remValLocal.div(remainingKgBefore) : ZERO;
+  stock.used = stock.used.plus(kg);
+  stock.remValUsd = stock.remValUsd.minus(kg.times(avgCostUsdBefore));
+  stock.remValLocal = stock.remValLocal.minus(kg.times(avgCostLocalBefore));
 }
 
 export async function computeNetPositionInventory(ctx: NetPositionInventoryContext): Promise<NetPositionInventory> {
@@ -77,8 +101,8 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     )
 `);
   const invRow = resultRows(invResult)[0] ?? {};
-  const inventorySellValue = ctx.round2(parseFloat(String(invRow?.total_cost ?? "0")));
-  const inventorySellingValue = ctx.round2(parseFloat(String(invRow?.total_selling ?? "0")));
+  const inventorySellValue = cents(col(invRow?.total_cost));
+  const inventorySellingValue = cents(col(invRow?.total_selling));
 
   // ── 3b. Raw material stock value — direct SQL, mirrors /api/factory/raw-stock
   //
@@ -135,22 +159,22 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   // _avgCostPerKgUsd = _avgCostPerKg (the newly blended local rate). We mirror that here
   // so the net-position value matches the "Stock Value" shown on the Raw Materials page.
   type SupMap = {
-    recv: number;
-    used: number;
-    cpkUsd: number;
-    cpkLocal: number;
-    remValLocal: number;
-    remValUsd: number;
+    recv: Decimal;
+    used: Decimal;
+    cpkUsd: Decimal;
+    cpkLocal: Decimal;
+    remValLocal: Decimal;
+    remValUsd: Decimal;
   };
   const supMap = new Map<string, SupMap>();
   for (const r of rawRows) {
     const key = r.supplier_id ? `s${r.supplier_id}` : `u`;
-    const recv = parseFloat(String(r.total_recv ?? "0")) || 0;
-    const used = parseFloat(String(r.total_used ?? "0")) || 0;
-    const cpkLocal = parseFloat(String(r.avg_cpk_local ?? "0")) || 0;
-    const cpkUsd = parseFloat(String(r.avg_cpk_usd ?? "0")) || 0;
-    const remValLocal = parseFloat(String(r.remaining_value_local ?? "0")) || 0;
-    const remValUsd = parseFloat(String(r.remaining_value_usd ?? "0")) || 0;
+    const recv = col(r.total_recv);
+    const used = col(r.total_used);
+    const cpkLocal = col(r.avg_cpk_local);
+    const cpkUsd = col(r.avg_cpk_usd);
+    const remValLocal = col(r.remaining_value_local);
+    const remValUsd = col(r.remaining_value_usd);
     supMap.set(key, { recv, used, cpkUsd, cpkLocal, remValLocal, remValUsd });
   }
   for (const a of adjRows) {
@@ -163,8 +187,8 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     // /api/factory/raw-stock's `MANUAL__${materialLabel}` bucket keying — collapsing them
     // into a single MANUAL bucket would incorrectly blend distinct materials' weighted costs.
     const key = a.supplier_id ? `s${a.supplier_id}` : `MANUAL__${a.material_label || "unknown"}`;
-    const kg = parseFloat(String(a.kg ?? "0")) || 0;
-    const cpk = parseFloat(String(a.cpk ?? "0")) || 0;
+    const kg = col(a.kg);
+    const cpk = col(a.cpk);
     const isAdd = a.type === "ADD";
     const ex = supMap.get(key);
     if (ex) {
@@ -172,31 +196,26 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
         // Mirror rawStockReceiptRoutes: new stock's full value joins the remaining-value
         // pool directly (manual adjustments have no separate USD leg, so local and USD
         // move together); the received-weighted rate also shifts, same as a new container.
-        const prevLocalVal = ex.recv * ex.cpkLocal;
-        ex.recv += kg;
-        ex.cpkLocal = ex.recv > 0 ? (prevLocalVal + kg * cpk) / ex.recv : 0;
+        const prevLocalVal = ex.recv.times(ex.cpkLocal);
+        ex.recv = ex.recv.plus(kg);
+        ex.cpkLocal = ex.recv.gt(0) ? prevLocalVal.plus(kg.times(cpk)).div(ex.recv) : ZERO;
         ex.cpkUsd = ex.cpkLocal;
-        ex.remValLocal += kg * cpk;
-        ex.remValUsd += kg * cpk;
+        ex.remValLocal = ex.remValLocal.plus(kg.times(cpk));
+        ex.remValUsd = ex.remValUsd.plus(kg.times(cpk));
       } else {
         // Manual usage isn't tied to a specific container/source, so it draws down the
         // supplier's remaining stock at that stock's current blended remaining cost/kg —
         // mirrors rawStockReceiptRoutes.ts's avgCostBefore/avgCostLocalBefore depletion.
-        const remainingKgBefore = ex.recv - ex.used;
-        const avgCostUsdBefore = remainingKgBefore > 0 ? ex.remValUsd / remainingKgBefore : 0;
-        const avgCostLocalBefore = remainingKgBefore > 0 ? ex.remValLocal / remainingKgBefore : 0;
-        ex.used += kg;
-        ex.remValUsd -= kg * avgCostUsdBefore;
-        ex.remValLocal -= kg * avgCostLocalBefore;
+        drawDown(ex, kg);
       }
     } else if (isAdd) {
       supMap.set(key, {
         recv: kg,
-        used: 0,
+        used: ZERO,
         cpkUsd: cpk,
         cpkLocal: cpk,
-        remValLocal: kg * cpk,
-        remValUsd: kg * cpk,
+        remValLocal: kg.times(cpk),
+        remValUsd: kg.times(cpk),
       });
     }
   }
@@ -226,15 +245,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     if (supplierKeysWithContainerStock.has(key)) continue; // container stock already tracks used via total_used
     const ex = supMap.get(key);
     if (!ex) continue;
-    const consumed = parseFloat(String(r.consumed_kg ?? "0")) || 0;
     // Mirrors rawStockReceiptRoutes.ts: draw down at the current blended remaining
     // cost/kg (the best available attribution without a specific source container).
-    const remainingKgBefore = ex.recv - ex.used;
-    const avgCostUsdBefore = remainingKgBefore > 0 ? ex.remValUsd / remainingKgBefore : 0;
-    const avgCostLocalBefore = remainingKgBefore > 0 ? ex.remValLocal / remainingKgBefore : 0;
-    ex.used += consumed;
-    ex.remValUsd -= consumed * avgCostUsdBefore;
-    ex.remValLocal -= consumed * avgCostLocalBefore;
+    drawDown(ex, col(r.consumed_kg));
   }
 
   // Subtract kg reserved in open (not yet CLOSED/COMPLETED) mix batches —
@@ -251,9 +264,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   GROUP  BY fms.supplier_id
 `);
   const openReservedRows = resultRows(openReservedResult);
-  const reservedBySupKey = new Map<string, number>();
+  const reservedBySupKey = new Map<string, Decimal>();
   for (const r of openReservedRows) {
-    if (r.supplier_id) reservedBySupKey.set(`s${r.supplier_id}`, parseFloat(String(r.reserved_kg ?? "0")) || 0);
+    if (r.supplier_id) reservedBySupKey.set(`s${r.supplier_id}`, col(r.reserved_kg));
   }
 
   // Sum each supplier's stock value the SAME way rawStockReceiptRoutes.ts computes
@@ -265,18 +278,17 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   // page-side formula only applies to real suppliers too.
   // (Reserved kg still have physical value in the warehouse; they are subtracted from the
   // displayed kg count but not from the dollar value, matching the raw-materials KPI.)
-  let rawTotal = 0;
+  let rawTotal: Decimal = ZERO;
   for (const [key, s] of supMap.entries()) {
     const supplierId = key.startsWith("s") ? parseInt(key.slice(1)) : null;
     const lockedRate = supplierId !== null ? ctx.supplierLockedRateMapNp.get(supplierId) : undefined;
     if (lockedRate !== undefined) {
-      const remainingKg = s.recv - s.used;
-      rawTotal += remainingKg * lockedRate;
+      rawTotal = rawTotal.plus(s.recv.minus(s.used).times(lockedRate));
     } else {
-      rawTotal += s.remValUsd;
+      rawTotal = rawTotal.plus(s.remValUsd);
     }
   }
-  const rawMaterialStockValue = ctx.round2(rawTotal);
+  const rawMaterialStockValue = cents(rawTotal);
 
   // ── 3b. Factory Stock OTW — containers in transit (PENDING / IN_TRANSIT / ARRIVED) ──
   // Per-currency goods+freight+commission+other charges, converted to USD using the
@@ -285,29 +297,27 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
   // (EUR×1.17, AUD×0.75), which drifted from the user's actual configured rates and
   // produced a wrong OTW total on this page.
   const otwStatuses = new Set(["PENDING", "IN_TRANSIT", "ARRIVED"]);
-  const otwCurrBuckets: Record<string, number> = {};
-  const otwAdd = (cc: string, amt: number) => {
-    if (amt > 0 && cc) otwCurrBuckets[cc] = (otwCurrBuckets[cc] || 0) + amt;
+  const otwCurrBuckets: Record<string, Decimal> = {};
+  const otwAdd = (cc: string, amt: Decimal) => {
+    if (amt.gt(0) && cc) otwCurrBuckets[cc] = (otwCurrBuckets[cc] ?? ZERO).plus(amt);
   };
   for (const c of ctx.allContainersF) {
     if (!c.status || !otwStatuses.has(c.status)) continue;
     const containerCcy = c.currencyCode || "USD";
-    const goods =
-      parseFloat(c.finalPayableAmount || "0") > 0
-        ? parseFloat(c.finalPayableAmount || "0")
-        : parseFloat(c.ratePerKg || "0") * parseFloat(c.totalKg || "0");
+    const finalPayable = col(c.finalPayableAmount);
+    const goods = finalPayable.gt(0) ? finalPayable : col(c.ratePerKg).times(col(c.totalKg));
     otwAdd(containerCcy, goods);
     const freightCcy = c.freightCurrencyCode || containerCcy;
-    otwAdd(freightCcy, parseFloat(c.freight || "0"));
+    otwAdd(freightCcy, col(c.freight));
     const commCcy = c.commissionCurrencyCode || "USD";
-    otwAdd(commCcy, parseFloat(c.commissionAmount || "0"));
-    otwAdd(containerCcy, parseFloat(c.otherCharges || "0"));
+    otwAdd(commCcy, col(c.commissionAmount));
+    otwAdd(containerCcy, col(c.otherCharges));
   }
-  const stockOtwValue = ctx.round2(
-    Object.entries(otwCurrBuckets).reduce((sum, [cc, amt]) => {
-      const fx = cc === "USD" ? 1 : ctx.getConfigFx(cc);
-      return sum + amt * fx;
-    }, 0)
+  const stockOtwValue = cents(
+    Object.entries(otwCurrBuckets).reduce(
+      (sum: Decimal, [cc, amt]) => sum.plus(amt.times(cc === "USD" ? 1 : ctx.getConfigFx(cc))),
+      ZERO
+    )
   );
 
   // ── 3c. Balance on Table — material in process (mix batch input minus bale output) ──
@@ -327,9 +337,9 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     AND deleted_at IS NULL
 `);
   const mixSumRow = resultRows(mixSumResult)[0] ?? {};
-  const totalMixKg = parseFloat(String(mixSumRow.total_mix_kg ?? "0")) || 0;
-  const totalMixCost = parseFloat(String(mixSumRow.total_mix_cost ?? "0")) || 0;
-  const blendedCpk = totalMixKg > 0 ? totalMixCost / totalMixKg : 0;
+  const totalMixKg = col(mixSumRow.total_mix_kg);
+  const totalMixCost = col(mixSumRow.total_mix_cost);
+  const blendedCpk = totalMixKg.gt(0) ? totalMixCost.div(totalMixKg) : ZERO;
 
   // Split bales: wipers/garbage (by category name) vs regular
   const baleSumResult = await db.execute(sql`
@@ -345,19 +355,19 @@ export async function computeNetPositionInventory(ctx: NetPositionInventoryConte
     AND  b.status NOT IN ('DELETED', 'REMOVED')
 `);
   const baleSumRow = resultRows(baleSumResult)[0] ?? {};
-  const totalBaleKg = parseFloat(String(baleSumRow.total_kg ?? "0")) || 0;
-  const totalSellingValue = parseFloat(String(baleSumRow.total_selling_value ?? "0")) || 0;
-  const _totalWgKg = parseFloat(String(baleSumRow.wg_kg ?? "0")) || 0;
+  const totalBaleKg = col(baleSumRow.total_kg);
+  const totalSellingValue = col(baleSumRow.total_selling_value);
 
-  const botWeightKg = Math.max(totalMixKg - totalBaleKg, 0);
-  const balanceOnTableValue = ctx.round2(botWeightKg * blendedCpk);
+  const botWeightKg = MoneyDecimal.max(totalMixKg.minus(totalBaleKg), 0);
+  const balanceOnTableValue = cents(botWeightKg.times(blendedCpk));
   // Selling valuation uses the realized configured selling value per kg of produced
   // bales as the best like-for-like valuation for material still on the table.
   // If no produced-bale selling basis exists yet, fall back to cost rather than
   // inventing a markup.
-  const blendedSellingPerKg = totalBaleKg > 0 ? totalSellingValue / totalBaleKg : 0;
-  const balanceOnTableSellingValue =
-    blendedSellingPerKg > 0 ? ctx.round2(botWeightKg * blendedSellingPerKg) : balanceOnTableValue;
+  const blendedSellingPerKg = totalBaleKg.gt(0) ? totalSellingValue.div(totalBaleKg) : ZERO;
+  const balanceOnTableSellingValue = blendedSellingPerKg.gt(0)
+    ? cents(botWeightKg.times(blendedSellingPerKg))
+    : balanceOnTableValue;
 
   return {
     inventorySellValue,

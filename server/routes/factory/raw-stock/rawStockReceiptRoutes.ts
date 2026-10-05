@@ -17,6 +17,42 @@ import {
   factorySupplierCategories,
 } from "@shared/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
+
+const ZERO = new MoneyDecimal(0);
+/** A stored amount, or zero when it is missing or not a number. */
+const amountOrZero = (value: unknown) => toMoney(value as string | null);
+
+type SupplierStock = {
+  supplierName: string;
+  supplierId: number | null;
+  categoryId: number | null;
+  categoryName: string | null;
+  sourceType: string;
+  currencyCode: string;
+  _totalReceived: Decimal;
+  _totalUsed: Decimal;
+  _avgCostPerKg: Decimal;
+  _avgCostPerKgUsd: Decimal;
+  _remainingValueLocal: Decimal;
+  _remainingValueUsd: Decimal;
+  lastOffloaded: unknown;
+  _adjustmentIds?: number[];
+};
+
+/**
+ * Usage not tied to a specific container draws the supplier's remaining stock
+ * down at that stock's current blended cost/kg.
+ */
+function drawDown(stock: SupplierStock, kg: Decimal) {
+  const remainingKgBefore = stock._totalReceived.minus(stock._totalUsed);
+  const avgCostBefore = remainingKgBefore.gt(0) ? stock._remainingValueUsd.div(remainingKgBefore) : ZERO;
+  const avgCostLocalBefore = remainingKgBefore.gt(0) ? stock._remainingValueLocal.div(remainingKgBefore) : ZERO;
+  stock._totalUsed = stock._totalUsed.plus(kg);
+  stock._remainingValueUsd = stock._remainingValueUsd.minus(kg.times(avgCostBefore));
+  stock._remainingValueLocal = stock._remainingValueLocal.minus(kg.times(avgCostLocalBefore));
+}
 
 export function registerRawStockReceiptRoutes(app: Express) {
   app.get("/api/factory/raw-stock", requireAuth, async (req: Request, res: Response) => {
@@ -44,7 +80,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
       // derive-and-persist helper every other read path uses, so this endpoint can never
       // disagree with getLockedSupplierRate (used by the offload/mix-batch/diagnostic
       // code) about what a supplier's rate is.
-      const supplierLockedRateMap = new Map<number, number>();
+      const supplierLockedRateMap = new Map<number, Decimal>();
       for (const s of supplierRows) {
         supplierCategoryMap.set(s.id, {
           categoryId: s.supplierCategoryId ?? null,
@@ -52,15 +88,15 @@ export function registerRawStockReceiptRoutes(app: Express) {
         });
         const persisted = s.currentRawMaterialCostPerKgUsd;
         if (persisted !== null && persisted !== undefined) {
-          supplierLockedRateMap.set(s.id, parseFloat(persisted as string) || 0);
+          supplierLockedRateMap.set(s.id, amountOrZero(persisted));
         } else {
           try {
-            supplierLockedRateMap.set(s.id, await getLockedSupplierRate(db, companyId, s.id));
+            supplierLockedRateMap.set(s.id, toMoney(await getLockedSupplierRate(db, companyId, s.id)));
           } catch (rateErr: unknown) {
             logger.error(`[raw-stock] getLockedSupplierRate failed for supplier ${s.id}:`, {
               error: getErrorMessage(rateErr),
             });
-            supplierLockedRateMap.set(s.id, 0);
+            supplierLockedRateMap.set(s.id, ZERO);
           }
         }
       }
@@ -95,16 +131,17 @@ export function registerRawStockReceiptRoutes(app: Express) {
           )
         );
 
-      const supplierMap = new Map();
+      const supplierMap = new Map<string, SupplierStock>();
       for (const r of results) {
         const isOB = r.containerStatus === "OPENING_BALANCE";
         // Always merge by supplier — one row per supplier regardless of OB vs Container
         const key = r.supplierId ? `supplier-${r.supplierId}` : r.supplierName || `unknown-${r.containerId}`;
-        const received = parseFloat(r.receivedKg as string) || 0;
-        const used = parseFloat(r.usedKg as string) || 0;
-        const costPerKg = parseFloat(r.costPerKg as string) || 0;
+        const received = amountOrZero(r.receivedKg);
+        const used = amountOrZero(r.usedKg);
+        const costPerKg = amountOrZero(r.costPerKg);
 
-        const costPerKgUsd = parseFloat(r.costPerKgUsd as string) || costPerKg;
+        const storedCostPerKgUsd = amountOrZero(r.costPerKgUsd);
+        const costPerKgUsd = storedCostPerKgUsd.isZero() ? costPerKg : storedCostPerKgUsd;
         // Each raw-stock row is one specific container/source with its own cost/kg and its
         // own usedKg (usage is already attributed to the exact container it was drawn from
         // via factoryMixBatchSources). The remaining VALUE of this row is therefore
@@ -113,28 +150,30 @@ export function registerRawStockReceiptRoutes(app: Express) {
         // Averaging received cost first and multiplying by remaining kg afterwards silently
         // misattributes the cost of whatever was actually used to every other container in
         // the blend, inflating (or deflating) the remaining stock value.
-        const rowRemainingKg = received - used;
-        const rowRemainingValueLocal = rowRemainingKg * costPerKg;
-        const rowRemainingValueUsd = rowRemainingKg * costPerKgUsd;
+        const rowRemainingKg = received.minus(used);
+        const rowRemainingValueLocal = rowRemainingKg.times(costPerKg);
+        const rowRemainingValueUsd = rowRemainingKg.times(costPerKgUsd);
         // The displayed "rate" (cost/kg) is a separate concept from remaining value: it's
         // the going purchase rate for this supplier's material, weighted by everything ever
         // RECEIVED. It should only move when a new container/receipt is added, never when
         // existing stock is consumed in a mix batch — so it's tracked independently of usage.
         if (supplierMap.has(key)) {
           const existing = supplierMap.get(key)!;
-          const prevTotalCost = existing._totalReceived * existing._avgCostPerKg;
-          const newTotalCost = received * costPerKg;
-          const prevTotalCostUsd = existing._totalReceived * existing._avgCostPerKgUsd;
-          const newTotalCostUsd = received * costPerKgUsd;
-          existing._totalReceived += received;
-          existing._totalUsed += used;
-          existing._avgCostPerKg =
-            existing._totalReceived > 0 ? (prevTotalCost + newTotalCost) / existing._totalReceived : 0;
-          existing._avgCostPerKgUsd =
-            existing._totalReceived > 0 ? (prevTotalCostUsd + newTotalCostUsd) / existing._totalReceived : 0;
-          existing._remainingValueLocal += rowRemainingValueLocal;
-          existing._remainingValueUsd += rowRemainingValueUsd;
-          if (new Date(r.offloadedAt) > new Date(existing.lastOffloaded)) {
+          const prevTotalCost = existing._totalReceived.times(existing._avgCostPerKg);
+          const newTotalCost = received.times(costPerKg);
+          const prevTotalCostUsd = existing._totalReceived.times(existing._avgCostPerKgUsd);
+          const newTotalCostUsd = received.times(costPerKgUsd);
+          existing._totalReceived = existing._totalReceived.plus(received);
+          existing._totalUsed = existing._totalUsed.plus(used);
+          existing._avgCostPerKg = existing._totalReceived.gt(0)
+            ? prevTotalCost.plus(newTotalCost).div(existing._totalReceived)
+            : ZERO;
+          existing._avgCostPerKgUsd = existing._totalReceived.gt(0)
+            ? prevTotalCostUsd.plus(newTotalCostUsd).div(existing._totalReceived)
+            : ZERO;
+          existing._remainingValueLocal = existing._remainingValueLocal.plus(rowRemainingValueLocal);
+          existing._remainingValueUsd = existing._remainingValueUsd.plus(rowRemainingValueUsd);
+          if (new Date(r.offloadedAt) > new Date(existing.lastOffloaded as string)) {
             existing.lastOffloaded = r.offloadedAt;
           }
           // If any container for this supplier is not OB, show as Container
@@ -171,8 +210,8 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
       for (const adj of adjustments) {
         if (adj.type === "DEDUCT") continue; // DEDUCT is history-only; receivedKg on rows already reduced
-        const kg = parseFloat(adj.kg as string) || 0;
-        const costPerKgAdj = parseFloat(adj.costPerKg as string) || 0;
+        const kg = amountOrZero(adj.kg);
+        const costPerKgAdj = amountOrZero(adj.costPerKg);
         const isAdd = adj.type === "ADD";
         let key: string;
         let supplierName: string;
@@ -207,25 +246,22 @@ export function registerRawStockReceiptRoutes(app: Express) {
             // grows (feeds freeKg). Value is derived later from freeKg × locked rate for
             // real suppliers. Standalone MANUAL materials (no supplierId) aren't tied to
             // a locked rate, so they keep their own blended-average tracking.
-            existing._totalReceived += kg;
+            existing._totalReceived = existing._totalReceived.plus(kg);
             if (!supplierId) {
-              const prevCost = (existing._totalReceived - kg) * existing._avgCostPerKg;
-              const newCost = kg * costPerKgAdj;
-              existing._avgCostPerKg = existing._totalReceived > 0 ? (prevCost + newCost) / existing._totalReceived : 0;
+              const prevCost = existing._totalReceived.minus(kg).times(existing._avgCostPerKg);
+              const newCost = kg.times(costPerKgAdj);
+              existing._avgCostPerKg = existing._totalReceived.gt(0)
+                ? prevCost.plus(newCost).div(existing._totalReceived)
+                : ZERO;
               existing._avgCostPerKgUsd = existing._avgCostPerKg;
-              existing._remainingValueLocal += kg * costPerKgAdj;
-              existing._remainingValueUsd += kg * costPerKgAdj;
+              existing._remainingValueLocal = existing._remainingValueLocal.plus(newCost);
+              existing._remainingValueUsd = existing._remainingValueUsd.plus(newCost);
             }
           } else {
             // Manual usage isn't tied to a specific container/source, so it draws down
             // the supplier's remaining stock at that stock's current blended cost/kg —
             // the best available attribution without a specific source reference.
-            const remainingKgBefore = existing._totalReceived - existing._totalUsed;
-            const avgCostBefore = remainingKgBefore > 0 ? existing._remainingValueUsd / remainingKgBefore : 0;
-            const avgCostLocalBefore = remainingKgBefore > 0 ? existing._remainingValueLocal / remainingKgBefore : 0;
-            existing._totalUsed += kg;
-            existing._remainingValueUsd -= kg * avgCostBefore;
-            existing._remainingValueLocal -= kg * avgCostLocalBefore;
+            drawDown(existing, kg);
           }
         } else {
           const adjCatInfo = supplierId
@@ -238,12 +274,12 @@ export function registerRawStockReceiptRoutes(app: Express) {
             categoryName: adjCatInfo.categoryName,
             sourceType: "MANUAL",
             currencyCode: adj.currencyCode || "USD",
-            _totalReceived: isAdd ? kg : 0,
-            _totalUsed: isAdd ? 0 : kg,
+            _totalReceived: isAdd ? kg : ZERO,
+            _totalUsed: isAdd ? ZERO : kg,
             _avgCostPerKg: costPerKgAdj,
             _avgCostPerKgUsd: costPerKgAdj,
-            _remainingValueLocal: isAdd ? kg * costPerKgAdj : 0,
-            _remainingValueUsd: isAdd ? kg * costPerKgAdj : 0,
+            _remainingValueLocal: isAdd ? kg.times(costPerKgAdj) : ZERO,
+            _remainingValueUsd: isAdd ? kg.times(costPerKgAdj) : ZERO,
             lastOffloaded: adj.createdAt,
             _adjustmentIds: [adj.id],
           });
@@ -300,14 +336,14 @@ export function registerRawStockReceiptRoutes(app: Express) {
           )
         )
         .groupBy(factoryMixBatchSources.supplierId);
-      const usedValueBySupplierId = new Map<number, number>();
+      const usedValueBySupplierId = new Map<number, Decimal>();
       for (const r of usedValueRows) {
-        if (r.supplierId) usedValueBySupplierId.set(r.supplierId, parseFloat(r.usedValueUsd as string) || 0);
+        if (r.supplierId) usedValueBySupplierId.set(r.supplierId, amountOrZero(r.usedValueUsd));
       }
 
-      const reservedBySupplierId = new Map<number, number>();
+      const reservedBySupplierId = new Map<number, Decimal>();
       for (const r of reservedRows) {
-        if (r.supplierId) reservedBySupplierId.set(r.supplierId, parseFloat(r.reservedKg as string) || 0);
+        if (r.supplierId) reservedBySupplierId.set(r.supplierId, amountOrZero(r.reservedKg));
       }
 
       // Track which supplierIds have actual container raw stock records (those already
@@ -342,28 +378,22 @@ export function registerRawStockReceiptRoutes(app: Express) {
       for (const r of completedBatchRows) {
         if (!r.supplierId) continue;
         if (supplierIdsWithContainerStock.has(r.supplierId)) continue; // container stock handles it
-        const consumed = parseFloat(r.consumedKg as string) || 0;
+        const consumed = amountOrZero(r.consumedKg);
         const key = `supplier-${r.supplierId}`;
         if (supplierMap.has(key)) {
-          const existing = supplierMap.get(key)!;
-          const remainingKgBefore = existing._totalReceived - existing._totalUsed;
-          const avgCostBefore = remainingKgBefore > 0 ? existing._remainingValueUsd / remainingKgBefore : 0;
-          const avgCostLocalBefore = remainingKgBefore > 0 ? existing._remainingValueLocal / remainingKgBefore : 0;
-          existing._totalUsed += consumed;
-          existing._remainingValueUsd -= consumed * avgCostBefore;
-          existing._remainingValueLocal -= consumed * avgCostLocalBefore;
+          drawDown(supplierMap.get(key)!, consumed);
         }
       }
 
       // Build aggregated rows (reservedKg / freeKg will be fixed below for multi-row suppliers)
       const aggregated = Array.from(supplierMap.values()).map((s) => {
-        const remainingKg = s._totalReceived - s._totalUsed;
+        const remainingKg = s._totalReceived.minus(s._totalUsed);
         // For a REAL supplier, the displayed rate is ALWAYS the persisted locked rate —
         // never a recomputed receipt-weighted or remaining-value-derived figure. Only
         // an actual offload / opening balance / explicit correction can move it.
         // Standalone MANUAL materials (no supplierId) have no locked rate to read, so
         // they keep their own tracked blended-average cost.
-        const lockedRateUsd = s.supplierId ? (supplierLockedRateMap.get(s.supplierId) ?? 0) : null;
+        const lockedRateUsd = s.supplierId ? (supplierLockedRateMap.get(s.supplierId) ?? ZERO) : null;
         const avgCostPerKg = lockedRateUsd !== null ? lockedRateUsd : s._avgCostPerKg;
         const avgCostPerKgUsd = lockedRateUsd !== null ? lockedRateUsd : s._avgCostPerKgUsd;
         return {
@@ -383,8 +413,8 @@ export function registerRawStockReceiptRoutes(app: Express) {
           // Value is set below, AFTER freeKg is computed: for real suppliers it's
           // freeKg × locked rate (spec-mandated formula); MANUAL materials keep the
           // tracked remaining cost basis since they have no locked rate.
-          valueRemaining: (lockedRateUsd !== null ? 0 : s._remainingValueLocal).toFixed(2),
-          valueRemainingUsd: (lockedRateUsd !== null ? 0 : s._remainingValueUsd).toFixed(2),
+          valueRemaining: (lockedRateUsd !== null ? ZERO : s._remainingValueLocal).toFixed(2),
+          valueRemainingUsd: (lockedRateUsd !== null ? ZERO : s._remainingValueUsd).toFixed(2),
           _isLockedRateSupplier: lockedRateUsd !== null,
           _lockedRateUsd: lockedRateUsd,
           lastOffloaded: s.lastOffloaded,
@@ -411,17 +441,17 @@ export function registerRawStockReceiptRoutes(app: Express) {
         // informational here — showing how much of the already-deducted usedKg is
         // still "in an open batch" versus fully consumed — and must NOT be subtracted
         // again from freeKg, or the same kilograms are deducted twice.
-        const reserved = reservedBySupplierId.get(suppId) || 0;
-        const totalRemaining = rows.reduce((sum, r) => sum + parseFloat(r.remainingKg), 0);
+        const reserved = reservedBySupplierId.get(suppId) ?? ZERO;
+        const totalRemaining = sumMoney(rows.map((r) => r.remainingKg));
         if (rows.length === 1) {
           rows[0].reservedKg = reserved.toFixed(3);
           rows[0].freeKg = totalRemaining.toFixed(3);
         } else {
           // Proportional distribution across multiple rows
           for (const row of rows) {
-            const rem = parseFloat(row.remainingKg);
-            const proportion = totalRemaining > 0 ? rem / totalRemaining : 0;
-            row.reservedKg = (reserved * proportion).toFixed(3);
+            const rem = toMoney(row.remainingKg);
+            const proportion = totalRemaining.gt(0) ? rem.div(totalRemaining) : ZERO;
+            row.reservedKg = reserved.times(proportion).toFixed(3);
             row.freeKg = rem.toFixed(3);
           }
         }
@@ -433,11 +463,13 @@ export function registerRawStockReceiptRoutes(app: Express) {
       // the Raw Materials table, category totals, KPIs, and the mix-batch dialog
       // (which reads this same endpoint) numerically consistent by construction.
       const responseRows = aggregated.map((row) => {
-        const freeKg = parseFloat(row.freeKg) || 0;
-        const lockedValue = (freeKg * (row._lockedRateUsd || 0)).toFixed(2);
+        const freeKg = toMoney(row.freeKg);
+        const lockedValue = freeKg.times(row._lockedRateUsd ?? ZERO).toFixed(2);
         // Total consumed value at each source's own recorded (locked-at-creation) rate —
         // NOT a blended-rate × total-used-kg guess. See usedValueRows above.
-        const usedValueUsd = (row.supplierId ? usedValueBySupplierId.get(row.supplierId) || 0 : 0).toFixed(2);
+        const usedValueUsd = ((row.supplierId ? usedValueBySupplierId.get(row.supplierId) : undefined) ?? ZERO).toFixed(
+          2
+        );
         const { _isLockedRateSupplier: _locked, _lockedRateUsd: _rate, ...rest } = row;
         return {
           ...rest,
@@ -469,10 +501,12 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
       const { supplierId, newCostPerKg } = req.body;
       if (!supplierId) return res.status(400).json({ message: "supplierId is required" });
-      const newCost = parseFloat(newCostPerKg);
-      if (isNaN(newCost) || newCost < 0)
+      const newCostInput = parseMoneyInput(newCostPerKg);
+      if (newCostInput === null || newCostInput.lt(0))
         return res.status(400).json({ message: "newCostPerKg must be a non-negative number" });
 
+      // Stored in the same text form as before: the input read as a plain number.
+      const newCost = newCostInput.toNumber();
       await db.transaction(async (tx) => {
         // 1. Update costPerKg on all factory_raw_stock rows for this supplier
         const rawStockRows = await tx
@@ -535,12 +569,12 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
         const affectedBatchIds = new Set<number>();
         for (const src of batchSources) {
-          const wt = parseFloat(src.weightKg as string) || 0;
+          const wt = amountOrZero(src.weightKg);
           await tx
             .update(factoryMixBatchSources)
             .set({
               costPerKg: String(newCost),
-              totalCost: String((wt * newCost).toFixed(2)),
+              totalCost: wt.times(newCostInput).toFixed(2),
             })
             .where(eq(factoryMixBatchSources.id, src.id));
           affectedBatchIds.add(src.mixBatchId);
@@ -556,19 +590,17 @@ export function registerRawStockReceiptRoutes(app: Express) {
             .from(factoryMixBatchSources)
             .where(eq(factoryMixBatchSources.mixBatchId, batchId));
 
-          const totalWt = allSources.reduce((s, r) => s + (parseFloat(r.weightKg as string) || 0), 0);
-          const totalCostSum = allSources.reduce((s, r) => {
-            const wt = parseFloat(r.weightKg as string) || 0;
-            const c = parseFloat(r.costPerKg as string) || 0;
-            return s + wt * c;
-          }, 0);
-          const blendedCost = totalWt > 0 ? totalCostSum / totalWt : 0;
+          const totalWt = sumMoney(allSources.map((r) => r.weightKg));
+          const totalCostSum = sumMoney(
+            allSources.map((r) => amountOrZero(r.weightKg).times(amountOrZero(r.costPerKg)))
+          );
+          const blendedCost = totalWt.gt(0) ? totalCostSum.div(totalWt) : ZERO;
 
           await tx
             .update(factoryMixBatches)
             .set({
-              costPerKg: String(blendedCost.toFixed(4)),
-              totalCost: String(totalCostSum.toFixed(2)),
+              costPerKg: blendedCost.toFixed(4),
+              totalCost: totalCostSum.toFixed(2),
               updatedAt: new Date(),
             })
             .where(and(eq(factoryMixBatches.id, batchId), eq(factoryMixBatches.companyId, companyId)));
@@ -586,12 +618,12 @@ export function registerRawStockReceiptRoutes(app: Express) {
             );
 
           for (const bale of balesInBatch) {
-            const baleWt = parseFloat(bale.weightKg as string) || 0;
+            const baleWt = amountOrZero(bale.weightKg);
             await tx
               .update(factoryBales)
               .set({
-                costPerKg: String(blendedCost.toFixed(2)),
-                totalCost: String((baleWt * blendedCost).toFixed(2)),
+                costPerKg: blendedCost.toFixed(2),
+                totalCost: baleWt.times(blendedCost).toFixed(2),
                 updatedAt: new Date(),
               })
               .where(eq(factoryBales.id, bale.id));
@@ -614,10 +646,15 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
       const { supplierId, kg, notes, reference, costPerKg, currencyCode, txDate } = req.body;
       if (!supplierId) return res.status(400).json({ message: "supplierId is required" });
-      if (!kg || parseFloat(kg) <= 0) return res.status(400).json({ message: "kg must be > 0" });
+      const deductKgInput = kg ? parseMoneyInput(kg) : null;
+      if (deductKgInput === null || deductKgInput.lte(0)) return res.status(400).json({ message: "kg must be > 0" });
 
-      const deductKg = parseFloat(kg);
-      const costPerKgNum = costPerKg ? parseFloat(costPerKg) : 0;
+      const deductKgExact = deductKgInput;
+      // A cost that does not parse leaves no daybook entry, as NaN > 0 did.
+      const costPerKgExact = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
+      // Plain numbers for stored text and descriptions, as before.
+      const deductKg = deductKgExact.toNumber();
+      const costPerKgNum = costPerKgExact.toNumber();
       const ccy = currencyCode || "USD";
       const today = txDate || getClientDate(req);
 
@@ -640,9 +677,8 @@ export function registerRawStockReceiptRoutes(app: Express) {
         .orderBy(desc(factoryRawStock.offloadedAt));
 
       // Free kg from actual rows
-      const totalFreeFromRows = rows.reduce(
-        (sum, r) => sum + Math.max(0, parseFloat(r.receivedKg as string) - parseFloat(r.usedKg as string)),
-        0
+      const totalFreeFromRows = sumMoney(
+        rows.map((r) => MoneyDecimal.max(0, toMoney(r.receivedKg).minus(toMoney(r.usedKg))))
       );
 
       // Free kg from ADD/REMOVE adjustments for this supplier
@@ -655,37 +691,37 @@ export function registerRawStockReceiptRoutes(app: Express) {
             eq(factoryRawMaterialAdjustments.supplierId, Number(supplierId))
           )
         );
-      const adjFree = adjRows.reduce((sum, a) => {
+      const adjFree = adjRows.reduce((sum: Decimal, a) => {
         if (a.type === "DEDUCT") return sum; // DEDUCT is history-only; receivedKg on rows already reduced
-        const k = parseFloat(a.kg as string) || 0;
-        return a.type === "ADD" ? sum + k : sum - k;
-      }, 0);
+        const k = amountOrZero(a.kg);
+        return a.type === "ADD" ? sum.plus(k) : sum.minus(k);
+      }, ZERO);
 
-      const _totalFree = totalFreeFromRows + Math.max(0, adjFree);
+      const _totalFree = totalFreeFromRows.plus(MoneyDecimal.max(0, adjFree));
 
       // Allow over-use: no guard here — deduction can drive remaining stock negative
 
       // Deduct from rows newest-first; allow received to go below used (negative stock)
-      let remaining = deductKg;
-      const updates: { id: number; newReceived: number }[] = [];
+      let remaining: Decimal = deductKgExact;
+      const updates: { id: number; newReceived: Decimal }[] = [];
       for (const row of rows) {
-        if (remaining <= 0) break;
-        const received = parseFloat(row.receivedKg as string);
+        if (remaining.lte(0)) break;
+        const received = toMoney(row.receivedKg);
         // Allow over-use: deduct from received up to its full amount (may leave usedKg > receivedKg)
-        const take = Math.min(remaining, received);
-        if (take > 0) {
-          updates.push({ id: row.id, newReceived: received - take });
-          remaining -= take;
+        const take = MoneyDecimal.min(remaining, received);
+        if (take.gt(0)) {
+          updates.push({ id: row.id, newReceived: received.minus(take) });
+          remaining = remaining.minus(take);
         }
       }
 
       // Any remaining kg after row deductions → create a REMOVE adjustment
-      const adjDeductKg = remaining > 0.001 ? remaining : 0;
+      const adjDeductKg = remaining.gt("0.001") ? remaining : ZERO;
 
       let fxRate = 1;
-      if (ccy !== "USD" && costPerKgNum > 0) {
+      if (ccy !== "USD" && costPerKgExact.gt(0)) {
         try {
-          fxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, ccy, today));
+          fxRate = toMoney(await getOrFetchFxRateToUsd(companyId, ccy, today)).toNumber();
         } catch {
           fxRate = 1;
         }
@@ -696,14 +732,14 @@ export function registerRawStockReceiptRoutes(app: Express) {
         for (const u of updates) {
           await tx
             .update(factoryRawStock)
-            .set({ receivedKg: String(u.newReceived.toFixed(3)) })
+            .set({ receivedKg: u.newReceived.toFixed(3) })
             .where(eq(factoryRawStock.id, u.id));
         }
 
         // 1b. Record a DEDUCT history entry for the amount taken from container rows
         // DEDUCT type is skipped in all balance calculations — it only exists for history visibility.
-        const rowDeductKg = deductKg - adjDeductKg;
-        if (rowDeductKg > 0.001) {
+        const rowDeductKg = deductKgExact.minus(adjDeductKg);
+        if (rowDeductKg.gt("0.001")) {
           await tx.insert(factoryRawMaterialAdjustments).values({
             companyId,
             date: today,
@@ -719,7 +755,7 @@ export function registerRawStockReceiptRoutes(app: Express) {
 
         // 2. REMOVE adjustment for any overflow (from adjustment-sourced free)
         let _insertedAdj = null;
-        if (adjDeductKg > 0) {
+        if (adjDeductKg.gt(0)) {
           [_insertedAdj] = await tx
             .insert(factoryRawMaterialAdjustments)
             .values({
@@ -737,9 +773,9 @@ export function registerRawStockReceiptRoutes(app: Express) {
         }
 
         // 3. Write daybook entry for the balance update (if costPerKg provided)
-        if (costPerKgNum > 0) {
-          const totalValue = deductKg * costPerKgNum;
-          const totalValueUsd = totalValue * fxRate;
+        if (costPerKgExact.gt(0)) {
+          const totalValue = deductKgExact.times(costPerKgExact);
+          const totalValueUsd = totalValue.times(fxRate);
 
           const [sup] = await tx
             .select({ name: factorySuppliers.name })
@@ -755,14 +791,14 @@ export function registerRawStockReceiptRoutes(app: Express) {
             referenceId: Number(supplierId),
             description: `Deduct from received: ${deductKg} kg @ ${costPerKgNum} ${ccy} — ${supplierName}${notes ? ` (${notes})` : ""}`,
             currencyCode: ccy,
-            amountCurrency: -totalValue,
+            amountCurrency: totalValue.negated().toNumber(),
             fxRateToUsd: fxRate,
-            amountUsd: -totalValueUsd,
+            amountUsd: totalValueUsd.negated().toNumber(),
           });
         }
       });
 
-      res.json({ deducted: deductKg, rowsUpdated: updates.length, adjCreated: adjDeductKg > 0 });
+      res.json({ deducted: deductKg, rowsUpdated: updates.length, adjCreated: adjDeductKg.gt(0) });
     } catch (error: unknown) {
       logger.error("Error deducting received kg:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
