@@ -56,3 +56,18 @@ export function signedOpeningBalance(amount: MoneyInput, side: string | null | u
 export function moneyString(value: MoneyInput): string {
   return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES, MoneyDecimal.ROUND_HALF_UP).toFixed(MONEY_DECIMAL_PLACES);
 }
+
+const LEADING_NUMBER = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
+
+/**
+ * Request input as an exact Decimal, read the way parseFloat reads it (the
+ * leading number, so "5kg" is 5), or null where parseFloat gives NaN. Lets a
+ * route keep accepting exactly the input it accepted before while computing
+ * with the decimal value instead of a binary float.
+ */
+export function parseMoneyInput(value: unknown): Decimal | null {
+  if (typeof value === "number") return Number.isFinite(value) ? new MoneyDecimal(value) : null;
+  if (typeof value !== "string") return null;
+  const match = LEADING_NUMBER.exec(value);
+  return match ? new MoneyDecimal(match[0].trim()) : null;
+}
