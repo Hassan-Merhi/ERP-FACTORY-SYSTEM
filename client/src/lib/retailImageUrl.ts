@@ -20,6 +20,9 @@ export function normalizeRetailImageUrl(value?: string | null): string {
   const storedPreview = path.match(/^\/api\/files\/(\d+)\/preview\/?$/);
   if (storedPreview) return `/api/retail/media/${storedPreview[1]}`;
 
+  const retailMedia = path.match(/^\/api\/retail\/media\/(\d+)\/?$/);
+  if (retailMedia) return `/api/retail/media/${retailMedia[1]}`;
+
   return raw;
 }
 
