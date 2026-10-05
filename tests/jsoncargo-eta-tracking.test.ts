@@ -16,10 +16,7 @@ import {
   isValidContainerNumber,
   track as jsonCargoTrack,
 } from "../server/lib/trackingProviders/jsonCargoProvider";
-import {
-  refreshContainerEta,
-  refreshMultipleContainerEtas,
-} from "../server/services/jsonCargoTrackingService";
+import { refreshContainerEta, refreshMultipleContainerEtas } from "../server/services/jsonCargoTrackingService";
 
 const TEST_PREFIX = "jcargotest";
 
@@ -60,10 +57,9 @@ beforeAll(async () => {
   // Purge any containers/suppliers left behind by a previous failed run before
   // seedTestData tries to delete their parent companies (containers.company_id
   // has an FK that would otherwise block company cleanup).
-  await pool.query(
-    "DELETE FROM containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)",
-    [`%${TEST_PREFIX}%`]
-  );
+  await pool.query("DELETE FROM containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)", [
+    `%${TEST_PREFIX}%`,
+  ]);
   await pool.query("DELETE FROM suppliers WHERE code LIKE $1", [`${TEST_PREFIX}%`]);
 
   ctx = await seedTestData(TEST_PREFIX);
@@ -114,10 +110,9 @@ afterAll(async () => {
   await pool.query("DELETE FROM login_history WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)", [
     `%${TEST_PREFIX}%`,
   ]);
-  await pool.query(
-    "DELETE FROM containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)",
-    [`%${TEST_PREFIX}%`]
-  );
+  await pool.query("DELETE FROM containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)", [
+    `%${TEST_PREFIX}%`,
+  ]);
   await pool.query("DELETE FROM suppliers WHERE code LIKE $1", [`${TEST_PREFIX}%`]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
@@ -226,10 +221,7 @@ describe("jsonCargoProvider.track (mocked HTTP)", () => {
 describe("refreshContainerEta (service, mocked HTTP)", () => {
   it("updates the ETA on a successful response", async () => {
     const container = await makeContainer();
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-09-15" } } })
-    );
+    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-09-15" } } }));
     const result = await refreshContainerEta(container.id);
     expect(result.status).toBe("updated");
     expect(result.newEta).toBe("2026-09-15");
@@ -329,10 +321,7 @@ describe("refreshMultipleContainerEtas (bulk)", () => {
     const c1 = await makeContainer();
     const c2 = await makeContainer({ trackingCarrierHint: "Evergreen" }); // unsupported
     const c3 = await makeContainer({ status: "OFFLOADED" }); // inactive
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-01" } } })
-    );
+    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-01" } } }));
 
     const summary = await refreshMultipleContainerEtas([c1.id, c1.id, c2.id, c3.id]);
     expect(summary.total).toBe(3); // deduped
@@ -349,61 +338,22 @@ describe("routes — permissions and company isolation", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when refreshing a container from another company", async () => {
-    const otherCtx = await seedTestData(`${TEST_PREFIX}other`);
-    try {
-      const [foreignSupplier] = await db
-        .insert(companyScopedSuppliers)
-        .values({
-          companyId: otherCtx.companyId,
-          code: `${TEST_PREFIX}-FSUP`,
-          legalName: "Foreign Supplier",
-          email: `${TEST_PREFIX}_foreign@example.com`,
-        })
-        .returning();
-      const [foreignContainer] = await db
-        .insert(schema.containers)
-        .values({
-          companyId: otherCtx.companyId,
-          containerNumber: "MSCU7654321",
-          supplierId: foreignSupplier.id,
-          status: "OTW",
-          importDate: "2026-01-01",
-          trackingCarrierHint: "MSC",
-        } as any)
-        .returning();
-
-      vi.stubGlobal("fetch", mockFetchOnce({ status: 200 }));
-      const res = await agent.post(`/api/containers/${foreignContainer.id}/refresh-eta`).send({});
-      expect(res.status).toBe(404);
-    } finally {
-      await pool.query("DELETE FROM containers WHERE company_id = $1", [otherCtx.companyId]);
-      await pool.query("DELETE FROM suppliers WHERE code = $1", [`${TEST_PREFIX}-FSUP`]);
-      await cleanupTestData(`${TEST_PREFIX}other`);
-    }
-  });
-
-  it("allows a regular (non-admin) authenticated user to refresh a single container", async () => {
+  // Automated carrier tracking is disabled (66c6aa5): ETA refresh answers 410
+  // for every role, single or bulk, before any lookup, and never calls a carrier.
+  it("answers 410 for single and bulk ETA refresh without calling a carrier", async () => {
     const container = await makeContainer();
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-15" } } })
-    );
-    const res = await managerAgent.post(`/api/containers/${container.id}/refresh-eta`).send({});
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("updated");
-  });
-
-  it("rejects bulk refresh for non-admin roles", async () => {
-    const res = await managerAgent.post("/api/containers/refresh-etas").send({});
-    expect(res.status).toBe(403);
-  });
-
-  it("allows bulk refresh for Admin", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2027-01-01" } } }));
-    const res = await agent.post("/api/containers/refresh-etas").send({});
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("total");
+    const carrier = vi.fn();
+    vi.stubGlobal("fetch", carrier);
+    const attempts = [
+      managerAgent.post(`/api/containers/${container.id}/refresh-eta`).send({}),
+      agent.post(`/api/containers/${container.id}/refresh-eta`).send({}),
+      managerAgent.post("/api/containers/refresh-etas").send({}),
+      agent.post("/api/containers/refresh-etas").send({}),
+    ];
+    for (const res of await Promise.all(attempts)) {
+      expect(res.status).toBe(410);
+    }
+    expect(carrier).not.toHaveBeenCalled();
   });
 
   it("returns a safe summary with no secrets on GET eta-tracking-summary", async () => {
