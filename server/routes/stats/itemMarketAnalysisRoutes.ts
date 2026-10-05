@@ -79,7 +79,14 @@ function parseCompanyIds(value: string | undefined, activeCompanyId: number): nu
 function parseStockGroupNames(value: string | undefined): string[] | undefined {
   if (!value) return undefined;
 
-  const names = [...new Set(value.split(",").map((name) => name.trim()).filter(Boolean))];
+  const names = [
+    ...new Set(
+      value
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+    ),
+  ];
   if (names.length === 0) return undefined;
   if (names.length > 50 || names.some((name) => name.length > 100)) {
     throw new CompanyAccessError(
@@ -149,7 +156,8 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
           return res.status(403).json({ message: "Item Market Analysis is available for ERP companies only" });
         }
 
-        const assignment = companyId === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, companyId);
+        const assignment =
+          companyId === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, companyId);
         const role =
           companyId === activeCompanyId
             ? activeRole
