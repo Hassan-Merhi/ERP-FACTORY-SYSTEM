@@ -313,6 +313,7 @@ export default function FactoryPriorityScan() {
           queryKey: ["/api/factory/customer-proformas/capacity", routed.target.proformaId],
         }),
         queryClient.invalidateQueries({ queryKey: ["/api/factory/bale-stock-count"] }),
+        queryClient.invalidateQueries({ queryKey: ["/api/factory/daily-bale-scans"] }),
       ]);
 
       const completedThisLoading = routed.advance?.completedOrderIds.includes(routed.target.orderId) === true;
