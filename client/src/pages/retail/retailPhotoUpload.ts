@@ -32,7 +32,7 @@ export async function compressRetailPhoto(file: File): Promise<File> {
   }
 }
 
-/** Uploads one photo to company file storage and returns its absolute preview URL. */
+/** Uploads one photo to company file storage and returns a host-agnostic retail media URL. */
 export async function uploadRetailPhoto(file: File): Promise<string> {
   const prepared = await compressRetailPhoto(file);
   if (!ALLOWED_IMAGE_TYPES.has(prepared.type)) throw new Error("Use JPG, PNG, WEBP or GIF images.");
@@ -42,5 +42,5 @@ export async function uploadRetailPhoto(file: File): Promise<string> {
   const response = await fetch("/api/files/upload", { method: "POST", body: formData, credentials: "include" });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${prepared.name}`);
-  return new URL(`/api/files/${body.id}/preview`, window.location.origin).toString();
+  return `/api/retail/media/${body.id}`;
 }
