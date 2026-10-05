@@ -360,4 +360,9 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "ستتوقف الملصقات المطبوعة بالرمز الشريطي القديم عن المسح. هل تريد تغيير هذا الرمز الشريطي؟",
     fr: "Les étiquettes imprimées avec l'ancien code-barres ne pourront plus être scannées. Changer ce code-barres ?",
   },
+  {
+    en: "Review post-offload cost impact",
+    ar: "مراجعة أثر التكلفة بعد التفريغ",
+    fr: "Vérifier l'impact sur les coûts après déchargement",
+  },
 ];

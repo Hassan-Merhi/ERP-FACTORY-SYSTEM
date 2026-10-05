@@ -114,8 +114,6 @@ function money(value: string | number | null | undefined): string {
 function buildPostOffloadImpactConfirmation(preview: PostOffloadImpactPreviewResponse["preview"]): string {
   const remainingPercent = Math.max(0, Math.min(100, Number(preview.remainingFraction || 0) * 100));
   const lines = [
-    "Review post-offload cost impact",
-    "",
     `Container: ${preview.containerNumber}`,
     `Container cost/kg: $${money(preview.currentContainerCostPerKgUsd)} → $${money(preview.projectedContainerCostPerKgUsd)}`,
     `Full container value change: $${money(preview.fullContainerValueDeltaUsd)}`,
@@ -182,7 +180,10 @@ async function attachPostOffloadImpactPreview(
 
   const confirmed =
     typeof window === "undefined" ||
-    (await confirmAction({ title: buildPostOffloadImpactConfirmation(prepared.preview) }));
+    (await confirmAction({
+      title: "Review post-offload cost impact",
+      description: buildPostOffloadImpactConfirmation(prepared.preview),
+    }));
   if (!confirmed) {
     const cancelled: Error & { _handledGlobally?: boolean } = new Error("Post-offload charge save cancelled.");
     cancelled.name = "UserCancelled";
