@@ -29,6 +29,8 @@ interface MarketRow {
   importedQty: number;
   purchaseValue: number | null;
   weightedPurchaseCost: number | null;
+  purchaseValueWithOffloading: number | null;
+  weightedPurchaseCostWithOffloading: number | null;
   purchaseCurrencies: string[];
   soldQty: number;
   revenue: number;
@@ -125,6 +127,7 @@ export default function ItemMarketAnalysis() {
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
   const [expandedItemCode, setExpandedItemCode] = useState<string | null>(null);
   const [visibleRowCount, setVisibleRowCount] = useState(250);
+  const [includeOffloadingCost, setIncludeOffloadingCost] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
@@ -349,6 +352,14 @@ export default function ItemMarketAnalysis() {
         const purchaseValue =
           purchaseCurrencies.length === 1 ? orderedRows.reduce((sum, row) => sum + (row.purchaseValue ?? 0), 0) : null;
         const weightedPurchaseCost = purchaseValue != null && importedQty !== 0 ? purchaseValue / importedQty : null;
+        const purchaseValueWithOffloading =
+          purchaseCurrencies.length === 1
+            ? orderedRows.reduce((sum, row) => sum + (row.purchaseValueWithOffloading ?? 0), 0)
+            : null;
+        const weightedPurchaseCostWithOffloading =
+          purchaseValueWithOffloading != null && importedQty !== 0
+            ? purchaseValueWithOffloading / importedQty
+            : null;
         const avgSellingPrice = soldQty === 0 ? 0 : revenue / soldQty;
         const profitPerUnit = soldQty === 0 ? 0 : profit / soldQty;
         const marginPct = revenue === 0 ? 0 : (profit / revenue) * 100;
@@ -363,6 +374,8 @@ export default function ItemMarketAnalysis() {
           importedQty,
           purchaseValue,
           weightedPurchaseCost,
+          purchaseValueWithOffloading,
+          weightedPurchaseCostWithOffloading,
           purchaseCurrencies,
           soldQty,
           revenue,
@@ -530,6 +543,14 @@ export default function ItemMarketAnalysis() {
             <SelectItem value="none">None</SelectItem>
           </SelectContent>
         </Select>
+        <Button
+          type="button"
+          variant={includeOffloadingCost ? "default" : "outline"}
+          onClick={() => setIncludeOffloadingCost((current) => !current)}
+          data-testid="button-item-market-offloading-cost"
+        >
+          {includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
+        </Button>
       </div>
 
       {multiCompany && companySummaries.length > 0 && (
@@ -590,8 +611,12 @@ export default function ItemMarketAnalysis() {
                 {multiCompany && <TableHead>Company</TableHead>}
                 <TableHead className="text-right">Imports</TableHead>
                 <TableHead className="text-right">Imported Qty</TableHead>
-                <TableHead className="text-right">Purchase Value</TableHead>
-                <TableHead className="text-right">Avg Purchase</TableHead>
+                <TableHead className="text-right">
+                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                </TableHead>
+                <TableHead className="text-right">
+                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                </TableHead>
                 <TableHead className="text-right">Sold Qty</TableHead>
                 <TableHead className="text-right">Avg Sell</TableHead>
                 <TableHead className="text-right">Revenue</TableHead>
@@ -643,11 +668,19 @@ export default function ItemMarketAnalysis() {
                           {mixedCurrency ? (
                             <span className="text-xs text-muted-foreground">Mixed currencies</span>
                           ) : (
-                            formatNativePurchase(group.purchaseValue, group.purchaseCurrencies)
+                            formatNativePurchase(
+                              includeOffloadingCost ? group.purchaseValueWithOffloading : group.purchaseValue,
+                              group.purchaseCurrencies
+                            )
                           )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatNativePurchase(group.weightedPurchaseCost, group.purchaseCurrencies)}
+                          {formatNativePurchase(
+                            includeOffloadingCost
+                              ? group.weightedPurchaseCostWithOffloading
+                              : group.weightedPurchaseCost,
+                            group.purchaseCurrencies
+                          )}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{formatNumber(group.soldQty)}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatAmount(group.avgSellingPrice)}</TableCell>
@@ -695,8 +728,12 @@ export default function ItemMarketAnalysis() {
                                       <TableHead>Company</TableHead>
                                       <TableHead className="text-right">Imports</TableHead>
                                       <TableHead className="text-right">Imported Qty</TableHead>
-                                      <TableHead className="text-right">Purchase Value</TableHead>
-                                      <TableHead className="text-right">Avg Purchase</TableHead>
+                                      <TableHead className="text-right">
+                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                </TableHead>
+                                      <TableHead className="text-right">
+                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                </TableHead>
                                       <TableHead className="text-right">Sold Qty</TableHead>
                                       <TableHead className="text-right">Avg Sell</TableHead>
                                       <TableHead className="text-right">Revenue</TableHead>
@@ -740,11 +777,21 @@ export default function ItemMarketAnalysis() {
                                             {rowMixedCurrency ? (
                                               <span className="text-xs text-muted-foreground">Mixed currencies</span>
                                             ) : (
-                                              formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
+                                              formatNativePurchase(
+                                                includeOffloadingCost
+                                                  ? row.purchaseValueWithOffloading
+                                                  : row.purchaseValue,
+                                                row.purchaseCurrencies
+                                              )
                                             )}
                                           </TableCell>
                                           <TableCell className="text-right tabular-nums">
-                                            {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
+                                            {formatNativePurchase(
+                                              includeOffloadingCost
+                                                ? row.weightedPurchaseCostWithOffloading
+                                                : row.weightedPurchaseCost,
+                                              row.purchaseCurrencies
+                                            )}
                                           </TableCell>
                                           <TableCell className="text-right tabular-nums">
                                             {formatNumber(row.soldQty)}
@@ -800,11 +847,17 @@ export default function ItemMarketAnalysis() {
                         {mixedCurrency ? (
                           <span className="text-xs text-muted-foreground">Mixed currencies</span>
                         ) : (
-                          formatNativePurchase(row.purchaseValue, row.purchaseCurrencies)
+                          formatNativePurchase(
+                            includeOffloadingCost ? row.purchaseValueWithOffloading : row.purchaseValue,
+                            row.purchaseCurrencies
+                          )
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatNativePurchase(row.weightedPurchaseCost, row.purchaseCurrencies)}
+                        {formatNativePurchase(
+                          includeOffloadingCost ? row.weightedPurchaseCostWithOffloading : row.weightedPurchaseCost,
+                          row.purchaseCurrencies
+                        )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>

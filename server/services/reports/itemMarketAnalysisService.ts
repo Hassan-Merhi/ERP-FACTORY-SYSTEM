@@ -54,13 +54,36 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COUNT(DISTINCT c.id)::int AS import_count,
         COALESCE(SUM(pli.quantity::numeric), 0) AS imported_qty,
         COALESCE(SUM(pli.line_total::numeric), 0) AS purchase_value,
+        COALESCE(
+          SUM(pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0)),
+          0
+        ) AS offloading_value,
+        COALESCE(
+          SUM(
+            pli.line_total::numeric +
+            (pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0))
+          ),
+          0
+        ) AS purchase_value_with_offloading,
         COUNT(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN'))::int AS currency_count,
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
-        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
+        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost,
+        SUM(
+          pli.line_total::numeric +
+          (pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0))
+        ) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost_with_offloading
       FROM eligible_items e
       JOIN po_line_items pli ON pli.stock_item_id = e.id
       JOIN purchase_orders po ON po.id = pli.po_id
       JOIN containers c ON c.id = po.container_id
+      LEFT JOIN LATERAL (
+        SELECT co.additional_cost_per_bale::numeric AS additional_cost_per_bale
+        FROM container_offloads co
+        WHERE co.container_id = c.id
+          AND COALESCE(co.optional, false) = false
+        ORDER BY co.offloaded_at DESC, co.id DESC
+        LIMIT 1
+      ) offload ON true
       WHERE po.company_id = $1
         AND c.offload_date IS NOT NULL
         AND ($3::date IS NULL OR c.offload_date >= $3::date)
@@ -127,6 +150,11 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       COALESCE(i.imported_qty, 0) AS imported_qty,
       CASE WHEN i.currency_count = 1 THEN i.purchase_value ELSE NULL END AS purchase_value,
       CASE WHEN i.currency_count = 1 THEN i.weighted_purchase_cost ELSE NULL END AS weighted_purchase_cost,
+      CASE WHEN i.currency_count = 1 THEN i.purchase_value_with_offloading ELSE NULL END AS purchase_value_with_offloading,
+      CASE
+        WHEN i.currency_count = 1 THEN i.weighted_purchase_cost_with_offloading
+        ELSE NULL
+      END AS weighted_purchase_cost_with_offloading,
       COALESCE(i.currencies, ARRAY[]::text[]) AS purchase_currencies,
       COALESCE(s.sold_qty, 0) AS sold_qty,
       COALESCE(s.revenue, 0) AS revenue,
@@ -156,6 +184,12 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       importedQty: numberValue(raw.imported_qty),
       purchaseValue: raw.purchase_value == null ? null : numberValue(raw.purchase_value),
       weightedPurchaseCost: raw.weighted_purchase_cost == null ? null : numberValue(raw.weighted_purchase_cost),
+      purchaseValueWithOffloading:
+        raw.purchase_value_with_offloading == null ? null : numberValue(raw.purchase_value_with_offloading),
+      weightedPurchaseCostWithOffloading:
+        raw.weighted_purchase_cost_with_offloading == null
+          ? null
+          : numberValue(raw.weighted_purchase_cost_with_offloading),
       purchaseCurrencies: Array.isArray(raw.purchase_currencies) ? raw.purchase_currencies : [],
       soldQty,
       revenue,
