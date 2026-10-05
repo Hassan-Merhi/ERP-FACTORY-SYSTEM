@@ -67,15 +67,18 @@ export function registerBalesCrudRoutes(app: Express) {
       if (locationId) conditions.push(eq(factoryBales.erpLocationId, parseInt(locationId as string)));
       if (productId) conditions.push(eq(factoryBales.productId, parseInt(productId as string)));
 
+      const normalizedSearch = typeof search === "string" ? search.trim() : "";
+
       // Date filter: match against stockEntryDate first (set on all stock-entry/waste-dispatch bales),
-      // falling back to the date portion of createdAt for pressing-batch bales.
-      if (date && typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      // falling back to the date portion of createdAt for pressing-batch bales. Text/reference
+      // searches intentionally span all dates so an exact bale can never be hidden by the day picker.
+      if (!normalizedSearch && date && typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
         conditions.push(sql`COALESCE(${factoryBales.stockEntryDate}, ${factoryBales.createdAt}::date) = ${date}::date`);
       }
 
       // Server-side text search: bale code, article code, product name, reference number.
-      if (search && typeof search === "string" && search.trim()) {
-        const raw = search.trim();
+      if (normalizedSearch) {
+        const raw = normalizedSearch;
         const q = `%${raw}%`;
         const compact = `%${normalizeSearchText(raw)}%`;
         conditions.push(
