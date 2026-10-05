@@ -223,7 +223,6 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
   };
 }
 
-
 export interface ItemMarketSalePriceBreakdownFilters {
   companyId: number;
   stockItemId: number;
@@ -290,13 +289,7 @@ export async function getItemMarketSalePriceBreakdown(filters: ItemMarketSalePri
     GROUP BY activity_type, unit_price
     ORDER BY CASE WHEN activity_type = 'sale' THEN 0 ELSE 1 END, unit_price DESC
     `,
-    [
-      filters.companyId,
-      filters.stockItemId,
-      filters.locationIds,
-      filters.startDate ?? null,
-      filters.endDate ?? null,
-    ]
+    [filters.companyId, filters.stockItemId, filters.locationIds, filters.startDate ?? null, filters.endDate ?? null]
   );
 
   return {

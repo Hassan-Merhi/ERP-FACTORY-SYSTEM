@@ -1,6 +1,6 @@
 {
   "description": "Per-file count of parseFloat( calls in server/ and shared/ source (tests excluded). parseFloat turns numeric(...) money strings into binary floats, and sums of those drift by fractions of a cent; new code uses server/lib/money.ts instead. tests/float-money-ratchet.test.ts fails when a file's count rises or a new file starts using parseFloat, and when a count falls without this baseline being lowered to match, so the total can only go down.",
-  "total": 2924,
+  "total": 2876,
   "files": {
     "server/aiAgentTools.ts": 4,
     "server/aiTools.ts": 33,
@@ -207,8 +207,6 @@
     "server/routes/factory/stock/stockRemovalRoutes.ts": 2,
     "server/routes/factory/suppliers/_supplierStatementHelpers.ts": 12,
     "server/routes/factory/suppliers/balance/_helpers.ts": 12,
-    "server/routes/factory/suppliers/balance/single.ts": 11,
-    "server/routes/factory/suppliers/balance/with-balances.ts": 37,
     "server/routes/factory/suppliers/broker/_helpers.ts": 12,
     "server/routes/factory/suppliers/broker/statement.ts": 16,
     "server/routes/factory/suppliers/broker/visual-statement.ts": 10,

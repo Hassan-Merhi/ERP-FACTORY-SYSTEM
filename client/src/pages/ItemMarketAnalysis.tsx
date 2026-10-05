@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,206 +15,18 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 
-interface MarketRow {
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-  stockItemId: number;
-  code: string;
-  name: string;
-  stockGroupId: number | null;
-  stockGroupName: string | null;
-  importCount: number;
-  importedQty: number;
-  purchaseValue: number | null;
-  weightedPurchaseCost: number | null;
-  purchaseValueWithOffloading: number | null;
-  weightedPurchaseCostWithOffloading: number | null;
-  purchaseCurrencies: string[];
-  soldQty: number;
-  revenue: number;
-  historicalCost: number;
-  profit: number;
-  avgSellingPrice: number;
-  profitPerUnit: number;
-  marginPct: number;
-  marketStatus: "strong" | "watch" | "losing" | "no_sales";
-}
-
-interface SalePriceBreakdownRow {
-  activityType: "sale" | "return";
-  unitPrice: number;
-  quantity: number;
-  revenue: number;
-  profit: number;
-  transactionCount: number;
-}
-
-interface SalePriceBreakdownResponse {
-  rows: SalePriceBreakdownRow[];
-}
-
-interface MarketCompanySummary {
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-  itemCount: number;
-  importedQty: number;
-  soldQty: number;
-  revenue: number;
-  profit: number;
-  marginPct: number;
-}
-
-interface MarketResponse {
-  generatedAt: string;
-  rows: MarketRow[];
-  stockGroups: string[];
-  companySummaries: MarketCompanySummary[];
-  summary: {
-    itemCount: number;
-    importedQty: number;
-    soldQty: number;
-    revenue: number;
-    profit: number;
-    marginPct: number;
-  };
-}
-
-function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
-  if (status === "strong") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Strong</Badge>;
-  if (status === "losing") return <Badge variant="destructive">Losing</Badge>;
-  if (status === "watch") return <Badge variant="secondary">Watch</Badge>;
-  return <Badge variant="outline">No sales</Badge>;
-}
-
-type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
-
-const PROFIT_EPSILON = 0.005;
-
-function normalizeItemCode(code: string) {
-  return code.trim().toLocaleUpperCase();
-}
-
-function matchesProfitDirection(profit: number, filter: ProfitDirectionFilter) {
-  if (filter === "gaining") return profit > PROFIT_EPSILON;
-  if (filter === "losing") return profit < -PROFIT_EPSILON;
-  if (filter === "none") return Math.abs(profit) <= PROFIT_EPSILON;
-  return true;
-}
-
-function getMarketStatus(soldQty: number, profit: number, marginPct: number): MarketRow["marketStatus"] {
-  if (soldQty <= 0) return "no_sales";
-  if (profit < 0) return "losing";
-  if (marginPct >= 15) return "strong";
-  return "watch";
-}
-
-function formatNativePurchase(value: number | null, currencies: string[]) {
-  if (value == null) return "—";
-  if (currencies.length !== 1) return "Mixed currencies";
-  const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return "$" + amount;
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-    </div>
-  );
-}
-
-function SalePriceBreakdown({
-  companyId,
-  stockItemId,
-  startDate,
-  endDate,
-}: {
-  companyId: number;
-  stockItemId: number;
-  startDate?: string;
-  endDate?: string;
-}) {
-  const { formatAmount } = useCurrencyContext();
-  const queryUrl = useMemo(() => {
-    const params = new URLSearchParams({
-      companyId: String(companyId),
-      stockItemId: String(stockItemId),
-    });
-    if (startDate) params.set("startDate", startDate);
-    if (endDate) params.set("endDate", endDate);
-    return `/api/reports/item-market-analysis/sale-prices?${params.toString()}`;
-  }, [companyId, stockItemId, startDate, endDate]);
-
-  const { data, isLoading, isError } = useQuery<SalePriceBreakdownResponse>({
-    queryKey: [queryUrl],
-    staleTime: 5 * 60_000,
-    gcTime: 15 * 60_000,
-    refetchOnWindowFocus: false,
-  });
-
-  if (isLoading) {
-    return <Skeleton className="h-24 w-full" />;
-  }
-
-  if (isError) {
-    return <div className="p-3 text-xs text-destructive">Failed to load sale price breakdown.</div>;
-  }
-
-  if (!data?.rows.length) {
-    return <div className="p-3 text-xs text-muted-foreground">No sale price history for this item.</div>;
-  }
-
-  return (
-    <div className="rounded-md border bg-background">
-      <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">Sale price breakdown</div>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Sold Price</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Revenue</TableHead>
-              <TableHead className="text-right">Profit</TableHead>
-              <TableHead className="text-right">Transactions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.rows.map((priceRow) => {
-              return (
-                <TableRow key={`${priceRow.activityType}:${priceRow.unitPrice}`}>
-                  <TableCell>
-                    <Badge variant={priceRow.activityType === "return" ? "outline" : "secondary"}>
-                      {priceRow.activityType === "return" ? "Return" : "Sale"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatAmount(priceRow.unitPrice)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatNumber(priceRow.quantity)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatAmount(priceRow.revenue)}</TableCell>
-                  <TableCell
-                    className={`text-right font-medium tabular-nums ${
-                      priceRow.profit < 0
-                        ? "text-red-600 dark:text-red-400"
-                        : "text-emerald-600 dark:text-emerald-400"
-                    }`}
-                  >
-                    {formatAmount(priceRow.profit)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatNumber(priceRow.transactionCount)}</TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </div>
-    </div>
-  );
-}
+import {
+  StatusBadge,
+  normalizeItemCode,
+  matchesProfitDirection,
+  getMarketStatus,
+  formatNativePurchase,
+  MetricCard,
+  type MarketRow,
+  type MarketResponse,
+  type ProfitDirectionFilter,
+  SalePriceBreakdown,
+} from "./itemMarketAnalysisParts";
 
 export default function ItemMarketAnalysis() {
   const { selectedCompany, companies } = useCompany();
@@ -346,9 +157,8 @@ export default function ItemMarketAnalysis() {
     );
 
     return {
-      itemCount: new Set(
-        rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
-      ).size,
+      itemCount: new Set(rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`))
+        .size,
       ...totals,
       marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
     };
@@ -465,9 +275,7 @@ export default function ItemMarketAnalysis() {
             ? orderedRows.reduce((sum, row) => sum + (row.purchaseValueWithOffloading ?? 0), 0)
             : null;
         const weightedPurchaseCostWithOffloading =
-          purchaseValueWithOffloading != null && importedQty !== 0
-            ? purchaseValueWithOffloading / importedQty
-            : null;
+          purchaseValueWithOffloading != null && importedQty !== 0 ? purchaseValueWithOffloading / importedQty : null;
         const avgSellingPrice = soldQty === 0 ? 0 : revenue / soldQty;
         const profitPerUnit = soldQty === 0 ? 0 : profit / soldQty;
         const marginPct = revenue === 0 ? 0 : (profit / revenue) * 100;
@@ -1023,9 +831,7 @@ export default function ItemMarketAnalysis() {
                         <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
                         <TableCell
                           className={`text-right font-medium tabular-nums ${
-                            row.profit < 0
-                              ? "text-red-600 dark:text-red-400"
-                              : "text-emerald-600 dark:text-emerald-400"
+                            row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
                           }`}
                         >
                           {formatAmount(row.profit)}
@@ -1050,7 +856,6 @@ export default function ItemMarketAnalysis() {
                     </Fragment>
                   );
                 })}
-
 
               {!isLoading && (multiCompany ? groupedRows.length === 0 : rows.length === 0) && (
                 <TableRow>

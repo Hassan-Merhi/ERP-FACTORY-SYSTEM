@@ -119,7 +119,6 @@ describe("Item Market Analysis calculations", () => {
     expect(report.body.summary.revenue).toBeCloseTo(160, 2);
     expect(report.body.summary.profit).toBeCloseTo(80, 2);
 
-
     const priceBreakdown = await agent.get(
       `/api/reports/item-market-analysis/sale-prices?companyId=${ctx.companyId}&stockItemId=${stockItemId}&startDate=2030-01-01&endDate=2030-12-31`
     );
