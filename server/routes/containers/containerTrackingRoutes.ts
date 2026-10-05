@@ -12,13 +12,7 @@ import {
   type InsertContainer,
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import {
-  refreshContainerEta,
-  refreshMultipleContainerEtas,
-  getEtaTrackingSummary,
-} from "../../services/jsonCargoTrackingService";
-
-const JSONCARGO_ADMIN_ROLES = ["Admin", "Developer", "Owner"];
+import { getEtaTrackingSummary } from "../../services/jsonCargoTrackingService";
 
 export function registerContainerTrackingRoutes(app: Express) {
   app.patch("/api/containers/:id/tracking", requireAuth, requireNonPOS, async (req, res) => {
@@ -308,86 +302,26 @@ export function registerContainerTrackingRoutes(app: Express) {
   // Any authenticated non-POS user in the container's own company may trigger this,
   // matching the permission level of the manual tracking-fields PATCH above.
   app.post("/api/containers/:id/fetch-eta", requireAuth, requireNonPOS, async (req, res) => {
-    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
-    if (!req.session.currentCompanyId) {
-      return res.status(400).json({ message: "No company selected" });
-    }
-    const id = parseId(req.params.id);
-    if (id === null) {
-      return res.status(400).json({ message: "Invalid container ID" });
-    }
-
-    try {
-      const result = await refreshContainerEta(id, {
-        forceRefresh: req.body?.forceRefresh === true,
-        companyId: req.session.currentCompanyId,
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      if (getErrorMessage(error) === "Container not found") {
-        return res.status(404).json({ message: "Container not found" });
-      }
-      res.status(500).json({ message: getErrorMessage(error) ?? "Failed to refresh ETA" });
-    }
+    return res.status(410).json({
+      message:
+        "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import.",
+    });
   });
 
   // Alias with a more descriptive path — same behavior as fetch-eta above.
   app.post("/api/containers/:id/refresh-eta", requireAuth, requireNonPOS, async (req, res) => {
-    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
-    if (!req.session.currentCompanyId) {
-      return res.status(400).json({ message: "No company selected" });
-    }
-    const id = parseId(req.params.id);
-    if (id === null) {
-      return res.status(400).json({ message: "Invalid container ID" });
-    }
-
-    try {
-      const result = await refreshContainerEta(id, {
-        forceRefresh: req.body?.forceRefresh === true,
-        companyId: req.session.currentCompanyId,
-      });
-      res.json(result);
-    } catch (error: unknown) {
-      if (getErrorMessage(error) === "Container not found") {
-        return res.status(404).json({ message: "Container not found" });
-      }
-      res.status(500).json({ message: getErrorMessage(error) ?? "Failed to refresh ETA" });
-    }
+    return res.status(410).json({
+      message:
+        "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import.",
+    });
   });
 
   // POST /api/containers/refresh-etas — bulk JSONCargo ETA refresh, Admin/Developer/Owner only.
   app.post("/api/containers/refresh-etas", requireAuth, requireNonPOS, async (req, res) => {
-    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
-    const role = req.user?.role;
-    if (!role || !JSONCARGO_ADMIN_ROLES.includes(role)) {
-      return res.status(403).json({ message: "Insufficient permissions" });
-    }
-    if (!req.session.currentCompanyId) {
-      return res.status(400).json({ message: "No company selected" });
-    }
-
-    try {
-      const containerIds = Array.isArray(req.body?.containerIds)
-        ? req.body.containerIds.filter((n: unknown): n is number => Number.isInteger(n))
-        : undefined;
-
-      const summary = await refreshMultipleContainerEtas(containerIds, {
-        forceRefresh: req.body?.forceRefresh === true,
-        companyId: req.session.currentCompanyId,
-      });
-
-      const message =
-        summary.total === 0
-          ? "No containers were eligible for a JSONCargo ETA refresh (unsupported carrier, inactive, or none tracked)."
-          : `Checked ${summary.total} container(s): ${summary.updated} updated, ${summary.unchanged} unchanged, ` +
-            `${summary.noEta} with no ETA yet, ${summary.notFound} not found, ${summary.skippedRecent} skipped (checked recently), ` +
-            `${summary.errors} failed.`;
-
-      res.json({ ...summary, message });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) ?? "Bulk ETA refresh failed" });
-    }
+    return res.status(410).json({
+      message:
+        "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import.",
+    });
   });
 
   // GET /api/containers/eta-tracking-summary — dashboard summary, no secrets/raw data.

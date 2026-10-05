@@ -97,7 +97,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(DEFAULT_COLOR);
+  const [selectedColor, setSelectedColor] = useState<string>(DEFAULT_COLOR);
   const [selectedPriority, setSelectedPriority] = useState(1);
   const [selectedPresetIndex, setSelectedPresetIndex] = useState<number | null>(0);
   const [draftColorPresets, setDraftColorPresets] = useState<string[]>([...DEFAULT_COLOR_PRESETS]);
@@ -136,15 +136,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   };
 
   const saveMutation = useMutation({
-    mutationFn: async ({
-      color,
-      priority,
-      palette,
-    }: {
-      color: string;
-      priority: number;
-      palette: string[];
-    }) => {
+    mutationFn: async ({ color, priority, palette }: { color: string; priority: number; palette: string[] }) => {
       if (!samePalette(palette, colorPresets)) {
         const paletteRes = await apiRequest("PUT", FACTORY_SETTINGS_URL, {
           priorityScanColorPresets: palette,
@@ -161,10 +153,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
       return res.json() as Promise<PriorityScanConfig>;
     },
     onSuccess: async (saved) => {
-      await Promise.all([
-        refreshQueue(),
-        queryClient.invalidateQueries({ queryKey: [FACTORY_SETTINGS_URL] }),
-      ]);
+      await Promise.all([refreshQueue(), queryClient.invalidateQueries({ queryKey: [FACTORY_SETTINGS_URL] })]);
       setDialogOpen(false);
       toast({
         title: tr("prioritySaved", { priority: saved.priority }),
@@ -213,7 +202,9 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     const currentPalette = [...colorPresets];
     const configuredColor = isHexColor(config?.color) ? config.color : null;
     const availableDefault =
-      currentPalette.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ?? currentPalette[0] ?? DEFAULT_COLOR;
+      currentPalette.find((color) => !usedColorKeys.has(normalizeColorKey(color))) ??
+      currentPalette[0] ??
+      DEFAULT_COLOR;
     const initialColor = configuredColor ?? availableDefault;
     const initialPresetIndex = currentPalette.findIndex(
       (color) => normalizeColorKey(color) === normalizeColorKey(initialColor)
@@ -328,8 +319,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 {draftColorPresets.map((color, index) => {
                   const unavailable = usedColorKeys.has(normalizeColorKey(color));
                   const selected =
-                    selectedPresetIndex === index &&
-                    normalizeColorKey(selectedColor) === normalizeColorKey(color);
+                    selectedPresetIndex === index && normalizeColorKey(selectedColor) === normalizeColorKey(color);
                   return (
                     <button
                       key={index}
