@@ -1,7 +1,7 @@
 import { getErrorDetails } from "@shared/errorUtils";
 import { useState, useEffect, useRef, ChangeEvent } from "react";
 import { Redirect } from "wouter";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,7 +36,6 @@ import {
   OTW_COLS,
   OtwColId,
   DEFAULT_OTW_COL_VIS,
-  BulkProgress,
   fmt,
   type EtaFilterValue,
 } from "./git-containers/gitContainerTypes";
@@ -44,7 +43,6 @@ import { SummaryCard } from "./git-containers/InlineCells";
 import { ContainerDrawer } from "./git-containers/ContainerDrawer";
 import { ContainerTable } from "./git-containers/ContainerTable";
 import { ContainerBulkActions } from "./git-containers/ContainerBulkActions";
-import { BulkProgressBanner } from "./git-containers/BulkProgressBanner";
 import { FilterBar, countGitContainerFilters } from "./git-containers/FilterBar";
 import { ErpFilterSheet } from "@/components/ui/erp-mobile-filters";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
@@ -87,12 +85,8 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
   const [waSending, setWaSending] = useState(false);
   const CONTAINER_CHUNK_SIZE = 50;
 
-  const [bulkProgress, setBulkProgress] = useState<BulkProgress | null>(null);
-  const [showProgressBanner, setShowProgressBanner] = useState(false);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
   const printRef = useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
 
   // ── Column visibility (per-user, persisted to localStorage) ──────────────────
   const [colVis, setColVis] = useState<Record<OtwColId, boolean>>(DEFAULT_OTW_COL_VIS);
@@ -145,18 +139,11 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
   const allContainers = data?.containers ?? [];
 
-  const { importMutation, undoImportMutation, bulkEnableMutation, bulkTrackMutation } = useGITContainersData({
-    isAllowed,
+  const { importMutation, undoImportMutation } = useGITContainersData({
     refetch,
     toast,
     setImportResult,
-    setShowProgressBanner,
-    setBulkProgress,
-    queryClient,
-    showProgressBanner,
   });
-
-  const isBulkPending = bulkTrackMutation.isPending;
 
   const filteredContainers = allContainers;
 
@@ -500,25 +487,14 @@ export default function GITContainers({ embedded = false }: { embedded?: boolean
 
           <ContainerBulkActions
             className="max-sm:col-span-2 max-sm:[&>*]:flex-1"
-            isAllowed={isAllowed}
-            isBulkPending={isBulkPending}
-            allContainersCount={data?.total ?? allContainers.length}
             waSending={waSending}
-            onTrackAll={() => bulkTrackMutation.mutate()}
             onImportClick={() => fileInputRef.current?.click()}
-            onBulkEnable={(enabled) => bulkEnableMutation.mutate(enabled)}
             onSendWhatsApp={sendToWhatsApp}
             onPrint={() => window.print()}
           />
         </div>
 
         <input type="file" ref={fileInputRef} className="hidden" accept=".xlsx,.xls" onChange={handleFileChange} />
-
-        <BulkProgressBanner
-          showProgressBanner={showProgressBanner}
-          bulkProgress={bulkProgress}
-          setShowProgressBanner={setShowProgressBanner}
-        />
 
         {!isPhoneLayout && (
           <FilterBar
