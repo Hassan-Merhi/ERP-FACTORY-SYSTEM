@@ -148,7 +148,10 @@ export function useBalesHistoryModel() {
     ],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (dateFilter) params.set("date", dateFilter);
+      // A reference/text search is global across production dates. Keeping the
+      // selected date in the request made valid bales look missing when their
+      // stored production date differed from the day currently open in Explorer.
+      if (dateFilter && !debouncedSearch.trim()) params.set("date", dateFilter);
       // Lite mode: slim product/mixBatch payloads; skips lastPrintedAt lookup.
       params.set("lite", "1");
       params.set("page", String(currentPage));
