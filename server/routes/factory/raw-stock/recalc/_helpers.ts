@@ -5,35 +5,20 @@
  */
 import {} from "../../../../services/factory/raw-stock-recalc";
 import { pool } from "../../../../db";
+import { historicalReplaySafetySchema } from "../../../../startup-schema/032-historical-replay-safety";
 
 export const ADMIN_ROLES = ["Admin", "Developer"] as const;
 
 // ─── Undo log + consumed-token helpers ─────────────────────────────────────────
 
 /**
- * FIX 11: ensureTokenTable removed — the consumed-tokens table is now fully defined
- * in migrations/20260718_factory_replay_consumed_tokens.sql. The migration CREATE TABLE
- * already includes all columns; no ALTER TABLE ADD COLUMN is needed.
+ * Ensure the undo log and consumed-token tables exist in their replay-safe
+ * shape. Called once at route registration, so it runs in every migration mode.
  */
-
-/** Ensure the undo log table exists. Called once at route registration. */
 export async function ensureUndoLogTable(): Promise<void> {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS factory_recalc_undo_log (
-      id                   SERIAL PRIMARY KEY,
-      company_id           INTEGER      NOT NULL,
-      user_id              INTEGER,
-      username             TEXT,
-      description          TEXT         NOT NULL,
-      container_count      INTEGER      NOT NULL DEFAULT 0,
-      container_numbers    TEXT[]       NOT NULL DEFAULT '{}',
-      snapshot             JSONB        NOT NULL,
-      applied_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-      undone_at            TIMESTAMPTZ,
-      undone_by_user_id    INTEGER,
-      undone_by_username   TEXT
-    )
-  `);
+  for (const statement of historicalReplaySafetySchema) {
+    await pool.query(statement);
+  }
 }
 
 /** Capture a point-in-time snapshot of every row that applyRawStockRecalc will touch. */
