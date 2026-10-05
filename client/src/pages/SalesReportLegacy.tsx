@@ -334,7 +334,6 @@ export default function SalesReport() {
     setSelectedStockGroups,
   };
 
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
