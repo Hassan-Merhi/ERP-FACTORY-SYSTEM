@@ -11,6 +11,11 @@ import {
 import { db } from "../../db";
 import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
 import {
+  loadRetailSalePayments,
+  settleRetailSaleTx,
+  type RetailPaymentInput,
+} from "./retailFinancialService";
+import {
   nextRetailReturnQuantity,
   nextRetailSaleQuantity,
   validateRetailReturnQuantity,
@@ -61,9 +66,11 @@ export async function loadSaleResponse(companyId: number, saleId: number) {
     .innerJoin(retailProducts, eq(retailProducts.id, retailProductVariants.productId))
     .leftJoin(retailBrands, eq(retailBrands.id, retailProducts.brandId))
     .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
+  const payments = await loadRetailSalePayments(companyId, saleId);
   return {
     ...sale,
     totalAmount: toNumber(sale.totalAmount),
+    payments,
     items: items.map((item) => {
       const { variantImageUrls, productImageUrls, ...rest } = item;
       return {
@@ -117,7 +124,10 @@ export interface RetailSaleInput {
   notes?: string | null;
   items: RetailCartItemInput[];
   userId: string;
+  username?: string | null;
   canSellNegativeStock: boolean;
+  shiftId?: number | null;
+  payments?: RetailPaymentInput[];
 }
 
 /**
@@ -138,6 +148,7 @@ export async function createRetailSaleInTx(
       totalAmount: "0",
       createdBy: input.userId,
       notes: input.notes ?? null,
+      shiftId: input.shiftId ?? null,
     })
     .onConflictDoNothing({ target: [retailPosSales.companyId, retailPosSales.idempotencyKey] })
     .returning({ id: retailPosSales.id });
@@ -153,6 +164,7 @@ export async function createRetailSaleInTx(
   }
 
   let totalAmount = 0;
+  let totalCost = 0;
   for (const item of input.items) {
     const variant = await ensureRetailVariant(tx, companyId, item.variantId);
     const stock = await lockInventoryRow(tx, companyId, item.variantId, input.locationId);
@@ -194,12 +206,27 @@ export async function createRetailSaleInTx(
       metadata: { saleItemId: saleItem.id },
     });
     totalAmount += unitPrice * item.quantity;
+    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * item.quantity;
   }
 
   await tx
     .update(retailPosSales)
     .set({ totalAmount: String(totalAmount), updatedAt: new Date() })
     .where(eq(retailPosSales.id, createdSale.id));
+
+  await settleRetailSaleTx(tx, {
+    companyId,
+    locationId: input.locationId,
+    saleId: createdSale.id,
+    saleIdempotencyKey: input.idempotencyKey,
+    totalAmount,
+    totalCost,
+    userId: input.userId,
+    username: input.username ?? null,
+    shiftId: input.shiftId ?? null,
+    payments: input.payments,
+  });
+
   return { saleId: createdSale.id, replayed: false };
 }
 
@@ -221,7 +248,7 @@ export interface RetailReturnInput {
 export async function createRetailReturnInTx(
   tx: RetailTransaction,
   input: RetailReturnInput
-): Promise<{ returnId: number; replayed: boolean }> {
+): Promise<{ returnId: number; replayed: boolean; refundValue: number; costValue: number }> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
     .insert(retailPosReturns)
@@ -241,7 +268,7 @@ export async function createRetailReturnInTx(
       .where(and(eq(retailPosReturns.companyId, companyId), eq(retailPosReturns.idempotencyKey, input.idempotencyKey)))
       .limit(1);
     if (!existing) throw new Error("Return retry could not be resolved");
-    return { returnId: existing.id, replayed: true };
+    return { returnId: existing.id, replayed: true, refundValue: 0, costValue: 0 };
   }
 
   await tx.execute(sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`);
@@ -267,6 +294,7 @@ export async function createRetailReturnInTx(
       quantity: retailPosSaleItems.quantity,
       returnedQuantity: retailPosSaleItems.returnedQuantity,
       unitPrice: retailPosSaleItems.unitPrice,
+      unitCost: retailPosSaleItems.unitCost,
     })
     .from(retailPosSaleItems)
     .where(
@@ -280,6 +308,8 @@ export async function createRetailReturnInTx(
     .for("update");
   const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
 
+  let refundValue = 0;
+  let costValue = 0;
   for (const [saleItemId, quantity] of aggregate) {
     const saleItem = saleItemsById.get(saleItemId);
     if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
@@ -304,8 +334,11 @@ export async function createRetailReturnInTx(
         locationId: sale.locationId,
         quantity: String(quantity),
         unitPrice: saleItem.unitPrice,
+        unitCost: saleItem.unitCost,
       })
       .returning({ id: retailPosReturnItems.id });
+    refundValue += quantity * toNumber(saleItem.unitPrice);
+    costValue += quantity * toNumber(saleItem.unitCost);
     await addMovement(tx, {
       companyId,
       variantId: saleItem.variantId,
@@ -321,5 +354,5 @@ export async function createRetailReturnInTx(
       metadata: { saleId, saleItemId: saleItem.id, ...input.metadata },
     });
   }
-  return { returnId: createdReturn.id, replayed: false };
+  return { returnId: createdReturn.id, replayed: false, refundValue, costValue };
 }
