@@ -11,6 +11,8 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { companies, locations } from "./common";
+import { bankAccounts, ledgerAccounts } from "./accounting";
+import { posShifts } from "./pos";
 import { retailProductVariants } from "./retail";
 import { users } from "./users";
 
@@ -40,6 +42,8 @@ export const retailPosSales = pgTable(
       .references(() => locations.id, { onDelete: "restrict" }),
     idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
     status: varchar("status", { length: 32 }).notNull().default("completed"),
+    shiftId: integer("shift_id").references(() => posShifts.id, { onDelete: "set null" }),
+    accountingVoucherId: integer("accounting_voucher_id"),
     totalAmount: decimal("total_amount", { precision: 20, scale: 6 }).notNull().default("0"),
     createdBy: varchar("created_by")
       .notNull()
@@ -52,6 +56,7 @@ export const retailPosSales = pgTable(
   (t) => ({
     companyIdx: index("retail_pos_sales_company_idx").on(t.companyId),
     locationIdx: index("retail_pos_sales_location_idx").on(t.locationId),
+    shiftIdx: index("retail_pos_sales_shift_idx").on(t.shiftId),
     companyIdempotencyUnique: uniqueIndex("retail_pos_sales_company_idempotency_unique").on(
       t.companyId,
       t.idempotencyKey
@@ -133,12 +138,126 @@ export const retailPosReturnItems = pgTable(
       .references(() => locations.id, { onDelete: "restrict" }),
     quantity: decimal("quantity", { precision: 20, scale: 6 }).notNull(),
     unitPrice: decimal("unit_price", { precision: 20, scale: 6 }).notNull(),
+    unitCost: decimal("unit_cost", { precision: 20, scale: 6 }).notNull().default("0"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
     companyIdx: index("retail_pos_return_items_company_idx").on(t.companyId),
     returnIdx: index("retail_pos_return_items_return_idx").on(t.returnId),
     saleItemIdx: index("retail_pos_return_items_sale_item_idx").on(t.saleItemId),
+  })
+);
+
+export const RETAIL_PAYMENT_METHODS = ["cash", "card", "bank", "mobile", "other"] as const;
+export type RetailPaymentMethod = (typeof RETAIL_PAYMENT_METHODS)[number];
+
+export const retailPosPayments = pgTable(
+  "retail_pos_payments",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    saleId: integer("sale_id")
+      .notNull()
+      .references(() => retailPosSales.id, { onDelete: "cascade" }),
+    locationId: integer("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    shiftId: integer("shift_id").references(() => posShifts.id, { onDelete: "set null" }),
+    paymentType: varchar("payment_type", { length: 20 }).notNull().default("payment"),
+    method: varchar("method", { length: 20 }).notNull(),
+    amount: decimal("amount", { precision: 20, scale: 6 }).notNull(),
+    tenderedAmount: decimal("tendered_amount", { precision: 20, scale: 6 }),
+    changeAmount: decimal("change_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    reference: varchar("reference", { length: 191 }),
+    ledgerAccountId: integer("ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
+    relatedPaymentId: integer("related_payment_id"),
+    idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyIdx: index("retail_pos_payments_company_idx").on(t.companyId),
+    saleIdx: index("retail_pos_payments_sale_idx").on(t.saleId),
+    shiftIdx: index("retail_pos_payments_shift_idx").on(t.shiftId),
+    companyIdempotencyUnique: uniqueIndex("retail_pos_payments_company_idempotency_unique").on(
+      t.companyId,
+      t.idempotencyKey
+    ),
+  })
+);
+
+export const retailCashMovements = pgTable(
+  "retail_cash_movements",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    locationId: integer("location_id")
+      .notNull()
+      .references(() => locations.id, { onDelete: "restrict" }),
+    shiftId: integer("shift_id")
+      .notNull()
+      .references(() => posShifts.id, { onDelete: "cascade" }),
+    movementType: varchar("movement_type", { length: 20 }).notNull(),
+    amount: decimal("amount", { precision: 20, scale: 6 }).notNull(),
+    reason: text("reason").notNull(),
+    idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
+    createdBy: varchar("created_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    shiftIdx: index("retail_cash_movements_shift_idx").on(t.shiftId),
+    companyIdempotencyUnique: uniqueIndex("retail_cash_movements_company_idempotency_unique").on(
+      t.companyId,
+      t.idempotencyKey
+    ),
+  })
+);
+
+export const retailAccountingSettings = pgTable(
+  "retail_accounting_settings",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    locationId: integer("location_id").references(() => locations.id, { onDelete: "cascade" }),
+    cashLedgerAccountId: integer("cash_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    cardLedgerAccountId: integer("card_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    bankLedgerAccountId: integer("bank_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
+    mobileLedgerAccountId: integer("mobile_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    otherLedgerAccountId: integer("other_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    salesRevenueLedgerAccountId: integer("sales_revenue_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    inventoryAssetLedgerAccountId: integer("inventory_asset_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    cogsLedgerAccountId: integer("cogs_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    discountsLedgerAccountId: integer("discounts_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    taxPayableLedgerAccountId: integer("tax_payable_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    storeCreditLedgerAccountId: integer("store_credit_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyIdx: index("retail_accounting_settings_company_idx").on(t.companyId),
+    companyLocationUnique: uniqueIndex("retail_accounting_settings_company_location_unique").on(t.companyId, t.locationId),
   })
 );
 
@@ -205,4 +324,7 @@ export const retailStockMovements = pgTable(
 export type RetailPosSale = typeof retailPosSales.$inferSelect;
 export type RetailPosSaleItem = typeof retailPosSaleItems.$inferSelect;
 export type RetailPosReturn = typeof retailPosReturns.$inferSelect;
+export type RetailPosPayment = typeof retailPosPayments.$inferSelect;
+export type RetailCashMovement = typeof retailCashMovements.$inferSelect;
+export type RetailAccountingSetting = typeof retailAccountingSettings.$inferSelect;
 export type RetailStockMovement = typeof retailStockMovements.$inferSelect;
