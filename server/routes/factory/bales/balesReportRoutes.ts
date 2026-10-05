@@ -108,14 +108,17 @@ export function registerBalesReportRoutes(app: Express) {
       // Privileged users can see deleted bales when searching by ref code;
       // otherwise exclude deleted/removed bales (consistent with daily-summary)
       const deletedFilter = isPrivileged && search ? sql`` : sql`AND fb.status NOT IN ('DELETED', 'REMOVED')`;
+      const dateFilter = search
+        ? sql``
+        : sql`AND fb.stock_entry_date >= ${effectiveStart} AND fb.stock_entry_date <= ${effectiveEnd}`;
 
       // Shared WHERE base reused by both the data query and the COUNT subquery.
+      // Reference search spans all dates; the date picker resumes once search is cleared.
       const whereClause = sql`
         WHERE fb.company_id = ${companyId}
           ${deletedFilter}
           AND fb.stock_entry_date IS NOT NULL
-          AND fb.stock_entry_date >= ${effectiveStart}
-          AND fb.stock_entry_date <= ${effectiveEnd}
+          ${dateFilter}
           ${workerFilter}
           ${productFilter}
           ${locationFilter}
@@ -271,6 +274,9 @@ export function registerBalesReportRoutes(app: Express) {
         : sql``;
       const unassignedFilter = includeUnassigned === "false" ? sql`AND fb.finalized_by IS NOT NULL` : sql``;
       const deletedFilter = isPrivileged && search ? sql`` : sql`AND fb.status NOT IN ('DELETED', 'REMOVED')`;
+      const dateFilter = search
+        ? sql``
+        : sql`AND fb.stock_entry_date >= ${effectiveStart} AND fb.stock_entry_date <= ${effectiveEnd}`;
 
       const rows = await db.execute(sql`
         SELECT
@@ -306,8 +312,7 @@ export function registerBalesReportRoutes(app: Express) {
         WHERE fb.company_id = ${companyId}
           ${deletedFilter}
           AND fb.stock_entry_date IS NOT NULL
-          AND fb.stock_entry_date >= ${effectiveStart}
-          AND fb.stock_entry_date <= ${effectiveEnd}
+          ${dateFilter}
           ${workerFilter}
           ${productFilter}
           ${locationFilter}
@@ -389,7 +394,7 @@ export function registerBalesReportRoutes(app: Express) {
       // ── Sub-header: period & summary ─────────────────────────────────────
       const subY = 154;
       doc.fillColor("#000000").font("Helvetica").fontSize(9);
-      doc.text(`Period: ${effectiveStart}  →  ${effectiveEnd}`, 40, subY);
+      doc.text(search ? "Period: All dates (reference search)" : `Period: ${effectiveStart}  →  ${effectiveEnd}`, 40, subY);
       doc
         .font("Helvetica-Bold")
         .text(
