@@ -24,11 +24,13 @@ interface ExchangeResult {
 export function RetailExchangeDialog({
   sale,
   locationId,
+  shiftId,
   onOpenChange,
   onCompleted,
 }: {
   sale: RetailSale | null;
   locationId: number | null;
+  shiftId: number | null;
   onOpenChange: (open: boolean) => void;
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
@@ -99,6 +101,7 @@ export function RetailExchangeDialog({
         idempotencyKey: attemptRef.current.key,
         saleId: sale.id,
         locationId,
+        shiftId: shiftId ?? undefined,
         returnItems,
         newItems: items,
       });
