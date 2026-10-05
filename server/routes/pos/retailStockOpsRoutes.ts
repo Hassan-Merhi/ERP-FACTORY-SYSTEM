@@ -43,6 +43,13 @@ const toNumber = (value: unknown) => {
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 
+const paymentSchema = z.object({
+  method: z.enum(["cash", "card", "bank", "mobile", "other"]),
+  amount: z.coerce.number().finite().positive(),
+  tenderedAmount: z.coerce.number().finite().positive().optional(),
+  reference: z.string().trim().max(191).optional(),
+});
+
 const receiveSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   variantId: z.coerce.number().int().positive(),
@@ -58,6 +65,7 @@ export const retailExchangeSchema = z.object({
   saleId: z.coerce.number().int().positive(),
   locationId: z.coerce.number().int().positive(),
   shiftId: z.coerce.number().int().positive().optional(),
+  payments: z.array(paymentSchema).min(1).max(8).optional(),
   notes: z.string().trim().max(2000).optional(),
   returnItems: z
     .array(
@@ -298,6 +306,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           username: req.user?.username ?? null,
           canSellNegativeStock,
           shiftId: body.shiftId ?? null,
+          payments: body.payments,
         });
 
         const refundValue = returned.refundValue;
