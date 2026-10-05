@@ -3,8 +3,8 @@ import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 
-import { factoryContainers, customerOrders, customers, containers } from "@shared/schema";
-import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
+import { customerOrders, customers, containers } from "@shared/schema";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 export function registerOrderTrackingRoutes(app: Express) {
   app.get("/api/factory/invoice-container-tracking", requireAuth, async (req: Request, res: Response) => {
