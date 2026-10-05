@@ -13,7 +13,7 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import compression from "compression";
-import helmet from "helmet";
+import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
@@ -79,19 +79,11 @@ app.use(
   })
 );
 
-// Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
-// The Content-Security-Policy is set once, enforced, by securityHeadersMiddleware
-// (server/security/securityHeaders.ts, mounted with the tenant boundaries);
-// violations are collected at /api/csp-report. This early pass covers the
-// remaining helmet headers for routes mounted before those boundaries.
-// crossOriginEmbedderPolicy is disabled to allow loading external images (logos, etc.).
-app.use(
-  helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
+// Security headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+// HSTS, Referrer-Policy, etc.), mounted ahead of every route. The CSP is the one
+// enforced policy built in server/security/securityHeaders.ts; violations are
+// collected at /api/csp-report.
+app.use(securityHeadersMiddleware());
 
 // General API body limit is 2 MB. Upload routes specify their own higher limit via multer.
 app.use(
