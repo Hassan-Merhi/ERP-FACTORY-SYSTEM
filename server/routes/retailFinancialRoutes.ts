@@ -211,7 +211,21 @@ export function registerRetailFinancialRoutes(app: Express): void {
             )
             .limit(1)
         )[0];
-      res.status(created ? 201 : 200).json({ replayed: !created, movement: row, summary: await getRetailShiftSummary(companyId, shiftId) });
+      if (!row) throw new Error("Cash movement retry could not be resolved");
+      if (
+        !created &&
+        (row.shiftId !== shiftId ||
+          row.movementType !== body.movementType ||
+          Math.abs(Number(row.amount) - body.amount) > 0.000001 ||
+          row.reason !== body.reason)
+      ) {
+        return res.status(409).json({ message: "Cash movement idempotency key was reused with different data" });
+      }
+      res.status(created ? 201 : 200).json({
+        replayed: !created,
+        movement: row,
+        summary: await getRetailShiftSummary(companyId, shiftId),
+      });
     } catch (error) {
       const message = getErrorMessage(error);
       res.status(message.includes("only access") ? 403 : 400).json({ message });
