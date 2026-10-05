@@ -128,6 +128,20 @@ const utilityItems: NavItem[] = [
   { title: "Live Sheets", url: "/live-sheets", icon: ExternalLink },
 ];
 
+export const RETAIL_HIDDEN_ERP_ROUTES = new Set([
+  "/tracking",
+  "/agents",
+  "/transaction-journal",
+  "/stock",
+  "/supplier-profit-check",
+  "/pos-item-replacement",
+  "/sales-tools",
+  "/stock-in-sales-report",
+  "/erp/rental/shops",
+  "/ai-command-center",
+  "/ai-validation",
+]);
+
 export const ERP_PINNED_ITEMS = defaultPinnedItems;
 export const ERP_UTILITY_ITEMS = utilityItems;
 
@@ -171,6 +185,7 @@ export function useErpVisibleSections(user?: SidebarUser): {
     const isOwner = effectiveRole === "Owner";
     const featureKeys = getErpRouteFeatureKeys(item.url);
 
+    if (selectedCompany?.companyType === "retail" && RETAIL_HIDDEN_ERP_ROUTES.has(item.url)) return false;
     if (item.url === "/tracking") return !isPOSUser;
     if (isPOSUser && item.url === "/pos-item-replacement") return false;
 
