@@ -876,6 +876,7 @@ export default function ItemMarketAnalysis() {
                                       const rowMixedCurrency = row.purchaseCurrencies.length > 1;
                                       const salePriceKey = `${company.id}:${row.stockItemId}`;
                                       const salePriceExpanded = expandedSalePriceKey === salePriceKey;
+
                                       return (
                                         <Fragment key={company.id}>
                                           <TableRow>
@@ -896,69 +897,69 @@ export default function ItemMarketAnalysis() {
                                                 <span className="font-medium">{row.companyName}</span>
                                               </Button>
                                             </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatNumber(row.importCount)}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatNumber(row.importedQty)}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {rowMixedCurrency ? (
-                                              <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                                            ) : (
-                                              formatNativePurchase(
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatNumber(row.importCount)}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatNumber(row.importedQty)}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {rowMixedCurrency ? (
+                                                <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                                              ) : (
+                                                formatNativePurchase(
+                                                  includeOffloadingCost
+                                                    ? row.purchaseValueWithOffloading
+                                                    : row.purchaseValue,
+                                                  row.purchaseCurrencies
+                                                )
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatNativePurchase(
                                                 includeOffloadingCost
-                                                  ? row.purchaseValueWithOffloading
-                                                  : row.purchaseValue,
+                                                  ? row.weightedPurchaseCostWithOffloading
+                                                  : row.weightedPurchaseCost,
                                                 row.purchaseCurrencies
-                                              )
-                                            )}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatNativePurchase(
-                                              includeOffloadingCost
-                                                ? row.weightedPurchaseCostWithOffloading
-                                                : row.weightedPurchaseCost,
-                                              row.purchaseCurrencies
-                                            )}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatNumber(row.soldQty)}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatAmount(row.avgSellingPrice)}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {formatAmount(row.revenue)}
-                                          </TableCell>
-                                          <TableCell
-                                            className={`text-right font-medium tabular-nums ${
-                                              row.profit < 0
-                                                ? "text-red-600 dark:text-red-400"
-                                                : "text-emerald-600 dark:text-emerald-400"
-                                            }`}
-                                          >
-                                            {formatAmount(row.profit)}
-                                          </TableCell>
-                                          <TableCell className="text-right tabular-nums">
-                                            {row.marginPct.toFixed(1)}%
-                                          </TableCell>
-                                          <TableCell>
-                                            <StatusBadge status={row.marketStatus} />
-                                          </TableCell>
-                                        </TableRow>
-                                        {salePriceExpanded && (
-                                          <TableRow>
-                                            <TableCell colSpan={11} className="bg-muted/10 p-3">
-                                              <SalePriceBreakdown
-                                                companyId={row.companyId}
-                                                stockItemId={row.stockItemId}
-                                                startDate={period.fromDate}
-                                                endDate={period.toDate}
-                                              />
+                                              )}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatNumber(row.soldQty)}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatAmount(row.avgSellingPrice)}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {formatAmount(row.revenue)}
+                                            </TableCell>
+                                            <TableCell
+                                              className={`text-right font-medium tabular-nums ${
+                                                row.profit < 0
+                                                  ? "text-red-600 dark:text-red-400"
+                                                  : "text-emerald-600 dark:text-emerald-400"
+                                              }`}
+                                            >
+                                              {formatAmount(row.profit)}
+                                            </TableCell>
+                                            <TableCell className="text-right tabular-nums">
+                                              {row.marginPct.toFixed(1)}%
+                                            </TableCell>
+                                            <TableCell>
+                                              <StatusBadge status={row.marketStatus} />
                                             </TableCell>
                                           </TableRow>
-                                        )}
+                                          {salePriceExpanded && (
+                                            <TableRow>
+                                              <TableCell colSpan={11} className="bg-muted/10 p-3">
+                                                <SalePriceBreakdown
+                                                  companyId={row.companyId}
+                                                  stockItemId={row.stockItemId}
+                                                  startDate={period.fromDate}
+                                                  endDate={period.toDate}
+                                                />
+                                              </TableCell>
+                                            </TableRow>
+                                          )}
                                         </Fragment>
                                       );
                                     })}
@@ -979,6 +980,7 @@ export default function ItemMarketAnalysis() {
                   const rowKey = `${row.companyId}:${row.stockItemId}`;
                   const mixedCurrency = row.purchaseCurrencies.length > 1;
                   const salePriceExpanded = expandedSalePriceKey === rowKey;
+
                   return (
                     <Fragment key={rowKey}>
                       <TableRow data-testid={`row-item-market-${row.companyId}-${row.stockItemId}`}>
@@ -998,34 +1000,36 @@ export default function ItemMarketAnalysis() {
                           </Button>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {mixedCurrency ? (
-                          <span className="text-xs text-muted-foreground">Mixed currencies</span>
-                        ) : (
-                          formatNativePurchase(
-                            includeOffloadingCost ? row.purchaseValueWithOffloading : row.purchaseValue,
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {mixedCurrency ? (
+                            <span className="text-xs text-muted-foreground">Mixed currencies</span>
+                          ) : (
+                            formatNativePurchase(
+                              includeOffloadingCost ? row.purchaseValueWithOffloading : row.purchaseValue,
+                              row.purchaseCurrencies
+                            )
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {formatNativePurchase(
+                            includeOffloadingCost ? row.weightedPurchaseCostWithOffloading : row.weightedPurchaseCost,
                             row.purchaseCurrencies
-                          )
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatNativePurchase(
-                          includeOffloadingCost ? row.weightedPurchaseCostWithOffloading : row.weightedPurchaseCost,
-                          row.purchaseCurrencies
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
-                      <TableCell
-                        className={`text-right font-medium tabular-nums ${
-                          row.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
-                        }`}
-                      >
-                        {formatAmount(row.profit)}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.soldQty)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(row.avgSellingPrice)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatAmount(row.revenue)}</TableCell>
+                        <TableCell
+                          className={`text-right font-medium tabular-nums ${
+                            row.profit < 0
+                              ? "text-red-600 dark:text-red-400"
+                              : "text-emerald-600 dark:text-emerald-400"
+                          }`}
+                        >
+                          {formatAmount(row.profit)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{row.marginPct.toFixed(1)}%</TableCell>
                         <TableCell>
                           <StatusBadge status={row.marketStatus} />
                         </TableCell>
@@ -1045,6 +1049,7 @@ export default function ItemMarketAnalysis() {
                     </Fragment>
                   );
                 })}
+
 
               {!isLoading && (multiCompany ? groupedRows.length === 0 : rows.length === 0) && (
                 <TableRow>
