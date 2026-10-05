@@ -57,6 +57,26 @@ export function moneyString(value: MoneyInput): string {
   return toMoney(value).toDecimalPlaces(MONEY_DECIMAL_PLACES, MoneyDecimal.ROUND_HALF_UP).toFixed(MONEY_DECIMAL_PLACES);
 }
 
+/**
+ * The amount_usd a daybook entry stores: the caller's own USD amount when it
+ * gives one, else amount × rate taken exactly and kept at the column's cents
+ * (rounded half away from zero, as Postgres rounds). The float product used to
+ * be written whole, so Postgres rounded the float: 1.13 × 1.5 = 1.695 was
+ * written as 1.6949999999999998 and stored as 1.69.
+ */
+export function daybookAmountUsd(
+  currency: string,
+  amountCurrency: number,
+  fxRate: number,
+  amountUsd: number | undefined
+): string {
+  if (amountUsd !== undefined) return String(amountUsd);
+  if (currency === "USD") return String(amountCurrency);
+  // Non-finite input keeps its old text so a bad amount is not silently zeroed.
+  if (!Number.isFinite(amountCurrency) || !Number.isFinite(fxRate)) return String(amountCurrency * fxRate);
+  return toMoney(amountCurrency).times(toMoney(fxRate)).toFixed(MONEY_DECIMAL_PLACES);
+}
+
 const LEADING_NUMBER = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
 
 /**
