@@ -427,6 +427,28 @@ describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", 
     expect(reused.body.code).toBe("DISCOUNT_APPROVAL_ALREADY_USED");
   });
 
+  it("refuses a legacy SHA-256 manager hash instead of comparing it weakly", async () => {
+    const { createHash } = await import("node:crypto");
+    const bcrypt = await import("bcryptjs");
+    const legacyHash = createHash("sha256").update(MANAGER_PASSWORD, "utf8").digest("hex");
+    await db.update(schema.users).set({ password: legacyHash }).where(eq(schema.users.id, managerId));
+    try {
+      const response = await cashier.post("/api/pos/retail/discount-approvals").send({
+        managerUsername: `${TEST_PREFIX}_manager`,
+        managerPassword: MANAGER_PASSWORD,
+        locationId,
+        items: [{ variantId: variantAId, quantity: 1, discountType: "percent", discountValue: 20 }],
+      });
+      expect(response.status).toBe(409);
+      expect(response.body.code).toBe("MANAGER_PASSWORD_RESET_REQUIRED");
+    } finally {
+      await db
+        .update(schema.users)
+        .set({ password: await bcrypt.hash(MANAGER_PASSWORD, 10) })
+        .where(eq(schema.users.id, managerId));
+    }
+  });
+
   it("requires approval for manual price overrides and keeps the original price", async () => {
     await updateSettings({ discountLimitPercent: 50, priceOverrideRequiresApproval: true });
     const cart = {

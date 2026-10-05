@@ -20,7 +20,7 @@ import {
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { verifyPassword } from "../_helpers";
+import { isLegacySHA256Hash, verifyPasswordBcryptOnly } from "../_helpers";
 import {
   evaluateRetailDiscountPolicy,
   isRetailManagerRole,
@@ -154,7 +154,13 @@ export function registerRetailSellingRoutes(app: Express): void {
       if (!manager || !manager.active || !isRetailManagerRole(manager.role)) {
         return res.status(401).json({ message: "Manager credentials are not valid for this company" });
       }
-      const { valid } = await verifyPassword(body.managerPassword, manager.password);
+      if (isLegacySHA256Hash(manager.password)) {
+        return res.status(409).json({
+          code: "MANAGER_PASSWORD_RESET_REQUIRED",
+          message: "The approving manager must set a new password before approving discounts",
+        });
+      }
+      const valid = await verifyPasswordBcryptOnly(body.managerPassword, manager.password);
       if (!valid) {
         return res.status(401).json({ message: "Manager credentials are not valid for this company" });
       }

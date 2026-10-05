@@ -2,7 +2,7 @@
  * Retail Wave 2 API client — one place for every customer / pricing / tax / stock-count call
  * the POS and retail workspace make, so components stay free of fetch plumbing.
  */
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, apiRequestPrivileged } from "@/lib/queryClient";
 import type {
   RetailCartPreview,
   RetailCustomerHistory,
@@ -55,7 +55,8 @@ export async function requestRetailDiscountApproval(input: {
   items: CartRequestLine[];
   orderDiscount: CartRequestOrderDiscount | null;
 }): Promise<RetailDiscountApprovalResponse> {
-  const response = await apiRequest("POST", "/api/pos/retail/discount-approvals", {
+  // Manager credentials: privileged request, never written to the offline queue.
+  const response = await apiRequestPrivileged("POST", "/api/pos/retail/discount-approvals", {
     managerUsername: input.managerUsername,
     managerPassword: input.managerPassword,
     reason: input.reason,

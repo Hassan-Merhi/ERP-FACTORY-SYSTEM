@@ -104,7 +104,11 @@ describe("Retail Wave 2 — service wiring", () => {
     const sellers = read("server/routes/pos/retailSellingRoutes.ts");
     expect(sellers).toContain("signRetailApprovalToken");
     expect(sellers).toContain("fingerprint");
-    expect(sellers).toContain("verifyPassword");
+    // Approvals verify with bcrypt only: a legacy SHA-256 hash is refused instead of
+    // being compared with a weak digest, so the new credential flow never reaches it.
+    expect(sellers).toContain("verifyPasswordBcryptOnly");
+    expect(sellers).toContain("MANAGER_PASSWORD_RESET_REQUIRED");
+    expect(sellers).not.toContain("verifyPassword(");
 
     const checkout = read("server/routes/pos/retailPosRoutes.ts");
     expect(checkout).toContain("approvalCoversRequest");
@@ -208,6 +212,23 @@ describe("Retail Wave 2 — client UI", () => {
     for (const marker of ["customerName", "listSubtotal", "discountTotal", "taxAmount", "grossUnitPrice"]) {
       expect(receipt, `the receipt must print ${marker}`).toContain(marker);
     }
+  });
+
+  it("keeps manager credentials out of the offline queue", () => {
+    const api = read("client/src/pages/pos/retailWave2Api.ts");
+    expect(api).toContain("apiRequestPrivileged");
+    expect(api).not.toContain('apiRequest("POST", "/api/pos/retail/discount-approvals"');
+
+    const queryClient = read("client/src/lib/queryClient.ts");
+    expect(queryClient).toContain("export async function apiRequestPrivileged");
+    // The queueable path refuses credential payloads as defence in depth.
+    expect(queryClient).toContain("!containsSensitiveCredentials(data)");
+
+    const queue = read("client/src/lib/offlineQueue.ts");
+    expect(queue).toContain("export function containsSensitiveCredentials");
+    expect(queue).toContain("managerPassword");
+    expect(queue).toContain("/^\\/api\\/pos\\/retail\\/discount-approvals$/");
+    expect(queue).toContain("/^\\/api\\/user\\/change-password$/");
   });
 
   it("registers the stock count, selling settings and sales history workspaces", () => {

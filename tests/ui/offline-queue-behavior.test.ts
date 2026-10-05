@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearQueue,
+  containsSensitiveCredentials,
   enqueueRequest,
   getDescriptionForRequest,
   getLastSynced,
@@ -70,6 +71,24 @@ describe("offline mutation queue behavior", () => {
     expect(isSafeToQueue("POST", "/api/factory/raw-stock/88/assign-to-bales")).toBe(false);
     expect(isSafeToQueue("GET", "/api/pos/sales")).toBe(false);
     expect(isSafeToQueue("POST", "/api/unknown")).toBe(false);
+  });
+
+  it("never replays credential-bearing requests from browser storage", () => {
+    // Deny-list: manager approvals and password changes are online-only.
+    expect(isSafeToQueue("POST", "/api/pos/retail/discount-approvals")).toBe(false);
+    expect(isSafeToQueue("POST", "/api/auth/login")).toBe(false);
+    expect(isSafeToQueue("POST", "/api/auth/change-password")).toBe(false);
+    expect(isSafeToQueue("POST", "/api/user/change-password")).toBe(false);
+
+    // Defence in depth: a payload carrying credentials is never persisted, even if a
+    // future endpoint that accepts it is added to the queue allow-list.
+    expect(containsSensitiveCredentials({ managerUsername: "m", managerPassword: "secret" })).toBe(true);
+    expect(containsSensitiveCredentials({ currentPassword: "a", newPassword: "b" })).toBe(true);
+    expect(containsSensitiveCredentials({ nested: { apiToken: "t" } })).toBe(true);
+    expect(containsSensitiveCredentials({ lines: [{ variantId: 1, cvv: "123" }] })).toBe(true);
+    expect(containsSensitiveCredentials({ approvalToken: "short-lived", customerId: 4, items: [] })).toBe(false);
+    expect(containsSensitiveCredentials({ description: "password" })).toBe(false);
+    expect(containsSensitiveCredentials(null)).toBe(false);
   });
 
   it("labels every high-use offline ERP domain for transparent replay review", () => {
