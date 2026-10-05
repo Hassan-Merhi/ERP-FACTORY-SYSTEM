@@ -43,6 +43,7 @@ export function ProductEditor({
   const [newBrandName, setNewBrandName] = useState("");
   const [uploadingImages, setUploadingImages] = useState(false);
   const [uploadingVariantIndex, setUploadingVariantIndex] = useState<number | null>(null);
+  const [unlockedBarcodes, setUnlockedBarcodes] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     if (!open) return;
@@ -80,6 +81,7 @@ export function ProductEditor({
     );
     setAddingBrand(false);
     setNewBrandName("");
+    setUnlockedBarcodes(new Set());
   }, [open, product]);
 
   const createBrandMutation = useMutation({
@@ -247,8 +249,8 @@ export function ProductEditor({
       }));
 
       if (!draft.name.trim()) throw new Error("Item name is required");
-      if (!variants.length || variants.some((variant) => !variant.color || !variant.size || !variant.barcode)) {
-        throw new Error("Every variant needs a color, size and barcode");
+      if (!variants.length || variants.some((variant) => !variant.color || !variant.size)) {
+        throw new Error("Every variant needs a color and size");
       }
 
       const selectedBrandName =
@@ -435,11 +437,35 @@ export function ProductEditor({
                     />
                   </div>
                   <div className="space-y-1 md:col-span-2">
-                    <Label>Barcode *</Label>
-                    <Input
-                      value={variant.barcode}
-                      onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })}
-                    />
+                    <Label>Barcode</Label>
+                    <div className="flex gap-1">
+                      <Input
+                        className="font-mono"
+                        placeholder="Auto-generate"
+                        value={variant.barcode}
+                        // Existing barcodes are printed on labels; editing requires an explicit unlock.
+                        readOnly={Boolean(variant.id) && !unlockedBarcodes.has(variantIndex)}
+                        onChange={(e) => updateVariant(variantIndex, { barcode: e.target.value })}
+                      />
+                      {variant.id && !unlockedBarcodes.has(variantIndex) && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Printed labels with the old barcode will stop scanning. Change this barcode?"
+                              )
+                            ) {
+                              setUnlockedBarcodes((current) => new Set(current).add(variantIndex));
+                            }
+                          }}
+                        >
+                          Change
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <Label>Cost</Label>

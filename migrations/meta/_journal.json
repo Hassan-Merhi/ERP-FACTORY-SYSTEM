@@ -26,6 +26,7 @@
     { "idx": 21, "version": "7", "when": 1790076664000, "tag": "20260922_001_factory_container_planner_phase4", "breakpoints": true },
     { "idx": 22, "version": "7", "when": 1790080264000, "tag": "20260922_002_factory_container_planner_phase5", "breakpoints": true },
     { "idx": 23, "version": "7", "when": 1790083864000, "tag": "20260922_003_factory_container_planner_phase6", "breakpoints": true },
-    { "idx": 24, "version": "7", "when": 1791018840000, "tag": "20261003_001_retail_fashion_variants", "breakpoints": true }
+    { "idx": 24, "version": "7", "when": 1791018840000, "tag": "20261003_001_retail_fashion_variants", "breakpoints": true },
+    { "idx": 25, "version": "7", "when": 1791105240000, "tag": "20261004_001_retail_fashion_barcodes_labels", "breakpoints": true }
   ]
 }

@@ -13,6 +13,7 @@ interface CatalogQuery {
   size: string;
   category: string;
   locationId?: number;
+  archived: "exclude" | "include" | "only";
   stockStatus: "all" | "in" | "low" | "out";
   page: number;
   pageSize: number;
@@ -33,6 +34,7 @@ interface CatalogProductRow {
   size: string | null;
   variant_image_urls: unknown;
   barcode: string | null;
+  barcode_source: string | null;
   sku: string | null;
   cost: string | number | null;
   selling_price: string | number | null;
@@ -74,6 +76,7 @@ function parseCatalogQuery(req: Request): CatalogQuery {
     size: normalize(req.query.size),
     category: normalize(req.query.category),
     locationId: positiveInteger(req.query.locationId),
+    archived: req.query.archived === "include" || req.query.archived === "only" ? req.query.archived : "exclude",
     stockStatus,
     page,
     pageSize,
@@ -109,6 +112,16 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
   };
 
   const where: string[] = [`p.company_id = ${add(companyId)}`];
+  // Archived styles keep their sales and movement history but are hidden from day-to-day browsing.
+  if (query.archived === "exclude") where.push("p.active = true");
+  if (query.archived === "only") {
+    where.push(`(p.active = false OR EXISTS (
+      SELECT 1 FROM retail_product_variants archived_variant
+      WHERE archived_variant.company_id = p.company_id
+        AND archived_variant.product_id = p.id
+        AND archived_variant.active = false
+    ))`);
+  }
 
   if (query.search) {
     const token = add(`%${query.search}%`);
@@ -190,19 +203,24 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
         AND low_inventory.quantity <= low_variant.low_stock_threshold
     )`);
   } else if (query.stockStatus === "in" || query.stockStatus === "out") {
+    // Fashion stock is judged per exact color/size: a style is "out" when any of its
+    // active variants is sold out (optionally at the chosen location), "in" when any has stock.
     const locationClause = query.locationId ? `AND stock_inventory.location_id = ${add(query.locationId)}` : "";
     const comparator = query.stockStatus === "in" ? "> 0" : "<= 0";
-    where.push(`COALESCE((
-      SELECT SUM(stock_inventory.quantity)
+    where.push(`EXISTS (
+      SELECT 1
       FROM retail_product_variants stock_variant
-      LEFT JOIN retail_variant_inventory stock_inventory
-        ON stock_inventory.company_id = stock_variant.company_id
-       AND stock_inventory.variant_id = stock_variant.id
-       ${locationClause}
       WHERE stock_variant.company_id = p.company_id
         AND stock_variant.product_id = p.id
         AND stock_variant.active = true
-    ), 0) ${comparator}`);
+        AND COALESCE((
+          SELECT SUM(stock_inventory.quantity)
+          FROM retail_variant_inventory stock_inventory
+          WHERE stock_inventory.company_id = stock_variant.company_id
+            AND stock_inventory.variant_id = stock_variant.id
+            ${locationClause}
+        ), 0) ${comparator}
+    )`);
   }
 
   return { text: where.join(" AND "), params };
@@ -224,6 +242,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
       size: string;
       imageUrls: string[];
       barcode: string;
+      barcodeSource: string;
       sku: string | null;
       cost: number;
       sellingPrice: number;
@@ -279,6 +298,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
           ? row.variant_image_urls.filter((value): value is string => typeof value === "string")
           : [],
         barcode: row.barcode ?? "",
+        barcodeSource: row.barcode_source ?? "manual",
         sku: row.sku,
         cost: numberValue(row.cost),
         sellingPrice: numberValue(row.selling_price),
@@ -382,7 +402,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
          FROM retail_products p
          LEFT JOIN retail_brands b ON b.id = p.brand_id AND b.company_id = p.company_id
          WHERE ${where.text}
-         ORDER BY LOWER(p.name), p.id
+         ORDER BY LOWER(COALESCE(b.name, '')), LOWER(p.name), p.id
          LIMIT ${limitParam} OFFSET ${offsetParam}`,
         pageParams
       );
@@ -407,6 +427,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
            v.size,
            v.image_urls AS variant_image_urls,
            v.barcode,
+           v.barcode_source,
            v.sku,
            v.cost,
            v.selling_price,

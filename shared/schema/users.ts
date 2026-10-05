@@ -92,11 +92,7 @@ export const userLocations = pgTable(
   },
   (t) => ({
     companyIdx: index("user_locations_company_idx").on(t.companyId),
-    userCompanyLocationIdx: index("user_locations_user_company_location_idx").on(
-      t.userId,
-      t.companyId,
-      t.locationId
-    ),
+    userCompanyLocationIdx: index("user_locations_user_company_location_idx").on(t.userId, t.companyId, t.locationId),
   })
 );
 

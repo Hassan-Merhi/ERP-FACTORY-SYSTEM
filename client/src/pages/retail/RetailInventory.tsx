@@ -1,22 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
-import { ArrowLeft, Boxes, Pencil, Plus, ShoppingCart, Upload } from "lucide-react";
+import { ArrowLeft, Boxes, Camera, Pencil, Plus, Printer, ShoppingCart, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { useCompany } from "@/contexts/CompanyContext";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ImportDialog } from "./RetailImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
 import { ProductImage } from "./RetailProductImage";
+import { RetailNav } from "./RetailNav";
+import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
+import { RetailLabelHistory, RetailMovementHistory } from "./RetailMovementHistory";
+import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
 import {
   getJson,
-  money,
   type Brand,
   type Location,
   type RetailCatalogFacets,
   type RetailCatalogPage,
   type RetailProduct,
+  type RetailVariant,
 } from "./retailInventoryTypes";
 
 export default function RetailInventory() {
@@ -35,6 +43,12 @@ export default function RetailInventory() {
   const [stockStatus, setStockStatus] = useState("all");
   const [page, setPage] = useState(1);
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [labelItems, setLabelItems] = useState<RetailLabelRequestItem[]>([]);
+  const [labelOpen, setLabelOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<{ product: RetailProduct; variant: RetailVariant } | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -43,7 +57,7 @@ export default function RetailInventory() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, brandId, color, size, category, locationId, stockStatus]);
+  }, [debouncedSearch, brandId, color, size, category, locationId, stockStatus, showArchived]);
 
   const retailEnabled = selectedCompany?.companyType === "retail";
   const companyKey = selectedCompany?.id ?? 0;
@@ -72,8 +86,9 @@ export default function RetailInventory() {
     if (size) params.set("size", size);
     if (category) params.set("category", category);
     if (locationId) params.set("locationId", locationId);
+    if (showArchived) params.set("archived", "include");
     return params.toString();
-  }, [page, debouncedSearch, brandId, color, size, category, locationId, stockStatus]);
+  }, [page, debouncedSearch, brandId, color, size, category, locationId, stockStatus, showArchived]);
 
   const { data: catalogPage, isLoading } = useQuery<RetailCatalogPage>({
     queryKey: ["retail-products", "page", companyKey, catalogParams],
@@ -92,6 +107,129 @@ export default function RetailInventory() {
     queryFn: () => getJson(`/api/retail/products/${productId}`),
     enabled: retailEnabled && productId > 0,
   });
+
+  const catalogFilters: RetailCatalogFilters = { color, size, locationId, stockStatus, showArchived };
+  const knownVariants = new Map<number, { product: RetailProduct; variant: RetailVariant }>();
+  for (const product of [...products, ...(detailProduct ? [detailProduct] : [])]) {
+    for (const variant of product.variants) knownVariants.set(variant.id, { product, variant });
+  }
+  const labelItemFor = (product: RetailProduct, variant: RetailVariant): RetailLabelRequestItem => ({
+    variantId: variant.id,
+    title: `${product.brand.name} · ${product.name} · ${variant.color} · ${variant.size}`,
+    barcode: variant.barcode,
+    stockQuantity: variant.quantity,
+  });
+  const toggleVariant = (variantId: number) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(variantId)) next.delete(variantId);
+      else next.add(variantId);
+      return next;
+    });
+  const toggleVariants = (variantIds: number[], select: boolean) =>
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const id of variantIds) {
+        if (select) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  const openEditor = (product: RetailProduct) => {
+    setEditingProduct(product);
+    setEditorOpen(true);
+  };
+  const refreshCatalog = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
+    ]);
+  const setProductActive = async (product: RetailProduct, active: boolean) => {
+    if (!active && !window.confirm(`Archive ${product.name}? Its sales and stock history are kept.`)) return;
+    try {
+      await apiRequest("PATCH", `/api/retail/products/${product.id}/active`, { active });
+      await refreshCatalog();
+      toast({ title: active ? "Style restored" : "Style archived" });
+    } catch (error) {
+      toast({ title: "Could not update style", description: (error as Error).message, variant: "destructive" });
+    }
+  };
+  const handleVariantAction = async (action: RetailVariantAction, product: RetailProduct, variant: RetailVariant) => {
+    if (action === "print") {
+      setLabelItems([labelItemFor(product, variant)]);
+      setLabelOpen(true);
+    } else if (action === "transfer" || action === "adjust") {
+      navigate(`/retail/stock?variant=${variant.id}&mode=${action}`);
+    } else if (action === "history") {
+      setHistoryTarget({ product, variant });
+    } else {
+      const active = action === "restore";
+      try {
+        await apiRequest("PATCH", `/api/retail/variants/${variant.id}/active`, { active });
+        await refreshCatalog();
+        toast({
+          title: active ? "Variant restored" : "Variant archived",
+          description: `${variant.color} / ${variant.size}`,
+        });
+      } catch (error) {
+        toast({ title: "Could not update variant", description: (error as Error).message, variant: "destructive" });
+      }
+    }
+  };
+
+  const bulkBar =
+    selected.size > 0 ? (
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center gap-2">
+          <span className="flex-1 text-sm" data-i18n-ui>
+            Selected for labels: {selected.size}
+          </span>
+          <Button variant="ghost" onClick={() => setSelected(new Set())}>
+            Clear
+          </Button>
+          <Button
+            onClick={() => {
+              setLabelItems(
+                [...selected]
+                  .map((id) => knownVariants.get(id))
+                  .filter((entry): entry is { product: RetailProduct; variant: RetailVariant } => Boolean(entry))
+                  .map(({ product, variant }) => labelItemFor(product, variant))
+              );
+              setLabelOpen(true);
+            }}
+          >
+            <Printer className="mr-2 h-4 w-4" /> Print labels
+          </Button>
+        </div>
+      </div>
+    ) : null;
+
+  const actionDialogs = (
+    <>
+      <RetailLabelPrintDialog open={labelOpen} onOpenChange={setLabelOpen} items={labelItems} />
+      <Dialog open={Boolean(historyTarget)} onOpenChange={(open) => !open && setHistoryTarget(null)}>
+        <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Movement history</DialogTitle>
+          </DialogHeader>
+          {historyTarget && (
+            <div className="space-y-3">
+              <p className="text-sm" data-no-translate>
+                <strong>
+                  {historyTarget.product.brand.name} · {historyTarget.product.name}
+                </strong>{" "}
+                · {historyTarget.variant.color} / {historyTarget.variant.size} ·{" "}
+                <span className="font-mono">{historyTarget.variant.barcode}</span>
+              </p>
+              <RetailMovementHistory variantId={historyTarget.variant.id} companyKey={companyKey} />
+              <RetailLabelHistory variantId={historyTarget.variant.id} companyKey={companyKey} />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 
   if (!retailEnabled) {
     return (
@@ -119,7 +257,7 @@ export default function RetailInventory() {
       );
     }
     return (
-      <div className="mx-auto max-w-7xl space-y-5 p-4 md:p-6">
+      <div className="mx-auto max-w-7xl space-y-5 p-4 pb-24 md:p-6 md:pb-24">
         <div className="flex items-center justify-between gap-3">
           <Button variant="ghost" onClick={() => navigate("/retail/inventory")}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Inventory
@@ -164,57 +302,22 @@ export default function RetailInventory() {
           <CardHeader>
             <CardTitle>Stock by color and size</CardTitle>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left">
-                  <th className="w-16 py-2">Image</th>
-                  <th className="py-2">
-                    <span>Color</span>
-                  </th>
-                  <th>
-                    <span>Size</span>
-                  </th>
-                  <th>Barcode</th>
-                  <th>Cost</th>
-                  <th>Selling price</th>
-                  <th>Total Qty</th>
-                  <th>Locations</th>
-                </tr>
-              </thead>
-              <tbody>
-                {detailProduct.variants.map((variant) => (
-                  <tr key={variant.id} className="border-b last:border-0">
-                    <td className="py-3 pr-3">
-                      {variant.imageUrls[0] || detailProduct.imageUrls[0] ? (
-                        <img
-                          src={variant.imageUrls[0] || detailProduct.imageUrls[0]}
-                          alt={`${detailProduct.name} · ${variant.color} · ${variant.size}`}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-11 w-11 rounded-md border object-cover"
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="py-3 font-medium">{variant.color}</td>
-                    <td>{variant.size}</td>
-                    <td className="font-mono text-xs">{variant.barcode}</td>
-                    <td>{money(variant.cost)}</td>
-                    <td>{money(variant.sellingPrice)}</td>
-                    <td>{variant.quantity}</td>
-                    <td>
-                      {variant.stocks.length
-                        ? variant.stocks.map((stock) => `${stock.locationName}: ${stock.quantity}`).join(" · ")
-                        : "—"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <CardContent>
+            <RetailCatalogList
+              products={[detailProduct]}
+              filters={{ ...catalogFilters, color: "", size: "", stockStatus: "all", showArchived: true }}
+              selected={selected}
+              onToggle={toggleVariant}
+              onToggleProduct={toggleVariants}
+              onOpenProduct={() => undefined}
+              onEdit={openEditor}
+              onArchiveProduct={(product, active) => void setProductActive(product, active)}
+              onVariantAction={handleVariantAction}
+            />
           </CardContent>
         </Card>
+        {bulkBar}
+        {actionDialogs}
 
         <ProductEditor
           open={editorOpen}
@@ -228,7 +331,8 @@ export default function RetailInventory() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6">
+    <div className="mx-auto max-w-[1600px] space-y-5 p-4 pb-24 md:p-6 md:pb-24">
+      <RetailNav />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -247,6 +351,7 @@ export default function RetailInventory() {
             <Upload className="mr-2 h-4 w-4" /> Import
           </Button>
           <Button
+            variant="outline"
             onClick={() => {
               setEditingProduct(null);
               setEditorOpen(true);
@@ -254,15 +359,18 @@ export default function RetailInventory() {
           >
             <Plus className="mr-2 h-4 w-4" /> Add Product
           </Button>
+          <Button onClick={() => navigate("/retail/quick-add")}>
+            <Camera className="mr-2 h-4 w-4" /> Quick add
+          </Button>
         </div>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-8">
         <Input
           placeholder="Search style, brand, barcode, SKU, color or size…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="md:col-span-2"
+          className="col-span-2"
         />
         <select
           className="h-10 rounded-md border bg-background px-2 text-sm"
@@ -332,76 +440,30 @@ export default function RetailInventory() {
         </select>
       </div>
 
-      <Card>
-        <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[860px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/40 text-left">
-                <th className="w-16 p-3">Image</th>
-                <th>Product</th>
-                <th>Brand</th>
-                <th>Available colors</th>
-                <th>Available sizes</th>
-                <th className="text-right">Total quantity</th>
-                <th className="text-right">Selling price</th>
-                <th className="w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    Loading retail inventory…
-                  </td>
-                </tr>
-              ) : products.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
-                    No products match these filters.
-                  </td>
-                </tr>
-              ) : (
-                products.map((product) => (
-                  <tr
-                    key={product.id}
-                    className="cursor-pointer border-b last:border-0 hover:bg-muted/20"
-                    onClick={() => navigate(`/retail/products/${product.id}`)}
-                  >
-                    <td className="p-3">
-                      <ProductImage product={product} className="h-11 w-11 rounded-md border" />
-                    </td>
-                    <td>
-                      <div className="font-medium">{product.name}</div>
-                    </td>
-                    <td>{product.brand.name}</td>
-                    <td>{product.availableColors.length ? product.availableColors.join(", ") : "—"}</td>
-                    <td>{product.availableSizes.length ? product.availableSizes.join(", ") : "—"}</td>
-                    <td className="text-right font-medium">{product.totalQuantity}</td>
-                    <td className="text-right">
-                      {product.minSellingPrice === product.maxSellingPrice
-                        ? money(product.minSellingPrice)
-                        : `${money(product.minSellingPrice)} – ${money(product.maxSellingPrice)}`}
-                    </td>
-                    <td className="text-right">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setEditingProduct(product);
-                          setEditorOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <label className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Checkbox checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)} />
+        <span>Show archived items</span>
+      </label>
+
+      {isLoading ? (
+        <div className="p-8 text-center text-muted-foreground">Loading retail inventory…</div>
+      ) : products.length === 0 ? (
+        <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
+          No products match these filters.
+        </div>
+      ) : (
+        <RetailCatalogList
+          products={products}
+          filters={catalogFilters}
+          selected={selected}
+          onToggle={toggleVariant}
+          onToggleProduct={toggleVariants}
+          onOpenProduct={(product) => navigate(`/retail/products/${product.id}`)}
+          onEdit={openEditor}
+          onArchiveProduct={(product, active) => void setProductActive(product, active)}
+          onVariantAction={handleVariantAction}
+        />
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-muted-foreground">
@@ -442,6 +504,8 @@ export default function RetailInventory() {
         locations={locations}
       />
       <ImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      {bulkBar}
+      {actionDialogs}
     </div>
   );
 }

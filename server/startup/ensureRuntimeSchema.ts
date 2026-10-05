@@ -50,6 +50,39 @@ export async function ensureRetailVariantSchema(pool: Pool): Promise<void> {
   logger.info("[startup] ✓ Retail variant color and image columns ensured");
 }
 
+/**
+ * Retail fashion barcodes and labels (migrations/20261004_001_retail_fashion_barcodes_labels.sql),
+ * applied by the always-on guard for the same reason as ensureRetailVariantSchema.
+ * Every statement is idempotent and only adds a defaulted column, new tables and indexes.
+ */
+export async function ensureRetailBarcodeLabelSchema(pool: Pool): Promise<void> {
+  await pool.query(`
+    ALTER TABLE retail_product_variants
+      ADD COLUMN IF NOT EXISTS barcode_source VARCHAR(20) NOT NULL DEFAULT 'manual';
+    CREATE TABLE IF NOT EXISTS retail_barcode_sequences (
+      company_id INTEGER PRIMARY KEY NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      next_value BIGINT NOT NULL DEFAULT 1,
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS retail_label_print_events (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      variant_id INTEGER NOT NULL REFERENCES retail_product_variants(id) ON DELETE RESTRICT,
+      barcode VARCHAR(191) NOT NULL,
+      copies INTEGER NOT NULL DEFAULT 1,
+      layout VARCHAR(40) NOT NULL,
+      is_reprint BOOLEAN NOT NULL DEFAULT false,
+      created_by VARCHAR NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS retail_label_print_events_company_idx ON retail_label_print_events (company_id);
+    CREATE INDEX IF NOT EXISTS retail_label_print_events_variant_idx ON retail_label_print_events (variant_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_movements_variant_created_idx
+      ON retail_stock_movements (variant_id, created_at);
+  `);
+  logger.info("[startup] ✓ Retail barcode and label schema ensured");
+}
+
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
     await pool.query(
@@ -206,6 +239,14 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await ensureRetailVariantSchema(pool);
   } catch (retailErr: unknown) {
     logger.error("[startup] ✗ Could not ensure retail variant columns:", { error: getErrorMessage(retailErr) });
+  }
+
+  try {
+    await ensureRetailBarcodeLabelSchema(pool);
+  } catch (retailErr: unknown) {
+    logger.error("[startup] ✗ Could not ensure retail barcode and label schema:", {
+      error: getErrorMessage(retailErr),
+    });
   }
 
   // Scheduled WhatsApp claims are a correctness boundary: production disables
