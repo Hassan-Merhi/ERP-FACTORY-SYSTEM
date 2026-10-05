@@ -85,6 +85,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/retailFashionTranslations.ts",
   "client/src/i18n/wave8ReleaseTranslations.part1.ts",
   "client/src/i18n/wave8ReleaseTranslations.part2.ts",
+  "client/src/i18n/wave8ReleaseTranslations.part3.ts",
   "client/src/i18n/payrollUiTranslations.ts",
 ];
 

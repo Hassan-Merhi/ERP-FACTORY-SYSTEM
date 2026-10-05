@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -16,103 +15,17 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { formatNumber } from "@/lib/formatNumber";
 
-interface MarketRow {
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-  stockItemId: number;
-  code: string;
-  name: string;
-  stockGroupId: number | null;
-  stockGroupName: string | null;
-  importCount: number;
-  importedQty: number;
-  purchaseValue: number | null;
-  weightedPurchaseCost: number | null;
-  purchaseValueWithOffloading: number | null;
-  weightedPurchaseCostWithOffloading: number | null;
-  purchaseCurrencies: string[];
-  soldQty: number;
-  revenue: number;
-  historicalCost: number;
-  profit: number;
-  avgSellingPrice: number;
-  profitPerUnit: number;
-  marginPct: number;
-  marketStatus: "strong" | "watch" | "losing" | "no_sales";
-}
-
-interface MarketCompanySummary {
-  companyId: number;
-  companyCode: string;
-  companyName: string;
-  itemCount: number;
-  importedQty: number;
-  soldQty: number;
-  revenue: number;
-  profit: number;
-  marginPct: number;
-}
-
-interface MarketResponse {
-  generatedAt: string;
-  rows: MarketRow[];
-  stockGroups: string[];
-  companySummaries: MarketCompanySummary[];
-  summary: {
-    itemCount: number;
-    importedQty: number;
-    soldQty: number;
-    revenue: number;
-    profit: number;
-    marginPct: number;
-  };
-}
-
-function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
-  if (status === "strong") return <Badge className="bg-emerald-600 hover:bg-emerald-600">Strong</Badge>;
-  if (status === "losing") return <Badge variant="destructive">Losing</Badge>;
-  if (status === "watch") return <Badge variant="secondary">Watch</Badge>;
-  return <Badge variant="outline">No sales</Badge>;
-}
-
-type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
-
-const PROFIT_EPSILON = 0.005;
-
-function normalizeItemCode(code: string) {
-  return code.trim().toLocaleUpperCase();
-}
-
-function matchesProfitDirection(profit: number, filter: ProfitDirectionFilter) {
-  if (filter === "gaining") return profit > PROFIT_EPSILON;
-  if (filter === "losing") return profit < -PROFIT_EPSILON;
-  if (filter === "none") return Math.abs(profit) <= PROFIT_EPSILON;
-  return true;
-}
-
-function getMarketStatus(soldQty: number, profit: number, marginPct: number): MarketRow["marketStatus"] {
-  if (soldQty <= 0) return "no_sales";
-  if (profit < 0) return "losing";
-  if (marginPct >= 15) return "strong";
-  return "watch";
-}
-
-function formatNativePurchase(value: number | null, currencies: string[]) {
-  if (value == null) return "—";
-  if (currencies.length !== 1) return "Mixed currencies";
-  const amount = value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  return "$" + amount;
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border bg-card p-4">
-      <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
-    </div>
-  );
-}
+import {
+  StatusBadge,
+  normalizeItemCode,
+  matchesProfitDirection,
+  getMarketStatus,
+  formatNativePurchase,
+  MetricCard,
+  type MarketRow,
+  type MarketResponse,
+  type ProfitDirectionFilter,
+} from "./itemMarketAnalysisParts";
 
 export default function ItemMarketAnalysis() {
   const { selectedCompany, companies } = useCompany();
@@ -238,9 +151,8 @@ export default function ItemMarketAnalysis() {
     );
 
     return {
-      itemCount: new Set(
-        rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`)
-      ).size,
+      itemCount: new Set(rows.map((row) => normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`))
+        .size,
       ...totals,
       marginPct: totals.revenue === 0 ? 0 : (totals.profit / totals.revenue) * 100,
     };
@@ -357,9 +269,7 @@ export default function ItemMarketAnalysis() {
             ? orderedRows.reduce((sum, row) => sum + (row.purchaseValueWithOffloading ?? 0), 0)
             : null;
         const weightedPurchaseCostWithOffloading =
-          purchaseValueWithOffloading != null && importedQty !== 0
-            ? purchaseValueWithOffloading / importedQty
-            : null;
+          purchaseValueWithOffloading != null && importedQty !== 0 ? purchaseValueWithOffloading / importedQty : null;
         const avgSellingPrice = soldQty === 0 ? 0 : revenue / soldQty;
         const profitPerUnit = soldQty === 0 ? 0 : profit / soldQty;
         const marginPct = revenue === 0 ? 0 : (profit / revenue) * 100;
@@ -729,11 +639,11 @@ export default function ItemMarketAnalysis() {
                                       <TableHead className="text-right">Imports</TableHead>
                                       <TableHead className="text-right">Imported Qty</TableHead>
                                       <TableHead className="text-right">
-                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
-                </TableHead>
+                                        {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                                      </TableHead>
                                       <TableHead className="text-right">
-                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
-                </TableHead>
+                                        {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                                      </TableHead>
                                       <TableHead className="text-right">Sold Qty</TableHead>
                                       <TableHead className="text-right">Avg Sell</TableHead>
                                       <TableHead className="text-right">Revenue</TableHead>
