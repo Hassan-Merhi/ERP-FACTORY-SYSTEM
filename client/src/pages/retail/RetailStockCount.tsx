@@ -153,7 +153,10 @@ export default function RetailStockCount() {
       ),
     onSuccess: async (_data, input) => {
       await refreshAll();
-      toast({ title: `Stock count ${input.action}`, description: `${session?.code ?? "Session"} updated.` });
+      toast({
+        title: `Stock count ${input.action}`,
+        description: `Stock count ${session?.code ?? "current session"} updated.`,
+      });
     },
     onError: (error) => toast({ title: "Action failed", description: error.message, variant: "destructive" }),
   });
@@ -168,9 +171,10 @@ export default function RetailStockCount() {
     onSuccess: async (data) => {
       setFinalizeOpen(false);
       await refreshAll();
+      const movementsWritten = data.session.movementCount ?? data.session.countedLineCount;
       toast({
         title: "Stock count finalized",
-        description: `${data.session.movementCount ?? data.session.countedLineCount} inventory movements written.`,
+        description: `${movementsWritten} inventory movements were written by this count.`,
       });
     },
     onError: (error) => toast({ title: "Finalize failed", description: error.message, variant: "destructive" }),

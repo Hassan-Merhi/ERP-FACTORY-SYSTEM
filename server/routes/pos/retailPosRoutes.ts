@@ -15,7 +15,7 @@ import {
   retailStockOperations,
   retailVariantInventory,
 } from "@shared/schema";
-import { requireAuth, requireNonPOS } from "../../auth";
+import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";

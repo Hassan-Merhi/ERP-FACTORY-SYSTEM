@@ -29,7 +29,7 @@ import { RetailApprovalDialog } from "./RetailApprovalDialog";
 import { RetailCustomerPicker } from "./RetailCustomerPicker";
 import { RetailLineAdjustDialog, type LineAdjustment } from "./RetailLineAdjustDialog";
 import { fetchRetailCartPreview, requestRetailDiscountApproval, type CartRequestLine } from "./retailWave2Api";
-import type { RetailCartPreview, RetailCustomerSummary, RetailSellingSettings } from "./retailWave2Types";
+import type { RetailCartPreview, RetailCustomerSummary } from "./retailWave2Types";
 import {
   canSellIntoNegative,
   lookupRetailBarcode,
@@ -40,7 +40,6 @@ import {
   type CartLine,
   type Location,
   type RetailPosItem,
-  type RetailLineDiscountType,
   type RetailSale,
   type ScanOutcome,
 } from "./retailPosTypes";
@@ -307,7 +306,7 @@ export default function RetailPOS() {
         customerName: customer?.legalName ?? null,
         items: checkoutItems,
         orderDiscount: orderDiscount.type === "none" ? undefined : orderDiscountPayload,
-        approvalToken: (options?.approvalToken ?? approvalToken) ?? undefined,
+        approvalToken: options?.approvalToken ?? approvalToken ?? undefined,
       });
       return (await response.json()) as { replayed: boolean; sale: RetailSale };
     },
