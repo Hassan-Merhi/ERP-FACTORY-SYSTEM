@@ -5,6 +5,8 @@ import { storage } from "../../storage";
 import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema";
 import { eq, and, or, sql, like } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
+import type Decimal from "decimal.js";
+import { toMoney } from "../../lib/money";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Centralised PO amount calculator — single source of truth for gross/interco
@@ -18,7 +20,7 @@ interface PoAmounts {
   freight: number;
 }
 
-export function calcPoAmounts(po: {
+type PoAmountFields = {
   itemsTotal?: string | number | null;
   freight?: string | number | null;
   surcharge?: string | number | null;
@@ -27,22 +29,39 @@ export function calcPoAmounts(po: {
   discount?: string | number | null;
   otherCharges?: string | number | null;
   freightPaidBy?: string | null;
-}): PoAmounts {
-  const f = (v: string | number | null | undefined) => parseFloat(String(v ?? "0")) || 0;
-  const itemsTotal = f(po.itemsTotal);
-  const freight = f(po.freight);
-  const surcharge = f(po.surcharge);
-  const fumigation = f(po.fumigation);
-  const documentCharges = f(po.documentCharges);
-  const discount = f(po.discount);
-  const otherCharges = f(po.otherCharges);
+};
+
+/** calcPoAmounts as exact decimals, for callers that store or compare the totals. */
+export function calcPoAmountsExact(po: PoAmountFields): {
+  grossTotal: Decimal;
+  intercoTotal: Decimal;
+  freightPaidBy: string;
+  freight: Decimal;
+} {
+  const freight = toMoney(po.freight);
   const freightPaidBy = po.freightPaidBy ?? "supplier";
-  const grossTotal = itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+  const grossTotal = toMoney(po.itemsTotal)
+    .plus(freight)
+    .plus(toMoney(po.surcharge))
+    .plus(toMoney(po.fumigation))
+    .plus(toMoney(po.documentCharges))
+    .minus(toMoney(po.discount))
+    .plus(toMoney(po.otherCharges));
   // intercoTotal is the supplier's share: excludes freight when it's paid
   // by the subsidiary itself ("own") or by the parent company ("parent").
   const intercoTotal =
-    (freightPaidBy === "own" || freightPaidBy === "parent") && freight > 0 ? grossTotal - freight : grossTotal;
+    (freightPaidBy === "own" || freightPaidBy === "parent") && freight.gt(0) ? grossTotal.minus(freight) : grossTotal;
   return { grossTotal, intercoTotal, freightPaidBy, freight };
+}
+
+export function calcPoAmounts(po: PoAmountFields): PoAmounts {
+  const exact = calcPoAmountsExact(po);
+  return {
+    grossTotal: exact.grossTotal.toNumber(),
+    intercoTotal: exact.intercoTotal.toNumber(),
+    freightPaidBy: exact.freightPaidBy,
+    freight: exact.freight.toNumber(),
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
