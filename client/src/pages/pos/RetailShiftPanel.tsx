@@ -70,6 +70,16 @@ export function RetailShiftPanel({
   const shift = currentQuery.data ?? null;
   useEffect(() => onShiftChange(shift), [shift, onShiftChange]);
 
+  const historyQuery = useQuery<RetailShift[]>({
+    queryKey: ["retail-shift-history", locationId],
+    queryFn: async () =>
+      json<RetailShift[]>(
+        await fetch(`/api/pos/shifts/history?locationId=${locationId}&limit=5`, { credentials: "include" })
+      ),
+    enabled: Boolean(locationId),
+    staleTime: 15_000,
+  });
+
   const summaryQuery = useQuery<ShiftSummary>({
     queryKey: ["retail-shift-summary", shift?.id],
     queryFn: async () =>
@@ -84,6 +94,7 @@ export function RetailShiftPanel({
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["retail-current-shift"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-shift-summary"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-shift-history"] }),
     ]);
   };
 
@@ -255,6 +266,26 @@ export function RetailShiftPanel({
             </div>
           </>
         )}
+
+        {(historyQuery.data ?? []).filter((entry) => entry.status === "closed").length > 0 ? (
+          <div className="border-t pt-3">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent shifts</div>
+            <div className="space-y-1.5">
+              {(historyQuery.data ?? [])
+                .filter((entry) => entry.status === "closed")
+                .slice(0, 5)
+                .map((entry) => (
+                  <div key={entry.id} className="grid grid-cols-[1fr_auto_auto] gap-2 text-xs">
+                    <span>#{entry.id} · {new Date(entry.openedAt).toLocaleDateString()}</span>
+                    <span>Expected {money(Number(entry.expectedCash ?? 0))}</span>
+                    <span className={Math.abs(Number(entry.variance ?? 0)) > 0.005 ? "text-destructive" : ""}>
+                      Var {money(Number(entry.variance ?? 0))}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );
