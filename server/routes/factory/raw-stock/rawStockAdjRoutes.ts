@@ -18,6 +18,10 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+
+const ZERO = new MoneyDecimal(0);
 
 export function registerRawStockAdjRoutes(app: Express) {
   app.get("/api/factory/raw-stock/adjustments", requireAuth, async (req: Request, res: Response) => {
@@ -128,12 +132,13 @@ export function registerRawStockAdjRoutes(app: Express) {
       // so a batch fed by this supplier more than once still shows one correct weighted rate.
       const batchAggMap = new Map();
       for (const r of batchSourceRows) {
-        const kg = parseFloat(r.weightKg as string) || 0;
-        const cost = parseFloat(r.totalCost as string) || kg * (parseFloat(r.costPerKg as string) || 0);
+        const kg = toMoney(r.weightKg);
+        const storedCost = toMoney(r.totalCost);
+        const cost = storedCost.isZero() ? kg.times(toMoney(r.costPerKg)) : storedCost;
         if (batchAggMap.has(r.batchId)) {
           const agg = batchAggMap.get(r.batchId);
-          agg.kg += kg;
-          agg._cost += cost;
+          agg.kg = agg.kg.plus(kg);
+          agg._cost = agg._cost.plus(cost);
         } else {
           batchAggMap.set(r.batchId, {
             kind: "batch" as const,
@@ -152,8 +157,8 @@ export function registerRawStockAdjRoutes(app: Express) {
         }
       }
       const batches = Array.from(batchAggMap.values()).map((r) => {
-        const { _cost, ...rest } = r;
-        return { ...rest, costPerKg: rest.kg > 0 ? _cost / rest.kg : 0 };
+        const { _cost, kg, ...rest } = r;
+        return { ...rest, kg: kg.toNumber(), costPerKg: kg.gt(0) ? _cost.div(kg).toNumber() : 0 };
       });
 
       // 3. Container-based raw stock receipts for this supplier
@@ -189,12 +194,12 @@ export function registerRawStockAdjRoutes(app: Express) {
         date: r.offloadedAt,
         createdAt: r.offloadedAt,
         type: "RECEIPT",
-        kg: parseFloat(r.receivedKg as string) || 0,
-        usedKg: parseFloat(r.usedKg as string) || 0,
+        kg: toMoney(r.receivedKg).toNumber(),
+        usedKg: toMoney(r.usedKg).toNumber(),
         rawStockId: r.id,
         // Prefer the USD rate (computed from actual received kg at offload time);
         // fall back to the native rate only if costPerKgUsd is absent (legacy rows).
-        costPerKg: parseFloat(r.costPerKgUsd as string) || parseFloat(r.costPerKg as string) || 0,
+        costPerKg: (toMoney(r.costPerKgUsd).isZero() ? toMoney(r.costPerKg) : toMoney(r.costPerKgUsd)).toNumber(),
         currencyCode: "USD",
         notes: r.origin ? `Origin: ${r.origin}` : null,
         label: `Container Receipt — ${r.containerNumber || `#${r.id}`}`,
@@ -210,8 +215,8 @@ export function registerRawStockAdjRoutes(app: Express) {
         date: r.date || r.createdAt,
         createdAt: r.createdAt,
         type: r.type,
-        kg: parseFloat(r.kg as string) || 0,
-        costPerKg: parseFloat(r.costPerKg as string) || 0,
+        kg: toMoney(r.kg).toNumber(),
+        costPerKg: toMoney(r.costPerKg).toNumber(),
         currencyCode: r.currencyCode || "USD",
         notes: r.notes,
         reference: r.reference || null,
@@ -239,10 +244,12 @@ export function registerRawStockAdjRoutes(app: Express) {
         req.body;
       if (!type || !["ADD", "REMOVE"].includes(type))
         return res.status(400).json({ message: "type must be ADD or REMOVE" });
-      if (!kg || parseFloat(kg) <= 0) return res.status(400).json({ message: "kg must be > 0" });
+      // A non-numeric kg used to pass this check (NaN <= 0 is false) and was stored as NaN.
+      const kgInput = kg ? parseMoneyInput(kg) : null;
+      if (kgInput === null || kgInput.lte(0)) return res.status(400).json({ message: "kg must be > 0" });
       if (!date) return res.status(400).json({ message: "date is required" });
 
-      const kgNum = parseFloat(kg);
+      const kgNum = kgInput;
       const ccy = currencyCode || "USD";
       const resolvedSupplierId = supplierId ? Number(supplierId) : null;
 
@@ -253,10 +260,11 @@ export function registerRawStockAdjRoutes(app: Express) {
       // to the real receipt paths (container offload / opening balance) that are
       // authorized to set it. A supplier-less (MANUAL) adjustment isn't tied to a
       // locked rate, so the client-supplied cost is still accepted there.
-      let costNum = costPerKg ? parseFloat(costPerKg) : 0;
+      // A cost that does not parse is treated as no cost, as NaN > 0 was.
+      let costNum: Decimal = (costPerKg ? parseMoneyInput(costPerKg) : null) ?? ZERO;
       if (type === "ADD" && resolvedSupplierId) {
-        const lockedRate = await getLockedSupplierRate(db, companyId, resolvedSupplierId);
-        if (lockedRate <= 0) {
+        const lockedRate = toMoney(await getLockedSupplierRate(db, companyId, resolvedSupplierId));
+        if (lockedRate.lte(0)) {
           return res.status(400).json({
             message:
               "This supplier has no established raw-material rate yet. Use a container offload or the opening-balance workflow to record the first receipt.",
@@ -264,11 +272,11 @@ export function registerRawStockAdjRoutes(app: Express) {
         }
         costNum = lockedRate;
       }
-      const totalAmount = kgNum * costNum;
+      const totalAmount = kgNum.times(costNum);
 
       // Pre-fetch ledger account IDs before transaction (getOrCreateLedgerAccount must run outside tx)
       let rawMaterialAcctId: number | null = null;
-      if (createVoucher && resolvedSupplierId && type === "ADD" && costNum > 0) {
+      if (createVoucher && resolvedSupplierId && type === "ADD" && costNum.gt(0)) {
         rawMaterialAcctId = await getOrCreateLedgerAccount(
           companyId,
           "FACTORY_RAW_MATERIAL_STOCK",
@@ -280,7 +288,7 @@ export function registerRawStockAdjRoutes(app: Express) {
       let fxRate = 1;
       if (ccy !== "USD") {
         try {
-          fxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, ccy, date));
+          fxRate = toMoney(await getOrFetchFxRateToUsd(companyId, ccy, date)).toNumber();
         } catch {
           fxRate = 1;
         }
@@ -294,8 +302,8 @@ export function registerRawStockAdjRoutes(app: Express) {
             companyId,
             date,
             type,
-            kg: String(kgNum),
-            costPerKg: costNum > 0 ? String(costNum) : "0",
+            kg: String(kgNum.toNumber()),
+            costPerKg: costNum.gt(0) ? String(costNum.toNumber()) : "0",
             currencyCode: ccy,
             supplierId: resolvedSupplierId,
             materialLabel: materialLabel || null,
@@ -305,7 +313,7 @@ export function registerRawStockAdjRoutes(app: Express) {
           .returning();
 
         // Accounting voucher: Dr Raw Material Stock / Cr Supplier Account
-        if (createVoucher && resolvedSupplierId && rawMaterialAcctId && totalAmount > 0) {
+        if (createVoucher && resolvedSupplierId && rawMaterialAcctId && totalAmount.gt(0)) {
           // Look up supplier name for description
           const [sup] = await tx
             .select({ name: factorySuppliers.name })
@@ -322,8 +330,8 @@ export function registerRawStockAdjRoutes(app: Express) {
               voucherType: "Journal",
               voucherNumber: voucherNum,
               voucherDate: date,
-              description: `Manual raw material purchase: ${kgNum} kg @ ${costNum}/${ccy} — ${supplierName}`,
-              totalAmount: String(totalAmount),
+              description: `Manual raw material purchase: ${kgNum.toNumber()} kg @ ${costNum.toNumber()}/${ccy} — ${supplierName}`,
+              totalAmount: moneyString(totalAmount),
               currency: ccy,
               exchangeRate: String(fxRate),
               sourceModule: "FACTORY",
@@ -334,9 +342,9 @@ export function registerRawStockAdjRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             ledgerAccountId: rawMaterialAcctId,
-            debitAmount: String(totalAmount),
+            debitAmount: moneyString(totalAmount),
             creditAmount: "0",
-            narration: `Raw material stock — ${kgNum} kg from ${supplierName}`,
+            narration: `Raw material stock — ${kgNum.toNumber()} kg from ${supplierName}`,
           });
 
           // Cr Supplier
@@ -344,7 +352,7 @@ export function registerRawStockAdjRoutes(app: Express) {
             voucherId: voucher.id,
             factorySupplierId: resolvedSupplierId,
             debitAmount: "0",
-            creditAmount: String(totalAmount),
+            creditAmount: moneyString(totalAmount),
             narration: `Payable to ${supplierName} for raw material`,
           });
 
@@ -354,9 +362,9 @@ export function registerRawStockAdjRoutes(app: Express) {
             txType: "OFFLOAD_RAW_STOCK",
             referenceId: inserted.id,
             referenceTable: "factory_raw_stock",
-            description: `Manual purchase: ${kgNum} kg @ ${costNum} ${ccy} from ${supplierName}`,
+            description: `Manual purchase: ${kgNum.toNumber()} kg @ ${costNum.toNumber()} ${ccy} from ${supplierName}`,
             currencyCode: ccy,
-            amountCurrency: totalAmount,
+            amountCurrency: totalAmount.toNumber(),
             fxRateToUsd: fxRate,
           });
         }
@@ -409,16 +417,16 @@ export function registerRawStockAdjRoutes(app: Express) {
           .orderBy(desc(factoryRawStock.offloadedAt));
 
         await db.transaction(async (tx) => {
-          let remaining = parseFloat(String(adj.kg));
+          let remaining = toMoney(adj.kg);
           for (const row of stockRows) {
-            if (remaining <= 0.001) break;
-            const received = parseFloat(String(row.receivedKg));
+            if (remaining.lte("0.001")) break;
+            const received = toMoney(row.receivedKg);
             // Add back all remaining to this row (newest first)
             await tx
               .update(factoryRawStock)
-              .set({ receivedKg: String((received + remaining).toFixed(3)) })
+              .set({ receivedKg: received.plus(remaining).toFixed(3) })
               .where(eq(factoryRawStock.id, row.id));
-            remaining = 0;
+            remaining = ZERO;
           }
           // Hard-delete the DEDUCT record
           await tx
@@ -503,20 +511,19 @@ export function registerRawStockAdjRoutes(app: Express) {
           );
         if (sources.length === 0) throw new Error("No source records found for this supplier in this batch");
 
-        let totalKgToReverse = 0;
-        let totalCostToReverse = 0;
+        let totalKgToReverse: Decimal = ZERO;
+        let totalCostToReverse: Decimal = ZERO;
 
         for (const src of sources) {
-          const srcKg = parseFloat(src.weightKg as string) || 0;
-          const srcCost = parseFloat(src.totalCost as string) || 0;
-          totalKgToReverse += srcKg;
-          totalCostToReverse += srcCost;
+          const srcKg = toMoney(src.weightKg);
+          totalKgToReverse = totalKgToReverse.plus(srcKg);
+          totalCostToReverse = totalCostToReverse.plus(toMoney(src.totalCost));
 
           // If this source references a container raw stock row, reverse usedKg
           if (src.containerId) {
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`GREATEST(0, ${factoryRawStock.usedKg} - ${srcKg})` })
+              .set({ usedKg: sql`GREATEST(0, ${factoryRawStock.usedKg} - ${srcKg.toString()})` })
               .where(and(eq(factoryRawStock.companyId, companyId), eq(factoryRawStock.containerId, src.containerId)));
           }
         }
@@ -529,16 +536,17 @@ export function registerRawStockAdjRoutes(app: Express) {
           );
 
         // Update the batch totals
-        const newTotalKg = Math.max(0, parseFloat(batch.totalWeightKg as string) - totalKgToReverse);
-        const newTotalCost = Math.max(0, parseFloat(batch.totalCost as string) - totalCostToReverse);
-        const newCostPerKg = newTotalKg > 0 ? newTotalCost / newTotalKg : 0;
+        const newTotalKg = MoneyDecimal.max(0, toMoney(batch.totalWeightKg).minus(totalKgToReverse));
+        const newTotalCost = MoneyDecimal.max(0, toMoney(batch.totalCost).minus(totalCostToReverse));
+        // total_weight_kg holds 3 decimals, total_cost and cost_per_kg 7.
+        const newCostPerKg = newTotalKg.gt(0) ? newTotalCost.div(newTotalKg) : ZERO;
 
         await tx
           .update(factoryMixBatches)
           .set({
-            totalWeightKg: String(newTotalKg),
-            totalCost: String(newTotalCost),
-            costPerKg: String(newCostPerKg),
+            totalWeightKg: newTotalKg.toFixed(3),
+            totalCost: newTotalCost.toFixed(7),
+            costPerKg: newCostPerKg.toFixed(7),
             updatedAt: new Date(),
           })
           .where(eq(factoryMixBatches.id, batchId));
@@ -569,8 +577,8 @@ export function registerRawStockAdjRoutes(app: Express) {
         .limit(1);
       if (!row) return res.status(404).json({ message: "Raw stock record not found" });
 
-      const usedKg = parseFloat(row.usedKg as string) || 0;
-      if (usedKg > 0.001) {
+      const usedKg = toMoney(row.usedKg);
+      if (usedKg.gt("0.001")) {
         return res.status(400).json({
           message: `Cannot delete: ${usedKg.toFixed(3)} kg have already been used from this receipt in batches. Delete the batch sources first or edit the balance instead.`,
         });
@@ -614,8 +622,8 @@ export function registerRawStockAdjRoutes(app: Express) {
       if (isNaN(rawStockId)) return res.status(400).json({ message: "Invalid rawStockId" });
 
       const { receivedKg } = req.body;
-      const newKg = parseFloat(receivedKg);
-      if (isNaN(newKg) || newKg < 0)
+      const newKg = parseMoneyInput(receivedKg);
+      if (newKg === null || newKg.lt(0))
         return res.status(400).json({ message: "receivedKg must be a non-negative number" });
 
       const [row] = await db
@@ -625,8 +633,8 @@ export function registerRawStockAdjRoutes(app: Express) {
         .limit(1);
       if (!row) return res.status(404).json({ message: "Raw stock record not found" });
 
-      const usedKg = parseFloat(row.usedKg as string) || 0;
-      if (newKg < usedKg - 0.001) {
+      const usedKg = toMoney(row.usedKg);
+      if (newKg.lt(usedKg.minus("0.001"))) {
         return res.status(400).json({
           message: `Cannot set receivedKg below already-used amount (${usedKg.toFixed(3)} kg used). Delete the batch sources first or set a higher value.`,
         });
@@ -634,7 +642,7 @@ export function registerRawStockAdjRoutes(app: Express) {
 
       await db
         .update(factoryRawStock)
-        .set({ receivedKg: String(newKg) })
+        .set({ receivedKg: String(newKg.toNumber()) })
         .where(and(eq(factoryRawStock.id, rawStockId), eq(factoryRawStock.companyId, companyId)));
 
       res.json({ success: true });
@@ -679,10 +687,7 @@ export function registerRawStockAdjRoutes(app: Express) {
         );
 
       const enriched = results.map((r) => {
-        const received = parseFloat(r.receivedKg) || 0;
-        const used = parseFloat(r.usedKg) || 0;
-        const _costPerKg = parseFloat(r.costPerKg) || 0;
-        const remainingKg = received - used;
+        const remainingKg = toMoney(r.receivedKg).minus(toMoney(r.usedKg));
         return { ...r, remainingKg: remainingKg.toFixed(3) };
       });
 

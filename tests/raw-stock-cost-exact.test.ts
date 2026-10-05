@@ -3,8 +3,9 @@
  * - update-cost wrote each open mix-batch source's totalCost as
  *   (weight × cost).toFixed(2) over binary floats: 100.5 kg × 0.35 = 35.175,
  *   held as 35.17499…, was stored as 35.17 instead of 35.18.
- * - deduct-received let a non-numeric kg through (NaN <= 0 is false) and went
- *   on to write a daybook entry with NaN amounts.
+ * - deduct-received and the adjustment route let a non-numeric kg through
+ *   (NaN <= 0 is false): one went on to post NaN daybook amounts, the other
+ *   stored kg = 'NaN', which Postgres numeric accepts and every SUM then spreads.
  */
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,10 +16,11 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock("../server/auth", () => ({ requireAuth: (_q: unknown, _s: unknown, next: () => void) => next() }));
-vi.mock("../server/services/factory/rawStockLockedRate", () => ({ getLockedSupplierRate: async () => 0 }));
+vi.mock("../server/services/factory/rawStockLockedRate", () => ({ getLockedSupplierRate: async () => 0.35 }));
 vi.mock("../server/routes/factory/_helpers", () => ({
   writeDaybookEntry: async (_tx: unknown, entry: unknown) => harness.daybook.push(entry),
   getOrFetchFxRateToUsd: async () => "1",
+  getOrCreateLedgerAccount: async () => 77,
 }));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
@@ -45,11 +47,13 @@ vi.mock("../server/db", async () => {
 });
 
 import { registerRawStockReceiptRoutes } from "../server/routes/factory/raw-stock/rawStockReceiptRoutes";
+import { registerRawStockAdjRoutes } from "../server/routes/factory/raw-stock/rawStockAdjRoutes";
 
 async function post(path: string, body: Record<string, unknown>) {
   const handlers: Record<string, (req: unknown, res: unknown) => Promise<unknown>> = {};
   const register = (route: string, ...chain: never[]) => (handlers[route] = chain.at(-1)!);
   registerRawStockReceiptRoutes({ get: register, post: register } as never);
+  registerRawStockAdjRoutes({ get: register, post: register, delete: register, patch: register } as never);
   harness.writes = [];
   harness.daybook = [];
   let status = 200;
@@ -83,5 +87,23 @@ describe("raw stock cost routes", () => {
     );
     expect(harness.daybook).toEqual([]);
     expect(harness.writes).toEqual([]);
+  });
+
+  it("rejects a non-numeric adjustment kg instead of storing NaN", async () => {
+    harness.rows = {};
+    const body = { type: "ADD", kg: "abc", supplierId: 1, date: "2026-03-01" };
+    expect(await post("/api/factory/raw-stock/adjustment", body)).toBe(400);
+    expect(harness.writes).toEqual([]);
+  });
+
+  it("writes the manual purchase voucher as cent strings of kg × locked rate", async () => {
+    harness.rows = { factory_suppliers: [{ name: "Supplier" }] };
+    const body = { type: "ADD", kg: "100.5", supplierId: 1, date: "2026-03-01", createVoucher: true };
+    expect(await post("/api/factory/raw-stock/adjustment", body)).toBe(200);
+    const entries = harness.writes.filter(([kind, table]) => kind === "insert" && table === "voucher_entries");
+    expect(entries.map(([, , values]) => [values.debitAmount, values.creditAmount])).toEqual([
+      ["35.18", "0"],
+      ["0", "35.18"],
+    ]);
   });
 });
