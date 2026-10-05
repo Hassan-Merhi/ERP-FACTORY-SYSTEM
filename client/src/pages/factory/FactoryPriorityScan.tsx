@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { AlertCircle, CheckCircle2, PackageCheck, ScanLine } from "lucide-react";
+import { AlertCircle, CheckCircle2, ScanLine } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -424,45 +424,36 @@ export default function FactoryPriorityScan() {
           )}
         </section>
 
-        <section className="rounded-xl border bg-card p-5">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            {tr("currentPriority")}
-          </div>
+        <section
+          className={[
+            "rounded-xl border min-h-[230px] overflow-hidden",
+            !isLoading && current ? "" : "bg-card p-5",
+          ].join(" ")}
+          style={!isLoading && current ? { backgroundColor: current.color } : undefined}
+          aria-label={!isLoading && current ? tr("priorityColor", { color: current.color }) : undefined}
+          data-testid="current-priority-color"
+        >
           {isLoading ? (
-            <div className="mt-3 space-y-2">
-              <Skeleton className="h-7 w-32" />
-              <Skeleton className="h-5 w-48" />
-            </div>
+            <>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {tr("currentPriority")}
+              </div>
+              <div className="mt-3 space-y-2">
+                <Skeleton className="h-7 w-32" />
+                <Skeleton className="h-5 w-48" />
+              </div>
+            </>
           ) : current ? (
-            <div className="mt-3">
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-8 w-8 rounded-full border border-black/10 shadow-sm"
-                  style={{ backgroundColor: current.color }}
-                  aria-hidden="true"
-                />
-                <div>
-                  <div className="text-2xl font-bold">{tr("priorityNumber", { priority: current.priority })}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {tr("loadingNumber", { orderId: current.orderId })}
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 text-sm">
-                <div className="font-medium">
-                  {current.load?.customerName || tr("customerLoading", { orderId: current.orderId })}
-                </div>
-                <div className="text-muted-foreground">
-                  {current.load?.proformaName || tr("proformaNumber", { proformaId: current.proformaIdUsed ?? "—" })}
-                </div>
-                <div className="mt-2 flex items-center gap-2 text-muted-foreground">
-                  <PackageCheck className="h-4 w-4" />
-                  {tr("balesAlreadyScanned", { count: current.load?.totalQtyBales ?? 0 })}
-                </div>
-              </div>
-            </div>
+            <span className="sr-only">
+              {tr("priorityNumber", { priority: current.priority })} · {tr("loadingNumber", { orderId: current.orderId })}
+            </span>
           ) : (
-            <div className="mt-3 text-sm text-muted-foreground">{tr("noPriorityQueue")}</div>
+            <>
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {tr("currentPriority")}
+              </div>
+              <div className="mt-3 text-sm text-muted-foreground">{tr("noPriorityQueue")}</div>
+            </>
           )}
         </section>
       </div>
