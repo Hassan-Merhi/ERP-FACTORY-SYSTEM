@@ -327,16 +327,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Only Stock In Hand switches valuation mode; Balance on Table stays on
       // its original all-time blended raw-material cost basis.
       const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
-      const {
-        inventorySellValue,
-        inventorySellingValue,
-        rawMaterialStockValue,
-        stockOtwValue,
-        balanceOnTableValue,
-      } = await computeNetPositionInventory({
+      const { inventorySellValue, inventorySellingValue, rawMaterialStockValue, stockOtwValue, balanceOnTableValue } =
+        await computeNetPositionInventory({
           companyId,
           asOf,
-          round2,
           getConfigFx,
           configFxRates,
           supplierLockedRateMapNp,
@@ -389,9 +383,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // ── 5. Combine and return ────────────────────────────────────────────
       // Rename for clarity — these are the two factory-specific values.
-      const baleInventoryValue = round2(
-        valuationMode === "selling" ? inventorySellingValue : inventorySellValue
-      );
+      const baleInventoryValue = round2(valuationMode === "selling" ? inventorySellingValue : inventorySellValue);
       const selectedBalanceOnTableValue = round2(balanceOnTableValue);
 
       // Guard: strip any ledger account whose category could collide with our
