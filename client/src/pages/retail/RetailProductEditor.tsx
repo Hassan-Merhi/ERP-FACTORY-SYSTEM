@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import {
   ALLOWED_IMAGE_TYPES,
   blankDraft,
@@ -141,7 +142,7 @@ export function ProductEditor({
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${file.name}`);
-        uploadedUrls.push(new URL(`/api/files/${body.id}/preview`, window.location.origin).toString());
+        uploadedUrls.push(`/api/retail/media/${body.id}`);
       }
       setDraft((current) => ({
         ...current,
@@ -204,7 +205,7 @@ export function ProductEditor({
         });
         const body = await response.json().catch(() => ({}));
         if (!response.ok || !body.id) throw new Error(body.message || `Could not upload ${file.name}`);
-        uploadedUrls.push(new URL(`/api/files/${body.id}/preview`, window.location.origin).toString());
+        uploadedUrls.push(`/api/retail/media/${body.id}`);
       }
       setDraft((current) => ({
         ...current,
@@ -379,7 +380,7 @@ export function ProductEditor({
                     key={`${src}-${index}`}
                     className="group relative h-24 w-24 overflow-hidden rounded-lg border bg-muted"
                   >
-                    <img src={src} alt="" className="h-full w-full object-cover" />
+                    <img src={normalizeRetailImageUrl(src)} alt="" className="h-full w-full object-cover" />
                     <Button
                       type="button"
                       size="icon"
