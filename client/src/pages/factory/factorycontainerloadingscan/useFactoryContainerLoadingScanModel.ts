@@ -1,4 +1,3 @@
-import { visibleTabInterval } from "@/lib/queryPolicies";
 /**
  * Controller hook for the factory container loading scan page.
  *
@@ -19,13 +18,7 @@ import {
 } from "@/i18n/factoryContainerLoadingTranslations";
 import { getApiRequest } from "@/lib/factoryApi";
 import { getErrorDetails } from "@shared/errorUtils";
-import {
-  applyCurrentOrderBalesToCapacity,
-  buildProformaProgress,
-  normalizeProformaArticleCode,
-  proformaCapacityArticles,
-  type ProformaCapacitySnapshot,
-} from "@/lib/proformaCapacity";
+import { applyCurrentOrderBalesToCapacity, type ProformaCapacitySnapshot } from "@/lib/proformaCapacity";
 import {
   OPEN_ORDER_STATUSES,
   type AddLoadingBaleInput,
@@ -46,6 +39,7 @@ import {
   useScanFlashReset,
 } from "./scanFeedback";
 import { downloadBaleImportTemplate, summarizeLoadedBales } from "./loadedBales";
+import { useProformaComparison } from "./useProformaComparison";
 import { BALE_IMPORT_EMPTY_HINT, baleImportRowCount, parseBaleImportWorkbook } from "./baleImportFile";
 
 export type { BaleGroup } from "./loadedBales";
@@ -766,60 +760,16 @@ export function useFactoryContainerLoadingScanModel() {
 
   const { groupedBalesMap, orderedGroups, totalWeight, loadedByArticle } = summarizeLoadedBales(bales);
 
-  // Stock count targets come from the same authoritative capacity buckets.
-  const proformaArticleCodesForStock = useMemo(
-    () =>
-      proformaCapacityArticles(proformaCapacity)
-        .filter((article) => article.isOnProforma)
-        .map((article) => article.articleCode)
-        .filter(Boolean),
-    [proformaCapacity]
-  );
-  const stockLocationId = orderDetail?.locationId || (selectedLocationId ? parseInt(selectedLocationId) : null);
-  const { data: stockCounts = {} } = useQuery<Record<string, number>>({
-    queryKey: ["/api/factory/bale-stock-count", proformaArticleCodesForStock.join(","), stockLocationId],
-    queryFn: async () => {
-      if (proformaArticleCodesForStock.length === 0) return {};
-      const params = new URLSearchParams({ articleCodes: proformaArticleCodesForStock.join(",") });
-      if (stockLocationId) params.set("locationId", String(stockLocationId));
-      const res = await fetch(`/api/factory/bale-stock-count?${params}`, { credentials: "include" });
-      if (!res.ok) return {};
-      return res.json();
-    },
-    enabled: proformaArticleCodesForStock.length > 0,
-    refetchInterval: visibleTabInterval(30_000),
-  });
-
-  // Linked proforma metadata stays compact; all quantity math comes from the
-  // authoritative capacity snapshot so sibling loadings are never missed.
-  const linkedProforma = orderDetail?.proformaIdUsed
-    ? proformas.find((p) => p.id === orderDetail.proformaIdUsed) ||
-      (proformaCapacity
-        ? {
-            id: proformaCapacity.proformaId,
-            customerId: proformaCapacity.customerId,
-            name: proformaCapacity.proformaName,
-            isActive: proformaCapacity.proformaActive,
-            lines: [],
-          }
-        : null)
-    : proformas.find((p) => p.isActive) || null;
-
-  const proformaProgress = buildProformaProgress(proformaCapacity);
-  const fulfilledCount = proformaProgress.filter(
-    (line) => line.status === "fulfilled" || line.status === "overloaded"
-  ).length;
-  const totalLines = proformaProgress.length;
-
-  const proformaArticleCodes = new Set(
-    proformaCapacityArticles(proformaCapacity)
-      .filter((article) => article.isOnProforma)
-      .map((article) => article.normalizedArticleCode)
-  );
-  const remainingProformaBales = proformaCapacity?.remainingTotalQty ?? 0;
-  const extraArticles = Object.keys(loadedByArticle).filter(
-    (code) => !proformaArticleCodes.has(normalizeProformaArticleCode(code))
-  );
+  const {
+    stockCounts,
+    stockLocationId,
+    linkedProforma,
+    proformaProgress,
+    fulfilledCount,
+    totalLines,
+    remainingProformaBales,
+    extraArticles,
+  } = useProformaComparison({ proformaCapacity, proformas, orderDetail, selectedLocationId, loadedByArticle });
 
   const scanInputClass =
     scanFlash === "success"
