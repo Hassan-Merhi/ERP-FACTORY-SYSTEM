@@ -29,6 +29,13 @@ import {
 import { getLockedRateDiagnosticsForCompany, type LockedRateDiagnosticRow } from "./rawStockLockedRate";
 import { resolveStoredFxRate } from "./currencyConversion";
 import { resolveParentCompanyId } from "../../routes/helpers/supplierBalanceHelpers";
+import { toMoney } from "../../lib/money";
+
+// The report returns numbers; every sum and product is taken exactly first.
+const amountOf = (value: string | null | undefined) => toMoney(value).toNumber();
+const plus = (a: number, b: number) => toMoney(a).plus(b).toNumber();
+const minus = (a: number, b: number) => toMoney(a).minus(b).toNumber();
+const times = (a: number, b: number) => toMoney(a).times(b).toNumber();
 
 export interface KgSummary {
   receivedKg: number;
@@ -128,11 +135,11 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   let usedKg = 0;
   const negativeStockRows: KgSummary["negativeStockRows"] = [];
   for (const r of rawStockRows) {
-    const rec = parseFloat(r.receivedKg as string) || 0;
-    const used = parseFloat(r.usedKg as string) || 0;
-    receivedKg += rec;
-    usedKg += used;
-    const free = rec - used;
+    const rec = amountOf(r.receivedKg);
+    const used = amountOf(r.usedKg);
+    receivedKg = plus(receivedKg, rec);
+    usedKg = plus(usedKg, used);
+    const free = minus(rec, used);
     if (free < -EPS) {
       negativeStockRows.push({
         rawStockId: r.id,
@@ -160,18 +167,18 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   const kgSummary: KgSummary = {
     receivedKg,
     usedKg,
-    reservedKg: parseFloat(reservedKgTotal || "0") || 0,
+    reservedKg: amountOf(reservedKgTotal),
     // Model A (matches rawStockReceiptRoutes.ts / rawStockDiagnosticRoutes.ts): usedKg
     // already reflects mix-batch consumption, so freeKg is received-used, NOT that
     // minus reservedKg a second time — reservedKg is informational exposure only.
-    freeKg: receivedKg - usedKg,
+    freeKg: minus(receivedKg, usedKg),
     negativeStockCount: negativeStockRows.length,
     negativeStockRows,
   };
 
   // ── 2. Stored vs expected locked cost/kg and free-stock value ────────────
   const lockedRateDiagnostics = await getLockedRateDiagnosticsForCompany(companyId);
-  const lockedRateDriftCount = lockedRateDiagnostics.filter((r) => Math.abs(parseFloat(r.difference)) > EPS).length;
+  const lockedRateDriftCount = lockedRateDiagnostics.filter((r) => toMoney(r.difference).abs().gt(EPS)).length;
 
   // ── 3. Supplier currency exposure (resolved vs unresolved native amounts) ─
   const suppliers = await db
@@ -194,9 +201,10 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     if (!row.byCurrency[currencyCode]) {
       row.byCurrency[currencyCode] = { resolvedNative: 0, unresolvedNative: 0, unresolvedCount: 0 };
     }
-    if (resolved) row.byCurrency[currencyCode].resolvedNative += nativeAmount;
+    const bucket = row.byCurrency[currencyCode];
+    if (resolved) bucket.resolvedNative = plus(bucket.resolvedNative, nativeAmount);
     else {
-      row.byCurrency[currencyCode].unresolvedNative += nativeAmount;
+      bucket.unresolvedNative = plus(bucket.unresolvedNative, nativeAmount);
       row.byCurrency[currencyCode].unresolvedCount += 1;
     }
   }
@@ -207,7 +215,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     .where(and(eq(factoryContainers.companyId, companyId), ne(factoryContainers.currencyCode, "USD")));
   for (const c of nonUsdContainers) {
     const { looksSet } = resolveStoredFxRate(c.currencyCode, c.fxRateToUsd, c.fxRateConfirmed);
-    const amt = (parseFloat(c.ratePerKg || "0") || 0) * (parseFloat(c.actualReceivedKg || c.totalKg || "0") || 0);
+    const amt = times(amountOf(c.ratePerKg), amountOf(c.actualReceivedKg || c.totalKg));
     bumpExposure(c.supplierId, c.currencyCode, amt, looksSet);
   }
 
@@ -230,7 +238,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     const supplierId = oc.supplierId ?? container?.supplierId ?? null;
     // The currency_code <> 'USD' filter above also excludes NULL currencies,
     // so every row here carries a currency code.
-    bumpExposure(supplierId, oc.currencyCode!, parseFloat(oc.amount || "0") || 0, looksSet);
+    bumpExposure(supplierId, oc.currencyCode!, amountOf(oc.amount), looksSet);
   }
 
   const nonUsdCommissions = await db
@@ -242,7 +250,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   for (const cm of nonUsdCommissions) {
     const { looksSet } = resolveStoredFxRate(cm.currencyCode, cm.fxRateToUsd, cm.fxRateConfirmed);
     const container = allContainersById.get(cm.containerId);
-    bumpExposure(container?.supplierId ?? null, cm.currencyCode, parseFloat(cm.commissionTotal || "0") || 0, looksSet);
+    bumpExposure(container?.supplierId ?? null, cm.currencyCode, amountOf(cm.commissionTotal), looksSet);
   }
 
   // ── 3b. Supplier balance-by-currency reconciliation ───────────────────────
@@ -278,15 +286,15 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   function addGross(supplierId: number | null, cc: string, nativeAmount: number, usdAmount: number | null) {
     if (!supplierId || !nativeAmount) return;
     const acc = getBalanceAcc(supplierId);
-    acc.grossNative.set(cc, (acc.grossNative.get(cc) || 0) + nativeAmount);
-    if (usdAmount !== null) acc.usdGrossResolved += usdAmount;
+    acc.grossNative.set(cc, plus(acc.grossNative.get(cc) || 0, nativeAmount));
+    if (usdAmount !== null) acc.usdGrossResolved = plus(acc.usdGrossResolved, usdAmount);
     else acc.hasUnresolvedFx = true;
   }
   function addPayment(supplierId: number | null, cc: string, nativeAmount: number, usdAmount: number | null) {
     if (!supplierId || !nativeAmount) return;
     const acc = getBalanceAcc(supplierId);
-    acc.paymentsNative.set(cc, (acc.paymentsNative.get(cc) || 0) + nativeAmount);
-    if (usdAmount !== null) acc.usdPayments += usdAmount;
+    acc.paymentsNative.set(cc, plus(acc.paymentsNative.get(cc) || 0, nativeAmount));
+    if (usdAmount !== null) acc.usdPayments = plus(acc.usdPayments, usdAmount);
     else acc.hasUnresolvedFx = true;
   }
 
@@ -304,7 +312,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
       // always 0, meaning this branch adds nothing today. Adding the real
       // column to the projection would change reported balances and needs its
       // own reviewed change.
-      const ob = parseFloat((s as { openingBalance?: string | null }).openingBalance || "0") || 0;
+      const ob = amountOf((s as { openingBalance?: string | null }).openingBalance);
       if (ob !== 0) addGross(s.id, "USD", ob, ob);
     }
   }
@@ -318,12 +326,10 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     if (c.deletedAt) continue;
     if (!PAYABLE_CONTAINER_STATUSES.has(String(c.status || "").toUpperCase())) continue;
     const cc = c.currencyCode || "USD";
-    const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0") || 0;
-    const rate = parseFloat(c.ratePerKg || "0") || 0;
-    const amt = kg * rate;
+    const amt = times(amountOf(c.actualReceivedKg || c.totalKg), amountOf(c.ratePerKg));
     if (amt) {
       const { fxRate, looksSet } = resolveStoredFxRate(cc, c.fxRateToUsd, c.fxRateConfirmed);
-      addGross(c.supplierId, cc, amt, cc === "USD" ? amt : looksSet ? amt * fxRate : null);
+      addGross(c.supplierId, cc, amt, cc === "USD" ? amt : looksSet ? times(amt, fxRate) : null);
       if (cc !== "USD" && !looksSet) {
         unresolvedFxRows.push({
           supplierId: c.supplierId,
@@ -336,11 +342,16 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
       }
     }
 
-    const freight = parseFloat(c.freight || "0") || 0;
+    const freight = amountOf(c.freight);
     if (freight) {
       const freightCc = c.freightCurrencyCode || cc;
       const { fxRate, looksSet } = resolveStoredFxRate(freightCc, c.fxRateToUsd, c.fxRateConfirmed);
-      addGross(c.supplierId, freightCc, freight, freightCc === "USD" ? freight : looksSet ? freight * fxRate : null);
+      addGross(
+        c.supplierId,
+        freightCc,
+        freight,
+        freightCc === "USD" ? freight : looksSet ? times(freight, fxRate) : null
+      );
       if (freightCc !== "USD" && !looksSet) {
         unresolvedFxRows.push({
           supplierId: c.supplierId,
@@ -363,10 +374,10 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     const supplierId = oc.supplierId ?? allContainersById.get(oc.containerId)?.supplierId ?? null;
     if (!supplierId) continue;
     const cc = oc.currencyCode || "USD";
-    const amt = parseFloat(oc.amount || "0") || 0;
+    const amt = amountOf(oc.amount);
     if (!amt) continue;
     const { fxRate, looksSet } = resolveStoredFxRate(cc, oc.fxRateToUsd, oc.fxRateConfirmed);
-    addGross(supplierId, cc, amt, cc === "USD" ? amt : looksSet ? amt * fxRate : null);
+    addGross(supplierId, cc, amt, cc === "USD" ? amt : looksSet ? times(amt, fxRate) : null);
     if (cc !== "USD" && !looksSet) {
       unresolvedFxRows.push({
         supplierId,
@@ -390,12 +401,12 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     const supplierId = container?.supplierId ?? null;
     if (!supplierId) continue;
     const cc = oc.currencyCode || container?.currencyCode || "USD";
-    const amt = parseFloat(oc.amount || "0") || 0;
+    const amt = amountOf(oc.amount);
     if (!amt) continue;
     // This table has no FX fields of its own — reuse the container's, since the
     // charge's currency defaults to the container's currency when unset.
     const { fxRate, looksSet } = resolveStoredFxRate(cc, container?.fxRateToUsd, container?.fxRateConfirmed);
-    addGross(supplierId, cc, amt, cc === "USD" ? amt : looksSet ? amt * fxRate : null);
+    addGross(supplierId, cc, amt, cc === "USD" ? amt : looksSet ? times(amt, fxRate) : null);
     if (cc !== "USD" && !looksSet) {
       unresolvedFxRows.push({
         supplierId,
@@ -410,11 +421,11 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   for (const c of allContainersById.values()) {
     const chargeSupplierId = c.otherChargesSupplierId;
     if (!chargeSupplierId) continue;
-    const amt = parseFloat(c.otherCharges || "0") || 0;
+    const amt = amountOf(c.otherCharges);
     if (!amt) continue;
     const cc = c.otherChargesCurrencyCode || "USD";
     const { fxRate, looksSet } = resolveStoredFxRate(cc, c.fxRateToUsd, c.fxRateConfirmed);
-    addGross(chargeSupplierId, cc, amt, cc === "USD" ? amt : looksSet ? amt * fxRate : null);
+    addGross(chargeSupplierId, cc, amt, cc === "USD" ? amt : looksSet ? times(amt, fxRate) : null);
     if (cc !== "USD" && !looksSet) {
       unresolvedFxRows.push({
         supplierId: chargeSupplierId,
@@ -444,10 +455,10 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
       (cm as { commissionSupplierId?: number | null }).commissionSupplierId ?? container?.supplierId ?? null;
     if (!recipientId) continue;
     const cc = cm.currencyCode || "USD";
-    const amt = parseFloat(cm.commissionTotal || "0") || 0;
+    const amt = amountOf(cm.commissionTotal);
     if (!amt) continue;
     const { fxRate, looksSet } = resolveStoredFxRate(cc, cm.fxRateToUsd, cm.fxRateConfirmed);
-    addGross(recipientId, cc, amt, cc === "USD" ? amt : looksSet ? amt * fxRate : null);
+    addGross(recipientId, cc, amt, cc === "USD" ? amt : looksSet ? times(amt, fxRate) : null);
     if (cc !== "USD" && !looksSet) {
       unresolvedFxRows.push({
         supplierId: recipientId,
@@ -468,8 +479,8 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     .where(eq(factorySupplierPayments.companyId, companyId));
   for (const p of allSupplierPayments) {
     const cc = p.currencyCode || "USD";
-    const amt = parseFloat(p.amount || "0") || 0;
-    const amtUsd = parseFloat(p.amountUsd || "0") || 0;
+    const amt = amountOf(p.amount);
+    const amtUsd = amountOf(p.amountUsd);
     addPayment(p.supplierId, cc, amt, amtUsd);
   }
 
@@ -503,12 +514,12 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   for (const p of allVoucherPayments) {
     if (p.optional || !p.supplierId) continue;
     const cc = p.currency || "USD";
-    const amt = parseFloat(p.debitAmount || "0") || 0;
+    const amt = amountOf(p.debitAmount);
     if (!amt) continue;
     const rate =
-      p.exchangeRate !== null && p.exchangeRate !== undefined ? parseFloat(p.exchangeRate) : cc === "USD" ? 1 : null;
+      p.exchangeRate !== null && p.exchangeRate !== undefined ? amountOf(p.exchangeRate) : cc === "USD" ? 1 : null;
     const resolved = cc === "USD" ? true : rate !== null && rate > 0;
-    addPayment(p.supplierId, cc, amt, resolved ? amt * (rate ?? 1) : null);
+    addPayment(p.supplierId, cc, amt, resolved ? times(amt, rate ?? 1) : null);
     if (!resolved) {
       unresolvedFxRows.push({
         supplierId: p.supplierId,
@@ -531,8 +542,8 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
     .where(eq(factorySupplierFxTransfers.companyId, companyId));
   for (const t of allFxTransfers) {
     const fromCc = t.fromCurrencyCode || "USD";
-    const fromAmt = parseFloat(t.fromAmount || "0") || 0;
-    const toAmountUsd = parseFloat(t.toAmountUsd || "0") || 0;
+    const fromAmt = amountOf(t.fromAmount);
+    const toAmountUsd = amountOf(t.toAmountUsd);
     if (fromAmt) addPayment(t.fromSupplierId, fromCc, fromAmt, fromCc === "USD" ? fromAmt : toAmountUsd);
     if (toAmountUsd) addPayment(t.toSupplierId, "USD", toAmountUsd, toAmountUsd);
   }
@@ -548,7 +559,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
         const paid = acc.paymentsNative.get(cc) || 0;
         grossExposureByCurrency[cc] = gross;
         paymentsByCurrency[cc] = paid;
-        netBalanceByCurrency[cc] = gross - paid;
+        netBalanceByCurrency[cc] = minus(gross, paid);
       }
       return {
         supplierId,
@@ -556,7 +567,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
         grossExposureByCurrency,
         paymentsByCurrency,
         netBalanceByCurrency,
-        netBalanceUsd: acc.usdGrossResolved - acc.usdPayments,
+        netBalanceUsd: minus(acc.usdGrossResolved, acc.usdPayments),
         hasUnresolvedFx: acc.hasUnresolvedFx,
       };
     }
@@ -659,11 +670,11 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   const usedByContainer = new Map<number, number>();
   const remainingByContainer = new Map<number, number>();
   for (const r of rawStockRows) {
-    const rec = parseFloat(r.receivedKg as string) || 0;
-    const used = parseFloat(r.usedKg as string) || 0;
-    receivedByContainer.set(r.containerId, (receivedByContainer.get(r.containerId) || 0) + rec);
-    usedByContainer.set(r.containerId, (usedByContainer.get(r.containerId) || 0) + used);
-    remainingByContainer.set(r.containerId, (remainingByContainer.get(r.containerId) || 0) + (rec - used));
+    const rec = amountOf(r.receivedKg);
+    const used = amountOf(r.usedKg);
+    receivedByContainer.set(r.containerId, plus(receivedByContainer.get(r.containerId) || 0, rec));
+    usedByContainer.set(r.containerId, plus(usedByContainer.get(r.containerId) || 0, used));
+    remainingByContainer.set(r.containerId, plus(remainingByContainer.get(r.containerId) || 0, minus(rec, used)));
   }
 
   // Model A: usedKg already reflects mix-batch consumption, so a container's
@@ -679,7 +690,7 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
   const doubleReservedDeductions: DoubleReservedRow[] = [];
   for (const r of reservedByContainer) {
     if (!r.containerId) continue;
-    const reserved = parseFloat(r.reservedKg as string) || 0;
+    const reserved = amountOf(r.reservedKg);
     const remaining = remainingByContainer.get(r.containerId) || 0;
     const received = receivedByContainer.get(r.containerId) || 0;
     const used = usedByContainer.get(r.containerId) || 0;
