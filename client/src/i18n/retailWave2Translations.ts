@@ -4,6 +4,11 @@ import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
 
 export const retailWave2Translations: readonly Phase3SharedUiEntry[] = [
   {
+    en: "The approving manager must set a new password before approving discounts",
+    ar: "يجب على المدير المعتمد تعيين كلمة مرور جديدة قبل اعتماد الخصومات",
+    fr: "Le manager approbateur doit définir un nouveau mot de passe avant d'approuver des remises",
+  },
+  {
     en: "Scan barcode or search product / SKU / brand / size",
     ar: "امسح الباركود أو ابحث عن المنتج / SKU / العلامة / المقاس",
     fr: "Scannez le code-barres ou recherchez produit / SKU / marque / taille",

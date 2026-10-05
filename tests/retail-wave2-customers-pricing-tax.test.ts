@@ -428,10 +428,14 @@ describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", 
   });
 
   it("refuses a legacy SHA-256 manager hash instead of comparing it weakly", async () => {
-    const { createHash } = await import("node:crypto");
+    const { randomBytes } = await import("node:crypto");
     const bcrypt = await import("bcryptjs");
-    const legacyHash = createHash("sha256").update(MANAGER_PASSWORD, "utf8").digest("hex");
-    await db.update(schema.users).set({ password: legacyHash }).where(eq(schema.users.id, managerId));
+    // A legacy row stores a 64-hex digest. The value is random on purpose: the approval
+    // path must refuse the shape outright, without ever comparing a weak digest — so the
+    // test asserts the shape rather than computing an insecure hash of the password.
+    const legacyShapedHash = randomBytes(32).toString("hex");
+    expect(legacyShapedHash).toMatch(/^[a-f0-9]{64}$/);
+    await db.update(schema.users).set({ password: legacyShapedHash }).where(eq(schema.users.id, managerId));
     try {
       const response = await cashier.post("/api/pos/retail/discount-approvals").send({
         managerUsername: `${TEST_PREFIX}_manager`,
