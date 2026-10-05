@@ -12,9 +12,10 @@ describe("Phase 7 backend-message translations", () => {
     // in by the Phase 3 latest-main sync (b86cb44), plus 6 more reviewed entries
     // added since, plus the 3 remote-support watch phrases reviewed in Phase 33E
     // (27bd1a8), plus the pool-timeout and CSRF rejection phrases the Phase 9
-    // release ratchet required, for a total of 702.
-    expect(backendMessagesPhase7Translations).toHaveLength(702);
-    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(702);
+    // release ratchet required (702), plus the 25 Priority Scan configuration,
+    // queue and routing messages (#2032), for a total of 727.
+    expect(backendMessagesPhase7Translations).toHaveLength(727);
+    expect(new Set(backendMessagesPhase7Translations.map((entry) => entry.en)).size).toBe(727);
 
     for (const entry of backendMessagesPhase7Translations) {
       expect(entry.en.trim()).not.toBe("");

@@ -91,6 +91,8 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       [orderId]
     );
 
+    // Priorities are queue positions (Wave 2): asking for #3 while this is the
+    // only active loading keeps it at #1.
     const update = await agent
       .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
       .send({ color: "Navy", priority: 3, enabled: true });
@@ -99,7 +101,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(update.body).toMatchObject({
       orderId,
       color: "Navy",
-      priority: 3,
+      priority: 1,
       enabled: true,
       createdBy: create.body.createdBy,
       createdByName: create.body.createdByName,
@@ -127,7 +129,16 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(listed).toBe(true);
   });
 
-  it("prevents duplicate active colors and priorities but frees them when disabled", async () => {
+  it("prevents duplicate active colors, queues priorities and frees colors when disabled", async () => {
+    const activeQueue = async (): Promise<number[]> =>
+      (
+        await pool.query<{ order_id: number }>(
+          `SELECT order_id FROM customer_order_priority_scan_configs
+            WHERE company_id = $1 AND enabled ORDER BY priority`,
+          [ctx.companyId]
+        )
+      ).rows.map((row) => row.order_id);
+
     const first = await createLoading();
     const second = await createLoading();
 
@@ -142,11 +153,21 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(duplicateColor.status).toBe(409);
     expect(String(duplicateColor.body.message)).toContain("color");
 
-    const duplicatePriority = await agent
+    // A taken priority is a queue position, not a conflict: the loading is
+    // inserted there and the rest shift down, keeping priorities 1..n.
+    const queued = await agent
       .put(`/api/factory/customer-orders/${second}/loading-list/priority-scan-config`)
       .send({ color: "Gold", priority: 10 });
-    expect(duplicatePriority.status).toBe(409);
-    expect(String(duplicatePriority.body.message)).toContain("priority");
+    expect(queued.status).toBe(200);
+    const before = await activeQueue();
+    expect(before.slice(-2)).toEqual([first, second]);
+
+    const moved = await agent
+      .put(`/api/factory/customer-orders/${second}/loading-list/priority-scan-config`)
+      .send({ color: "Gold", priority: 1 });
+    expect(moved.status).toBe(200);
+    expect(moved.body.priority).toBe(1);
+    expect(await activeQueue()).toEqual([second, ...before.filter((id) => id !== second)]);
 
     const disableFirst = await agent
       .put(`/api/factory/customer-orders/${first}/loading-list/priority-scan-config`)
