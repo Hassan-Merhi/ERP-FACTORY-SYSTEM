@@ -96,7 +96,26 @@ async function ensureLedgerAccount(
   accountType: string,
   subType?: string
 ): Promise<number> {
-  await tx
+  const [existing] = await tx
+    .select({ id: ledgerAccounts.id, deletedAt: ledgerAccounts.deletedAt })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, code)))
+    .limit(1);
+  if (existing) {
+    await tx
+      .update(ledgerAccounts)
+      .set({
+        name,
+        accountType,
+        subType: subType ?? null,
+        active: true,
+        deletedAt: null,
+      })
+      .where(eq(ledgerAccounts.id, existing.id));
+    return existing.id;
+  }
+
+  const [created] = await tx
     .insert(ledgerAccounts)
     .values({
       companyId,
@@ -106,14 +125,9 @@ async function ensureLedgerAccount(
       subType: subType ?? null,
       active: true,
     })
-    .onConflictDoNothing();
-  const [account] = await tx
-    .select({ id: ledgerAccounts.id })
-    .from(ledgerAccounts)
-    .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, code), isNull(ledgerAccounts.deletedAt)))
-    .limit(1);
-  if (!account) throw new Error(`Could not resolve Retail accounting account ${code}`);
-  return account.id;
+    .returning({ id: ledgerAccounts.id });
+  if (!created) throw new Error(`Could not resolve Retail accounting account ${code}`);
+  return created.id;
 }
 
 async function defaultRetailAccountIds(tx: DbTransaction, companyId: number) {
