@@ -22,6 +22,69 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+
+type PayrollItemInput = {
+  employeeId: number;
+  employeeName: string;
+  groupName?: string | null;
+  baseSalary: unknown;
+  deduction?: unknown;
+  payrollDeduction?: unknown;
+  netPay: unknown;
+};
+
+/**
+ * A run item's amounts as the cents the numeric(…, 2) columns store, or null
+ * when one does not parse. Unparsed amounts used to be written as 'NaN', which
+ * Postgres numeric accepts and which then reached the payment voucher.
+ */
+function payrollItemAmounts(item: PayrollItemInput) {
+  const baseSalary = parseMoneyInput(item.baseSalary);
+  const deduction = parseMoneyInput(item.deduction || 0);
+  const payrollDeduction = parseMoneyInput(item.payrollDeduction || 0);
+  const netPay = parseMoneyInput(item.netPay);
+  if (!baseSalary || !deduction || !payrollDeduction || !netPay) return null;
+  return {
+    baseSalary: moneyString(baseSalary),
+    deduction: moneyString(deduction),
+    payrollDeduction: moneyString(payrollDeduction),
+    netPay: moneyString(netPay),
+  };
+}
+
+/** Run items with exact amounts, or the first employee whose amounts do not parse. */
+function payrollItemRows(items: PayrollItemInput[], runId: number) {
+  const rows = [];
+  for (const it of items) {
+    const amounts = payrollItemAmounts(it);
+    if (!amounts) return { invalidEmployee: it.employeeName || `employee #${it.employeeId}` };
+    rows.push({
+      runId,
+      employeeId: it.employeeId,
+      employeeName: it.employeeName,
+      groupName: it.groupName || null,
+      ...amounts,
+    });
+  }
+  return { rows };
+}
+
+/** The deduction a run item represents: the stored one, or for legacy rows base − advance deduction − net. */
+function payrollDeductionOf(item: {
+  payrollDeduction: string | null;
+  baseSalary: string | null;
+  deduction: string | null;
+  netPay: string | null;
+}): Decimal {
+  const stored = toMoney(item.payrollDeduction);
+  const inferredLegacy = MoneyDecimal.max(
+    0,
+    toMoney(item.baseSalary).minus(toMoney(item.deduction)).minus(toMoney(item.netPay))
+  );
+  return stored.gt("0.005") ? stored : inferredLegacy;
+}
 
 export function registerPayrollRunRoutes(app: Express) {
   // ── ERP Payroll Runs (draft → paid workflow) ──────────────────────────────
@@ -34,23 +97,15 @@ export function registerPayrollRunRoutes(app: Express) {
       const { date, notes, items } = req.body;
       if (!date || !Array.isArray(items) || items.length === 0)
         return res.status(400).json({ message: "date and items are required" });
+      const checked = payrollItemRows(items, 0);
+      if ("invalidEmployee" in checked)
+        return res.status(400).json({ message: `Invalid salary amounts for ${checked.invalidEmployee}` });
       const createdAt = new Date().toISOString();
       const [run] = await db
         .insert(erpPayrollRuns)
         .values({ companyId, status: "DRAFT", date, notes: notes || null, createdAt })
         .returning();
-      await db.insert(erpPayrollRunItems).values(
-        items.map((it) => ({
-          runId: run.id,
-          employeeId: it.employeeId,
-          employeeName: it.employeeName,
-          groupName: it.groupName || null,
-          baseSalary: parseFloat(it.baseSalary).toFixed(2),
-          deduction: parseFloat(it.deduction || 0).toFixed(2),
-          payrollDeduction: parseFloat(it.payrollDeduction || 0).toFixed(2),
-          netPay: parseFloat(it.netPay).toFixed(2),
-        }))
-      );
+      await db.insert(erpPayrollRunItems).values(checked.rows.map((row) => ({ ...row, runId: run.id })));
       res.json({ ...run, items });
     } catch (e: unknown) {
       res.status(500).json({ message: getErrorMessage(e) });
@@ -83,24 +138,12 @@ export function registerPayrollRunRoutes(app: Express) {
       const result = await Promise.all(
         runs.map(async (run) => {
           const rawItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, run.id));
-          const items = rawItems.map((i) => {
-            const storedPayrollDeduction = parseFloat(i.payrollDeduction || "0");
-            const inferredLegacyDeduction = Math.max(
-              0,
-              parseFloat(i.baseSalary || "0") - parseFloat(i.deduction || "0") - parseFloat(i.netPay || "0")
-            );
-            return {
-              ...i,
-              payrollDeduction: (storedPayrollDeduction > 0.005 ? storedPayrollDeduction : inferredLegacyDeduction).toFixed(2),
-            };
-          });
-          const totalNet = items.reduce((s, i) => s + parseFloat(i.netPay), 0);
-          const totalBase = items.reduce((s, i) => s + parseFloat(i.baseSalary), 0);
+          const items = rawItems.map((i) => ({ ...i, payrollDeduction: moneyString(payrollDeductionOf(i)) }));
           return {
             ...run,
             itemCount: items.length,
-            totalNet: totalNet.toFixed(2),
-            totalBase: totalBase.toFixed(2),
+            totalNet: moneyString(sumMoney(items.map((i) => i.netPay))),
+            totalBase: moneyString(sumMoney(items.map((i) => i.baseSalary))),
             items,
           };
         })
@@ -131,21 +174,16 @@ export function registerPayrollRunRoutes(app: Express) {
         if (!paymentAccountId) return res.status(400).json({ message: "Payment account required" });
 
         const runItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));
-        const totalAmount = runItems.reduce((s, i) => s + parseFloat(i.netPay), 0);
-        if (totalAmount <= 0) return res.status(400).json({ message: "Total net pay must be > 0" });
+        const totalAmount = sumMoney(runItems.map((i) => i.netPay));
+        if (totalAmount.lte(0)) return res.status(400).json({ message: "Total net pay must be > 0" });
 
         // Resolve the exact pending worker-deduction records represented by this draft.
         // We validate before creating the payment voucher so stale/deleted deductions
         // cannot silently make the paid payroll disagree with the saved preview.
         const payrollDeductionIdsByEmployee = new Map<number, number[]>();
         for (const item of runItems) {
-          const storedPayrollDeduction = parseFloat(item.payrollDeduction || "0");
-          const inferredLegacyDeduction = Math.max(
-            0,
-            parseFloat(item.baseSalary || "0") - parseFloat(item.deduction || "0") - parseFloat(item.netPay || "0")
-          );
-          const target = storedPayrollDeduction > 0.005 ? storedPayrollDeduction : inferredLegacyDeduction;
-          if (target <= 0 || !item.employeeId) continue;
+          const target = payrollDeductionOf(item);
+          if (target.lte(0) || !item.employeeId) continue;
 
           const pending = await db
             .select()
@@ -159,14 +197,14 @@ export function registerPayrollRunRoutes(app: Express) {
             )
             .orderBy(factoryWorkerDeductions.createdAt, factoryWorkerDeductions.id);
 
-          let accumulated = 0;
+          let accumulated: Decimal = new MoneyDecimal(0);
           const ids: number[] = [];
           for (const ded of pending) {
-            if (accumulated >= target - 0.005) break;
-            accumulated += parseFloat(ded.amount || "0");
+            if (accumulated.gte(target.minus("0.005"))) break;
+            accumulated = accumulated.plus(toMoney(ded.amount));
             ids.push(ded.id);
           }
-          if (Math.abs(accumulated - target) > 0.005) {
+          if (accumulated.minus(target).abs().gt("0.005")) {
             return res.status(409).json({
               message: `Pending payroll deductions changed for ${item.employeeName}. Refresh the payroll preview and try again.`,
             });
@@ -177,10 +215,10 @@ export function registerPayrollRunRoutes(app: Express) {
         const allAccounts = await storage.getAllLedgerAccounts(companyId);
 
         // Group run items by worker group name so each group gets its own expense account
-        const itemsByGroup = new Map<string, number>();
+        const itemsByGroup = new Map<string, Decimal>();
         for (const item of runItems) {
           const grp = (item.groupName || "").trim() || "__default__";
-          itemsByGroup.set(grp, (itemsByGroup.get(grp) || 0) + parseFloat(item.netPay));
+          itemsByGroup.set(grp, (itemsByGroup.get(grp) ?? new MoneyDecimal(0)).plus(toMoney(item.netPay)));
         }
 
         const payDate = run.date;
@@ -193,7 +231,7 @@ export function registerPayrollRunRoutes(app: Express) {
             voucherType: "Payment",
             voucherDate: payDate,
             description: run.notes || `Payroll run #${runId} — ${runItems.length} workers`,
-            totalAmount: totalAmount.toFixed(2),
+            totalAmount: moneyString(totalAmount),
           })
           .returning();
 
@@ -222,7 +260,7 @@ export function registerPayrollRunRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: voucher.id,
             ledgerAccountId: expAccount.id,
-            debitAmount: grpTotal.toFixed(2),
+            debitAmount: moneyString(grpTotal),
             creditAmount: "0",
             narration: isDefault ? `Salary expense — payroll run #${runId}` : `Salary expense - ${grp} — run #${runId}`,
           });
@@ -233,7 +271,7 @@ export function registerPayrollRunRoutes(app: Express) {
           voucherId: voucher.id,
           ledgerAccountId: parseInt(paymentAccountId),
           debitAmount: "0",
-          creditAmount: totalAmount.toFixed(2),
+          creditAmount: moneyString(totalAmount),
           narration: `Cash paid — payroll run #${runId}`,
         });
         const [updated] = await db
@@ -245,8 +283,8 @@ export function registerPayrollRunRoutes(app: Express) {
         // Deduct advance balances FIFO for each employee who has a deduction in this payroll
         const payMonth = payDate.substring(0, 7);
         for (const item of runItems) {
-          const deductAmt = parseFloat(item.deduction || "0");
-          if (deductAmt <= 0 || !item.employeeId) continue;
+          const deductAmt = toMoney(item.deduction);
+          if (deductAmt.lte(0) || !item.employeeId) continue;
 
           const outstanding = await db
             .select()
@@ -262,23 +300,23 @@ export function registerPayrollRunRoutes(app: Express) {
 
           let remaining = deductAmt;
           for (const adv of outstanding) {
-            if (remaining <= 0.001) break;
-            const bal = parseFloat(adv.remainingBalance || "0");
-            if (bal <= 0) continue;
-            const toDeduct = Math.min(remaining, bal);
-            const newBal = Math.max(0, bal - toDeduct);
-            const fullyPaid = newBal <= 0.01;
+            if (remaining.lte("0.001")) break;
+            const bal = toMoney(adv.remainingBalance);
+            if (bal.lte(0)) continue;
+            const toDeduct = MoneyDecimal.min(remaining, bal);
+            const newBal = MoneyDecimal.max(0, bal.minus(toDeduct));
+            const fullyPaid = newBal.lte("0.01");
 
             await db.insert(salaryAdvanceDeductions).values({
               salaryAdvanceId: adv.id,
               payrollMonth: payMonth,
-              deductionAmount: toDeduct.toFixed(2),
+              deductionAmount: moneyString(toDeduct),
             });
             await db
               .update(salaryAdvances)
-              .set({ remainingBalance: newBal.toFixed(2), fullyPaid })
+              .set({ remainingBalance: moneyString(newBal), fullyPaid })
               .where(eq(salaryAdvances.id, adv.id));
-            remaining -= toDeduct;
+            remaining = remaining.minus(toDeduct);
           }
         }
 
@@ -321,22 +359,14 @@ export function registerPayrollRunRoutes(app: Express) {
         const updates: Partial<typeof erpPayrollRuns.$inferInsert> = {};
         if (notes !== undefined) updates.notes = notes;
         if (date) updates.date = date;
+        const checked = Array.isArray(items) && items.length > 0 ? payrollItemRows(items, runId) : null;
+        if (checked && "invalidEmployee" in checked)
+          return res.status(400).json({ message: `Invalid salary amounts for ${checked.invalidEmployee}` });
         if (Object.keys(updates).length)
           await db.update(erpPayrollRuns).set(updates).where(eq(erpPayrollRuns.id, runId));
-        if (Array.isArray(items) && items.length > 0) {
+        if (checked) {
           await db.delete(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));
-          await db.insert(erpPayrollRunItems).values(
-            items.map((it) => ({
-              runId,
-              employeeId: it.employeeId,
-              employeeName: it.employeeName,
-              groupName: it.groupName || null,
-              baseSalary: parseFloat(it.baseSalary).toFixed(2),
-              deduction: parseFloat(it.deduction || 0).toFixed(2),
-              payrollDeduction: parseFloat(it.payrollDeduction || 0).toFixed(2),
-              netPay: parseFloat(it.netPay).toFixed(2),
-            }))
-          );
+          await db.insert(erpPayrollRunItems).values(checked.rows);
         }
         const [updated] = await db.select().from(erpPayrollRuns).where(eq(erpPayrollRuns.id, runId));
         const updatedItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));
