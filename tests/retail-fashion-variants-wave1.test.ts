@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { retailImportRowSchema, retailProductVariants, retailProductWriteSchema } from "../shared/schema";
 import { blankVariant, MAX_VARIANT_IMAGES } from "../client/src/pages/retail/retailInventoryTypes";
 import { validateRetailVariantPayload } from "../server/services/retail/retailProductValidation";
+import { normalizeRetailImageUrl } from "../client/src/lib/retailImageUrl";
 
 describe("retail fashion variants wave 1 behavior", () => {
   it("keeps legacy variants backward compatible", () => {
@@ -35,6 +36,31 @@ describe("retail fashion variants wave 1 behavior", () => {
       ],
     });
     expect(() => validateRetailVariantPayload(parsed)).toThrow("Duplicate color/size in product");
+  });
+
+  it("keeps stored retail photos portable across hosts", () => {
+    expect(normalizeRetailImageUrl("https://old-host.example/api/files/42/preview")).toBe("/api/retail/media/42");
+    expect(normalizeRetailImageUrl("/api/files/43/preview")).toBe("/api/retail/media/43");
+    expect(normalizeRetailImageUrl("https://cdn.example.com/photo.jpg")).toBe("https://cdn.example.com/photo.jpg");
+
+    const parsed = retailProductWriteSchema.parse({
+      code: "PORTABLE-TEE",
+      name: "Portable Tee",
+      imageUrls: ["/api/retail/media/42"],
+      variants: [
+        {
+          color: "Black",
+          size: "M",
+          barcode: "PORTABLE-001",
+          cost: 5,
+          sellingPrice: 10,
+          imageUrls: ["/api/retail/media/43"],
+          stocks: [],
+        },
+      ],
+    });
+    expect(parsed.imageUrls).toEqual(["/api/retail/media/42"]);
+    expect(parsed.variants[0].imageUrls).toEqual(["/api/retail/media/43"]);
   });
 
   it("accepts up to four variant images and rejects a fifth", () => {

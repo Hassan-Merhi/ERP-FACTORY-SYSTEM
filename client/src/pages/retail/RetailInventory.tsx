@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { ImportDialog } from "./RetailImportDialog";
 import { ProductEditor } from "./RetailProductEditor";
-import { ProductImage } from "./RetailProductImage";
+import { ProductImageGallery } from "./RetailProductImage";
 import { RetailNav } from "./RetailNav";
 import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
 import { RetailLabelHistory, RetailMovementHistory } from "./RetailMovementHistory";
@@ -272,8 +272,13 @@ export default function RetailInventory() {
           </Button>
         </div>
 
-        <div className="flex items-start gap-5">
-          <ProductImage product={detailProduct} className="h-32 w-32 rounded-lg border" />
+        <div className="flex flex-wrap items-start gap-5">
+          <ProductImageGallery
+            product={detailProduct}
+            maxImages={6}
+            className="max-w-full"
+            imageClassName="h-32 w-32 rounded-lg border"
+          />
           <div>
             <h1 className="text-3xl font-bold">{detailProduct.name}</h1>
             <p className="mt-1">
@@ -283,20 +288,6 @@ export default function RetailInventory() {
           </div>
         </div>
 
-        {detailProduct.imageUrls.length > 1 && (
-          <div className="flex gap-2 overflow-x-auto">
-            {detailProduct.imageUrls.map((src) => (
-              <img
-                key={src}
-                src={src}
-                alt=""
-                loading="lazy"
-                decoding="async"
-                className="h-20 w-20 rounded border object-cover"
-              />
-            ))}
-          </div>
-        )}
 
         <Card>
           <CardHeader>
