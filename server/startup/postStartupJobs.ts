@@ -4,7 +4,6 @@
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { startAisLiveTracking, stopAisLiveTracking } from "../services/ais/aisLiveTrackingService";
 import { checkAndRecoverDailyExport } from "../services/scheduler";
 
 let installed = false;
@@ -18,11 +17,8 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
-  // AIS is optional and isolated from normal container tracking. It starts only
-  // after the HTTP server is live and shuts down independently on process signals.
-  startAisLiveTracking();
-  process.once("SIGTERM", stopAisLiveTracking);
-  process.once("SIGINT", stopAisLiveTracking);
+  // Live vessel/AIS tracking is intentionally disabled. Container movement is
+  // maintained manually or through Excel imports.
 
   const migrationDiagTimer = setTimeout(async () => {
     try {
