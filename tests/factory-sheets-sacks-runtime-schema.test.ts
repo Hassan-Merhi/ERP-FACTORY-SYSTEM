@@ -66,7 +66,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await client.query(`SET search_path TO DEFAULT`);
-  for (const suffix of ["fresh", "legacy", "held"]) {
+  for (const suffix of ["fresh", "legacy", "held", "range"]) {
     await client.query(`DROP SCHEMA IF EXISTS ${schemaPrefix}_${suffix} CASCADE`);
   }
   client.release();
@@ -125,5 +125,22 @@ describe("factory sheets & sacks runtime schema", () => {
       `SELECT pieces::text, unit_price::text, action, reason FROM factory_sheets_sacks_log`
     );
     expect(row.rows).toEqual([{ pieces: "1.5", unit_price: "0.1234567", action: "deduct", reason: "kept" }]);
+  });
+
+  it("keeps loose types when whole values exceed the narrower ranges", async () => {
+    await useSchema(`${schemaPrefix}_range`);
+    await client.query(LEGACY_LOG);
+    await client.query(`
+      INSERT INTO factory_sheets_sacks_log (company_id, item_id, item_name, item_type, action, pieces, unit_price, total_value)
+      VALUES (1, 7, 'Sheet A', 'Sheet', 'IN', 3000000000, 100000000000000, 1)
+    `);
+    await expect(ensureFactorySheetsSacksSchema(client)).resolves.toBeUndefined();
+
+    const columns = await logColumns(`${schemaPrefix}_range`);
+    expect(columns.pieces).toBe("numeric not null");
+    expect(columns.unit_price).toBe("numeric not null");
+    // Steps whose data fits still apply.
+    expect(columns.entry_id).toBeUndefined();
+    expect(columns.created_at).toBe("timestamp with time zone not null");
   });
 });

@@ -138,9 +138,16 @@ import { startupMigrations } from "../server/startup-schema";
  * three statements to 004-post-deploy-tables and
  * 010-security-notifications-and-precision without re-pinning, taking the
  * count from 1380 to 1383.
+ *
+ * Re-pinned when the Sheets & Sacks block in
+ * 010-security-notifications-and-precision moved to
+ * server/startup/factorySheetsSacksSchema.ts, which 010 now spreads in the
+ * same position: the 9 statements became 17 (the kept updated_at column, the
+ * guarded convergence of a legacy log and seven legacy index drops, replacing
+ * the fss_log_color block), 1383 to 1391. Nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1383;
-const EXPECTED_CONTENT_HASH = "a52a03f379162f3a504a3a2f16b72d2cfc65062a6216a78ff15da7e8455232c0";
+const EXPECTED_STATEMENT_COUNT = 1391;
+const EXPECTED_CONTENT_HASH = "61537efd5d6e32613d51f89e998083c8a1c889ff8f796ededb6e5302caa3d582";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

@@ -92,16 +92,18 @@ export const factorySheetsSacksSchema: string[] = [
        WHERE table_schema = current_schema() AND table_name = 'factory_sheets_sacks_log'
          AND column_name = 'pieces' AND data_type <> 'integer'
      ) THEN
-       IF NOT EXISTS (SELECT 1 FROM factory_sheets_sacks_log WHERE pieces <> trunc(pieces)) THEN
+       IF NOT EXISTS (SELECT 1 FROM factory_sheets_sacks_log WHERE pieces <> trunc(pieces) OR pieces NOT BETWEEN -2147483648 AND 2147483647) THEN
          ALTER TABLE factory_sheets_sacks_log ALTER COLUMN pieces TYPE INTEGER USING pieces::INTEGER;
        ELSE
-         RAISE WARNING 'factory_sheets_sacks_log.pieces holds fractions; kept as numeric';
+         RAISE WARNING 'factory_sheets_sacks_log.pieces holds fractions or exceeds integer range; kept as numeric';
        END IF;
      END IF;
 
      IF NOT EXISTS (
        SELECT 1 FROM factory_sheets_sacks_log
        WHERE unit_price <> round(unit_price, 6) OR total_value <> round(total_value, 4)
+          -- DECIMAL(20,6) holds under 10^14 and DECIMAL(20,4) under 10^16.
+          OR abs(unit_price) >= 1e14 OR abs(total_value) >= 1e16
      ) THEN
        ALTER TABLE factory_sheets_sacks_log
          ALTER COLUMN unit_price TYPE DECIMAL(20,6),
@@ -111,7 +113,7 @@ export const factorySheetsSacksSchema: string[] = [
          ALTER COLUMN total_value DROP DEFAULT,
          ALTER COLUMN total_value DROP NOT NULL;
      ELSE
-       RAISE WARNING 'factory_sheets_sacks_log prices exceed the declared scale; kept';
+       RAISE WARNING 'factory_sheets_sacks_log prices exceed the declared precision or scale; kept';
      END IF;
 
      IF EXISTS (
