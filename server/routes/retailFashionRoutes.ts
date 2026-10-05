@@ -5,6 +5,7 @@ import {
   RETAIL_DEFAULT_COLOR,
   RETAIL_LABEL_LAYOUTS,
   RETAIL_NO_BRAND_NAME,
+  retailImageUrlSchema,
   retailBrands,
   retailLabelPrintEvents,
   retailProductVariants,
@@ -45,7 +46,7 @@ const quickAddVariantSchema = z.object({
   sku: z.string().trim().max(191).nullable().optional(),
   barcode: z.string().trim().max(191).optional().default(""),
   lowStockThreshold: z.coerce.number().finite().nonnegative().optional().default(0),
-  imageUrls: z.array(z.string().trim().url()).max(4).optional().default([]),
+  imageUrls: z.array(retailImageUrlSchema).max(4).optional().default([]),
 });
 
 export const retailQuickAddSchema = z.object({

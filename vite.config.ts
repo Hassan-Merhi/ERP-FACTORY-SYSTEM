@@ -11,6 +11,7 @@ import { lazyHeavyImportsPlugin } from "./build/viteLazyHeavyImportsPlugin.ts";
 import { labelAssetExtractionPlugin } from "./build/viteLabelAssetExtractionPlugin.ts";
 import { cssColorMixPlugin } from "./build/viteCssColorMixPlugin.ts";
 import { initialChunkAuditPlugin } from "./build/viteInitialChunkAuditPlugin.ts";
+import { fortuneSheetNoEvalPlugin } from "./build/viteFortuneSheetNoEvalPlugin.ts";
 
 // `vite build` produces the production artifact, so it must be a production
 // build regardless of the NODE_ENV the surrounding job happens to export. CI
@@ -49,6 +50,7 @@ export default defineConfig({
     lazyHeavyImportsPlugin(),
     labelAssetExtractionPlugin(),
     cssColorMixPlugin(),
+    fortuneSheetNoEvalPlugin(),
     initialChunkAuditPlugin(),
     react(),
     runtimeErrorOverlay(),

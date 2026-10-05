@@ -122,8 +122,6 @@ export function registerGitImportRoutes(app: Express) {
           "Docs Sent Date (YYYY-MM-DD)",
           "Tracking Link",
           "Tracking Description",
-          "Tracking Enabled",
-          "Tracking Carrier Hint",
           "Shop Name",
         ];
 
@@ -156,8 +154,6 @@ export function registerGitImportRoutes(app: Express) {
           "YYYY-MM-DD",
           "https://…",
           "",
-          "Yes / No — enable ParcelsApp auto-tracking",
-          "e.g. MAERSK, MSC, COSCO — leave blank to auto-detect",
           "e.g. ABC SHOP",
         ];
         const hintRow = ws.addRow(hints);
@@ -185,8 +181,6 @@ export function registerGitImportRoutes(app: Express) {
           "2026-05-10",
           "",
           "Cleared border — heading inland",
-          "Yes",
-          "MAERSK",
           "ABC SHOP",
         ]);
         ex1.eachCell((cell) => {
@@ -211,8 +205,6 @@ export function registerGitImportRoutes(app: Express) {
           "",
           "",
           "Awaiting customs clearance",
-          "No",
-          "",
           "XYZ STORE",
         ]);
         ex2.eachCell((cell) => {
@@ -224,8 +216,8 @@ export function registerGitImportRoutes(app: Express) {
         ex1.getCell(1).font = { bold: true, italic: true, color: { argb: "5D4037" } };
         ex1.getCell(1).note = "Example row — delete before importing";
 
-        // Column widths (18 columns)
-        const colWidths = [20, 28, 18, 20, 20, 18, 16, 18, 12, 14, 14, 14, 24, 30, 35, 14, 22, 20];
+        // Column widths (16 columns)
+        const colWidths = [20, 28, 18, 20, 20, 18, 16, 18, 12, 14, 14, 14, 24, 30, 35, 20];
         colWidths.forEach((w, i) => {
           ws.getColumn(i + 1).width = w;
         });
@@ -402,17 +394,6 @@ export function registerGitImportRoutes(app: Express) {
           trackinglink: "trackingLink",
           link: "trackingLink",
           tracklink: "trackingLink",
-          trackingenabled: "trackingEnabled",
-          autotrackingenabled: "trackingEnabled",
-          autotracking: "trackingEnabled",
-          tracking: "trackingEnabled",
-          trackingon: "trackingEnabled",
-          trackon: "trackingEnabled",
-          trackingcarrierhint: "trackingCarrierHint",
-          carrierhint: "trackingCarrierHint",
-          carrier: "trackingCarrierHint",
-          shippingline: "trackingCarrierHint",
-          shippingcarrier: "trackingCarrierHint",
           shopname: "shopName",
           shop: "shopName",
           store: "shopName",
@@ -542,9 +523,6 @@ export function registerGitImportRoutes(app: Express) {
           const trackingLink = toOptStr(rawMap.trackingLink);
           if (trackingLink) updateData.trackingLink = trackingLink;
 
-          const trackingCarrierHint = toOptStr(rawMap.trackingCarrierHint);
-          if (trackingCarrierHint) updateData.trackingCarrierHint = trackingCarrierHint;
-
           const shopName = toOptStr(rawMap.shopName);
           if (shopName) updateData.shopName = shopName;
 
@@ -581,16 +559,6 @@ export function registerGitImportRoutes(app: Express) {
               updateData.docReceived = true;
             } else if (v === "no" || v === "n" || v === "false" || v === "0" || v === "") {
               updateData.docReceived = false;
-            }
-          }
-
-          // ── Tracking enabled ─────────────────────────────────────────────────
-          if (rawMap.trackingEnabled !== undefined && rawMap.trackingEnabled !== "") {
-            const v = String(rawMap.trackingEnabled).trim().toLowerCase();
-            if (v === "yes" || v === "y" || v === "true" || v === "1" || v === "on") {
-              updateData.trackingEnabled = true;
-            } else if (v === "no" || v === "n" || v === "false" || v === "0" || v === "off") {
-              updateData.trackingEnabled = false;
             }
           }
 

@@ -160,6 +160,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/test-connection — verify ParcelsApp key works
   app.post("/api/container-tracking/test-connection", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
     try {
       const result = await testConnection();
       res.json(result);
@@ -171,6 +172,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/:id/track-now — immediately track a single container
   app.post("/api/container-tracking/:id/track-now", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
 
     const containerId = parseInt(req.params.id, 10);
     if (isNaN(containerId)) {
@@ -277,6 +279,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/bulk-settings
   app.post("/api/container-tracking/bulk-settings", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
 
     const { trackingEnabled } = req.body;
     if (typeof trackingEnabled !== "boolean") {
@@ -301,6 +304,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // POST /api/container-tracking/bulk-track-now
   app.post("/api/container-tracking/bulk-track-now", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
 
     if (!anyProviderAvailable()) {
       res.status(400).json({
@@ -336,6 +340,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // each provider returned and where the ETA was or was not found.
   app.post("/api/container-tracking/:id/debug-eta", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
     const containerId = parseInt(req.params.id, 10);
     if (isNaN(containerId)) {
       res.status(400).json({ message: "Invalid container ID" });
@@ -431,6 +436,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // PATCH /api/container-tracking/:id/settings
   app.patch("/api/container-tracking/:id/settings", requireAuth, async (req: Request, res: Response) => {
     if (!requireAllowedRole(req, res)) return;
+    return res.status(410).json({ message: "Automated container tracking is disabled. Update container tracking fields manually or by Excel import." });
 
     const containerId = parseInt(req.params.id, 10);
     if (isNaN(containerId)) {

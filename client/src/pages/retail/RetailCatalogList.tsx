@@ -2,8 +2,9 @@ import { Archive, ArchiveRestore, ArrowRightLeft, History, Pencil, Printer, Slid
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
+import { normalizeRetailImageUrls } from "@/lib/retailImageUrl";
 import { cn } from "@/lib/utils";
-import { ProductImage } from "./RetailProductImage";
+import { ProductImageGallery, RetailImage } from "./RetailProductImage";
 import { money, sortRetailVariants, type RetailProduct, type RetailVariant } from "./retailInventoryTypes";
 
 export type RetailVariantAction = "print" | "transfer" | "adjust" | "history" | "archive" | "restore";
@@ -99,7 +100,11 @@ export function RetailCatalogList({
                 <CardContent className="space-y-3 p-3 sm:p-4">
                   <div className="flex items-start gap-3">
                     <button type="button" onClick={() => onOpenProduct(product)} className="shrink-0">
-                      <ProductImage product={product} className="h-16 w-16 rounded-md border" />
+                      <ProductImageGallery
+                        product={product}
+                        maxImages={3}
+                        imageClassName="h-16 w-16 rounded-md border"
+                      />
                     </button>
                     <div className="min-w-0 flex-1">
                       <button
@@ -158,7 +163,9 @@ export function RetailCatalogList({
                       </label>
                       {rows.map((variant) => {
                         const quantity = variantQuantity(variant, filters.locationId);
-                        const image = variant.imageUrls[0] ?? product.imageUrls[0];
+                        const images = normalizeRetailImageUrls(
+                          variant.imageUrls.length ? variant.imageUrls : product.imageUrls
+                        );
                         return (
                           <div
                             key={variant.id}
@@ -173,17 +180,21 @@ export function RetailCatalogList({
                               checked={selected.has(variant.id)}
                               onCheckedChange={() => onToggle(variant.id)}
                             />
-                            {image ? (
-                              <img
-                                src={image}
-                                alt=""
-                                loading="lazy"
-                                decoding="async"
-                                className="h-10 w-10 rounded object-cover"
-                              />
-                            ) : (
-                              <div className="h-10 w-10 rounded bg-muted" />
-                            )}
+                            <div className="flex shrink-0 -space-x-2">
+                              {(images.length ? images.slice(0, 3) : [""]).map((src, imageIndex) => (
+                                <RetailImage
+                                  key={src || `empty-${variant.id}`}
+                                  src={src}
+                                  alt={src ? `${product.name} · ${variant.color} · ${variant.size} photo ${imageIndex + 1}` : ""}
+                                  className="h-10 w-10 rounded border-2 border-background"
+                                />
+                              ))}
+                              {images.length > 3 && (
+                                <span className="flex h-10 w-10 items-center justify-center rounded border-2 border-background bg-muted text-[10px] font-bold">
+                                  +{images.length - 3}
+                                </span>
+                              )}
+                            </div>
                             <div className="min-w-[7rem] flex-1" data-no-translate>
                               <div className="font-semibold">
                                 {variant.color} / {variant.size}

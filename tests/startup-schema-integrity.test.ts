@@ -138,9 +138,14 @@ import { startupMigrations } from "../server/startup-schema";
  * three statements to 004-post-deploy-tables and
  * 010-security-notifications-and-precision without re-pinning, taking the
  * count from 1380 to 1383.
+ *
+ * Re-pinned for stage 032, the historical-replay safety tables
+ * (factory_recalc_undo_log, factory_replay_consumed_tokens and their indexes,
+ * the 17 statements of migrations/0007), appended after stage 031 without
+ * moving any earlier statement: 1383 to 1400.
  */
-const EXPECTED_STATEMENT_COUNT = 1383;
-const EXPECTED_CONTENT_HASH = "a52a03f379162f3a504a3a2f16b72d2cfc65062a6216a78ff15da7e8455232c0";
+const EXPECTED_STATEMENT_COUNT = 1400;
+const EXPECTED_CONTENT_HASH = "a5f07623661d5eab676b726db7d4aee8afaead2e07e051a94277b6860c387749";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

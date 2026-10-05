@@ -33,6 +33,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
     requireNonPOS,
     async (req: Request, res: Response) => {
       try {
+      return res.status(410).json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
         const containerId = parseId(req.params.id);
         if (containerId === null) return res.status(400).json({ message: "Invalid container id" });
 
@@ -51,6 +52,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   // POST /api/factory/containers/refresh-etas — bulk JSONCargo ETA refresh (admin-only)
   app.post("/api/factory/containers/refresh-etas", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
     try {
+      return res.status(410).json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
       const role = req.session?.user?.role || req.user?.role || "";
       if (!JSONCARGO_ADMIN_ROLES.includes(role)) {
         return res.status(403).json({ message: "Not authorized to run bulk ETA refresh" });
@@ -161,6 +163,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   // POST /api/factory/container-tracking/:id/track-now — manually trigger tracking
   app.post("/api/factory/container-tracking/:id/track-now", requireAuth, async (req: Request, res: Response) => {
     try {
+      return res.status(410).json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
       const containerId = parseId(req.params.id);
       if (containerId === null) return res.status(400).json({ message: "Invalid container id" });
 
@@ -209,6 +212,7 @@ export function registerFactoryContainerTrackingRoutes(app: Express) {
   // PATCH /api/factory/container-tracking/:id/settings — enable/disable tracking
   app.patch("/api/factory/container-tracking/:id/settings", requireAuth, async (req: Request, res: Response) => {
     try {
+      return res.status(410).json({ message: "Automated container tracking is disabled. Update container data manually or by import." });
       const containerId = parseId(req.params.id);
       if (containerId === null) return res.status(400).json({ message: "Invalid container id" });
       const { trackingEnabled, trackingAutoUpdate, trackingCarrierHint } = req.body as {

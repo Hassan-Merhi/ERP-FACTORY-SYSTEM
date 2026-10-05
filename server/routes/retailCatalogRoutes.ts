@@ -1,7 +1,7 @@
 import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request, Response } from "express";
-import { eq } from "drizzle-orm";
-import { companies } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
+import { companies, storedFiles } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db, pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
@@ -336,6 +336,50 @@ function assembleProducts(rows: CatalogProductRow[]) {
 }
 
 export function registerRetailCatalogRoutes(app: Express): void {
+  // Product photos use the company file store, but retail users should not need
+  // the generic files.download permission just to see catalog/POS imagery.
+  // This endpoint is intentionally limited to image/* files in the selected
+  // retail company and keeps legacy product-photo records working.
+  app.get("/api/retail/media/:id", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+
+      const fileId = positiveInteger(req.params.id);
+      if (!fileId) return res.status(404).json({ message: "Image not found" });
+
+      const [file] = await db
+        .select({
+          id: storedFiles.id,
+          fileName: storedFiles.fileName,
+          displayName: storedFiles.displayName,
+          fileType: storedFiles.fileType,
+          fileData: storedFiles.fileData,
+        })
+        .from(storedFiles)
+        .where(and(eq(storedFiles.id, fileId), eq(storedFiles.companyId, companyId)))
+        .limit(1);
+
+      if (!file || !file.fileType?.startsWith("image/")) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+
+      const buffer = Buffer.from(file.fileData, "base64");
+      res.setHeader("Content-Type", file.fileType);
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(file.displayName || file.fileName)}"`
+      );
+      res.setHeader("Content-Length", String(buffer.length));
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.end(buffer);
+      return;
+    } catch (error: unknown) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/retail/catalog-facets", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);

@@ -410,39 +410,12 @@ export function startScheduler() {
     }
   );
 
-  // Container auto-tracking — runs every 6 hours (00:00, 06:00, 12:00, 18:00 EST).
-  // This global switch pauses both ERP and Factory auto-tracking without affecting
-  // manual "Track Now" actions or any of the other scheduled jobs.
-  const containerAutoTrackingEnabled = process.env.ENABLE_CONTAINER_AUTO_TRACKING !== "false";
-  if (containerAutoTrackingEnabled) {
-    cron.schedule(
-      "0 */6 * * *",
-      createSchedulerTick("containerTracking", async () => {
-        // ERP and factory tracking are reported separately on purpose: one
-        // failing is not a reason to skip the other.
-        try {
-          const { trackDueContainers } = await import("../container-tracking");
-          await trackDueContainers();
-        } catch (err: unknown) {
-          logger.error("cron containerTracking (ERP) failed", {
-            module: "scheduler",
-            action: "containerTracking",
-            error: err,
-          });
-        }
-        const { trackDueFactoryContainers } = await import("../factory-container-tracking");
-        await trackDueFactoryContainers();
-      }),
-      {
-        timezone: "America/New_York",
-      }
-    );
-  } else {
-    logger.info("Container auto-tracking disabled by ENABLE_CONTAINER_AUTO_TRACKING=false", {
-      module: "scheduler",
-      action: "containerTracking",
-    });
-  }
+  // Container carrier auto-tracking is intentionally disabled system-wide.
+  // Container status/ETA/location are maintained manually or through Excel imports.
+  logger.info("Container carrier auto-tracking is disabled by product policy", {
+    module: "scheduler",
+    action: "containerTracking",
+  });
 
   logger.info("All scheduled jobs registered", {
     module: "scheduler",
@@ -458,7 +431,6 @@ export function startScheduler() {
       "convergenceReconciliation(daily 03:30 ET)",
       "overdueCustomers(daily 09:00 EST)",
       "softDeletePurge(daily 02:00 EST)",
-      ...(containerAutoTrackingEnabled ? ["containerTracking(every 6h EST)"] : []),
     ],
   });
 }

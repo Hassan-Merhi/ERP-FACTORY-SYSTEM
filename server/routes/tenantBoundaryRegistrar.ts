@@ -4,10 +4,10 @@ import { poImportDatabaseScopeContinuityBoundary } from "../middleware/poImportD
 import { tenantCompanyParamBoundary, tenantIsolationBoundary } from "../middleware/tenantIsolationBoundary";
 import { enforcePrivilegedMaintenanceScope } from "../middleware/privilegedMaintenanceScope";
 import { browserMutationFailClosedBoundary } from "../security/browserMutationBoundary";
-import { securityHeadersMiddleware } from "../security/securityHeaders";
 
 /**
- * Installs the canonical security and tenant boundaries ahead of every API
+ * Installs the canonical tenant and mutation boundaries (security headers are
+ * mounted app-wide in server/index.ts) ahead of every API
  * registrar and before the SPA/static handlers that are mounted afterward.
  *
  * This lives beside the registrars rather than in server/routes.ts because that
@@ -16,7 +16,6 @@ import { securityHeadersMiddleware } from "../security/securityHeaders";
  * boundaries only guard routes registered after this call, so they run first.
  */
 export function registerTenantIsolationBoundary(app: Express): void {
-  app.use(securityHeadersMiddleware());
   app.use(browserMutationFailClosedBoundary);
   app.use(tenantIsolationBoundary);
   app.use(enforcePrivilegedMaintenanceScope);

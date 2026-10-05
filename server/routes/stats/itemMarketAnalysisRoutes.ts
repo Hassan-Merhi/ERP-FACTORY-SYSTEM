@@ -37,6 +37,7 @@ const querySchema = z.object({
   search: z.string().trim().max(100).optional(),
   stockGroupId: z.coerce.number().int().positive().optional(),
   stockGroupName: z.string().trim().max(100).optional(),
+  stockGroupNames: z.string().trim().max(2000).optional(),
   companyIds: z.string().trim().max(500).optional(),
 });
 
@@ -65,6 +66,22 @@ function parseCompanyIds(value: string | undefined, activeCompanyId: number): nu
   return ids;
 }
 
+function parseStockGroupNames(value: string | undefined): string[] | undefined {
+  if (!value) return undefined;
+
+  const names = [...new Set(value.split(",").map((name) => name.trim()).filter(Boolean))];
+  if (names.length === 0) return undefined;
+  if (names.length > 50 || names.some((name) => name.length > 100)) {
+    throw new CompanyAccessError(
+      400,
+      "stockGroupNames must contain 1 to 50 valid stock group names",
+      "INVALID_STOCK_GROUP_NAMES"
+    );
+  }
+
+  return names;
+}
+
 function marginPct(profit: number, revenue: number): number {
   return revenue === 0 ? 0 : Number(((profit / revenue) * 100).toFixed(2));
 }
@@ -86,6 +103,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
       search: first(req.query.search),
       stockGroupId: first(req.query.stockGroupId),
       stockGroupName: first(req.query.stockGroupName),
+      stockGroupNames: first(req.query.stockGroupNames),
       companyIds: first(req.query.companyIds),
     });
     if (!parsed.success) {
@@ -97,6 +115,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
 
     try {
       const companyIds = parseCompanyIds(parsed.data.companyIds, activeCompanyId);
+      const stockGroupNames = parseStockGroupNames(parsed.data.stockGroupNames ?? parsed.data.stockGroupName);
       await assertCompaniesAccess(userId, companyIds);
 
       const companyResult = await pool.query(
@@ -177,7 +196,7 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
                   endDate: parsed.data.endDate,
                   search: parsed.data.search || undefined,
                   stockGroupId: companyIds.length === 1 ? parsed.data.stockGroupId : undefined,
-                  stockGroupName: parsed.data.stockGroupName || undefined,
+                  stockGroupNames,
                 });
 
                 return { company, analysis };

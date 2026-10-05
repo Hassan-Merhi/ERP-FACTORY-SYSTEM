@@ -79,8 +79,8 @@ const REQUIRED_COLUMNS = Object.freeze([
   ["deleted_at", "TIMESTAMP"],
   ["created_at", "TIMESTAMP NOT NULL DEFAULT now()"],
   ["updated_at", "TIMESTAMP NOT NULL DEFAULT now()"],
-  ["tracking_enabled", "BOOLEAN NOT NULL DEFAULT true"],
-  ["tracking_auto_update", "BOOLEAN NOT NULL DEFAULT true"],
+  ["tracking_enabled", "BOOLEAN NOT NULL DEFAULT false"],
+  ["tracking_auto_update", "BOOLEAN NOT NULL DEFAULT false"],
   ["tracking_carrier_hint", "TEXT"],
   ["tracking_provider", "TEXT"],
   ["tracking_last_status", "TEXT"],
@@ -158,6 +158,14 @@ async function ensureFactoryContainerSchema() {
       existingColumns.add(columnName);
       columnsAdded.push(columnName);
     }
+
+    // Automated carrier tracking is permanently disabled. Keep database
+    // defaults and any legacy rows off even when startup migrations are skipped.
+    await client.query("ALTER TABLE factory_containers ALTER COLUMN tracking_enabled SET DEFAULT false");
+    await client.query("ALTER TABLE factory_containers ALTER COLUMN tracking_auto_update SET DEFAULT false");
+    await client.query(
+      "UPDATE factory_containers SET tracking_enabled = false, tracking_auto_update = false WHERE tracking_enabled = true OR tracking_auto_update = true"
+    );
 
     const requiredJsonCargoColumns = ["json_cargo_last_checked_at", "json_cargo_tracking_status", "json_cargo_error"];
     const missingAfterRepair = requiredJsonCargoColumns.filter((columnName) => !existingColumns.has(columnName));
