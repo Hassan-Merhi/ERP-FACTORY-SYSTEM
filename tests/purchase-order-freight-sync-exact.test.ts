@@ -2,18 +2,22 @@
  * POST /api/purchase-orders/:id/sync-parent-voucher writes the PO voucher from
  * exact totals. The PO columns are numeric(20, 2), which hold amounts a binary
  * float cannot: an items total of 12345678901234567.89 was written as
- * 12345678901234568.00 by the float path.
+ * 12345678901234568.00 by the float path. The intercompany branch hands the
+ * same exact totals to syncIntercoParentVoucher.
  */
 import { describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ writes: [] as Array<[string, string, Record<string, unknown>]> }));
+const h = vi.hoisted(() => ({
+  writes: [] as Array<[string, string, Record<string, unknown>]>,
+  parentCompanyId: null as number | null,
+}));
 vi.mock("../server/auth", () => {
   const pass = (_q: unknown, _s: unknown, next: () => void) => next();
   return { requireAuth: pass, requireNonPOS: pass };
 });
 vi.mock("../server/storage", () => ({
   storage: {
-    getParentCompanyId: async () => null,
+    getParentCompanyId: async () => h.parentCompanyId,
     getPurchaseOrderByIdForCompany: async () => ({
       id: 11,
       companyId: 7,
@@ -50,7 +54,16 @@ vi.mock("../server/db", async () => {
     return chain([]);
   };
   const db: Record<string, unknown> = {
-    select: () => ({ from: (table: never) => chain(getTableName(table) === "voucher_entries" ? entries : []) }),
+    select: () => ({
+      from: (table: never) => {
+        const name = getTableName(table);
+        // The subsidiary PO's INTERCO-PARENT voucher in the parent company.
+        if (name === "vouchers") return chain(h.parentCompanyId ? [{ id: 90, totalAmount: "1.00" }] : []);
+        const q = chain(name === "voucher_entries" ? entries : []);
+        (q as Record<string, unknown>).innerJoin = () => q;
+        return q;
+      },
+    }),
     update: (table: never) => ({ set: (values: Record<string, unknown>) => record("update", table, values) }),
     insert: (table: never) => ({ values: (values: Record<string, unknown>) => record("insert", table, values) }),
     delete: () => chain([]),
@@ -90,5 +103,38 @@ describe("purchase order freight sync", () => {
         ["insert", "voucher_entries", expect.objectContaining({ creditAmount: "10.00", ledgerAccountId: 9 })],
       ])
     );
+  });
+
+  it("syncs the parent company's interco voucher from exact totals", async () => {
+    h.writes = [];
+    h.parentCompanyId = 1;
+    const handlers = new Map<string, (req: unknown, res: unknown) => Promise<void>>();
+    const register =
+      (method: string) =>
+      (path: string, ...chain: Array<(req: unknown, res: unknown) => Promise<void>>) =>
+        handlers.set(`${method} ${path}`, chain[chain.length - 1]);
+    registerContainerFreightReadRoutes({ get: register("GET"), post: register("POST") } as never);
+    let body: Record<string, unknown> | undefined;
+    const res = {
+      status: () => res,
+      json: (value: Record<string, unknown>) => {
+        body = value;
+        return res;
+      },
+    };
+    await handlers.get("POST /api/purchase-orders/:id/sync-parent-voucher")!(
+      { session: { currentCompanyId: 7 }, params: { id: "11" } },
+      res
+    );
+
+    expect(body).toMatchObject({ found: true, amount: "12345678901234577.89" });
+    expect(h.writes).toEqual(
+      expect.arrayContaining([
+        ["update", "vouchers", { totalAmount: "12345678901234577.89" }],
+        ["update", "voucher_entries", { debitAmount: "12345678901234577.89" }],
+        ["update", "voucher_entries", { creditAmount: "12345678901234567.89" }],
+      ])
+    );
+    h.parentCompanyId = null;
   });
 });

@@ -106,9 +106,9 @@ export async function applyPurchaseOrderItemsUpdate(
 
   // Capture freight in outer scope so the post-transaction parent-freight sync
   // can access it without a ReferenceError.
-  let _b1FreightForSync = toMoney(existingPO.freight).toNumber();
+  let _b1FreightForSync = toMoney(existingPO.freight);
   // ── Lifted for post-transaction interco sync (belt-and-suspenders) ────
-  let _b1GrandTotalForSync = 0;
+  let _b1GrandTotalForSync = new MoneyDecimal(0);
   let _b1HasParentFreightForSync = false;
   let _b1FreightParentAccountIdForSync: number | null = null;
   let _b1PoNumsForSync: string | string[] = existingPO.poNumber;
@@ -188,7 +188,7 @@ export async function applyPurchaseOrderItemsUpdate(
     }
 
     // Update PO with new items total and charges
-    _b1FreightForSync = freight.toNumber(); // lift into outer scope for post-tx sync
+    _b1FreightForSync = freight; // lift into outer scope for post-tx sync
 
     // Check if any charge field was explicitly provided in the request
     const chargesWereEdited =
@@ -264,10 +264,9 @@ export async function applyPurchaseOrderItemsUpdate(
 
     // Compute totals. intercoTotal = supplier share (excludes freight when own/parent-paid).
     const poGrandTotalExact = itemsTotal.plus(freight).plus(nonFreightCharges);
-    const poGrandTotal = poGrandTotalExact.toNumber();
     const b1FreightPaidBy: string = req.body.freightPaidBy ?? existingPO.freightPaidBy ?? "supplier";
     // 'own': freight goes to a separate own-account voucher → exclude from PO voucher
-    // 'parent': subsidiary still owes parent the full amount including freight → use poGrandTotal
+    // 'parent': subsidiary still owes parent the full amount including freight → use poGrandTotalExact
     // 'supplier': full amount
     const b1IntercoTotal = cents(
       b1FreightPaidBy === "own" && freight.greaterThan(0) ? itemsTotal.plus(nonFreightCharges) : poGrandTotalExact
@@ -326,11 +325,11 @@ export async function applyPurchaseOrderItemsUpdate(
         const _b1Sync = await syncIntercoParentVoucher(
           tx,
           _b1PoNums,
-          poGrandTotal,
+          poGrandTotalExact,
           _b1ContainerRow?.containerNumber,
           _b1HasParentFreight
             ? {
-                freightAmount: freight.toNumber(),
+                freightAmount: freight,
                 freightParentAccountId: _b1FreightParentAccountId!,
                 subsidiaryCompanyId: existingPO.companyId,
               }
@@ -342,7 +341,7 @@ export async function applyPurchaseOrderItemsUpdate(
           );
         }
         // Lift to outer scope so post-transaction backup sync can use them
-        _b1GrandTotalForSync = poGrandTotal;
+        _b1GrandTotalForSync = poGrandTotalExact;
         _b1HasParentFreightForSync = _b1HasParentFreight;
         _b1FreightParentAccountIdForSync = _b1FreightParentAccountId;
         _b1PoNumsForSync = _b1PoNums;
@@ -401,7 +400,7 @@ export async function applyPurchaseOrderItemsUpdate(
   // the transaction using the plain `db` handle — identical to the pattern
   // used by the charges-only path — so the parent INTERCO-PARENT JV is
   // guaranteed to be up-to-date even if the in-transaction call was a no-op.
-  if (_b1GrandTotalForSync > 0) {
+  if (_b1GrandTotalForSync.greaterThan(0)) {
     const _b1PostParentId = await storage.getParentCompanyId();
     if (_b1PostParentId && existingPO.companyId !== _b1PostParentId) {
       const _b1PostSync = await syncIntercoParentVoucher(

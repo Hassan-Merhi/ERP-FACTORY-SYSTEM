@@ -89,17 +89,20 @@ interface SyncIntercoResult {
 export async function syncIntercoParentVoucher(
   dbOrTx: DatabaseOrTransaction,
   poNumbers: string | string[],
-  grossTotal: number,
+  grossTotal: MoneyInput,
   containerNumber?: string,
   freightOpts?: {
-    freightAmount: number;
+    freightAmount: MoneyInput;
     freightParentAccountId: number;
     subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
   }
 ): Promise<SyncIntercoResult> {
-  const amountStr = grossTotal.toFixed(2);
-  const intercoTotal =
-    freightOpts && freightOpts.freightAmount > 0 ? grossTotal - freightOpts.freightAmount : grossTotal;
+  // Amounts stay exact: numeric(20, 2) totals above about 10^15 have no cents left as numbers.
+  const gross = toMoney(grossTotal);
+  const freight = toMoney(freightOpts?.freightAmount);
+  const hasFreight = !!freightOpts && freight.greaterThan(0);
+  const amountStr = gross.toFixed(2);
+  const intercoTotal = hasFreight ? gross.minus(freight) : gross;
   try {
     const parentCompanyId = await storage.getParentCompanyId();
     if (!parentCompanyId) return { found: false, updated: false, amount: amountStr };
@@ -174,14 +177,14 @@ export async function syncIntercoParentVoucher(
       // is still credited to the configured account.
       if (
         freightOpts &&
-        freightOpts.freightAmount > 0 &&
+        hasFreight &&
         freightOpts.subsidiaryCompanyId &&
         freightOpts.subsidiaryCompanyId !== parentCompanyId
       ) {
         try {
           const primaryPoNum = nums[0];
           const fallbackVoucherNum = `PARENT-FREIGHT-${primaryPoNum}`;
-          const freightAmtStr = freightOpts.freightAmount.toFixed(2);
+          const freightAmtStr = freight.toFixed(2);
 
           // Look up the interco config to get the subsidiary receivable account (DR side).
           const [icCfg] = await dbOrTx
@@ -209,12 +212,12 @@ export async function syncIntercoParentVoucher(
               .from(voucherEntries)
               .where(eq(voucherEntries.voucherId, existingFallback.id));
             for (const fe of fbEntries) {
-              if (parseFloat(fe.debitAmount || "0") > 0) {
+              if (toMoney(fe.debitAmount).greaterThan(0)) {
                 await dbOrTx
                   .update(voucherEntries)
                   .set({ debitAmount: freightAmtStr })
                   .where(eq(voucherEntries.id, fe.id));
-              } else if (parseFloat(fe.creditAmount || "0") > 0) {
+              } else if (toMoney(fe.creditAmount).greaterThan(0)) {
                 await dbOrTx
                   .update(voucherEntries)
                   .set({
@@ -281,18 +284,18 @@ export async function syncIntercoParentVoucher(
       .from(voucherEntries)
       .where(eq(voucherEntries.voucherId, parentVoucher.id));
 
-    const oldAmount = parseFloat(parentVoucher.totalAmount || "0");
+    const oldAmount = toMoney(parentVoucher.totalAmount);
     const oldAmountStr = oldAmount.toFixed(2);
 
     // Check whether an update is needed (idempotent)
-    const totalMismatch = Math.abs(oldAmount - grossTotal) > 0.001;
+    const totalMismatch = differsByMoreThanTolerance(oldAmount, gross);
     let freightEntryMissing = false;
     let freightNarrationMismatch = false;
-    if (freightOpts && freightOpts.freightAmount > 0) {
+    if (freightOpts && hasFreight) {
       const fe = parentEntries.find(
-        (e) => e.ledgerAccountId === freightOpts.freightParentAccountId && parseFloat(e.creditAmount || "0") > 0
+        (e) => e.ledgerAccountId === freightOpts.freightParentAccountId && toMoney(e.creditAmount).greaterThan(0)
       );
-      freightEntryMissing = !fe || Math.abs(parseFloat(fe.creditAmount || "0") - freightOpts.freightAmount) > 0.001;
+      freightEntryMissing = !fe || differsByMoreThanTolerance(toMoney(fe.creditAmount), freight);
       if (fe && containerNumber) {
         freightNarrationMismatch = !(fe.narration || "").includes(containerNumber);
       }
@@ -307,17 +310,17 @@ export async function syncIntercoParentVoucher(
 
     await dbOrTx.update(vouchers).set({ totalAmount: amountStr }).where(eq(vouchers.id, parentVoucher.id));
 
-    if (freightOpts && freightOpts.freightAmount > 0) {
+    if (freightOpts && hasFreight) {
       // Split the INTERCO-PARENT: DR subsidiary receivable (grossTotal),
       //   CR supplier (intercoTotal — goods only), CR freightAccount (freight)
       const intercoAmtStr = intercoTotal.toFixed(2);
-      const freightAmtStr = freightOpts.freightAmount.toFixed(2);
+      const freightAmtStr = freight.toFixed(2);
       let freightEntryFound = false;
 
       for (const entry of parentEntries) {
-        if (parseFloat(entry.debitAmount || "0") > 0) {
+        if (toMoney(entry.debitAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (parseFloat(entry.creditAmount || "0") > 0) {
+        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
           if (entry.ledgerAccountId === freightOpts.freightParentAccountId) {
             freightEntryFound = true;
             await dbOrTx
@@ -349,9 +352,9 @@ export async function syncIntercoParentVoucher(
     } else {
       // No freight split — update all entries to grossTotal (original behaviour)
       for (const entry of parentEntries) {
-        if (parseFloat(entry.debitAmount || "0") > 0) {
+        if (toMoney(entry.debitAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (parseFloat(entry.creditAmount || "0") > 0) {
+        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ creditAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
         }
       }
