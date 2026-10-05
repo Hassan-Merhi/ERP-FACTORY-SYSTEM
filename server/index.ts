@@ -27,7 +27,7 @@ import { apiRateLimit } from "./middleware/apiRateLimit";
 import { logger } from "./lib/logger";
 import { getErrorMessage } from "./lib/httpHandlers";
 import { originGuard } from "./security/originGuard";
-import { helmetContentSecurityPolicyOption, registerCspReportRoute } from "./security/contentSecurityPolicy";
+import { registerCspReportRoute } from "./security/contentSecurityPolicy";
 import { registerCsrfProtection } from "./security/csrfProtection";
 import { registerErrorHandler } from "./middleware/errorHandler";
 import { capacitorCors } from "./middleware/capacitorCors";
@@ -80,13 +80,14 @@ app.use(
 );
 
 // Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
-// CSP ships report-only in production and off elsewhere; CSP_ENFORCE=true
-// flips the same policy to enforcing. Policy and violation collection live in
-// server/security/contentSecurityPolicy.ts.
+// The Content-Security-Policy is set once, enforced, by securityHeadersMiddleware
+// (server/security/securityHeaders.ts, mounted with the tenant boundaries);
+// violations are collected at /api/csp-report. This early pass covers the
+// remaining helmet headers for routes mounted before those boundaries.
 // crossOriginEmbedderPolicy is disabled to allow loading external images (logos, etc.).
 app.use(
   helmet({
-    contentSecurityPolicy: helmetContentSecurityPolicyOption(),
+    contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })

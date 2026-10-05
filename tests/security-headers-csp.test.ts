@@ -31,6 +31,10 @@ describe("security headers CSP", () => {
     expect(cspDirective(csp, "frame-ancestors")).toBe("frame-ancestors 'self'");
     expect(cspDirective(csp, "frame-src")).toBe("frame-src 'self' blob:");
     expect(cspDirective(csp, "upgrade-insecure-requests")).toBe("upgrade-insecure-requests");
+    expect(cspDirective(csp, "media-src")).toBe("media-src 'self' blob: data:");
+    expect(cspDirective(csp, "report-uri")).toBe("report-uri /api/csp-report");
+    // One policy, enforced: no second report-only copy to drift from it.
+    expect(response.headers["content-security-policy-report-only"]).toBeUndefined();
     expect(response.headers["x-content-type-options"]).toBe("nosniff");
     expect(response.headers["x-frame-options"]).toBe("SAMEORIGIN");
     expect(response.headers["referrer-policy"]).toBe("strict-origin-when-cross-origin");

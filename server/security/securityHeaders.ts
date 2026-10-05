@@ -1,6 +1,8 @@
 import type { RequestHandler } from "express";
 import helmet, { type HelmetOptions } from "helmet";
 
+import { CSP_REPORT_PATH } from "./contentSecurityPolicy";
+
 /**
  * Build the HTTP security-header policy for the ERP shell.
  *
@@ -13,7 +15,13 @@ import helmet, { type HelmetOptions } from "helmet";
  * Inline styles remain allowed because the existing React UI uses style
  * attributes extensively. This does not weaken script execution because
  * script-src and script-src-attr remain independently locked down. Blob-backed
- * frames remain allowed for authenticated stored-file/PDF previews.
+ * frames remain allowed for authenticated stored-file/PDF previews, and
+ * blob:/data: media for generated audio and video.
+ *
+ * This is the only Content-Security-Policy the server sends, and it is
+ * enforced. Browsers report violations to /api/csp-report
+ * (server/security/contentSecurityPolicy.ts), so a blocked resource shows up
+ * in the logs instead of failing silently.
  */
 export function buildSecurityHeaderOptions(nodeEnv = process.env.NODE_ENV): HelmetOptions {
   const isProduction = nodeEnv === "production";
@@ -35,7 +43,9 @@ export function buildSecurityHeaderOptions(nodeEnv = process.env.NODE_ENV): Helm
         imgSrc: ["'self'", "data:", "blob:", "https:"],
         connectSrc: isProduction ? ["'self'", "https:", "wss:"] : ["'self'", "http:", "https:", "ws:", "wss:"],
         workerSrc: ["'self'", "blob:"],
+        mediaSrc: ["'self'", "blob:", "data:"],
         manifestSrc: ["'self'"],
+        reportUri: [CSP_REPORT_PATH],
         upgradeInsecureRequests: isProduction ? [] : null,
       },
     },
