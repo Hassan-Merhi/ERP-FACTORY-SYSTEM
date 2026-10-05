@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import {
   bankAccounts,
   companies,
@@ -12,7 +12,7 @@ import {
 } from "@shared/schema";
 import type { RetailPaymentMethod } from "@shared/schema/retailPos";
 import type { DbTransaction } from "../../db";
-import { db } from "../../db";
+import { db, pool } from "../../db";
 import { postBalancedVoucherTx } from "../accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
 
@@ -871,31 +871,51 @@ export async function getRetailFinancialReconciliation(
   companyId: number,
   input: { locationId?: number | null; from?: Date | null; to?: Date | null }
 ) {
-  const filters = [
-    sql`s.company_id = ${companyId}`,
-    input.locationId ? sql`s.location_id = ${input.locationId}` : sql`TRUE`,
-    input.from ? sql`s.created_at >= ${input.from}` : sql`TRUE`,
-    input.to ? sql`s.created_at < ${input.to}` : sql`TRUE`,
-  ];
-  const result = await db.execute(sql`
-    SELECT
-      s.id AS sale_id,
-      s.location_id,
-      s.status,
-      s.total_amount,
-      s.accounting_voucher_id,
-      s.created_at,
-      COALESCE(SUM(CASE WHEN p.payment_type = 'payment' THEN p.amount ELSE 0 END), 0) AS payments,
-      COALESCE(SUM(CASE WHEN p.payment_type = 'refund' THEN p.amount ELSE 0 END), 0) AS refunds
-    FROM retail_pos_sales s
-    LEFT JOIN retail_pos_payments p ON p.sale_id = s.id AND p.company_id = s.company_id
-    WHERE ${sql.join(filters, sql` AND `)}
-    GROUP BY s.id
-    ORDER BY s.created_at DESC
-    LIMIT 500
-  `);
-  const rows = (result as unknown as { rows: Array<Record<string, unknown>> }).rows ?? [];
-  const mapped = rows.map((row) => {
+  const params: unknown[] = [companyId];
+  const clauses = ["s.company_id = $1"];
+  if (input.locationId) {
+    params.push(input.locationId);
+    clauses.push(`s.location_id = $${params.length}`);
+  }
+  if (input.from) {
+    params.push(input.from);
+    clauses.push(`s.created_at >= $${params.length}`);
+  }
+  if (input.to) {
+    params.push(input.to);
+    clauses.push(`s.created_at < $${params.length}`);
+  }
+
+  const result = await pool.query<Record<string, unknown>>(
+    `SELECT
+       s.id AS sale_id,
+       s.location_id,
+       s.status,
+       s.total_amount,
+       s.accounting_voucher_id,
+       s.created_at,
+       COALESCE((
+         SELECT SUM(p.amount)
+         FROM retail_pos_payments p
+         WHERE p.company_id = s.company_id
+           AND p.sale_id = s.id
+           AND p.payment_type = 'payment'
+       ), 0) AS payments,
+       COALESCE((
+         SELECT SUM(p.amount)
+         FROM retail_pos_payments p
+         WHERE p.company_id = s.company_id
+           AND p.sale_id = s.id
+           AND p.payment_type = 'refund'
+       ), 0) AS refunds
+     FROM retail_pos_sales s
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY s.created_at DESC
+     LIMIT 500`,
+    params
+  );
+
+  const mapped = result.rows.map((row) => {
     const total = toNumber(row.total_amount);
     const paid = toNumber(row.payments);
     const refunded = toNumber(row.refunds);
@@ -903,7 +923,14 @@ export async function getRetailFinancialReconciliation(
     const actualNet = paid - refunded;
     const paymentMismatch = Math.abs(actualNet - expectedNet) > 0.000001;
     const accountingMissing = Number(row.accounting_voucher_id ?? 0) <= 0 && total !== 0;
-    return { ...row, totalAmount: total, payments: paid, refunds: refunded, paymentMismatch, accountingMissing };
+    return {
+      ...row,
+      totalAmount: total,
+      payments: paid,
+      refunds: refunded,
+      paymentMismatch,
+      accountingMissing,
+    };
   });
   return {
     rows: mapped,
@@ -914,3 +941,4 @@ export async function getRetailFinancialReconciliation(
     },
   };
 }
+
