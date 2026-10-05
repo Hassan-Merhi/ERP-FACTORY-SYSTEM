@@ -172,10 +172,24 @@ export async function ensureRetailAccountingSettingsTx(
     if (specific) {
       current = specific;
     } else {
-      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...defaultsToCopy } = defaultRow;
       const [createdSpecific] = await tx
         .insert(retailAccountingSettings)
-        .values({ ...defaultsToCopy, companyId, locationId })
+        .values({
+          companyId,
+          locationId,
+          cashLedgerAccountId: defaultRow.cashLedgerAccountId,
+          cardLedgerAccountId: defaultRow.cardLedgerAccountId,
+          bankLedgerAccountId: defaultRow.bankLedgerAccountId,
+          bankAccountId: defaultRow.bankAccountId,
+          mobileLedgerAccountId: defaultRow.mobileLedgerAccountId,
+          otherLedgerAccountId: defaultRow.otherLedgerAccountId,
+          salesRevenueLedgerAccountId: defaultRow.salesRevenueLedgerAccountId,
+          inventoryAssetLedgerAccountId: defaultRow.inventoryAssetLedgerAccountId,
+          cogsLedgerAccountId: defaultRow.cogsLedgerAccountId,
+          discountsLedgerAccountId: defaultRow.discountsLedgerAccountId,
+          taxPayableLedgerAccountId: defaultRow.taxPayableLedgerAccountId,
+          storeCreditLedgerAccountId: defaultRow.storeCreditLedgerAccountId,
+        })
         .onConflictDoNothing()
         .returning();
       current =
