@@ -118,7 +118,8 @@ export default function ItemMarketAnalysis() {
   const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [stockGroupName, setStockGroupName] = useState("all");
+  const [selectedStockGroupNames, setSelectedStockGroupNames] = useState<string[]>([]);
+  const [stockGroupPopoverOpen, setStockGroupPopoverOpen] = useState(false);
   const [profitDirection, setProfitDirection] = useState<ProfitDirectionFilter>("all");
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<number[]>([]);
   const [companyPopoverOpen, setCompanyPopoverOpen] = useState(false);
@@ -131,7 +132,7 @@ export default function ItemMarketAnalysis() {
   }, [search]);
 
   useEffect(() => {
-    setStockGroupName("all");
+    setSelectedStockGroupNames([]);
     setProfitDirection("all");
     setExpandedItemCode(null);
     setSelectedCompanyIds(selectedCompany?.id ? [selectedCompany.id] : []);
@@ -151,7 +152,13 @@ export default function ItemMarketAnalysis() {
       }
       return [...current, companyId];
     });
-    setStockGroupName("all");
+    setExpandedItemCode(null);
+  };
+
+  const toggleStockGroup = (groupName: string) => {
+    setSelectedStockGroupNames((current) =>
+      current.includes(groupName) ? current.filter((name) => name !== groupName) : [...current, groupName]
+    );
     setExpandedItemCode(null);
   };
 
@@ -160,10 +167,10 @@ export default function ItemMarketAnalysis() {
     if (period.fromDate) params.set("startDate", period.fromDate);
     if (period.toDate) params.set("endDate", period.toDate);
     if (debouncedSearch) params.set("search", debouncedSearch);
-    if (stockGroupName !== "all") params.set("stockGroupName", stockGroupName);
+    if (selectedStockGroupNames.length > 0) params.set("stockGroupNames", selectedStockGroupNames.join(","));
     if (selectedCompanyIds.length > 0) params.set("companyIds", selectedCompanyIds.join(","));
     return `/api/reports/item-market-analysis?${params.toString()}`;
-  }, [period, debouncedSearch, stockGroupName, selectedCompanyIds]);
+  }, [period, debouncedSearch, selectedStockGroupNames, selectedCompanyIds]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery<MarketResponse, Error>({
     queryKey: [queryUrl, selectedCompany?.id, selectedCompanyIds],
@@ -464,25 +471,48 @@ export default function ItemMarketAnalysis() {
             </div>
           </PopoverContent>
         </Popover>
-        <Select
-          value={stockGroupName}
-          onValueChange={(value) => {
-            setStockGroupName(value);
-            setExpandedItemCode(null);
-          }}
-        >
-          <SelectTrigger className="w-[190px]" data-testid="select-item-market-group">
-            <SelectValue placeholder="All groups" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stock Groups</SelectItem>
-            {stockGroups.map((groupName) => (
-              <SelectItem key={groupName} value={groupName}>
-                {groupName}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover open={stockGroupPopoverOpen} onOpenChange={setStockGroupPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-[190px] justify-between" data-testid="button-item-market-groups">
+              <span className="min-w-0 truncate">
+                {selectedStockGroupNames.length === 0
+                  ? "All Stock Groups"
+                  : selectedStockGroupNames.length === 1
+                    ? selectedStockGroupNames[0]
+                    : `${selectedStockGroupNames.length} Stock Groups`}
+              </span>
+              <ChevronDown className="ml-2 h-4 w-4 shrink-0" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-2" align="start">
+            <button
+              type="button"
+              className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+              onClick={() => {
+                setSelectedStockGroupNames([]);
+                setExpandedItemCode(null);
+              }}
+              data-testid="option-item-market-group-all"
+            >
+              <Checkbox checked={selectedStockGroupNames.length === 0} className="h-4 w-4" />
+              <span className="text-sm">All Stock Groups</span>
+            </button>
+            <div className="max-h-72 space-y-1 overflow-y-auto">
+              {stockGroups.map((groupName) => (
+                <button
+                  type="button"
+                  key={groupName}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+                  onClick={() => toggleStockGroup(groupName)}
+                  data-testid={`option-item-market-group-${groupName}`}
+                >
+                  <Checkbox checked={selectedStockGroupNames.includes(groupName)} className="h-4 w-4" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{groupName}</span>
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
         <Select
           value={profitDirection}
           onValueChange={(value) => {
