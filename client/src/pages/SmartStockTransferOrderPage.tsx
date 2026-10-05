@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import SmartTransferGeneratorDialog from "@/components/stock-transfer/SmartTransferGeneratorDialog";
 import type { SmartPreviewOrderItem } from "@/components/stock-transfer/smartTransferPreviewUi";
 import BaseStockTransferOrder from "./StockTransferOrder.tsx";
+import { confirmAction } from "@/components/ConfirmHost";
 
 const SOURCE_STORAGE_KEY = "stockTransferOrder_selectedLocations";
 const DRAFT_KEY = "stockTransferOrder_autosave_draft";
@@ -46,9 +47,9 @@ export default function SmartStockTransferOrderPage() {
   }) => {
     const existingDraft = localStorage.getItem(DRAFT_KEY);
     if (existingDraft) {
-      const replace = window.confirm(
-        "Importing this smart preview will replace the current unsaved stock transfer order. Continue?"
-      );
+      const replace = await confirmAction({
+        title: "Importing this smart preview will replace the current unsaved stock transfer order. Continue?",
+      });
       if (!replace) return;
     }
 
@@ -111,11 +112,7 @@ export default function SmartStockTransferOrderPage() {
             <Sparkles className="mr-1.5 h-3.5 w-3.5" />
             Smart Generate
           </Button>
-          <SmartTransferGeneratorDialog
-            open={generatorOpen}
-            onOpenChange={setGeneratorOpen}
-            onImport={importPreview}
-          />
+          <SmartTransferGeneratorDialog open={generatorOpen} onOpenChange={setGeneratorOpen} onImport={importPreview} />
         </>
       )}
     </>

@@ -131,7 +131,7 @@ export function ConfirmDialog({
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-md",
                     tone === "destructive" && "bg-destructive-soft text-destructive",
                     tone === "warning" && "bg-warning-soft text-warning-soft-foreground",
-                    tone === "default" && "bg-primary/10 text-primary",
+                    tone === "default" && "bg-primary/10 text-primary"
                   )}
                 >
                   <ResolvedIcon className="h-5 w-5" aria-hidden="true" />
@@ -140,7 +140,7 @@ export function ConfirmDialog({
               <div className="min-w-0 flex-1 text-left">
                 <AlertDialogTitle className="break-words">{headerTitle}</AlertDialogTitle>
                 {headerDescription && (
-                  <AlertDialogDescription className="mt-1 break-words leading-5">
+                  <AlertDialogDescription className="mt-1 whitespace-pre-line break-words leading-5">
                     {headerDescription}
                   </AlertDialogDescription>
                 )}
