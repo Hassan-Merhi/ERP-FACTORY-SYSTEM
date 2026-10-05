@@ -118,6 +118,33 @@ describe("Item Market Analysis calculations", () => {
     expect(report.body.summary.soldQty).toBeCloseTo(8, 6);
     expect(report.body.summary.revenue).toBeCloseTo(160, 2);
     expect(report.body.summary.profit).toBeCloseTo(80, 2);
+
+    const priceBreakdown = await agent.get(
+      `/api/reports/item-market-analysis/sale-prices?companyId=${ctx.companyId}&stockItemId=${stockItemId}&startDate=2030-01-01&endDate=2030-12-31`
+    );
+    expect(priceBreakdown.status).toBe(200);
+
+    const salePrice = priceBreakdown.body.rows.find(
+      (entry: { activityType: string; unitPrice: number }) => entry.activityType === "sale" && entry.unitPrice === 20
+    );
+    const returnPrice = priceBreakdown.body.rows.find(
+      (entry: { activityType: string; unitPrice: number }) => entry.activityType === "return" && entry.unitPrice === 20
+    );
+
+    expect(salePrice).toMatchObject({
+      activityType: "sale",
+      unitPrice: 20,
+      quantity: 10,
+      totalSales: 200,
+      transactionCount: 1,
+    });
+    expect(returnPrice).toMatchObject({
+      activityType: "return",
+      unitPrice: 20,
+      quantity: -2,
+      totalSales: -40,
+      transactionCount: 1,
+    });
   }, 60_000);
 
   it("returns purchase cost both with and without offloading cost", async () => {

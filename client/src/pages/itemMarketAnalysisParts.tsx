@@ -1,5 +1,11 @@
-/** Types and presentational helpers for the Item Market Analysis page. */
+/** Types, helpers and the sale-price breakdown for the Item Market Analysis page. */
+import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useCurrencyContext } from "@/contexts/CurrencyContext";
+import { formatNumber } from "@/lib/formatNumber";
 
 export interface MarketRow {
   companyId: number;
@@ -25,6 +31,20 @@ export interface MarketRow {
   profitPerUnit: number;
   marginPct: number;
   marketStatus: "strong" | "watch" | "losing" | "no_sales";
+}
+
+export interface SalePriceBreakdownRow {
+  activityType: "sale" | "return";
+  unitPrice: number;
+  quantity: number;
+  totalSales: number;
+  transactionCount: number;
+  firstDate: string | null;
+  lastDate: string | null;
+}
+
+export interface SalePriceBreakdownResponse {
+  rows: SalePriceBreakdownRow[];
 }
 
 export interface MarketCompanySummary {
@@ -63,7 +83,7 @@ export function StatusBadge({ status }: { status: MarketRow["marketStatus"] }) {
 
 export type ProfitDirectionFilter = "all" | "gaining" | "losing" | "none";
 
-const PROFIT_EPSILON = 0.005;
+export const PROFIT_EPSILON = 0.005;
 
 export function normalizeItemCode(code: string) {
   return code.trim().toLocaleUpperCase();
@@ -95,6 +115,94 @@ export function MetricCard({ label, value }: { label: string; value: string }) {
     <div className="rounded-xl border bg-card p-4">
       <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
       <div className="mt-1 text-xl font-semibold tabular-nums">{value}</div>
+    </div>
+  );
+}
+
+export function SalePriceBreakdown({
+  companyId,
+  stockItemId,
+  startDate,
+  endDate,
+}: {
+  companyId: number;
+  stockItemId: number;
+  startDate?: string;
+  endDate?: string;
+}) {
+  const { formatAmount } = useCurrencyContext();
+  const queryUrl = useMemo(() => {
+    const params = new URLSearchParams({
+      companyId: String(companyId),
+      stockItemId: String(stockItemId),
+    });
+    if (startDate) params.set("startDate", startDate);
+    if (endDate) params.set("endDate", endDate);
+    return `/api/reports/item-market-analysis/sale-prices?${params.toString()}`;
+  }, [companyId, stockItemId, startDate, endDate]);
+
+  const { data, isLoading, isError } = useQuery<SalePriceBreakdownResponse>({
+    queryKey: [queryUrl],
+    staleTime: 5 * 60_000,
+    gcTime: 15 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (isLoading) {
+    return <Skeleton className="h-24 w-full" />;
+  }
+
+  if (isError) {
+    return <div className="p-3 text-xs text-destructive">Failed to load sale price breakdown.</div>;
+  }
+
+  if (!data?.rows.length) {
+    return <div className="p-3 text-xs text-muted-foreground">No sale price history for this item.</div>;
+  }
+
+  return (
+    <div className="rounded-md border bg-background">
+      <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">Sale price breakdown</div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Type</TableHead>
+              <TableHead className="text-right">Sold Price</TableHead>
+              <TableHead className="text-right">Qty</TableHead>
+              <TableHead className="text-right">Total Sales</TableHead>
+              <TableHead className="text-right">Transactions</TableHead>
+              <TableHead>Period</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data.rows.map((priceRow) => {
+              const periodLabel =
+                priceRow.firstDate && priceRow.lastDate
+                  ? priceRow.firstDate === priceRow.lastDate
+                    ? priceRow.firstDate
+                    : `${priceRow.firstDate} – ${priceRow.lastDate}`
+                  : "—";
+              return (
+                <TableRow key={`${priceRow.activityType}:${priceRow.unitPrice}`}>
+                  <TableCell>
+                    <Badge variant={priceRow.activityType === "return" ? "outline" : "secondary"}>
+                      {priceRow.activityType === "return" ? "Return" : "Sale"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium tabular-nums">
+                    {formatAmount(priceRow.unitPrice)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(priceRow.quantity)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatAmount(priceRow.totalSales)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatNumber(priceRow.transactionCount)}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{periodLabel}</TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

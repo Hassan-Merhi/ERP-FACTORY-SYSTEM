@@ -594,6 +594,26 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     fr: "Performance des articles",
   },
   {
+    en: "Sale price breakdown",
+    ar: "تفصيل أسعار البيع",
+    fr: "Détail des prix de vente",
+  },
+  {
+    en: "Sold Price",
+    ar: "سعر البيع",
+    fr: "Prix de vente",
+  },
+  {
+    en: "No sale price history for this item.",
+    ar: "لا يوجد سجل لأسعار بيع هذا الصنف.",
+    fr: "Aucun historique de prix de vente pour cet article.",
+  },
+  {
+    en: "Failed to load sale price breakdown.",
+    ar: "تعذر تحميل تفصيل أسعار البيع.",
+    fr: "Impossible de charger le détail des prix de vente.",
+  },
+  {
     en: "Click an item to see its country breakdown",
     ar: "انقر على صنف لعرض توزيعه حسب الدولة",
     fr: "Cliquez sur un article pour voir sa répartition par pays",
