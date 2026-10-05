@@ -192,6 +192,10 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     const saleBody = {
       locationId,
       idempotencyKey: "retail-wave2-integration-sale-001",
+      payments: [
+        { method: "cash", amount: 8, tenderedAmount: 10 },
+        { method: "card", amount: 12, reference: "TEST-CARD" },
+      ],
       items: [{ variantId: scan.body.variantId, quantity: 2 }],
     };
 
@@ -209,6 +213,25 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       quantity: 2,
     });
     expect(await retailQuantity()).toBe(3);
+    expect(sale.body.sale.accountingVoucherId).toBeGreaterThan(0);
+    expect(sale.body.sale.payments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "cash", paymentType: "payment", amount: 8, changeAmount: 2 }),
+        expect.objectContaining({ method: "card", paymentType: "payment", amount: 12, reference: "TEST-CARD" }),
+      ])
+    );
+    const [saleAccountingRequest] = await db
+      .select()
+      .from(schema.accountingPostingRequests)
+      .where(
+        and(
+          eq(schema.accountingPostingRequests.companyId, companyId),
+          eq(schema.accountingPostingRequests.sourceType, "retail-pos-sale"),
+          eq(schema.accountingPostingRequests.sourceId, String(sale.body.sale.id))
+        )
+      )
+      .limit(1);
+    expect(saleAccountingRequest?.voucherId).toBe(sale.body.sale.accountingVoucherId);
 
     const saleReplay = await agent.post("/api/pos/retail/sales").send(saleBody);
     expect(saleReplay.status).toBe(200);
@@ -227,6 +250,21 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     expect(returned.status).toBe(201);
     expect(returned.body.replayed).toBe(false);
     expect(await retailQuantity()).toBe(5);
+    const refundPayments = returned.body.sale.payments.filter((payment: { paymentType: string }) => payment.paymentType === "refund");
+    expect(refundPayments.reduce((sum: number, payment: { amount: number }) => sum + payment.amount, 0)).toBe(20);
+    expect(refundPayments.map((payment: { method: string }) => payment.method).sort()).toEqual(["card", "cash"]);
+    const [returnAccountingRequest] = await db
+      .select()
+      .from(schema.accountingPostingRequests)
+      .where(
+        and(
+          eq(schema.accountingPostingRequests.companyId, companyId),
+          eq(schema.accountingPostingRequests.sourceType, "retail-pos-return"),
+          eq(schema.accountingPostingRequests.sourceId, String(returned.body.returnId))
+        )
+      )
+      .limit(1);
+    expect(returnAccountingRequest?.voucherId).toBeGreaterThan(0);
 
     const returnReplay = await agent.post(`/api/pos/retail/sales/${sale.body.sale.id}/returns`).send(returnBody);
     expect(returnReplay.status).toBe(200);
