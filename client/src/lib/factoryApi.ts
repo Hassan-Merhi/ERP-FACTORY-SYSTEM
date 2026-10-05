@@ -3,6 +3,7 @@ import { queryClient, apiRequest } from "./queryClient";
 import { attachAccountingRequestIdentity, releaseAccountingRequestIdentity } from "./accountingRequestIdentity";
 import { isUnsafeFactoryLoadingScanRequest, purgeUnsafeFactoryLoadingScans } from "./factoryOfflineQueueSafety";
 import { isCustomerOrderBaleScanPatch, mergeCustomerOrderBaleScanPatch } from "./customerOrderBaleScanPatch";
+import { confirmAction } from "@/components/ConfirmHost";
 import {
   forgetHistoricalReplayPreparation,
   freezeHistoricalReplayApplyRequest,
@@ -180,7 +181,8 @@ async function attachPostOffloadImpactPreview(
   }
 
   const confirmed =
-    typeof window === "undefined" || window.confirm(buildPostOffloadImpactConfirmation(prepared.preview));
+    typeof window === "undefined" ||
+    (await confirmAction({ title: buildPostOffloadImpactConfirmation(prepared.preview) }));
   if (!confirmed) {
     const cancelled: Error & { _handledGlobally?: boolean } = new Error("Post-offload charge save cancelled.");
     cancelled.name = "UserCancelled";
@@ -261,7 +263,10 @@ async function hydrateCompactBaleScanResponse(
 
   if (!current) {
     try {
-      const fullResponse = await delegate("GET", `/api/factory/customer-orders/${orderId}?continuationFromOrderId=${orderId}`);
+      const fullResponse = await delegate(
+        "GET",
+        `/api/factory/customer-orders/${orderId}?continuationFromOrderId=${orderId}`
+      );
       if (fullResponse.ok) current = await fullResponse.json();
     } catch {
       // The scan has already committed. Fall back to the compact order seed

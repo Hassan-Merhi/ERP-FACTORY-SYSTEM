@@ -17,6 +17,7 @@ import { RetailNav } from "./RetailNav";
 import { RetailCatalogList, type RetailCatalogFilters, type RetailVariantAction } from "./RetailCatalogList";
 import { RetailLabelHistory, RetailMovementHistory } from "./RetailMovementHistory";
 import { RetailLabelPrintDialog, type RetailLabelRequestItem } from "./retailLabels";
+import { confirmAction } from "@/components/ConfirmHost";
 import {
   getJson,
   type Brand,
@@ -146,7 +147,8 @@ export default function RetailInventory() {
       queryClient.invalidateQueries({ queryKey: ["retail-pos-items"] }),
     ]);
   const setProductActive = async (product: RetailProduct, active: boolean) => {
-    if (!active && !window.confirm(`Archive ${product.name}? Its sales and stock history are kept.`)) return;
+    if (!active && !(await confirmAction({ title: `Archive ${product.name}? Its sales and stock history are kept.` })))
+      return;
     try {
       await apiRequest("PATCH", `/api/retail/products/${product.id}/active`, { active });
       await refreshCatalog();

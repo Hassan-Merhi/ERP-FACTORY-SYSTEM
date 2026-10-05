@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface SupplierImpact {
   supplierId: number;
@@ -314,9 +315,14 @@ export function HistoricalReplaySafetyPanel() {
                             size="sm"
                             variant="outline"
                             disabled={classifyMutation.isPending}
-                            onClick={() => {
+                            onClick={async () => {
                               const readable = basis.replaceAll("_", " ").toLowerCase();
-                              if (!window.confirm(`Classify adjustment #${row.adjustmentId} as ${readable}?`)) return;
+                              if (
+                                !(await confirmAction({
+                                  title: `Classify adjustment #${row.adjustmentId} as ${readable}?`,
+                                }))
+                              )
+                                return;
                               classifyMutation.mutate({ adjustmentId: row.adjustmentId, valuationBasis: basis });
                             }}
                           >

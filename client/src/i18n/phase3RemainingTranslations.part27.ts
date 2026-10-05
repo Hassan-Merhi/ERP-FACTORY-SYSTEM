@@ -325,4 +325,39 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "اكتب بالضبط: CHANGE SP SETUP",
     fr: "Saisissez exactement : CHANGE SP SETUP",
   },
+  {
+    en: "You have a pending action that hasn't been confirmed yet. Clear chat and discard it?",
+    ar: "لديك إجراء معلّق لم يتم تأكيده بعد. هل تريد مسح المحادثة وتجاهله؟",
+    fr: "Vous avez une action en attente qui n'a pas encore été confirmée. Effacer la conversation et l'abandonner ?",
+  },
+  {
+    en: "Classify adjustment #${row.adjustmentId} as ${readable}?",
+    ar: "هل تريد تصنيف التسوية رقم {{0}} على أنها {{1}}؟",
+    fr: "Classer l'ajustement n° {{0}} comme {{1}} ?",
+  },
+  {
+    en: "Importing this smart preview will replace the current unsaved stock transfer order. Continue?",
+    ar: "سيؤدي استيراد هذه المعاينة الذكية إلى استبدال أمر تحويل المخزون الحالي غير المحفوظ. هل تريد المتابعة؟",
+    fr: "L'importation de cet aperçu intelligent remplacera l'ordre de transfert de stock actuel non enregistré. Continuer ?",
+  },
+  {
+    en: "This will split historical salary/bonus expense entries by city (Lubumbashi / Kolwezi). Run once only. Continue?",
+    ar: "سيؤدي هذا إلى تقسيم قيود مصروفات الرواتب والمكافآت التاريخية حسب المدينة (لوبومباشي / كولويزي). شغّله مرة واحدة فقط. هل تريد المتابعة؟",
+    fr: "Cela répartira les écritures historiques de dépenses de salaires et de primes par ville (Lubumbashi / Kolwezi). À exécuter une seule fois. Continuer ?",
+  },
+  {
+    en: "Delete Rev ${revision.revisionNumber}? This cannot be undone.",
+    ar: "هل تريد حذف المراجعة {{0}}؟ لا يمكن التراجع عن هذا الإجراء.",
+    fr: "Supprimer la révision {{0}} ? Cette action est irréversible.",
+  },
+  {
+    en: "Archive ${product.name}? Its sales and stock history are kept.",
+    ar: "هل تريد أرشفة {{0}}؟ سيتم الاحتفاظ بسجل مبيعاته ومخزونه.",
+    fr: "Archiver {{0}} ? Son historique de ventes et de stock est conservé.",
+  },
+  {
+    en: "Printed labels with the old barcode will stop scanning. Change this barcode?",
+    ar: "ستتوقف الملصقات المطبوعة بالرمز الشريطي القديم عن المسح. هل تريد تغيير هذا الرمز الشريطي؟",
+    fr: "Les étiquettes imprimées avec l'ancien code-barres ne pourront plus être scannées. Changer ce code-barres ?",
+  },
 ];
