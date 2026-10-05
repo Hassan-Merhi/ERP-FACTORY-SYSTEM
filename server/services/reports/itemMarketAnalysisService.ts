@@ -222,3 +222,90 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
     },
   };
 }
+
+
+export interface ItemMarketSalePriceBreakdownFilters {
+  companyId: number;
+  stockItemId: number;
+  locationIds: number[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getItemMarketSalePriceBreakdown(filters: ItemMarketSalePriceBreakdownFilters) {
+  const result = await pool.query(
+    `
+    WITH activity AS (
+      SELECT
+        'sale'::text AS activity_type,
+        s.selling_price::numeric AS unit_price,
+        s.quantity::numeric AS quantity,
+        s.total_sales::numeric AS total_sales,
+        v.voucher_date
+      FROM sales_items s
+      JOIN vouchers v ON v.id = s.voucher_id
+      JOIN stock_items si ON si.id = s.stock_item_id
+      WHERE v.company_id = $1
+        AND si.company_id = $1
+        AND s.stock_item_id = $2
+        AND v.voucher_type = 'Sales'
+        AND v.deleted_at IS NULL
+        AND COALESCE(v.optional, false) = false
+        AND v.location_id = ANY($3::int[])
+        AND ($4::date IS NULL OR v.voucher_date >= $4::date)
+        AND ($5::date IS NULL OR v.voucher_date <= $5::date)
+
+      UNION ALL
+
+      SELECT
+        'return'::text AS activity_type,
+        cni.rate::numeric AS unit_price,
+        -cni.quantity::numeric AS quantity,
+        -cni.total_value::numeric AS total_sales,
+        v.voucher_date
+      FROM credit_note_items cni
+      JOIN vouchers v ON v.id = cni.voucher_id
+      JOIN stock_items si ON si.id = cni.stock_item_id
+      WHERE v.company_id = $1
+        AND si.company_id = $1
+        AND cni.stock_item_id = $2
+        AND v.voucher_type = 'Credit Note'
+        AND v.deleted_at IS NULL
+        AND COALESCE(v.optional, false) = false
+        AND cni.location_id = ANY($3::int[])
+        AND ($4::date IS NULL OR v.voucher_date >= $4::date)
+        AND ($5::date IS NULL OR v.voucher_date <= $5::date)
+    )
+    SELECT
+      activity_type,
+      unit_price,
+      COALESCE(SUM(quantity), 0) AS quantity,
+      COALESCE(SUM(total_sales), 0) AS total_sales,
+      COUNT(*)::int AS transaction_count,
+      MIN(voucher_date) AS first_date,
+      MAX(voucher_date) AS last_date
+    FROM activity
+    GROUP BY activity_type, unit_price
+    ORDER BY CASE WHEN activity_type = 'sale' THEN 0 ELSE 1 END, unit_price DESC
+    `,
+    [
+      filters.companyId,
+      filters.stockItemId,
+      filters.locationIds,
+      filters.startDate ?? null,
+      filters.endDate ?? null,
+    ]
+  );
+
+  return {
+    rows: result.rows.map((raw) => ({
+      activityType: String(raw.activity_type) as "sale" | "return",
+      unitPrice: numberValue(raw.unit_price),
+      quantity: numberValue(raw.quantity),
+      totalSales: numberValue(raw.total_sales),
+      transactionCount: Number(raw.transaction_count || 0),
+      firstDate: raw.first_date ? String(raw.first_date) : null,
+      lastDate: raw.last_date ? String(raw.last_date) : null,
+    })),
+  };
+}
