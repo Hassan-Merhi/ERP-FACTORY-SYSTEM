@@ -37,10 +37,9 @@ export interface SalePriceBreakdownRow {
   activityType: "sale" | "return";
   unitPrice: number;
   quantity: number;
-  totalSales: number;
+  revenue: number;
+  profit: number;
   transactionCount: number;
-  firstDate: string | null;
-  lastDate: string | null;
 }
 
 export interface SalePriceBreakdownResponse {
@@ -170,19 +169,13 @@ export function SalePriceBreakdown({
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Sold Price</TableHead>
               <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Total Sales</TableHead>
+              <TableHead className="text-right">Revenue</TableHead>
+              <TableHead className="text-right">Profit</TableHead>
               <TableHead className="text-right">Transactions</TableHead>
-              <TableHead>Period</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {data.rows.map((priceRow) => {
-              const periodLabel =
-                priceRow.firstDate && priceRow.lastDate
-                  ? priceRow.firstDate === priceRow.lastDate
-                    ? priceRow.firstDate
-                    : `${priceRow.firstDate} – ${priceRow.lastDate}`
-                  : "—";
               return (
                 <TableRow key={`${priceRow.activityType}:${priceRow.unitPrice}`}>
                   <TableCell>
@@ -194,9 +187,15 @@ export function SalePriceBreakdown({
                     {formatAmount(priceRow.unitPrice)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatNumber(priceRow.quantity)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatAmount(priceRow.totalSales)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatAmount(priceRow.revenue)}</TableCell>
+                  <TableCell
+                    className={`text-right font-medium tabular-nums ${
+                      priceRow.profit < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+                    }`}
+                  >
+                    {formatAmount(priceRow.profit)}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{formatNumber(priceRow.transactionCount)}</TableCell>
-                  <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{periodLabel}</TableCell>
                 </TableRow>
               );
             })}
