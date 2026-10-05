@@ -6,7 +6,7 @@ import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema
 import { eq, and, or, sql, like } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
-import { toMoney } from "../../lib/money";
+import { toMoney, type MoneyInput } from "../../lib/money";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Centralised PO amount calculator — single source of truth for gross/interco
@@ -21,15 +21,23 @@ interface PoAmounts {
 }
 
 type PoAmountFields = {
-  itemsTotal?: string | number | null;
-  freight?: string | number | null;
-  surcharge?: string | number | null;
-  fumigation?: string | number | null;
-  documentCharges?: string | number | null;
-  discount?: string | number | null;
-  otherCharges?: string | number | null;
+  itemsTotal?: MoneyInput;
+  freight?: MoneyInput;
+  surcharge?: MoneyInput;
+  fumigation?: MoneyInput;
+  documentCharges?: MoneyInput;
+  discount?: MoneyInput;
+  otherCharges?: MoneyInput;
   freightPaidBy?: string | null;
 };
+
+type EntryAmounts = { debitAmount: string | null; creditAmount: string | null };
+/** A voucher entry that only debits. */
+export const isDebitOnlyEntry = (e: EntryAmounts) => toMoney(e.debitAmount).gt(0) && toMoney(e.creditAmount).isZero();
+/** A voucher entry that only credits. */
+export const isCreditOnlyEntry = (e: EntryAmounts) => toMoney(e.creditAmount).gt(0) && toMoney(e.debitAmount).isZero();
+/** Differs by more than a tenth of a cent, the tolerance the PO voucher repairs use. */
+export const differsByMoreThanTolerance = (a: Decimal, b: Decimal) => a.minus(b).abs().gt("0.001");
 
 /** calcPoAmounts as exact decimals, for callers that store or compare the totals. */
 export function calcPoAmountsExact(po: PoAmountFields): {

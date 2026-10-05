@@ -19,15 +19,15 @@ import {
   intercompanyPosConfigs,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { calcPoAmountsExact, syncIntercoParentVoucher } from "../containerHelpers";
+import {
+  calcPoAmountsExact,
+  differsByMoreThanTolerance as differs,
+  isCreditOnlyEntry as isCreditOnly,
+  isDebitOnlyEntry as isDebitOnly,
+  syncIntercoParentVoucher,
+} from "../containerHelpers";
 import { moneyString, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
-
-type EntryAmounts = { debitAmount: string | null; creditAmount: string | null };
-const isDebitOnly = (e: EntryAmounts) => toMoney(e.debitAmount).gt(0) && toMoney(e.creditAmount).isZero();
-const isCreditOnly = (e: EntryAmounts) => toMoney(e.creditAmount).gt(0) && toMoney(e.debitAmount).isZero();
-/** Differs by more than a tenth of a cent, the tolerance this repair has always used. */
-const differs = (a: Decimal, b: Decimal) => a.minus(b).abs().gt("0.001");
 
 const CHARGE_FIELDS = ["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const;
 type ChargeField = (typeof CHARGE_FIELDS)[number];
