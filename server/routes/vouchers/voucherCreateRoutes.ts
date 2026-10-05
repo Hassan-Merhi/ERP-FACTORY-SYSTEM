@@ -76,7 +76,14 @@ export function registerVoucherCreateRoutes(app: Express) {
       let totalAmount: string;
       try {
         const parsedTotal = new Decimal(String(req.body.totalAmount).trim());
-        if (!parsedTotal.isFinite() || parsedTotal.isNegative()) throw new Error("invalid");
+        // Mixed production/consumption vouchers are net-valued: production
+        // minus consumption. Their legitimate header total can therefore be
+        // negative (for example, consuming $393.43 and producing $99.53 gives
+        // -$293.90). Other voucher types keep the non-negative boundary.
+        const allowsSignedTotal = String(voucherType).trim().toLowerCase() === "mixed";
+        if (!parsedTotal.isFinite() || (!allowsSignedTotal && parsedTotal.isNegative())) {
+          throw new Error("invalid");
+        }
         totalAmount = parsedTotal.toFixed(2);
       } catch {
         return res.status(400).json({ message: "Invalid request data", field: "totalAmount" });
