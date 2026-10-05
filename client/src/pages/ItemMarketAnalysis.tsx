@@ -548,7 +548,6 @@ export default function ItemMarketAnalysis() {
           variant={includeOffloadingCost ? "default" : "outline"}
           onClick={() => setIncludeOffloadingCost((current) => !current)}
           data-testid="button-item-market-offloading-cost"
-          title="Switch purchase cost between base cost and base cost plus offloading"
         >
           {includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
         </Button>
