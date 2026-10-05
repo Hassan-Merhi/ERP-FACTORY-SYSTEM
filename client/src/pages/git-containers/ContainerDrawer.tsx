@@ -1,20 +1,14 @@
 import type { ClientErrorLike } from "@/lib/clientError";
-import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { companyDataKey, frontendQueryPolicies, invalidateApiFamily } from "@/lib/frontendDataArchitecture";
+import { invalidateApiFamily } from "@/lib/frontendDataArchitecture";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EnrichedContainerRow, DrawerForm, seedForm } from "./gitContainerTypes";
 import { ContainerDrawerForm } from "./ContainerDrawerForm";
-import {
-  ContainerDrawerTracking,
-  type TrackProgressStep,
-  type TrackingEvent,
-  type TrackingStatus,
-} from "./ContainerDrawerTracking";
 
 export function ContainerDrawer({
   container,
@@ -30,17 +24,10 @@ export function ContainerDrawer({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DrawerForm | null>(null);
-  const [trackEnabled, setTrackEnabled] = useState(true);
-  const [trackAutoUpdate, setTrackAutoUpdate] = useState(true);
-  const [trackCarrierHint, setTrackCarrierHint] = useState("");
-  const [showEvents, setShowEvents] = useState(false);
 
   useEffect(() => {
     if (open && container) {
       setForm(seedForm(container));
-      setTrackEnabled(container.trackingEnabled ?? false);
-      setTrackAutoUpdate(container.trackingAutoUpdate ?? true);
-      setTrackCarrierHint(container.trackingCarrierHint ?? "");
     }
   }, [open, container]);
 
@@ -74,7 +61,7 @@ export function ContainerDrawer({
       apiRequest("PATCH", `/api/containers/${container!.id}/tracking`, data),
     onSuccess: () => {
       void invalidateApiFamily(queryClient, "/api/git/containers");
-      toast({ title: "Saved", description: `\${container?.containerNumber} updated.` });
+      toast({ title: "Saved", description: `${container?.containerNumber} updated.` });
       onClose();
     },
     onError: (err: ClientErrorLike) => {
@@ -84,126 +71,6 @@ export function ContainerDrawer({
         variant: "destructive",
       });
     },
-  });
-
-  const trackingSettingsMutation = useMutation({
-    mutationFn: (data: Record<string, unknown>) =>
-      apiRequest("PATCH", `/api/container-tracking/${container!.id}/settings`, data),
-    onSuccess: () => {
-      void invalidateApiFamily(queryClient, "/api/git/containers");
-      toast({ title: "Tracking settings saved" });
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Save failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  type TrackNowResult = {
-    success: boolean;
-    containerNumber: string;
-    provider: string | null;
-    lastStatus: string | null;
-    oldEta: string | null;
-    newEta: string | null;
-    etaChanged: boolean;
-    attempts: Array<{ provider: string; status: string; error: string | null }>;
-    error: string | null;
-    quotaWarning?: string;
-  };
-
-  const trackNowMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/container-tracking/${container!.id}/track-now`, {}, false, 15000);
-      return res.json() as Promise<{ started: true; containerNumber: string } | TrackNowResult>;
-    },
-    onSuccess: (data) => {
-      const ALL_KEYS = ["/api/git/containers", "/api/containers", "/api/containers/active"];
-
-      if ("started" in data && data.started) {
-        toast({
-          title: "Tracking started",
-          description: "Results will refresh shortly.",
-        });
-        let polls = 0;
-        const interval = setInterval(() => {
-          polls++;
-          ALL_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
-          if (polls >= 10) clearInterval(interval);
-        }, 8000);
-        return;
-      }
-
-      ALL_KEYS.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
-      const result = data as TrackNowResult;
-      if (result.success) {
-        const etaLine = result.etaChanged
-          ? `ETA: ${result.newEta ?? "—"} (was ${result.oldEta ?? "none"})`
-          : result.newEta
-            ? `ETA unchanged: ${result.newEta}`
-            : "No ETA returned — previous ETA kept";
-        toast({
-          title: `Tracked: ${result.containerNumber}`,
-          description: `${result.provider ?? "unknown"} — ${etaLine}`,
-        });
-      } else {
-        const tried =
-          result.attempts?.length > 0
-            ? result.attempts.map((a) => `${a.provider}: ${a.status}`).join(" → ")
-            : "No providers available";
-        toast({
-          title: "All providers failed",
-          description: tried,
-          variant: "destructive",
-        });
-      }
-      if (result.quotaWarning) {
-        setTimeout(() => toast({ title: "Quota low", description: result.quotaWarning, variant: "destructive" }), 400);
-      }
-    },
-    onError: (err: ClientErrorLike) => {
-      toast({ title: "Track Now failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-
-  const [trackProgress, setTrackProgress] = useState<TrackProgressStep[]>([]);
-  const trackProgressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    if (trackNowMutation.isPending && container?.id) {
-      setTrackProgress([]);
-      trackProgressIntervalRef.current = setInterval(async () => {
-        try {
-          const res = await fetch(`/api/container-tracking/${container.id}/progress`, { credentials: "include" });
-          if (res.ok) setTrackProgress(await res.json());
-        } catch {
-          /* ignore */
-        }
-      }, 600);
-    } else {
-      if (trackProgressIntervalRef.current) {
-        clearInterval(trackProgressIntervalRef.current);
-        trackProgressIntervalRef.current = null;
-        setTimeout(() => setTrackProgress([]), 20_000);
-      }
-    }
-    return () => {
-      if (trackProgressIntervalRef.current) clearInterval(trackProgressIntervalRef.current);
-    };
-  }, [trackNowMutation.isPending, container?.id]);
-
-  const eventsQueryKey = container?.id ? `/api/container-tracking/${container.id}/events` : null;
-  const trackingCompanyIdentity = sessionCompanyId ?? container?.companyId ?? "no-company";
-  const { data: events, isLoading: eventsLoading } = useQuery<TrackingEvent[]>({
-    queryKey: eventsQueryKey
-      ? companyDataKey(eventsQueryKey, trackingCompanyIdentity, "container-tracking-events")
-      : [],
-    enabled: showEvents && !!eventsQueryKey,
-    ...frontendQueryPolicies.operational,
-  });
-
-  const { data: trackingStatus } = useQuery<TrackingStatus>({
-    queryKey: ["/api/container-tracking/status"],
-    staleTime: 5 * 60_000,
   });
 
   function handleSave() {
@@ -250,8 +117,6 @@ export function ContainerDrawer({
           maxOffload={maxOffload}
           daysDelayed={daysDelayed}
         />
-
-        {/* Automated carrier tracking is disabled; manual workbook fields remain above. */}
 
         <div className="pt-4 sticky bottom-0 bg-background pb-2">
           <Button
