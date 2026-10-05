@@ -663,6 +663,16 @@ export async function postRetailRefundAccountingTx(
     username?: string | null;
   }
 ): Promise<number | null> {
+  const [originalSale] = await tx
+    .select({ accountingVoucherId: retailPosSales.accountingVoucherId })
+    .from(retailPosSales)
+    .where(and(eq(retailPosSales.companyId, input.companyId), eq(retailPosSales.id, input.saleId)))
+    .limit(1);
+  // Do not invent a reversal for pre-Wave-1 sales that never had an accounting
+  // posting. Their synthetic legacy payment exists only to make the operational
+  // refund safe; reconciliation continues to flag the missing historical journal.
+  if (!originalSale?.accountingVoucherId) return null;
+
   const refundTotal = new Decimal(input.refundAmount);
   const restoredCost = new Decimal(input.restoredCost);
   if (refundTotal.isZero() && restoredCost.isZero()) return null;
