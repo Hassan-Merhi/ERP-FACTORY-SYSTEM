@@ -176,7 +176,7 @@ export default function FactoryPriorityScan() {
       }));
   }, [configs, loads]);
 
-  const current = activeQueue[0];
+  const latestScannedBale = sessionScans[0] ?? null;
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 100);
@@ -427,34 +427,18 @@ export default function FactoryPriorityScan() {
 
         <section
           className={[
-            "rounded-xl border min-h-[230px] overflow-hidden",
-            !isLoading && current ? "" : "bg-card p-5",
+            "rounded-xl border min-h-[230px] overflow-hidden transition-colors duration-150",
+            latestScannedBale ? "" : "bg-card",
           ].join(" ")}
-          style={!isLoading && current ? { backgroundColor: current.color } : undefined}
-          aria-label={!isLoading && current ? tr("priorityColor", { color: current.color }) : undefined}
+          style={latestScannedBale ? { backgroundColor: latestScannedBale.color } : undefined}
+          aria-label={latestScannedBale ? tr("priorityColor", { color: latestScannedBale.color }) : undefined}
           data-testid="current-priority-color"
         >
-          {isLoading ? (
-            <>
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {tr("currentPriority")}
-              </div>
-              <div className="mt-3 space-y-2">
-                <Skeleton className="h-7 w-32" />
-                <Skeleton className="h-5 w-48" />
-              </div>
-            </>
-          ) : current ? (
+          {latestScannedBale && (
             <span className="sr-only">
-              {tr("priorityNumber", { priority: current.priority })} · {tr("loadingNumber", { orderId: current.orderId })}
+              {latestScannedBale.referenceNumber} · {tr("priorityNumber", { priority: latestScannedBale.priority })} ·{" "}
+              {tr("loadingNumber", { orderId: latestScannedBale.orderId })}
             </span>
-          ) : (
-            <>
-              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {tr("currentPriority")}
-              </div>
-              <div className="mt-3 text-sm text-muted-foreground">{tr("noPriorityQueue")}</div>
-            </>
           )}
         </section>
       </div>
