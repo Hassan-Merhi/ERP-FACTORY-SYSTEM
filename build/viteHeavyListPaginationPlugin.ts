@@ -47,7 +47,21 @@ function transformStockEntryShell(source: string): string {
   if (first < 0) {
     const directPagedSearch =
       'if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());';
-    if (source.includes(directPagedSearch)) return source;
+    const currentPagedSearch =
+      'const activeSearch = debouncedSearch.trim();';
+    const currentLazyGroupFilters =
+      source.includes('const expandedGroupBaleKeys = useMemo(') &&
+      source.includes('groupParams.set("search", debouncedSearch.trim());');
+
+    // Newer StockEntryHistory owns both the top-level paged search and the
+    // expanded-group lazy filter directly. Treat either fully-applied shape as
+    // already transformed so the production build stays idempotent.
+    if (
+      source.includes(directPagedSearch) ||
+      (source.includes(currentPagedSearch) && currentLazyGroupFilters)
+    ) {
+      return source;
+    }
 
     throw new Error(
       "[heavy-list-pagination] Missing transform target: stock-entry lazy expanded group filters"
