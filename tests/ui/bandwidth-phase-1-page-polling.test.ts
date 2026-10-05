@@ -55,12 +55,12 @@ describe("Bandwidth Phase 1 page request policy", () => {
     expect(source).toMatch(/"bale-removals"[\s\S]*?enabled: !!orderId,[\s\S]*?staleTime: 30_000/);
   });
 
-  it("throttles shipping syncs across tabs and cancels delayed tracking refreshes on unmount", () => {
+  it("throttles shipping syncs across tabs and has no carrier-tracking refresh loop", () => {
     const source = readPageSources("client/src/pages/factory/FactoryShippingContainers.tsx");
     expect(source).toContain("factory-shipping-containers:last-sync");
     expect(source).toContain("5 * 60_000");
-    expect(source).toContain("trackingRefreshTimerRef");
-    expect(source).toContain('document.visibilityState !== "visible"');
-    expect(source).toContain("clearTimeout(trackingRefreshTimerRef.current)");
+    expect(source).not.toContain("trackingRefreshTimerRef");
+    expect(source).not.toContain("/api/factory/shipping-containers/track-now");
+    expect(source).not.toContain("button-track-all-eta");
   });
 });
