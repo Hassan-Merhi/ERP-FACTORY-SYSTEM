@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   decimal,
   index,
@@ -257,7 +258,12 @@ export const retailAccountingSettings = pgTable(
   },
   (t) => ({
     companyIdx: index("retail_accounting_settings_company_idx").on(t.companyId),
-    companyLocationUnique: uniqueIndex("retail_accounting_settings_company_location_unique").on(t.companyId, t.locationId),
+    companyLocationUnique: uniqueIndex("retail_accounting_settings_company_location_unique")
+      .on(t.companyId, t.locationId)
+      .where(sql`${t.locationId} IS NOT NULL`),
+    companyDefaultUnique: uniqueIndex("retail_accounting_settings_company_default_unique")
+      .on(t.companyId)
+      .where(sql`${t.locationId} IS NULL`),
   })
 );
 
