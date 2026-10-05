@@ -609,9 +609,29 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     fr: "Valeur d’achat",
   },
   {
+    en: "Purchase + Offloading",
+    ar: "الشراء + تكلفة التفريغ",
+    fr: "Achat + frais de déchargement",
+  },
+  {
+    en: "Cost Only",
+    ar: "التكلفة فقط",
+    fr: "Coût uniquement",
+  },
+  {
+    en: "Cost + Offloading",
+    ar: "التكلفة + تكلفة التفريغ",
+    fr: "Coût + frais de déchargement",
+  },
+  {
     en: "Avg Purchase",
     ar: "متوسط الشراء",
     fr: "Achat moyen",
+  },
+  {
+    en: "Avg Cost + Offloading",
+    ar: "متوسط التكلفة + تكلفة التفريغ",
+    fr: "Coût moyen + frais de déchargement",
   },
   {
     en: "Top Profit Country",
