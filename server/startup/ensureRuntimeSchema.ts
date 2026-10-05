@@ -83,6 +83,222 @@ export async function ensureRetailBarcodeLabelSchema(pool: Pool): Promise<void> 
   logger.info("[startup] ✓ Retail barcode and label schema ensured");
 }
 
+/**
+ * Retail Wave 2 selling schema (migrations/20261005_001_retail_selling_customers_pricing_tax.sql),
+ * applied by the always-on guard for the same reason as ensureRetailVariantSchema.
+ * Every statement is idempotent, only adds defaulted columns/tables/indexes, and the
+ * backfills skip rows that already carry a snapshot.
+ */
+export async function ensureRetailSellingSchema(pool: Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS retail_pos_settings (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+      discount_limit_percent NUMERIC(6,2) NOT NULL DEFAULT 10,
+      require_manager_approval BOOLEAN NOT NULL DEFAULT true,
+      price_override_requires_approval BOOLEAN NOT NULL DEFAULT true,
+      tax_enabled BOOLEAN NOT NULL DEFAULT false,
+      tax_label VARCHAR(40) NOT NULL DEFAULT 'Tax',
+      tax_rate NUMERIC(8,5) NOT NULL DEFAULT 0,
+      tax_inclusive BOOLEAN NOT NULL DEFAULT false,
+      updated_by VARCHAR(255),
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS retail_pos_settings_company_idx ON retail_pos_settings (company_id);
+
+    CREATE TABLE IF NOT EXISTS retail_promotions (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      name VARCHAR(160) NOT NULL,
+      description TEXT,
+      scope VARCHAR(20) NOT NULL DEFAULT 'all',
+      brand_id INTEGER REFERENCES retail_brands(id) ON DELETE CASCADE,
+      product_id INTEGER REFERENCES retail_products(id) ON DELETE CASCADE,
+      variant_id INTEGER REFERENCES retail_product_variants(id) ON DELETE CASCADE,
+      discount_type VARCHAR(20) NOT NULL,
+      value NUMERIC(20,6) NOT NULL,
+      starts_at TIMESTAMP,
+      ends_at TIMESTAMP,
+      active BOOLEAN NOT NULL DEFAULT true,
+      priority INTEGER NOT NULL DEFAULT 0,
+      created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS retail_promotions_company_idx ON retail_promotions (company_id);
+    CREATE INDEX IF NOT EXISTS retail_promotions_company_active_idx ON retail_promotions (company_id, active);
+    CREATE INDEX IF NOT EXISTS retail_promotions_company_window_idx ON retail_promotions (company_id, starts_at, ends_at);
+
+    CREATE TABLE IF NOT EXISTS retail_discount_approvals (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      token_id VARCHAR(64) NOT NULL,
+      manager_user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      manager_name TEXT NOT NULL,
+      cashier_user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      reason TEXT,
+      requested_discount_percent NUMERIC(6,2) NOT NULL DEFAULT 0,
+      allows_price_override BOOLEAN NOT NULL DEFAULT false,
+      expires_at TIMESTAMP NOT NULL,
+      consumed_sale_id INTEGER,
+      consumed_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS retail_discount_approvals_company_token_unique
+      ON retail_discount_approvals (company_id, token_id);
+    CREATE INDEX IF NOT EXISTS retail_discount_approvals_company_idx ON retail_discount_approvals (company_id);
+    CREATE INDEX IF NOT EXISTS retail_discount_approvals_manager_idx ON retail_discount_approvals (manager_user_id);
+
+    ALTER TABLE retail_pos_sales
+      ADD COLUMN IF NOT EXISTS customer_id INTEGER REFERENCES customers(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS customer_name VARCHAR(191) NOT NULL DEFAULT 'Walk-in',
+      ADD COLUMN IF NOT EXISTS list_subtotal NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS discount_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS subtotal NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS order_discount_type VARCHAR(20) NOT NULL DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS order_discount_value NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS order_discount_amount NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS order_discount_reason TEXT,
+      ADD COLUMN IF NOT EXISTS tax_enabled BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS tax_label VARCHAR(40) NOT NULL DEFAULT 'Tax',
+      ADD COLUMN IF NOT EXISTS tax_rate NUMERIC(8,5) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS tax_inclusive BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS approval_id INTEGER REFERENCES retail_discount_approvals(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS approved_by_user_id VARCHAR(255),
+      ADD COLUMN IF NOT EXISTS approved_by_name TEXT;
+
+    UPDATE retail_pos_sales
+       SET list_subtotal = total_amount, subtotal = total_amount
+     WHERE list_subtotal = 0 AND subtotal = 0 AND total_amount <> 0;
+
+    ALTER TABLE retail_pos_sale_items
+      ADD COLUMN IF NOT EXISTS original_unit_price NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS gross_unit_price NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS line_discount_amount NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS line_discount_type VARCHAR(20) NOT NULL DEFAULT 'none',
+      ADD COLUMN IF NOT EXISTS line_discount_value NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS discount_reason TEXT,
+      ADD COLUMN IF NOT EXISTS price_override BOOLEAN NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS promotion_id INTEGER REFERENCES retail_promotions(id) ON DELETE SET NULL,
+      ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS line_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS approved_by_user_id VARCHAR(255);
+
+    UPDATE retail_pos_sale_items
+       SET original_unit_price = unit_price,
+           gross_unit_price = unit_price,
+           line_total = unit_price * quantity
+     WHERE original_unit_price = 0 AND line_total = 0 AND unit_price <> 0;
+
+    ALTER TABLE retail_pos_returns
+      ADD COLUMN IF NOT EXISTS refund_amount NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS refund_tax_amount NUMERIC(20,6) NOT NULL DEFAULT 0;
+
+    ALTER TABLE retail_pos_return_items
+      ADD COLUMN IF NOT EXISTS gross_unit_price NUMERIC(20,6) NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS tax_amount NUMERIC(20,6) NOT NULL DEFAULT 0;
+
+    UPDATE retail_pos_return_items
+       SET gross_unit_price = unit_price
+     WHERE gross_unit_price = 0 AND unit_price <> 0;
+
+    CREATE INDEX IF NOT EXISTS retail_pos_sales_customer_idx ON retail_pos_sales (customer_id);
+    CREATE INDEX IF NOT EXISTS retail_pos_sales_company_created_idx ON retail_pos_sales (company_id, created_at);
+  `);
+  logger.info("[startup] ✓ Retail selling (customer, pricing, tax) schema ensured");
+}
+
+/**
+ * Retail Wave 2 stock-count schema (migrations/20261005_002_retail_stock_count.sql),
+ * applied by the always-on guard for the same reason as ensureRetailVariantSchema.
+ */
+export async function ensureRetailStockCountSchema(pool: Pool): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS retail_stock_count_sessions (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE RESTRICT,
+      code VARCHAR(60) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'draft',
+      notes TEXT,
+      snapshot_at TIMESTAMP,
+      counting_started_at TIMESTAMP,
+      review_started_at TIMESTAMP,
+      finalized_at TIMESTAMP,
+      canceled_at TIMESTAMP,
+      created_by VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      finalized_by VARCHAR(255) REFERENCES users(id) ON DELETE RESTRICT,
+      canceled_by VARCHAR(255) REFERENCES users(id) ON DELETE RESTRICT,
+      line_count INTEGER NOT NULL DEFAULT 0,
+      counted_line_count INTEGER NOT NULL DEFAULT 0,
+      uncounted_line_count INTEGER NOT NULL DEFAULT 0,
+      variance_line_count INTEGER NOT NULL DEFAULT 0,
+      unexpected_line_count INTEGER NOT NULL DEFAULT 0,
+      recount_line_count INTEGER NOT NULL DEFAULT 0,
+      expected_quantity_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      counted_quantity_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      variance_quantity_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      variance_value_total NUMERIC(20,6) NOT NULL DEFAULT 0,
+      finalized_result JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS retail_stock_count_sessions_company_code_unique
+      ON retail_stock_count_sessions (company_id, code);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_sessions_company_idx ON retail_stock_count_sessions (company_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_sessions_company_status_idx
+      ON retail_stock_count_sessions (company_id, status);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_sessions_location_idx ON retail_stock_count_sessions (location_id);
+
+    CREATE TABLE IF NOT EXISTS retail_stock_count_lines (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      session_id INTEGER NOT NULL REFERENCES retail_stock_count_sessions(id) ON DELETE CASCADE,
+      variant_id INTEGER NOT NULL REFERENCES retail_product_variants(id) ON DELETE RESTRICT,
+      expected_quantity NUMERIC(20,6) NOT NULL DEFAULT 0,
+      counted_quantity NUMERIC(20,6),
+      status VARCHAR(20) NOT NULL DEFAULT 'uncounted',
+      recount_required BOOLEAN NOT NULL DEFAULT false,
+      notes TEXT,
+      expected_live_quantity NUMERIC(20,6),
+      variance_quantity NUMERIC(20,6),
+      movement_delta NUMERIC(20,6),
+      counted_by VARCHAR(255) REFERENCES users(id) ON DELETE RESTRICT,
+      counted_at TIMESTAMP,
+      last_scanned_at TIMESTAMP,
+      created_at TIMESTAMP NOT NULL DEFAULT now(),
+      updated_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS retail_stock_count_lines_session_variant_unique
+      ON retail_stock_count_lines (session_id, variant_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_lines_company_idx ON retail_stock_count_lines (company_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_lines_session_idx ON retail_stock_count_lines (session_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_lines_status_idx ON retail_stock_count_lines (status);
+
+    CREATE TABLE IF NOT EXISTS retail_stock_count_events (
+      id SERIAL PRIMARY KEY NOT NULL,
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      session_id INTEGER NOT NULL REFERENCES retail_stock_count_sessions(id) ON DELETE CASCADE,
+      line_id INTEGER REFERENCES retail_stock_count_lines(id) ON DELETE SET NULL,
+      variant_id INTEGER REFERENCES retail_product_variants(id) ON DELETE SET NULL,
+      event_type VARCHAR(40) NOT NULL,
+      previous_quantity NUMERIC(20,6),
+      quantity NUMERIC(20,6),
+      delta NUMERIC(20,6),
+      note TEXT,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_by VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      created_at TIMESTAMP NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS retail_stock_count_events_company_idx ON retail_stock_count_events (company_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_events_session_idx ON retail_stock_count_events (session_id);
+    CREATE INDEX IF NOT EXISTS retail_stock_count_events_created_at_idx ON retail_stock_count_events (created_at);
+  `);
+  logger.info("[startup] ✓ Retail stock-count schema ensured");
+}
+
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   try {
     await pool.query(
@@ -245,6 +461,22 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await ensureRetailBarcodeLabelSchema(pool);
   } catch (retailErr: unknown) {
     logger.error("[startup] ✗ Could not ensure retail barcode and label schema:", {
+      error: getErrorMessage(retailErr),
+    });
+  }
+
+  try {
+    await ensureRetailSellingSchema(pool);
+  } catch (retailErr: unknown) {
+    logger.error("[startup] ✗ Could not ensure retail selling (customer, pricing, tax) schema:", {
+      error: getErrorMessage(retailErr),
+    });
+  }
+
+  try {
+    await ensureRetailStockCountSchema(pool);
+  } catch (retailErr: unknown) {
+    logger.error("[startup] ✗ Could not ensure retail stock-count schema:", {
       error: getErrorMessage(retailErr),
     });
   }

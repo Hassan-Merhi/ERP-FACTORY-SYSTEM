@@ -10,6 +10,7 @@ const RECEIPT_CSS = `
 #retail-receipt-print-root .rr-line { display: flex; justify-content: space-between; gap: 2mm; }
 #retail-receipt-print-root .rr-item { margin-bottom: 1.5mm; }
 #retail-receipt-print-root .rr-total { font-weight: 700; font-size: 11pt; }
+#retail-receipt-print-root .rr-muted { font-size: 8pt; }
 @media screen { #retail-receipt-print-root { display: none; } }
 @media print {
   @page { size: 80mm auto; margin: 0; }
@@ -28,6 +29,8 @@ export function RetailReceipt({
   companyName?: string;
   locationName?: string;
 }) {
+  const taxEnabled = Boolean(sale.taxEnabled);
+  const hasDiscount = Number(sale.discountTotal ?? 0) > 0;
   return (
     <div data-no-translate>
       <div className="rr-center rr-title">{companyName ?? "Receipt"}</div>
@@ -35,34 +38,82 @@ export function RetailReceipt({
       <div className="rr-center">
         #{sale.id} · {new Date(sale.createdAt).toLocaleString()}
       </div>
+      <div className="rr-center rr-muted">Customer: {sale.customerName || "Walk-in"}</div>
       <div className="rr-rule" />
-      {sale.items.map((item) => (
-        <div key={item.id} className="rr-item">
-          <div>
-            {item.brand} · {item.name}
-          </div>
-          <div>
-            {item.color} / {item.size} · {item.barcode}
-          </div>
-          <div className="rr-line">
-            <span>
-              {item.quantity} × {money(item.unitPrice)}
-            </span>
-            <span>{money(item.quantity * item.unitPrice)}</span>
-          </div>
-          {item.returnedQuantity > 0 && (
-            <div className="rr-line">
-              <span>Returned {item.returnedQuantity}</span>
-              <span>-{money(item.returnedQuantity * item.unitPrice)}</span>
+      {sale.items.map((item) => {
+        const paidUnit = item.grossUnitPrice ?? item.unitPrice;
+        const listUnit = item.originalUnitPrice ?? item.unitPrice;
+        const discounted = paidUnit < listUnit - 0.000001 || Number(item.lineDiscountAmount ?? 0) > 0;
+        return (
+          <div key={item.id} className="rr-item">
+            <div>
+              {item.brand} · {item.name}
             </div>
-          )}
-        </div>
-      ))}
+            <div>
+              {item.color} / {item.size} · {item.barcode}
+            </div>
+            <div className="rr-line">
+              <span>
+                {item.quantity} × {money(paidUnit)}
+                {discounted && <span className="rr-muted"> (was {money(listUnit)})</span>}
+              </span>
+              <span>{money(item.lineTotal ?? item.quantity * paidUnit)}</span>
+            </div>
+            {discounted && (
+              <div className="rr-line rr-muted">
+                <span>
+                  Discount
+                  {item.lineDiscountType === "percent"
+                    ? ` ${item.lineDiscountValue ?? 0}%`
+                    : item.lineDiscountType === "promotion"
+                      ? " (promotion)"
+                      : item.lineDiscountType === "override"
+                        ? " (override)"
+                        : ""}
+                </span>
+                <span>-{money(item.lineDiscountAmount ?? 0)}</span>
+              </div>
+            )}
+            {taxEnabled && Number(item.taxAmount ?? 0) !== 0 && (
+              <div className="rr-line rr-muted">
+                <span>{sale.taxLabel || "Tax"}</span>
+                <span>{money(item.taxAmount ?? 0)}</span>
+              </div>
+            )}
+            {item.returnedQuantity > 0 && (
+              <div className="rr-line">
+                <span>Returned {item.returnedQuantity}</span>
+                <span>-{money(item.returnedQuantity * paidUnit)}</span>
+              </div>
+            )}
+          </div>
+        );
+      })}
       <div className="rr-rule" />
+      <div className="rr-line">
+        <span>Subtotal</span>
+        <span>{money(sale.listSubtotal ?? sale.totalAmount)}</span>
+      </div>
+      {hasDiscount && (
+        <div className="rr-line">
+          <span>Discount</span>
+          <span>-{money(sale.discountTotal ?? 0)}</span>
+        </div>
+      )}
+      {taxEnabled && (
+        <div className="rr-line">
+          <span>
+            {sale.taxLabel || "Tax"}
+            {sale.taxRate ? ` (${Number((sale.taxRate * 100).toFixed(2))}%)` : ""}
+          </span>
+          <span>{money(sale.taxAmount ?? 0)}</span>
+        </div>
+      )}
       <div className="rr-line rr-total">
         <span>TOTAL</span>
         <span>{money(sale.totalAmount)}</span>
       </div>
+      {sale.approvedByName && <div className="rr-center rr-muted">Discount approved by {sale.approvedByName}</div>}
       {sale.status !== "completed" && <div className="rr-center">*** {sale.status.toUpperCase()} ***</div>}
       <div className="rr-rule" />
       <div className="rr-center">Thank you</div>

@@ -16,6 +16,7 @@ export interface RetailPosItem {
   code: string;
   name: string;
   brand: string;
+  brandId?: number | null;
   imageUrls: string[];
   color: string;
   size: string;
@@ -25,10 +26,27 @@ export interface RetailPosItem {
   quantity: number;
   active?: boolean;
   otherLocations?: Array<{ locationId: number; locationName: string; quantity: number }>;
+  /** Best active promotion for this variant, when one applies (Wave 2). */
+  promotion?: {
+    id: number;
+    name: string;
+    discountType: "percent" | "fixed";
+    value: number;
+    promotionPrice: number;
+  } | null;
 }
+
+export type RetailLineDiscountType = "none" | "percent" | "fixed";
 
 export interface CartLine extends RetailPosItem {
   cartQuantity: number;
+  /** Manual price override keyed by the cashier; replaces the list price. */
+  priceOverride?: number | null;
+  /** Manual line discount entered by the cashier (mutually exclusive with the override). */
+  discountType?: RetailLineDiscountType;
+  discountValue?: number;
+  /** Mandatory for every manual discount / override — stored on the sale line. */
+  discountReason?: string | null;
 }
 
 export interface SaleItem {
@@ -36,7 +54,20 @@ export interface SaleItem {
   variantId: number;
   quantity: number;
   returnedQuantity: number;
+  /** List price at sale time — never destroyed by a discount. */
+  originalUnitPrice?: number;
+  /** Final pre-tax unit price actually charged. */
   unitPrice: number;
+  /** Paid per unit including tax — the amount returns refund. */
+  grossUnitPrice?: number;
+  lineDiscountAmount?: number;
+  lineDiscountType?: string | null;
+  lineDiscountValue?: number;
+  discountReason?: string | null;
+  priceOverride?: boolean;
+  promotionId?: number | null;
+  taxAmount?: number;
+  lineTotal?: number;
   name: string;
   code: string;
   color: string;
@@ -54,6 +85,21 @@ export interface RetailSale {
   totalAmount: number;
   createdAt: string;
   notes?: string | null;
+  customerId?: number | null;
+  customerName?: string | null;
+  listSubtotal?: number;
+  discountTotal?: number;
+  subtotal?: number;
+  orderDiscountType?: "none" | "percent" | "fixed" | null;
+  orderDiscountValue?: number;
+  orderDiscountAmount?: number;
+  orderDiscountReason?: string | null;
+  taxEnabled?: boolean;
+  taxLabel?: string | null;
+  taxRate?: number;
+  taxInclusive?: boolean;
+  taxAmount?: number;
+  approvedByName?: string | null;
   items: SaleItem[];
 }
 

@@ -1,48 +1,92 @@
 import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express } from "express";
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
+  customers,
   locations,
   retailBrands,
   retailPosSaleItems,
   retailPosSales,
   retailProductVariants,
   retailProducts,
+  retailDiscountApprovals,
   retailStockMovements,
   retailStockOperations,
   retailVariantInventory,
 } from "@shared/schema";
-import { requireAuth } from "../../auth";
+import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import { addMovement, lockInventoryRow, setInventoryQuantity } from "../../services/retail/retailStockLedger";
 import {
+  approvalCoversRequest,
+  evaluateRetailDiscountPolicy,
+  ExpiredRetailApprovalTokenError,
+  InvalidRetailApprovalTokenError,
+  retailApprovalFingerprint,
+  RetailApprovalReuseError,
+  verifyRetailApprovalToken,
+} from "../../services/retail/retailDiscountApproval";
+import {
+  effectiveManualDiscountPercent,
+  hasManualAdjustment,
+  roundRetailMoney,
+} from "../../services/retail/retailPricing";
+import { bestPromotionForLine, listActiveRetailPromotions } from "../../services/retail/retailPromotions";
+import { loadRetailSettings } from "../../services/retail/retailSettings";
+import {
   createRetailReturnInTx,
   createRetailSaleInTx,
   ensureRetailVariant,
   loadSaleResponse,
+  prepareRetailSalePricing,
   resolveRetailItemImages,
+  type RetailSaleInput,
+  type RetailSaleLineRequest,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems, nextRetailTransferQuantities } from "../../services/retail/retailStockMath";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
 
+const saleItemSchema = z.object({
+  variantId: z.coerce.number().int().positive(),
+  quantity: positiveQuantitySchema,
+  priceOverride: z.coerce.number().finite().nonnegative().nullable().optional(),
+  discountType: z.enum(["none", "percent", "fixed"]).optional(),
+  discountValue: z.coerce.number().finite().nonnegative().optional(),
+  discountReason: z.string().trim().max(500).nullable().optional(),
+});
+
 const saleSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
-  items: z
-    .array(
-      z.object({
-        variantId: z.coerce.number().int().positive(),
-        quantity: positiveQuantitySchema,
-      })
-    )
-    .min(1)
-    .max(250),
+  customerId: z.coerce.number().int().positive().nullable().optional(),
+  customerName: z.string().trim().max(191).nullable().optional(),
+  orderDiscount: z
+    .object({
+      type: z.enum(["none", "percent", "fixed"]),
+      value: z.coerce.number().finite().nonnegative().optional(),
+      reason: z.string().trim().max(500).nullable().optional(),
+    })
+    .optional(),
+  approvalToken: z.string().trim().max(4000).optional(),
+  items: z.array(saleItemSchema).min(1).max(250),
+});
+
+const cartPreviewSchema = z.object({
+  locationId: z.coerce.number().int().positive().optional(),
+  items: z.array(saleItemSchema).min(1).max(250),
+  orderDiscount: z
+    .object({
+      type: z.enum(["none", "percent", "fixed"]),
+      value: z.coerce.number().finite().nonnegative().optional(),
+      reason: z.string().trim().max(500).nullable().optional(),
+    })
+    .optional(),
 });
 
 const returnSchema = z.object({
@@ -111,6 +155,7 @@ export function registerRetailPosRoutes(app: Express): void {
           code: retailProducts.code,
           name: retailProducts.name,
           brand: retailBrands.name,
+          brandId: retailProducts.brandId,
           color: retailProductVariants.color,
           variantImageUrls: retailProductVariants.imageUrls,
           productImageUrls: retailProducts.imageUrls,
@@ -153,18 +198,103 @@ export function registerRetailPosRoutes(app: Express): void {
         .orderBy(retailProducts.name, retailProductVariants.color, retailProductVariants.size)
         .limit(limit);
 
+      const promotions = await listActiveRetailPromotions(companyId);
       res.json(
         rows.map((row) => {
           const { variantImageUrls, productImageUrls, ...rest } = row;
+          const price = toNumber(row.price);
+          const promotion = promotions.length
+            ? bestPromotionForLine(
+                promotions,
+                { variantId: row.variantId, productId: row.productId, brandId: row.brandId ?? null },
+                price
+              )
+            : null;
+          const promotionRow = promotion ? (promotions.find((entry) => entry.id === promotion.id) ?? null) : null;
+          const promotionPrice = promotion
+            ? promotion.discountType === "percent"
+              ? roundRetailMoney(price * (1 - promotion.value / 100), 2)
+              : Math.max(0, roundRetailMoney(price - promotion.value, 2))
+            : null;
           return {
             ...rest,
             imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
             brand: row.brand ?? "Other / No Brand",
-            price: toNumber(row.price),
+            price,
             quantity: toNumber(row.quantity),
+            promotion:
+              promotion && promotionPrice !== null
+                ? {
+                    id: promotion.id,
+                    name: promotionRow?.name ?? "Promotion",
+                    discountType: promotion.discountType,
+                    value: promotion.value,
+                    promotionPrice,
+                  }
+                : null,
           };
         })
       );
+    } catch (error) {
+      res.status(400).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  /**
+   * Prices a cart without selling it. The POS uses this to render the exact
+   * Subtotal → Discount → Tax → Total ladder and to warn the cashier that a manager
+   * approval is required, so the client never re-implements the money math.
+   */
+  app.post("/api/pos/retail/cart-preview", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+      const body = cartPreviewSchema.parse(req.body ?? {});
+      if (body.locationId) await ensureCompanyLocation(companyId, body.locationId);
+      const requestedLines: RetailSaleLineRequest[] = body.items.map((item) => ({
+        variantId: item.variantId,
+        quantity: item.quantity,
+        priceOverride: item.priceOverride ?? null,
+        discountType: item.discountType ?? "none",
+        discountValue: item.discountValue ?? 0,
+        discountReason: item.discountReason ?? null,
+      }));
+      const settings = await loadRetailSettings(companyId);
+      const promotions = await listActiveRetailPromotions(companyId);
+      const orderDiscount = {
+        type: body.orderDiscount?.type ?? ("none" as const),
+        value: body.orderDiscount?.value ?? 0,
+        reason: body.orderDiscount?.reason ?? null,
+      };
+      const { priced } = await prepareRetailSalePricing(db, {
+        companyId,
+        items: requestedLines,
+        orderDiscount,
+        settings,
+        promotions,
+      });
+      const manual = hasManualAdjustment(priced, orderDiscount);
+      const effectiveDiscountPercent = effectiveManualDiscountPercent(priced);
+      const hasPriceOverride = priced.lines.some((line) => line.priceOverride);
+      const policy = evaluateRetailDiscountPolicy({
+        role: req.user?.role,
+        discountLimitPercent: settings.discountLimitPercent,
+        requireManagerApproval: settings.requireManagerApproval,
+        priceOverrideRequiresApproval: settings.priceOverrideRequiresApproval,
+        effectiveDiscountPercent,
+        hasPriceOverride,
+        hasManualDiscount: manual.any,
+      });
+      res.json({
+        settings: { ...settings, taxRatePercent: Number((settings.taxRate * 100).toFixed(5)) },
+        policy: {
+          ...policy,
+          hasPriceOverride,
+          hasManualDiscount: manual.any,
+          effectiveDiscountPercent: Number(effectiveDiscountPercent.toFixed(6)),
+        },
+        pricing: priced,
+      });
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
     }
@@ -264,7 +394,143 @@ export function registerRetailPosRoutes(app: Express): void {
       const body = saleSchema.parse(req.body);
       await ensureCompanyLocation(companyId, body.locationId);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
-      const items = aggregateRetailCartItems(body.items);
+
+      // One line per variant keeps line discounts unambiguous; plain Wave 1 carts may still
+      // contain duplicate variants and keep working through the legacy aggregation.
+      const hasAdjustments = body.items.some(
+        (item) =>
+          (item.priceOverride ?? null) !== null ||
+          (item.discountType ?? "none") !== "none" ||
+          Number(item.discountValue ?? 0) > 0
+      );
+      const requestedLines: RetailSaleLineRequest[] = hasAdjustments
+        ? body.items.map((item) => ({
+            variantId: item.variantId,
+            quantity: item.quantity,
+            priceOverride: item.priceOverride ?? null,
+            discountType: item.discountType ?? "none",
+            discountValue: item.discountValue ?? 0,
+            discountReason: item.discountReason ?? null,
+          }))
+        : aggregateRetailCartItems(body.items).map((item) => ({ variantId: item.variantId, quantity: item.quantity }));
+      if (hasAdjustments && new Set(requestedLines.map((line) => line.variantId)).size !== requestedLines.length) {
+        return res.status(400).json({ message: "Each variant may appear only once when a discount is applied" });
+      }
+
+      const settings = await loadRetailSettings(companyId);
+      const promotions = await listActiveRetailPromotions(companyId);
+      const orderDiscount = {
+        type: body.orderDiscount?.type ?? ("none" as const),
+        value: body.orderDiscount?.value ?? 0,
+        reason: body.orderDiscount?.reason ?? null,
+      };
+
+      // A reason is mandatory for every manual discount / price override.
+      const missingReason = requestedLines.some(
+        (line) =>
+          ((line.priceOverride ?? null) !== null ||
+            (line.discountType ?? "none") !== "none" ||
+            Number(line.discountValue ?? 0) > 0) &&
+          !line.discountReason?.trim()
+      );
+      if (missingReason || (orderDiscount.type !== "none" && !orderDiscount.reason?.trim())) {
+        return res.status(400).json({
+          code: "DISCOUNT_REASON_REQUIRED",
+          message: "A reason is required for every discount or price override",
+        });
+      }
+
+      const preview = await prepareRetailSalePricing(db, {
+        companyId,
+        items: requestedLines,
+        orderDiscount,
+        settings,
+        promotions,
+      });
+      const manual = hasManualAdjustment(preview.priced, orderDiscount);
+      const effectiveDiscountPercent = effectiveManualDiscountPercent(preview.priced);
+      const hasPriceOverride = preview.priced.lines.some((line) => line.priceOverride);
+      const policy = evaluateRetailDiscountPolicy({
+        role: req.user?.role,
+        discountLimitPercent: settings.discountLimitPercent,
+        requireManagerApproval: settings.requireManagerApproval,
+        priceOverrideRequiresApproval: settings.priceOverrideRequiresApproval,
+        effectiveDiscountPercent,
+        hasPriceOverride,
+        hasManualDiscount: manual.any,
+      });
+
+      let approval: RetailSaleInput["approval"] = null;
+      if (policy.requiresApproval) {
+        if (!body.approvalToken) {
+          return res.status(428).json({
+            code: "DISCOUNT_APPROVAL_REQUIRED",
+            message: "A manager must approve this discount or price override",
+            reasons: policy.reasons,
+            discountLimitPercent: settings.discountLimitPercent,
+            effectiveDiscountPercent,
+          });
+        }
+        let payload: ReturnType<typeof verifyRetailApprovalToken>;
+        try {
+          payload = verifyRetailApprovalToken(body.approvalToken);
+        } catch (error) {
+          const expired = error instanceof ExpiredRetailApprovalTokenError;
+          return res.status(428).json({
+            code: expired ? "DISCOUNT_APPROVAL_EXPIRED" : "DISCOUNT_APPROVAL_INVALID",
+            message: getErrorMessage(error),
+          });
+        }
+        const fingerprint = retailApprovalFingerprint(requestedLines, orderDiscount);
+        const covers =
+          payload.companyId === companyId &&
+          payload.cashierUserId === userId &&
+          payload.fingerprint === fingerprint &&
+          approvalCoversRequest(payload, {
+            companyId,
+            cashierUserId: userId,
+            effectiveDiscountPercent,
+            hasPriceOverride,
+          });
+        if (!covers) {
+          return res.status(428).json({
+            code: "DISCOUNT_APPROVAL_INVALID",
+            message:
+              "This approval was issued for a different cart, cashier or company — ask the manager to approve again.",
+          });
+        }
+        const [record] = await db
+          .select({ id: retailDiscountApprovals.id })
+          .from(retailDiscountApprovals)
+          .where(
+            and(eq(retailDiscountApprovals.companyId, companyId), eq(retailDiscountApprovals.tokenId, payload.tokenId))
+          )
+          .limit(1);
+        if (!record) {
+          return res.status(428).json({ code: "DISCOUNT_APPROVAL_INVALID", message: "Approval record not found" });
+        }
+        approval = {
+          approvalId: record.id,
+          approvedByUserId: payload.managerUserId,
+          approvedByName: payload.managerName,
+        };
+      }
+
+      // The customer is optional: walk-in stays the default and costs no extra query.
+      let customer: RetailSaleInput["customer"] = null;
+      if (body.customerId) {
+        const [row] = await db
+          .select({ id: customers.id, legalName: customers.legalName })
+          .from(customers)
+          .where(
+            and(eq(customers.id, body.customerId), eq(customers.companyId, companyId), isNull(customers.deletedAt))
+          )
+          .limit(1);
+        if (!row) return res.status(404).json({ message: "Customer not found" });
+        customer = { id: row.id, name: row.legalName };
+      } else if (body.customerName?.trim()) {
+        customer = { id: null, name: body.customerName.trim() };
+      }
 
       const result = await db.transaction((tx) =>
         createRetailSaleInTx(tx, {
@@ -272,15 +538,26 @@ export function registerRetailPosRoutes(app: Express): void {
           locationId: body.locationId,
           idempotencyKey: body.idempotencyKey,
           notes: body.notes ?? null,
-          items,
+          items: requestedLines,
           userId,
           canSellNegativeStock,
+          customer,
+          orderDiscount,
+          settings,
+          promotions,
+          approval,
         })
       );
 
       const sale = await loadSaleResponse(companyId, result.saleId);
       res.status(result.replayed ? 200 : 201).json({ replayed: result.replayed, sale });
     } catch (error) {
+      if (error instanceof InvalidRetailApprovalTokenError) {
+        return res.status(428).json({ code: "DISCOUNT_APPROVAL_INVALID", message: getErrorMessage(error) });
+      }
+      if (error instanceof RetailApprovalReuseError) {
+        return res.status(409).json({ code: "DISCOUNT_APPROVAL_ALREADY_USED", message: getErrorMessage(error) });
+      }
       const message = getErrorMessage(error);
       res.status(message.includes("Insufficient stock") ? 409 : 400).json({ message });
     }
@@ -330,7 +607,12 @@ export function registerRetailPosRoutes(app: Express): void {
         })
       );
 
-      res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
+      res.status(result.replayed ? 200 : 201).json({
+        ...result,
+        refundAmount: roundRetailMoney(result.refundAmount, 2),
+        refundTaxAmount: roundRetailMoney(result.refundTaxAmount, 2),
+        sale: await loadSaleResponse(companyId, saleId),
+      });
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
     }

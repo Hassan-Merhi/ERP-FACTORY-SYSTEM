@@ -115,13 +115,19 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          SELECT
            m.id,
            m.movement_type,
+           s.customer_id,
            (-m.quantity_delta) AS net_quantity,
            (-m.quantity_delta) * si.unit_price AS revenue,
-           (-m.quantity_delta) * si.unit_cost AS cogs
+           (-m.quantity_delta) * si.unit_cost AS cogs,
+           CASE WHEN si.quantity <> 0 THEN (-m.quantity_delta) / si.quantity ELSE 0 END * si.tax_amount AS tax_amount,
+           CASE WHEN si.quantity <> 0 THEN (-m.quantity_delta) / si.quantity ELSE 0 END * si.line_discount_amount AS discount_amount
          FROM retail_stock_movements m
          JOIN retail_pos_sale_items si
            ON si.company_id = m.company_id
           AND si.id = NULLIF(m.metadata->>'saleItemId', '')::integer
+         JOIN retail_pos_sales s
+           ON s.company_id = si.company_id
+          AND s.id = si.sale_id
          WHERE m.company_id = $1
            AND m.created_at >= $2
            AND m.created_at < $3
@@ -132,6 +138,9 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
          COALESCE(SUM(cogs), 0) AS cogs,
          COALESCE(SUM(revenue - cogs), 0) AS gross_profit,
          COALESCE(SUM(net_quantity), 0) AS units_sold,
+         COALESCE(SUM(tax_amount), 0) AS tax_collected,
+         COALESCE(SUM(discount_amount), 0) AS discount_given,
+         COUNT(DISTINCT customer_id)::int AS customer_count,
          COUNT(*) FILTER (WHERE movement_type = 'sale')::int AS sale_lines
        FROM financial_moves`,
       financialParams
@@ -318,6 +327,9 @@ export async function getRetailDashboard(filters: RetailReportFilters) {
   ]);
   const financialSummary = mapNumericFields(financialSummaryResult.rows[0] ?? {}, [
     "revenue",
+    "tax_collected",
+    "discount_given",
+    "customer_count",
     "cogs",
     "gross_profit",
     "units_sold",

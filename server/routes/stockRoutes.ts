@@ -9,6 +9,7 @@ import { registerRetailRoutes } from "./retailRoutes";
 import { registerRetailCatalogRoutes } from "./retailCatalogRoutes";
 import { registerRetailReportingRoutes } from "./retailReportingRoutes";
 import { registerRetailFashionRoutes } from "./retailFashionRoutes";
+import { registerRetailSettingsRoutes } from "./retailSettingsRoutes";
 
 export function registerStockRoutes(app: Express) {
   // Light route MUST be first — prevents /api/stock-items/:id from swallowing "light" as a param
@@ -22,4 +23,5 @@ export function registerStockRoutes(app: Express) {
   registerRetailCatalogRoutes(app);
   registerRetailReportingRoutes(app);
   registerRetailFashionRoutes(app);
+  registerRetailSettingsRoutes(app);
 }
