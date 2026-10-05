@@ -2,6 +2,7 @@ import Decimal from "decimal.js";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import {
   bankAccounts,
+  companies,
   ledgerAccounts,
   posShifts,
   retailAccountingSettings,
@@ -58,6 +59,28 @@ export interface RetailAccountingSettingsResolved {
 
 function money(value: Decimal.Value): string {
   return new Decimal(value).toDecimalPlaces(6).toFixed(6);
+}
+
+function accountingMoney(value: Decimal.Value): string {
+  return new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
+}
+
+function allocateAccountingAmounts(amounts: number[], targetTotal: Decimal.Value): string[] {
+  if (!amounts.length) return [];
+  const rounded = amounts.map((amount) => new Decimal(accountingMoney(amount)));
+  const target = new Decimal(accountingMoney(targetTotal));
+  const current = rounded.reduce((sum, amount) => sum.plus(amount), new Decimal(0));
+  rounded[rounded.length - 1] = rounded[rounded.length - 1].plus(target.minus(current));
+  return rounded.map((amount) => amount.toFixed(2));
+}
+
+async function companyCurrency(tx: DbTransaction, companyId: number): Promise<string> {
+  const [company] = await tx
+    .select({ baseCurrency: companies.baseCurrency })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+  return String(company?.baseCurrency || "USD").slice(0, 3).toUpperCase();
 }
 
 function toNumber(value: unknown): number {
@@ -385,41 +408,48 @@ export async function settleRetailSaleTx(
   const totalCost = new Decimal(input.totalCost);
   if (saleTotal.isZero() && totalCost.isZero()) return { payments: resolved, voucherId: null };
 
+  const saleAccountingAmount = new Decimal(accountingMoney(saleTotal));
+  const costAccountingAmount = new Decimal(accountingMoney(totalCost));
+  const paymentAccountingAmounts = allocateAccountingAmounts(
+    resolved.map((payment) => payment.amount),
+    saleAccountingAmount
+  );
   const entries = [
-    ...resolved.map((payment) => ({
+    ...resolved.map((payment, index) => ({
       ...(payment.bankAccountId ? { bankAccountId: payment.bankAccountId } : { ledgerAccountId: payment.ledgerAccountId }),
-      debitAmount: money(payment.amount),
+      debitAmount: paymentAccountingAmounts[index],
       creditAmount: "0",
       narration: `Retail sale #${input.saleId} · ${payment.method}`,
     })),
-    ...(saleTotal.isZero()
+    ...(saleAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.salesRevenueLedgerAccountId,
             debitAmount: "0",
-            creditAmount: money(saleTotal),
+            creditAmount: saleAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · revenue`,
           },
         ]),
-    ...(totalCost.isZero()
+    ...(costAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.cogsLedgerAccountId,
-            debitAmount: money(totalCost),
+            debitAmount: costAccountingAmount.toFixed(2),
             creditAmount: "0",
             narration: `Retail sale #${input.saleId} · COGS`,
           },
           {
             ledgerAccountId: settings.inventoryAssetLedgerAccountId,
             debitAmount: "0",
-            creditAmount: money(totalCost),
+            creditAmount: costAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · inventory`,
           },
         ]),
   ];
-  const debitTotal = saleTotal.plus(totalCost);
+  const debitTotal = saleAccountingAmount.plus(costAccountingAmount);
+  const currency = await companyCurrency(tx, input.companyId);
   const sourceKey = `retail-pos-sale:${input.saleId}`;
   const posted = await postBalancedVoucherTx(
     tx,
@@ -429,10 +459,10 @@ export async function settleRetailSaleTx(
         voucherNumber: `RETAIL-SALE-${input.saleId}`,
         voucherType: "Journal",
         voucherDate: new Date().toISOString().slice(0, 10),
-        totalAmount: money(debitTotal),
+        totalAmount: debitTotal.toFixed(2),
         description: `Retail POS sale #${input.saleId}`,
         locationId: input.locationId,
-        currency: "USD",
+        currency,
         sourceModule: "Retail",
       },
       entries,
@@ -623,43 +653,50 @@ export async function postRetailRefundAccountingTx(
   const restoredCost = new Decimal(input.restoredCost);
   if (refundTotal.isZero() && restoredCost.isZero()) return null;
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
+  const refundAccountingAmount = new Decimal(accountingMoney(refundTotal));
+  const restoredCostAccountingAmount = new Decimal(accountingMoney(restoredCost));
+  const refundPaymentAccountingAmounts = allocateAccountingAmounts(
+    input.refunds.map((payment) => payment.amount),
+    refundAccountingAmount
+  );
   const entries = [
-    ...(refundTotal.isZero()
+    ...(refundAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.salesRevenueLedgerAccountId,
-            debitAmount: money(refundTotal),
+            debitAmount: refundAccountingAmount.toFixed(2),
             creditAmount: "0",
             narration: `Retail sale #${input.saleId} · refund revenue reversal`,
           },
-          ...input.refunds.map((payment) => ({
+          ...input.refunds.map((payment, index) => ({
             ...(payment.bankAccountId
               ? { bankAccountId: payment.bankAccountId }
               : { ledgerAccountId: payment.ledgerAccountId }),
             debitAmount: "0",
-            creditAmount: money(payment.amount),
+            creditAmount: refundPaymentAccountingAmounts[index],
             narration: `Retail sale #${input.saleId} · ${payment.method} refund`,
           })),
         ]),
-    ...(restoredCost.isZero()
+    ...(restoredCostAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.inventoryAssetLedgerAccountId,
-            debitAmount: money(restoredCost),
+            debitAmount: restoredCostAccountingAmount.toFixed(2),
             creditAmount: "0",
             narration: `Retail sale #${input.saleId} · inventory restored`,
           },
           {
             ledgerAccountId: settings.cogsLedgerAccountId,
             debitAmount: "0",
-            creditAmount: money(restoredCost),
+            creditAmount: restoredCostAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · COGS reversed`,
           },
         ]),
   ];
-  const total = refundTotal.plus(restoredCost);
+  const total = refundAccountingAmount.plus(restoredCostAccountingAmount);
+  const currency = await companyCurrency(tx, input.companyId);
   const posted = await postBalancedVoucherTx(
     tx,
     {
@@ -668,10 +705,10 @@ export async function postRetailRefundAccountingTx(
         voucherNumber: `RETAIL-${input.sourceType === "retail-pos-cancel" ? "CANCEL" : "RETURN"}-${input.sourceId}`,
         voucherType: "Journal",
         voucherDate: new Date().toISOString().slice(0, 10),
-        totalAmount: money(total),
+        totalAmount: total.toFixed(2),
         description: `Retail ${input.sourceType === "retail-pos-cancel" ? "cancellation" : "return"} for sale #${input.saleId}`,
         locationId: input.locationId,
-        currency: "USD",
+        currency,
         sourceModule: "Retail",
       },
       entries,
