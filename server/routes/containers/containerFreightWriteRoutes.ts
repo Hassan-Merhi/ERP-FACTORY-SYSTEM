@@ -741,11 +741,11 @@ export function registerContainerFreightWriteRoutes(app: Express) {
           const _b2Sync = await syncIntercoParentVoucher(
             db,
             _b2PoNums,
-            newGrandTotal.toNumber(),
+            newGrandTotal,
             _b2ContainerRow?.containerNumber,
             newHasParentFreight && newFreightParentAccountId
               ? {
-                  freightAmount: newFreight.toNumber(),
+                  freightAmount: newFreight,
                   freightParentAccountId: newFreightParentAccountId,
                   subsidiaryCompanyId: existingPO.companyId,
                 }

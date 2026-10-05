@@ -203,11 +203,11 @@ export function registerContainerFreightReadRoutes(app: Express) {
       const result = await syncIntercoParentVoucher(
         db,
         po.poNumber,
-        poGrossTotal.toNumber(),
+        poGrossTotal,
         poContainerRow?.containerNumber,
         poHasParentFreight
           ? {
-              freightAmount: poFreightAmt.toNumber(),
+              freightAmount: poFreightAmt,
               freightParentAccountId: poFreightParentAcctId!,
               subsidiaryCompanyId: po.companyId,
             }
