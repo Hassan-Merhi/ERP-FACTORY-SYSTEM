@@ -136,14 +136,16 @@ describe("Item Market Analysis calculations", () => {
       activityType: "sale",
       unitPrice: 20,
       quantity: 10,
-      totalSales: 200,
+      revenue: 200,
+      profit: 100,
       transactionCount: 1,
     });
     expect(returnPrice).toMatchObject({
       activityType: "return",
       unitPrice: 20,
       quantity: -2,
-      totalSales: -40,
+      revenue: -40,
+      profit: -20,
       transactionCount: 1,
     });
   }, 60_000);
