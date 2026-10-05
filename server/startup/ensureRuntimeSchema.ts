@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { scheduledWhatsAppDeliveryTracking } from "../startup-schema/030-scheduled-whatsapp-delivery-tracking";
+import { retailFinancialSchemaSql } from "./retailFinancialSchema";
 
 export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool): Promise<void> {
   for (const statement of scheduledWhatsAppDeliveryTracking) {
@@ -81,6 +82,21 @@ export async function ensureRetailBarcodeLabelSchema(pool: Pool): Promise<void> 
       ON retail_stock_movements (variant_id, created_at);
   `);
   logger.info("[startup] ✓ Retail barcode and label schema ensured");
+}
+
+/** Retail Wave 1 payments, cashier shifts and accounting bridge schema. */
+export async function ensureRetailFinancialSchema(pool: Pool): Promise<void> {
+  const existing = await pool.query<{ sales: string | null; return_items: string | null }>(
+    `SELECT to_regclass('retail_pos_sales')::text AS sales,
+            to_regclass('retail_pos_return_items')::text AS return_items`
+  );
+  if (!existing.rows[0]?.sales || !existing.rows[0]?.return_items) {
+    logger.info("[startup] Retail financial schema deferred; Retail POS base tables are not installed yet");
+    return;
+  }
+
+  await pool.query(retailFinancialSchemaSql);
+  logger.info("[startup] ✓ Retail payments, cashier shifts and accounting bridge schema ensured");
 }
 
 export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
@@ -245,6 +261,14 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
     await ensureRetailBarcodeLabelSchema(pool);
   } catch (retailErr: unknown) {
     logger.error("[startup] ✗ Could not ensure retail barcode and label schema:", {
+      error: getErrorMessage(retailErr),
+    });
+  }
+
+  try {
+    await ensureRetailFinancialSchema(pool);
+  } catch (retailErr: unknown) {
+    logger.error("[startup] ✗ Could not ensure retail financial core schema:", {
       error: getErrorMessage(retailErr),
     });
   }

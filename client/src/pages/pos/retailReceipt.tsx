@@ -48,21 +48,83 @@ export function RetailReceipt({
             <span>
               {item.quantity} × {money(item.unitPrice)}
             </span>
-            <span>{money(item.quantity * item.unitPrice)}</span>
+            <span>{money(item.grossAmount ?? item.quantity * item.unitPrice)}</span>
           </div>
+          {(item.discountAmount ?? 0) > 0 && (
+            <div className="rr-line">
+              <span>Discount</span>
+              <span>-{money(item.discountAmount ?? 0)}</span>
+            </div>
+          )}
+          {(item.taxAmount ?? 0) > 0 && (
+            <div className="rr-line">
+              <span>Tax</span>
+              <span>{money(item.taxAmount ?? 0)}</span>
+            </div>
+          )}
+          {(item.totalAmount ?? null) != null && (
+            <div className="rr-line">
+              <span>Line total</span>
+              <span>{money(item.totalAmount ?? 0)}</span>
+            </div>
+          )}
           {item.returnedQuantity > 0 && (
             <div className="rr-line">
               <span>Returned {item.returnedQuantity}</span>
-              <span>-{money(item.returnedQuantity * item.unitPrice)}</span>
+              <span>-{money(item.returnedAmount ?? 0)}</span>
             </div>
           )}
         </div>
       ))}
       <div className="rr-rule" />
+      <div className="rr-line">
+        <span>Subtotal</span>
+        <span>{money(sale.subtotalAmount ?? sale.totalAmount)}</span>
+      </div>
+      {(sale.discountAmount ?? 0) > 0 && (
+        <div className="rr-line">
+          <span>Discount</span>
+          <span>-{money(sale.discountAmount ?? 0)}</span>
+        </div>
+      )}
+      {(sale.taxAmount ?? 0) > 0 && (
+        <div className="rr-line">
+          <span>Tax</span>
+          <span>{money(sale.taxAmount ?? 0)}</span>
+        </div>
+      )}
       <div className="rr-line rr-total">
         <span>TOTAL</span>
         <span>{money(sale.totalAmount)}</span>
       </div>
+      {(sale.payments ?? [])
+        .filter((payment) => payment.operationType === "sale")
+        .map((payment) => (
+          <div key={payment.id} className="rr-line">
+            <span>{payment.method.replaceAll("_", " ").toUpperCase()}</span>
+            <span>{money(payment.amount)}</span>
+          </div>
+        ))}
+      {(sale.payments ?? []).some((payment) => payment.operationType === "sale") && (
+        <>
+          <div className="rr-line">
+            <span>Paid</span>
+            <span>{money(sale.paidAmount ?? 0)}</span>
+          </div>
+          {(sale.changeDue ?? 0) > 0 && (
+            <div className="rr-line">
+              <span>Change</span>
+              <span>{money(sale.changeDue ?? 0)}</span>
+            </div>
+          )}
+        </>
+      )}
+      {(sale.refundedAmount ?? 0) > 0 && (
+        <div className="rr-line">
+          <span>Refunded</span>
+          <span>{money(sale.refundedAmount ?? 0)}</span>
+        </div>
+      )}
       {sale.status !== "completed" && <div className="rr-center">*** {sale.status.toUpperCase()} ***</div>}
       <div className="rr-rule" />
       <div className="rr-center">Thank you</div>

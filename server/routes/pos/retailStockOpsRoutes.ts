@@ -1,17 +1,17 @@
 import type { Express } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import Decimal from "decimal.js";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   locations,
   retailBrands,
-  retailPosSaleItems,
-  retailPosSales,
   retailProductVariants,
   retailProducts,
   retailStockMovements,
   retailStockOperations,
   retailVariantInventory,
   users,
+  RETAIL_PAYMENT_METHODS,
 } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
@@ -27,9 +27,11 @@ import {
   createRetailReturnInTx,
   createRetailSaleInTx,
   ensureRetailVariant,
+  finalizeRetailSalePaymentsInTx,
   loadSaleResponse,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems } from "../../services/retail/retailStockMath";
+import { retailCheckoutFingerprint, retailMoney } from "../../services/retail/retailFinancialMath";
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -63,6 +65,17 @@ export const retailExchangeSchema = z.object({
     .array(z.object({ variantId: z.coerce.number().int().positive(), quantity: z.coerce.number().finite().positive() }))
     .min(1)
     .max(100),
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(RETAIL_PAYMENT_METHODS),
+        amount: z.coerce.number().finite().positive(),
+        amountTendered: z.coerce.number().finite().positive().optional(),
+        reference: z.string().trim().max(191).optional(),
+      })
+    )
+    .max(10)
+    .optional(),
 });
 
 /** Variant identity + stock at every location, used by barcode stock operations. */
@@ -204,8 +217,26 @@ export function registerRetailStockOpsRoutes(app: Express): void {
       if (!companyId) return;
       const body = retailExchangeSchema.parse(req.body);
       const userId = currentUserId(req);
-      await ensureCompanyLocation(companyId, body.locationId);
+      await ensureCompanyLocation(companyId, body.locationId, req);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
+      const requestItems = aggregateRetailCartItems(body.newItems);
+      const additionalTender = body.payments?.length ? body.payments : [];
+      if (additionalTender.some((payment) => payment.method === "store_credit")) {
+        throw new Error("Exchange payment lines cannot add store credit; the returned value is applied automatically");
+      }
+      const exchangeFingerprint = retailCheckoutFingerprint({
+        saleId: body.saleId,
+        locationId: body.locationId,
+        notes: body.notes ?? null,
+        returnItems: [...body.returnItems].sort((a, b) => a.saleItemId - b.saleItemId),
+        newItems: [...requestItems].sort((a, b) => a.variantId - b.variantId),
+        payments: additionalTender.map((payment) => ({
+          method: payment.method,
+          amount: retailMoney(payment.amount),
+          amountTendered: payment.method === "cash" ? retailMoney(payment.amountTendered ?? payment.amount) : null,
+          reference: payment.reference?.trim() || null,
+        })),
+      });
 
       const result = await db.transaction(async (tx) => {
         const [operation] = await tx
@@ -216,13 +247,18 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             idempotencyKey: body.idempotencyKey,
             referenceId: String(body.saleId),
             createdBy: userId,
-            metadata: { originalSaleId: body.saleId },
+            metadata: { originalSaleId: body.saleId, requestFingerprint: exchangeFingerprint },
           })
           .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
           .returning({ id: retailStockOperations.id });
         if (!operation) {
           const [previous] = await tx
-            .select({ metadata: retailStockOperations.metadata })
+            .select({
+              id: retailStockOperations.id,
+              operationType: retailStockOperations.operationType,
+              referenceId: retailStockOperations.referenceId,
+              metadata: retailStockOperations.metadata,
+            })
             .from(retailStockOperations)
             .where(
               and(
@@ -231,13 +267,24 @@ export function registerRetailStockOpsRoutes(app: Express): void {
               )
             )
             .limit(1);
-          const meta = previous?.metadata ?? {};
+          if (!previous || previous.operationType !== "exchange" || previous.referenceId !== String(body.saleId)) {
+            throw new Error("RETAIL_IDEMPOTENCY_CONFLICT: exchange key is already bound to another operation");
+          }
+          const meta = previous.metadata ?? {};
+          if (meta.requestFingerprint && meta.requestFingerprint !== exchangeFingerprint) {
+            throw new Error(
+              "RETAIL_IDEMPOTENCY_CONFLICT: exchange key is already bound to different return or replacement details"
+            );
+          }
           return {
             replayed: true,
-            operationId: 0,
+            operationId: previous.id,
             returnId: Number(meta.returnId ?? 0),
             newSaleId: Number(meta.newSaleId ?? 0),
-            refundValue: toNumber(meta.refundValue),
+            refundValue: retailMoney(meta.refundValue as string | number | null | undefined),
+            newSaleTotal: retailMoney(meta.newSaleTotal as string | number | null | undefined),
+            balanceDue: retailMoney(meta.balanceDue as string | number | null | undefined),
+            changeDue: retailMoney(meta.changeDue as string | number | null | undefined),
           };
         }
 
@@ -246,73 +293,106 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           saleId: body.saleId,
           locationId: body.locationId,
           idempotencyKey: `${body.idempotencyKey}:return`.slice(0, 191),
-          notes: "Exchange #" + operation.id + (body.notes ? " · " + body.notes : ""),
+          notes: `Exchange #${operation.id}${body.notes ? ` · ${body.notes}` : ""}`,
           items: body.returnItems,
           userId,
+          username: req.user?.username,
+          refundMethod: "store_credit",
           metadata: { exchangeOperationId: operation.id },
+        });
+        if (returned.replayed) throw new Error("RETAIL_IDEMPOTENCY_CONFLICT: exchange return key was already used");
+
+        const items = requestItems;
+        const saleKey = `${body.idempotencyKey}:sale`.slice(0, 191);
+        const saleFingerprint = retailCheckoutFingerprint({
+          locationId: body.locationId,
+          items: [...items].sort((a, b) => a.variantId - b.variantId),
+          exchangeReturnId: returned.returnId,
+          payments: additionalTender.map((payment) => ({
+            method: payment.method,
+            amount: retailMoney(payment.amount),
+            amountTendered: payment.method === "cash" ? retailMoney(payment.amountTendered ?? payment.amount) : null,
+            reference: payment.reference?.trim() || null,
+          })),
         });
         const sold = await createRetailSaleInTx(tx, {
           companyId,
           locationId: body.locationId,
-          idempotencyKey: `${body.idempotencyKey}:sale`.slice(0, 191),
+          idempotencyKey: saleKey,
+          requestFingerprint: saleFingerprint,
+          shiftId: returned.shiftId,
+          checkoutVersion: 1,
           notes: `Exchange #${operation.id} for sale #${body.saleId}`,
-          items: aggregateRetailCartItems(body.newItems),
+          items,
           userId,
           canSellNegativeStock,
         });
+        if (sold.replayed || !sold.amounts) {
+          throw new Error("RETAIL_IDEMPOTENCY_CONFLICT: exchange sale key was already used");
+        }
 
-        const priceBySaleItem = new Map(
-          (
-            await tx
-              .select({ id: retailPosSaleItems.id, unitPrice: retailPosSaleItems.unitPrice })
-              .from(retailPosSaleItems)
-              .where(
-                and(
-                  eq(retailPosSaleItems.companyId, companyId),
-                  inArray(
-                    retailPosSaleItems.id,
-                    body.returnItems.map((item) => item.saleItemId)
-                  )
-                )
-              )
-          ).map((row) => [row.id, toNumber(row.unitPrice)])
-        );
-        const refundValue = body.returnItems.reduce(
-          (sum, item) => sum + item.quantity * (priceBySaleItem.get(item.saleItemId) ?? 0),
-          0
-        );
+        const refundValue = retailMoney(returned.refundAmount);
+        const newSaleTotal = retailMoney(sold.amounts.totalAmount);
+        const storeCreditAmount = Decimal.min(new Decimal(refundValue), new Decimal(newSaleTotal)).toFixed(2);
+        const balanceDue = new Decimal(newSaleTotal).minus(refundValue).toDecimalPlaces(2).toFixed(2);
+        const externalDue = Decimal.max(new Decimal(balanceDue), 0).toFixed(2);
+        if (new Decimal(externalDue).isZero() && additionalTender.length) {
+          throw new Error("No external payment is due for this exchange");
+        }
+        const tenderLines = [
+          ...(new Decimal(storeCreditAmount).gt(0)
+            ? [{ method: "store_credit" as const, amount: storeCreditAmount, reference: `Exchange #${operation.id}` }]
+            : []),
+          ...(additionalTender.length
+            ? additionalTender
+            : new Decimal(externalDue).gt(0)
+              ? [{ method: "cash" as const, amount: externalDue, amountTendered: externalDue }]
+              : []),
+        ];
+        const settled = await finalizeRetailSalePaymentsInTx(tx, {
+          companyId,
+          saleId: sold.saleId,
+          locationId: body.locationId,
+          shiftId: returned.shiftId ?? 0,
+          idempotencyKey: `${body.idempotencyKey}:sale-payment`.slice(0, 191),
+          userId,
+          username: req.user?.username,
+          amounts: sold.amounts,
+          paymentLines: tenderLines,
+        });
+
         await tx
           .update(retailStockOperations)
           .set({
             metadata: {
               originalSaleId: body.saleId,
+              requestFingerprint: exchangeFingerprint,
               returnId: returned.returnId,
               newSaleId: sold.saleId,
               refundValue,
+              newSaleTotal,
+              balanceDue,
+              changeDue: settled.changeDue,
             },
           })
           .where(eq(retailStockOperations.id, operation.id));
-        await tx
-          .update(retailPosSales)
-          .set({ updatedAt: new Date() })
-          .where(and(eq(retailPosSales.id, sold.saleId), eq(retailPosSales.companyId, companyId)));
         return {
           replayed: false,
           operationId: operation.id,
           returnId: returned.returnId,
           newSaleId: sold.saleId,
           refundValue,
+          newSaleTotal,
+          balanceDue,
+          changeDue: settled.changeDue,
         };
       });
 
       const newSale = await loadSaleResponse(companyId, result.newSaleId);
-      const newTotal = toNumber(newSale?.totalAmount);
       res.status(result.replayed ? 200 : 201).json({
         ...result,
-        newSaleTotal: newTotal,
+        checkout: newSale,
         sale: newSale,
-        // Positive: customer pays the difference. Negative: refund the difference.
-        balanceDue: Math.round((newTotal - result.refundValue) * 100) / 100,
       });
     } catch (error) {
       const message = getErrorMessage(error);

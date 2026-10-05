@@ -11,6 +11,7 @@ const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
 const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
 const RetailQuickAdd = lazy(() => import("@/pages/retail/RetailQuickAdd"));
 const RetailStockOperations = lazy(() => import("@/pages/retail/RetailStockOperations"));
+const RetailFinancials = lazy(() => import("@/pages/retail/RetailFinancials"));
 
 interface RouterProps {
   user: AuthMe;
@@ -57,6 +58,10 @@ export function Router({ user, posImportEnabled }: RouterProps) {
 
   if (location === "/retail/reports") {
     return <RetailDashboard />;
+  }
+
+  if (location === "/retail/finance") {
+    return <RetailFinancials />;
   }
 
   if (location === "/retail" || location === "/retail/inventory" || location.startsWith("/retail/products/")) {

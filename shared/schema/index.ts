@@ -5,6 +5,7 @@ export * from "./security";
 export * from "./inventory";
 export * from "./retail";
 export * from "./retailPos";
+export * from "./retailFinance";
 export * from "./retailFashion";
 export * from "./erp";
 export * from "./containers";

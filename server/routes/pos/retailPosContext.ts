@@ -34,7 +34,14 @@ export async function requireRetailCompany(req: Request, res: Response): Promise
   return companyId;
 }
 
-export async function ensureCompanyLocation(companyId: number, locationId: number): Promise<void> {
+export async function ensureCompanyLocation(companyId: number, locationId: number, req?: Request): Promise<void> {
+  const role = req?.session?.currentRole ?? req?.user?.role;
+  if (role === "POS") {
+    const assignedLocationId = Number(req?.user?.assignedLocationId ?? req?.session?.currentLocationId ?? 0);
+    if (!Number.isInteger(assignedLocationId) || assignedLocationId <= 0 || assignedLocationId !== locationId) {
+      throw new Error("POS users are restricted to their assigned Retail location");
+    }
+  }
   const [location] = await db
     .select({ id: locations.id })
     .from(locations)

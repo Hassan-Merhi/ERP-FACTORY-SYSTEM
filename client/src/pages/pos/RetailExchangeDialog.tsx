@@ -5,14 +5,22 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { calculateRetailSaleAmounts, sumRetailMoney } from "@shared/retailFinancialMath";
 import { RetailItemImage } from "./RetailScanFeedback";
-import { lookupRetailBarcode, makeKey, money, type RetailPosItem, type RetailSale } from "./retailPosTypes";
+import {
+  lookupRetailBarcode,
+  makeKey,
+  money,
+  retailReturnLineValue,
+  type RetailPosItem,
+  type RetailSale,
+} from "./retailPosTypes";
 
 interface ExchangeResult {
   replayed: boolean;
-  balanceDue: number;
-  refundValue: number;
-  newSaleTotal: number;
+  balanceDue: number | string;
+  refundValue: number | string;
+  newSaleTotal: number | string;
   sale: RetailSale;
 }
 
@@ -48,9 +56,27 @@ export function RetailExchangeDialog({
 
   if (!sale) return null;
 
-  const refundValue = sale.items.reduce((sum, item) => sum + (returnQty[item.id] ?? 0) * item.unitPrice, 0);
-  const newTotal = newItems.reduce((sum, item) => sum + item.exchangeQuantity * item.price, 0);
-  const balance = newTotal - refundValue;
+  const refundValue = Number(
+    sumRetailMoney(sale.items.map((item) => retailReturnLineValue(item, returnQty[item.id] ?? 0)))
+  );
+  const replacementAmounts = newItems.length
+    ? (() => {
+        try {
+          return calculateRetailSaleAmounts(
+            newItems.map((item) => ({
+              variantId: item.variantId,
+              quantity: item.exchangeQuantity,
+              unitPrice: item.price,
+              unitCost: 0,
+            }))
+          );
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  const newTotal = Number(replacementAmounts?.totalAmount ?? 0);
+  const balance = Number(sumRetailMoney([newTotal, -refundValue]));
 
   const scan = async () => {
     const barcode = scanText.trim();
@@ -104,13 +130,14 @@ export function RetailExchangeDialog({
       });
       const result = (await response.json()) as ExchangeResult;
       attemptRef.current = null;
+      const exactBalanceDue = Number(result.balanceDue);
       toast({
         title: result.replayed ? "Exchange already recorded" : "Exchange completed",
         description:
-          result.balanceDue > 0
-            ? `Customer pays: ${money(result.balanceDue)}`
-            : result.balanceDue < 0
-              ? `Refund ${money(-result.balanceDue)}`
+          exactBalanceDue > 0
+            ? `Customer pays: ${money(exactBalanceDue)}`
+            : exactBalanceDue < 0
+              ? `Store credit issued: ${money(-exactBalanceDue)}`
               : "Even exchange",
       });
       await onCompleted(result.sale);
@@ -227,7 +254,7 @@ export function RetailExchangeDialog({
               <span>{money(newTotal)}</span>
             </div>
             <div className="flex justify-between border-t pt-1 font-semibold">
-              <span>{balance >= 0 ? "Customer pays" : "Refund to customer"}</span>
+              <span>{balance >= 0 ? "Customer pays" : "Store credit issued"}</span>
               <span data-testid="exchange-balance">{money(Math.abs(balance))}</span>
             </div>
           </div>

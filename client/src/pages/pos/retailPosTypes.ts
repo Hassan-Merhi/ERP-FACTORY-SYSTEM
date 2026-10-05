@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/queryClient";
+import { calculateRetailReturnAmounts } from "@shared/retailFinancialMath";
 import { makeRetailIdempotencyKey } from "@/pages/retail/retailIdempotency";
 
 export interface Location {
@@ -31,12 +32,34 @@ export interface CartLine extends RetailPosItem {
   cartQuantity: number;
 }
 
+export type RetailPaymentMethod = "cash" | "card" | "bank_transfer" | "mobile_other" | "store_credit";
+
+export interface RetailPayment {
+  id: number;
+  operationType: "sale" | "refund" | "cancellation";
+  method: RetailPaymentMethod;
+  amount: number;
+  amountTendered: number | null;
+  changeDue: number;
+  reference: string | null;
+  cashierId: string;
+  locationId: number;
+  shiftId: number | null;
+  createdAt: string;
+}
+
 export interface SaleItem {
   id: number;
   variantId: number;
   quantity: number;
   returnedQuantity: number;
+  returnedAmount?: number;
   unitPrice: number;
+  unitCost?: number;
+  grossAmount?: number;
+  discountAmount?: number;
+  taxAmount?: number;
+  totalAmount?: number;
   name: string;
   code: string;
   color: string;
@@ -47,14 +70,71 @@ export interface SaleItem {
   brand: string;
 }
 
+/** Preview a return with the same rounded line-snapshot calculation as the server. */
+export function retailReturnLineValue(item: SaleItem, returnQuantity: number): number {
+  if (!item.quantity || returnQuantity <= 0) return 0;
+  try {
+    return Number(
+      calculateRetailReturnAmounts({
+        soldQuantity: item.quantity,
+        returnedBefore: item.returnedQuantity,
+        returnQuantity,
+        grossAmount: item.grossAmount ?? item.unitPrice * item.quantity,
+        discountAmount: item.discountAmount ?? 0,
+        taxAmount: item.taxAmount ?? 0,
+        unitCost: item.unitCost ?? 0,
+      }).totalAmount
+    );
+  } catch {
+    return 0;
+  }
+}
+
 export interface RetailSale {
   id: number;
   locationId: number;
+  shiftId?: number | null;
   status: string;
+  subtotalAmount?: number;
+  discountAmount?: number;
+  taxAmount?: number;
   totalAmount: number;
+  changeDue?: number;
+  paidAmount?: number;
+  refundedAmount?: number;
+  payments?: RetailPayment[];
+  paymentMethodTotals?: Array<{ method: RetailPaymentMethod; sales: number; refunds: number; net: number }>;
+  accountingVoucherId?: number | null;
   createdAt: string;
   notes?: string | null;
   items: SaleItem[];
+}
+
+export interface RetailCashierShift {
+  id: number;
+  companyId: number;
+  locationId: number;
+  cashierId: string;
+  status: "open" | "closed";
+  openingCash: string;
+  openedAt: string;
+  closedAt: string | null;
+  expectedClosingCash: string | null;
+  actualCountedCash: string | null;
+  variance: string | null;
+  closeNotes: string | null;
+}
+
+export interface RetailShiftReport {
+  shift: RetailCashierShift;
+  cashSalesTotal: number;
+  refundTotal: number;
+  cashInTotal: number;
+  cashOutTotal: number;
+  expectedClosingCash: number;
+  actualCountedCash: number | null;
+  variance: number | null;
+  paymentMethodTotals: Array<{ method: RetailPaymentMethod; sales: number; refunds: number; net: number }>;
 }
 
 export type ScanOutcome =

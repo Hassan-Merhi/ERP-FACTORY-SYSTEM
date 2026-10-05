@@ -9,6 +9,7 @@ vite.config.ts.*
 # Security: Exclude sensitive/debug files
 attached_assets/
 *.sql
+!migrations/20261005_001_retail_financial_core.sql
 *.dump
 *.backup
 *.log

@@ -5,13 +5,13 @@ import { z } from "zod";
 import {
   locations,
   retailBrands,
-  retailPosSaleItems,
   retailPosSales,
   retailProductVariants,
   retailProducts,
   retailStockMovements,
   retailStockOperations,
   retailVariantInventory,
+  RETAIL_PAYMENT_METHODS,
 } from "@shared/schema";
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
@@ -19,12 +19,13 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import { addMovement, lockInventoryRow, setInventoryQuantity } from "../../services/retail/retailStockLedger";
 import {
+  createRetailCheckoutInTx,
   createRetailReturnInTx,
-  createRetailSaleInTx,
   ensureRetailVariant,
   loadSaleResponse,
   resolveRetailItemImages,
 } from "../../services/retail/retailSaleService";
+import { cancelRetailSaleInTx } from "../../services/retail/retailCancellationService";
 import { aggregateRetailCartItems, nextRetailTransferQuantities } from "../../services/retail/retailStockMath";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
@@ -34,6 +35,20 @@ const saleSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
+  discountAmount: z.coerce.number().finite().nonnegative().default(0),
+  taxAmount: z.coerce.number().finite().nonnegative().default(0),
+  payments: z
+    .array(
+      z.object({
+        method: z.enum(RETAIL_PAYMENT_METHODS),
+        amount: z.coerce.number().finite().positive(),
+        amountTendered: z.coerce.number().finite().positive().optional(),
+        reference: z.string().trim().max(191).optional(),
+      })
+    )
+    .min(1)
+    .max(10)
+    .optional(),
   items: z
     .array(
       z.object({
@@ -49,6 +64,7 @@ const returnSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
+  refundMethod: z.enum(RETAIL_PAYMENT_METHODS).optional(),
   items: z
     .array(
       z.object({
@@ -85,6 +101,7 @@ const cancelSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   reason: z.string().trim().min(1).max(500).optional(),
+  refundMethod: z.enum(RETAIL_PAYMENT_METHODS).optional(),
 });
 
 function toNumber(value: string | number | null | undefined): number {
@@ -100,7 +117,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const locationId = Number(req.query.locationId);
       if (!Number.isInteger(locationId) || locationId <= 0)
         return res.status(400).json({ message: "Location is required" });
-      await ensureCompanyLocation(companyId, locationId);
+      await ensureCompanyLocation(companyId, locationId, req);
       const search = String(req.query.search ?? "").trim();
       const limit = Math.min(Math.max(Number(req.query.limit) || 40, 1), 100);
 
@@ -177,7 +194,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const locationId = Number(req.query.locationId);
       if (!Number.isInteger(locationId) || locationId <= 0)
         return res.status(400).json({ message: "Location is required" });
-      await ensureCompanyLocation(companyId, locationId);
+      await ensureCompanyLocation(companyId, locationId, req);
       const barcode = String(req.params.barcode ?? "").trim();
       if (!barcode) return res.status(400).json({ message: "Barcode is required" });
 
@@ -219,23 +236,26 @@ export function registerRetailPosRoutes(app: Express): void {
       if (!row) return res.status(404).json({ code: "BARCODE_NOT_FOUND", message: "Barcode not found" });
 
       const { variantImageUrls, productImageUrls, variantActive, productActive, ...rest } = row;
-      const otherLocations = await db
-        .select({
-          locationId: retailVariantInventory.locationId,
-          locationName: locations.name,
-          quantity: retailVariantInventory.quantity,
-        })
-        .from(retailVariantInventory)
-        .innerJoin(locations, eq(locations.id, retailVariantInventory.locationId))
-        .where(
-          and(
-            eq(retailVariantInventory.companyId, companyId),
-            eq(retailVariantInventory.variantId, row.variantId),
-            sql`${retailVariantInventory.locationId} <> ${locationId}`,
-            sql`${retailVariantInventory.quantity} > 0`
-          )
-        )
-        .orderBy(locations.name);
+      const otherLocations =
+        (req.session?.currentRole ?? req.user?.role) === "POS"
+          ? []
+          : await db
+              .select({
+                locationId: retailVariantInventory.locationId,
+                locationName: locations.name,
+                quantity: retailVariantInventory.quantity,
+              })
+              .from(retailVariantInventory)
+              .innerJoin(locations, eq(locations.id, retailVariantInventory.locationId))
+              .where(
+                and(
+                  eq(retailVariantInventory.companyId, companyId),
+                  eq(retailVariantInventory.variantId, row.variantId),
+                  sql`${retailVariantInventory.locationId} <> ${locationId}`,
+                  sql`${retailVariantInventory.quantity} > 0`
+                )
+              )
+              .orderBy(locations.name);
       const item = {
         ...rest,
         imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
@@ -262,24 +282,28 @@ export function registerRetailPosRoutes(app: Express): void {
       if (!companyId) return;
       const userId = currentUserId(req);
       const body = saleSchema.parse(req.body);
-      await ensureCompanyLocation(companyId, body.locationId);
+      await ensureCompanyLocation(companyId, body.locationId, req);
       const canSellNegativeStock = Boolean(req.user?.canSellNegativeStock);
       const items = aggregateRetailCartItems(body.items);
 
       const result = await db.transaction((tx) =>
-        createRetailSaleInTx(tx, {
+        createRetailCheckoutInTx(tx, {
           companyId,
           locationId: body.locationId,
           idempotencyKey: body.idempotencyKey,
           notes: body.notes ?? null,
           items,
           userId,
+          username: req.user?.username,
           canSellNegativeStock,
+          discountAmount: body.discountAmount,
+          taxAmount: body.taxAmount,
+          paymentLines: body.payments,
         })
       );
 
-      const sale = await loadSaleResponse(companyId, result.saleId);
-      res.status(result.replayed ? 200 : 201).json({ replayed: result.replayed, sale });
+      const checkout = await loadSaleResponse(companyId, result.saleId);
+      res.status(result.replayed ? 200 : 201).json({ replayed: result.replayed, checkout, sale: checkout });
     } catch (error) {
       const message = getErrorMessage(error);
       res.status(message.includes("Insufficient stock") ? 409 : 400).json({ message });
@@ -294,7 +318,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const limit = Math.min(Math.max(Number(req.query.limit) || 25, 1), 100);
       if (!Number.isInteger(locationId) || locationId <= 0)
         return res.status(400).json({ message: "Location is required" });
-      await ensureCompanyLocation(companyId, locationId);
+      await ensureCompanyLocation(companyId, locationId, req);
       const sales = await db
         .select({ id: retailPosSales.id })
         .from(retailPosSales)
@@ -315,7 +339,7 @@ export function registerRetailPosRoutes(app: Express): void {
       const saleId = Number(req.params.saleId);
       if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
       const body = returnSchema.parse(req.body);
-      await ensureCompanyLocation(companyId, body.locationId);
+      await ensureCompanyLocation(companyId, body.locationId, req);
       const userId = currentUserId(req);
 
       const result = await db.transaction((tx) =>
@@ -327,6 +351,8 @@ export function registerRetailPosRoutes(app: Express): void {
           notes: body.notes ?? null,
           items: body.items,
           userId,
+          username: req.user?.username,
+          refundMethod: body.refundMethod,
         })
       );
 
@@ -345,8 +371,8 @@ export function registerRetailPosRoutes(app: Express): void {
       if (body.fromLocationId === body.toLocationId)
         return res.status(400).json({ message: "Transfer locations must be different" });
       await Promise.all([
-        ensureCompanyLocation(companyId, body.fromLocationId),
-        ensureCompanyLocation(companyId, body.toLocationId),
+        ensureCompanyLocation(companyId, body.fromLocationId, req),
+        ensureCompanyLocation(companyId, body.toLocationId, req),
         ensureRetailVariant(db, companyId, body.variantId),
       ]);
       const userId = currentUserId(req);
@@ -437,7 +463,7 @@ export function registerRetailPosRoutes(app: Express): void {
       if (req.user?.role === "POS") return res.status(403).json({ message: "POS users cannot make stock adjustments" });
       const body = adjustmentSchema.parse(req.body);
       await Promise.all([
-        ensureCompanyLocation(companyId, body.locationId),
+        ensureCompanyLocation(companyId, body.locationId, req),
         ensureRetailVariant(db, companyId, body.variantId),
       ]);
       const userId = currentUserId(req);
@@ -490,73 +516,20 @@ export function registerRetailPosRoutes(app: Express): void {
       const saleId = Number(req.params.saleId);
       if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
       const body = cancelSchema.parse(req.body);
-      await ensureCompanyLocation(companyId, body.locationId);
+      await ensureCompanyLocation(companyId, body.locationId, req);
       const userId = currentUserId(req);
-      const result = await db.transaction(async (tx) => {
-        const [operation] = await tx
-          .insert(retailStockOperations)
-          .values({
-            companyId,
-            operationType: "cancellation",
-            idempotencyKey: body.idempotencyKey,
-            referenceId: String(saleId),
-            createdBy: userId,
-            metadata: { reason: body.reason ?? null },
-          })
-          .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
-          .returning({ id: retailStockOperations.id });
-        if (!operation) return { replayed: true };
-
-        await tx.execute(
-          sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`
-        );
-        const [sale] = await tx
-          .select({ id: retailPosSales.id, locationId: retailPosSales.locationId, status: retailPosSales.status })
-          .from(retailPosSales)
-          .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
-          .limit(1);
-        if (!sale) throw new Error("Retail sale not found");
-        if (sale.locationId !== body.locationId)
-          throw new Error("Cancellation location must match the original sale location");
-        if (sale.status === "canceled") return { replayed: true };
-
-        const saleItems = await tx
-          .select({
-            id: retailPosSaleItems.id,
-            variantId: retailPosSaleItems.variantId,
-            quantity: retailPosSaleItems.quantity,
-            returnedQuantity: retailPosSaleItems.returnedQuantity,
-          })
-          .from(retailPosSaleItems)
-          .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
-
-        for (const item of saleItems) {
-          const quantityToRestore = Math.max(0, toNumber(item.quantity) - toNumber(item.returnedQuantity));
-          if (quantityToRestore <= 0) continue;
-          const stock = await lockInventoryRow(tx, companyId, item.variantId, sale.locationId);
-          const after = stock.quantity + quantityToRestore;
-          await setInventoryQuantity(tx, companyId, item.variantId, sale.locationId, after);
-          await addMovement(tx, {
-            companyId,
-            variantId: item.variantId,
-            locationId: sale.locationId,
-            movementType: "cancellation",
-            quantityDelta: quantityToRestore,
-            before: stock.quantity,
-            after,
-            eventKey: `cancellation:${operation.id}:${item.id}`,
-            referenceType: "retail_pos_sale",
-            referenceId: saleId,
-            createdBy: userId,
-            metadata: { saleItemId: item.id, reason: body.reason ?? null },
-          });
-        }
-        await tx
-          .update(retailPosSales)
-          .set({ status: "canceled", canceledAt: new Date(), updatedAt: new Date() })
-          .where(eq(retailPosSales.id, saleId));
-        return { replayed: false, operationId: operation.id };
-      });
+      const result = await db.transaction((tx) =>
+        cancelRetailSaleInTx(tx, {
+          companyId,
+          saleId,
+          locationId: body.locationId,
+          idempotencyKey: body.idempotencyKey,
+          reason: body.reason,
+          refundMethod: body.refundMethod,
+          userId,
+          username: req.user?.username,
+        })
+      );
       res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
     } catch (error) {
       res.status(400).json({ message: getErrorMessage(error) });
@@ -568,14 +541,27 @@ export function registerRetailPosRoutes(app: Express): void {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
       const limit = Math.min(Math.max(Number(req.query.limit) || 100, 1), 500);
-      const locationId = Number(req.query.locationId);
+      const posUser = (req.session?.currentRole ?? req.user?.role) === "POS";
+      const requestedLocationId = req.query.locationId == null ? null : Number(req.query.locationId);
+      if (requestedLocationId != null && (!Number.isInteger(requestedLocationId) || requestedLocationId <= 0)) {
+        return res.status(400).json({ message: "Invalid Retail location" });
+      }
+      const locationId = posUser
+        ? Number(req.user?.assignedLocationId ?? req.session?.currentLocationId ?? 0)
+        : requestedLocationId;
+      if (posUser && (typeof locationId !== "number" || !Number.isInteger(locationId) || locationId <= 0)) {
+        return res.status(403).json({ message: "POS user has no assigned Retail location" });
+      }
+      if (typeof locationId === "number" && locationId > 0) await ensureCompanyLocation(companyId, locationId, req);
       const rows = await db
         .select()
         .from(retailStockMovements)
         .where(
           and(
             eq(retailStockMovements.companyId, companyId),
-            Number.isInteger(locationId) && locationId > 0 ? eq(retailStockMovements.locationId, locationId) : undefined
+            typeof locationId === "number" && locationId > 0
+              ? eq(retailStockMovements.locationId, locationId)
+              : undefined
           )
         )
         .orderBy(desc(retailStockMovements.createdAt))
