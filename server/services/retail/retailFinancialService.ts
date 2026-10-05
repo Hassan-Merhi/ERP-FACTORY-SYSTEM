@@ -432,7 +432,7 @@ export async function refundRetailPaymentsTx(
 ): Promise<RetailResolvedPayment[]> {
   let remaining = new Decimal(input.refundAmount);
   if (remaining.lessThanOrEqualTo(0)) return [];
-  const payments = await tx
+  let payments = await tx
     .select()
     .from(retailPosPayments)
     .where(
@@ -443,7 +443,54 @@ export async function refundRetailPaymentsTx(
       )
     )
     .orderBy(asc(retailPosPayments.id));
-  if (!payments.length) throw new Error("Original Retail sale has no payment to refund");
+
+  // Backward compatibility for Retail sales created before Wave 1 payments existed.
+  // Materialize the historical sale total as one cash payment without rewriting the
+  // sale or its stock history, so old receipts can still be returned/cancelled.
+  if (!payments.length) {
+    const [sale] = await tx
+      .select({ totalAmount: retailPosSales.totalAmount })
+      .from(retailPosSales)
+      .where(and(eq(retailPosSales.companyId, input.companyId), eq(retailPosSales.id, input.saleId)))
+      .limit(1);
+    if (!sale) throw new Error("Retail sale not found");
+    const legacyTotal = new Decimal(sale.totalAmount ?? 0);
+    if (legacyTotal.lessThan(input.refundAmount)) {
+      throw new Error("Original Retail sale does not have enough paid value to refund");
+    }
+    const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
+    const legacyKey = `retail-legacy-payment:${input.saleId}`;
+    await tx
+      .insert(retailPosPayments)
+      .values({
+        companyId: input.companyId,
+        saleId: input.saleId,
+        locationId: input.locationId,
+        shiftId: null,
+        paymentType: "payment",
+        method: "cash",
+        amount: money(legacyTotal),
+        tenderedAmount: null,
+        changeAmount: "0",
+        reference: "Legacy Retail sale payment",
+        ledgerAccountId: settings.cashLedgerAccountId,
+        bankAccountId: null,
+        idempotencyKey: legacyKey,
+        createdBy: input.userId,
+      })
+      .onConflictDoNothing();
+    payments = await tx
+      .select()
+      .from(retailPosPayments)
+      .where(
+        and(
+          eq(retailPosPayments.companyId, input.companyId),
+          eq(retailPosPayments.saleId, input.saleId),
+          eq(retailPosPayments.paymentType, "payment")
+        )
+      )
+      .orderBy(asc(retailPosPayments.id));
+  }
 
   const refunds = await tx
     .select()
