@@ -15,9 +15,18 @@ import {
   vouchers,
 } from "@shared/schema";
 import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, debitMinusCredit, sumMoney, toMoney } from "../../lib/money";
 import type { DiagnosticIssue, ImportCycleBalanceSnapshot } from "./importCycleDiagnosticTypes";
 
-async function getAccountTypeBalance(companyId: number, accountType: string, isLiability = false) {
+/** An opening balance signed for a debit-normal account: negative unless its side is "Dr" (the default). */
+const drOpening = (amount: string | null, side: string | null) =>
+  (side || "Dr") === "Dr" ? toMoney(amount) : toMoney(amount).negated();
+/** An opening balance signed for a credit-normal account: positive only when its side is "Cr". */
+const crOpening = (amount: string | null, side: string | null) =>
+  side === "Cr" ? toMoney(amount) : toMoney(amount).negated();
+
+async function getAccountTypeBalance(companyId: number, accountType: string, isLiability = false): Promise<Decimal> {
   const accounts = await db
     .select()
     .from(ledgerAccounts)
@@ -29,7 +38,7 @@ async function getAccountTypeBalance(companyId: number, accountType: string, isL
       )
     );
 
-  let totalBalance = 0;
+  let totalBalance = new MoneyDecimal(0);
   for (const account of accounts) {
     const entries = await db
       .select({
@@ -47,29 +56,18 @@ async function getAccountTypeBalance(companyId: number, accountType: string, isL
         )
       );
 
-    const openingBalanceRaw = parseFloat(account.openingBalance || "0");
-    const openingSide = account.openingBalanceSide || "Dr";
-    const signedOpening = isLiability
-      ? openingSide === "Cr"
-        ? openingBalanceRaw
-        : -openingBalanceRaw
-      : openingSide === "Dr"
-        ? openingBalanceRaw
-        : -openingBalanceRaw;
-
-    const balance = entries.reduce((sum, entry) => {
-      const credit = parseFloat(entry.creditAmount || "0");
-      const debit = parseFloat(entry.debitAmount || "0");
-      return isLiability ? sum + credit - debit : sum + debit - credit;
-    }, signedOpening);
-
-    totalBalance += balance;
+    const movement = debitMinusCredit(entries);
+    totalBalance = totalBalance.plus(
+      isLiability
+        ? crOpening(account.openingBalance, account.openingBalanceSide).minus(movement)
+        : drOpening(account.openingBalance, account.openingBalanceSide).plus(movement)
+    );
   }
 
   return totalBalance;
 }
 
-async function getTransactionOnlyBalance(companyId: number, accountType: string, isLiability = true) {
+async function getTransactionOnlyBalance(companyId: number, accountType: string, isLiability = true): Promise<Decimal> {
   const result = await db
     .select({
       totalCredit: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS DECIMAL)), 0)`,
@@ -89,9 +87,8 @@ async function getTransactionOnlyBalance(companyId: number, accountType: string,
       )
     );
 
-  const totalCredit = parseFloat(result[0]?.totalCredit || "0");
-  const totalDebit = parseFloat(result[0]?.totalDebit || "0");
-  return isLiability ? totalCredit - totalDebit : totalDebit - totalCredit;
+  const net = toMoney(result[0]?.totalDebit).minus(toMoney(result[0]?.totalCredit));
+  return isLiability ? net.negated() : net;
 }
 
 export async function collectImportCycleBalanceSnapshot(companyId: number): Promise<ImportCycleBalanceSnapshot> {
@@ -116,9 +113,9 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .where(and(eq(inventory.companyId, companyId), sql`CAST(${inventory.quantity} AS DECIMAL) < 0`));
 
   for (const item of negativeInventory) {
-    const qty = parseFloat(item.quantity || "0");
-    const rate = parseFloat(item.averageRate || "0");
-    const impact = Math.abs(qty * rate);
+    const qty = toMoney(item.quantity).toNumber();
+    const rate = toMoney(item.averageRate).toNumber();
+    const impact = toMoney(item.quantity).times(toMoney(item.averageRate)).abs().toNumber();
     issues.push({
       id: generateIssueId(),
       type: "negative_inventory",
@@ -155,10 +152,11 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .where(and(eq(inventory.companyId, companyId), or(isNull(locations.id), isNotNull(locations.deletedAt))));
 
   for (const item of orphanedInventory) {
-    const qty = parseFloat(item.quantity || "0");
-    const rate = parseFloat(item.averageRate || "0");
-    const impact = Math.abs(qty * rate);
-    if (impact > 0.01) {
+    const qty = toMoney(item.quantity).toNumber();
+    const rate = toMoney(item.averageRate).toNumber();
+    const exactImpact = toMoney(item.quantity).times(toMoney(item.averageRate)).abs();
+    const impact = exactImpact.toNumber();
+    if (exactImpact.greaterThan(0.01)) {
       issues.push({
         id: generateIssueId(),
         type: "orphaned_inventory",
@@ -194,10 +192,11 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .groupBy(vouchers.id, vouchers.voucherNumber, vouchers.voucherType, vouchers.voucherDate);
 
   for (const voucher of voucherBalances) {
-    const debit = parseFloat(voucher.totalDebit || "0");
-    const credit = parseFloat(voucher.totalCredit || "0");
-    const difference = Math.abs(debit - credit);
-    if (difference > 0.01) {
+    const debit = toMoney(voucher.totalDebit);
+    const credit = toMoney(voucher.totalCredit);
+    const exactDifference = debit.minus(credit).abs();
+    const difference = exactDifference.toNumber();
+    if (exactDifference.greaterThan(0.01)) {
       issues.push({
         id: generateIssueId(),
         type: "unbalanced_voucher",
@@ -209,8 +208,8 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
           voucherNumber: voucher.voucherNumber,
           voucherType: voucher.voucherType,
           voucherDate: voucher.voucherDate,
-          totalDebit: debit,
-          totalCredit: credit,
+          totalDebit: debit.toNumber(),
+          totalCredit: credit.toNumber(),
           difference,
         },
         fixGuidance: "Edit the voucher to ensure debits equal credits, or delete and recreate it.",
@@ -239,7 +238,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     );
 
   for (const container of staleContainers) {
-    const value = parseFloat(container.grandTotal || "0");
+    const value = toMoney(container.grandTotal).toNumber();
     const daysSinceCreated = Math.floor(
       (Date.now() - new Date(container.createdAt || 0).getTime()) / (1000 * 60 * 60 * 24)
     );
@@ -305,7 +304,7 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     );
 
   const isParentContext = await isParentCompanyContext(companyId);
-  let supplierOpeningTotal = 0;
+  let supplierOpeningTotal = new MoneyDecimal(0);
   if (isParentContext) {
     const allSuppliers = await storage.getAllSuppliers();
     const supplierIdsWithActivity = new Set(
@@ -335,21 +334,20 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
       if (container.supplierId) supplierIdsWithActivity.add(container.supplierId);
     }
 
-    supplierOpeningTotal = allSuppliers
-      .filter((supplier) => supplierIdsWithActivity.has(supplier.id))
-      .reduce((sum, supplier) => sum + parseFloat(supplier.openingBalance || "0"), 0);
+    supplierOpeningTotal = sumMoney(
+      allSuppliers
+        .filter((supplier) => supplierIdsWithActivity.has(supplier.id))
+        .map((supplier) => supplier.openingBalance)
+    );
   }
 
-  const supplierBalance = supplierEntries.reduce(
-    (sum, entry) => sum + parseFloat(entry.creditAmount || "0") - parseFloat(entry.debitAmount || "0"),
-    supplierOpeningTotal
-  );
+  const supplierBalance = supplierOpeningTotal.minus(debitMinusCredit(supplierEntries));
 
   const otwContainers = await db
     .select()
     .from(containers)
     .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")));
-  const stockOtwValue = otwContainers.reduce((sum, container) => sum + parseFloat(container.grandTotal || "0"), 0);
+  const stockOtwValue = sumMoney(otwContainers.map((container) => container.grandTotal));
 
   const cashBalance = await getAccountTypeBalance(companyId, "Cash", false);
   const ledgerBankBalance = await getAccountTypeBalance(companyId, "Bank", false);
@@ -378,24 +376,14 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .select()
     .from(bankAccounts)
     .where(
-      and(
-        eq(bankAccounts.companyId, companyId),
-        isNull(bankAccounts.deletedAt),
-        isNull(bankAccounts.linkedLedgerId)
-      )
+      and(eq(bankAccounts.companyId, companyId), isNull(bankAccounts.deletedAt), isNull(bankAccounts.linkedLedgerId))
     );
-  const standaloneBankOpening = standaloneBankAccounts.reduce((sum, account) => {
-    const openingBalanceRaw = parseFloat(account.openingBalance || "0");
-    const openingSide = account.openingBalanceSide || "Dr";
-    return sum + (openingSide === "Dr" ? openingBalanceRaw : -openingBalanceRaw);
-  }, 0);
-  const standaloneBankVoucher = standaloneBankEntries.reduce((sum, entry) => {
-    const credit = parseFloat(entry.creditAmount || "0");
-    const debit = parseFloat(entry.debitAmount || "0");
-    return sum + debit - credit;
-  }, 0);
+  const standaloneBankOpening = sumMoney(
+    standaloneBankAccounts.map((account) => drOpening(account.openingBalance, account.openingBalanceSide))
+  );
+  const standaloneBankVoucher = debitMinusCredit(standaloneBankEntries);
 
-  const bankBalance = ledgerBankBalance + standaloneBankOpening + standaloneBankVoucher;
+  const bankBalance = ledgerBankBalance.plus(standaloneBankOpening).plus(standaloneBankVoucher);
   const assetBalance = await getAccountTypeBalance(companyId, "Asset", false);
   const dutyAgentBalance = await getAccountTypeBalance(companyId, "Duty Agent", true);
   const transporterAgentBalance = await getAccountTypeBalance(companyId, "Transporter Agent", true);
@@ -416,9 +404,8 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .from(inventory)
     .innerJoin(locations, eq(inventory.locationId, locations.id))
     .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
-  const stockOnFloorValue = inventoryItems.reduce(
-    (sum, item) => sum + parseFloat(item.quantity || "0") * parseFloat(item.averageRate || "0"),
-    0
+  const stockOnFloorValue = sumMoney(
+    inventoryItems.map((item) => toMoney(item.quantity).times(toMoney(item.averageRate)))
   );
 
   const cogsData = await db
@@ -426,69 +413,33 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     .from(salesItems)
     .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
     .where(and(eq(vouchers.companyId, companyId), isNull(vouchers.deletedAt), eq(vouchers.optional, false)));
-  const cogsBalance = cogsData.reduce((sum, item) => sum + parseFloat(item.totalCost || "0"), 0);
+  const cogsBalance = sumMoney(cogsData.map((item) => item.totalCost));
 
   const employeesData = await db
     .select({ currentBalance: employees.currentBalance })
     .from(employees)
     .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)));
-  const payrollLiabilitiesBalance = employeesData.reduce((sum, employee) => {
-    const balance = parseFloat(employee.currentBalance || "0");
-    return sum + (balance > 0 ? balance : 0);
-  }, 0);
+  const payrollLiabilitiesBalance = sumMoney(
+    employeesData.map((employee) => toMoney(employee.currentBalance)).filter((balance) => balance.greaterThan(0))
+  );
 
   const allAccountsForOpening = await db
     .select()
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
-  let totalDrOpenings = 0;
-  let totalCrOpenings = 0;
-  for (const account of allAccountsForOpening) {
-    const openingBalanceRaw = parseFloat(account.openingBalance || "0");
-    const openingSide = account.openingBalanceSide || "Dr";
-    if (openingSide === "Dr") totalDrOpenings += openingBalanceRaw;
-    else totalCrOpenings += openingBalanceRaw;
-  }
-  let openingBalanceEquity = totalCrOpenings - totalDrOpenings;
+  // Dr openings minus Cr openings is the sum of debit-signed openings, so the equity is its negation.
+  const openingBalanceEquityBeforeStock = sumMoney(
+    allAccountsForOpening.map((account) => drOpening(account.openingBalance, account.openingBalanceSide))
+  ).negated();
 
   const stockItemsWithOpening = await db
     .select({ openingValue: stockItems.openingValue })
     .from(stockItems)
     .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt)));
-  const openingStockValue = stockItemsWithOpening.reduce(
-    (sum, item) => sum + parseFloat(item.openingValue || "0"),
-    0
-  );
-  openingBalanceEquity -= openingStockValue;
+  const openingStockValue = sumMoney(stockItemsWithOpening.map((item) => item.openingValue));
+  const openingBalanceEquity = openingBalanceEquityBeforeStock.minus(openingStockValue);
 
-  const netImportCycleBalance =
-    Math.round(
-      (stockOtwValue +
-        cashBalance +
-        bankBalance +
-        stockOnFloorValue +
-        assetBalance +
-        salaryAdvancesBalance +
-        indirectExpenseBalance +
-        payrollExpenseBalance +
-        governmentTaxesBalance +
-        cogsBalance -
-        (supplierBalance +
-          dutyAgentBalance +
-          transporterAgentBalance +
-          loansBalance +
-          liabilityBalance +
-          profitBalance +
-          equityTransactionBalance +
-          apTransactionBalance +
-          incomeBalance +
-          payrollLiabilitiesBalance -
-          openingBalanceEquity)) *
-        100
-    ) / 100;
-
-  return {
-    issues,
+  const assets = sumMoney([
     stockOtwValue,
     cashBalance,
     bankBalance,
@@ -499,6 +450,8 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     payrollExpenseBalance,
     governmentTaxesBalance,
     cogsBalance,
+  ]);
+  const liabilities = sumMoney([
     supplierBalance,
     dutyAgentBalance,
     transporterAgentBalance,
@@ -509,9 +462,35 @@ export async function collectImportCycleBalanceSnapshot(companyId: number): Prom
     apTransactionBalance,
     incomeBalance,
     payrollLiabilitiesBalance,
-    openingBalanceEquity,
-    openingStockValue,
-    generalExpenseBalance,
+  ]).minus(openingBalanceEquity);
+  // Math.round's rule (halves toward +infinity), applied to the exact value.
+  const netImportCycleBalance = assets.minus(liabilities).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_CEIL).toNumber();
+
+  return {
+    issues,
+    stockOtwValue: stockOtwValue.toNumber(),
+    cashBalance: cashBalance.toNumber(),
+    bankBalance: bankBalance.toNumber(),
+    stockOnFloorValue: stockOnFloorValue.toNumber(),
+    assetBalance: assetBalance.toNumber(),
+    salaryAdvancesBalance: salaryAdvancesBalance.toNumber(),
+    indirectExpenseBalance: indirectExpenseBalance.toNumber(),
+    payrollExpenseBalance: payrollExpenseBalance.toNumber(),
+    governmentTaxesBalance: governmentTaxesBalance.toNumber(),
+    cogsBalance: cogsBalance.toNumber(),
+    supplierBalance: supplierBalance.toNumber(),
+    dutyAgentBalance: dutyAgentBalance.toNumber(),
+    transporterAgentBalance: transporterAgentBalance.toNumber(),
+    loansBalance: loansBalance.toNumber(),
+    liabilityBalance: liabilityBalance.toNumber(),
+    profitBalance: profitBalance.toNumber(),
+    equityTransactionBalance: equityTransactionBalance.toNumber(),
+    apTransactionBalance: apTransactionBalance.toNumber(),
+    incomeBalance: incomeBalance.toNumber(),
+    payrollLiabilitiesBalance: payrollLiabilitiesBalance.toNumber(),
+    openingBalanceEquity: openingBalanceEquity.toNumber(),
+    openingStockValue: openingStockValue.toNumber(),
+    generalExpenseBalance: generalExpenseBalance.toNumber(),
     netImportCycleBalance,
   };
 }
