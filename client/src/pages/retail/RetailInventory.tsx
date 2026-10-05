@@ -290,7 +290,6 @@ export default function RetailInventory() {
           </div>
         </div>
 
-
         <Card>
           <CardHeader>
             <CardTitle>Stock by color and size</CardTitle>
