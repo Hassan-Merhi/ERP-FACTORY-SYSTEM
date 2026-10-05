@@ -373,7 +373,8 @@ export function registerRetailCatalogRoutes(app: Express): void {
       res.setHeader("Content-Length", String(buffer.length));
       res.setHeader("Cache-Control", "private, max-age=86400");
       res.setHeader("X-Content-Type-Options", "nosniff");
-      return res.send(buffer);
+      res.end(buffer);
+      return;
     } catch (error: unknown) {
       return res.status(500).json({ message: getErrorMessage(error) });
     }
