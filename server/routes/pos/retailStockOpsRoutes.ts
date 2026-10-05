@@ -30,6 +30,11 @@ import {
   loadSaleResponse,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems } from "../../services/retail/retailStockMath";
+import {
+  postRetailRefundAccountingTx,
+  refundRetailPaymentsTx,
+  validateRetailShiftTx,
+} from "../../services/retail/retailFinancialService";
 
 const toNumber = (value: unknown) => {
   const parsed = Number(value ?? 0);
@@ -52,6 +57,7 @@ export const retailExchangeSchema = z.object({
   idempotencyKey: idempotencyKeySchema,
   saleId: z.coerce.number().int().positive(),
   locationId: z.coerce.number().int().positive(),
+  shiftId: z.coerce.number().int().positive().optional(),
   notes: z.string().trim().max(2000).optional(),
   returnItems: z
     .array(
@@ -251,6 +257,37 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           userId,
           metadata: { exchangeOperationId: operation.id },
         });
+        if (!returned.replayed) {
+          const shift = await validateRetailShiftTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            userId,
+            shiftId: body.shiftId ?? null,
+          });
+          const refunds = await refundRetailPaymentsTx(tx, {
+            companyId,
+            saleId: body.saleId,
+            locationId: body.locationId,
+            shiftId: shift?.id ?? null,
+            refundAmount: returned.refundValue,
+            idempotencyKey: `${body.idempotencyKey}:return`.slice(0, 191),
+            userId,
+          });
+          await postRetailRefundAccountingTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            saleId: body.saleId,
+            sourceType: "retail-pos-return",
+            sourceId: String(returned.returnId),
+            idempotencyKey: `retail-pos-return:${returned.returnId}`,
+            refundAmount: returned.refundValue,
+            restoredCost: returned.costValue,
+            refunds,
+            userId,
+            username: req.user?.username ?? null,
+          });
+        }
+
         const sold = await createRetailSaleInTx(tx, {
           companyId,
           locationId: body.locationId,
@@ -258,29 +295,12 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           notes: `Exchange #${operation.id} for sale #${body.saleId}`,
           items: aggregateRetailCartItems(body.newItems),
           userId,
+          username: req.user?.username ?? null,
           canSellNegativeStock,
+          shiftId: body.shiftId ?? null,
         });
 
-        const priceBySaleItem = new Map(
-          (
-            await tx
-              .select({ id: retailPosSaleItems.id, unitPrice: retailPosSaleItems.unitPrice })
-              .from(retailPosSaleItems)
-              .where(
-                and(
-                  eq(retailPosSaleItems.companyId, companyId),
-                  inArray(
-                    retailPosSaleItems.id,
-                    body.returnItems.map((item) => item.saleItemId)
-                  )
-                )
-              )
-          ).map((row) => [row.id, toNumber(row.unitPrice)])
-        );
-        const refundValue = body.returnItems.reduce(
-          (sum, item) => sum + item.quantity * (priceBySaleItem.get(item.saleItemId) ?? 0),
-          0
-        );
+        const refundValue = returned.refundValue;
         await tx
           .update(retailStockOperations)
           .set({
