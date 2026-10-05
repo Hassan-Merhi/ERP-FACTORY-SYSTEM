@@ -16,7 +16,6 @@ interface InvoiceContainerRow {
   orderDate: string;
   customerName: string | null;
   eta: string | null;
-  trackingLastStatus: string | null;
   trackingLink: string | null;
   containerStatus: string | null;
 }
@@ -29,25 +28,6 @@ function fmtDate(d: string | null | undefined): string {
   const [y, m, day] = plain.split("-");
   if (!y || !m || !day) return "—";
   return `${day}/${m}/${y.slice(2)}`;
-}
-
-function TrackingStatus({ row }: { row: InvoiceContainerRow }) {
-  const raw = row.trackingLastStatus?.trim();
-  if (!raw) {
-    return <span className="text-muted-foreground text-xs">—</span>;
-  }
-  const lower = raw.toLowerCase();
-  const isDelivered = lower.includes("return") || lower.includes("delivered") || lower.includes("gate-out");
-  const isInTransit =
-    lower.includes("transit") || lower.includes("gate-in") || lower.includes("vessel") || lower.includes("loaded");
-  const colorClass = isDelivered
-    ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
-    : isInTransit
-      ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-      : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${colorClass}`}>{raw}</span>
-  );
 }
 
 function InvoiceStatus({ status }: { status: string }) {
@@ -125,8 +105,7 @@ export default function FactoryContainerTracking() {
                 <TableHead className="whitespace-nowrap text-right">Cost (USD)</TableHead>
                 <TableHead className="whitespace-nowrap">ETA</TableHead>
                 <TableHead className="whitespace-nowrap">Invoice Status</TableHead>
-                <TableHead className="whitespace-nowrap">Tracking Status</TableHead>
-                <TableHead className="whitespace-nowrap">Tracking</TableHead>
+                <TableHead className="whitespace-nowrap">Manual Tracking Link</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -167,9 +146,6 @@ export default function FactoryContainerTracking() {
                   </TableCell>
                   <TableCell data-testid={`text-invoice-status-${row.id}`}>
                     <InvoiceStatus status={row.status} />
-                  </TableCell>
-                  <TableCell data-testid={`text-tracking-status-${row.id}`}>
-                    <TrackingStatus row={row} />
                   </TableCell>
                   <TableCell data-testid={`cell-tracking-${row.id}`}>
                     {row.trackingLink ? (

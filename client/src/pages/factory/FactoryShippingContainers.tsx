@@ -30,7 +30,6 @@ import {
   Trash2,
   RotateCcw,
   Check,
-  RefreshCw,
   Loader2,
   SlidersHorizontal,
 } from "lucide-react";
@@ -71,7 +70,6 @@ export default function FactoryShippingContainers() {
   const [docsRowId, setDocsRowId] = useState<number | null>(null);
   const [waRowId, setWaRowId] = useState<number | null>(null);
   const shippingInvoiceInputRef = useRef<HTMLInputElement>(null);
-  const trackingRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shippingInvoiceUploadingId, setShippingInvoiceUploadingId] = useState<number | null>(null);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [donePage, setDonePage] = useState(1);
@@ -144,33 +142,6 @@ export default function FactoryShippingContainers() {
     syncShippingContainers();
   }, [me?.id, me?.currentCompanyId, me?.companyId, syncShippingContainers]);
 
-  const trackAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/factory/shipping-containers/track-now");
-      return (await res.json()) as { message?: string };
-    },
-    onSuccess: (data: { message?: string }) => {
-      toast({ title: "Tracking started", description: data?.message ?? "ETA updates will appear shortly." });
-      if (trackingRefreshTimerRef.current) clearTimeout(trackingRefreshTimerRef.current);
-      trackingRefreshTimerRef.current = setTimeout(() => {
-        trackingRefreshTimerRef.current = null;
-        if (document.visibilityState !== "visible") return;
-        queryClient.invalidateQueries(
-          { queryKey: ["/api/factory/invoice-container-tracking"], exact: true, refetchType: "active" },
-          { cancelRefetch: false }
-        );
-      }, 8000);
-    },
-    onError: (err: ClientErrorLike) =>
-      toast({ title: "Tracking failed", description: err.message, variant: "destructive" }),
-  });
-
-  useEffect(
-    () => () => {
-      if (trackingRefreshTimerRef.current) clearTimeout(trackingRefreshTimerRef.current);
-    },
-    []
-  );
 
   const rows = useMemo(() => [...activeRows, ...done], [activeRows, done]);
 
@@ -330,19 +301,6 @@ export default function FactoryShippingContainers() {
               data-testid="input-search"
             />
           </div>
-          <Button
-            variant="outline"
-            onClick={() => trackAllMutation.mutate()}
-            disabled={trackAllMutation.isPending}
-            data-testid="button-track-all-eta"
-          >
-            {trackAllMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-1" />
-            )}
-            {trackAllMutation.isPending ? "Tracking…" : "Track All ETAs"}
-          </Button>
           <Button
             variant={showFilters ? "secondary" : "outline"}
             onClick={() => setShowFilters((v) => !v)}

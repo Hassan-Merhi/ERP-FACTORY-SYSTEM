@@ -308,6 +308,7 @@ export function registerContainerTrackingRoutes(app: Express) {
   // Any authenticated non-POS user in the container's own company may trigger this,
   // matching the permission level of the manual tracking-fields PATCH above.
   app.post("/api/containers/:id/fetch-eta", requireAuth, requireNonPOS, async (req, res) => {
+    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
     if (!req.session.currentCompanyId) {
       return res.status(400).json({ message: "No company selected" });
     }
@@ -332,6 +333,7 @@ export function registerContainerTrackingRoutes(app: Express) {
 
   // Alias with a more descriptive path — same behavior as fetch-eta above.
   app.post("/api/containers/:id/refresh-eta", requireAuth, requireNonPOS, async (req, res) => {
+    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
     if (!req.session.currentCompanyId) {
       return res.status(400).json({ message: "No company selected" });
     }
@@ -356,6 +358,7 @@ export function registerContainerTrackingRoutes(app: Express) {
 
   // POST /api/containers/refresh-etas — bulk JSONCargo ETA refresh, Admin/Developer/Owner only.
   app.post("/api/containers/refresh-etas", requireAuth, requireNonPOS, async (req, res) => {
+    return res.status(410).json({ message: "Automatic ETA/carrier tracking is disabled. Update ETA and tracking fields manually or by Excel import." });
     const role = req.user?.role;
     if (!role || !JSONCARGO_ADMIN_ROLES.includes(role)) {
       return res.status(403).json({ message: "Insufficient permissions" });

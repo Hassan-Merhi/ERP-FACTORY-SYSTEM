@@ -186,7 +186,7 @@ const PAGES: Array<{ name: string; load: () => Promise<any>; landmark: string }>
   {
     name: "FactoryShippingContainers",
     load: () => import("@/pages/factory/FactoryShippingContainers"),
-    landmark: "button-track-all-eta",
+    landmark: "input-search",
   },
   { name: "FactoryInvoices", load: () => import("@/pages/factory/FactoryInvoices"), landmark: "filter-tabs" },
   { name: "WasteDispatch", load: () => import("@/pages/factory/WasteDispatch"), landmark: "input-scan-ref" },

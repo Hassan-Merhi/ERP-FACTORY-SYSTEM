@@ -1,7 +1,6 @@
-import { Check, RefreshCw } from "lucide-react";
+import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TableCell } from "@/components/ui/table";
-import { useJsonCargoEta } from "../useJsonCargoEta";
 
 interface OtwContainerActionsProps {
   containerId: number;
@@ -16,9 +15,6 @@ export function OtwContainerActions({
   saveTracking,
   savingIds,
 }: OtwContainerActionsProps) {
-  const { refreshOne, refreshingIds } = useJsonCargoEta();
-  const isRefreshing = refreshingIds.has(containerId);
-
   return (
     <TableCell>
       <div className="flex items-center gap-1">
@@ -37,16 +33,6 @@ export function OtwContainerActions({
             )}
           </Button>
         )}
-        <Button
-          size="icon"
-          variant="ghost"
-          title="Refresh ETA (Maersk / Hapag-Lloyd / MSC / CMA CGM)"
-          onClick={() => refreshOne(containerId)}
-          disabled={isRefreshing}
-          data-testid={`button-refresh-eta-${containerId}`}
-        >
-          <RefreshCw className={`h-4 w-4 text-muted-foreground ${isRefreshing ? "animate-spin" : ""}`} />
-        </Button>
       </div>
     </TableCell>
   );

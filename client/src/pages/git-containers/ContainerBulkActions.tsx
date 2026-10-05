@@ -1,4 +1,4 @@
-import { CheckCircle2, Loader2, MessageCircle, Upload, Download, ChevronDown, X, FileSpreadsheet } from "lucide-react";
+import { Loader2, MessageCircle, Upload, Download, ChevronDown, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
@@ -11,50 +11,21 @@ import {
 
 interface ContainerBulkActionsProps {
   className?: string;
-  isAllowed: boolean;
-  isBulkPending: boolean;
-  allContainersCount: number;
   waSending: boolean;
-  onTrackAll: () => void;
   onImportClick: () => void;
-  onBulkEnable: (enabled: boolean) => void;
   onSendWhatsApp: () => void;
   onPrint: () => void;
 }
 
 export function ContainerBulkActions({
-  isAllowed,
-  isBulkPending,
-  allContainersCount,
   waSending,
-  onTrackAll,
   onImportClick,
-  onBulkEnable,
   onSendWhatsApp,
   onPrint,
   className,
 }: ContainerBulkActionsProps) {
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      {isAllowed && (
-        <Button
-          variant="outline"
-          size="default"
-          onClick={onTrackAll}
-          disabled={isBulkPending || allContainersCount === 0}
-          data-testid="button-track-all-now"
-        >
-          {isBulkPending ? (
-            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-          ) : (
-            <div className="flex items-center">
-              <CheckCircle2 className="h-4 w-4 mr-1.5" />
-              Track All
-            </div>
-          )}
-        </Button>
-      )}
-
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="default" data-testid="button-otw-actions">
@@ -74,19 +45,6 @@ export function ContainerBulkActions({
             </a>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          {isAllowed && (
-            <>
-              <DropdownMenuItem onClick={() => onBulkEnable(true)} data-testid="menu-bulk-enable">
-                <CheckCircle2 className="h-4 w-4 mr-2 text-green-600" />
-                Enable Auto-tracking (All)
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onBulkEnable(false)} data-testid="menu-bulk-disable">
-                <X className="h-4 w-4 mr-2 text-red-500" />
-                Disable Auto-tracking (All)
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          )}
           <DropdownMenuItem onClick={onSendWhatsApp} disabled={waSending} data-testid="menu-send-whatsapp">
             {waSending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageCircle className="h-4 w-4 mr-2" />}
             Send to WhatsApp Group

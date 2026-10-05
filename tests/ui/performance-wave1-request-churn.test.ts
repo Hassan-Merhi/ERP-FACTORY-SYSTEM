@@ -65,10 +65,11 @@ describe("Performance Wave 1 request-churn policy", () => {
     expect(text).not.toContain("? 2000 : false");
   });
 
-  it("pauses container bulk-progress requests while the tab is hidden", () => {
+  it("does not poll carrier tracking progress from the container workbook", () => {
     const text = source("client/src/pages/git-containers/useGITContainersData.ts");
-    expect(text).toContain('document.visibilityState === "hidden"');
-    expect(text).toContain('fetch("/api/container-tracking/bulk-progress"');
+    expect(text).not.toContain("/api/container-tracking/bulk-progress");
+    expect(text).not.toContain("/api/container-tracking/bulk-track-now");
+    expect(text).not.toContain("/api/container-tracking/bulk-settings");
   });
 
   it("keeps the shared visible-tab helper as the single background-polling gate", () => {
