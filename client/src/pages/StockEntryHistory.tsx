@@ -58,11 +58,14 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
   const useLite = viewMode === "condensed";
 
   const params = new URLSearchParams();
-  if (selectedDate) {
+  const activeSearch = debouncedSearch.trim();
+  // Reference search must work across all production dates. The date picker
+  // remains unchanged so clearing the search immediately restores that day.
+  if (selectedDate && !activeSearch) {
     params.set("startDate", selectedDate);
     params.set("endDate", selectedDate);
   }
-  if (debouncedSearch.trim()) params.set("search", debouncedSearch.trim());
+  if (activeSearch) params.set("search", activeSearch);
   if (!includeUnassigned) params.set("includeUnassigned", "false");
   if (useLite) params.set("lite", "1");
   params.set("page", String(page));

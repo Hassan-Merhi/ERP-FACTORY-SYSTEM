@@ -77,7 +77,7 @@ const referencePayload = {
     grade: "A",
     stockEntryDate: "2026-08-10",
     pressedAt: null,
-    finalizedAt: "2026-08-10T12:00:00.000Z",
+    finalizedAt: "2026-08-11T12:00:00.000Z",
     workerName: "Alice",
     createdAt: "2026-08-10T09:00:00.000Z",
     updatedAt: "2026-08-10T12:00:00.000Z",
@@ -152,6 +152,7 @@ describe("barcode lookup page behavior", () => {
     expect(screen.getByTestId("text-ref-article-code")).toHaveTextContent("SH-1");
     expect(screen.getByTestId("text-bale-product-name")).toHaveTextContent("Shirts");
     expect(screen.getByTestId("bale-status")).toHaveTextContent("IN_STOCK");
+    expect(screen.getByText("Date Produced:2026-08-10")).toBeInTheDocument();
   });
 
   it("auto-detects article mode and lists every matching bale reference", async () => {
