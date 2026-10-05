@@ -139,42 +139,62 @@ export async function ensureRetailAccountingSettingsTx(
   companyId: number,
   locationId?: number | null
 ): Promise<RetailAccountingSettingsResolved> {
-  const specific = locationId
-    ? await tx
-        .select()
-        .from(retailAccountingSettings)
-        .where(and(eq(retailAccountingSettings.companyId, companyId), eq(retailAccountingSettings.locationId, locationId)))
-        .limit(1)
-    : [];
-  const defaults = await tx
+  const generated = await defaultRetailAccountIds(tx, companyId);
+  let [defaultRow] = await tx
     .select()
     .from(retailAccountingSettings)
     .where(and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId)))
     .limit(1);
-  let current = specific[0] ?? defaults[0];
-  const generated = await defaultRetailAccountIds(tx, companyId);
 
-  if (!current) {
-    const [created] = await tx
+  if (!defaultRow) {
+    [defaultRow] = await tx
       .insert(retailAccountingSettings)
-      .values({
-        companyId,
-        locationId: null,
-        ...generated,
-      })
+      .values({ companyId, locationId: null, ...generated })
       .onConflictDoNothing()
       .returning();
-    current =
-      created ??
-      (
-        await tx
-          .select()
-          .from(retailAccountingSettings)
-          .where(and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId)))
-          .limit(1)
-      )[0];
+    if (!defaultRow) {
+      [defaultRow] = await tx
+        .select()
+        .from(retailAccountingSettings)
+        .where(and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId)))
+        .limit(1);
+    }
   }
-  if (!current) throw new Error("Retail accounting settings could not be created");
+  if (!defaultRow) throw new Error("Retail accounting settings could not be created");
+
+  let current = defaultRow;
+  if (locationId) {
+    const [specific] = await tx
+      .select()
+      .from(retailAccountingSettings)
+      .where(and(eq(retailAccountingSettings.companyId, companyId), eq(retailAccountingSettings.locationId, locationId)))
+      .limit(1);
+    if (specific) {
+      current = specific;
+    } else {
+      const { id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...defaultsToCopy } = defaultRow;
+      const [createdSpecific] = await tx
+        .insert(retailAccountingSettings)
+        .values({ ...defaultsToCopy, companyId, locationId })
+        .onConflictDoNothing()
+        .returning();
+      current =
+        createdSpecific ??
+        (
+          await tx
+            .select()
+            .from(retailAccountingSettings)
+            .where(
+              and(
+                eq(retailAccountingSettings.companyId, companyId),
+                eq(retailAccountingSettings.locationId, locationId)
+              )
+            )
+            .limit(1)
+        )[0];
+    }
+  }
+  if (!current) throw new Error("Retail accounting settings could not be resolved");
 
   const patch = {
     cashLedgerAccountId: current.cashLedgerAccountId ?? generated.cashLedgerAccountId,
