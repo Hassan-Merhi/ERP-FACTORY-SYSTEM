@@ -9,10 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PENDING_LOADS_URL = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
+const SESSION_SCAN_STORAGE_PREFIX = "factory-priority-scan-session";
 
 interface PriorityScanConfig {
   id: number;
@@ -77,6 +79,52 @@ interface SessionScan {
   color: string;
 }
 
+interface StoredSessionScans {
+  dateKey: string;
+  scans: SessionScan[];
+}
+
+function getLocalCalendarDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getSessionScanStorageKey(companyId: number): string {
+  return `${SESSION_SCAN_STORAGE_PREFIX}:${companyId}`;
+}
+
+function readStoredSessionScans(storageKey: string, dateKey: string): SessionScan[] {
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return [];
+
+    const stored = JSON.parse(raw) as Partial<StoredSessionScans>;
+    if (stored.dateKey !== dateKey || !Array.isArray(stored.scans)) {
+      window.localStorage.removeItem(storageKey);
+      return [];
+    }
+
+    return stored.scans.slice(0, 30) as SessionScan[];
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return [];
+  }
+}
+
+function persistStoredSessionScans(storageKey: string, dateKey: string, scans: SessionScan[]) {
+  try {
+    const payload: StoredSessionScans = {
+      dateKey,
+      scans: scans.slice(0, 30),
+    };
+    window.localStorage.setItem(storageKey, JSON.stringify(payload));
+  } catch {
+    // Scanning must continue even when browser storage is unavailable.
+  }
+}
+
 interface ScanFeedback {
   type: "success" | "error" | "warn";
   referenceNumber: string;
@@ -85,6 +133,7 @@ interface ScanFeedback {
 
 export default function FactoryPriorityScan() {
   const { language } = useApplicationLanguage();
+  const { selectedCompany } = useCompany();
   const tr = useCallback(
     (key: PriorityScanTranslationKey, params?: Record<string, string | number>) =>
       translatePriorityScanText(key, language, params),
@@ -96,7 +145,13 @@ export default function FactoryPriorityScan() {
   const [scanInput, setScanInput] = useState("");
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
+  const [sessionDateKey, setSessionDateKey] = useState(() => getLocalCalendarDateKey());
   const [sessionScans, setSessionScans] = useState<SessionScan[]>([]);
+  const selectedCompanyId = selectedCompany?.id ?? null;
+  const sessionStorageKey = useMemo(
+    () => (selectedCompanyId ? getSessionScanStorageKey(selectedCompanyId) : null),
+    [selectedCompanyId]
+  );
 
   const { data: configs = [], isLoading: configsLoading } = useQuery<PriorityScanConfig[]>({
     queryKey: [PRIORITY_SCAN_CONFIGS_URL],
@@ -134,6 +189,25 @@ export default function FactoryPriorityScan() {
     },
     []
   );
+
+  useEffect(() => {
+    if (!sessionStorageKey) {
+      setSessionScans([]);
+      return;
+    }
+    setSessionScans(readStoredSessionScans(sessionStorageKey, sessionDateKey));
+  }, [sessionDateKey, sessionStorageKey]);
+
+  useEffect(() => {
+    const refreshDate = () => {
+      const nextDateKey = getLocalCalendarDateKey();
+      setSessionDateKey((currentDateKey) => (currentDateKey === nextDateKey ? currentDateKey : nextDateKey));
+    };
+
+    refreshDate();
+    const timer = window.setInterval(refreshDate, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const showFeedback = (next: ScanFeedback) => {
     if (feedbackTimerRef.current) clearTimeout(feedbackTimerRef.current);
@@ -215,7 +289,18 @@ export default function FactoryPriorityScan() {
         priority: routed.target.priority,
         color: routed.target.color,
       };
-      setSessionScans((currentScans) => [scan, ...currentScans].slice(0, 30));
+      const scanDateKey = getLocalCalendarDateKey();
+      if (scanDateKey !== sessionDateKey) setSessionDateKey(scanDateKey);
+      setSessionScans((currentScans) => {
+        const nextScans = [
+          scan,
+          ...(scanDateKey === sessionDateKey ? currentScans : []),
+        ].slice(0, 30);
+        if (sessionStorageKey) {
+          persistStoredSessionScans(sessionStorageKey, scanDateKey, nextScans);
+        }
+        return nextScans;
+      });
 
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [PENDING_LOADS_URL] }),
