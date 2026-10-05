@@ -139,15 +139,24 @@ import { startupMigrations } from "../server/startup-schema";
  * 010-security-notifications-and-precision without re-pinning, taking the
  * count from 1380 to 1383.
  *
+ * Re-pinned for stage 032, the historical-replay safety tables
+ * (factory_recalc_undo_log, factory_replay_consumed_tokens and their indexes,
+ * the 17 statements of migrations/0007), appended after stage 031 without
+ * moving any earlier statement: 1383 to 1400.
+ *
+ * Re-pinned for 66c6aa5, which disabled automated container tracking and
+ * added five statements forcing the ERP and factory tracking defaults and
+ * existing flags off, without re-pinning: 1400 to 1405.
+ *
  * Re-pinned when the Sheets & Sacks block in
  * 010-security-notifications-and-precision moved to
  * server/startup/factorySheetsSacksSchema.ts, which 010 now spreads in the
  * same position: the 9 statements became 17 (the kept updated_at column, the
  * guarded convergence of a legacy log and seven legacy index drops, replacing
- * the fss_log_color block), 1383 to 1391. Nothing else moved.
+ * the fss_log_color block), 1405 to 1413. Nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1391;
-const EXPECTED_CONTENT_HASH = "61537efd5d6e32613d51f89e998083c8a1c889ff8f796ededb6e5302caa3d582";
+const EXPECTED_STATEMENT_COUNT = 1413;
+const EXPECTED_CONTENT_HASH = "1cd4323d10c5f370593713dd2d0baf74aa98b9fe0ce6e5dbb0a5b66279908e2d";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

@@ -101,6 +101,21 @@ describe("retail quick add intake contract", () => {
     expect(() => validateQuickAddVariants(parsed)).not.toThrow();
   });
 
+  it("accepts portable retail media photos", () => {
+    const parsed = retailQuickAddSchema.parse({
+      ...base,
+      variants: [
+        {
+          color: "Black",
+          size: "M",
+          sellingPrice: 1,
+          imageUrls: ["/api/retail/media/77"],
+        },
+      ],
+    });
+    expect(parsed.variants[0].imageUrls).toEqual(["/api/retail/media/77"]);
+  });
+
   it("caps photos at four per variant", () => {
     const result = retailQuickAddSchema.safeParse({
       ...base,

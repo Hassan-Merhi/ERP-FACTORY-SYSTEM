@@ -96,9 +96,15 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
         const conditions = [
           `fb.company_id = ${companyParam}`,
           `fb.stock_entry_date IS NOT NULL`,
-          `fb.stock_entry_date >= ${bind(startDate)}::date`,
-          `fb.stock_entry_date <= ${bind(endDate)}::date`,
         ];
+        // Exact/reference searches are global across production dates. A selected
+        // day must not make a valid bale disappear from Stock Entry History.
+        if (!search) {
+          conditions.push(
+            `fb.stock_entry_date >= ${bind(startDate)}::date`,
+            `fb.stock_entry_date <= ${bind(endDate)}::date`
+          );
+        }
 
         if (!(isPrivileged && search)) conditions.push(`fb.status NOT IN ('DELETED', 'REMOVED')`);
         if (workerIds.length > 0) {

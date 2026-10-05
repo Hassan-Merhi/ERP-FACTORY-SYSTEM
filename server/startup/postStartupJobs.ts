@@ -4,7 +4,6 @@
 import { pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { startAisLiveTracking, stopAisLiveTracking } from "../services/ais/aisLiveTrackingService";
 import { checkAndRecoverDailyExport } from "../services/scheduler";
 
 let installed = false;
@@ -18,11 +17,33 @@ export function runPostStartupJobs(): void {
   if (installed) return;
   installed = true;
 
-  // AIS is optional and isolated from normal container tracking. It starts only
-  // after the HTTP server is live and shuts down independently on process signals.
-  startAisLiveTracking();
-  process.once("SIGTERM", stopAisLiveTracking);
-  process.once("SIGINT", stopAisLiveTracking);
+  // Live vessel/AIS tracking is intentionally disabled. Container movement is
+  // maintained manually or through Excel imports.
+
+  // Defense in depth: clear legacy enable flags on both container systems at
+  // every startup. No provider calls are made; manual/Excel fields are untouched.
+  void (async () => {
+    try {
+      const [erp, factory] = await Promise.all([
+        pool.query(
+          `UPDATE containers
+             SET tracking_enabled = false, tracking_auto_update = false
+           WHERE tracking_enabled = true OR tracking_auto_update = true`
+        ),
+        pool.query(
+          `UPDATE factory_containers
+             SET tracking_enabled = false, tracking_auto_update = false
+           WHERE tracking_enabled = true OR tracking_auto_update = true`
+        ),
+      ]);
+      const disabled = (erp.rowCount ?? 0) + (factory.rowCount ?? 0);
+      if (disabled > 0) {
+        logger.info(`[ContainerTracking] Disabled automated tracking on ${disabled} legacy container row(s)`);
+      }
+    } catch (e: unknown) {
+      logger.warn("[ContainerTracking] Could not enforce disabled tracking flags:", { error: getErrorMessage(e) });
+    }
+  })();
 
   const migrationDiagTimer = setTimeout(async () => {
     try {

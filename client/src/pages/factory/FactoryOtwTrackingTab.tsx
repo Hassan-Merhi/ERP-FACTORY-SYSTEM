@@ -11,10 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Radio,
-  RefreshCw,
   Loader2,
-  AlertTriangle,
-  Settings2,
   Search,
   Package,
   Pencil,
@@ -32,7 +29,6 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { factoryApiRequest } from "@/lib/factoryApi";
-import { useFactoryJsonCargoEta } from "./useFactoryJsonCargoEta";
 import type { ContainerWithSupplier, OtwTrackingTabProps } from "./factoryotwtrackingtab/types";
 import {
   STATUS_ACTIVE,
@@ -46,19 +42,12 @@ import {
 import { SummaryCard } from "./factoryotwtrackingtab/components/SummaryCard";
 import { EtaCell } from "./factoryotwtrackingtab/components/EtaCell";
 import { NotesCell } from "./factoryotwtrackingtab/components/NotesCell";
-import { EventTimelineSheet } from "./factoryotwtrackingtab/components/EventTimelineSheet";
-import { TrackingSettingsSheet } from "./factoryotwtrackingtab/components/TrackingSettingsSheet";
-import { TrackNowProgressLog } from "./factoryotwtrackingtab/components/TrackNowProgressLog";
 import { useOtwCsvTools } from "./factoryotwtrackingtab/hooks/useOtwCsvTools";
 import type { AuthMe } from "@shared/apiTypes";
 export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = {}) {
   const { toast } = useToast();
   const tqClient = useTQClient();
   const { data: currentUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"] });
-  const jsonCargoEta = useFactoryJsonCargoEta();
-  const [trackingNowId, setTrackingNowId] = useState<number | null>(null);
-  const [timelineId, setTimelineId] = useState<number | null>(null);
-  const [settingsContainer, setSettingsContainer] = useState<ContainerWithSupplier | null>(null);
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [freightFilter, setFreightFilter] = useState<string>("all");
   const [weightFilter, setWeightFilter] = useState<string>("all");
@@ -114,12 +103,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   const inTransit = otwContainers.filter((c) => c.status === "IN_TRANSIT").length;
   const arrived = otwContainers.filter((c) => c.status === "ARRIVED").length;
   const delayed = otwContainers.filter((c) => calcDelayDays(c) > 0).length;
-  const _withErrors = otwContainers.filter((c) => !!c.trackingError).length;
-  const today = new Date().toDateString();
-  const _checkedToday = otwContainers.filter((c) => {
-    const fc = c;
-    return fc.trackingLastCheckedAt && new Date(fc.trackingLastCheckedAt).toDateString() === today;
-  }).length;
   // Cost totals grouped by currency
   const costByCurrency = filtered.reduce<Record<string, { symbol: string; amount: number }>>((acc, c) => {
     const { symbol, amount } = containerCost(c);
@@ -172,8 +155,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
   }
   const docsReceived = filtered.filter((c) => !!c.otwDocsReceived).length;
   const totalWeight = filtered.reduce((sum, c) => sum + num(c.totalKg), 0);
-  const timelineContainer = otwContainers.find((c) => c.id === timelineId) ?? null;
-  const trackingEnabledCount = otwContainers.filter((c) => c.trackingEnabled !== false).length;
   const _hasActiveFilters =
     search ||
     supplierFilter !== "all" ||
@@ -246,94 +227,8 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
     setDelayedFilter("all");
     setSortOrder("DEFAULT");
   }
-  const trackNowMutation = useMutation({
-    mutationFn: async (containerId: number) => {
-      const res = await factoryApiRequest("POST", `/api/factory/container-tracking/${containerId}/track-now`, {});
-      if (!res.ok) throw new Error("Failed to dispatch tracking");
-      return containerId;
-    },
-    onMutate: (id) => setTrackingNowId(id),
-    onSuccess: (_containerId) => {
-      toast({ title: "Tracking started", description: "Fetching live data in the background…" });
-      // Poll for updated container data while tracking runs in background
-      let elapsed = 0;
-      const POLL_MS = 4000;
-      const MAX_MS = 28000;
-      const interval = setInterval(() => {
-        elapsed += POLL_MS;
-        tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
-        if (elapsed >= MAX_MS) {
-          clearInterval(interval);
-          setTrackingNowId(null);
-        }
-      }, POLL_MS);
-    },
-    onError: (err: ClientErrorLike) => {
-      setTrackingNowId(null);
-      toast({ title: "Tracking failed", description: err?.message ?? "Unknown error", variant: "destructive" });
-    },
-  });
-  const [bulkTracking, setBulkTracking] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
   const { importing, exportCsv, handleImportFile } = useOtwCsvTools(filtered, otwContainers);
 
-  async function trackAll() {
-    const eligible = otwContainers.filter((c) => {
-      const fc = c;
-      return fc.trackingEnabled !== false && /^[A-Z]{4}\d{7}$/.test((c.containerNumber || "").trim().toUpperCase());
-    });
-    if (eligible.length === 0) {
-      toast({
-        title: "No eligible containers",
-        description: "All containers have tracking disabled or invalid numbers.",
-      });
-      return;
-    }
-    setBulkTracking(true);
-    setBulkProgress({ done: 0, total: eligible.length });
-    // Dispatch tracking requests with back-pressure: if the server is busy (429)
-    // we pause briefly before retrying, preventing OOM from too many concurrent jobs.
-    const RETRY_DELAY_MS = 4000;
-    const MAX_RETRIES = 8;
-    let queued = 0;
-    for (let i = 0; i < eligible.length; i++) {
-      const c = eligible[i];
-      let retries = 0;
-      while (retries <= MAX_RETRIES) {
-        try {
-          const res = await factoryApiRequest("POST", `/api/factory/container-tracking/${c.id}/track-now`, {});
-          if (res.status === 429) {
-            retries++;
-            if (retries <= MAX_RETRIES) {
-              await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-              continue;
-            }
-          } else {
-            queued++;
-          }
-          break;
-        } catch {
-          break;
-        }
-      }
-      setBulkProgress({ done: i + 1, total: eligible.length });
-    }
-    setBulkTracking(false);
-    setBulkProgress(null);
-    toast({
-      title: `Tracking ${queued} of ${eligible.length} containers…`,
-      description: "Results will appear automatically as each container is checked.",
-    });
-    // Poll for results as background tracking completes
-    let elapsed = 0;
-    const POLL_MS = 5000;
-    const MAX_MS = 60000;
-    const interval = setInterval(() => {
-      elapsed += POLL_MS;
-      tqClient.invalidateQueries({ queryKey: ["/api/factory/containers"] });
-      if (elapsed >= MAX_MS) clearInterval(interval);
-    }, POLL_MS);
-  }
   if (isLoading) {
     return (
       <div className="space-y-4 p-4">
@@ -415,7 +310,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           />
         ))}
       </div>
-      {/* ── Search + Filters Toggle + Track All ── */}
+      {/* ── Search + Filters + manual import/export ── */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -432,39 +327,8 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           Filters
           <ChevronDown className={cn("h-3.5 w-3.5 ml-1 transition-transform", showFilters && "rotate-180")} />
         </Button>
-        <Button
-          variant="outline"
-          onClick={trackAll}
-          disabled={bulkTracking || otwContainers.length === 0}
-          data-testid="button-track-all-now"
-        >
-          {bulkTracking ? (
-            <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-1.5" />
-          )}
-          {bulkTracking
-            ? bulkProgress
-              ? `Tracking… ${bulkProgress.done}/${bulkProgress.total}`
-              : "Tracking…"
-            : `Track All${trackingEnabledCount > 0 ? ` (${trackingEnabledCount})` : ""}`}
-        </Button>
         {currentUser?.role === "Developer" && (
           <>
-            <Button
-              variant="outline"
-              onClick={() => jsonCargoEta.refreshBulk()}
-              disabled={jsonCargoEta.bulkIsPending}
-              title="JSONCargo ETA refresh — Maersk, Hapag-Lloyd, MSC, CMA CGM"
-              data-testid="button-update-etas"
-            >
-              {jsonCargoEta.bulkIsPending ? (
-                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4 mr-1.5" />
-              )}
-              Update ETAs
-            </Button>
             <Button
               variant="outline"
               onClick={exportCsv}
@@ -647,23 +511,14 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
               const commSym = ccySym(c.commissionCurrencyCode || "USD");
               const dutySym = ccySym(c.currencyCode);
               const docDone = !!c.otwDocsReceived;
-              const isTracking = trackingNowId === c.id;
-              const hasError = !!fc.trackingError;
-              const isEnabled = fc.trackingEnabled !== false;
-              const isValidNum = /^[A-Z]{4}\d{7}$/.test((c.containerNumber || "").trim().toUpperCase());
               const delayDays = calcDelayDays(c);
               const overdue = isOverdue(c);
-              const location = fc.trackingLastLocation || c.destination || null;
-              const rowBg = overdue
-                ? "bg-red-50/50 dark:bg-red-950/20"
-                : hasError
-                  ? "bg-amber-50/50 dark:bg-amber-950/20"
-                  : "";
+              const location = c.destination || null;
+              const rowBg = overdue ? "bg-red-50/50 dark:bg-red-950/20" : "";
               return (
                 <TableRow
                   key={c.id}
-                  className={cn("cursor-pointer", rowBg)}
-                  onClick={() => setTimelineId(c.id)}
+                  className={cn(rowBg)}
                   data-testid={`row-otw-container-${c.id}`}
                 >
                   {/* # */}
@@ -672,21 +527,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                   <TableCell className="font-mono font-medium">
                     <div className="flex flex-col gap-0.5">
                       <span>{c.containerNumber || "—"}</span>
-                      {isTracking && <TrackNowProgressLog containerId={c.id} />}
-                      {fc.trackingLastCheckedAt && (
-                        <span className="text-xs text-muted-foreground font-normal">
-                          {new Date(fc.trackingLastCheckedAt).toLocaleDateString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </span>
-                      )}
-                      {!isValidNum && (
-                        <span className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" />
-                          Invalid format
-                        </span>
-                      )}
                     </div>
                   </TableCell>
 
@@ -788,57 +628,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
                           <TooltipContent>Edit Container</TooltipContent>
                         </Tooltip>
                       )}
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setSettingsContainer(c)}
-                            data-testid={`button-otw-settings-${c.id}`}
-                          >
-                            <Settings2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Tracking Settings</TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={isTracking || !isEnabled || !isValidNum}
-                            onClick={() => trackNowMutation.mutate(c.id)}
-                            data-testid={`button-otw-track-now-${c.id}`}
-                          >
-                            {isTracking ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {!isEnabled ? "Tracking disabled" : !isValidNum ? "Invalid container # format" : "Track Now"}
-                        </TooltipContent>
-                      </Tooltip>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            disabled={jsonCargoEta.refreshingIds.has(c.id)}
-                            onClick={() => jsonCargoEta.refreshOne(c.id)}
-                            data-testid={`button-otw-refresh-eta-${c.id}`}
-                          >
-                            {jsonCargoEta.refreshingIds.has(c.id) ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Ship className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Refresh ETA (JSONCargo)</TooltipContent>
-                      </Tooltip>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -848,18 +637,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
         </Table>
       )}
 
-      {/* ── Sheets ── */}
-      <EventTimelineSheet
-        containerId={timelineId}
-        containerNumber={timelineContainer?.containerNumber ?? ""}
-        open={!!timelineId}
-        onClose={() => setTimelineId(null)}
-      />
-      <TrackingSettingsSheet
-        container={settingsContainer}
-        open={!!settingsContainer}
-        onClose={() => setSettingsContainer(null)}
-      />
     </div>
   );
 }

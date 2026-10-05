@@ -186,6 +186,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
             productName: factoryBales.productName,
             productId: factoryBales.productId,
             weightKg: factoryBales.weightKg,
+            stockEntryDate: factoryBales.stockEntryDate,
             productArticleCode: sql<string | null>`(
               SELECT fbp.article_code
               FROM factory_bale_products fbp
@@ -444,6 +445,27 @@ export function registerOrderBaleScanRoutes(app: Express) {
             .update(factoryBales)
             .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
             .where(eq(factoryBales.id, bale.id));
+        }
+
+        // A successful Priority Scan is also a Daily Scan verification for the
+        // bale's production day. Keep this in the same transaction so the two
+        // scan views can never disagree after a successful allocation. The
+        // unique constraint makes rescans/idempotent retries harmless.
+        if (isPriorityScan && bale.stockEntryDate) {
+          await tx.execute(sql`
+            INSERT INTO factory_daily_bale_scans
+              (company_id, scan_date, reference_number, article_code, product_name, weight_kg, scanned_by_user_id)
+            VALUES (
+              ${String(companyId)},
+              ${bale.stockEntryDate},
+              ${bale.referenceNumber},
+              ${bale.articleCode},
+              ${bale.productName},
+              ${bale.weightKg},
+              ${req.session.userId == null ? null : String(req.session.userId)}
+            )
+            ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
+          `);
         }
 
         const recalculated = await recalculateOrderTotalsForScannedArticle(

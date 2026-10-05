@@ -647,7 +647,7 @@ const PAGES: PageCase[] = [
   {
     name: "FactoryShippingContainers",
     load: () => import("@/pages/factory/FactoryShippingContainers"),
-    landmark: "button-track-all-eta",
+    landmark: "input-search",
     factory: true,
     showsRows: true,
   },

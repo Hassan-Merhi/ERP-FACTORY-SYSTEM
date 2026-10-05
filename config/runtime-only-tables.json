@@ -1,8 +1,6 @@
 {
   "description": "Tables created by runtime DDL (server/, migrations/) but not declared in shared/schema. drizzle-kit cannot manage them and drizzle.config.ts filters them out of push. This list may only shrink: declare a table in shared/schema, then remove it here. tests/runtime-only-tables-ratchet.test.ts enforces it.",
   "tables": [
-    "factory_recalc_undo_log",
-    "factory_replay_consumed_tokens",
     "financial_periods",
     "immutable_financial_audit_events",
     "one_time_migrations",

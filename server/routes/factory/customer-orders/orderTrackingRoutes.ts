@@ -1,11 +1,10 @@
-import { trackOneFactoryContainerById } from "../../../services/factory-container-tracking";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 
-import { factoryContainers, customerOrders, customers, containers } from "@shared/schema";
-import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
+import { customerOrders, customers, containers } from "@shared/schema";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 export function registerOrderTrackingRoutes(app: Express) {
   app.get("/api/factory/invoice-container-tracking", requireAuth, async (req: Request, res: Response) => {
@@ -24,7 +23,6 @@ export function registerOrderTrackingRoutes(app: Express) {
           customerName: customers.legalName,
           // ERP container tracking fields
           eta: containers.eta,
-          trackingLastStatus: containers.trackingLastStatus,
           trackingLink: containers.trackingLink,
           containerStatus: containers.status,
         })
@@ -47,67 +45,11 @@ export function registerOrderTrackingRoutes(app: Express) {
     }
   });
 
-  // POST /api/factory/shipping-containers/track-now
-  // Finds all active factory customer orders with container numbers, matches
-  // them to ERP containers table, and triggers live tracking for each one.
-  app.post("/api/factory/shipping-containers/track-now", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      // Get all active factory customer orders with a container number
-      const orders = await db
-        .select({ containerNumber: customerOrders.containerNumber })
-        .from(customerOrders)
-        .where(
-          and(
-            eq(customerOrders.companyId, companyId),
-            isNull(customerOrders.deletedAt),
-            sql`${customerOrders.containerNumber} IS NOT NULL AND TRIM(${customerOrders.containerNumber}) <> ''`
-          )
-        );
-
-      const containerNumbers = [
-        ...new Set(orders.map((o) => (o.containerNumber || "").trim().toUpperCase()).filter(Boolean)),
-      ];
-
-      if (containerNumbers.length === 0) {
-        return res.json({ tracked: 0, message: "No container numbers found on active orders." });
-      }
-
-      // Find matching factory containers (sp_containers / factoryContainers table)
-      const matched = await db
-        .select({ id: factoryContainers.id, containerNumber: factoryContainers.containerNumber })
-        .from(factoryContainers)
-        .where(
-          and(
-            eq(factoryContainers.companyId, companyId),
-            inArray(sql`UPPER(TRIM(${factoryContainers.containerNumber}))`, containerNumbers)
-          )
-        );
-
-      if (matched.length === 0) {
-        return res.json({
-          tracked: 0,
-          message:
-            "No matching factory containers found. Ensure the container numbers on orders match containers in the factory system.",
-        });
-      }
-
-      // Fire factory tracking for each matched container (fire-and-forget)
-      let queued = 0;
-      for (const c of matched) {
-        trackOneFactoryContainerById(c.id).catch(() => {});
-        queued++;
-      }
-
-      res.json({
-        tracked: queued,
-        message: `Tracking started for ${queued} container${queued !== 1 ? "s" : ""}. ETAs will update shortly.`,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
+  // Live carrier tracking is disabled. Container ETA/status/location are maintained manually or by import.
+  app.post("/api/factory/shipping-containers/track-now", requireAuth, async (_req: Request, res: Response) => {
+    return res.status(410).json({
+      message: "Automatic container tracking is disabled. Update container data manually or by Excel import.",
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────

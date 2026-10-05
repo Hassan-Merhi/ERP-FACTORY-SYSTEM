@@ -92,8 +92,10 @@ function getDailyScanPriority(bale: DayBale): number {
   if (bale.is_deleted) return 2;
 
   const status = (bale.status || "").toUpperCase();
-  if (status === "IN_STOCK") return 0;
 
+  // Match the visible status badge: a bale already tied to a loading is no
+  // longer an "In Stock" priority row even if its underlying bale status is
+  // still IN_STOCK (V5 loading flow keeps that status until finalization).
   if (
     bale.is_in_loading_order ||
     status === "LOADING" ||
@@ -106,6 +108,7 @@ function getDailyScanPriority(bale: DayBale): number {
     return 2;
   }
 
+  if (status === "IN_STOCK") return 0;
   return 1;
 }
 

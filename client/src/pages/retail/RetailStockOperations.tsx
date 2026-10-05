@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import { cn } from "@/lib/utils";
 import { RetailNav } from "./RetailNav";
 import { RetailMovementHistory } from "./RetailMovementHistory";
@@ -316,7 +317,7 @@ export default function RetailStockOperations() {
         <Card data-testid="stock-variant">
           <CardContent className="flex gap-3 p-3">
             {variant.imageUrls[0] ? (
-              <img src={variant.imageUrls[0]} alt="" className="h-24 w-24 shrink-0 rounded-md border object-cover" />
+              <img src={normalizeRetailImageUrl(variant.imageUrls[0])} alt="" className="h-24 w-24 shrink-0 rounded-md border object-cover" />
             ) : (
               <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-md bg-muted">
                 <ImageIcon className="h-6 w-6 text-muted-foreground" />

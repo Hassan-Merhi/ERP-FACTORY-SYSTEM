@@ -1,4 +1,5 @@
 import { AlertTriangle, Ban, CheckCircle2, HelpCircle, ImageIcon } from "lucide-react";
+import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import { cn } from "@/lib/utils";
 import { money, type RetailPosItem, type ScanOutcome } from "./retailPosTypes";
 
@@ -9,7 +10,7 @@ export function RetailItemImage({
   item: Pick<RetailPosItem, "imageUrls" | "name">;
   className?: string;
 }) {
-  const src = item.imageUrls?.[0];
+  const src = normalizeRetailImageUrl(item.imageUrls?.[0]);
   if (!src) {
     return (
       <div

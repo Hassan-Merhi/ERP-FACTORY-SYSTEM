@@ -222,10 +222,10 @@ export function BarcodeReferenceResults({ model }: { model: BarcodeLookupModel }
 
           {baleInfo && (
             <div className="flex items-start gap-6 flex-wrap pt-3 border-t">
-              {(baleInfo.finalizedAt || baleInfo.stockEntryDate) && (
+              {(baleInfo.stockEntryDate || baleInfo.finalizedAt) && (
                 <InfoRow
                   label="Date Produced"
-                  value={model.formatDateOnly(baleInfo.finalizedAt || baleInfo.stockEntryDate) || "—"}
+                  value={model.formatDateOnly(baleInfo.stockEntryDate || baleInfo.finalizedAt) || "—"}
                 />
               )}
               {baleInfo.createdAt && (
