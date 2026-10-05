@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
   "routeCount": 2045,
-  "middlewareMountCount": 131,
+  "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/vouchers [<anonymous>]",
@@ -2051,7 +2051,6 @@
     "GET /api/transporter-statement/:accountId/statement [requireAuth > requireNonPOS > <anonymous>]"
   ],
   "middlewareMounts": [
-    "USE / [helmetMiddleware]",
     "USE / [browserMutationFailClosedBoundary]",
     "USE / [tenantIsolationBoundary]",
     "USE / [enforcePrivilegedMaintenanceScope]",
