@@ -611,6 +611,7 @@ export default function ItemMarketAnalysis() {
               onClick={() => {
                 setSelectedStockGroupNames([]);
                 setExpandedItemCode(null);
+                setExpandedSalePriceKey(null);
               }}
               data-testid="option-item-market-group-all"
             >
@@ -638,6 +639,7 @@ export default function ItemMarketAnalysis() {
           onValueChange={(value) => {
             setProfitDirection(value as ProfitDirectionFilter);
             setExpandedItemCode(null);
+            setExpandedSalePriceKey(null);
           }}
         >
           <SelectTrigger className="w-[150px]" data-testid="select-item-market-profit-direction">
@@ -762,7 +764,10 @@ export default function ItemMarketAnalysis() {
                             variant="ghost"
                             size="sm"
                             className="h-8 gap-1.5 px-2"
-                            onClick={() => setExpandedItemCode(expanded ? null : group.itemKey)}
+                            onClick={() => {
+                              setExpandedItemCode(expanded ? null : group.itemKey);
+                              setExpandedSalePriceKey(null);
+                            }}
                             data-testid={`button-item-market-expand-${group.itemKey}`}
                           >
                             {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -836,11 +841,11 @@ export default function ItemMarketAnalysis() {
                                       <TableHead className="text-right">Imports</TableHead>
                                       <TableHead className="text-right">Imported Qty</TableHead>
                                       <TableHead className="text-right">
-                  {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
-                </TableHead>
+                                        {includeOffloadingCost ? "Purchase + Offloading" : "Purchase Value"}
+                                      </TableHead>
                                       <TableHead className="text-right">
-                  {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
-                </TableHead>
+                                        {includeOffloadingCost ? "Avg Cost + Offloading" : "Avg Purchase"}
+                                      </TableHead>
                                       <TableHead className="text-right">Sold Qty</TableHead>
                                       <TableHead className="text-right">Avg Sell</TableHead>
                                       <TableHead className="text-right">Revenue</TableHead>
@@ -954,7 +959,7 @@ export default function ItemMarketAnalysis() {
                                             </TableCell>
                                           </TableRow>
                                         )}
-                                      </Fragment>
+                                        </Fragment>
                                       );
                                     })}
                                   </TableBody>
@@ -992,7 +997,7 @@ export default function ItemMarketAnalysis() {
                             <span className="truncate font-medium">{row.name}</span>
                           </Button>
                         </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
+                        <TableCell className="text-right tabular-nums">{formatNumber(row.importCount)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatNumber(row.importedQty)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {mixedCurrency ? (
