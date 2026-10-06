@@ -143,7 +143,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
   const saveMutation = useMutation({
     mutationFn: async ({ color, priority, palette }: { color: string; priority?: number; palette: string[] }) => {
-      if (!samePalette(palette, colorPresets)) {
+      if (canManagePriority && !samePalette(palette, colorPresets)) {
         const paletteRes = await apiRequest("PUT", FACTORY_SETTINGS_URL, {
           priorityScanColorPresets: palette,
         });
