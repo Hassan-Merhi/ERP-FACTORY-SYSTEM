@@ -108,7 +108,7 @@ export function registerPayrollVoucherBackfillRoutes(app: Express) {
             const [maxCode] = await tx
               .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
               .from(ledgerAccounts)
-              .where(and(eq(ledgerAccounts.companyId, cid), sql`code ~ '^\d+$'`));
+              .where(and(eq(ledgerAccounts.companyId, cid), sql`code ~ '^[0-9]+$'`));
             const nextCode = String((maxCode?.maxCode ?? 0) + 1);
             [found] = await tx
               .insert(ledgerAccounts)

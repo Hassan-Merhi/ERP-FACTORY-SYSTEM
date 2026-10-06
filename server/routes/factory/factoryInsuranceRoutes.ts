@@ -303,10 +303,19 @@ export function registerFactoryInsuranceRoutes(app: Express) {
         .delete(insuranceMembers)
         .where(and(eq(insuranceMembers.id, id), eq(insuranceMembers.companyId, companyId)));
       if (existing.ledgerAccountId) {
-        await pool.query(`UPDATE ledger_accounts SET deleted_at = NOW() WHERE id = $1 AND company_id = $2`, [
-          existing.ledgerAccountId,
-          companyId,
-        ]);
+        // Only an account with no postings and no opening balance is removed:
+        // deleting one that carries history drops its balance from every
+        // report, and the ledger_accounts delete guard refuses it.
+        await pool.query(
+          `UPDATE ledger_accounts la SET deleted_at = NOW()
+            WHERE la.id = $1 AND la.company_id = $2
+              AND COALESCE(la.opening_balance, 0) = 0
+              AND NOT EXISTS (
+                SELECT 1 FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+                 WHERE ve.ledger_account_id = la.id AND v.deleted_at IS NULL
+              )`,
+          [existing.ledgerAccountId, companyId]
+        );
       }
       res.json({ success: true });
     } catch (error: unknown) {

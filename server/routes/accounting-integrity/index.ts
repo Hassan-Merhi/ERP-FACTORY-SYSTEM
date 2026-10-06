@@ -1,14 +1,45 @@
 /**
  * Accounting integrity routes (2026-10 accounting audit).
  *
- * Both are read-only: the integrity diagnostic runs the audit's ledger checks
- * for the current company, and the trial balance reports every posted line and
- * opening balance with any difference shown explicitly, never plugged.
+ * The integrity diagnostic and the trial balance are read-only: the diagnostic
+ * runs the audit's ledger checks for the current company, and the trial balance
+ * reports every posted line and opening balance with any difference shown
+ * explicitly, never plugged. The system-account and account-type routes report
+ * by GET and change the chart of accounts only by an explicit, audited POST that
+ * never alters an existing account's history.
  */
+
+/** Accounts whose type differs from a recognised type only by case or spaces. */
+async function miscasedAccounts(companyId: number) {
+  const rows = await db
+    .select({
+      id: ledgerAccounts.id,
+      code: ledgerAccounts.code,
+      name: ledgerAccounts.name,
+      accountType: ledgerAccounts.accountType,
+    })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
+  return rows
+    .map((row) => ({ ...row, canonicalType: canonicalAccountType(row.accountType) }))
+    .filter((row) => row.canonicalType !== row.accountType);
+}
 import type { Express } from "express";
 
+import { and, eq, inArray, isNull } from "drizzle-orm";
+
+import { ledgerAccounts } from "@shared/schema";
+
 import { requireAuth, requireRole } from "../../auth";
+import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { logAudit } from "../_helpers";
+import { canonicalAccountType } from "../../services/accounting/accountClassification";
+import {
+  SYSTEM_ACCOUNTS,
+  diagnoseSystemAccounts,
+  ensureSystemAccounts,
+} from "../../services/accounting/systemAccounts";
 import { runAccountingIntegrityDiagnostic } from "../../services/accounting/integrity/accountingIntegrityDiagnostic";
 import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
 
@@ -32,6 +63,115 @@ export function registerAccountingIntegrityRoutes(app: Express) {
       const asOf = typeof req.query.asOf === "string" && req.query.asOf ? req.query.asOf : null;
       if (asOf && !ISO_DATE.test(asOf)) return res.status(400).json({ message: "Invalid date" });
       res.json(await buildTrialBalance(companyId, asOf));
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/accounting/system-accounts", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const statuses = await diagnoseSystemAccounts(db, companyId);
+      res.json({
+        definitions: SYSTEM_ACCOUNTS,
+        statuses,
+      });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/accounting/system-accounts/ensure", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // Creating accounts is explicit: an empty or malformed request changes nothing.
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+      const known = new Set(SYSTEM_ACCOUNTS.map((definition) => definition.code));
+      const codes: unknown = req.body?.codes;
+      if (codes !== undefined && (!Array.isArray(codes) || codes.some((code) => !known.has(String(code))))) {
+        return res.status(400).json({ message: "Unknown system account code" });
+      }
+      const statuses = await db.transaction((tx) =>
+        ensureSystemAccounts(tx, companyId, codes === undefined ? undefined : (codes as string[]))
+      );
+      const created = statuses.filter((status) => status.state === "created");
+      if (created.length > 0) {
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || "unknown",
+          companyId,
+          action: "create",
+          tableName: "ledger_accounts",
+          recordIdentifier: "system-accounts",
+          changes: { created: { new: created } },
+        });
+      }
+      res.json({ statuses });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.get(
+    "/api/accounting/account-types/normalization",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const accounts = await miscasedAccounts(companyId);
+        res.json({
+          fixable: accounts.filter((account) => account.canonicalType !== null),
+          unknown: accounts.filter((account) => account.canonicalType === null),
+        });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Rewrites only the spelling of a type ('EXPENSE' -> 'Expense'); a type that
+  // is genuinely wrong is reported for review, never guessed.
+  app.post("/api/accounting/account-types/normalize", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+      const fixable = (await miscasedAccounts(companyId)).filter((account) => account.canonicalType !== null);
+      await db.transaction(async (tx) => {
+        for (const account of fixable) {
+          await tx
+            .update(ledgerAccounts)
+            .set({ accountType: account.canonicalType! })
+            .where(
+              and(
+                eq(ledgerAccounts.companyId, companyId),
+                inArray(ledgerAccounts.id, [account.id]),
+                eq(ledgerAccounts.accountType, account.accountType)
+              )
+            );
+        }
+      });
+      if (fixable.length > 0) {
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || "unknown",
+          companyId,
+          action: "update",
+          tableName: "ledger_accounts",
+          recordIdentifier: "account-type-normalization",
+          changes: {
+            accountType: {
+              old: fixable.map((account) => ({ id: account.id, type: account.accountType })),
+              new: fixable.map((account) => ({ id: account.id, type: account.canonicalType })),
+            },
+          },
+        });
+      }
+      res.json({ normalized: fixable.length, accounts: fixable });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

@@ -15,6 +15,8 @@ import { sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { CANONICAL_ACCOUNT_TYPES } from "../accountClassification";
+import { SYSTEM_ACCOUNTS, diagnoseSystemAccounts } from "../systemAccounts";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
 
@@ -43,26 +45,7 @@ export interface AccountingIntegrityReport {
 
 const SAMPLE_LIMIT = 20;
 
-/** Account types the application writes; anything else is misclassified or mis-cased. */
-export const CANONICAL_ACCOUNT_TYPES = new Set([
-  "Asset",
-  "Liability",
-  "Equity",
-  "Income",
-  "Expense",
-  "Bank",
-  "Cash",
-  "Indirect Expense",
-  "Direct Expense",
-  "Government Taxes",
-  "Loans",
-  "Duty Agent",
-  "Transporter Agent",
-  "Accounts Payable",
-  "Profit",
-  "Intercompany",
-  "Indirect Income",
-]);
+export { CANONICAL_ACCOUNT_TYPES };
 
 type Row = Record<string, unknown>;
 
@@ -326,6 +309,30 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       nonCanonical
     )
   );
+  const systemAccounts = await diagnoseSystemAccounts(db, companyId);
+  const requiredCodes = new Set(SYSTEM_ACCOUNTS.filter((definition) => definition.required).map((d) => d.code));
+  const missingRequired = systemAccounts.filter(
+    (status) => status.state === "missing" && requiredCodes.has(status.code)
+  );
+  const needsReview = systemAccounts.filter(
+    (status) => status.state === "type_differs" || status.state === "deleted" || status.state === "reused_by_name"
+  );
+  checks.push(
+    check(
+      "required_system_accounts_missing",
+      missingRequired.length ? "fail" : "pass",
+      missingRequired.length,
+      "Required system accounts (retained earnings, opening balance equity) that do not exist; they are created at boot and by POST /api/accounting/system-accounts/ensure.",
+      missingRequired
+    ),
+    check(
+      "system_accounts_needing_review",
+      needsReview.length ? "warn" : "pass",
+      needsReview.length,
+      "System accounts whose type differs from the registry, that are deleted, or that are only matched by name. They are never changed automatically because posted history may depend on them.",
+      needsReview
+    )
+  );
   const hasEquity = accounts.some((account) => account.account_type === "Equity");
   checks.push(
     check(
@@ -336,7 +343,30 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     )
   );
 
-  // 9. Legacy stored plug left by the old import-cycle auto-adjustment.
+  // 9. Database guards installed (ensureLedgerIntegrityGuard / ensureClosedPeriodGuard).
+  const guards = await rows<{ name: string }>(sql`
+    SELECT tgname AS name FROM pg_trigger
+     WHERE NOT tgisinternal
+       AND tgname IN ('voucher_entries_target_guard', 'ledger_accounts_delete_guard',
+                      'voucher_entries_closed_period_guard', 'vouchers_closed_period_guard')
+  `);
+  const missingGuards = [
+    "voucher_entries_target_guard",
+    "ledger_accounts_delete_guard",
+    "voucher_entries_closed_period_guard",
+    "vouchers_closed_period_guard",
+  ].filter((name) => !guards.some((guard) => guard.name === name));
+  checks.push(
+    check(
+      "database_guards_installed",
+      missingGuards.length ? "fail" : "pass",
+      missingGuards.length,
+      "Ledger integrity and closed-period triggers that must exist on the ledger tables.",
+      missingGuards.map((name) => ({ missing: name }))
+    )
+  );
+
+  // 10. Legacy stored plug left by the old import-cycle auto-adjustment.
   const plug = await rows<{ value: string; updated_at: string }>(sql`
     SELECT value, updated_at::text FROM system_settings WHERE key = ${`equity_adjustment_${companyId}`}
   `);

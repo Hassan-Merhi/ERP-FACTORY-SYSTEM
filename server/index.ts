@@ -35,6 +35,8 @@ import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
 import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
 import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
+import { ensureLedgerIntegrityGuard } from "./services/accounting/ledgerIntegrityGuard";
+import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
 import { listenWithRetry, registerGracefulShutdown } from "./startup/listenWithRetry";
@@ -256,6 +258,10 @@ let migrationsDone = false;
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
       await ensureClosedPeriodGuard(pool);
+      await ensureLedgerIntegrityGuard(pool);
+      await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
+        logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
+      });
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);

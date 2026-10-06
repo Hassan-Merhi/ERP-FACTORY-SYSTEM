@@ -8,6 +8,7 @@ import { db, type DbTransaction } from "../../db";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import * as schema from "@shared/schema";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
+import { PROFIT_AND_LOSS_ACCOUNT_TYPES } from "../../services/accounting/accountClassification";
 
 export class FiscalPeriodCloseError extends Error {
   constructor(
@@ -60,7 +61,10 @@ async function incomeExpenseActivityTx(
            ), 0)::text AS activity
     FROM ledger_accounts la
     WHERE la.company_id = ${companyId}
-      AND la.account_type IN ('Income', 'Expense')
+      AND la.account_type IN (${sql.join(
+        PROFIT_AND_LOSS_ACCOUNT_TYPES.map((type) => sql`${type}`),
+        sql`, `
+      )})
     ORDER BY la.id
   `);
   return result.rows as unknown as IncomeExpenseBalanceRow[];
@@ -117,7 +121,10 @@ export async function closeFiscalPeriod(
           AND v.optional = false
           AND v.deleted_at IS NULL
           AND v.voucher_date < ${periodStartDate}
-          AND la.account_type IN ('Income', 'Expense')
+          AND la.account_type IN (${sql.join(
+            PROFIT_AND_LOSS_ACCOUNT_TYPES.map((type) => sql`${type}`),
+            sql`, `
+          )})
       `);
       const earliest = (earlier.rows[0] as { earliest: string | null } | undefined)?.earliest;
       if (earliest) {
@@ -144,7 +151,8 @@ export async function closeFiscalPeriod(
     for (const account of accounts) {
       // Debit-positive balance; the closing line posts its opposite.
       const balance = signedOpening(account.opening_balance, account.opening_balance_side).plus(account.activity);
-      if (account.account_type === "Income") totalIncome = totalIncome.minus(balance);
+      if (account.account_type === "Income" || account.account_type === "Indirect Income")
+        totalIncome = totalIncome.minus(balance);
       else totalExpense = totalExpense.plus(balance);
       netDebitBalance = netDebitBalance.plus(balance);
       if (balance.isZero()) continue;

@@ -362,6 +362,16 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
           let exclusiveVoucherIds: number[] = [];
           const splitSnapshots: SplitVoucherSnapshot[] = [];
 
+          // The accounts move to the destination company before any line is
+          // written that references them there: the ledger integrity guard
+          // checks each line against its account's company as it is written.
+          for (const plan of accountPlans) {
+            await tx
+              .update(ledgerAccounts)
+              .set({ companyId: destCompanyId, code: plan.finalCode, parentId: null })
+              .where(and(eq(ledgerAccounts.id, plan.account.id), eq(ledgerAccounts.companyId, srcCompanyId)));
+          }
+
           if (touchedVoucherIds.length > 0) {
             const [touchedVoucherRows, touchedEntries] = await Promise.all([
               tx.select().from(vouchers).where(inArray(vouchers.id, touchedVoucherIds)),
@@ -529,12 +539,6 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
 
           const controls = await detachAccountMigrationControlReferences(tx, srcCompanyId, accountIds);
 
-          for (const plan of accountPlans) {
-            await tx
-              .update(ledgerAccounts)
-              .set({ companyId: destCompanyId, code: plan.finalCode, parentId: null })
-              .where(and(eq(ledgerAccounts.id, plan.account.id), eq(ledgerAccounts.companyId, srcCompanyId)));
-          }
           if (exclusiveVoucherIds.length > 0) {
             await tx
               .update(vouchers)
@@ -682,6 +686,14 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             }
           }
 
+          // The accounts return to the source company before their source lines
+          // are re-pointed at them (see the ordering note in execute).
+          for (const account of saved.accounts) {
+            await tx
+              .update(ledgerAccounts)
+              .set({ companyId: srcCompanyId, code: account.originalCode, parentId: null })
+              .where(and(eq(ledgerAccounts.id, account.accountId), eq(ledgerAccounts.companyId, destCompanyId)));
+          }
           if (saved.version === 2) {
             for (const split of saved.splitVouchers) {
               if (split.remappedEntries.length > 0) {
@@ -716,12 +728,6 @@ export function registerAccountMigrationSafeRoutes(app: Express) {
             }
           }
 
-          for (const account of saved.accounts) {
-            await tx
-              .update(ledgerAccounts)
-              .set({ companyId: srcCompanyId, code: account.originalCode, parentId: null })
-              .where(and(eq(ledgerAccounts.id, account.accountId), eq(ledgerAccounts.companyId, destCompanyId)));
-          }
           if (saved.movedVoucherIds.length > 0) {
             await tx
               .update(vouchers)

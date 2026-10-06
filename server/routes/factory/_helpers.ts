@@ -26,6 +26,7 @@ import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
   try {
@@ -173,22 +174,34 @@ export async function getOrCreateLedgerAccount(
   companyId: number,
   code: string,
   name: string,
-  accountType: string = "EXPENSE"
+  accountType?: string
 ): Promise<number> {
   const safeCode = code.slice(0, 50);
+  // A registry account is created with its registry type; anything else defaults
+  // to "Expense". The old default, "EXPENSE", is a type no report recognises, and
+  // it made FACTORY_CHARGES_PAYABLE (a payable) an expense.
+  const resolvedType = systemAccountDefinition(safeCode)?.accountType ?? accountType ?? "Expense";
   const [existing] = await db
-    .select({ id: ledgerAccounts.id })
+    .select({ id: ledgerAccounts.id, deletedAt: ledgerAccounts.deletedAt })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, safeCode)))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    // A system account the posting needs is restored rather than posted to
+    // while deleted: the ledger integrity guard refuses lines on deleted
+    // accounts, and reports hide them.
+    if (existing.deletedAt) {
+      await db.update(ledgerAccounts).set({ deletedAt: null, active: true }).where(eq(ledgerAccounts.id, existing.id));
+    }
+    return existing.id;
+  }
   const [created] = await db
     .insert(ledgerAccounts)
     .values({
       companyId,
       code: safeCode,
       name,
-      accountType,
+      accountType: resolvedType,
       active: true,
       isHidden: false,
     })

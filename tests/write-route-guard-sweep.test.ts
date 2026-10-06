@@ -65,6 +65,7 @@ import type { Express } from "express";
  */
 const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/bales/:id",
+  "DELETE /api/containers/:id",
   "DELETE /api/deleted-items/:type/:id/permanent",
   "DELETE /api/factory/advances/:id",
   "DELETE /api/factory/bale-products/:id",
@@ -159,6 +160,8 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/vouchers/:id/payment-receipt",
   "PATCH /api/vouchers/:id/purchase",
   "PATCH /api/vouchers/:id/transfer",
+  "POST /api/accounting/account-types/normalize",
+  "POST /api/accounting/system-accounts/ensure",
   "POST /api/admin/account-migration/execute",
   "POST /api/admin/account-migration/preview",
   "POST /api/admin/account-migration/undo",
@@ -191,6 +194,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/bales/price-import/preview",
   "POST /api/cleanup/orphaned-charges",
   "POST /api/company-settings",
+  "POST /api/containers",
   "POST /api/containers/:id/offload",
   "POST /api/containers/:id/reverse-offload",
   "POST /api/containers/:id/sync-voucher",

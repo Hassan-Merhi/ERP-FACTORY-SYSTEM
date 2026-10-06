@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2051,
+  "routeCount": 2055,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1542,6 +1542,10 @@
     "GET /api/stats/import-cycle-diagnostics [requireAuth > <anonymous>]",
     "GET /api/accounting/integrity [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/accounting/trial-balance [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/accounting/system-accounts [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/accounting/system-accounts/ensure [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/accounting/account-types/normalization [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/accounting/account-types/normalize [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/debug/inventory/:stockItemId [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/debug/import-cycle [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous>]",
     "GET /api/debug/orphaned-charge-vouchers [requireAuth > <anonymous> > <anonymous>]",

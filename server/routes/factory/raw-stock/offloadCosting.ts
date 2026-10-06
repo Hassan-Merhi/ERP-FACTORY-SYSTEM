@@ -286,17 +286,23 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     "FACTORY_CHARGES_PAYABLE",
     "Factory Charges Payable"
   );
+  // The expense (debit) account of the freight / other-charges voucher. On the
+  // supplier path the request's account is the expense account; on the
+  // own-account path the request's account is the one that paid (the credit
+  // leg), so the expense goes to the system expense account. Resolving it only
+  // for the supplier path left own-account vouchers with an expense line that
+  // posted to no account (2026-10 accounting audit: 13 such lines in production).
   const freightExpenseAcctId =
-    freightVal > 0 && effectiveFreightSupplierId
-      ? reqFreightAccountId
+    freightVal > 0
+      ? effectiveFreightSupplierId && reqFreightAccountId
         ? parseInt(reqFreightAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense", "Direct Expense")
       : null;
   const ocExpenseAcctId =
-    otherChargesVal > 0 && reqOtherChargesSupplierId
-      ? reqOtherChargesAccountId
+    otherChargesVal > 0
+      ? reqOtherChargesSupplierId && reqOtherChargesAccountId
         ? parseInt(reqOtherChargesAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense", "Direct Expense")
       : null;
 
   return {

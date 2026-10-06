@@ -117,4 +117,14 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "يمكن نقل قيود حسابات الأستاذ فقط",
     fr: "Seules les écritures de comptes du grand livre peuvent être déplacées",
   },
+  {
+    en: "Unknown system account code",
+    ar: "رمز حساب نظام غير معروف",
+    fr: "Code de compte système inconnu",
+  },
+  {
+    en: "Confirmation is required",
+    ar: "التأكيد مطلوب",
+    fr: "Une confirmation est requise",
+  },
 ];
