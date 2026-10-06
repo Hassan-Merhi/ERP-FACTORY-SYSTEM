@@ -8,12 +8,12 @@ import path from "path";
 import fs from "fs";
 import { factoryDaybookEntries } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
+import { daybookAmountUsd } from "../../lib/money";
 
 /** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
 export function getFactoryCompanyId(req: import("express").Request): number | undefined {
   return req.session.factoryCompanyId || req.session.currentCompanyId;
 }
-
 
 /**
  * Contract lifecycle actions are intentionally available to Owners in Factory Mode.
@@ -123,8 +123,7 @@ export async function writeDaybookEntry(
   const currency = opts.currencyCode || "USD";
   const fxRate = opts.fxRateToUsd || 1;
   const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd =
-    opts.amountUsd !== undefined ? opts.amountUsd : currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
   await dbOrTx.insert(factoryDaybookEntries).values({
     companyId: opts.companyId,
     txDate: opts.txDate,
@@ -136,7 +135,7 @@ export async function writeDaybookEntry(
     currencyCode: currency,
     amountCurrency: String(amtCurrency),
     fxRateToUsd: String(fxRate),
-    amountUsd: String(amtUsd),
+    amountUsd: amtUsd,
     createdBy: opts.createdBy || null,
   });
 }

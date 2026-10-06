@@ -14,6 +14,7 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { ledgerAccounts } from "../accounting";
+import { isPositiveNumeric } from "../../numericString";
 
 // ─── Factory Workers ──────────────────────────────────────────────────────────
 export const factoryWorkers = pgTable(
@@ -328,10 +329,7 @@ export const insertFactoryWorkerDeductionSchema = createInsertSchema(factoryWork
     createdAt: true,
   })
   .extend({
-    amount: z
-      .string()
-      .min(1, "Amount is required")
-      .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) > 0, "Amount must be positive"),
+    amount: z.string().min(1, "Amount is required").refine(isPositiveNumeric, "Amount must be positive"),
     reason: z.string().optional().nullable(),
     deductionDate: z.string().min(1, "Date is required"),
   });

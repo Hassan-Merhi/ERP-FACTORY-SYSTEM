@@ -18,6 +18,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { companies, locations } from "../common";
 import { customers, vouchers } from "../erp";
+import { isNonNegativeNumeric } from "../../numericString";
 
 // ─── Customer Proformas ───────────────────────────────────────────────────────
 export const customerProformas = pgTable(
@@ -92,9 +93,7 @@ export const insertCustomerProformaLineSchema = createInsertSchema(customerProfo
     articleCode: z.string().min(1, "Article code is required"),
     productName: z.string().min(1, "Product name is required"),
     quantity: z.number().int().min(1, "Quantity must be at least 1"),
-    pricePerBale: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Price must be non-negative"),
+    pricePerBale: z.string().refine(isNonNegativeNumeric, "Price must be non-negative"),
     pricingMode: z.enum(["per_bale", "per_kg"]).optional().default("per_bale"),
     pricePerKg: z.string().optional().nullable(),
   });

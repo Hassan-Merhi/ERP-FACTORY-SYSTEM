@@ -262,14 +262,18 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs Received</p>
             <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.docsReceived}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">
+            {isLoading ? "—" : summary.docsReceived}
+          </p>
         </div>
         <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs To Send</p>
             <FileClock className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.docsReadyNotSent}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">
+            {isLoading ? "—" : summary.docsReadyNotSent}
+          </p>
         </div>
       </div>
 
@@ -394,7 +398,10 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
         </div>
       </div>
 
-      <div className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm" data-table-scroll-region>
+      <div
+        className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm"
+        data-table-scroll-region
+      >
         {isLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 7 }).map((_, index) => (

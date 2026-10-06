@@ -16,6 +16,7 @@ import { z } from "zod";
 import { locations } from "../common";
 import { employees } from "./parties";
 import { customers, vouchers } from "./vouchers";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../../numericString";
 
 export const employeeBaleRates = pgTable(
   "employee_bale_rates",
@@ -96,16 +97,10 @@ export const insertContainerSaleSchema = createInsertSchema(containerSales)
     containerId: z.number().min(1, "Container is required"),
     customerId: z.number().min(1, "Customer is required"),
     saleDate: z.string().min(1, "Sale date is required"),
-    containerCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Container cost must be non-negative"),
-    commission: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Commission must be non-negative"),
+    containerCost: z.string().refine(isNonNegativeNumeric, "Container cost must be non-negative"),
+    commission: z.string().refine(isNonNegativeNumeric, "Commission must be non-negative"),
     commissionAccountId: z.number().optional(),
-    totalAmount: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Total amount must be positive"),
+    totalAmount: z.string().refine(isPositiveNumeric, "Total amount must be positive"),
     currency: z.string().min(1).default("USD"),
     invoiceNumber: z.string().optional(),
     paymentStatus: z.enum(["PENDING", "PARTIAL", "PAID"]).optional(),
@@ -142,7 +137,7 @@ export const insertInterCompanyTransferSchema = createInsertSchema(interCompanyT
     fromCompanyId: z.number().min(1, "From company is required"),
     toCompanyId: z.number().min(1, "To company is required"),
     transferDate: z.string().min(1, "Transfer date is required"),
-    amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),
+    amount: z.string().refine(isPositiveNumeric, "Amount must be positive"),
     fromLedgerAccountId: z.number().min(1, "From account is required"),
     toLedgerAccountId: z.number().min(1, "To account is required"),
   });

@@ -2,6 +2,7 @@ import { pgTable, text, serial, integer, decimal, date, timestamp, index } from 
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { customers } from "./vouchers";
+import { isNumericString } from "../../numericString";
 
 export const dashboardCashAccounts = pgTable(
   "dashboard_cash_accounts",
@@ -101,7 +102,7 @@ export const insertCustomerBalanceSchema = createInsertSchema(customerBalances)
     referenceType: z.string().optional(),
     debitAmount: z.string().optional(),
     creditAmount: z.string().optional(),
-    balance: z.string().refine((val) => !isNaN(parseFloat(val)), "Balance must be a valid number"),
+    balance: z.string().refine(isNumericString, "Balance must be a valid number"),
     currency: z.string().min(1).default("USD"),
     description: z.string().optional(),
   });
