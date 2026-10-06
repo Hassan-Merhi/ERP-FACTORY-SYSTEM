@@ -31,6 +31,7 @@ import { registerGlobalTransactionRoutes } from "./globalTransactionRoutes";
 import { registerGoldenCoastAccountingRoutes } from "./goldenCoastAccountingRoutes";
 import { registerGoldenCoastLegacyPostingRetirement } from "./goldenCoastLegacyPostingRetirement";
 import { registerImportCycleRoutes } from "./import-cycle";
+import { registerAccountingIntegrityRoutes } from "./accounting-integrity";
 import { registerImportRoutes } from "./import";
 import { registerIntercompanyNotificationRoutes } from "./intercompanyNotificationRoutes";
 import { registerInventoryRoutes } from "./inventoryRoutes";
@@ -154,6 +155,7 @@ export async function registerApplicationRoutes(app: Express): Promise<Server> {
   registerPosRoutes(app);
   registerStatsRoutes(app);
   registerImportCycleRoutes(app);
+  registerAccountingIntegrityRoutes(app);
   registerDebugRoutes(app);
   registerReportsRoutes(app);
   registerBarcodeImageBandwidthMiddleware(app);
