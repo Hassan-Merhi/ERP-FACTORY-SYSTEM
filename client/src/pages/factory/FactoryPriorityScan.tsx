@@ -193,10 +193,7 @@ export default function FactoryPriorityScan() {
   };
 
   const resolvePriorityRoute = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
-    const response = await apiRequest(
-      "GET",
-      `${PRIORITY_SCAN_ROUTE_URL}?code=${encodeURIComponent(referenceNumber)}`
-    );
+    const response = await apiRequest("GET", `${PRIORITY_SCAN_ROUTE_URL}?code=${encodeURIComponent(referenceNumber)}`);
     return response.json() as Promise<PriorityRouteResolution>;
   };
 
