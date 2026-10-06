@@ -34,7 +34,10 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
       }
 
       // Get employee/worker
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Worker not found" });
       }

@@ -6,7 +6,7 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
@@ -38,7 +38,10 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
       }
 
       // Get employee
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
@@ -107,7 +110,7 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
       );
 
       // Get updated employee balance
-      const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
 
       res.json({
         voucher,
