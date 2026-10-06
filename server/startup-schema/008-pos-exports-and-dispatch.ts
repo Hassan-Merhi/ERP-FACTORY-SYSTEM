@@ -300,6 +300,7 @@ export const posExportsAndDispatch: string[] = [
       created_at timestamptz NOT NULL DEFAULT now()
     )`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS note text`,
+  `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS details text`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS archived_at timestamp`,
   // One-time cleanup: remove ghost rows from factory_shipping_container_documents.
