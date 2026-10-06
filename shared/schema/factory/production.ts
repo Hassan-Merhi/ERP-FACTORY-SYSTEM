@@ -17,6 +17,16 @@ import { companies, locations } from "../common";
 import { customers } from "../erp";
 import { containers } from "../containers";
 
+/**
+ * Whether a string is a number as a numeric column reads it (so "5kg", which
+ * Postgres would reject, fails here instead of at insert) and passes `test`.
+ * Only the sign is checked, so no money arithmetic happens here.
+ */
+const numericStringWhere = (test: (value: number) => boolean) => (val: string) =>
+  val.trim() !== "" && Number.isFinite(Number(val)) && test(Number(val));
+const isPositiveNumeric = numericStringWhere((value) => value > 0);
+const isNonNegativeNumeric = numericStringWhere((value) => value >= 0);
+
 // ─── Bales ───────────────────────────────────────────────────────────────────
 export const bales = pgTable(
   "bales",
@@ -54,7 +64,7 @@ export const insertBaleSchema = createInsertSchema(bales)
     category: z.string().min(1, "Category is required"),
     grade: z.enum(["A", "B", "C"]),
     origin: z.enum(["EU", "AUS", "USA"]),
-    weight: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
+    weight: z.string().refine(isPositiveNumeric, "Weight must be positive"),
     datePressed: z.string().min(1, "Date pressed is required"),
     price: z.string().optional(),
     currency: z.string().length(3).optional(),
@@ -119,13 +129,9 @@ export const insertProductionRawStockSchema = createInsertSchema(productionRawSt
   .extend({
     companyId: z.number().min(1, "Company is required"),
     containerId: z.number().min(1, "Container is required"),
-    receivedKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Received kg must be positive"),
+    receivedKg: z.string().refine(isPositiveNumeric, "Received kg must be positive"),
     usedKg: z.string().optional(),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
   });
 
 export type InsertProductionRawStock = z.infer<typeof insertProductionRawStockSchema>;
@@ -163,15 +169,9 @@ export const insertMixBatchSchema = createInsertSchema(mixBatches)
     companyId: z.number().min(1, "Company is required"),
     batchCode: z.string().optional(),
     name: z.string().optional(),
-    totalWeightKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Total weight must be positive"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
+    totalWeightKg: z.string().refine(isPositiveNumeric, "Total weight must be positive"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
     usedKg: z.string().optional(),
     status: z.enum(["ACTIVE", "COMPLETED"]).optional(),
   });
@@ -200,13 +200,9 @@ export const insertMixBatchSourceSchema = createInsertSchema(mixBatchSources)
     mixBatchId: z.number().min(1, "Mix batch is required"),
     containerId: z.number().optional().nullable(),
     sourceBatchId: z.number().optional().nullable(),
-    weightKg: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
   });
 
 export type InsertMixBatchSource = z.infer<typeof insertMixBatchSourceSchema>;
@@ -377,13 +373,9 @@ export const insertProductionBaleSchema = createInsertSchema(productionBales)
     barcodeValue: z.string().min(1, "Barcode value is required"),
     category: z.string().optional(),
     grade: z.string().optional(),
-    weightKg: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
     warehouseLocation: z.string().optional(),
     status: z.enum(["PENDING", "LABEL_PRINTED", "PRESSED", "IN_STOCK", "RESERVED", "SOLD"]).optional(),
     pressedAt: z.string().optional(),
@@ -458,13 +450,9 @@ export const insertBaleTransferItemSchema = createInsertSchema(baleTransferItems
     transferId: z.number().min(1, "Transfer is required"),
     productionBaleId: z.number().min(1, "Bale is required"),
     quantity: z.number().min(1, "Quantity must be at least 1"),
-    weightKg: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
   });
 
 export type InsertBaleTransferItem = z.infer<typeof insertBaleTransferItemSchema>;

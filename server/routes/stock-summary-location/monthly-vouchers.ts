@@ -12,6 +12,8 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { calculateHistoricalLocationInventory } from "../helpers/inventoryHistoryHelpers";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 import {
   inventory,
   containers,
@@ -71,136 +73,6 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         );
         const openingHistoryRow = openingHistory.find((row) => row.stockItemId === stockItemId);
 
-        // ============ CALCULATE OPENING BALANCE (all transactions BEFORE selected month) ============
-        // Query all prior movements and aggregate them to get opening balance
-        let priorInwardQty = 0;
-        let priorInwardValue = 0;
-        let priorOutwardQty = 0;
-        let priorOutwardValue = 0;
-
-        // Prior Stock Transfers
-        const priorTransfers = await db
-          .select({
-            quantity: stockTransferItems.quantity,
-            totalAmount: stockTransferItems.totalAmount,
-            sourceLocationId: stockTransferItems.sourceLocationId,
-            destinationLocationId: stockTransferVouchers.destinationLocationId,
-          })
-          .from(stockTransferItems)
-          .innerJoin(stockTransferVouchers, eq(stockTransferItems.transferId, stockTransferVouchers.id))
-          .innerJoin(vouchers, eq(stockTransferVouchers.voucherId, vouchers.id))
-          .where(
-            and(
-              eq(stockTransferItems.stockItemId, stockItemId),
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.optional, false),
-              sql`${vouchers.voucherDate}::date < ${monthStartStr}::date`,
-              or(
-                eq(stockTransferItems.sourceLocationId, locationId),
-                eq(stockTransferVouchers.destinationLocationId, locationId)
-              )
-            )
-          );
-
-        for (const item of priorTransfers) {
-          const qty = parseFloat(item.quantity);
-          const val = parseFloat(item.totalAmount);
-          if (item.sourceLocationId === locationId) {
-            priorOutwardQty += qty;
-            priorOutwardValue += val;
-          }
-          if (item.destinationLocationId === locationId) {
-            priorInwardQty += qty;
-            priorInwardValue += val;
-          }
-        }
-
-        // Prior Stock Adjustments (production adds, consumption subtracts)
-        const priorAdjustments = await db
-          .select({
-            quantity: stockAdjustmentItems.quantity,
-            totalAmount: stockAdjustmentItems.totalAmount,
-          })
-          .from(stockAdjustmentItems)
-          .innerJoin(stockAdjustmentVouchers, eq(stockAdjustmentItems.adjustmentId, stockAdjustmentVouchers.id))
-          .innerJoin(vouchers, eq(stockAdjustmentVouchers.voucherId, vouchers.id))
-          .where(
-            and(
-              eq(stockAdjustmentItems.stockItemId, stockItemId),
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.optional, false),
-              eq(stockAdjustmentVouchers.locationId, locationId),
-              sql`${vouchers.voucherDate}::date < ${monthStartStr}::date`
-            )
-          );
-
-        for (const item of priorAdjustments) {
-          const qty = parseFloat(item.quantity);
-          const val = parseFloat(item.totalAmount);
-          if (qty > 0) {
-            priorInwardQty += qty;
-            priorInwardValue += val;
-          } else {
-            priorOutwardQty += Math.abs(qty);
-            priorOutwardValue += Math.abs(val);
-          }
-        }
-
-        // Prior Sales
-        const priorSales = await db
-          .select({
-            quantity: salesItems.quantity,
-            costPrice: salesItems.costPrice,
-            totalCost: salesItems.totalCost,
-          })
-          .from(salesItems)
-          .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-          .where(
-            and(
-              eq(salesItems.stockItemId, stockItemId),
-              eq(vouchers.companyId, companyId),
-              isNull(vouchers.deletedAt),
-              eq(vouchers.optional, false),
-              eq(vouchers.locationId, locationId),
-              sql`${vouchers.voucherDate}::date < ${monthStartStr}::date`
-            )
-          );
-
-        for (const item of priorSales) {
-          priorOutwardQty += parseFloat(item.quantity);
-          priorOutwardValue += parseFloat(item.totalCost);
-        }
-
-        // Prior Container Offloads
-        const priorOffloads = await db
-          .select({
-            quantity: poLineItems.quantity,
-            lineTotal: poLineItems.lineTotal,
-            additionalCostPerBale: containerOffloads.additionalCostPerBale,
-          })
-          .from(containerOffloads)
-          .innerJoin(containers, eq(containerOffloads.containerId, containers.id))
-          .innerJoin(purchaseOrders, eq(purchaseOrders.containerId, containers.id))
-          .innerJoin(poLineItems, eq(poLineItems.poId, purchaseOrders.id))
-          .where(
-            and(
-              eq(poLineItems.stockItemId, stockItemId),
-              eq(containers.companyId, companyId),
-              eq(containerOffloads.locationId, locationId),
-              sql`${containerOffloads.offloadedAt}::date < ${monthStartStr}::date`
-            )
-          );
-
-        for (const item of priorOffloads) {
-          const qty = parseFloat(item.quantity);
-          const baseValue = parseFloat(item.lineTotal);
-          const additionalCost = parseFloat(item.additionalCostPerBale) * qty;
-          priorInwardQty += qty;
-          priorInwardValue += baseValue + additionalCost;
-        }
-
         // ============ GET CURRENT INVENTORY (to check for unexplained stock from imports) ============
         const [currentInventory] = await db
           .select({
@@ -211,22 +83,16 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           .from(inventory)
           .where(and(eq(inventory.locationId, locationId), eq(inventory.stockItemId, stockItemId)));
 
-        const currentQty = currentInventory ? parseFloat(currentInventory.quantity) : 0;
-        const currentRate = currentInventory ? parseFloat(currentInventory.averageRate) : 0;
+        const currentQty = toMoney(currentInventory?.quantity);
+        const currentRate = toMoney(currentInventory?.averageRate);
         // totalValue is the exact stored asset value; averageRate is rounded cost memory.
-        const currentValue = currentInventory
-          ? parseFloat(currentInventory.totalValue || "") || currentQty * currentRate
-          : 0;
-
-        // Calculate voucher-derived opening balance
-        const voucherOpeningQty = priorInwardQty - priorOutwardQty;
-        const voucherOpeningValue = priorInwardValue - priorOutwardValue;
-        const _voucherOpeningRate = voucherOpeningQty > 0 ? voucherOpeningValue / voucherOpeningQty : 0;
+        const storedCurrentValue = toMoney(currentInventory?.totalValue);
+        const currentValue = storedCurrentValue.isZero() ? currentQty.times(currentRate) : storedCurrentValue;
 
         // ============ CALCULATE MOVEMENTS AFTER THE SELECTED MONTH ============
         // To reconcile with inventory, we need to work backwards from current inventory
-        let afterMonthNetQty = 0;
-        let afterMonthNetValue = 0;
+        let afterMonthNetQty: Decimal = new MoneyDecimal(0);
+        let afterMonthNetValue: Decimal = new MoneyDecimal(0);
 
         // After-month Stock Transfers
         const afterTransfers = await db
@@ -254,15 +120,15 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           );
 
         for (const item of afterTransfers) {
-          const qty = parseFloat(item.quantity);
-          const val = parseFloat(item.totalAmount);
+          const qty = toMoney(item.quantity);
+          const val = toMoney(item.totalAmount);
           if (item.sourceLocationId === locationId) {
-            afterMonthNetQty -= qty;
-            afterMonthNetValue -= val;
+            afterMonthNetQty = afterMonthNetQty.minus(qty);
+            afterMonthNetValue = afterMonthNetValue.minus(val);
           }
           if (item.destinationLocationId === locationId) {
-            afterMonthNetQty += qty;
-            afterMonthNetValue += val;
+            afterMonthNetQty = afterMonthNetQty.plus(qty);
+            afterMonthNetValue = afterMonthNetValue.plus(val);
           }
         }
 
@@ -287,8 +153,8 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           );
 
         for (const item of afterAdjustments) {
-          afterMonthNetQty += parseFloat(item.quantity);
-          afterMonthNetValue += parseFloat(item.totalAmount);
+          afterMonthNetQty = afterMonthNetQty.plus(toMoney(item.quantity));
+          afterMonthNetValue = afterMonthNetValue.plus(toMoney(item.totalAmount));
         }
 
         // After-month Sales
@@ -311,8 +177,8 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           );
 
         for (const item of afterSales) {
-          afterMonthNetQty -= parseFloat(item.quantity);
-          afterMonthNetValue -= parseFloat(item.totalCost);
+          afterMonthNetQty = afterMonthNetQty.minus(toMoney(item.quantity));
+          afterMonthNetValue = afterMonthNetValue.minus(toMoney(item.totalCost));
         }
 
         // After-month Container Offloads
@@ -336,17 +202,19 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           );
 
         for (const item of afterOffloads) {
-          const qty = parseFloat(item.quantity);
-          const baseValue = parseFloat(item.lineTotal);
-          const additionalCost = parseFloat(item.additionalCostPerBale) * qty;
-          afterMonthNetQty += qty;
-          afterMonthNetValue += baseValue + additionalCost;
+          const qty = toMoney(item.quantity);
+          afterMonthNetQty = afterMonthNetQty.plus(qty);
+          afterMonthNetValue = afterMonthNetValue
+            .plus(toMoney(item.lineTotal))
+            .plus(toMoney(item.additionalCostPerBale).times(qty));
         }
 
         // Calculate expected end-of-month closing from inventory (working backwards)
-        const expectedClosingQty = currentQty - afterMonthNetQty;
-        const expectedClosingValue = currentValue - afterMonthNetValue;
-        const expectedClosingRate = expectedClosingQty > 0 ? expectedClosingValue / expectedClosingQty : 0;
+        const expectedClosingQty = currentQty.minus(afterMonthNetQty);
+        const expectedClosingValue = currentValue.minus(afterMonthNetValue);
+        const expectedClosingRate = expectedClosingQty.gt(0)
+          ? expectedClosingValue.div(expectedClosingQty)
+          : new MoneyDecimal(0);
 
         // ============ COLLECT CURRENT MONTH TRANSACTIONS AT THIS LOCATION ============
         const transactions: Array<{
@@ -410,9 +278,9 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         }
 
         for (const item of transferItems) {
-          const qty = parseFloat(item.quantity);
-          const rate = parseFloat(item.rate);
-          const val = parseFloat(item.totalAmount);
+          const qty = toMoney(item.quantity).toNumber();
+          const rate = toMoney(item.rate).toNumber();
+          const val = toMoney(item.totalAmount).toNumber();
           const sourceName = item.sourceLocationId ? locationMap[item.sourceLocationId] || "Unknown" : "Unknown";
           const destName = locationMap[item.destinationLocationId] || "Unknown";
 
@@ -476,12 +344,12 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           .orderBy(vouchers.voucherDate);
 
         for (const item of adjustmentItems) {
-          const rawQty = parseFloat(item.quantity);
-          const rawValue = parseFloat(item.totalAmount);
-          const qty = Math.abs(rawQty);
-          const rate = parseFloat(item.rate);
+          const rawQty = toMoney(item.quantity);
+          const rawValue = toMoney(item.totalAmount).toNumber();
+          const qty = rawQty.abs().toNumber();
+          const rate = toMoney(item.rate).toNumber();
           const value = Math.abs(rawValue);
-          const isProduction = rawQty > 0;
+          const isProduction = rawQty.gt(0);
 
           transactions.push({
             date: item.voucherDate,
@@ -524,13 +392,11 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           .orderBy(vouchers.voucherDate);
 
         for (const item of salesData) {
-          const qty = parseFloat(item.quantity);
-          const sellingRate = parseFloat(item.sellingPrice);
-          const totalSalesValue = parseFloat(item.totalSales);
-          const storedCostValue = parseFloat(item.totalCost || "0");
-          const storedCostRate = parseFloat(item.costPrice || "0");
-          const inventoryValue = storedCostValue > 0 ? storedCostValue : storedCostRate * qty;
-          const inventoryRate = qty > 0 ? inventoryValue / qty : storedCostRate;
+          const qty = toMoney(item.quantity);
+          const storedCostValue = toMoney(item.totalCost);
+          const storedCostRate = toMoney(item.costPrice);
+          const inventoryValue = storedCostValue.gt(0) ? storedCostValue : storedCostRate.times(qty);
+          const inventoryRate = qty.gt(0) ? inventoryValue.div(qty) : storedCostRate;
 
           transactions.push({
             date: item.voucherDate,
@@ -540,12 +406,12 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
             inwardQty: 0,
             inwardRate: 0,
             inwardValue: 0,
-            outwardQty: qty,
-            outwardRate: inventoryRate,
-            outwardValue: inventoryValue,
+            outwardQty: qty.toNumber(),
+            outwardRate: inventoryRate.toNumber(),
+            outwardValue: inventoryValue.toNumber(),
             isPOS: true,
-            posSellingRate: sellingRate,
-            posSellingValue: totalSalesValue,
+            posSellingRate: toMoney(item.sellingPrice).toNumber(),
+            posSellingValue: toMoney(item.totalSales).toNumber(),
           });
         }
 
@@ -574,9 +440,11 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           .orderBy(vouchers.voucherDate);
 
         for (const item of noteData) {
-          const qty = Math.abs(parseFloat(item.quantity));
-          const rate = Math.max(parseFloat(item.inventoryCost || "0"), 0);
-          const value = qty * rate;
+          const exactQty = toMoney(item.quantity).abs();
+          const exactRate = MoneyDecimal.max(toMoney(item.inventoryCost), 0);
+          const qty = exactQty.toNumber();
+          const rate = exactRate.toNumber();
+          const value = exactQty.times(exactRate).toNumber();
           const isCredit = item.noteType === "Credit Note";
 
           transactions.push({
@@ -622,13 +490,10 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           .orderBy(containerOffloads.offloadedAt);
 
         for (const item of offloadData) {
-          const qty = parseFloat(item.quantity);
-          const _baseRate = parseFloat(item.rate);
-          const baseValue = parseFloat(item.lineTotal);
-          const additionalCostPerBale = parseFloat(item.additionalCostPerBale);
-          const additionalCost = additionalCostPerBale * qty;
-          const landedValue = baseValue + additionalCost;
-          const landedRate = landedValue / qty;
+          const qty = toMoney(item.quantity);
+          const landedValue = toMoney(item.lineTotal).plus(toMoney(item.additionalCostPerBale).times(qty));
+          // A zero quantity has no rate; NaN serialises as null, as the float division did.
+          const landedRate = qty.isZero() ? Number.NaN : landedValue.div(qty).toNumber();
 
           const offloadDateStr =
             item.offloadedAt instanceof Date
@@ -641,9 +506,9 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
             vchType: "PO Offload",
             voucherId: 0,
             poId: item.poId,
-            inwardQty: qty,
+            inwardQty: qty.toNumber(),
             inwardRate: landedRate,
-            inwardValue: landedValue,
+            inwardValue: landedValue.toNumber(),
             outwardQty: 0,
             outwardRate: 0,
             outwardValue: 0,
@@ -661,58 +526,44 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         });
 
         // Calculate in-month net movements from transactions
-        let inMonthInwardQty = 0;
-        let _inMonthInwardValue = 0;
-        let inMonthOutwardQty = 0;
-
-        for (const t of transactions) {
-          inMonthInwardQty += t.inwardQty;
-          _inMonthInwardValue += t.inwardValue;
-          inMonthOutwardQty += t.outwardQty;
-        }
+        const inMonthInwardQty = sumMoney(transactions.map((t) => t.inwardQty));
+        const inMonthOutwardQty = sumMoney(transactions.map((t) => t.outwardQty));
 
         // Calculate what the opening balance SHOULD be based on:
         // expectedClosing = expectedOpening + inMonthInward - inMonthOutward
         // Therefore: expectedOpening = expectedClosing - inMonthInward + inMonthOutward
-        const expectedOpeningQty = expectedClosingQty - inMonthInwardQty + inMonthOutwardQty;
+        const expectedOpeningQty = expectedClosingQty.minus(inMonthInwardQty).plus(inMonthOutwardQty);
         const expectedOpeningRate = expectedClosingRate; // Use the expected rate
-        const expectedOpeningValue = expectedOpeningQty * expectedOpeningRate;
+        const expectedOpeningValue = expectedOpeningQty.times(expectedOpeningRate);
 
-        // Compare voucher-derived opening with expected opening
-        // The difference represents imported/adjusted stock not captured by vouchers
-        const importedQty = expectedOpeningQty - voucherOpeningQty;
-        const importedValue = expectedOpeningValue - voucherOpeningValue;
-        const _importedRate = importedQty > 0 ? importedValue / importedQty : 0;
-
-        // Use the expected opening (which reconciles with inventory) as the actual opening
-        // For value, use the expected rate from inventory (this ensures consistency)
-        const historicalOpeningQty = openingHistoryRow
-          ? parseFloat(openingHistoryRow.quantity) || 0
-          : expectedOpeningQty;
-        const historicalOpeningValue = openingHistoryRow
-          ? parseFloat(openingHistoryRow.totalValue) || 0
-          : expectedOpeningValue;
+        // Use the historical snapshot when there is one, else the expected opening,
+        // which reconciles with inventory.
+        const historicalOpeningQty = openingHistoryRow ? toMoney(openingHistoryRow.quantity) : expectedOpeningQty;
+        const historicalOpeningValue = openingHistoryRow ? toMoney(openingHistoryRow.totalValue) : expectedOpeningValue;
         const historicalOpeningStoredRate = openingHistoryRow
-          ? parseFloat(openingHistoryRow.averageRate) || 0
+          ? toMoney(openingHistoryRow.averageRate)
           : expectedOpeningRate;
 
-        let openingQty = Math.round(historicalOpeningQty * 1000) / 1000;
+        let openingQty = historicalOpeningQty.toDecimalPlaces(3, MoneyDecimal.ROUND_HALF_CEIL);
         let openingValue = historicalOpeningValue;
         let openingRate =
-          openingQty > 0 && openingValue > 0 ? openingValue / openingQty : Math.max(historicalOpeningStoredRate, 0);
+          openingQty.gt(0) && openingValue.gt(0)
+            ? openingValue.div(openingQty)
+            : MoneyDecimal.max(historicalOpeningStoredRate, 0);
 
         // Handle edge cases: if opening is negative, something is wrong
-        if (openingQty < 0) {
+        if (openingQty.lt(0)) {
           // Negative opening means more was sold than could have existed
           // This indicates data issues - clamp to zero for display
-          openingQty = 0;
-          openingValue = 0;
-          openingRate = 0;
+          openingQty = new MoneyDecimal(0);
+          openingValue = new MoneyDecimal(0);
+          openingRate = new MoneyDecimal(0);
         }
 
         // Calculate running balance - start with the full expected opening (includes imports)
         let runningQty = openingQty;
         let runningValue = openingValue;
+        const opening = { qty: openingQty.toNumber(), rate: openingRate.toNumber(), value: openingValue.toNumber() };
 
         const transactionsWithBalance: Array<{
           date: string;
@@ -736,45 +587,51 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         }> = [];
 
         // Add Opening Balance row if there's opening stock
-        if (openingQty > 0 || openingValue > 0) {
+        if (openingQty.gt(0) || openingValue.gt(0)) {
           transactionsWithBalance.push({
             date: monthStartStr,
             particulars: "Opening Balance",
             vchType: "",
             voucherId: 0,
-            inwardQty: openingQty,
-            inwardRate: openingRate,
-            inwardValue: openingValue,
+            inwardQty: opening.qty,
+            inwardRate: opening.rate,
+            inwardValue: opening.value,
             outwardQty: 0,
             outwardRate: 0,
             outwardValue: 0,
-            closingQty: openingQty,
-            closingRate: openingRate,
-            closingValue: openingValue,
+            closingQty: opening.qty,
+            closingRate: opening.rate,
+            closingValue: opening.value,
             isOpeningBalance: true,
           });
         }
 
         // Calculate running balance for each transaction using weighted average cost
         for (const t of transactions) {
-          const currentAvgRate = runningQty > 0 ? runningValue / runningQty : 0;
-          runningQty += t.inwardQty - t.outwardQty;
-          const storedOutwardCost = t.outwardQty > 0 ? Math.max(t.outwardValue, 0) : 0;
-          const actualOutwardCost =
-            t.outwardQty > 0 ? (storedOutwardCost > 0 ? storedOutwardCost : t.outwardQty * currentAvgRate) : 0;
-          runningValue += t.inwardValue - actualOutwardCost;
-          const avgClosingRate = runningQty > 0 ? runningValue / runningQty : 0;
+          const outwardQty = toMoney(t.outwardQty);
+          const currentAvgRate = runningQty.gt(0) ? runningValue.div(runningQty) : new MoneyDecimal(0);
+          runningQty = runningQty.plus(toMoney(t.inwardQty)).minus(outwardQty);
+          const storedOutwardCost = outwardQty.gt(0)
+            ? MoneyDecimal.max(toMoney(t.outwardValue), 0)
+            : new MoneyDecimal(0);
+          const actualOutwardCost = outwardQty.gt(0)
+            ? storedOutwardCost.gt(0)
+              ? storedOutwardCost
+              : outwardQty.times(currentAvgRate)
+            : new MoneyDecimal(0);
+          runningValue = runningValue.plus(toMoney(t.inwardValue)).minus(actualOutwardCost);
+          const avgClosingRate = runningQty.gt(0) ? runningValue.div(runningQty) : new MoneyDecimal(0);
 
-          const displayOutwardRate = t.outwardQty !== 0 ? actualOutwardCost / t.outwardQty : 0;
-          const displayOutwardValue = t.outwardQty !== 0 ? actualOutwardCost : 0;
+          const displayOutwardRate = outwardQty.isZero() ? 0 : actualOutwardCost.div(outwardQty).toNumber();
+          const displayOutwardValue = outwardQty.isZero() ? 0 : actualOutwardCost.toNumber();
 
           transactionsWithBalance.push({
             ...t,
             outwardRate: displayOutwardRate,
             outwardValue: displayOutwardValue,
-            closingQty: runningQty,
-            closingRate: avgClosingRate,
-            closingValue: runningValue,
+            closingQty: runningQty.toNumber(),
+            closingRate: avgClosingRate.toNumber(),
+            closingValue: runningValue.toNumber(),
           });
         }
 
@@ -782,19 +639,16 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
         // by the monthly summary so both views show identical quantity/value.
         const closingHistory = await calculateHistoricalLocationInventory(locationId, companyId, monthEndStr);
         const closingHistoryRow = closingHistory.find((row) => row.stockItemId === stockItemId);
-        const finalClosingQty =
-          Math.round((closingHistoryRow ? parseFloat(closingHistoryRow.quantity) || 0 : expectedClosingQty) * 1000) /
-          1000;
-        const finalClosingValue = closingHistoryRow
-          ? parseFloat(closingHistoryRow.totalValue) || 0
-          : expectedClosingValue;
-        const closingStoredRate = closingHistoryRow
-          ? parseFloat(closingHistoryRow.averageRate) || 0
-          : expectedClosingRate;
+        const finalClosingQty = (closingHistoryRow ? toMoney(closingHistoryRow.quantity) : expectedClosingQty)
+          .toDecimalPlaces(3, MoneyDecimal.ROUND_HALF_CEIL)
+          .toNumber();
+        const exactClosingValue = closingHistoryRow ? toMoney(closingHistoryRow.totalValue) : expectedClosingValue;
+        const closingStoredRate = closingHistoryRow ? toMoney(closingHistoryRow.averageRate) : expectedClosingRate;
+        const finalClosingValue = exactClosingValue.toNumber();
         const finalClosingRate =
-          finalClosingQty > 0 && finalClosingValue > 0
-            ? finalClosingValue / finalClosingQty
-            : Math.max(closingStoredRate, 0);
+          finalClosingQty > 0 && exactClosingValue.gt(0)
+            ? exactClosingValue.div(finalClosingQty).toNumber()
+            : MoneyDecimal.max(closingStoredRate, 0).toNumber();
 
         // Update last transaction's closing to match expected closing
         if (transactionsWithBalance.length > 0) {
@@ -806,12 +660,12 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
 
         const processedTransactions = transactionsWithBalance.filter((t) => !t.isOpeningBalance);
         const totals = {
-          inwardQty: processedTransactions.reduce((s, t) => s + t.inwardQty, 0),
+          inwardQty: sumMoney(processedTransactions.map((t) => t.inwardQty)).toNumber(),
           inwardRate: 0,
-          inwardValue: processedTransactions.reduce((s, t) => s + t.inwardValue, 0),
-          outwardQty: processedTransactions.reduce((s, t) => s + t.outwardQty, 0),
+          inwardValue: sumMoney(processedTransactions.map((t) => t.inwardValue)).toNumber(),
+          outwardQty: sumMoney(processedTransactions.map((t) => t.outwardQty)).toNumber(),
           outwardRate: 0,
-          outwardValue: processedTransactions.reduce((s, t) => s + t.outwardValue, 0),
+          outwardValue: sumMoney(processedTransactions.map((t) => t.outwardValue)).toNumber(),
           closingQty: finalClosingQty,
           closingRate: finalClosingRate,
           closingValue: finalClosingValue,
@@ -840,11 +694,7 @@ export function registerLocationMonthlyVoucherRoutes(app: Express) {
           year,
           month,
           monthName: monthNames[month - 1],
-          openingBalance: {
-            qty: openingQty,
-            rate: openingRate,
-            value: openingValue,
-          },
+          openingBalance: opening,
           transactions: transactionsWithBalance,
           totals,
         });

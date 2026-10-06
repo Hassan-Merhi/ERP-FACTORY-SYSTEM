@@ -20,6 +20,7 @@ import {
 import { writeDaybookEntry } from "../../_helpers";
 import { factorySuppliers, factoryContainers, factoryRawStock, factoryMixBatchSources } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { parseMoneyInput, toMoney } from "../../../../lib/money";
 
 export function registerRawStockOpeningBalanceRoutes(app: Express) {
   app.post("/api/factory/raw-stock/opening-balance", requireAuth, async (req: Request, res: Response) => {
@@ -42,14 +43,16 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
 
       if (!supplierName || !String(supplierName).trim())
         return res.status(400).json({ message: "Supplier name is required" });
-      if (!receivedKg || parseFloat(receivedKg) <= 0)
-        return res.status(400).json({ message: "Received KG must be positive" });
-      if (!costPerKg || parseFloat(costPerKg) < 0)
+      // A non-numeric value used to pass these checks (NaN <= 0 is false) and was stored as NaN.
+      const kgInput = receivedKg ? parseMoneyInput(receivedKg) : null;
+      if (kgInput === null || kgInput.lte(0)) return res.status(400).json({ message: "Received KG must be positive" });
+      const rateInput = costPerKg ? parseMoneyInput(costPerKg) : null;
+      if (rateInput === null || rateInput.lt(0))
         return res.status(400).json({ message: "Cost per KG must be non-negative" });
 
       const currencyCode = reqCurrency || "USD";
-      const kgVal = parseFloat(receivedKg);
-      const rateVal = parseFloat(costPerKg);
+      const kgVal = kgInput.toNumber();
+      const rateVal = rateInput.toNumber();
       let costPerKgUsd: number;
       try {
         costPerKgUsd = convertToUsdOrThrow(rateVal, currencyCode, reqFxRate);
@@ -57,14 +60,15 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
         if (err instanceof UnresolvedExchangeRateError) return res.status(400).json({ message: err.message });
         throw err;
       }
-      const fxRate = currencyCode === "USD" ? 1 : parseFloat(reqFxRate);
-      const totalPayable = kgVal * rateVal;
-      const totalPayableUsd = kgVal * costPerKgUsd;
+      const fxRate = currencyCode === "USD" ? 1 : (parseMoneyInput(reqFxRate)?.toNumber() ?? Number.NaN);
+      const totalPayable = kgInput.times(rateInput);
+      const totalPayableUsd = kgInput.times(costPerKgUsd);
       const trimmedSupplierName = String(supplierName).trim();
 
       // Commission is a separate new record on this same write — its non-USD rate must be
       // explicitly supplied too, never silently defaulted to 1 like the main container rate.
-      const hasCommissionReq = reqCommAmount && parseFloat(reqCommAmount) > 0;
+      const commAmountInput = reqCommAmount ? parseMoneyInput(reqCommAmount) : null;
+      const hasCommissionReq = commAmountInput !== null && commAmountInput.gt(0);
       const commCurrencyCode = reqCommCurrency || "USD";
       let commFxRateResolved = 1;
       if (hasCommissionReq && commCurrencyCode !== "USD") {
@@ -79,7 +83,45 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
 
       const result = await db.transaction(async (tx) => {
         // Use supplierId directly if provided, otherwise find-or-create by name
-        let existingSupplier: ({ id: number; companyId: number; name: string; contactPerson: string | null; phone: string | null; email: string | null; address: string | null; notes: string | null; openingBalance: string; linkedSupplierId: number | null; parentId: number | null; supplierCategoryId: number | null; isActive: boolean; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; createdAt: Date; updatedAt: Date; }) | ({ name: string; id: number; email: string | null; companyId: number; notes: string | null; createdAt: Date; updatedAt: Date; phone: string | null; openingBalance: string; isActive: boolean; parentId: number | null; address: string | null; contactPerson: string | null; linkedSupplierId: number | null; supplierCategoryId: number | null; isBroker: boolean; currentRawMaterialCostPerKgUsd: string | null; });
+        let existingSupplier:
+          | {
+              id: number;
+              companyId: number;
+              name: string;
+              contactPerson: string | null;
+              phone: string | null;
+              email: string | null;
+              address: string | null;
+              notes: string | null;
+              openingBalance: string;
+              linkedSupplierId: number | null;
+              parentId: number | null;
+              supplierCategoryId: number | null;
+              isActive: boolean;
+              isBroker: boolean;
+              currentRawMaterialCostPerKgUsd: string | null;
+              createdAt: Date;
+              updatedAt: Date;
+            }
+          | {
+              name: string;
+              id: number;
+              email: string | null;
+              companyId: number;
+              notes: string | null;
+              createdAt: Date;
+              updatedAt: Date;
+              phone: string | null;
+              openingBalance: string;
+              isActive: boolean;
+              parentId: number | null;
+              address: string | null;
+              contactPerson: string | null;
+              linkedSupplierId: number | null;
+              supplierCategoryId: number | null;
+              isBroker: boolean;
+              currentRawMaterialCostPerKgUsd: string | null;
+            };
         if (reqSupplierId) {
           const [found] = await tx
             .select()
@@ -140,12 +182,12 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
             ratePerKg: String(rateVal),
             declaredKg: String(kgVal),
             actualReceivedKg: String(kgVal),
-            finalPayableAmount: String(totalPayable),
+            finalPayableAmount: totalPayable.toString(),
             differenceKg: "0",
             currencyCode,
             fxRateToUsd: String(fxRate),
             ratePerKgUsd: String(costPerKgUsd),
-            finalPayableAmountUsd: String(totalPayableUsd),
+            finalPayableAmountUsd: totalPayableUsd.toString(),
             notes: notes || "Opening balance import",
             status: "OPENING_BALANCE",
           })
@@ -155,8 +197,8 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
         const hasCommission = hasCommissionReq;
         const commCurrency = commCurrencyCode;
         const commFxRate = commFxRateResolved;
-        const commAmountNum = hasCommission ? parseFloat(reqCommAmount) : 0;
-        const commAmountUsd = hasCommission ? (commCurrency === "USD" ? commAmountNum : commAmountNum * commFxRate) : 0;
+        const commAmount = hasCommission ? commAmountInput : toMoney(0);
+        const commAmountUsd = commCurrency === "USD" ? commAmount : commAmount.times(commFxRate);
 
         let commissionSupplierId: number | null = null;
         if (hasCommission && existingSupplier) {
@@ -204,10 +246,10 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
             costPerKgUsd: String(costPerKgUsd),
             ...(hasCommission
               ? {
-                  commissionAmount: String(commAmountNum),
+                  commissionAmount: String(commAmount.toNumber()),
                   commissionCurrencyCode: commCurrency,
                   commissionFxRateToUsd: String(commFxRate),
-                  commissionAmountUsd: String(commAmountUsd),
+                  commissionAmountUsd: commAmountUsd.toString(),
                   commissionSupplierId,
                 }
               : {}),
@@ -223,7 +265,7 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
           referenceTable: "factory_raw_stock",
           description: `Opening balance: ${containerNumber} - ${kgVal} kg at ${rateVal}/kg (${currencyCode})`,
           currencyCode,
-          amountCurrency: totalPayable,
+          amountCurrency: totalPayable.toNumber(),
           fxRateToUsd: fxRate,
         });
 
@@ -276,10 +318,7 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
         return res.status(400).json({ message: "This record is not an opening balance entry" });
       }
 
-      const received = parseFloat(row.receivedKg as string) || 0;
-      const used = parseFloat(row.usedKg as string) || 0;
-
-      res.json({ ...row, remainingKg: (received - used).toFixed(3) });
+      res.json({ ...row, remainingKg: toMoney(row.receivedKg).minus(toMoney(row.usedKg)).toFixed(3) });
     } catch (error: unknown) {
       logger.error("Error fetching opening balance record:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
@@ -314,14 +353,27 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
         commissionFxRateToUsd,
       } = req.body;
 
-      if (receivedKg !== undefined && parseFloat(receivedKg) <= 0) {
+      // A non-numeric value used to pass these checks (NaN <= 0 is false) and was stored as NaN.
+      const kgInput = receivedKg !== undefined ? parseMoneyInput(receivedKg) : undefined;
+      if (kgInput !== undefined && (kgInput === null || kgInput.lte(0))) {
         return res.status(400).json({ message: "Received KG must be positive" });
       }
-      if (costPerKg !== undefined && parseFloat(costPerKg) < 0) {
+      const costInput = costPerKg !== undefined ? parseMoneyInput(costPerKg) : undefined;
+      if (costInput !== undefined && (costInput === null || costInput.lt(0))) {
         return res.status(400).json({ message: "Cost per KG must be non-negative" });
       }
-      if (fxRateToUsd !== undefined && parseFloat(fxRateToUsd) <= 0) {
+      const fxInput = fxRateToUsd !== undefined ? parseMoneyInput(fxRateToUsd) : undefined;
+      if (fxInput !== undefined && (fxInput === null || fxInput.lte(0))) {
         return res.status(400).json({ message: "FX rate must be positive" });
+      }
+      const commissionInput = commissionAmount !== undefined ? parseMoneyInput(commissionAmount) : undefined;
+      if (commissionInput === null) {
+        return res.status(400).json({ message: "Commission amount must be a number" });
+      }
+      const commissionFxInput =
+        commissionFxRateToUsd !== undefined ? parseMoneyInput(commissionFxRateToUsd) : undefined;
+      if (commissionFxInput === null) {
+        return res.status(400).json({ message: "Commission FX rate must be a number" });
       }
 
       const [rawStockRow] = await db
@@ -343,16 +395,17 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
         const rawUpdates: Record<string, unknown> = {};
         const containerUpdates: Record<string, unknown> = {};
 
-        if (receivedKg !== undefined) {
-          rawUpdates.receivedKg = String(parseFloat(receivedKg));
-          containerUpdates.totalKg = String(parseFloat(receivedKg));
-          containerUpdates.declaredKg = String(parseFloat(receivedKg));
-          containerUpdates.actualReceivedKg = String(parseFloat(receivedKg));
+        if (kgInput) {
+          const kgText = String(kgInput.toNumber());
+          rawUpdates.receivedKg = kgText;
+          containerUpdates.totalKg = kgText;
+          containerUpdates.declaredKg = kgText;
+          containerUpdates.actualReceivedKg = kgText;
         }
 
         const effectiveCurrency = currencyCode || undefined;
-        const effectiveFx = fxRateToUsd !== undefined ? parseFloat(fxRateToUsd) : undefined;
-        const effectiveCost = costPerKg !== undefined ? parseFloat(costPerKg) : undefined;
+        const effectiveFx = fxInput ? fxInput.toNumber() : undefined;
+        const effectiveCost = costInput ? costInput.toNumber() : undefined;
 
         if (effectiveCost !== undefined) {
           rawUpdates.costPerKg = String(effectiveCost);
@@ -374,7 +427,7 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
             .where(eq(factoryRawStock.id, id))
             .limit(1);
 
-          const resolvedCost = effectiveCost ?? parseFloat(current?.costPerKg || "0");
+          const resolvedCost = effectiveCost ?? toMoney(current?.costPerKg).toNumber();
           const resolvedCurrency = effectiveCurrency ?? current?.currencyCode ?? "USD";
           // effectiveFx is the caller's explicit new rate (already validated positive above);
           // otherwise fall back to the stored rate — but only if it's actually resolved, never
@@ -387,20 +440,19 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
           } else {
             resolvedFx = resolveStoredFxRateOrThrow(resolvedCurrency, current?.fxRateToUsd, current?.fxRateConfirmed);
           }
-          const costUsd = resolvedCurrency === "USD" ? resolvedCost : resolvedCost * resolvedFx;
-          rawUpdates.costPerKgUsd = String(costUsd);
-          containerUpdates.ratePerKgUsd = String(costUsd);
+          const costUsd = resolvedCurrency === "USD" ? toMoney(resolvedCost) : toMoney(resolvedCost).times(resolvedFx);
+          rawUpdates.costPerKgUsd = costUsd.toString();
+          containerUpdates.ratePerKgUsd = costUsd.toString();
         }
 
         if (notes !== undefined) containerUpdates.notes = notes;
 
         // Phase 4: commission field edits on OB raw-stock
-        if (commissionAmount !== undefined) rawUpdates.commissionAmount = String(parseFloat(commissionAmount));
+        if (commissionInput) rawUpdates.commissionAmount = String(commissionInput.toNumber());
         if (commissionCurrencyCode !== undefined) rawUpdates.commissionCurrencyCode = commissionCurrencyCode;
         if (commissionPersonName !== undefined) rawUpdates.commissionPersonName = commissionPersonName;
         if (commissionNotes !== undefined) rawUpdates.commissionNotes = commissionNotes;
-        if (commissionFxRateToUsd !== undefined)
-          rawUpdates.commissionFxRateToUsd = String(parseFloat(commissionFxRateToUsd));
+        if (commissionFxInput) rawUpdates.commissionFxRateToUsd = String(commissionFxInput.toNumber());
         if (
           commissionAmount !== undefined ||
           commissionFxRateToUsd !== undefined ||
@@ -419,9 +471,11 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
             resolvedCommCurr === "USD"
               ? 1
               : resolveStoredFxRateOrThrow(resolvedCommCurr, commissionFxRateToUsd ?? cur?.commissionFxRateToUsd);
-          const resolvedCommAmt = parseFloat(commissionAmount ?? "0");
+          const resolvedCommAmt = commissionInput ?? toMoney(0);
           rawUpdates.commissionAmountUsd =
-            resolvedCommCurr === "USD" ? String(resolvedCommAmt) : String(resolvedCommAmt * resolvedCommFx);
+            resolvedCommCurr === "USD"
+              ? String(resolvedCommAmt.toNumber())
+              : resolvedCommAmt.times(resolvedCommFx).toString();
         }
 
         if (reqSupplierId !== undefined) {
