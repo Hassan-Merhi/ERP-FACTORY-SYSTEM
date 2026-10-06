@@ -16,6 +16,21 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
+import { sumMoney, toMoney } from "../../lib/money";
+
+/**
+ * A live voucher's daybook amounts: the voucher total, its rate (1 when unset
+ * or zero) and the USD amount at cents. The USD amount was the whole float
+ * product, so 1.13 at 1.5 showed 1.6949999999999998.
+ */
+function liveVoucherAmounts(v: { currency: string | null; exchangeRate: string | null; totalAmount: string | null }) {
+  const currency = v.currency || "USD";
+  const rate = toMoney(v.exchangeRate || "1");
+  const fxRate = rate.isZero() ? toMoney(1) : rate;
+  const amtCurrency = toMoney(v.totalAmount);
+  const amtUsd = currency === "USD" ? amtCurrency : amtCurrency.times(fxRate).toDecimalPlaces(2);
+  return { currency, fxRate: fxRate.toString(), amtCurrency: amtCurrency.toString(), amtUsd: amtUsd.toString() };
+}
 
 export function registerFactoryDaybookRoutes(app: Express) {
   app.get("/api/factory/daybook", requireAuth, async (req: Request, res: Response) => {
@@ -98,10 +113,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
       const offloadRawStockRefIds = daybookRows
         .filter((r) => r.txType === "OFFLOAD_RAW_STOCK" && r.referenceId != null)
         .map((r) => r.referenceId as number);
-      const offloadSupplierByRawStockId = new Map<
-        number,
-        { containerNumber: string; supplierName: string | null }
-      >();
+      const offloadSupplierByRawStockId = new Map<number, { containerNumber: string; supplierName: string | null }>();
       if (offloadRawStockRefIds.length > 0) {
         const offloadSupplierRows = await db
           .select({
@@ -112,24 +124,13 @@ export function registerFactoryDaybookRoutes(app: Express) {
           .from(factoryRawStock)
           .innerJoin(
             factoryContainers,
-            and(
-              eq(factoryContainers.id, factoryRawStock.containerId),
-              eq(factoryContainers.companyId, companyId)
-            )
+            and(eq(factoryContainers.id, factoryRawStock.containerId), eq(factoryContainers.companyId, companyId))
           )
           .leftJoin(
             factorySuppliers,
-            and(
-              eq(factorySuppliers.id, factoryContainers.supplierId),
-              eq(factorySuppliers.companyId, companyId)
-            )
+            and(eq(factorySuppliers.id, factoryContainers.supplierId), eq(factorySuppliers.companyId, companyId))
           )
-          .where(
-            and(
-              eq(factoryRawStock.companyId, companyId),
-              inArray(factoryRawStock.id, offloadRawStockRefIds)
-            )
-          );
+          .where(and(eq(factoryRawStock.companyId, companyId), inArray(factoryRawStock.id, offloadRawStockRefIds)));
 
         for (const row of offloadSupplierRows) {
           offloadSupplierByRawStockId.set(row.rawStockId, {
@@ -195,10 +196,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
         liveVouchers.forEach((v) => {
           validVoucherIds.add(v.id);
           voucherOptionalMap.set(v.id, !!v.optional);
-          const currency = v.currency || "USD";
-          const fxRate = parseFloat(v.exchangeRate || "1") || 1;
-          const amtCurrency = parseFloat(v.totalAmount || "0");
-          const amtUsd = currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+          const { fxRate, amtCurrency, amtUsd } = liveVoucherAmounts(v);
           voucherLiveDataMap.set(v.id, {
             description: v.description || `${v.voucherType} voucher #${v.voucherNumber}`,
             amountCurrency: String(amtCurrency),
@@ -248,9 +246,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
             ...r,
             optional: false,
             description:
-              r.txType === "OFFLOAD_RAW_STOCK"
-                ? enrichOffloadNarration(r.description, r.referenceId)
-                : r.description,
+              r.txType === "OFFLOAD_RAW_STOCK" ? enrichOffloadNarration(r.description, r.referenceId) : r.description,
           };
         });
 
@@ -330,10 +326,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
           .filter((v) => !capturedVoucherIds.has(v.id))
           .map((v) => {
             const txTypeVal = voucherTxTypeMap[v.voucherType] || "JOURNAL";
-            const currency = v.currency || "USD";
-            const fxRate = parseFloat(v.exchangeRate || "1") || 1;
-            const amtCurrency = parseFloat(v.totalAmount || "0");
-            const amtUsd = currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+            const { currency, fxRate, amtCurrency, amtUsd } = liveVoucherAmounts(v);
             return {
               id: -v.id, // negative id so FE can distinguish; won't clash with real ids
               companyId: v.companyId,
@@ -362,7 +355,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
       const baleStockAndZeroRows = filteredDaybookRows.filter(
         (r) =>
           r.txType === "BALE_STOCK_ENTRY" ||
-          (parseFloat(r.amountCurrency || "0") === 0 && ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(r.txType))
+          (toMoney(r.amountCurrency).isZero() && ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(r.txType))
       );
       // Alias kept so the rest of the block compiles unchanged
       const zeroRows = baleStockAndZeroRows;
@@ -382,7 +375,7 @@ export function registerFactoryDaybookRoutes(app: Express) {
                 const numId = parseInt(b.id, 10);
                 if (!b.id || isNaN(numId) || String(numId) !== String(b.id)) continue; // skip UUIDs / non-integers
                 if (!baleIdToEntry.has(numId)) baleIdToEntry.set(numId, []);
-                baleIdToEntry.get(numId)!.push({ row, weightKg: parseFloat(b.weightKg || "0") });
+                baleIdToEntry.get(numId)!.push({ row, weightKg: toMoney(b.weightKg).toNumber() });
               }
             } catch {
               // Failure here is non-fatal and the surrounding flow continues deliberately.
@@ -403,8 +396,8 @@ export function registerFactoryDaybookRoutes(app: Express) {
 
             // Build product production price map: by id (primary) and by articleCode (fallback)
             // Production price is what was spent to produce the bale — used for cost-side daybook entries.
-            const productProductionPriceById = new Map<number, number>();
-            const productProductionPriceByArticleCode = new Map<string, number>();
+            const productProductionPriceById = new Map<number, string>();
+            const productProductionPriceByArticleCode = new Map<string, string>();
             const allProducts = await db
               .select({
                 id: factoryBaleProducts.id,
@@ -414,23 +407,22 @@ export function registerFactoryDaybookRoutes(app: Express) {
               .from(factoryBaleProducts)
               .where(eq(factoryBaleProducts.companyId, companyId));
             allProducts.forEach((p) => {
-              productProductionPriceById.set(p.id, parseFloat(p.productionPrice || "0"));
-              if (p.articleCode)
-                productProductionPriceByArticleCode.set(p.articleCode, parseFloat(p.productionPrice || "0"));
+              productProductionPriceById.set(p.id, p.productionPrice || "0");
+              if (p.articleCode) productProductionPriceByArticleCode.set(p.articleCode, p.productionPrice || "0");
             });
 
             // Accumulate value per daybook row id using productionPrice (per bale)
-            const rowValueMap = new Map<number, number>();
+            const rowValues = new Map<number, string[]>();
             for (const baleRec of baleRecords) {
               const entries = baleIdToEntry.get(baleRec.id) || [];
-              let val = 0;
+              let val = toMoney(0);
               // primary: productId → productionPrice
-              if (baleRec.productId) val = productProductionPriceById.get(baleRec.productId) || 0;
+              if (baleRec.productId) val = toMoney(productProductionPriceById.get(baleRec.productId));
               // fallback: articleCode → productionPrice
-              if (val === 0 && baleRec.articleCode)
-                val = productProductionPriceByArticleCode.get(baleRec.articleCode) || 0;
+              if (val.isZero() && baleRec.articleCode)
+                val = toMoney(productProductionPriceByArticleCode.get(baleRec.articleCode));
               for (const { row } of entries) {
-                rowValueMap.set(row.id, (rowValueMap.get(row.id) || 0) + val);
+                rowValues.set(row.id, [...(rowValues.get(row.id) || []), val.toString()]);
               }
             }
 
@@ -439,8 +431,9 @@ export function registerFactoryDaybookRoutes(app: Express) {
             // selling price are corrected to production price on the fly.
             for (const row of filteredDaybookRows) {
               if (row.txType === "BALE_STOCK_ENTRY") {
-                const derived = rowValueMap.get(row.id);
-                if (derived && derived > 0) {
+                const values = rowValues.get(row.id);
+                const derived = values ? sumMoney(values) : null;
+                if (derived && derived.gt(0)) {
                   row.amountCurrency = String(derived.toFixed(2));
                   row.amountUsd = String(derived.toFixed(2));
                 }
@@ -464,18 +457,15 @@ export function registerFactoryDaybookRoutes(app: Express) {
             .from(customerOrders)
             .where(inArray(customerOrders.id, orderIds));
 
-          const orderTotals = new Map<number, number>();
+          const orderTotals = new Map<number, ReturnType<typeof toMoney>>();
           for (const o of orderGrandTotals) {
-            orderTotals.set(o.id, parseFloat(o.grandTotal || "0"));
+            orderTotals.set(o.id, toMoney(o.grandTotal));
           }
 
           for (const row of filteredDaybookRows) {
-            if (
-              ["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(row.txType) &&
-              parseFloat(row.amountCurrency || "0") === 0
-            ) {
+            if (["LOADING_SUBMITTED", "ORDER_VERIFIED"].includes(row.txType) && toMoney(row.amountCurrency).isZero()) {
               const total = row.referenceId == null ? undefined : orderTotals.get(row.referenceId);
-              if (total && total > 0) {
+              if (total && total.gt(0)) {
                 row.amountCurrency = String(total.toFixed(2));
                 row.amountUsd = String(total.toFixed(2));
               }
