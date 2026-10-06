@@ -1,6 +1,7 @@
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { db } from "../../../db";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import {
   factoryContainers,
   factoryRawStock,
@@ -147,16 +148,16 @@ export async function getMixBatchSourceCostMismatchPreview(
   const result: MixBatchSourceCostMismatchRow[] = [];
 
   for (const { src, batch, containerNumber, containerStatus, supplierName, supplierLockedRate, container } of rows) {
-    const weightKg = parseFloat(src.weightKg || "0");
-    const oldCostPerKgUsd = parseFloat(src.costPerKg || "0");
-    const oldTotalCost = parseFloat(src.totalCost || "0");
+    const weightKg = toMoney(src.weightKg).toNumber();
+    const oldCostPerKgUsd = toMoney(src.costPerKg).toNumber();
+    const oldTotalCost = toMoney(src.totalCost).toNumber();
 
     if (src.containerId == null) {
       // Supplier-type source (no specific container). Compare against the supplier's
       // current locked rate — this is the corrected receipt-weighted average computed
       // after a recalc apply. If the locked rate differs from the stored source cost,
       // the source is stale and can be auto-fixed.
-      const lockedRate = parseFloat((supplierLockedRate as string) || "0");
+      const lockedRate = toMoney(supplierLockedRate as string).toNumber();
       const newTotalCost =
         lockedRate > 0
           ? new Decimal(weightKg).times(new Decimal(lockedRate)).toDecimalPlaces(COST_SCALE).toNumber()
@@ -229,9 +230,11 @@ export async function getMixBatchSourceCostMismatchPreview(
     if (costEquals(oldCostPerKgUsd, newCostPerKgUsd) && costEquals(oldTotalCost, newTotalCost)) continue;
 
     const rawStock = rawStockByContainer.get(src.containerId);
-    const containerReceivedKg = parseFloat(container?.actualReceivedKg || "0");
-    const rawStockUsedKg = rawStock ? parseFloat(rawStock.usedKg || "0") : containerReceivedKg;
-    const remainingKg = rawStock ? Math.max(0, parseFloat(rawStock.receivedKg || "0") - rawStockUsedKg) : 0;
+    const containerReceivedKg = toMoney(container?.actualReceivedKg).toNumber();
+    const rawStockUsedKg = rawStock ? toMoney(rawStock.usedKg).toNumber() : containerReceivedKg;
+    const remainingKg = rawStock
+      ? MoneyDecimal.max(0, toMoney(rawStock.receivedKg).minus(rawStockUsedKg)).toNumber()
+      : 0;
 
     result.push({
       sourceId: src.id,
@@ -304,7 +307,10 @@ export async function applyZeroCostMixBatchSourcesFix(
   sourceIds: number[],
   opts: {
     manualRates?: Record<number, number>;
-    onAudit?: (tx: Parameters<Parameters<typeof db.transaction>[0]>[0], result: ZeroCostSourceFixResult) => Promise<void>;
+    onAudit?: (
+      tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+      result: ZeroCostSourceFixResult
+    ) => Promise<void>;
   } = {}
 ): Promise<ZeroCostSourceFixResult[]> {
   const results: ZeroCostSourceFixResult[] = [];
@@ -326,7 +332,7 @@ export async function applyZeroCostMixBatchSourcesFix(
         .where(and(eq(factoryMixBatches.id, src.mixBatchId), eq(factoryMixBatches.companyId, companyId)));
       if (!batch) return null;
 
-      const weightKg = parseFloat(src.weightKg || "0");
+      const weightKg = toMoney(src.weightKg).toNumber();
       if (weightKg <= 0) {
         return {
           sourceId,
@@ -354,7 +360,7 @@ export async function applyZeroCostMixBatchSourcesFix(
           );
 
         if (rawStock) {
-          correctedCostPerKgUsd = parseFloat(rawStock.costPerKgUsd || "0");
+          correctedCostPerKgUsd = toMoney(rawStock.costPerKgUsd).toNumber();
         } else {
           // No active raw-stock: derive from container record
           const [container] = await tx
@@ -419,7 +425,7 @@ export async function applyZeroCostMixBatchSourcesFix(
             .select({ currentRawMaterialCostPerKgUsd: factorySuppliers.currentRawMaterialCostPerKgUsd })
             .from(factorySuppliers)
             .where(and(eq(factorySuppliers.id, src.supplierId), eq(factorySuppliers.companyId, companyId)));
-          const lockedRate = parseFloat((supplierRow?.currentRawMaterialCostPerKgUsd as string) || "0");
+          const lockedRate = toMoney(supplierRow?.currentRawMaterialCostPerKgUsd as string).toNumber();
           if (lockedRate > 0) {
             correctedCostPerKgUsd = lockedRate;
           } else if (manualRate && manualRate > 0) {
