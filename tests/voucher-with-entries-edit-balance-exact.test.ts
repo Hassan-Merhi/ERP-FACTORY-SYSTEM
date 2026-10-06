@@ -54,4 +54,16 @@ describe("voucher with-entries edit balance", () => {
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Total debits must equal total credits for active vouchers");
   });
+
+  it("refuses a leg that is not a finite number", async () => {
+    const response = await agent.put(`/api/vouchers/${voucherId}/with-entries`).send({
+      voucher: { voucherType: "Journal", voucherDate: "2026-09-01" },
+      entries: [
+        { ledgerAccountId: ctx.cashAccountId, debitAmount: "NaN", creditAmount: "0" },
+        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "0" },
+      ],
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Invalid amount");
+  });
 });
