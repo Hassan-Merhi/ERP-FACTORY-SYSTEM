@@ -44,11 +44,12 @@ interface RowRecord {
   done_by: string | null;
   whatsapp_sent_at: string | null;
   note: string | null;
+  anything: string | null;
 }
 
 async function rowRecord(id: number): Promise<RowRecord | null> {
   const result = await pool.query<RowRecord>(
-    `SELECT id, is_done, done_at, done_by, whatsapp_sent_at, note
+    `SELECT id, is_done, done_at, done_by, whatsapp_sent_at, note, anything
      FROM factory_shipping_container_rows WHERE id = $1`,
     [id]
   );
@@ -182,13 +183,28 @@ describe("POST /api/factory/shipping-container-rows", () => {
 });
 
 describe("PATCH /api/factory/shipping-container-rows/:id", () => {
-  it("updates only the fields sent", async () => {
+  it("updates only the fields sent, including the free-text Anything column", async () => {
     const rowId = await createRow(await createOrder());
 
-    const response = await agent.patch(`/api/factory/shipping-container-rows/${rowId}`).send({ note: "at port" });
+    const response = await agent
+      .patch(`/api/factory/shipping-container-rows/${rowId}`)
+      .send({ note: "at port", anything: "Call broker after customs / ref 88-A" });
 
     expect(response.status).toBe(200);
-    expect((await rowRecord(rowId))?.note).toBe("at port");
+    const row = await rowRecord(rowId);
+    expect(row?.note).toBe("at port");
+    expect(row?.anything).toBe("Call broker after customs / ref 88-A");
+
+    const list = await agent.get("/api/factory/shipping-container-rows?isDone=false&pageSize=500");
+    expect(list.status).toBe(200);
+    expect(list.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: rowId,
+          anything: "Call broker after customs / ref 88-A",
+        }),
+      ])
+    );
   });
 
   it("returns 404 for a row in another company", async () => {
