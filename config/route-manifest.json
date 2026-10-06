@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2047,
+  "routeCount": 2049,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1544,6 +1544,8 @@
     "GET /api/debug/import-cycle [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous>]",
     "GET /api/debug/orphaned-charge-vouchers [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/admin/fix-orphaned-charge-vouchers [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/admin/offload-charge-voucher-repair [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/admin/offload-charge-voucher-repair [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/offloads [requireAuth > <anonymous>]",
     "GET /api/offloads/:id [requireAuth > <anonymous>]",
     "POST /api/offloads/:id/toggle-optional [requireAuth > <anonymous> > <anonymous>]",

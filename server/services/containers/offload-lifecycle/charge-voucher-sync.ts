@@ -1,3 +1,4 @@
+import type Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import type { DbTransaction } from "../../../db";
@@ -26,7 +27,7 @@ const CHARGE_COLUMN = {
   CHG: null,
 } as const;
 
-type ChargePrefix = keyof typeof CHARGE_COLUMN;
+export type ChargePrefix = keyof typeof CHARGE_COLUMN;
 
 export function parseContainerChargeVoucherNumber(
   voucherNumber: string | null | undefined
@@ -75,7 +76,32 @@ export async function syncContainerChargeVoucherEditTx(
   const parsed = parseContainerChargeVoucherNumber(edit.voucherNumber);
   if (!parsed) return null;
 
-  const chargeDelta = roundInventoryValue(subtractInventoryValues(edit.newTotal ?? 0, edit.oldTotal ?? 0), 2);
+  return applyContainerChargeDeltaTx(tx, {
+    companyId: edit.companyId,
+    containerNumber: parsed.containerNumber,
+    prefix: parsed.prefix,
+    chargeDelta: subtractInventoryValues(edit.newTotal ?? 0, edit.oldTotal ?? 0),
+  });
+}
+
+export interface ContainerChargeDelta {
+  companyId: number;
+  containerNumber: string;
+  prefix: ChargePrefix;
+  chargeDelta: string | number | Decimal;
+}
+
+/**
+ * Apply a change of `chargeDelta` in one charge category to an offloaded
+ * container: the offload record, its lines and the inventory still on hand.
+ * Shared by the voucher-edit sync and the one-time repair of offloads whose
+ * vouchers were edited before that sync existed.
+ */
+export async function applyContainerChargeDeltaTx(
+  tx: DbTransaction,
+  change: ContainerChargeDelta
+): Promise<ContainerChargeVoucherSyncResult | null> {
+  const chargeDelta = roundInventoryValue(change.chargeDelta, 2);
   if (chargeDelta.isZero()) return null;
 
   const [container] = await tx
@@ -83,8 +109,8 @@ export async function syncContainerChargeVoucherEditTx(
     .from(schema.containers)
     .where(
       and(
-        eq(schema.containers.companyId, edit.companyId),
-        eq(schema.containers.containerNumber, parsed.containerNumber)
+        eq(schema.containers.companyId, change.companyId),
+        eq(schema.containers.containerNumber, change.containerNumber)
       )
     )
     .limit(1)
@@ -109,14 +135,14 @@ export async function syncContainerChargeVoucherEditTx(
     totalCharges: inventoryMoney(newTotalCharges),
     additionalCostPerBale: newCostPerBale.toFixed(2),
   };
-  const column = CHARGE_COLUMN[parsed.prefix];
+  const column = CHARGE_COLUMN[change.prefix];
   if (column) {
     const next = addInventoryValues(offload[column], chargeDelta);
     offloadUpdate[column] = inventoryMoney(next.isNegative() ? 0 : next);
   }
   await tx.update(schema.containerOffloads).set(offloadUpdate).where(eq(schema.containerOffloads.id, offload.id));
 
-  if (parsed.prefix === "DUTY") {
+  if (change.prefix === "DUTY") {
     await tx
       .update(schema.containers)
       .set({ dutyFee: offloadUpdate.duties })

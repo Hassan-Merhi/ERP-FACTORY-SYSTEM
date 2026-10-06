@@ -237,3 +237,76 @@ describe("editing an offload charge voucher", () => {
     expect(await inventoryAt(itemA)).toMatchObject({ quantity: "4.000", average_rate: "9.00", total_value: "36.00" });
   });
 });
+
+describe("repairing offloads edited before the sync existed", () => {
+  it("previews and applies the gap between stored charges and live vouchers", async () => {
+    await pool.query(`DELETE FROM inventory WHERE location_id = $1`, [ctx.locationId]);
+    const [itemA, itemB] = ctx.stockItemIds;
+    const { containerId, containerNumber } = await makeOffloadableContainer([
+      { stockItemId: itemA, quantity: "10", rate: "5.00" },
+      { stockItemId: itemB, quantity: "20", rate: "4.00" },
+    ]);
+    const offload = await agent.post(`/api/containers/${containerId}/offload`).send({
+      locationId: ctx.locationId,
+      offloadDate: "2026-09-15",
+      duties: "30.00",
+      dutiesAccountId: ctx.cashAccountId,
+      officeCharges: "15.00",
+      transferCharges: "0",
+      transportFees: "30.00",
+      transportAccountId: ctx.cashAccountId,
+    });
+    expect(offload.status, JSON.stringify(offload.body)).toBeLessThan(300);
+    // 75 over 30 bales = 2.50 a bale; office charges had no account, so no voucher.
+    expect((await offloadState(containerId)).offload.additional_cost_per_bale).toBe("2.50");
+
+    // An edit made before the sync: the duty voucher went 30 → 90 and nothing else moved.
+    const duty = await chargeVoucher("DUTY", containerNumber);
+    await pool.query(`UPDATE vouchers SET total_amount = '90.00' WHERE id = $1`, [duty.id]);
+
+    const preview = await agent.get("/api/admin/offload-charge-voucher-repair");
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200);
+    const rows = preview.body.drift.filter(
+      (row: { containerNumber: string }) => row.containerNumber === containerNumber
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({
+        prefix: "DUTY",
+        stored: "30.00",
+        vouchers: "90.00",
+        chargeDelta: "60.00",
+        oldCostPerBale: "2.50",
+        newCostPerBale: "4.50",
+        balesOnHand: "30.000",
+      }),
+    ]);
+    // The preview changes nothing.
+    expect((await offloadState(containerId)).offload.duties).toBe("30.00");
+
+    const apply = await agent
+      .post("/api/admin/offload-charge-voucher-repair")
+      .send({ offloadIds: [rows[0].offloadId] });
+    expect(apply.status, JSON.stringify(apply.body)).toBe(200);
+    expect(apply.body.repaired).toHaveLength(1);
+
+    const state = await offloadState(containerId);
+    expect(state.offload).toMatchObject({
+      duties: "90.00",
+      transport_fees: "30.00",
+      total_charges: "135.00",
+      additional_cost_per_bale: "4.50",
+    });
+    expect(state.items.map((item) => [item.rate, item.total_value])).toEqual([
+      ["9.50", "95.00"],
+      ["8.50", "170.00"],
+    ]);
+    expect(await inventoryAt(itemA)).toMatchObject({ average_rate: "9.50", total_value: "95.00" });
+    expect(await inventoryAt(itemB)).toMatchObject({ average_rate: "8.50", total_value: "170.00" });
+
+    // Running it again finds nothing left to do for this container.
+    const again = await agent.get("/api/admin/offload-charge-voucher-repair");
+    expect(
+      again.body.drift.filter((row: { containerNumber: string }) => row.containerNumber === containerNumber)
+    ).toEqual([]);
+  });
+});

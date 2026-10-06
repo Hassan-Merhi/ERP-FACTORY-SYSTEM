@@ -19,6 +19,7 @@ import type { ReactNode } from "react";
 import { Link } from "wouter";
 import { MergeStockItemsLauncher } from "./components/MergeStockItemsLauncher";
 import { ReconcileOTWNamesCard } from "./components/ReconcileOTWNamesCard";
+import { OffloadChargeRepairCard } from "./components/OffloadChargeRepairCard";
 import { LocationCostPriceOverride } from "./components/LocationCostPriceOverride";
 import { DataToolsImportDialogs } from "./DataToolsImportDialogs";
 import { SilentProductionDialog } from "./SilentProductionDialog";
@@ -332,6 +333,8 @@ export function DataToolsView({ model }: Props) {
           {appMode !== "factory" && canManageData && <MergeStockItemsLauncher />}
 
           {appMode !== "factory" && canManageData && <ReconcileOTWNamesCard />}
+
+          {appMode !== "factory" && canManageData && <OffloadChargeRepairCard />}
 
           {appMode === "factory" && canManageData && (
             <ToolCard
