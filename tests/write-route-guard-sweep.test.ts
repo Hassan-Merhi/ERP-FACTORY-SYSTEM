@@ -172,7 +172,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/admin/fix-orphaned-charge-vouchers",
   "POST /api/admin/fix-orphaned-pos-data",
   "POST /api/admin/fix-sales-inventory",
-  "POST /api/admin/initialize-accounting-balances",
   "POST /api/admin/migrate-employee-account/:accountId",
   "POST /api/admin/offload-charge-voucher-repair",
   "POST /api/admin/po-supplier-reconciliation",

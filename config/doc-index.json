@@ -157,6 +157,7 @@
   ],
   "classification": {
     "docs/README.md": "reference",
+    "docs/accounting-audit-2026-10.md": "reference",
     "docs/accounting-flow.md": "reference",
     "docs/api-quickstart.md": "reference",
     "docs/architecture.md": "reference",

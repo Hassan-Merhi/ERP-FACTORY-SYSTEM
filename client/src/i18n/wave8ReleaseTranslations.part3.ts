@@ -82,4 +82,34 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "يجب أن يكون سعر صرف العمولة رقماً",
     fr: "Le taux de change de la commission doit être un nombre",
   },
+  {
+    en: "Not changed. Investigate the difference and post a correcting entry.",
+    ar: "لم يتم التغيير. تحقق من الفرق وسجّل قيداً تصحيحياً.",
+    fr: "Non modifié. Analysez l’écart et passez une écriture de correction.",
+  },
+  {
+    en: "No balances were changed",
+    ar: "لم يتم تغيير أي أرصدة",
+    fr: "Aucun solde n’a été modifié",
+  },
+  {
+    en: "Equity adjustments are no longer written. The difference is reported as it is; investigate it and post a correcting entry.",
+    ar: "لم تعد تسويات حقوق الملكية تُسجَّل. يُعرض الفرق كما هو؛ تحقق منه وسجّل قيداً تصحيحياً.",
+    fr: "Les ajustements de capitaux propres ne sont plus enregistrés. L’écart est présenté tel quel ; analysez-le et passez une écriture de correction.",
+  },
+  {
+    en: "This checks each company's Import Cycle difference and shows what a balancing entry would need. No balances are changed: a difference is corrected with a reviewed, posted entry.",
+    ar: "يتحقق هذا من فرق دورة الاستيراد لكل شركة ويعرض ما يتطلبه قيد الموازنة. لا يتم تغيير أي أرصدة: يُصحَّح الفرق بقيد مُراجع ومُرحَّل.",
+    fr: "Ceci vérifie l’écart du cycle d’importation de chaque société et indique ce qu’exigerait une écriture d’équilibrage. Aucun solde n’est modifié : un écart se corrige par une écriture revue et comptabilisée.",
+  },
+  {
+    en: "Check All Companies",
+    ar: "التحقق من جميع الشركات",
+    fr: "Vérifier toutes les sociétés",
+  },
+  {
+    en: "Checking...",
+    ar: "جارٍ التحقق...",
+    fr: "Vérification...",
+  },
 ];

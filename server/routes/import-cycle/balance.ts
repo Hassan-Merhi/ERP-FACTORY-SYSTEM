@@ -23,7 +23,6 @@ import {
   employees,
   locations,
   salaryAdvances,
-  systemSettings,
 } from "@shared/schema";
 import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
@@ -483,23 +482,13 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       const traceNetLiabilities = traceLiabilitiesRaw.minus(openingBalanceEquity);
       const netImportCycleBalance = traceAssetTotal.plus(traceExpenseTotal).minus(traceNetLiabilities);
 
-      // Auto-adjust: silently keep the import cycle balance at 0 by computing and storing
-      // the exact offset needed. This runs on every fetch so no manual action is needed.
-      const autoAdjustKey = `equity_adjustment_${companyId}`;
-      const storedEquityAdjustment = netImportCycleBalance.negated();
-      if (netImportCycleBalance.abs().greaterThan(0.01)) {
-        // Fire-and-forget — don't await so the response is not delayed
-        db.insert(systemSettings)
-          .values({ key: autoAdjustKey, value: storedEquityAdjustment.toFixed(2) })
-          .onConflictDoUpdate({
-            target: systemSettings.key,
-            set: { value: storedEquityAdjustment.toFixed(2), updatedAt: new Date() },
-          })
-          .catch(() => {});
-      }
-
-      // Adjusted balance is always 0 after auto-adjustment
-      const adjustedImportCycleBalance = netImportCycleBalance.plus(storedEquityAdjustment);
+      // The difference is reported, never plugged. This endpoint used to upsert
+      // system_settings.equity_adjustment_<companyId> = -net on every read and then
+      // report 0, which hid real ledger/sub-ledger differences (2026-10 accounting
+      // audit). A read must not write, and an unexplained difference must stay
+      // visible until it is investigated and corrected with a posted entry.
+      const storedEquityAdjustment = new MoneyDecimal(0);
+      const adjustedImportCycleBalance = netImportCycleBalance;
 
       // Round to the cent, halves toward +infinity as Math.round did.
       // T006: Threshold reduced from $5 to $0.01 — the $5 threshold was hiding real imbalances.
@@ -555,11 +544,9 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         storedEquityAdjustment: storedEquityAdjustment.toNumber(),
         adjustedBalance: adjustedImportCycleBalance.toNumber(),
         finalRoundedBalance: roundedBalance,
-        discrepancyExplanation: !storedEquityAdjustment.isZero()
-          ? `An equity adjustment of ${storedEquityAdjustment.toFixed(2)} was applied to zero out the balance.`
-          : netImportCycleBalance.abs().lessThan(50) && !netImportCycleBalance.isZero()
-            ? `Small discrepancy of ${netImportCycleBalance.toFixed(2)} likely from accumulated rounding in weighted average cost calculations.`
-            : null,
+        discrepancyExplanation: netImportCycleBalance.abs().greaterThan(0.01)
+          ? `Unreconciled difference of ${netImportCycleBalance.toFixed(2)} between ledger and sub-ledger figures. It is not plugged; investigate it with the accounting integrity diagnostic.`
+          : null,
       };
 
       const _result = {

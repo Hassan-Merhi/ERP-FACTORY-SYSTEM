@@ -203,29 +203,12 @@ export const supplierPartnerAndAi: string[] = [
   // ── ERP Rent Accrual: track which ledger rows have had a journal accrual posted ──
   `ALTER TABLE property_monthly_ledger ADD COLUMN IF NOT EXISTS accrual_voucher_id INTEGER`,
 
-  // ── Ledger accounts: merge any duplicate (company_id, name) rows created by
-  //    parallel accrual races, then add unique index to prevent future ones ──
-  `DO $$
-     DECLARE canonical_id integer; dup_id integer;
-     BEGIN
-       FOR canonical_id IN
-         SELECT DISTINCT ON (company_id, name) id
-         FROM ledger_accounts
-         WHERE deleted_at IS NULL
-         ORDER BY company_id, name, id
-       LOOP
-         FOR dup_id IN
-           SELECT id FROM ledger_accounts la2
-           WHERE la2.deleted_at IS NULL
-             AND la2.id != canonical_id
-             AND la2.company_id = (SELECT company_id FROM ledger_accounts WHERE id = canonical_id)
-             AND la2.name       = (SELECT name       FROM ledger_accounts WHERE id = canonical_id)
-         LOOP
-           UPDATE voucher_entries SET ledger_account_id = canonical_id WHERE ledger_account_id = dup_id;
-           DELETE FROM ledger_accounts WHERE id = dup_id;
-         END LOOP;
-       END LOOP;
-     END $$`,
+  // ── Ledger accounts: unique active name per company. A boot-time step here
+  //    used to merge duplicate (company_id, name) rows by re-pointing
+  //    voucher_entries and hard-deleting the duplicates on every boot. It was
+  //    retired (2026-10 accounting audit): it re-assigned posted history, merged
+  //    accounts of different types, and left other references dangling. The
+  //    index below now prevents duplicates; production had none left.
   `CREATE UNIQUE INDEX IF NOT EXISTS uq_ledger_accounts_company_name_active
      ON ledger_accounts (company_id, name)
      WHERE deleted_at IS NULL`,

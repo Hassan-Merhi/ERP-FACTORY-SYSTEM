@@ -42,7 +42,8 @@ import {
 import { eq, and, or, inArray, sql, isNull, isNotNull } from "drizzle-orm";
 
 export function registerAccountingBalanceInitRoutes(app: Express) {
-  // Initialize Accounting Balances - creates Owner's Capital accounts to balance the Import Cycle
+  // Initialize Accounting Balances - read-only: reports each company's import-cycle
+  // difference and what a balancing entry would need. It no longer writes plugs.
   app.post("/api/admin/initialize-accounting-balances", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
       const results: Array<{
@@ -56,6 +57,8 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         previousBalance?: string;
         openingBalance?: string;
         openingBalanceSide?: string;
+        proposedOpeningBalance?: string;
+        proposedOpeningBalanceSide?: string;
         message: string;
         components?: {
           assets: { name: string; value: number }[];
@@ -541,35 +544,27 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           const newOpeningBalance = moneyString(newOpeningSigned.abs());
           const newOpeningBalanceSide: "Dr" | "Cr" = newOpeningSigned.gte(0) ? "Cr" : "Dr";
 
-          // Update the account using raw query since storage.updateLedgerAccount may not support all fields
-          await db
-            .update(ledgerAccounts)
-            .set({
-              openingBalance: newOpeningBalance,
-              openingBalanceSide: newOpeningBalanceSide,
-            })
-            .where(eq(ledgerAccounts.id, profitAccount.id));
-
+          // Report only. Rewriting an opening balance to make the books "balance"
+          // hides the real difference (2026-10 accounting audit); the difference
+          // must be investigated and corrected with a reviewed, posted entry.
           results.push({
             companyId,
             companyName: company.name,
             imbalance: netImportCycleBalance,
             accountCreated: false,
-            accountUpdated: true,
+            accountUpdated: false,
             accountCode: profitAccount.code,
             accountName: profitAccount.name,
             previousBalance: `${currentBalance.toFixed(2)} ${currentSide}`,
-            openingBalance: newOpeningBalance,
-            openingBalanceSide: newOpeningBalanceSide,
-            message: `Updated ${profitAccount.code} - ${profitAccount.name}: ${currentBalance.toFixed(2)} ${currentSide} → ${newOpeningBalance} ${newOpeningBalanceSide}`,
+            proposedOpeningBalance: newOpeningBalance,
+            proposedOpeningBalanceSide: newOpeningBalanceSide,
+            message: "Not changed. Investigate the difference and post a correcting entry.",
             components: componentsBreakdown,
           });
           continue;
         }
 
-        // No existing Profit account - generate unique code for new capital account
-        const nextCodeNum = 1;
-        const accountCode = `CAP-${String(nextCodeNum).padStart(3, "0")}`;
+        // No existing Profit account.
         const accountName = "Owner's Capital";
 
         // Set Profit = Assets - Liabilities_without_profit to zero the import cycle
@@ -577,50 +572,23 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
         const openingBalanceSide: "Dr" | "Cr" = targetProfitSigned >= 0 ? "Cr" : "Dr";
         const openingBalanceAmount = moneyString(Math.abs(targetProfitSigned));
 
-        // Create the Owner's Capital account
-        await storage.createLedgerAccount({
-          companyId,
-          code: accountCode,
-          name: accountName,
-          accountType: "Profit",
-          openingBalance: openingBalanceAmount,
-          openingBalanceSide: openingBalanceSide,
-          active: true,
-        });
-
+        // Report only: no balancing capital account is created (see above).
         results.push({
           companyId,
           companyName: company.name,
           imbalance: netImportCycleBalance,
-          accountCreated: true,
-          accountCode,
+          accountCreated: false,
+          proposedOpeningBalance: openingBalanceAmount,
+          proposedOpeningBalanceSide: openingBalanceSide,
           accountName,
-          openingBalance: openingBalanceAmount,
-          openingBalanceSide,
-          message: `Created ${accountCode} - ${accountName} with opening balance ${openingBalanceAmount} ${openingBalanceSide}`,
+          message: "Not changed. Investigate the difference and post a correcting entry.",
           components: componentsBreakdown,
         });
       }
 
-      // Generate SQL summary for production database
-      const sqlStatements: string[] = [];
-      for (const result of results) {
-        if (result.accountCreated) {
-          sqlStatements.push(
-            `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side, active)\nVALUES (${result.companyId}, '${result.accountCode}', '${result.accountName}', 'Profit', ${result.openingBalance}, '${result.openingBalanceSide}', true);`
-          );
-        } else if (result.accountUpdated) {
-          sqlStatements.push(
-            `UPDATE ledger_accounts SET opening_balance = '${result.openingBalance}', opening_balance_side = '${result.openingBalanceSide}'\nWHERE company_id = ${result.companyId} AND code = '${result.accountCode}';`
-          );
-        }
-      }
-
       res.json({
-        message: `Processed ${results.length} companies`,
+        message: "No balances were changed",
         results,
-        sqlForProduction:
-          sqlStatements.length > 0 ? sqlStatements.join("\n\n") : "No accounts needed to be created or updated",
       });
     } catch (error: unknown) {
       logger.error("Error initializing accounting balances:", { error: error });

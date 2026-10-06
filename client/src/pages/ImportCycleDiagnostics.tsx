@@ -234,10 +234,10 @@ export default function ImportCycleDiagnostics() {
         return r.json();
       });
     },
-    onSuccess: () => {
+    onSuccess: (data: { message?: string }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-balance"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/import-cycle-diagnostics"] });
-      toast({ title: "Recalculated", description: "Opening balance equity has been recalculated." });
+      toast({ title: "Recalculated", description: data.message ?? "" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });

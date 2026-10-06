@@ -156,7 +156,7 @@ import { startupMigrations } from "../server/startup-schema";
  * the fss_log_color block), 1405 to 1413. Nothing else moved.
  */
 const EXPECTED_STATEMENT_COUNT = 1413;
-const EXPECTED_CONTENT_HASH = "1cd4323d10c5f370593713dd2d0baf74aa98b9fe0ce6e5dbb0a5b66279908e2d";
+const EXPECTED_CONTENT_HASH = "5b5b8b71a7bb6f71d880fc13537ea63115b2cbd94c9558b537d37e2a4ef3e607";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -215,6 +215,13 @@ const EXPECTED_CONTENT_HASH = "1cd4323d10c5f370593713dd2d0baf74aa98b9fe0ce6e5dbb
  * against factory_containers, so the validation compared rows against the wrong
  * parent table and raised foreign_key_violation on every boot of a database
  * holding factory rows. Only those three were deleted and no statement moved.
+ *
+ * Re-pinned again (2026-10 accounting audit) when two boot-time steps that
+ * rewrote posted history were retired: the GUAR-CASH debit/credit swap in 007
+ * and the duplicate-account merge in 009 (re-pointed voucher_entries and
+ * hard-deleted ledger accounts on every boot). main had 1415 statements against
+ * a stale pin of 1413; with the two removed the array is 1413, and nothing else
+ * moved.
  */
 
 function contentHash(statements: string[]): string {
