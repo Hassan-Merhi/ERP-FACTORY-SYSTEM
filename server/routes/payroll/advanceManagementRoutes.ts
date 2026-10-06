@@ -20,7 +20,8 @@ import {
   vouchers,
   voucherEntries,
 } from "@shared/schema";
-import { daybookAmountUsd } from "../../lib/money";
+import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 
 /** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
 function getFactoryCompanyId(req: import("express").Request): number | undefined {
@@ -213,20 +214,21 @@ export function registerAdvanceManagementRoutes(app: Express) {
         advancesByWorker.set(adv.workerId, list);
       }
 
-      const payrollDeductionByWorker = new Map<number, number>();
+      const zero = new MoneyDecimal(0);
+      const payrollDeductionByWorker = new Map<number, Decimal>();
       for (const pr of allPayrolls) {
-        const amt = parseFloat(pr.advances || "0");
-        if (amt > 0) {
-          payrollDeductionByWorker.set(pr.workerId, (payrollDeductionByWorker.get(pr.workerId) || 0) + amt);
+        const amt = toMoney(pr.advances);
+        if (amt.gt(0)) {
+          payrollDeductionByWorker.set(pr.workerId, (payrollDeductionByWorker.get(pr.workerId) ?? zero).plus(amt));
         }
       }
 
       // Manual repayments keyed by advanceId
-      const manualRepaymentByAdvance = new Map<number, number>();
+      const manualRepaymentByAdvance = new Map<number, Decimal>();
       for (const rep of allRepayments) {
         manualRepaymentByAdvance.set(
           rep.advanceId,
-          (manualRepaymentByAdvance.get(rep.advanceId) || 0) + parseFloat(rep.amount || "0")
+          (manualRepaymentByAdvance.get(rep.advanceId) ?? zero).plus(toMoney(rep.amount))
         );
       }
 
@@ -234,27 +236,27 @@ export function registerAdvanceManagementRoutes(app: Express) {
       await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
         for (const [workerId, advances] of advancesByWorker) {
           // Step 1: Reset each advance to its original amount minus manual repayments
-          const balances: { id: number; bal: number }[] = [];
+          const balances: { id: number; bal: Decimal }[] = [];
           for (const adv of advances) {
-            const original = parseFloat(adv.amount || "0");
-            const manualPaid = manualRepaymentByAdvance.get(adv.id) || 0;
-            balances.push({ id: adv.id, bal: Math.max(0, original - manualPaid) });
+            const original = toMoney(adv.amount);
+            const manualPaid = manualRepaymentByAdvance.get(adv.id) ?? zero;
+            balances.push({ id: adv.id, bal: MoneyDecimal.max(0, original.minus(manualPaid)) });
           }
 
           // Step 2: Apply total payroll deductions oldest-first
-          let remaining = payrollDeductionByWorker.get(workerId) || 0;
+          let remaining = payrollDeductionByWorker.get(workerId) ?? zero;
           for (const entry of balances) {
-            if (remaining <= 0) break;
-            const deduct = Math.min(entry.bal, remaining);
-            entry.bal = entry.bal - deduct;
-            remaining -= deduct;
+            if (remaining.lte(0)) break;
+            const deduct = MoneyDecimal.min(entry.bal, remaining);
+            entry.bal = entry.bal.minus(deduct);
+            remaining = remaining.minus(deduct);
           }
 
           // Step 3: Persist updated balances
           for (let i = 0; i < advances.length; i++) {
-            const newBal = Math.max(0, balances[i].bal);
+            const newBal = MoneyDecimal.max(0, balances[i].bal);
             const newBal2dp = newBal.toFixed(2);
-            const fullyPaid = newBal <= 0.001;
+            const fullyPaid = newBal.lte(0.001);
             const adv = advances[i];
             if (adv.remainingBalance !== newBal2dp || adv.fullyPaid !== fullyPaid) {
               await tx
@@ -361,7 +363,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
           txType: "ADVANCE_DELETED",
           referenceId: id,
           referenceTable: "factory_worker_advances",
-          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${parseFloat(advance.amount).toFixed(2)}${repayNote}${voucherNote}`,
+          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${repayNote}${voucherNote}`,
           createdBy: req.session.userId ?? undefined,
         });
       });
@@ -421,7 +423,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
           txType: "ADVANCE_REVERSED",
           referenceId: id,
           referenceTable: "factory_worker_advances",
-          description: `Advance reversed for ${worker?.fullName || "Unknown"}: $${parseFloat(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)`,
+          description: `Advance reversed for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)`,
           createdBy: req.session.userId ?? undefined,
         });
       });
@@ -563,7 +565,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
             continue;
           }
 
-          const amount = parseFloat(adv.amount);
+          const amount = toMoney(adv.amount);
           const voucherNumber = `PAYMENT-ADV-${adv.id}-${Date.now()}`;
           const narration = `Advance to ${adv.workerName}: $${amount.toFixed(2)} (retroactive)`;
 
@@ -718,7 +720,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
 
         for (const adv of advanceRows) {
           const workerName = workerMap.get(adv.workerId) ?? "Worker";
-          const amount = parseFloat(adv.amount || "0");
+          const amount = toMoney(adv.amount);
           const advDate = adv.advanceDate ?? today;
           const narration = `Advance to ${workerName}: $${amount.toFixed(2)}`;
 
@@ -731,8 +733,8 @@ export function registerAdvanceManagementRoutes(app: Express) {
               .where(eq(voucherEntries.voucherId, voucherId));
 
             const creditEntry = entries
-              .filter((e) => parseFloat(e.creditAmount || "0") > 0)
-              .sort((a, b) => parseFloat(b.creditAmount || "0") - parseFloat(a.creditAmount || "0"))[0];
+              .filter((e) => toMoney(e.creditAmount).gt(0))
+              .sort((a, b) => toMoney(b.creditAmount).comparedTo(toMoney(a.creditAmount)))[0];
 
             if (creditEntry) {
               await tx
@@ -784,8 +786,8 @@ export function registerAdvanceManagementRoutes(app: Express) {
             referenceId: adv.id,
             referenceTable: "factory_worker_advances",
             description: `Cash account assigned for advance to ${workerName}: $${amount.toFixed(2)} → ${acct.name}`,
-            amountCurrency: amount,
-            amountUsd: amount,
+            amountCurrency: amount.toNumber(),
+            amountUsd: amount.toNumber(),
             createdBy: req.session.userId ?? undefined,
           });
         }
@@ -824,7 +826,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
           )
         );
 
-      const totalBalance = outstanding.reduce((s: number, a) => s + parseFloat(a.remainingBalance || "0"), 0);
+      const totalBalance = sumMoney(outstanding.map((a) => a.remainingBalance));
       res.json({ totalBalance: totalBalance.toFixed(2), count: outstanding.length });
     } catch (error: unknown) {
       logger.error("Error fetching advance balance:", { error: error });
