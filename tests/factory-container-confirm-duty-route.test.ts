@@ -138,7 +138,8 @@ describe("PATCH /api/factory/containers/:id/confirm-duty — validation and scop
   it("requires a positive duty amount", async () => {
     const id = await seedContainer();
 
-    for (const body of [{}, { dutyAmount: "0" }, { dutyAmount: "-5" }]) {
+    // "abc" used to pass the `parseFloat(x) <= 0` check as NaN.
+    for (const body of [{}, { dutyAmount: "0" }, { dutyAmount: "-5" }, { dutyAmount: "abc" }]) {
       const response = await confirmDuty(id, body);
       expect(response.status).toBe(400);
       expect(response.body.message).toMatch(/Valid duty amount is required/i);
@@ -272,5 +273,18 @@ describe("PATCH /api/factory/containers/:id/confirm-duty — cost and records", 
     expect(Number(afterSecond.duty_amount)).toBe(50);
     expect(await dutyAuditRows(id)).toHaveLength(1);
     expect((await daybookRows(id)).filter((row) => row.tx_type === "DUTY")).toHaveLength(1);
+  });
+});
+
+describe("PATCH /api/factory/containers/:id/confirm-duty — exact duty text", () => {
+  it("describes a half-cent duty at the cents it is stored at", async () => {
+    const id = await seedContainer({ dutyAmount: "5" });
+
+    expect((await confirmDuty(id, { dutyAmount: "1.005" })).status).toBe(200);
+
+    // The float toFixed(2) wrote "1.00" into the description while the duty
+    // column kept 1.01.
+    const daybook = (await daybookRows(id)).filter((row) => row.tx_type === "DUTY");
+    expect(daybook[0].description).toMatch(/: 1\.01$/);
   });
 });
