@@ -275,6 +275,35 @@ describe("Phase 33D employee/factory net position", () => {
     expect(supplierArgs.getConfigFx("USD")).toBe(1);
   });
 
+  it("sums ledger movements and customer balances exactly", async () => {
+    harness.executeResults.push({ rows: [] }, { rows: [] });
+    harness.selectResults.push(
+      [{ id: 1, name: "Cash", code: "CASH", accountType: "Cash" }],
+      [{ id: 9 }],
+      [
+        { ledgerAccountId: 1, debitAmount: "0.1", creditAmount: "0" },
+        { ledgerAccountId: 1, debitAmount: "0.2", creditAmount: "0" },
+      ],
+      [{ id: 4, legalName: "Tiny Customer", openingBalance: "0.1", openingBalanceSide: "Dr", ledgerAccountId: null }],
+      [{ customerId: 4, net: "-0.09" }],
+      [],
+      [],
+      [],
+      [],
+      []
+    );
+    const res = resHarness();
+
+    await routes.get("GET /api/factory/net-position")!(req(), res);
+
+    expect(res.statusCode).toBe(200);
+    // 0.1 + 0.2 reaches the classifier as 0.3, not 0.30000000000000004.
+    expect(harness.classifyNetPositionAccounts.mock.calls[0][1].get(1)).toEqual({ debit: 0.3, credit: 0 });
+    // 0.1 - 0.09 is exactly the 0.01 threshold, so the customer is not listed;
+    // the float path saw 0.010000000000000009 and listed it.
+    expect(JSON.stringify(res.body)).not.toContain("Tiny Customer");
+  });
+
   it("falls back to the client date when asOf is malformed", async () => {
     harness.executeResults.push({ rows: [] }, { rows: [] });
     harness.selectResults.push([], [], [], [], [], []);
