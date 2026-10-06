@@ -20,6 +20,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
+import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchSourceRoutes(app: Express) {
   // Assign existing (unlinked) bales to a mix batch
@@ -57,10 +58,10 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
         return res.status(400).json({ message: `${alreadyLinked.length} bale(s) are already linked to a mix batch` });
       }
 
-      const totalKg = bales.reduce((sum, b) => sum + parseFloat(b.weightKg as string), 0);
-      const availableKg = parseFloat(batch.totalWeightKg as string) - parseFloat(batch.usedKg as string);
+      const totalKg = sumMoney(bales.map((b) => b.weightKg));
+      const availableKg = toMoney(batch.totalWeightKg).minus(toMoney(batch.usedKg));
 
-      if (totalKg > availableKg + 0.001) {
+      if (totalKg.greaterThan(availableKg.plus(0.001))) {
         return res.status(400).json({
           message: `Not enough remaining kg in this batch (need ${totalKg.toFixed(3)}, have ${availableKg.toFixed(3)})`,
         });
@@ -76,7 +77,7 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
           .where(eq(factoryMixBatches.id, mixBatchId));
       });
 
-      res.json({ success: true, balesUpdated: baleIds.length, totalKg });
+      res.json({ success: true, balesUpdated: baleIds.length, totalKg: totalKg.toNumber() });
     } catch (error: unknown) {
       logger.error("Error assigning bales to mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
@@ -91,6 +92,12 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+
+      const [batch] = await db
+        .select({ id: factoryMixBatches.id })
+        .from(factoryMixBatches)
+        .where(and(eq(factoryMixBatches.id, id), eq(factoryMixBatches.companyId, companyId)));
+      if (!batch) return res.status(404).json({ message: "Mix batch not found" });
 
       const results = await db
         .select({
@@ -118,13 +125,12 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
       // display always shows a meaningful number.
       const enriched = await Promise.all(
         results.map(async (src) => {
-          const storedCost = parseFloat(src.costPerKg) || 0;
-          if (storedCost > 0) return src;
+          if (toMoney(src.costPerKg).greaterThan(0)) return src;
 
           // Try to find a raw stock cost via containerId first, then supplierId.
           // Uses the same stable receipt-weighted rate as the write paths (getStableSupplierCost)
           // so the display fallback can never disagree with what was actually costed.
-          let fallbackCost = 0;
+          let fallbackCost = new MoneyDecimal(0);
           if (src.containerId) {
             const rows = await db
               .select({
@@ -134,26 +140,27 @@ export function registerFactoryMixBatchSourceRoutes(app: Express) {
               })
               .from(factoryRawStock)
               .where(and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId)));
-            let wSum = 0,
-              wWeight = 0;
+            let wSum = new MoneyDecimal(0);
+            let wWeight = new MoneyDecimal(0);
             for (const r of rows) {
-              const kg = parseFloat(r.receivedKg) || 0;
-              const c = parseFloat(r.costPerKgUsd || "0") || parseFloat(r.costPerKg || "0") || 0;
-              wSum += kg * c;
-              wWeight += kg;
+              const kg = toMoney(r.receivedKg);
+              const usd = toMoney(r.costPerKgUsd);
+              const c = usd.isZero() ? toMoney(r.costPerKg) : usd;
+              wSum = wSum.plus(kg.times(c));
+              wWeight = wWeight.plus(kg);
             }
-            fallbackCost = wWeight > 0 ? wSum / wWeight : 0;
+            fallbackCost = wWeight.greaterThan(0) ? wSum.dividedBy(wWeight) : new MoneyDecimal(0);
           } else if (src.supplierId) {
             const stable = await getStableSupplierCost(db, companyId, src.supplierId);
-            fallbackCost = stable.costPerKgUsd;
+            fallbackCost = toMoney(stable.costPerKgUsd);
           }
 
-          if (fallbackCost <= 0) return src;
-          const weightKg = parseFloat(src.weightKg) || 0;
+          if (!fallbackCost.greaterThan(0)) return src;
+          // Shown at the stored column scale (7 places), half up.
           return {
             ...src,
-            costPerKg: String(fallbackCost),
-            totalCost: String(weightKg * fallbackCost),
+            costPerKg: fallbackCost.toFixed(7),
+            totalCost: toMoney(src.weightKg).times(fallbackCost).toFixed(7),
           };
         })
       );
