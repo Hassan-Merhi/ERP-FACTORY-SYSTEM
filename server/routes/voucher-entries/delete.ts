@@ -101,8 +101,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
             // - Source: add back qty at existing rate (no average change needed)
             // - Destination: subtract qty and reverse the weighted average
             for (const item of transferItemsList) {
-              const qty = parseFloat(item.quantity);
-              const transferRate = parseFloat(item.rate);
+              const qty = Number(item.quantity);
+              const transferRate = Number(item.rate);
               // Use per-item sourceLocationId (multi-source transfers may have different sources per item)
               const itemSourceId = item.sourceLocationId || transferVoucher.sourceLocationId!;
 
@@ -175,8 +175,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
             // Consumption forward logic: subtracts qty, keeps rate
             // Mixed: depends on the individual item qty sign
             for (const item of adjustmentItemsList) {
-              const qty = parseFloat(item.quantity);
-              const adjustmentRate = parseFloat(item.rate);
+              const qty = Number(item.quantity);
+              const adjustmentRate = Number(item.rate);
               const absoluteQty = Math.abs(qty);
 
               // Same stored-casing hazard as the bulk path: see the note in
@@ -280,8 +280,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
               const targetLocationId = voucher.locationId;
               // This is a POS sale - add sold items back to inventory
               for (const item of saleItems) {
-                const qty = parseFloat(item.quantity);
-                const costPrice = parseFloat(item.costPrice || "0");
+                const qty = Number(item.quantity);
+                const costPrice = Number(item.costPrice || "0");
 
                 logger.info(`[POS Delete] Restoring item ${item.stockItemId}: qty=${qty}, costPrice=${costPrice}`);
 
@@ -333,8 +333,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
             logger.info(`[Credit/Debit Note Delete] Voucher ${id}: Found ${noteItems.length} items to reverse`);
 
             for (const item of noteItems) {
-              const qty = parseFloat(item.quantity);
-              const inventoryCost = parseFloat(item.inventoryCost || item.rate || "0");
+              const qty = Number(item.quantity);
+              const inventoryCost = Number(item.inventoryCost || item.rate || "0");
 
               if (voucher.voucherType === "Credit Note") {
                 // Credit Note forward: added qty to inventory
