@@ -35,7 +35,10 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
       }
 
       // Get employee
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
@@ -125,7 +128,7 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
       );
 
       // Get updated employee balance after sync
-      const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
 
       res.json({
         voucher,

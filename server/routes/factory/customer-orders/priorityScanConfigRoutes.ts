@@ -228,6 +228,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         proformaId: number;
         remainingQty: number;
       }> = [];
+      let matchesAnyActiveProforma = false;
 
       for (const row of queue) {
         if (!row.proformaIdUsed) continue;
@@ -238,6 +239,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         });
         if (!snapshot) continue;
         const decision = evaluateProformaArticleCapacity(snapshot, effectiveArticleCode, 1, "per_loading");
+        if (decision.reason !== "not_in_proforma") matchesAnyActiveProforma = true;
         if (!decision.allowed) continue;
         candidates.push({
           orderId: row.orderId,
@@ -250,6 +252,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
 
       if (candidates.length === 0) {
         return res.status(409).json({
+          code: matchesAnyActiveProforma ? "PRIORITY_SCAN_NO_CAPACITY" : "PRIORITY_SCAN_NOT_REQUIRED",
           message:
             "This reference is not required by any active Priority Scan loading. Use the normal Pending Loading scanner for overload or items not requested on the proforma.",
           referenceNumber: bale.referenceNumber,

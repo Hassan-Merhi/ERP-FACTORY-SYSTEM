@@ -20,13 +20,8 @@ import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } fr
 import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
-import type Decimal from "decimal.js";
-import { MoneyDecimal, parseMoneyInput, toMoney } from "../lib/money";
-
-/** A request quantity read as parseFloat read it; NaN (as a Decimal) when it does not parse. */
-function requestQuantity(value: unknown): Decimal {
-  return parseMoneyInput(typeof value === "number" ? value : String(value)) ?? new MoneyDecimal(NaN);
-}
+import { MoneyDecimal, toMoney } from "../lib/money";
+import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -86,9 +81,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
         // Expected columns: Barcode, Quantity
         const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        // A quantity that does not parse is invalid too; it used to pass as NaN.
-        const quantity =
-          parseMoneyInput(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"))?.toNumber() ?? 0;
+        const quantity = rowQuantity(row);
 
         if (!barcode) {
           continue; // Skip rows without barcode
@@ -505,9 +498,7 @@ export function registerStockTransferImportRoutes(app: Express) {
           // Expected columns: Source Location, Barcode, Quantity
           const sourceLocation = row["Source Location"] || row.SourceLocation || row.sourceLocation || row.source || "";
           const barcode = row.Barcode || row.barcode || row.Code || row.code;
-          // A quantity that does not parse is invalid too; it used to pass as NaN.
-          const quantity =
-            parseMoneyInput(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"))?.toNumber() ?? 0;
+          const quantity = rowQuantity(row);
 
           if (!barcode) {
             continue; // Skip rows without barcode
