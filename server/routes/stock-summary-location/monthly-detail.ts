@@ -8,6 +8,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and, or, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { requireAuth } from "../../auth";
 import {
   vouchers,
@@ -62,39 +63,43 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
           )
         );
       for (const r of saleRows) {
-        const qty = parseFloat(r.qty);
-        const totalCost = parseFloat(r.totalCost || "0");
-        const costPrice = parseFloat(r.costPrice || "0");
-        const sellingPrice = parseFloat(r.sellingPrice || "0");
-        const totalSales = parseFloat(r.totalSales || "0");
+        const qty = toMoney(r.qty);
+        const totalCost = toMoney(r.totalCost);
+        const costPrice = toMoney(r.costPrice);
+        const sellingPrice = toMoney(r.sellingPrice);
+        const totalSales = toMoney(r.totalSales);
+        const ZERO = new MoneyDecimal(0);
 
         // Preserve the inventory-valuation contract used by other consumers.
         // Legacy rows may not have cost fields, so retain the existing sale-value fallback.
-        const inventoryValue =
-          totalCost > 0
-            ? totalCost
-            : costPrice > 0
-              ? costPrice * qty
-              : totalSales > 0
-                ? totalSales
-                : sellingPrice * qty;
-        const inventoryRate = qty > 0 ? inventoryValue / qty : 0;
+        const inventoryValue = totalCost.greaterThan(0)
+          ? totalCost
+          : costPrice.greaterThan(0)
+            ? costPrice.times(qty)
+            : totalSales.greaterThan(0)
+              ? totalSales
+              : sellingPrice.times(qty);
+        const inventoryRate = qty.greaterThan(0) ? inventoryValue.dividedBy(qty) : ZERO;
 
         // Stock-out sale detail should display what the item actually sold for,
         // not its inventory cost. Prefer the recorded unit selling price, with
         // totalSales as the legacy fallback when a unit price is missing.
-        const sellingRate = sellingPrice > 0 ? sellingPrice : qty > 0 && totalSales > 0 ? totalSales / qty : 0;
-        const sellingValue = totalSales > 0 ? totalSales : sellingRate * qty;
+        const sellingRate = sellingPrice.greaterThan(0)
+          ? sellingPrice
+          : qty.greaterThan(0) && totalSales.greaterThan(0)
+            ? totalSales.dividedBy(qty)
+            : ZERO;
+        const sellingValue = totalSales.greaterThan(0) ? totalSales : sellingRate.times(qty);
 
         outTx.push({
           type: "Sale",
           date: r.date,
           reference: r.ref,
-          qty,
-          rate: inventoryRate,
-          value: inventoryValue,
-          sellingRate,
-          sellingValue,
+          qty: qty.toNumber(),
+          rate: inventoryRate.toNumber(),
+          value: inventoryValue.toNumber(),
+          sellingRate: sellingRate.toNumber(),
+          sellingValue: sellingValue.toNumber(),
         });
       }
 
@@ -126,9 +131,15 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
           )
         );
       for (const r of transferRows) {
-        const qty = parseFloat(r.qty);
-        const val = parseFloat(r.totalAmount);
-        const entry = { date: r.date, reference: r.ref, qty, rate: qty > 0 ? val / qty : 0, value: val };
+        const qty = toMoney(r.qty);
+        const val = toMoney(r.totalAmount);
+        const entry = {
+          date: r.date,
+          reference: r.ref,
+          qty: qty.toNumber(),
+          rate: qty.greaterThan(0) ? val.dividedBy(qty).toNumber() : 0,
+          value: val.toNumber(),
+        };
         if (r.srcLoc === locationId) outTx.push({ ...entry, type: "Transfer Out" });
         if (r.dstLoc === locationId) inTx.push({ ...entry, type: "Transfer In" });
       }
@@ -157,10 +168,17 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
           )
         );
       for (const r of adjRows) {
-        const qty = Math.abs(parseFloat(r.qty));
-        const val = Math.abs(parseFloat(r.totalAmount));
-        const entry = { date: r.date, reference: r.ref, qty, rate: qty > 0 ? val / qty : 0, value: val };
-        if (r.adjustmentType === "Production" || parseFloat(r.qty) > 0)
+        const signedQty = toMoney(r.qty);
+        const qty = signedQty.abs();
+        const val = toMoney(r.totalAmount).abs();
+        const entry = {
+          date: r.date,
+          reference: r.ref,
+          qty: qty.toNumber(),
+          rate: qty.greaterThan(0) ? val.dividedBy(qty).toNumber() : 0,
+          value: val.toNumber(),
+        };
+        if (r.adjustmentType === "Production" || signedQty.greaterThan(0))
           inTx.push({ ...entry, type: `Adjustment (${r.adjustmentType})` });
         else outTx.push({ ...entry, type: `Adjustment (${r.adjustmentType})` });
       }
@@ -187,10 +205,15 @@ export function registerLocationMonthlyDetailRoutes(app: Express) {
           )
         );
       for (const r of noteRows) {
-        const qty = parseFloat(r.qty);
-        const rate = parseFloat(r.inventoryCost || "0");
-        const val = rate * qty;
-        const entry = { date: r.date, reference: r.ref, qty, rate, value: val };
+        const qty = toMoney(r.qty);
+        const rate = toMoney(r.inventoryCost);
+        const entry = {
+          date: r.date,
+          reference: r.ref,
+          qty: qty.toNumber(),
+          rate: rate.toNumber(),
+          value: rate.times(qty).toNumber(),
+        };
         if (r.noteType === "Credit Note") inTx.push({ ...entry, type: "Credit Note" });
         else outTx.push({ ...entry, type: "Debit Note" });
       }

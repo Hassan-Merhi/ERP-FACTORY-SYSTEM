@@ -8,6 +8,8 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
+import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { postableAdjustments } from "./postableAdjustments";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
@@ -156,12 +158,17 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
 
       // Validate all deposit amounts
       for (const deposit of deposits) {
-        const amount = parseFloat(deposit.amount);
-        if (isNaN(amount) || amount <= 0) {
+        const amount = parseMoneyInput(deposit.amount);
+        if (!amount || amount.lte(0)) {
           return res.status(400).json({
             message: "All deposit amounts must be positive numbers",
           });
         }
+      }
+      // Only employees of this company post, each amount at cents.
+      const postable = await postableAdjustments(deposits, req.session.currentCompanyId);
+      if (postable.length === 0) {
+        return res.status(400).json({ message: "No deposits provided" });
       }
 
       // Build group-membership lookup: employeeId → groupName
@@ -176,7 +183,7 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
       }
 
       // Calculate total amount
-      const totalAmount = deposits.reduce((sum: number, d) => sum + parseFloat(d.amount), 0);
+      const totalAmount = sumMoney(postable.map((d) => d.amount)).toNumber();
 
       // Create single voucher for all deposits
       const voucherNumber = `SAL-DEP-BULK-${Date.now()}`;
@@ -187,16 +194,16 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
           voucherNumber,
           voucherType: "Journal",
           voucherDate: date,
-          description: notes || `Bulk salary deposit for ${deposits.length} employees`,
+          description: notes || `Bulk salary deposit for ${postable.length} employees`,
           totalAmount: totalAmount.toFixed(2),
         })
         .returning();
 
       // Group deposits by employee group and create one debit per group
-      const bulkDepByGroup = new Map<string, number>();
-      for (const d of deposits) {
-        const grp = (bulkDepEmpGroupMap.get(d.employeeId) || "").trim() || "__default__";
-        bulkDepByGroup.set(grp, (bulkDepByGroup.get(grp) || 0) + parseFloat(d.amount));
+      const bulkDepByGroup = new Map<string, ReturnType<typeof toMoney>>();
+      for (const d of postable) {
+        const grp = (bulkDepEmpGroupMap.get(d.employee.id) || "").trim() || "__default__";
+        bulkDepByGroup.set(grp, (bulkDepByGroup.get(grp) ?? toMoney(0)).plus(d.amount));
       }
       const bulkDepFreshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
       for (const [grp, grpTotal] of bulkDepByGroup) {
@@ -225,26 +232,16 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
           debitAmount: grpTotal.toFixed(2),
           creditAmount: "0",
           narration: isDefault
-            ? `Bulk salary deposit - ${deposits.length} employees - ${voucherNumber}`
+            ? `Bulk salary deposit - ${postable.length} employees - ${voucherNumber}`
             : `Salary expense - ${grp} - ${voucherNumber}`,
         });
       }
 
       // Process each employee deposit
       const results = [];
-      for (const deposit of deposits) {
-        const [employee] = await db.select().from(employees).where(eq(employees.id, deposit.employeeId));
-
-        if (!employee) {
-          continue; // Skip if employee not found
-        }
-
-        // Verify employee belongs to current company
-        if (employee.companyId !== req.session.currentCompanyId) {
-          continue;
-        }
-
-        const depositAmount = parseFloat(deposit.amount);
+      for (const deposit of postable) {
+        const { employee } = deposit;
+        const depositAmount = deposit.amount.toNumber();
 
         // Credit employee (using employeeId field directly instead of separate ledger account)
         await db.insert(voucherEntries).values({
@@ -282,7 +279,7 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
         const [updatedEmp] = await db.select().from(employees).where(eq(employees.id, result.employeeId));
         updatedResults.push({
           ...result,
-          newBalance: updatedEmp ? parseFloat(updatedEmp.currentBalance) : 0,
+          newBalance: updatedEmp ? toMoney(updatedEmp.currentBalance).toNumber() : 0,
         });
       }
 

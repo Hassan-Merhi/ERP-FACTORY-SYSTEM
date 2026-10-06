@@ -17,6 +17,7 @@ import {
   customerBalances,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerOrderPricingRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/reprice", requireAuth, async (req: Request, res: Response) => {
@@ -109,16 +110,16 @@ export function registerOrderPricingRoutes(app: Express) {
         if (rawPrice === null) continue;
 
         // Normalise to 2-decimal string to avoid "40" vs "40.00" false-positives
-        const newPriceNum = parseFloat(rawPrice);
-        const curPriceNum = parseFloat(bale.priceUsed || "0");
+        const newPriceNum = toMoney(rawPrice);
+        const curPriceNum = toMoney(bale.priceUsed);
 
         // Skip if catalogue price is 0 (not yet set) or if already identical
-        if (newPriceNum <= 0) continue;
-        if (Math.abs(newPriceNum - curPriceNum) < 0.001) continue;
+        if (newPriceNum.lessThanOrEqualTo(0)) continue;
+        if (newPriceNum.minus(curPriceNum).abs().lessThan(0.001)) continue;
 
         await db
           .update(customerOrderBales)
-          .set({ priceUsed: newPriceNum.toFixed(2) })
+          .set({ priceUsed: moneyString(newPriceNum) })
           .where(eq(customerOrderBales.id, bale.id));
         updated++;
       }
@@ -129,7 +130,7 @@ export function registerOrderPricingRoutes(app: Express) {
 
       // Sync the customerBalances ledger entry so the customer's balance reflects the new grand total.
       // The entry is inserted at finalization time; repricing must keep it in sync.
-      const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+      const newGrandTotal = moneyString(updatedOrder.grandTotal);
       const [existingLedgerEntry] = await db
         .select({ id: customerBalances.id })
         .from(customerBalances)
@@ -144,8 +145,8 @@ export function registerOrderPricingRoutes(app: Express) {
         await db
           .update(customerBalances)
           .set({
-            debitAmount: String(newGrandTotal),
-            balance: String(newGrandTotal),
+            debitAmount: newGrandTotal,
+            balance: newGrandTotal,
           })
           .where(eq(customerBalances.id, existingLedgerEntry.id));
       }
@@ -239,14 +240,13 @@ export function registerOrderPricingRoutes(app: Express) {
               : null;
 
         if (rawPrice === null) continue;
-        const newPriceNum = parseFloat(rawPrice);
-        if (newPriceNum <= 0) continue;
-        const curPriceNum = parseFloat(bale.priceUsed || "0");
-        if (Math.abs(newPriceNum - curPriceNum) < 0.001) continue;
+        const newPriceNum = toMoney(rawPrice);
+        if (newPriceNum.lessThanOrEqualTo(0)) continue;
+        if (newPriceNum.minus(toMoney(bale.priceUsed)).abs().lessThan(0.001)) continue;
 
         await db
           .update(customerOrderBales)
-          .set({ priceUsed: newPriceNum.toFixed(2) })
+          .set({ priceUsed: moneyString(newPriceNum) })
           .where(eq(customerOrderBales.id, bale.id));
         updated++;
       }
@@ -256,7 +256,7 @@ export function registerOrderPricingRoutes(app: Express) {
       const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
 
       // Keep ledger in sync if already finalized
-      const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+      const newGrandTotal = moneyString(updatedOrder.grandTotal);
       const [existingLedgerEntry] = await db
         .select({ id: customerBalances.id })
         .from(customerBalances)
@@ -270,7 +270,7 @@ export function registerOrderPricingRoutes(app: Express) {
       if (existingLedgerEntry) {
         await db
           .update(customerBalances)
-          .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+          .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
           .where(eq(customerBalances.id, existingLedgerEntry.id));
       }
 
@@ -348,14 +348,13 @@ export function registerOrderPricingRoutes(app: Express) {
           if (!key) continue;
           const newPrice = priceMap.get(key);
           if (!newPrice) continue;
-          const newPriceNum = parseFloat(newPrice);
-          if (newPriceNum <= 0) continue;
-          const curPriceNum = parseFloat(bale.priceUsed || "0");
-          if (Math.abs(newPriceNum - curPriceNum) < 0.001) continue;
+          const newPriceNum = toMoney(newPrice);
+          if (newPriceNum.lessThanOrEqualTo(0)) continue;
+          if (newPriceNum.minus(toMoney(bale.priceUsed)).abs().lessThan(0.001)) continue;
 
           await db
             .update(customerOrderBales)
-            .set({ priceUsed: newPriceNum.toFixed(2) })
+            .set({ priceUsed: moneyString(newPriceNum) })
             .where(eq(customerOrderBales.id, bale.id));
           updated++;
         }
@@ -365,7 +364,7 @@ export function registerOrderPricingRoutes(app: Express) {
         const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
 
         // Keep customer balance ledger entry in sync if already finalized entry exists
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [existingLedgerEntry] = await db
           .select({ id: customerBalances.id })
           .from(customerBalances)
@@ -379,7 +378,7 @@ export function registerOrderPricingRoutes(app: Express) {
         if (existingLedgerEntry) {
           await db
             .update(customerBalances)
-            .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+            .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
 
@@ -421,8 +420,8 @@ export function registerOrderPricingRoutes(app: Express) {
           return res.status(400).json({ message: "articleCode and pricePerBale are required" });
         }
 
-        const price = parseFloat(pricePerBale);
-        if (isNaN(price) || price < 0) {
+        const price = parseMoneyInput(pricePerBale);
+        if (!price || price.lessThan(0)) {
           return res.status(400).json({ message: "Invalid price value" });
         }
 
@@ -434,14 +433,14 @@ export function registerOrderPricingRoutes(app: Express) {
 
         await db
           .update(customerOrderBales)
-          .set({ priceUsed: String(price) })
+          .set({ priceUsed: moneyString(price) })
           .where(and(eq(customerOrderBales.orderId, orderId), eq(customerOrderBales.articleCode, articleCode)));
 
         await recalculateOrderTotals(db, orderId);
 
         const [updatedOrder] = await db.select().from(customerOrders).where(eq(customerOrders.id, orderId));
 
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [existingLedgerEntry] = await db
           .select({ id: customerBalances.id })
           .from(customerBalances)
@@ -455,7 +454,7 @@ export function registerOrderPricingRoutes(app: Express) {
         if (existingLedgerEntry) {
           await db
             .update(customerBalances)
-            .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+            .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
 
@@ -510,10 +509,10 @@ export function registerOrderPricingRoutes(app: Express) {
 
           if (proformaPerKgLines.length === 0) continue;
 
-          const perKgMap = new Map<string, number>();
+          const perKgMap = new Map<string, ReturnType<typeof toMoney>>();
           for (const pl of proformaPerKgLines) {
             if (pl.articleCode && pl.pricePerKg) {
-              perKgMap.set(pl.articleCode.toLowerCase(), parseFloat(String(pl.pricePerKg)));
+              perKgMap.set(pl.articleCode.toLowerCase(), toMoney(String(pl.pricePerKg)));
             }
           }
 
@@ -532,11 +531,10 @@ export function registerOrderPricingRoutes(app: Express) {
           for (const bale of bales) {
             const key = (bale.articleCode || "").toLowerCase();
             const pkgRate = perKgMap.get(key);
-            if (!pkgRate) continue;
-            const currentPrice = parseFloat(String(bale.priceUsed || "0"));
-            if (currentPrice !== 0) continue; // already repaired — skip (idempotent)
-            const weightKg = parseFloat(String(bale.weight || "0"));
-            const newPrice = (weightKg * pkgRate).toFixed(2);
+            if (!pkgRate || pkgRate.isZero()) continue;
+            if (!toMoney(String(bale.priceUsed || "0")).isZero()) continue; // already repaired — skip (idempotent)
+            // Exact: 0.5 kg at 4.35 is 2.18; the float product gave 2.17.
+            const newPrice = moneyString(toMoney(String(bale.weight || "0")).times(pkgRate));
             await db.update(customerOrderBales).set({ priceUsed: newPrice }).where(eq(customerOrderBales.id, bale.id));
             balesRepaired++;
             orderChanged = true;

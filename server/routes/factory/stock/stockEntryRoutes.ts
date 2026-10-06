@@ -26,6 +26,8 @@ import {
   stockGroups,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
+import type Decimal from "decimal.js";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -96,7 +98,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
         const now = new Date();
         let baleIndex = 0;
-        let totalWeight = 0;
+        let totalWeight: Decimal = new MoneyDecimal(0);
 
         const productIds: number[] = [];
         for (const item of items) {
@@ -138,7 +140,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         for (const [itemIndex, item] of items.entries()) {
           const qty = parseInt(item.quantity || item.qty || "1");
           const rawWeight = item.weightPerBale ?? item.weightPerBaleKg ?? "25";
-          const weight = parseFloat(String(rawWeight)) || 25;
+          const parsedWeight = parseMoneyInput(String(rawWeight));
+          const weight = parsedWeight && !parsedWeight.isZero() ? parsedWeight : new MoneyDecimal(25);
           const product = productMap.get(item.productId);
           if (!product) throw new Error(`Product ID ${item.productId} not found`);
           const categoryName: string | null = product.categoryId
@@ -146,9 +149,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
             : null;
           const attribution = productionAttributions[itemIndex];
           const isGarbage = product.articleCode?.startsWith("HMD16");
-          const productionCostPerKg = parseFloat(product.productionPrice || "0");
-          const effectiveCostPerKg = isGarbage ? 0 : productionCostPerKg;
-          const baleTotalCost = weight * effectiveCostPerKg;
+          const productionCostPerKg = toMoney(product.productionPrice);
+          const effectiveCostPerKg = isGarbage ? new MoneyDecimal(0) : productionCostPerKg;
+          // Exact product; the column rounds it half away from zero, where the float product could fall short.
+          const baleTotalCost = weight.times(effectiveCostPerKg);
 
           for (let i = 0; i < qty; i++) {
             const refNum = `REF${String(nextNumber + baleIndex).padStart(6, "0")}`;
@@ -162,9 +166,9 @@ export function registerFactoryStockEntryRoutes(app: Express) {
               articleCode: product.articleCode,
               productName: product.name,
               category: categoryName,
-              weightKg: String(weight),
-              costPerKg: String(effectiveCostPerKg),
-              totalCost: String(baleTotalCost),
+              weightKg: weight.toString(),
+              costPerKg: effectiveCostPerKg.toString(),
+              totalCost: baleTotalCost.toString(),
               status: "IN_STOCK",
               // Entry date controls production attribution/history; finalizedAt is the actual action time.
               finalizedAt: now,
@@ -174,7 +178,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
             });
             baleProductRefs.push(product);
             baleAttributionRefs.push(attribution);
-            totalWeight += weight;
+            totalWeight = totalWeight.plus(weight);
             baleIndex++;
           }
         }
@@ -213,8 +217,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         });
 
         if (mixBatch) {
-          const mixRemaining = parseFloat(mixBatch.totalWeightKg) - parseFloat(mixBatch.usedKg || "0");
-          if (totalWeight > mixRemaining + 0.001) {
+          const mixRemaining = toMoney(mixBatch.totalWeightKg).minus(toMoney(mixBatch.usedKg));
+          if (totalWeight.gt(mixRemaining.plus(0.001))) {
             throw new Error(
               `Not enough mix batch remaining. Need ${totalWeight.toFixed(3)} kg but only ${mixRemaining.toFixed(3)} kg available`
             );
@@ -222,14 +226,14 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
           await tx
             .update(factoryMixBatches)
-            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${totalWeight}`, updatedAt: now })
+            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${totalWeight.toString()}`, updatedAt: now })
             .where(eq(factoryMixBatches.id, mixBatchId));
         }
 
         const stockGroupCache = new Map<string, number>();
         const stockItemCache = new Map<string, number>();
         // Accumulate inventory adjustments per stockItemId instead of per bale
-        const inventoryAdjMap = new Map<number, { qty: number; totalCost: number }>();
+        const inventoryAdjMap = new Map<number, { qty: number; totalCost: Decimal }>();
 
         for (const bale of bales) {
           const factoryProduct = productMap.get(bale.productId as number);
@@ -315,10 +319,9 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           }
 
           // Accumulate instead of calling adjustInventory per bale
-          const baleWeight = parseFloat(bale.weightKg);
-          const baleRate = baleWeight * parseFloat(bale.costPerKg || "0");
-          const prev = inventoryAdjMap.get(erpStockItemId!) ?? { qty: 0, totalCost: 0 };
-          inventoryAdjMap.set(erpStockItemId!, { qty: prev.qty + 1, totalCost: prev.totalCost + baleRate });
+          const baleRate = toMoney(bale.weightKg).times(toMoney(bale.costPerKg));
+          const prev = inventoryAdjMap.get(erpStockItemId!) ?? { qty: 0, totalCost: new MoneyDecimal(0) };
+          inventoryAdjMap.set(erpStockItemId!, { qty: prev.qty + 1, totalCost: prev.totalCost.plus(baleRate) });
         }
 
         // A stock entry has no header row of its own — it writes a batch of
@@ -332,8 +335,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
         // ── One adjustInventory call per unique stock item ──
         for (const [stockItemId, { qty, totalCost }] of inventoryAdjMap) {
-          const avgRatePerBale = qty > 0 ? totalCost / qty : 0;
-          await adjustInventory(tx, erpLocationId, stockItemId, qty, companyId, avgRatePerBale);
+          const avgRatePerBale = qty > 0 ? totalCost.div(qty) : new MoneyDecimal(0);
+          await adjustInventory(tx, erpLocationId, stockItemId, qty, companyId, avgRatePerBale.toNumber());
 
           // Canonical evidence for the stock this entry received, on the same
           // transaction that applied it. The unit cost is the batch's average
@@ -376,10 +379,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
       const descParts = Array.from(productGroups.keys());
       const stockEntryDesc = `${result.bales.length} bale${result.bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
-      const totalBaleValue = result.bales.reduce((sum: number, b) => {
-        const prodPrice = parseFloat(b._product?.productionPrice || "0");
-        return sum + prodPrice;
-      }, 0);
+      const totalBaleValue = sumMoney(result.bales.map((b) => b._product?.productionPrice)).toNumber();
       const baleMetaJson = JSON.stringify({
         bales: result.bales.map((b) => ({
           id: b.id,
@@ -403,7 +403,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         metaJson: baleMetaJson,
       });
 
-      res.json({ bales: result.bales, totalWeight: result.totalWeight });
+      res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber() });
     } catch (error: unknown) {
       logger.error("Error in stock entry:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
@@ -431,7 +431,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
             message: `Each bale must have itemName, barcode, and weight. Problem row: ${b.itemName || b.barcode || "unknown"}`,
           });
         }
-        if (isNaN(parseFloat(b.weight)) || parseFloat(b.weight) <= 0) {
+        const importWeight = parseMoneyInput(b.weight);
+        if (!importWeight || importWeight.lte(0)) {
           return res.status(400).json({ message: `Invalid weight for ${b.itemName}: ${b.weight}` });
         }
       }
@@ -477,11 +478,11 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         );
 
         const createdBales: (typeof factoryBales.$inferSelect)[] = [];
-        let totalWeight = 0;
+        let totalWeight: Decimal = new MoneyDecimal(0);
 
         for (const b of bales) {
           const itemName = b.itemName.trim();
-          const weight = parseFloat(b.weight);
+          const weight = toMoney(parseMoneyInput(b.weight));
           const qty = parseInt(b.quantity) || 1;
           const barcode = b.barcode.trim();
 
@@ -547,7 +548,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
                 referenceNumber: refNum,
                 articleCode: product.articleCode,
                 productName: product.name,
-                weightKg: String(weight),
+                weightKg: weight.toString(),
                 costPerKg: "0",
                 totalCost: "0",
                 status: "IN_STOCK",
@@ -557,7 +558,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
               .returning();
 
             createdBales.push(bale);
-            totalWeight += weight;
+            totalWeight = totalWeight.plus(weight);
           }
         }
 
@@ -602,7 +603,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         description: `Imported ${result.count} historical bale(s) into stock (${result.totalWeight.toFixed(1)} kg)`,
       });
 
-      res.json({ imported: result.count, totalWeight: result.totalWeight, bales: result.bales });
+      res.json({ imported: result.count, totalWeight: result.totalWeight.toNumber(), bales: result.bales });
     } catch (error: unknown) {
       logger.error("Error importing bales:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });

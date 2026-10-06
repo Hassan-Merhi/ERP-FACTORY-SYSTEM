@@ -1,6 +1,7 @@
 import { eq, and, isNull, sql, inArray, gt } from "drizzle-orm";
 import { pool } from "../../../db";
 import { db } from "../../../db";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import {
   factoryContainers,
   factoryRawStock,
@@ -168,21 +169,21 @@ export async function getRawStockRecalcPreview(companyId: number): Promise<Recal
     const ocRows = otherChargesByContainer.get(container.id) || [];
     const next = computeCorrectContainerCost(container, additionalCharges, commissionRecord, ocRows);
 
-    const oldCostPerKg = parseFloat(row.costPerKg || "0");
-    const oldCostPerKgUsd = parseFloat(row.costPerKgUsd || "0");
+    const oldCostPerKg = toMoney(row.costPerKg).toNumber();
+    const oldCostPerKgUsd = toMoney(row.costPerKgUsd).toNumber();
     const changed =
       !next.fxUnresolved &&
       (!costEquals(next.costPerKg, oldCostPerKg) || !costEquals(next.costPerKgUsd, oldCostPerKgUsd));
     const diffPct = oldCostPerKgUsd > 0 ? ((next.costPerKgUsd - oldCostPerKgUsd) / oldCostPerKgUsd) * 100 : 0;
 
-    const receivedKg = parseFloat(row.receivedKg || "0");
-    const usedKg = parseFloat(row.usedKg || "0");
-    const remainingKg = Math.max(0, receivedKg - usedKg);
+    const receivedKg = toMoney(row.receivedKg).toNumber();
+    const usedKg = toMoney(row.usedKg).toNumber();
+    const remainingKg = MoneyDecimal.max(0, toMoney(row.receivedKg).minus(toMoney(row.usedKg))).toNumber();
     const sc = sourceCountByContainer.get(container.id);
 
-    const rawStockValuationKg = parseFloat(
+    const rawStockValuationKg = toMoney(
       container.totalKg || container.declaredKg || container.actualReceivedKg || "0"
-    );
+    ).toNumber();
     results.push({
       containerId: container.id,
       rawStockId: row.rawStockId,
@@ -219,17 +220,19 @@ export async function getRawStockRecalcPreview(companyId: number): Promise<Recal
     const next = computeCorrectContainerCost(container, additionalCharges, commissionRecord, ocRows);
 
     // For historical containers compare against ratePerKgUsd snapshot
-    const oldCostPerKgUsd = parseFloat(container.ratePerKgUsd || "0");
-    const oldCostPerKg = parseFloat(container.ratePerKg || "0");
+    const oldCostPerKgUsd = toMoney(container.ratePerKgUsd).toNumber();
+    const oldCostPerKg = toMoney(container.ratePerKg).toNumber();
     const changed =
       !next.fxUnresolved &&
       (!costEquals(next.costPerKg, oldCostPerKg) || !costEquals(next.costPerKgUsd, oldCostPerKgUsd));
     const diffPct = oldCostPerKgUsd > 0 ? ((next.costPerKgUsd - oldCostPerKgUsd) / oldCostPerKgUsd) * 100 : 0;
 
-    const receivedKg = parseFloat(container.actualReceivedKg || "0");
+    const receivedKg = toMoney(container.actualReceivedKg).toNumber();
     const sc = sourceCountByContainer.get(container.id);
 
-    const histValuationKg = parseFloat(container.totalKg || container.declaredKg || container.actualReceivedKg || "0");
+    const histValuationKg = toMoney(
+      container.totalKg || container.declaredKg || container.actualReceivedKg || "0"
+    ).toNumber();
     results.push({
       containerId: container.id,
       rawStockId: null,

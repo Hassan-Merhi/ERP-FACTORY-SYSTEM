@@ -10,6 +10,7 @@ import { db } from "../../db";
 import { requireAuth } from "../../auth";
 import { inventory, containers, ledgerAccounts, vouchers, voucherEntries, employees, locations } from "@shared/schema";
 import { eq, and, or, sql, isNull, isNotNull } from "drizzle-orm";
+import { sumMoney, toMoney } from "../../lib/money";
 
 export function registerImportCycleDiagnosticRoutes(app: Express) {
   // Import Cycle Diagnostics - analyze and explain what's causing imbalance
@@ -46,15 +47,15 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         .where(and(eq(inventory.companyId, companyId), or(isNotNull(locations.deletedAt), isNull(locations.id))));
 
       if (orphanedInventory.length > 0) {
-        const totalOrphanedValue = orphanedInventory.reduce((sum, inv) => sum + parseFloat(inv.totalValue || "0"), 0);
+        const totalOrphanedValue = sumMoney(orphanedInventory.map((inv) => inv.totalValue));
 
-        if (totalOrphanedValue > 0) {
+        if (totalOrphanedValue.gt(0)) {
           issues.push({
             id: "orphaned-inventory",
             severity: "critical",
             title: "Orphaned Inventory at Deleted Locations",
             description: `You have ${orphanedInventory.length} inventory records worth $${totalOrphanedValue.toFixed(2)} at locations that have been deleted. This inventory is counted as an asset but doesn't exist in any active location.`,
-            impact: totalOrphanedValue,
+            impact: totalOrphanedValue.toNumber(),
             howToFix:
               "Go to Settings > System Tools > View Deleted Items > Locations. Either restore the deleted location(s) and transfer the inventory elsewhere, or permanently delete the location which will also remove the orphaned inventory.",
             category: "Orphaned Data",
@@ -82,17 +83,14 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         );
 
       if (negativeInventory.length > 0) {
-        const totalNegativeValue = negativeInventory.reduce(
-          (sum, inv) => sum + Math.abs(parseFloat(inv.totalValue || "0")),
-          0
-        );
+        const totalNegativeValue = sumMoney(negativeInventory.map((inv) => toMoney(inv.totalValue).abs()));
 
         issues.push({
           id: "negative-inventory",
           severity: "critical",
           title: "Negative Inventory Quantities",
           description: `You have ${negativeInventory.length} items with negative quantities. This shouldn't happen and indicates a data issue.`,
-          impact: totalNegativeValue,
+          impact: totalNegativeValue.toNumber(),
           howToFix:
             "Create a Production voucher to add the missing quantity back, or review recent Consumption/Sales vouchers that may have removed more than available.",
           category: "Data Integrity",
@@ -117,14 +115,14 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         );
 
       if (staleContainers.length > 0) {
-        const totalStaleValue = staleContainers.reduce((sum, c) => sum + parseFloat(c.grandTotal || "0"), 0);
+        const totalStaleValue = sumMoney(staleContainers.map((c) => c.grandTotal));
 
         issues.push({
           id: "stale-containers",
           severity: "warning",
           title: "Containers In Transit for Over 90 Days",
           description: `You have ${staleContainers.length} container(s) worth $${totalStaleValue.toFixed(2)} that have been "On The Way" for more than 90 days. These may need to be offloaded or marked as lost.`,
-          impact: totalStaleValue,
+          impact: totalStaleValue.toNumber(),
           howToFix:
             "Go to Containers, find the stale containers, and either Offload them to a location if they've arrived, or cancel them if they're lost.",
           category: "Pending Transactions",
@@ -149,19 +147,17 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         );
 
       if (unbalancedVouchers.length > 0) {
-        const totalImbalance = unbalancedVouchers.reduce((sum, v) => {
-          const debits = parseFloat(v.totalDebits || "0");
-          const credits = parseFloat(v.totalCredits || "0");
-          return sum + Math.abs(debits - credits);
-        }, 0);
+        const totalImbalance = sumMoney(
+          unbalancedVouchers.map((v) => toMoney(v.totalDebits).minus(toMoney(v.totalCredits)).abs())
+        );
 
         // Create detailed list of unbalanced vouchers
         const voucherDetails = unbalancedVouchers
           .slice(0, 10)
           .map((v) => {
-            const debits = parseFloat(v.totalDebits || "0");
-            const credits = parseFloat(v.totalCredits || "0");
-            const diff = debits - credits;
+            const debits = toMoney(v.totalDebits);
+            const credits = toMoney(v.totalCredits);
+            const diff = debits.minus(credits);
             return `${v.voucherNumber} (${v.voucherType}): DR ${debits.toFixed(2)} - CR ${credits.toFixed(2)} = ${diff.toFixed(2)}`;
           })
           .join("; ");
@@ -171,7 +167,7 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
           severity: "critical",
           title: `Unbalanced Voucher Entries (${unbalancedVouchers.length})`,
           description: `${unbalancedVouchers.length} voucher(s) where debits don't equal credits. Total imbalance: ${totalImbalance.toFixed(2)}. Details: ${voucherDetails}${unbalancedVouchers.length > 10 ? "..." : ""}`,
-          impact: totalImbalance,
+          impact: totalImbalance.toNumber(),
           howToFix:
             "Edit these vouchers in the Daybook to correct the imbalance, ensuring total debits equal total credits.",
           category: "Data Integrity",
@@ -188,27 +184,29 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         .from(ledgerAccounts)
         .where(and(eq(ledgerAccounts.companyId, companyId), isNull(ledgerAccounts.deletedAt)));
 
-      let totalDrOpenings = 0;
-      let totalCrOpenings = 0;
+      const drOpenings: string[] = [];
+      const crOpenings: string[] = [];
       for (const account of allLedgerAccounts) {
-        const openingBalanceRaw = parseFloat(account.openingBalance || "0");
-        if (openingBalanceRaw === 0) continue;
+        const openingBalanceRaw = account.openingBalance || "0";
+        if (toMoney(openingBalanceRaw).isZero()) continue;
         const openingSide = account.openingBalanceSide || "Dr";
         if (openingSide === "Dr") {
-          totalDrOpenings += openingBalanceRaw;
+          drOpenings.push(openingBalanceRaw);
         } else {
-          totalCrOpenings += openingBalanceRaw;
+          crOpenings.push(openingBalanceRaw);
         }
       }
+      const totalDrOpenings = sumMoney(drOpenings);
+      const totalCrOpenings = sumMoney(crOpenings);
 
-      const openingImbalance = Math.abs(totalDrOpenings - totalCrOpenings);
-      if (openingImbalance > 100) {
+      const openingImbalance = totalDrOpenings.minus(totalCrOpenings).abs();
+      if (openingImbalance.gt(100)) {
         issues.push({
           id: "opening-balance-imbalance",
           severity: "info",
           title: "Opening Balance Equity Adjustment",
           description: `Your opening debit balances ($${totalDrOpenings.toFixed(2)}) differ from opening credit balances ($${totalCrOpenings.toFixed(2)}) by $${openingImbalance.toFixed(2)}. This is treated as implicit opening equity.`,
-          impact: openingImbalance,
+          impact: openingImbalance.toNumber(),
           howToFix:
             "This is often normal when importing data from another system. If you need to balance it, add an opening balance to an Equity or Capital account to offset the difference.",
           category: "Opening Balances",
@@ -231,14 +229,14 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
         );
 
       if (employeesData.length > 0) {
-        const totalOwed = employeesData.reduce((sum, e) => sum + parseFloat(e.currentBalance || "0"), 0);
+        const totalOwed = sumMoney(employeesData.map((e) => e.currentBalance));
 
         issues.push({
           id: "employee-balances",
           severity: "info",
           title: "Outstanding Employee Balances",
           description: `You owe ${employeesData.length} employee(s) a total of $${totalOwed.toFixed(2)}. This is recorded as a liability.`,
-          impact: totalOwed,
+          impact: totalOwed.toNumber(),
           howToFix:
             "These balances are normal and represent wages owed. Pay employees through Payroll to reduce these liabilities.",
           category: "Liabilities",
@@ -278,17 +276,17 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
             )
           );
 
-        const netVoucherBalance = loanEntries.reduce((sum, e) => {
-          return sum + parseFloat(e.creditAmount || "0") - parseFloat(e.debitAmount || "0");
-        }, 0);
+        const netVoucherBalance = sumMoney(loanEntries.map((e) => e.creditAmount)).minus(
+          sumMoney(loanEntries.map((e) => e.debitAmount))
+        );
 
-        if (netVoucherBalance < -0.01) {
+        if (netVoucherBalance.lt(-0.01)) {
           issues.push({
             id: `loans-net-debit-${loanAcct.id}`,
             severity: "warning",
             title: `Loans Account "${loanAcct.name}" Has Net Debit Balance — Office Charges May Be Posted Backwards`,
             description: `The Loans account "${loanAcct.name}" has been debited more than credited (net: $${netVoucherBalance.toFixed(2)}). This usually means office charges were recorded with the Loans account on the DEBIT side instead of the CREDIT side in the Offload dialog.`,
-            impact: Math.abs(netVoucherBalance),
+            impact: netVoucherBalance.abs().toNumber(),
             howToFix: `In the Offload dialog, the Loans/credit account should go in the "Cash Account" field (credit side). An expense or import account should go in the "Office Account" field (debit side). Reversing the direction will fix the import cycle balance.`,
             category: "Office Charges",
           });
@@ -307,7 +305,7 @@ export function registerImportCycleDiagnosticRoutes(app: Express) {
       // Calculate summary
       const criticalCount = issues.filter((i) => i.severity === "critical").length;
       const warningCount = issues.filter((i) => i.severity === "warning").length;
-      const totalImpact = issues.reduce((sum, i) => sum + i.impact, 0);
+      const totalImpact = sumMoney(issues.map((i) => i.impact)).toNumber();
 
       res.json({
         issues,

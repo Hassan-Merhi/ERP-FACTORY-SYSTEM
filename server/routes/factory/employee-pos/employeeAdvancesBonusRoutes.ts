@@ -7,6 +7,7 @@ import { requireAuth } from "../../../auth";
 import { ledgerAccounts, voucherEntries, employees, factoryWorkers, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { findOrCreateLedger } from "../../payroll/core/_helpers";
+import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerEmployeeAdvancesBonusRoutes(app: Express) {
   app.get("/api/factory/employee-advances", requireAuth, async (req: Request, res: Response) => {
@@ -43,8 +44,8 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const { employeeId, advanceDate, amount, cashAccountId, notes } = req.body;
       if (!employeeId || !advanceDate || !amount)
         return res.status(400).json({ message: "employeeId, advanceDate, amount required" });
-      const amt = parseFloat(amount);
-      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Invalid amount" });
+      const amt = parseMoneyInput(amount);
+      if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
 
       const [emp] = await db
         .select()
@@ -54,7 +55,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
 
       const result = await db.execute(sql`
         INSERT INTO employee_advances (company_id, employee_id, advance_date, amount, remaining_balance, cash_account_id, notes, fully_paid)
-        VALUES (${companyId}, ${parseInt(employeeId)}, ${advanceDate}, ${amt.toFixed(2)}, ${amt.toFixed(2)}, ${cashAccountId ? parseInt(cashAccountId) : null}, ${notes || null}, false)
+        VALUES (${companyId}, ${parseInt(employeeId)}, ${advanceDate}, ${moneyString(amt)}, ${moneyString(amt)}, ${cashAccountId ? parseInt(cashAccountId) : null}, ${notes || null}, false)
         RETURNING *
       `);
       res.status(201).json(result.rows[0]);
@@ -69,8 +70,8 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const advId = parseInt(req.params.id);
       const { repaymentDate, amount, cashAccountId, notes } = req.body;
-      const amt = parseFloat(amount);
-      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Invalid amount" });
+      const amt = parseMoneyInput(amount);
+      if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
 
       const advResult = await db.execute(
         sql`SELECT * FROM employee_advances WHERE id = ${advId} AND company_id = ${companyId}`
@@ -78,17 +79,17 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const adv = advResult.rows[0] as { remaining_balance: string; employee_id: number } | undefined;
       if (!adv) return res.status(404).json({ message: "Advance not found" });
 
-      const remaining = parseFloat(adv.remaining_balance) - amt;
-      const fullyPaid = remaining <= 0;
+      const remaining = toMoney(adv.remaining_balance).minus(moneyString(amt));
+      const fullyPaid = remaining.lessThanOrEqualTo(0);
 
       await db.execute(sql`
         INSERT INTO employee_advance_repayments (company_id, advance_id, employee_id, repayment_date, amount, cash_account_id, notes)
-        VALUES (${companyId}, ${advId}, ${adv.employee_id}, ${repaymentDate}, ${amt.toFixed(2)}, ${cashAccountId ? parseInt(cashAccountId) : null}, ${notes || null})
+        VALUES (${companyId}, ${advId}, ${adv.employee_id}, ${repaymentDate}, ${moneyString(amt)}, ${cashAccountId ? parseInt(cashAccountId) : null}, ${notes || null})
       `);
       await db.execute(sql`
-        UPDATE employee_advances SET remaining_balance = ${Math.max(0, remaining).toFixed(2)}, fully_paid = ${fullyPaid} WHERE id = ${advId}
+        UPDATE employee_advances SET remaining_balance = ${moneyString(MoneyDecimal.max(0, remaining))}, fully_paid = ${fullyPaid} WHERE id = ${advId}
       `);
-      res.json({ message: "Repayment recorded", remaining: Math.max(0, remaining).toFixed(2) });
+      res.json({ message: "Repayment recorded", remaining: moneyString(MoneyDecimal.max(0, remaining)) });
     } catch (err: unknown) {
       res.status(500).json({ message: getErrorMessage(err) });
     }
@@ -160,8 +161,8 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const { employeeId, bonusDate, amount, notes } = req.body;
       if (!employeeId || !bonusDate || !amount)
         return res.status(400).json({ message: "employeeId, bonusDate, amount required" });
-      const amt = parseFloat(amount);
-      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Invalid amount" });
+      const amt = parseMoneyInput(amount);
+      if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
 
       const [emp] = await db
         .select()
@@ -198,14 +199,14 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
           voucherType: "Journal",
           voucherDate: bonusDate,
           description: desc,
-          totalAmount: amt.toFixed(2),
+          totalAmount: moneyString(amt),
         })
         .returning();
 
       await db.insert(voucherEntries).values({
         voucherId: voucher.id,
         ledgerAccountId: payrollExpenseAccount.id,
-        debitAmount: amt.toFixed(2),
+        debitAmount: moneyString(amt),
         creditAmount: "0",
         narration: desc,
       });
@@ -214,20 +215,20 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         ledgerAccountId: null,
         employeeId: parseInt(employeeId),
         debitAmount: "0",
-        creditAmount: amt.toFixed(2),
+        creditAmount: moneyString(amt),
         narration: desc,
       });
 
-      const newBalance = parseFloat(emp.currentBalance || "0") + amt;
-      const newDeposits = parseFloat(emp.totalDeposits || "0") + amt;
+      const newBalance = toMoney(emp.currentBalance).plus(moneyString(amt));
+      const newDeposits = toMoney(emp.totalDeposits).plus(moneyString(amt));
       await db
         .update(employees)
-        .set({ currentBalance: newBalance.toFixed(2), totalDeposits: newDeposits.toFixed(2) })
+        .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
         .where(eq(employees.id, parseInt(employeeId)));
 
       const bonusResult = await db.execute(sql`
         INSERT INTO employee_bonuses (company_id, employee_id, bonus_date, amount, notes, voucher_id)
-        VALUES (${companyId}, ${parseInt(employeeId)}, ${bonusDate}, ${amt.toFixed(2)}, ${notes || null}, ${voucher.id})
+        VALUES (${companyId}, ${parseInt(employeeId)}, ${bonusDate}, ${moneyString(amt)}, ${notes || null}, ${voucher.id})
         RETURNING *
       `);
       res.status(201).json(bonusResult.rows[0]);
@@ -258,11 +259,11 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       await db.transaction(async (tx) => {
         const [emp] = await tx.select().from(employees).where(eq(employees.id, bonus.employee_id));
         if (emp) {
-          const newBalance = parseFloat(emp.currentBalance || "0") - parseFloat(bonus.amount);
-          const newDeposits = parseFloat(emp.totalDeposits || "0") - parseFloat(bonus.amount);
+          const newBalance = toMoney(emp.currentBalance).minus(toMoney(bonus.amount));
+          const newDeposits = toMoney(emp.totalDeposits).minus(toMoney(bonus.amount));
           await tx
             .update(employees)
-            .set({ currentBalance: newBalance.toFixed(2), totalDeposits: newDeposits.toFixed(2) })
+            .set({ currentBalance: moneyString(newBalance), totalDeposits: moneyString(newDeposits) })
             .where(eq(employees.id, bonus.employee_id));
         }
         // The bonus row goes first so the voucher it references is free to drop.
@@ -316,8 +317,8 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       const { workerId, bonusDate, amount, notes } = req.body;
       if (!workerId || !bonusDate || !amount)
         return res.status(400).json({ message: "workerId, bonusDate, amount required" });
-      const amt = parseFloat(amount);
-      if (isNaN(amt) || amt <= 0) return res.status(400).json({ message: "Invalid amount" });
+      const amt = parseMoneyInput(amount);
+      if (!amt || amt.lessThanOrEqualTo(0)) return res.status(400).json({ message: "Invalid amount" });
       // The worker is only reached through a join when the bonus is paid, and
       // that join does not scope by company — so an unchecked worker id here
       // ends up posting one company's bonus expense against another's employee.
@@ -328,7 +329,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
       if (!worker) return res.status(404).json({ message: "Worker not found" });
       const result = await db.execute(sql`
         INSERT INTO worker_bonuses (company_id, worker_id, bonus_date, amount, notes, status)
-        VALUES (${companyId}, ${parseInt(workerId)}, ${bonusDate}, ${amt.toFixed(2)}, ${notes || null}, 'pending')
+        VALUES (${companyId}, ${parseInt(workerId)}, ${bonusDate}, ${moneyString(amt)}, ${notes || null}, 'pending')
         RETURNING *
       `);
       res.status(201).json(result.rows[0]);
@@ -368,7 +369,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         worker_id: number;
         notes: string | null;
       };
-      const amt = parseFloat(wb.amount || "0");
+      const amt = toMoney(wb.amount);
       const workerName = (wb.full_name as string | null)?.trim() || `Worker #${wb.worker_id}`;
 
       // Bonus expense is tracked by worker, not location. Keep every worker account
@@ -395,7 +396,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
           WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId} AND status = 'pending'
         `);
 
-        if (amt > 0) {
+        if (amt.greaterThan(0)) {
           const narration = wb.notes || `Bonus for ${workerName}`;
           const [bVoucher] = await tx
             .insert(vouchers)
@@ -405,7 +406,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
               voucherType: "Journal",
               voucherDate: payDate,
               description: narration,
-              totalAmount: amt.toFixed(2),
+              totalAmount: moneyString(amt),
               currency: "USD",
               sourceModule: "FACTORY",
             })
@@ -414,7 +415,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
             {
               voucherId: bVoucher.id,
               ledgerAccountId: expAcc.id,
-              debitAmount: amt.toFixed(2),
+              debitAmount: moneyString(amt),
               creditAmount: "0",
               narration: `Bonus - ${workerName}: ${narration}`,
             },
@@ -422,7 +423,7 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
               voucherId: bVoucher.id,
               ledgerAccountId: cashId,
               debitAmount: "0",
-              creditAmount: amt.toFixed(2),
+              creditAmount: moneyString(amt),
               narration,
             },
           ]);

@@ -8,6 +8,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { calcPoAmounts } from "../containerHelpers";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 interface StandaloneRepairSummary {
   handled: boolean;
@@ -150,27 +151,28 @@ export async function repairStandalonePurchaseOrderAccounting(companyId: number)
       const entries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, po.voucherId));
       const expected = grossTotal.toFixed(2);
       const debitEntries = entries.filter(
-        (entry) => parseFloat(entry.debitAmount || "0") > 0 && parseFloat(entry.creditAmount || "0") === 0
+        (entry) => toMoney(entry.debitAmount).greaterThan(0) && toMoney(entry.creditAmount).isZero()
       );
       const creditEntries = entries.filter(
-        (entry) => parseFloat(entry.creditAmount || "0") > 0 && parseFloat(entry.debitAmount || "0") === 0
+        (entry) => toMoney(entry.creditAmount).greaterThan(0) && toMoney(entry.debitAmount).isZero()
       );
-      const debitSum = debitEntries.reduce((sum, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-      const creditSum = creditEntries.reduce((sum, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
-      const supplierCreditSum = creditEntries
-        .filter((entry) => entry.supplierId === po.supplierId)
-        .reduce((sum, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
+      const debitSum = sumMoney(debitEntries.map((entry) => entry.debitAmount));
+      const creditSum = sumMoney(creditEntries.map((entry) => entry.creditAmount));
+      const supplierCreditSum = sumMoney(
+        creditEntries.filter((entry) => entry.supplierId === po.supplierId).map((entry) => entry.creditAmount)
+      );
       const hasForeignCreditTarget = creditEntries.some(
         (entry) => entry.supplierId !== po.supplierId || entry.ledgerAccountId !== null
       );
       const invalidParentFreight = po.freightPaidBy === "parent" || po.freightParentAccountId !== null;
-      const voucherTotal = parseFloat(voucher.totalAmount || "0");
+      const voucherTotal = toMoney(voucher.totalAmount);
+      const differs = (value: ReturnType<typeof toMoney>) => value.minus(grossTotal).abs().greaterThan(0.001);
       const needsRepair =
         invalidParentFreight ||
-        Math.abs(voucherTotal - grossTotal) > 0.001 ||
-        Math.abs(debitSum - grossTotal) > 0.001 ||
-        Math.abs(creditSum - grossTotal) > 0.001 ||
-        Math.abs(supplierCreditSum - grossTotal) > 0.001 ||
+        differs(voucherTotal) ||
+        differs(debitSum) ||
+        differs(creditSum) ||
+        differs(supplierCreditSum) ||
         hasForeignCreditTarget ||
         debitEntries.length !== 1 ||
         creditEntries.length !== 1;

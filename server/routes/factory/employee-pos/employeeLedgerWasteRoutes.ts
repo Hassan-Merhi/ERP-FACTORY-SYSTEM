@@ -19,6 +19,7 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../lib/queryResult";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 /**
  * A bale row from the waste-ledger projections.
@@ -162,7 +163,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         // Use production (cost) price per bale from product
         function getSellingPrice(bale: WasteLedgerBaleRow): number {
           const p = bale.productId ? productMap.get(bale.productId) : null;
-          return parseFloat(p?.productionPrice || "0") || 0;
+          return toMoney(p?.productionPrice).toNumber();
         }
 
         // Group bales into buckets
@@ -398,7 +399,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
       }
       function getSellingPrice(bale: WasteLedgerBaleRow): number {
         const p = bale.productId ? productMap.get(bale.productId) : null;
-        return parseFloat(p?.productionPrice || "0") || 0;
+        return toMoney(p?.productionPrice).toNumber();
       }
 
       function classify(bale: WasteLedgerBaleRow): string {
@@ -423,7 +424,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         .map((bale) => ({
           id: bale.id,
           ref: bale.referenceNumber || "",
-          weightKg: parseFloat(bale.weightKg) || 0,
+          weightKg: toMoney(bale.weightKg).toNumber(),
           totalCost: getSellingPrice(bale),
         }));
 
@@ -519,9 +520,9 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             productName: product?.name || product?.articleCode || b.productName || "Unknown",
             articleCode: b.articleCode || product?.articleCode,
             categoryName: cat?.name || b.category || "—",
-            weightKg: parseFloat(b.weightKg as string) || 0,
-            costPerKg: parseFloat(b.costPerKg as string) || 0,
-            totalCost: parseFloat(b.totalCost as string) || 0,
+            weightKg: toMoney(b.weightKg as string).toNumber(),
+            costPerKg: toMoney(b.costPerKg as string).toNumber(),
+            totalCost: toMoney(b.totalCost as string).toNumber(),
             status: b.status,
             locationName: b.erpLocationId ? locationMap.get(b.erpLocationId) || "Unknown" : "No Location",
             locationId: b.erpLocationId,
@@ -737,12 +738,8 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
           }
         }
 
-        let totalWeightKg = 0;
-        let totalCostWrittenOff = 0;
-        for (const bale of balesToDispose) {
-          totalWeightKg += parseFloat(bale.weightKg as string) || 0;
-          totalCostWrittenOff += parseFloat(bale.totalCost as string) || 0;
-        }
+        const totalWeightKg = sumMoney(balesToDispose.map((bale) => bale.weightKg as string)).toNumber();
+        const totalCostWrittenOff = sumMoney(balesToDispose.map((bale) => bale.totalCost as string)).toNumber();
 
         const [dispatch] = await tx
           .insert(factoryBaleWasteDispatches)
@@ -840,8 +837,8 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
         bales: result.bales.map((b) => ({
           id: b.id,
           referenceNumber: b.referenceNumber,
-          weightKg: parseFloat(b.weightKg as string) || 0,
-          totalCost: parseFloat(b.totalCost as string) || 0,
+          weightKg: toMoney(b.weightKg as string).toNumber(),
+          totalCost: toMoney(b.totalCost as string).toNumber(),
         })),
       });
     } catch (error: unknown) {

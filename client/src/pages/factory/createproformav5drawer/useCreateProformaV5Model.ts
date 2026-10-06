@@ -31,6 +31,7 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
   const [showGarbageWipers, setShowGarbageWipers] = useState(false);
   const [articleSearch, setArticleSearch] = useState("");
   const draftTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftStatusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const qtyRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Reset to blank every time the dialog opens
@@ -200,9 +201,19 @@ export function useCreateProformaV5Model({ open, onClose, articleRows, onSuccess
     draftTimer.current = setTimeout(() => {
       saveDraft(data);
       setDraftStatus("saved");
-      setTimeout(() => setDraftStatus("idle"), 2000);
+      if (draftStatusTimer.current) clearTimeout(draftStatusTimer.current);
+      draftStatusTimer.current = setTimeout(() => setDraftStatus("idle"), 2000);
     }, 800);
   }, []);
+
+  // Pending autosave timers must not fire after the drawer unmounts.
+  useEffect(
+    () => () => {
+      if (draftTimer.current) clearTimeout(draftTimer.current);
+      if (draftStatusTimer.current) clearTimeout(draftStatusTimer.current);
+    },
+    []
+  );
 
   useEffect(() => {
     triggerAutosave({

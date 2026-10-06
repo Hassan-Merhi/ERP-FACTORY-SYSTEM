@@ -7,6 +7,8 @@
 // ---------------------------------------------------------------------------
 
 import { db } from "../../db";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, inArray, isNotNull, lte } from "drizzle-orm";
@@ -73,16 +75,19 @@ export async function getProfitLoss(
       : [];
 
   // Calculate balances for each account
-  const accountBalances = new Map<number, number>();
+  const exactBalances = new Map<number, Decimal>();
 
   for (const entry of companyEntries) {
     if (entry.ledgerAccountId) {
-      const debit = parseFloat(entry.debitAmount || "0");
-      const credit = parseFloat(entry.creditAmount || "0");
-      const currentBalance = accountBalances.get(entry.ledgerAccountId) || 0;
-      accountBalances.set(entry.ledgerAccountId, currentBalance + credit - debit);
+      const currentBalance = exactBalances.get(entry.ledgerAccountId) ?? new MoneyDecimal(0);
+      exactBalances.set(
+        entry.ledgerAccountId,
+        currentBalance.plus(toMoney(entry.creditAmount)).minus(toMoney(entry.debitAmount))
+      );
     }
   }
+  // Exact sums, so an account whose entries cancel reads 0 rather than a float residue.
+  const accountBalances = new Map(Array.from(exactBalances, ([id, balance]) => [id, balance.toNumber()] as const));
 
   // Build income statement
   const incomeItems = incomeAccounts
@@ -105,9 +110,11 @@ export async function getProfitLoss(
     }))
     .filter((item) => item.balance !== 0);
 
-  const totalIncome = incomeItems.reduce((sum, item) => sum + item.balance, 0);
-  const totalExpenses = expenseItems.reduce((sum, item) => sum + item.balance, 0);
-  const netProfit = totalIncome - totalExpenses;
+  const totalIncomeExact = sumMoney(incomeItems.map((item) => exactBalances.get(item.id)));
+  const totalExpensesExact = sumMoney(expenseItems.map((item) => exactBalances.get(item.id)));
+  const totalIncome = totalIncomeExact.toNumber();
+  const totalExpenses = totalExpensesExact.toNumber();
+  const netProfit = totalIncomeExact.minus(totalExpensesExact).toNumber();
 
   return {
     incomeItems,
@@ -176,62 +183,64 @@ export async function getBalanceSheet(
   ]);
 
   // Calculate balances
-  const ledgerBalances = new Map<number, { debits: number; credits: number }>();
-  const bankBalances = new Map<number, { debits: number; credits: number }>();
-  const assetBalances = new Map<number, { debits: number; credits: number }>();
-  const employeeBalances = new Map<number, { debits: number; credits: number }>();
-  const supplierBalances = new Map<number, { debits: number; credits: number }>();
+  type Totals = { debits: Decimal; credits: Decimal };
+  const none = (): Totals => ({ debits: new MoneyDecimal(0), credits: new MoneyDecimal(0) });
+  const ledgerBalances = new Map<number, Totals>();
+  const bankBalances = new Map<number, Totals>();
+  const assetBalances = new Map<number, Totals>();
+  const employeeBalances = new Map<number, Totals>();
+  const supplierBalances = new Map<number, Totals>();
 
   for (const entry of allEntries) {
-    const debit = parseFloat(entry.debitAmount || "0");
-    const credit = parseFloat(entry.creditAmount || "0");
+    const debit = toMoney(entry.debitAmount);
+    const credit = toMoney(entry.creditAmount);
 
     if (entry.ledgerAccountId) {
-      const existing = ledgerBalances.get(entry.ledgerAccountId) || { debits: 0, credits: 0 };
+      const existing = ledgerBalances.get(entry.ledgerAccountId) ?? none();
       ledgerBalances.set(entry.ledgerAccountId, {
-        debits: existing.debits + debit,
-        credits: existing.credits + credit,
+        debits: existing.debits.plus(debit),
+        credits: existing.credits.plus(credit),
       });
     }
 
     if (entry.bankAccountId) {
-      const existing = bankBalances.get(entry.bankAccountId) || { debits: 0, credits: 0 };
+      const existing = bankBalances.get(entry.bankAccountId) ?? none();
       bankBalances.set(entry.bankAccountId, {
-        debits: existing.debits + debit,
-        credits: existing.credits + credit,
+        debits: existing.debits.plus(debit),
+        credits: existing.credits.plus(credit),
       });
     }
 
     if (entry.fixedAssetId) {
-      const existing = assetBalances.get(entry.fixedAssetId) || { debits: 0, credits: 0 };
+      const existing = assetBalances.get(entry.fixedAssetId) ?? none();
       assetBalances.set(entry.fixedAssetId, {
-        debits: existing.debits + debit,
-        credits: existing.credits + credit,
+        debits: existing.debits.plus(debit),
+        credits: existing.credits.plus(credit),
       });
     }
 
     if (entry.supplierId) {
-      const existing = supplierBalances.get(entry.supplierId) || { debits: 0, credits: 0 };
+      const existing = supplierBalances.get(entry.supplierId) ?? none();
       // Only count pure credit or pure debit entries to prevent double-counting
       // This matches the logic in /api/suppliers/stats
-      if (credit > 0 && debit === 0) {
+      if (credit.gt(0) && debit.isZero()) {
         supplierBalances.set(entry.supplierId, {
           debits: existing.debits,
-          credits: existing.credits + credit,
+          credits: existing.credits.plus(credit),
         });
-      } else if (debit > 0 && credit === 0) {
+      } else if (debit.gt(0) && credit.isZero()) {
         supplierBalances.set(entry.supplierId, {
-          debits: existing.debits + debit,
+          debits: existing.debits.plus(debit),
           credits: existing.credits,
         });
       }
     }
 
     if (entry.employeeId) {
-      const existing = employeeBalances.get(entry.employeeId) || { debits: 0, credits: 0 };
+      const existing = employeeBalances.get(entry.employeeId) ?? none();
       employeeBalances.set(entry.employeeId, {
-        debits: existing.debits + debit,
-        credits: existing.credits + credit,
+        debits: existing.debits.plus(debit),
+        credits: existing.credits.plus(credit),
       });
     }
   }
@@ -240,59 +249,59 @@ export async function getBalanceSheet(
   const assetAccounts = ledgers
     .filter((l) => l.accountType === "Asset")
     .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) || { debits: 0, credits: 0 };
-      const openingBalance = parseFloat(acc.openingBalance || "0");
+      const bal = ledgerBalances.get(acc.id) ?? none();
+      const openingBalance = toMoney(acc.openingBalance);
       return {
         id: acc.id,
         code: acc.code,
         name: acc.name,
-        balance: openingBalance + bal.debits - bal.credits,
+        balance: openingBalance.plus(bal.debits).minus(bal.credits).toNumber(),
       };
     });
 
   const bankAccountItems = banks.map((bank) => {
-    const bal = bankBalances.get(bank.id) || { debits: 0, credits: 0 };
-    const openingBalance = parseFloat(bank.openingBalance || "0");
+    const bal = bankBalances.get(bank.id) ?? none();
+    const openingBalance = toMoney(bank.openingBalance);
     return {
       id: bank.id,
       code: bank.accountNumber,
       name: bank.bankName,
-      balance: openingBalance + bal.debits - bal.credits,
+      balance: openingBalance.plus(bal.debits).minus(bal.credits).toNumber(),
     };
   });
 
   const fixedAssetAccounts = assets.map((asset) => {
-    const bal = assetBalances.get(asset.id) || { debits: 0, credits: 0 };
-    const purchaseValue = parseFloat(asset.purchaseAmount || "0");
+    const bal = assetBalances.get(asset.id) ?? none();
+    const purchaseValue = toMoney(asset.purchaseAmount);
     return {
       id: asset.id,
       code: asset.code,
       name: asset.name,
-      balance: purchaseValue + bal.debits - bal.credits,
+      balance: purchaseValue.plus(bal.debits).minus(bal.credits).toNumber(),
     };
   });
 
   const liabilityAccounts = ledgers
     .filter((l) => l.accountType === "Liability")
     .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) || { debits: 0, credits: 0 };
-      const openingBalance = parseFloat(acc.openingBalance || "0");
+      const bal = ledgerBalances.get(acc.id) ?? none();
+      const openingBalance = toMoney(acc.openingBalance);
       return {
         id: acc.id,
         code: acc.code,
         name: acc.name,
-        balance: openingBalance + bal.credits - bal.debits,
+        balance: openingBalance.plus(bal.credits).minus(bal.debits).toNumber(),
       };
     });
 
   const supplierAccounts = suppliers
     .map((supplier) => {
-      const bal = supplierBalances.get(supplier.id) || { debits: 0, credits: 0 };
+      const bal = supplierBalances.get(supplier.id) ?? none();
       return {
         id: supplier.id,
         code: supplier.code,
         name: supplier.legalName,
-        balance: bal.credits - bal.debits,
+        balance: bal.credits.minus(bal.debits).toNumber(),
       };
     })
     .filter((s) => s.balance !== 0);
@@ -300,24 +309,24 @@ export async function getBalanceSheet(
   const equityAccounts = ledgers
     .filter((l) => l.accountType === "Equity")
     .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) || { debits: 0, credits: 0 };
-      const openingBalance = parseFloat(acc.openingBalance || "0");
+      const bal = ledgerBalances.get(acc.id) ?? none();
+      const openingBalance = toMoney(acc.openingBalance);
       return {
         id: acc.id,
         code: acc.code,
         name: acc.name,
-        balance: openingBalance + bal.credits - bal.debits,
+        balance: openingBalance.plus(bal.credits).minus(bal.debits).toNumber(),
       };
     });
 
-  const totalAssets = [...assetAccounts, ...bankAccountItems, ...fixedAssetAccounts].reduce(
-    (sum, item) => sum + item.balance,
-    0
-  );
+  // Each balance above is an exact sum read once as a number, so these totals re-add short decimals.
+  const totalAssets = sumMoney(
+    [...assetAccounts, ...bankAccountItems, ...fixedAssetAccounts].map((item) => item.balance)
+  ).toNumber();
 
-  const totalLiabilities = [...liabilityAccounts, ...supplierAccounts].reduce((sum, item) => sum + item.balance, 0);
+  const totalLiabilities = sumMoney([...liabilityAccounts, ...supplierAccounts].map((item) => item.balance)).toNumber();
 
-  const totalEquity = equityAccounts.reduce((sum, item) => sum + item.balance, 0);
+  const totalEquity = sumMoney(equityAccounts.map((item) => item.balance)).toNumber();
 
   return {
     assets: {

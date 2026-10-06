@@ -8,7 +8,9 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { parseId } from "../lib/parseId";
 import { getActiveRecipients, sendWhatsAppTextToChatId, sendWhatsAppFileToChatId } from "../services/whatsappService";
-import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
+import { toPositiveInteger } from "@shared/typeGuards";
+import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import type Decimal from "decimal.js";
 
 /**
  * Voucher-entry rows behind the transporter statement.
@@ -215,36 +217,39 @@ export function registerTransporterStatementRoutes(app: Express) {
         WHERE company_id = ${companyId}
         GROUP BY credit_entry_id
       `);
-      const paidMap = new Map<number, number>();
+      const paidMap = new Map<number, Decimal>();
       for (const a of allocRows.rows) {
         const creditEntryId = toPositiveInteger(a.credit_entry_id);
         if (creditEntryId === undefined) continue;
-        paidMap.set(creditEntryId, toFiniteNumber(a.paid_amount) ?? 0);
+        paidMap.set(creditEntryId, toMoney(a.paid_amount as string | number | null));
       }
 
       const allRows = rawEntries.rows;
-      let totalCharged = 0;
-      let totalPaid = 0;
-      let runningBalance = 0;
+      const charged: Decimal[] = [];
+      const paidOut: Decimal[] = [];
+      let runningBalance: Decimal = new MoneyDecimal(0);
       let overdueCount = 0;
       const now = new Date().toISOString().slice(0, 10);
 
       for (const row of allRows) {
-        const debit = parseFloat(row.debit_amount || "0");
-        const credit = parseFloat(row.credit_amount || "0");
-        runningBalance += credit - debit;
+        const debit = toMoney(row.debit_amount);
+        const credit = toMoney(row.credit_amount);
+        runningBalance = runningBalance.plus(credit).minus(debit);
         const inRange = (!dateFrom || row.voucher_date >= dateFrom) && (!dateTo || row.voucher_date <= dateTo);
         if (inRange) {
-          totalCharged += credit;
-          totalPaid += debit;
+          charged.push(credit);
+          paidOut.push(debit);
         }
-        if (credit > 0) {
-          const paid = paidMap.get(row.id) ?? 0;
-          if (paid < credit - 0.005 && row.voucher_date <= now) overdueCount++;
+        if (credit.gt(0)) {
+          const paid = paidMap.get(row.id) ?? new MoneyDecimal(0);
+          if (paid.lt(credit.minus(0.005)) && row.voucher_date <= now) overdueCount++;
         }
       }
+      const totalCharged = sumMoney(charged);
+      const totalPaid = sumMoney(paidOut);
 
-      const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const fmt = (n: Decimal) =>
+        n.toDecimalPlaces(2).toNumber().toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
       const periodLine =
         dateFrom && dateTo
@@ -351,12 +356,12 @@ export function registerTransporterStatementRoutes(app: Express) {
 
       // Separate credits (charges) and debits (payments)
       const creditEntries = entries
-        .filter((e) => parseFloat(e.credit_amount || "0") > 0)
-        .map((e) => ({ id: e.id, total: parseFloat(e.credit_amount), remaining: parseFloat(e.credit_amount) }));
+        .filter((e) => toMoney(e.credit_amount).gt(0))
+        .map((e) => ({ id: e.id, remaining: toMoney(e.credit_amount) }));
 
       const debitEntries = entries
-        .filter((e) => parseFloat(e.debit_amount || "0") > 0)
-        .map((e) => ({ id: e.id, total: parseFloat(e.debit_amount), remaining: parseFloat(e.debit_amount) }));
+        .filter((e) => toMoney(e.debit_amount).gt(0))
+        .map((e) => ({ id: e.id, remaining: toMoney(e.debit_amount) }));
 
       // Clear existing allocations for this account
       await db.execute(
@@ -366,18 +371,18 @@ export function registerTransporterStatementRoutes(app: Express) {
       );
 
       // FIFO: iterate debits in date order, distribute against oldest unpaid credits
-      const newAllocations: Array<{ debitId: number; creditId: number; amount: number }> = [];
+      const newAllocations: Array<{ debitId: number; creditId: number; amount: string }> = [];
 
       for (const debit of debitEntries) {
         let debitRemaining = debit.remaining;
         for (const credit of creditEntries) {
-          if (debitRemaining <= 0) break;
-          if (credit.remaining <= 0) continue;
+          if (debitRemaining.lte(0)) break;
+          if (credit.remaining.lte(0)) continue;
 
-          const alloc = Math.min(debitRemaining, credit.remaining);
-          newAllocations.push({ debitId: debit.id, creditId: credit.id, amount: alloc });
-          debitRemaining -= alloc;
-          credit.remaining -= alloc;
+          const alloc = MoneyDecimal.min(debitRemaining, credit.remaining);
+          newAllocations.push({ debitId: debit.id, creditId: credit.id, amount: alloc.toString() });
+          debitRemaining = debitRemaining.minus(alloc);
+          credit.remaining = credit.remaining.minus(alloc);
         }
       }
 
@@ -467,9 +472,9 @@ export function registerTransporterStatementRoutes(app: Express) {
       }
 
       // Opening balance
-      const ob = parseFloat(account.openingBalance || "0");
+      const ob = toMoney(account.openingBalance);
       const obSide = account.openingBalanceSide;
-      let runningBalance = obSide === "Dr" ? -ob : ob;
+      let runningBalance: Decimal = obSide === "Dr" ? ob.neg() : ob;
 
       const allRows = rawEntries.rows;
 
@@ -485,8 +490,8 @@ export function registerTransporterStatementRoutes(app: Express) {
       // the second parse was safe.
       const fifoRows = (column: "credit_amount" | "debit_amount") =>
         allRows.flatMap((r) => {
-          const amount = toFiniteNumber(r[column]);
-          if (amount === undefined || amount <= 0) return [];
+          const amount = toMoney(r[column]);
+          if (!amount.gt(0)) return [];
           return [{ id: r.id, total: amount, remaining: amount }];
         });
 
@@ -499,26 +504,26 @@ export function registerTransporterStatementRoutes(app: Express) {
       // balance first before being applied to tracked voucher charges.
       // If Dr, the transporter already owes us money → more of our payments are free
       // to cover voucher charges.
-      const preSystemBalance = obSide === "Cr" ? ob : -ob; // positive = we owe from before
-      const totalVoucherPayments = fifoPayments.reduce((s, p) => s + p.total, 0);
-      let payPool = Math.max(0, totalVoucherPayments - Math.max(0, preSystemBalance));
+      const preSystemBalance = obSide === "Cr" ? ob : ob.neg(); // positive = we owe from before
+      const totalVoucherPayments = sumMoney(fifoPayments.map((p) => p.total));
+      let payPool = MoneyDecimal.max(0, totalVoucherPayments.minus(MoneyDecimal.max(0, preSystemBalance)));
 
-      const paidMap = new Map<number, number>(); // chargeEntryId → paidAmount
+      const paidMap = new Map<number, Decimal>(); // chargeEntryId → paidAmount
       for (const charge of fifoCharges) {
-        if (payPool <= 0) break;
-        const alloc = Math.min(payPool, charge.remaining);
-        if (alloc > 0) {
-          paidMap.set(charge.id, (paidMap.get(charge.id) ?? 0) + alloc);
-          payPool -= alloc;
-          charge.remaining -= alloc;
+        if (payPool.lte(0)) break;
+        const alloc = MoneyDecimal.min(payPool, charge.remaining);
+        if (alloc.gt(0)) {
+          paidMap.set(charge.id, (paidMap.get(charge.id) ?? new MoneyDecimal(0)).plus(alloc));
+          payPool = payPool.minus(alloc);
+          charge.remaining = charge.remaining.minus(alloc);
         }
       }
 
       // Build rows with running balance
       const statementRows = allRows.map((row) => {
-        const debit = parseFloat(row.debit_amount || "0");
-        const credit = parseFloat(row.credit_amount || "0");
-        runningBalance = runningBalance + credit - debit;
+        const debit = toMoney(row.debit_amount);
+        const credit = toMoney(row.credit_amount);
+        runningBalance = runningBalance.plus(credit).minus(debit);
 
         const containerNum = extractContainerNumber(row.voucher_description) || extractContainerNumber(row.narration);
 
@@ -543,12 +548,12 @@ export function registerTransporterStatementRoutes(app: Express) {
         // paidMap keys are credit entry IDs; value = how much of that charge FIFO covered
         let status: "unpaid" | "partial" | "paid" | null = null;
         let paidAmount: string | null = null;
-        if (credit > 0) {
-          const paid = paidMap.get(row.id) ?? 0;
+        if (credit.gt(0)) {
+          const paid = paidMap.get(row.id) ?? new MoneyDecimal(0);
           paidAmount = paid.toFixed(2);
-          if (paid <= 0) {
+          if (paid.lte(0)) {
             status = "unpaid";
-          } else if (paid >= credit - 0.005) {
+          } else if (paid.gte(credit.minus(0.005))) {
             status = "paid";
           } else {
             status = "partial";
@@ -563,8 +568,8 @@ export function registerTransporterStatementRoutes(app: Express) {
           date: row.voucher_date,
           description: row.voucher_description || row.narration || "",
           narration: row.narration || "",
-          debit: debit > 0 ? debit.toFixed(2) : null,
-          credit: credit > 0 ? credit.toFixed(2) : null,
+          debit: debit.gt(0) ? debit.toFixed(2) : null,
+          credit: credit.gt(0) ? credit.toFixed(2) : null,
           runningBalance: runningBalance.toFixed(2),
           numberPlate,
           offloadDate,
@@ -589,7 +594,7 @@ export function registerTransporterStatementRoutes(app: Express) {
           ? (() => {
               const firstIdx = allRows.findIndex((r) => r.id === filteredRows[0].id);
               if (firstIdx === 0) {
-                return (obSide === "Dr" ? -ob : ob).toFixed(2);
+                return (obSide === "Dr" ? ob.neg() : ob).toFixed(2);
               }
               return statementRows[firstIdx - 1].runningBalance;
             })()

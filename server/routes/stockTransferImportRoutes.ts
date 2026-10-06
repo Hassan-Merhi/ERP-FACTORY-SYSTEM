@@ -20,6 +20,8 @@ import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } fr
 import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
+import { MoneyDecimal, toMoney } from "../lib/money";
+import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -79,7 +81,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
         // Expected columns: Barcode, Quantity
         const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
+        const quantity = rowQuantity(row);
 
         if (!barcode) {
           continue; // Skip rows without barcode
@@ -171,8 +173,8 @@ export function registerStockTransferImportRoutes(app: Express) {
             .limit(1);
 
           if (inventoryItem) {
-            const currentQty = parseFloat(inventoryItem.quantity || "0");
-            const transferQty = parseFloat(item.quantity);
+            const currentQty = toMoney(inventoryItem.quantity).toNumber();
+            const transferQty = requestQuantity(item.quantity).toNumber();
             const remainingQty = currentQty - transferQty;
 
             validatedItem.currentStock = currentQty;
@@ -187,7 +189,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             }
           } else {
             validatedItem.currentStock = 0;
-            validatedItem.remainingStock = -parseFloat(item.quantity);
+            validatedItem.remainingStock = -requestQuantity(item.quantity).toNumber();
             validatedItem.averageRate = "0";
             validatedItem.warning = `No stock at source location, will go negative`;
             warnings.push(`${stockItem.name}: No stock at source location`);
@@ -233,8 +235,8 @@ export function registerStockTransferImportRoutes(app: Express) {
         return res.status(400).json({ message: "Destination location not found" });
       }
 
-      let totalValue = 0;
-      const transferItems: Array<{ stockItemId: number; quantity: string; rate: string }> = [];
+      let totalValue = new MoneyDecimal(0);
+      const transferItems: Array<{ stockItemId: number; quantity: Decimal; rate: Decimal }> = [];
 
       // Prepare items with rates from inventory
       for (const item of items) {
@@ -257,18 +259,12 @@ export function registerStockTransferImportRoutes(app: Express) {
           .limit(1);
 
         // Use inventory rate if available, otherwise use stock item's selling price as fallback
-        const rate = inventoryItem
-          ? parseFloat(inventoryItem.averageRate || "0")
-          : parseFloat(stockItem.sellingPrice || "0");
-        const quantity = parseFloat(item.quantity);
+        const rate = inventoryItem ? toMoney(inventoryItem.averageRate) : toMoney(stockItem.sellingPrice);
+        const quantity = requestQuantity(item.quantity);
 
-        totalValue += rate * quantity;
+        totalValue = totalValue.plus(rate.times(quantity));
 
-        transferItems.push({
-          stockItemId: stockItem.id,
-          quantity: quantity.toString(),
-          rate: rate.toString(),
-        });
+        transferItems.push({ stockItemId: stockItem.id, quantity, rate });
       }
 
       const voucherNumber = `ST-${Date.now()}`;
@@ -286,7 +282,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherDate: transferDate,
             description:
               notes || `Excel Import - ${items.length} items from ${sourceLocation.name} to ${destLocation.name}`,
-            totalAmount: totalValue.toString(),
+            totalAmount: totalValue.toFixed(),
           })
           .returning();
 
@@ -302,7 +298,7 @@ export function registerStockTransferImportRoutes(app: Express) {
 
         // Process each item
         for (const item of transferItems) {
-          const itemTotal = parseFloat(item.quantity) * parseFloat(item.rate);
+          const itemTotal = item.quantity.times(item.rate);
 
           // Create stock transfer item
           const [transferItem] = await tx
@@ -311,9 +307,9 @@ export function registerStockTransferImportRoutes(app: Express) {
               transferId: transferRecord.id,
               stockItemId: item.stockItemId,
               sourceLocationId,
-              quantity: item.quantity,
-              rate: item.rate,
-              totalAmount: itemTotal.toString(),
+              quantity: item.quantity.toFixed(),
+              rate: item.rate.toFixed(),
+              totalAmount: itemTotal.toFixed(),
             })
             .returning({ id: stockTransferItems.id });
 
@@ -322,7 +318,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             tx,
             sourceLocationId,
             item.stockItemId,
-            -parseFloat(item.quantity),
+            -item.quantity.toNumber(),
             req.session.currentCompanyId!
           );
 
@@ -331,9 +327,9 @@ export function registerStockTransferImportRoutes(app: Express) {
             tx,
             destinationLocationId,
             item.stockItemId,
-            parseFloat(item.quantity),
+            item.quantity.toNumber(),
             req.session.currentCompanyId!,
-            parseFloat(item.rate)
+            item.rate.toNumber()
           );
 
           await postStockMovementTx(
@@ -342,8 +338,8 @@ export function registerStockTransferImportRoutes(app: Express) {
               companyId: req.session.currentCompanyId!,
               stockItemId: item.stockItemId,
               kind: "transfer",
-              quantity: item.quantity,
-              unitCost: String(Math.max(parseFloat(item.rate) || 0, 0)),
+              quantity: item.quantity.toFixed(),
+              unitCost: (item.rate.greaterThan(0) ? item.rate : new MoneyDecimal(0)).toFixed(),
               fromLocationId: sourceLocationId,
               toLocationId: destinationLocationId,
               occurredAt: new Date(`${transferDate}T00:00:00.000Z`).toISOString(),
@@ -373,7 +369,7 @@ export function registerStockTransferImportRoutes(app: Express) {
       // Fire-and-forget: send transfer image to destination WA group
       const waItems = transferItems.map((i) => ({
         stockItemId: i.stockItemId,
-        quantity: parseFloat(i.quantity),
+        quantity: i.quantity.toNumber(),
       }));
       const waVoucher = voucherNumber;
       const waSrcName = sourceLocation.name;
@@ -502,7 +498,7 @@ export function registerStockTransferImportRoutes(app: Express) {
           // Expected columns: Source Location, Barcode, Quantity
           const sourceLocation = row["Source Location"] || row.SourceLocation || row.sourceLocation || row.source || "";
           const barcode = row.Barcode || row.barcode || row.Code || row.code;
-          const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
+          const quantity = rowQuantity(row);
 
           if (!barcode) {
             continue; // Skip rows without barcode
@@ -628,7 +624,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             validatedItem.rate = "0";
             warnings.push(`Row ${item.rowNum}: '${stockItem.name}' has no inventory at '${item.sourceLocation}'`);
           } else {
-            const currentQty = parseFloat(invRecord.quantity);
+            const currentQty = toMoney(invRecord.quantity).toNumber();
             validatedItem.currentStock = currentQty;
             validatedItem.rate = invRecord.averageRate;
 
@@ -697,8 +693,8 @@ export function registerStockTransferImportRoutes(app: Express) {
       const processedItems: Array<{
         stockItemId: number;
         sourceLocationId: number;
-        quantity: number;
-        rate: number;
+        quantity: Decimal;
+        rate: Decimal;
       }> = [];
 
       for (const item of items) {
@@ -738,10 +734,8 @@ export function registerStockTransferImportRoutes(app: Express) {
           .limit(1);
 
         // Use server-derived rate from inventory, or stock item's selling price as fallback
-        const serverRate = sourceInv[0]
-          ? parseFloat(sourceInv[0].averageRate || "0")
-          : parseFloat(stockItem.sellingPrice || "0");
-        const requestedQty = parseFloat(item.quantity);
+        const serverRate = sourceInv[0] ? toMoney(sourceInv[0].averageRate) : toMoney(stockItem.sellingPrice);
+        const requestedQty = requestQuantity(item.quantity);
 
         processedItems.push({
           stockItemId: item.stockItemId,
@@ -752,9 +746,9 @@ export function registerStockTransferImportRoutes(app: Express) {
       }
 
       // Calculate total value using server-derived rates
-      let totalValue = 0;
+      let totalValue = new MoneyDecimal(0);
       for (const item of processedItems) {
-        totalValue += item.rate * item.quantity;
+        totalValue = totalValue.plus(item.rate.times(item.quantity));
       }
 
       // Create voucher and update inventory in a transaction
@@ -788,7 +782,7 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherNumber,
             voucherDate: transferDate || getClientDate(req),
             description: notes || `Multi-source Stock Transfer Import (${processedItems.length} items)`,
-            totalAmount: totalValue.toString(),
+            totalAmount: totalValue.toFixed(),
             locationId: destinationLocationId,
             locationName: destLocation.name,
           })
@@ -810,7 +804,7 @@ export function registerStockTransferImportRoutes(app: Express) {
           const sourceLocationId = item.sourceLocationId;
           const qty = item.quantity;
           const rate = item.rate;
-          const itemTotal = qty * rate;
+          const itemTotal = qty.times(rate);
 
           // Create stock transfer item with individual sourceLocationId
           const [transferItem] = await tx
@@ -819,17 +813,24 @@ export function registerStockTransferImportRoutes(app: Express) {
               transferId: transferRecord.id,
               stockItemId: item.stockItemId,
               sourceLocationId,
-              quantity: qty.toString(),
-              rate: rate.toString(),
-              totalAmount: itemTotal.toString(),
+              quantity: qty.toFixed(),
+              rate: rate.toFixed(),
+              totalAmount: itemTotal.toFixed(),
             })
             .returning({ id: stockTransferItems.id });
 
           // Reduce source inventory
-          await adjustInventory(tx, sourceLocationId, item.stockItemId, -qty, req.session.currentCompanyId!);
+          await adjustInventory(tx, sourceLocationId, item.stockItemId, -qty.toNumber(), req.session.currentCompanyId!);
 
           // Add to destination inventory
-          await adjustInventory(tx, destinationLocationId, item.stockItemId, qty, req.session.currentCompanyId!, rate);
+          await adjustInventory(
+            tx,
+            destinationLocationId,
+            item.stockItemId,
+            qty.toNumber(),
+            req.session.currentCompanyId!,
+            rate.toNumber()
+          );
 
           const movementDate = transferDate || getClientDate(req);
           await postStockMovementTx(
@@ -838,8 +839,8 @@ export function registerStockTransferImportRoutes(app: Express) {
               companyId: req.session.currentCompanyId!,
               stockItemId: item.stockItemId,
               kind: "transfer",
-              quantity: String(qty),
-              unitCost: String(Math.max(rate || 0, 0)),
+              quantity: qty.toFixed(),
+              unitCost: (rate.greaterThan(0) ? rate : new MoneyDecimal(0)).toFixed(),
               fromLocationId: sourceLocationId,
               toLocationId: destinationLocationId,
               occurredAt: new Date(`${movementDate}T00:00:00.000Z`).toISOString(),
@@ -870,7 +871,7 @@ export function registerStockTransferImportRoutes(app: Express) {
       if (multiSourceVoucherNumber) {
         const waItemsMs = processedItems.map((i) => ({
           stockItemId: i.stockItemId,
-          quantity: i.quantity,
+          quantity: i.quantity.toNumber(),
         }));
         const waVoucherMs = multiSourceVoucherNumber;
         const waDstNameMs = destLocation.name;
