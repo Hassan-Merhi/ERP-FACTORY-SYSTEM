@@ -3,7 +3,6 @@ import {
   text,
   varchar,
   serial,
-  bigserial,
   integer,
   decimal,
   date,
@@ -237,37 +236,6 @@ export const insertCustomerOrderPriorityScanConfigSchema = createInsertSchema(cu
 
 export type InsertCustomerOrderPriorityScanConfig = z.infer<typeof insertCustomerOrderPriorityScanConfigSchema>;
 export type CustomerOrderPriorityScanConfig = typeof customerOrderPriorityScanConfigs.$inferSelect;
-
-// ─── Priority Scan Daily History ─────────────────────────────────────────────
-// Shared, company-wide audit/list for Priority Scan. Unlike browser session
-// state, this survives refreshes and is visible to every user in the company.
-export const factoryPriorityScanHistory = pgTable(
-  "factory_priority_scan_history",
-  {
-    id: bigserial("id", { mode: "number" }).primaryKey(),
-    companyId: integer("company_id").notNull(),
-    orderId: integer("order_id").notNull(),
-    baleId: integer("bale_id").notNull(),
-    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
-    productName: text("product_name"),
-    articleCode: varchar("article_code", { length: 50 }),
-    priority: integer("priority").notNull(),
-    color: varchar("color", { length: 64 }).notNull(),
-    businessDate: date("business_date").notNull(),
-    scannedBy: text("scanned_by"),
-    scannedAt: timestamp("scanned_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => ({
-    companyDateScannedIdx: index("fpsh_company_date_scanned_idx").on(
-      t.companyId,
-      t.businessDate,
-      t.scannedAt,
-      t.id
-    ),
-  })
-);
-
-export type FactoryPriorityScanHistory = typeof factoryPriorityScanHistory.$inferSelect;
 
 // ─── Customer Order Lines ─────────────────────────────────────────────────────
 export const customerOrderLines = pgTable(
