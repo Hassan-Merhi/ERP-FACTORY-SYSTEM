@@ -351,9 +351,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       ]
     );
 
-    const history = await agent.get(
-      "/api/factory/customer-orders/loading-list/priority-scan-route?view=today-history"
-    );
+    const history = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-route?view=today-history");
     expect(history.status).toBe(200);
     expect(history.body.businessDate).toBe(today);
     expect(history.body.serverNow).toBeTruthy();
