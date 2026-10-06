@@ -493,6 +493,9 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!canManagePriorityPosition(req)) {
+          return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+        }
 
         const orderId = parseId(req.params.id);
         if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });
