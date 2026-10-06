@@ -264,6 +264,23 @@ describe("repairing offloads edited before the sync existed", () => {
     const duty = await chargeVoucher("DUTY", containerNumber);
     await pool.query(`UPDATE vouchers SET total_amount = '90.00' WHERE id = $1`, [duty.id]);
 
+    // The repair scan must keep the legacy voucher-number matching rules:
+    // optional/deleted vouchers and non-numeric suffixes do not contribute.
+    await pool.query(
+      `INSERT INTO vouchers
+         (company_id, voucher_number, voucher_type, voucher_date, total_amount, optional, deleted_at)
+       VALUES
+         ($1, $2, 'Payment', '2026-09-15', '400.00', true, NULL),
+         ($1, $3, 'Payment', '2026-09-15', '500.00', false, NOW()),
+         ($1, $4, 'Payment', '2026-09-15', '700.00', false, NULL)`,
+      [
+        ctx.companyId,
+        `DUTY-${containerNumber}-999001`,
+        `DUTY-${containerNumber}-999002`,
+        `DUTY-${containerNumber}-NOTNUM`,
+      ]
+    );
+
     const preview = await agent.get("/api/admin/offload-charge-voucher-repair");
     expect(preview.status, JSON.stringify(preview.body)).toBe(200);
     const rows = preview.body.drift.filter(
