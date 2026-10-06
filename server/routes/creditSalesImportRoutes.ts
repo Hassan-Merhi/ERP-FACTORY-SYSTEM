@@ -18,6 +18,8 @@ import { createDatabaseStockMovementAdapter } from "../services/inventory/databa
 import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { getClientDate } from "../lib/dateUtils";
+import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../lib/money";
+import type Decimal from "decimal.js";
 import { generateInvoicePdf } from "../helpers/generateInvoicePdf";
 import { generateStockPdf } from "../helpers/generateStockPdf";
 import { getErpExportVisibility } from "../helpers/exportVisibility";
@@ -42,6 +44,14 @@ import {
 } from "../services/accounting/financialOperationRequest";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+
+/** An import row's quantity and rate, read as parseFloat reads them; null unless both are positive. */
+function importLineAmounts(quantity: unknown, rate: unknown) {
+  const q = parseMoneyInput(String(quantity ?? ""));
+  const r = parseMoneyInput(String(rate ?? ""));
+  if (!q || !r || !q.gt(0) || !r.gt(0)) return null;
+  return { quantity: q, rate: r };
+}
 
 export function registerCreditSalesImportRoutes(app: Express) {
   // ============= Credit Sales Import Endpoints =============
@@ -68,39 +78,41 @@ export function registerCreditSalesImportRoutes(app: Express) {
 
       const rows = rawData;
       const items: { rowNum: number; barcode: string; quantity: number; rate: number; value: number }[] = [];
-      let totalValue = 0;
+      const values: Decimal[] = [];
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const rowNum = i + 2;
 
         const barcode = row.Barcode || row.barcode || row.Code || row.code;
-        const quantity = parseFloat(String(row.Quantity || row.quantity || row.Qty || row.qty || "0"));
-        const rate = parseFloat(String(row.Rate || row.rate || row.Price || row.price || "0"));
+        const amounts = importLineAmounts(
+          row.Quantity || row.quantity || row.Qty || row.qty || "0",
+          row.Rate || row.rate || row.Price || row.price || "0"
+        );
 
         if (!barcode) {
           continue;
         }
 
-        if (quantity <= 0 || rate <= 0) {
+        if (!amounts) {
           continue;
         }
 
-        const itemValue = quantity * rate;
-        totalValue += itemValue;
+        const itemValue = amounts.quantity.times(amounts.rate);
+        values.push(itemValue);
 
         items.push({
           rowNum,
           barcode: String(barcode).trim(),
-          quantity,
-          rate,
-          value: itemValue,
+          quantity: amounts.quantity.toNumber(),
+          rate: amounts.rate.toNumber(),
+          value: itemValue.toNumber(),
         });
       }
 
       res.json({
         items,
-        totalValue,
+        totalValue: sumMoney(values).toNumber(),
         fileName: req.file.originalname,
       });
     } catch (error: unknown) {
@@ -127,7 +139,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
       const validatedItems: Record<string, unknown>[] = [];
 
       const location = await storage.getLocationById(locationId);
-      if (!location) {
+      if (!location || location.companyId !== req.session.currentCompanyId) {
         errors.push("Selected location not found");
         return res.json({ errors, warnings, validatedItems });
       }
@@ -152,20 +164,20 @@ export function registerCreditSalesImportRoutes(app: Express) {
             .limit(1);
 
           if (inventoryItem.length > 0) {
-            validatedItem.costPrice = parseFloat(inventoryItem[0].averageRate || "0");
-            const currentQty = parseFloat(inventoryItem[0].quantity || "0");
-            const saleQty = parseFloat(item.quantity);
-            const remainingQty = currentQty - saleQty;
+            validatedItem.costPrice = toMoney(inventoryItem[0].averageRate).toNumber();
+            const currentQty = toMoney(inventoryItem[0].quantity);
+            const saleQty = toMoney(item.quantity);
+            const remainingQty = currentQty.minus(saleQty);
 
-            validatedItem.currentStock = currentQty;
-            validatedItem.remainingStock = remainingQty;
+            validatedItem.currentStock = currentQty.toNumber();
+            validatedItem.remainingStock = remainingQty.toNumber();
 
-            if (remainingQty < 0) {
+            if (remainingQty.lt(0)) {
               validatedItem.warning = `Stock will go negative (${remainingQty.toFixed(2)} ${stockItem.uom})`;
               warnings.push(
                 `${stockItem.name}: Stock will go negative (Current: ${currentQty.toFixed(2)}, Selling: ${saleQty.toFixed(2)}, Remaining: ${remainingQty.toFixed(2)} ${stockItem.uom})`
               );
-            } else if (remainingQty === 0) {
+            } else if (remainingQty.isZero()) {
               validatedItem.warning = `Stock will reach zero`;
               warnings.push(
                 `${stockItem.name}: Stock will reach zero (Current: ${currentQty.toFixed(2)}, Selling: ${saleQty.toFixed(2)} ${stockItem.uom})`
@@ -173,7 +185,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
             }
           } else {
             validatedItem.currentStock = 0;
-            validatedItem.remainingStock = -parseFloat(item.quantity);
+            validatedItem.remainingStock = toMoney(item.quantity).neg().toNumber();
             validatedItem.warning = `No stock at this location, will go negative`;
             warnings.push(`${stockItem.name}: No stock at this location (Selling: ${item.quantity} ${stockItem.uom})`);
           }
@@ -207,8 +219,12 @@ export function registerCreditSalesImportRoutes(app: Express) {
       }
 
       const location = await storage.getLocationById(locationId);
-      if (!location) {
+      if (!location || location.companyId !== req.session.currentCompanyId) {
         return res.status(400).json({ message: "Location not found" });
+      }
+      const lineAmounts = items.map((item) => importLineAmounts(item.quantity, item.rate));
+      if (lineAmounts.some((amounts) => !amounts)) {
+        return res.status(400).json({ message: "Invalid amount" });
       }
 
       let customer = await storage.getCustomerById(customerId);
@@ -265,7 +281,6 @@ export function registerCreditSalesImportRoutes(app: Express) {
         customerLedgerAccountId = customerLedgerAccount.id;
       }
 
-      let totalSales = 0;
       let createdVoucher = null;
 
       const operationKey = resolveFinancialOperationKey(req);
@@ -299,7 +314,9 @@ export function registerCreditSalesImportRoutes(app: Express) {
             })
             .returning();
 
-          for (const item of items) {
+          const lineSales: string[] = [];
+          for (const [index, item] of items.entries()) {
+            const { quantity, rate } = lineAmounts[index]!;
             const stockItem = await storage.getStockItemByCodeOrAlias(item.barcode, req.session.currentCompanyId!);
             if (!stockItem) {
               throw new Error(`Stock item not found for barcode: ${item.barcode}`);
@@ -311,19 +328,14 @@ export function registerCreditSalesImportRoutes(app: Express) {
               .where(and(eq(inventory.stockItemId, stockItem.id), eq(inventory.locationId, locationId)))
               .limit(1);
 
-            let costPrice = 0;
-            let _currentQty = 0;
+            const costPrice = inventoryRecord ? toMoney(inventoryRecord.averageRate) : new MoneyDecimal(0);
 
-            if (inventoryRecord) {
-              costPrice = parseFloat(inventoryRecord.averageRate || "0");
-              _currentQty = parseFloat(inventoryRecord.quantity);
-            }
+            // Each line is stored at cents; the voucher total is the sum of the stored lines.
+            const itemSales = moneyString(quantity.times(rate));
+            const itemCost = moneyString(quantity.times(costPrice));
+            const profit = toMoney(itemSales).minus(itemCost).toFixed(2);
 
-            const itemSales = item.quantity * item.rate;
-            const itemCost = item.quantity * costPrice;
-            const profit = itemSales - itemCost;
-
-            totalSales += itemSales;
+            lineSales.push(itemSales);
 
             // Look up configured price for this item/location
             const [importCreditLocPrice] = await tx
@@ -336,7 +348,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
                 )
               )
               .limit(1);
-            const importCreditConfiguredPrice = parseFloat(
+            const importCreditConfiguredPrice = toMoney(
               importCreditLocPrice?.sellingPrice || stockItem.sellingPrice || "0"
             );
 
@@ -345,25 +357,25 @@ export function registerCreditSalesImportRoutes(app: Express) {
               .values({
                 voucherId: voucher.id,
                 stockItemId: stockItem.id,
-                quantity: item.quantity.toString(),
-                sellingPrice: item.rate.toString(),
+                quantity: quantity.toString(),
+                sellingPrice: rate.toString(),
                 costPrice: costPrice.toString(),
-                totalSales: itemSales.toString(),
-                totalCost: itemCost.toString(),
-                profit: profit.toString(),
-                configuredPrice: importCreditConfiguredPrice > 0 ? importCreditConfiguredPrice.toFixed(6) : null,
+                totalSales: itemSales,
+                totalCost: itemCost,
+                profit,
+                configuredPrice: importCreditConfiguredPrice.gt(0) ? importCreditConfiguredPrice.toFixed(6) : null,
               })
               .returning({ id: salesItems.id });
 
-            await adjustInventory(tx, locationId, stockItem.id, -item.quantity, req.session.currentCompanyId!);
+            await adjustInventory(tx, locationId, stockItem.id, -quantity.toNumber(), req.session.currentCompanyId!);
             await postStockMovementTx(
               tx,
               {
                 companyId: req.session.currentCompanyId!,
                 stockItemId: stockItem.id,
                 kind: "issue",
-                quantity: String(Math.abs(item.quantity)),
-                unitCost: String(Math.max(costPrice, 0)),
+                quantity: quantity.abs().toString(),
+                unitCost: MoneyDecimal.max(costPrice, 0).toString(),
                 fromLocationId: locationId,
                 occurredAt: new Date(`${saleDate}T00:00:00.000Z`).toISOString(),
                 source: {
@@ -382,12 +394,14 @@ export function registerCreditSalesImportRoutes(app: Express) {
             );
           }
 
+          const totalSales = sumMoney(lineSales).toFixed(2);
+
           // Create voucher entries for credit sale
           // Entry 1: Debit Customer's Ledger Account (Customer owes money)
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             ledgerAccountId: customerLedgerAccountId!,
-            debitAmount: totalSales.toString(),
+            debitAmount: totalSales,
             creditAmount: "0",
             narration: `Credit Sale to ${customer.legalName} - ${items.length} items`,
           });
@@ -397,7 +411,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
             voucherId: voucher.id,
             ledgerAccountId: salesRevenueAccount.id,
             debitAmount: "0",
-            creditAmount: totalSales.toString(),
+            creditAmount: totalSales,
             narration: `Credit Sale Revenue - ${items.length} items`,
           });
 
@@ -405,7 +419,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
           await tx
             .update(vouchers)
             .set({
-              totalAmount: totalSales.toString(),
+              totalAmount: totalSales,
             })
             .where(eq(vouchers.id, voucher.id));
 
@@ -425,8 +439,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
             .orderBy(desc(customerBalances.id))
             .limit(1);
 
-          const previousBalance = lastBalance ? parseFloat(lastBalance.balance || "0") : 0;
-          const newBalance = previousBalance + totalSales;
+          const newBalance = toMoney(lastBalance?.balance).plus(totalSales);
 
           await tx.insert(customerBalances).values({
             customerId,
@@ -435,7 +448,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
             transactionType: "Credit Sale",
             referenceId: voucher.id,
             referenceType: "voucher",
-            debitAmount: totalSales.toString(),
+            debitAmount: totalSales,
             creditAmount: "0",
             balance: newBalance.toString(),
             currency: "USD",
@@ -448,13 +461,12 @@ export function registerCreditSalesImportRoutes(app: Express) {
         }
       );
       createdVoucher = operation.value.voucher;
-      totalSales = operation.value.totalSales;
 
       res.json({
         success: true,
         voucher: createdVoucher,
         itemsCount: items.length,
-        totalSales: totalSales.toFixed(2),
+        totalSales: toMoney(operation.value.totalSales).toFixed(2),
         customerName: customer.legalName,
       });
 
