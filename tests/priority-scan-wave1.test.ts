@@ -372,9 +372,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       ])
     );
     expect(
-      history.body.scans.some(
-        (row: { referenceNumber: string }) => row.referenceNumber === `${PREFIX}-YESTERDAY`
-      )
+      history.body.scans.some((row: { referenceNumber: string }) => row.referenceNumber === `${PREFIX}-YESTERDAY`)
     ).toBe(false);
   });
 
