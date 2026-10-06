@@ -270,13 +270,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
           weight_kg, cost_per_kg, total_cost, status)
        VALUES ($1, $2, $2, $3, $4, $5, '40.000', '1.00', '40.00', 'IN_STOCK')
        RETURNING id`,
-      [
-        ctx.companyId,
-        referenceNumber,
-        articleCode,
-        `${PREFIX} Shared History Product`,
-        ctx.locationId,
-      ]
+      [ctx.companyId, referenceNumber, articleCode, `${PREFIX} Shared History Product`, ctx.locationId]
     );
 
     const scan = await agent.post(`/api/factory/customer-orders/${orderId}/bales`).send({
