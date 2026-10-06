@@ -23,10 +23,9 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
-  await pool.query(
-    `DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)`,
-    [ctx.companyId]
-  );
+  await pool.query(`DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)`, [
+    ctx.companyId,
+  ]);
   await pool.query(`DELETE FROM vouchers WHERE company_id = $1`, [ctx.companyId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
