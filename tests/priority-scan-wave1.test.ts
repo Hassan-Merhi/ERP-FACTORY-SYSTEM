@@ -273,6 +273,12 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       expect(colorEdit.status).toBe(200);
       expect(colorEdit.body.color).toBe("#dc2626");
       expect(colorEdit.body.priority).toBe(activeCount + 1);
+
+      const blockedRemoval = await agent.delete(
+        `/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`
+      );
+      expect(blockedRemoval.status).toBe(403);
+      expect(blockedRemoval.body.code).toBe("PRIORITY_POSITION_ADMIN_ONLY");
     } finally {
       await setRole("Admin");
     }
