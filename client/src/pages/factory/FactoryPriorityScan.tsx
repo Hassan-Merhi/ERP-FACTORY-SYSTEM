@@ -111,6 +111,7 @@ export default function FactoryPriorityScan() {
   const [scanning, setScanning] = useState(false);
   const [feedback, setFeedback] = useState<ScanFeedback | null>(null);
   const [priorityFlashVisible, setPriorityFlashVisible] = useState(false);
+  const [historyView, setHistoryView] = useState<"condensed" | "detailed">("condensed");
 
   const { data: configs = [], isLoading: configsLoading } = useQuery<PriorityScanConfig[]>({
     queryKey: [PRIORITY_SCAN_CONFIGS_URL],
@@ -130,6 +131,37 @@ export default function FactoryPriorityScan() {
     refetchIntervalInBackground: false,
   });
   const sessionScans = priorityHistory?.scans ?? [];
+
+  const condensedSessionScans = useMemo(() => {
+    const grouped = new Map<
+      string,
+      { name: string; articleCode: string | null; count: number; latestScannedAt: string }
+    >();
+
+    for (const scan of sessionScans) {
+      const name = scan.productName?.trim() || tr("unnamedProduct");
+      const key = name.toLocaleLowerCase("en-US");
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.count += 1;
+        if (Date.parse(scan.scannedAt) > Date.parse(existing.latestScannedAt)) {
+          existing.latestScannedAt = scan.scannedAt;
+          existing.articleCode = scan.articleCode;
+        }
+      } else {
+        grouped.set(key, {
+          name,
+          articleCode: scan.articleCode,
+          count: 1,
+          latestScannedAt: scan.scannedAt,
+        });
+      }
+    }
+
+    return Array.from(grouped.values()).sort(
+      (a, b) => Date.parse(b.latestScannedAt) - Date.parse(a.latestScannedAt)
+    );
+  }, [sessionScans, tr]);
 
   const activeQueue = useMemo(() => {
     const loadMap = new Map(loads.map((load) => [load.id, load]));
@@ -285,11 +317,34 @@ export default function FactoryPriorityScan() {
         message,
       });
     } catch (error) {
-      showFeedback({
-        type: "error",
-        referenceNumber,
-        message: error instanceof Error ? error.message : tr("couldNotRoute"),
-      });
+      const requestError = error as PriorityScanRequestError;
+
+      if (requestError.code === "PRIORITY_SCAN_NOT_REQUIRED") {
+        let dailyScanRecorded = true;
+        try {
+          await apiRequest("POST", "/api/factory/daily-bale-scans", { referenceNumber });
+        } catch (dailyError) {
+          if ((dailyError as PriorityScanRequestError).status !== 409) {
+            dailyScanRecorded = false;
+          }
+        }
+
+        await queryClient.invalidateQueries({ queryKey: ["/api/factory/daily-bale-scans"] });
+
+        showFeedback({
+          type: dailyScanRecorded ? "warn" : "error",
+          referenceNumber,
+          message: dailyScanRecorded
+            ? `${requestError.message} It was still marked as scanned in Daily Scan.`
+            : requestError.message,
+        });
+      } else {
+        showFeedback({
+          type: "error",
+          referenceNumber,
+          message: error instanceof Error ? error.message : tr("couldNotRoute"),
+        });
+      }
     } finally {
       scanSubmissionInFlightRef.current = false;
       setScanning(false);
@@ -445,9 +500,33 @@ export default function FactoryPriorityScan() {
       </section>
 
       <section className="rounded-xl border overflow-hidden flex-1 min-h-[220px]">
-        <div className="px-4 py-3 border-b bg-muted/20">
-          <h3 className="font-semibold">{tr("thisSession")}</h3>
-          <p className="text-xs text-muted-foreground">{tr("referenceProductOnly")}</p>
+        <div className="px-4 py-3 border-b bg-muted/20 flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <h3 className="font-semibold">{tr("thisSession")}</h3>
+            <p className="text-xs text-muted-foreground">
+              {historyView === "condensed" ? "Grouped by product name" : tr("referenceProductOnly")}
+            </p>
+          </div>
+          <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              size="sm"
+              variant={historyView === "condensed" ? "secondary" : "ghost"}
+              onClick={() => setHistoryView("condensed")}
+              data-testid="button-priority-history-condensed"
+            >
+              Condensed
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={historyView === "detailed" ? "secondary" : "ghost"}
+              onClick={() => setHistoryView("detailed")}
+              data-testid="button-priority-history-detailed"
+            >
+              Detailed
+            </Button>
+          </div>
         </div>
         {sessionScans.length === 0 ? (
           <div className="flex h-40 flex-col items-center justify-center text-muted-foreground">
@@ -455,26 +534,53 @@ export default function FactoryPriorityScan() {
             <p className="mt-2 text-sm">{tr("scanToBegin")}</p>
           </div>
         ) : (
-          <div className="divide-y">
-            {sessionScans.map((scan) => (
-              <div key={scan.id} className="px-4 py-3 flex items-center gap-3">
-                <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-                <div className="font-mono font-medium min-w-[150px]">{scan.referenceNumber}</div>
-                <div className="flex-1 min-w-0 text-sm truncate">{scan.productName || tr("unnamedProduct")}</div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span
-                    className="h-3.5 w-3.5 rounded-full border border-black/10"
-                    style={{ backgroundColor: scan.color }}
-                    aria-hidden="true"
-                  />
-                  <Badge variant="outline">
-                    {tr("priorityNumber", { priority: scan.priority })} ·{" "}
-                    {tr("loadingNumber", { orderId: scan.orderId })}
-                  </Badge>
-                </div>
+          <>
+            {historyView === "condensed" ? (
+              <div className="divide-y">
+                {condensedSessionScans.map((group) => (
+                  <div key={group.name.toLocaleLowerCase("en-US")} className="px-4 py-3 flex items-center gap-3">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium truncate">{group.name}</div>
+                      {group.articleCode && (
+                        <div className="text-xs text-muted-foreground font-mono truncate">{group.articleCode}</div>
+                      )}
+                    </div>
+                    <Badge variant="secondary">{group.count} scanned</Badge>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="divide-y">
+                {sessionScans.map((scan) => (
+                  <div key={scan.id} className="px-4 py-3 flex items-center gap-3">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+                    <div className="font-mono font-medium min-w-[150px]">{scan.referenceNumber}</div>
+                    <div className="flex-1 min-w-0 text-sm truncate">
+                      {scan.productName || tr("unnamedProduct")}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className="h-3.5 w-3.5 rounded-full border border-black/10"
+                        style={{ backgroundColor: scan.color }}
+                        aria-hidden="true"
+                      />
+                      <Badge variant="outline">
+                        {tr("priorityNumber", { priority: scan.priority })} ·{" "}
+                        {tr("loadingNumber", { orderId: scan.orderId })}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="px-4 py-3 border-t bg-muted/20 flex items-center justify-between text-sm">
+              <span className="font-medium">Total scanned bales</span>
+              <Badge variant="secondary" data-testid="priority-scan-total">
+                {sessionScans.length}
+              </Badge>
+            </div>
+          </>
         )}
       </section>
     </div>

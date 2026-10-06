@@ -192,9 +192,10 @@ export function registerFactoryDailyScanRoutes(app: Express) {
         factoryCompanyId: companyId,
       });
       const { scanDate, referenceNumber } = req.body;
-      if (!scanDate || !referenceNumber) {
-        return res.status(400).json({ message: "scanDate and referenceNumber are required" });
+      if (!referenceNumber) {
+        return res.status(400).json({ message: "referenceNumber is required" });
       }
+      const requestedScanDate = scanDate ? String(scanDate) : null;
       const reference = String(referenceNumber).trim().toUpperCase();
 
       // Source metadata from the authoritative bale row. Successful scans are one
@@ -202,30 +203,34 @@ export function registerFactoryDailyScanRoutes(app: Express) {
       const result = await pool.query(
         `INSERT INTO factory_daily_bale_scans
            (company_id, scan_date, reference_number, article_code, product_name, weight_kg, scanned_by_user_id)
-         SELECT $1, $2, $3, fb.article_code, fb.product_name, fb.weight_kg, $4
+         SELECT $1, COALESCE($2::date, fb.stock_entry_date), $3, fb.article_code, fb.product_name, fb.weight_kg, $4
          FROM factory_bales fb
          WHERE fb.company_id = $5
-           AND fb.stock_entry_date = $2
+           AND ($2::date IS NULL OR fb.stock_entry_date = $2::date)
            AND fb.reference_number = $3
            AND fb.deleted_at IS NULL
          ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
          RETURNING id, scan_date::text AS scan_date, reference_number, scanned_at`,
-        [String(companyId), scanDate, reference, userId == null ? null : String(userId), companyId]
+        [String(companyId), requestedScanDate, reference, userId == null ? null : String(userId), companyId]
       );
 
       if (!result.rowCount) {
         const baleCheck = await pool.query(
-          `SELECT 1
+          `SELECT stock_entry_date::text AS stock_entry_date
            FROM factory_bales
            WHERE company_id = $1
-             AND stock_entry_date = $2
+             AND ($2::date IS NULL OR stock_entry_date = $2::date)
              AND reference_number = $3
              AND deleted_at IS NULL
            LIMIT 1`,
-          [companyId, scanDate, reference]
+          [companyId, requestedScanDate, reference]
         );
         if (!baleCheck.rowCount) {
-          return res.status(422).json({ message: `Bale ${reference} was not produced on ${scanDate}` });
+          return res.status(422).json({
+            message: requestedScanDate
+              ? `Bale ${reference} was not produced on ${requestedScanDate}`
+              : `Bale ${reference} was not found in production`,
+          });
         }
         return res.status(409).json({ message: "This bale has already been scanned for this day" });
       }
