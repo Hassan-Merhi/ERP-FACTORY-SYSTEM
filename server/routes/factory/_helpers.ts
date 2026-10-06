@@ -22,12 +22,10 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { createHash, timingSafeEqual } from "node:crypto";
-import {
-  resolveStoredFxRate,
-  applyFxRate,
-  UnresolvedExchangeRateError,
-} from "../../services/factory/currencyConversion";
+import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
   try {
@@ -243,75 +241,75 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
 
   const grouped: Record<
     string,
-    { articleCode: string; baleName: string; qty: number; totalWeight: number; totalPrice: number }
+    { articleCode: string; baleName: string; qty: number; totalWeight: Decimal; totalPrice: Decimal }
   > = {};
   for (const b of bales) {
     const key = b.articleCode || "UNKNOWN";
     if (!grouped[key]) {
-      grouped[key] = { articleCode: key, baleName: b.baleName || key, qty: 0, totalWeight: 0, totalPrice: 0 };
+      grouped[key] = {
+        articleCode: key,
+        baleName: b.baleName || key,
+        qty: 0,
+        totalWeight: new MoneyDecimal(0),
+        totalPrice: new MoneyDecimal(0),
+      };
     }
     grouped[key].qty += 1;
-    grouped[key].totalWeight += parseFloat(b.weight);
-    grouped[key].totalPrice += parseFloat(b.priceUsed);
+    grouped[key].totalWeight = grouped[key].totalWeight.plus(toMoney(b.weight));
+    grouped[key].totalPrice = grouped[key].totalPrice.plus(toMoney(b.priceUsed));
   }
 
+  // For per_kg lines: totalPrice = totalWeight × pricePerKg (authoritative).
+  // For per_bale lines: totalPrice = sum of priceUsed on bales.
+  const lineTotalPriceOf = (line: (typeof grouped)[string]) => {
+    const pricing = proformaPricing.get(line.articleCode.toLowerCase());
+    const pkgRate = toMoney(pricing?.pricePerKg);
+    return (pricing?.pricingMode ?? "per_bale") === "per_kg" &&
+      pkgRate.greaterThan(0) &&
+      line.totalWeight.greaterThan(0)
+      ? line.totalWeight.times(pkgRate)
+      : line.totalPrice;
+  };
+
+  // Amounts are written at their columns' scales (weights 3, money 2), rounded
+  // half away from zero as Postgres rounds them.
   for (const line of Object.values(grouped)) {
     const pricing = proformaPricing.get(line.articleCode.toLowerCase());
     const pricingMode = pricing?.pricingMode ?? "per_bale";
     const pricePerKg = pricing?.pricePerKg ?? null;
-    const pkgRateInsert = pricePerKg ? parseFloat(pricePerKg) : 0;
-    // For per_kg lines: totalPrice = totalWeight × pricePerKg (authoritative).
-    // For per_bale lines: totalPrice = sum of priceUsed on bales.
-    const lineTotalPrice =
-      pricingMode === "per_kg" && pkgRateInsert > 0 && line.totalWeight > 0
-        ? line.totalWeight * pkgRateInsert
-        : line.totalPrice;
-    const pricePerBaleEffective = line.qty > 0 ? lineTotalPrice / line.qty : 0;
+    const lineTotalPrice = lineTotalPriceOf(line);
+    const pricePerBaleEffective = line.qty > 0 ? lineTotalPrice.dividedBy(line.qty) : new MoneyDecimal(0);
     await dbConn.insert(customerOrderLines).values({
       orderId,
       articleCode: line.articleCode,
       baleName: line.baleName,
       qty: line.qty,
-      weightPerBale: String(line.qty > 0 ? line.totalWeight / line.qty : 0),
-      totalWeight: String(line.totalWeight),
-      pricePerBale: String(pricePerBaleEffective),
-      totalPrice: String(lineTotalPrice),
+      weightPerBale: (line.qty > 0 ? line.totalWeight.dividedBy(line.qty) : new MoneyDecimal(0)).toFixed(3),
+      totalWeight: line.totalWeight.toFixed(3),
+      pricePerBale: pricePerBaleEffective.toFixed(2),
+      totalPrice: lineTotalPrice.toFixed(2),
       pricingMode,
       pricePerKg: pricePerKg ?? null,
     });
   }
 
   const charges = await dbConn.select().from(customerOrderCharges).where(eq(customerOrderCharges.orderId, orderId));
-  const freightAmount = charges
-    .filter((c) => c.chargeType === "FREIGHT")
-    .reduce((sum: number, c) => sum + parseFloat(c.amount), 0);
-  const otherChargesTotal = charges
-    .filter((c) => c.chargeType === "OTHER")
-    .reduce((sum: number, c) => sum + parseFloat(c.amount), 0);
+  const freightAmount = sumMoney(charges.filter((c) => c.chargeType === "FREIGHT").map((c) => c.amount));
+  const otherChargesTotal = sumMoney(charges.filter((c) => c.chargeType === "OTHER").map((c) => c.amount));
 
   // For per_kg articles: always use proformaRate × totalWeight as the authoritative price.
   // This matches the totalPrice stored in the order lines above and the verify-page display.
-  let subtotalBales = 0;
-  for (const line of Object.values(grouped)) {
-    const pricing = proformaPricing.get(line.articleCode.toLowerCase());
-    const pricingMode = pricing?.pricingMode ?? "per_bale";
-    const pkgRate = pricing?.pricePerKg ? parseFloat(pricing.pricePerKg) : 0;
-    if (pricingMode === "per_kg" && pkgRate > 0 && line.totalWeight > 0) {
-      subtotalBales += pkgRate * line.totalWeight;
-    } else {
-      subtotalBales += line.totalPrice;
-    }
-  }
+  const subtotalBales = sumMoney(Object.values(grouped).map(lineTotalPriceOf));
 
-  const grandTotal = subtotalBales + freightAmount + otherChargesTotal;
+  const grandTotal = subtotalBales.plus(freightAmount).plus(otherChargesTotal);
 
   await dbConn
     .update(customerOrders)
     .set({
-      subtotalBales: String(subtotalBales),
-      freightAmount: String(freightAmount),
-      otherChargesTotal: String(otherChargesTotal),
-      grandTotal: String(grandTotal),
+      subtotalBales: subtotalBales.toFixed(2),
+      freightAmount: freightAmount.toFixed(2),
+      otherChargesTotal: otherChargesTotal.toFixed(2),
+      grandTotal: grandTotal.toFixed(2),
       totalQtyBales: bales.length,
       updatedAt: new Date(),
     })
@@ -338,46 +336,46 @@ export async function recalculateContainerCosts(
     .where(and(eq(factoryContainers.id, containerId), eq(factoryContainers.companyId, companyId)));
   if (!container) throw new Error(`Container ${containerId} not found`);
 
-  const actualKg = parseFloat(container.actualReceivedKg || "0");
-  if (actualKg <= 0) throw new Error("Container has no received weight");
+  const actualKg = toMoney(container.actualReceivedKg);
+  if (actualKg.lessThanOrEqualTo(0)) throw new Error("Container has no received weight");
 
   const containerCcy = container.currencyCode || "USD";
   const { fxRate, looksSet: containerFxLooksSet } = resolveStoredFxRate(containerCcy, container.fxRateToUsd);
   if (!containerFxLooksSet) {
     throw new UnresolvedExchangeRateError(containerCcy);
   }
+  const containerFx = toMoney(fxRate);
+  // An amount in `ccy`, its USD value (`usd`) given, expressed in the container currency.
+  const inContainerCcy = (amount: Decimal, ccy: string, usd: Decimal) =>
+    ccy === containerCcy ? amount : containerFx.greaterThan(0) ? usd.dividedBy(containerFx) : amount;
 
   // Base material cost
-  const baseRate = parseFloat(container.ratePerKg || "0");
-  const basePayable = actualKg * baseRate;
+  const basePayable = actualKg.times(toMoney(container.ratePerKg));
 
   // Freight — may be in a different currency; normalise to container currency
-  const freightVal = parseFloat(container.freight || "0");
+  const freightVal = toMoney(container.freight);
   const freightCcy = container.freightCurrencyCode || containerCcy;
   // `container.freightFxRate` is not a column on factory_containers (the stored
   // freight rate is `freightFxRateToUsd`), so this branch has always been
   // undefined; kept as-is so the computed freight is unchanged.
-  const freightFx = parseFloat(container.fxRateToUsdOffload || String(fxRate));
-  const freightUsd = freightCcy === "USD" ? freightVal : freightVal * freightFx;
-  const freightInCcy = freightCcy === containerCcy ? freightVal : fxRate > 0 ? freightUsd / fxRate : freightVal;
+  const freightFx = toMoney(container.fxRateToUsdOffload || String(fxRate));
+  const freightUsd = freightCcy === "USD" ? freightVal : freightVal.times(freightFx);
+  const freightInCcy = inContainerCcy(freightVal, freightCcy, freightUsd);
 
   // Other charges (bulk field)
-  const ocVal = parseFloat(container.otherCharges || "0");
+  const ocVal = toMoney(container.otherCharges);
   const ocCcy = container.otherChargesCurrencyCode || containerCcy;
   // factory_containers has no other-charges FX column, so this has always
   // resolved to the container rate.
-  const ocFx = fxRate;
-  const ocUsd = ocCcy === "USD" ? ocVal : ocVal * ocFx;
-  const ocInCcy = ocCcy === containerCcy ? ocVal : fxRate > 0 ? ocUsd / fxRate : ocVal;
+  const ocUsd = ocCcy === "USD" ? ocVal : ocVal.times(containerFx);
+  const ocInCcy = inContainerCcy(ocVal, ocCcy, ocUsd);
 
   // Commission
   const [commission] = await tx
     .select()
     .from(factoryContainerCommissions)
     .where(eq(factoryContainerCommissions.containerId, containerId));
-  const commVal = commission
-    ? parseFloat(commission.commissionTotal || "0")
-    : parseFloat(container.commissionAmount || "0");
+  const commVal = commission ? toMoney(commission.commissionTotal) : toMoney(container.commissionAmount);
   const commCcy = commission ? commission.currencyCode || "USD" : containerCcy;
   let commFx = fxRate;
   if (commission && commCcy !== "USD") {
@@ -393,11 +391,11 @@ export async function recalculateContainerCosts(
       commFx = resolvedCommFx;
     }
   }
-  const commUsdAmt = commCcy === "USD" ? commVal : commVal * commFx;
-  const commInCcy = commCcy === containerCcy ? commVal : fxRate > 0 ? commUsdAmt / fxRate : commVal;
+  const commUsdAmt = commCcy === "USD" ? commVal : commVal.times(toMoney(commFx));
+  const commInCcy = inContainerCcy(commVal, commCcy, commUsdAmt);
 
   // Duty (only included when CONFIRMED)
-  const dutyVal = container.dutyStatus === "CONFIRMED" ? parseFloat(container.dutyAmount || "0") : 0;
+  const dutyVal = container.dutyStatus === "CONFIRMED" ? toMoney(container.dutyAmount) : new MoneyDecimal(0);
 
   // Additional offload charges
   const additionalCharges = await tx
@@ -409,26 +407,33 @@ export async function recalculateContainerCosts(
         eq(factoryOffloadAdditionalCharges.companyId, companyId)
       )
     );
-  const additionalTotal = additionalCharges.reduce((sum: number, c) => {
-    const amt = parseFloat(c.amount || "0");
-    const ccy = c.currencyCode || containerCcy;
-    const cfx = parseFloat(c.fxRateToUsd || String(fxRate));
-    const amtUsd = ccy === "USD" ? amt : amt * cfx;
-    return sum + (ccy === containerCcy ? amt : fxRate > 0 ? amtUsd / fxRate : amtUsd);
-  }, 0);
+  const additionalTotal = sumMoney(
+    additionalCharges.map((c) => {
+      const amt = toMoney(c.amount);
+      const ccy = c.currencyCode || containerCcy;
+      const amtUsd = ccy === "USD" ? amt : amt.times(toMoney(c.fxRateToUsd || String(fxRate)));
+      // Unlike the charges above, a zero container rate leaves the USD amount.
+      return ccy === containerCcy ? amt : containerFx.greaterThan(0) ? amtUsd.dividedBy(containerFx) : amtUsd;
+    })
+  );
 
-  const totalCost = basePayable + freightInCcy + ocInCcy + commInCcy + dutyVal + additionalTotal;
-  const inclusiveCostPerKg = totalCost / actualKg;
-  const costPerKgUsd = applyFxRate(inclusiveCostPerKg, containerCcy, fxRate);
-  const finalPayableAmountUsd = actualKg * costPerKgUsd;
+  const totalCostExact = sumMoney([basePayable, freightInCcy, ocInCcy, commInCcy, dutyVal, additionalTotal]);
+  const costPerKgExact = totalCostExact.dividedBy(actualKg);
+  const costPerKgUsdExact = containerCcy === "USD" ? costPerKgExact : costPerKgExact.times(containerFx);
+  const finalPayableAmountUsd = actualKg.times(costPerKgUsdExact);
+  const totalCost = totalCostExact.toNumber();
+  const inclusiveCostPerKg = costPerKgExact.toNumber();
+  const costPerKgUsd = costPerKgUsdExact.toNumber();
 
+  // Values are written at their columns' scales, rounded half away from zero
+  // as Postgres rounds them.
   // 1. Update container summary fields
   await tx
     .update(factoryContainers)
     .set({
-      finalPayableAmount: String(totalCost.toFixed(4)),
-      ratePerKgUsd: String(costPerKgUsd.toFixed(6)),
-      finalPayableAmountUsd: String(finalPayableAmountUsd.toFixed(4)),
+      finalPayableAmount: totalCostExact.toFixed(4),
+      ratePerKgUsd: costPerKgUsdExact.toFixed(6),
+      finalPayableAmountUsd: finalPayableAmountUsd.toFixed(4),
       updatedAt: new Date(),
     })
     .where(eq(factoryContainers.id, containerId));
@@ -444,7 +449,7 @@ export async function recalculateContainerCosts(
     rawStockId = rawStockRow.id;
     await tx
       .update(factoryRawStock)
-      .set({ costPerKg: String(inclusiveCostPerKg), costPerKgUsd: String(costPerKgUsd) })
+      .set({ costPerKg: costPerKgExact.toFixed(7), costPerKgUsd: costPerKgUsdExact.toFixed(7) })
       .where(eq(factoryRawStock.id, rawStockRow.id));
   }
 
@@ -456,10 +461,10 @@ export async function recalculateContainerCosts(
 
   if (mixSources.length > 0) {
     for (const src of mixSources) {
-      const newSrcCost = parseFloat(src.weightKg) * inclusiveCostPerKg;
+      const newSrcCost = toMoney(src.weightKg).times(costPerKgExact);
       await tx
         .update(factoryMixBatchSources)
-        .set({ costPerKg: String(inclusiveCostPerKg), totalCost: String(newSrcCost.toFixed(2)) })
+        .set({ costPerKg: costPerKgExact.toFixed(7), totalCost: newSrcCost.toFixed(2) })
         .where(eq(factoryMixBatchSources.id, src.id));
     }
 
@@ -472,14 +477,16 @@ export async function recalculateContainerCosts(
         .select()
         .from(factoryMixBatchSources)
         .where(eq(factoryMixBatchSources.mixBatchId, batchId));
-      const batchTotalCost = allSrc.reduce((s: number, r) => s + parseFloat(r.totalCost || "0"), 0);
-      const batchTotalWeight = allSrc.reduce((s: number, r) => s + parseFloat(r.weightKg || "0"), 0);
-      const batchCostPerKg = batchTotalWeight > 0 ? batchTotalCost / batchTotalWeight : 0;
+      const batchTotalCost = sumMoney(allSrc.map((r) => r.totalCost));
+      const batchTotalWeight = sumMoney(allSrc.map((r) => r.weightKg));
+      const batchCostPerKg = batchTotalWeight.greaterThan(0)
+        ? batchTotalCost.dividedBy(batchTotalWeight)
+        : new MoneyDecimal(0);
       await tx
         .update(factoryMixBatches)
         .set({
-          costPerKg: String(batchCostPerKg.toFixed(4)),
-          totalCost: String(batchTotalCost.toFixed(2)),
+          costPerKg: batchCostPerKg.toFixed(4),
+          totalCost: batchTotalCost.toFixed(2),
           updatedAt: new Date(),
         })
         .where(eq(factoryMixBatches.id, batchId));

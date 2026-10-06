@@ -20,6 +20,8 @@ import {
   factorySupplierPayments,
 } from "@shared/schema";
 import { eq, and, sql, isNull, isNotNull, notInArray, or } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 
 export function registerAccountVoucherSidebarRoutes(app: Express) {
   const _vsBCache = new Map();
@@ -186,10 +188,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
                   eq(voucherEntries.companyId, companyId),
                   notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)
                 )
-              : and(
-                  eq(ledgerAccounts.companyId, companyId),
-                  eq(voucherEntries.companyId, companyId)
-                )
+              : and(eq(ledgerAccounts.companyId, companyId), eq(voucherEntries.companyId, companyId))
           )
           .groupBy(voucherEntries.ledgerAccountId),
       ]);
@@ -204,54 +203,54 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
 
       // Fold the compact aggregate rows into the same balance maps used by
       // the response-building code below.
-      const ledgerBalances = new Map<number, { debits: number; credits: number }>();
-      const bankBalances = new Map<number, { debits: number; credits: number }>();
-      const assetBalances = new Map<number, { debits: number; credits: number }>();
-      const supplierBalances = new Map<number, number>();
-      const employeeBalances = new Map<number, { debits: number; credits: number }>();
-      const factorySupplierBalances = new Map<number, number>();
+      type Movement = { debits: Decimal; credits: Decimal };
+      const ZERO = new MoneyDecimal(0);
+      const NO_MOVEMENT: Movement = { debits: ZERO, credits: ZERO };
+      const ledgerBalances = new Map<number, Movement>();
+      const bankBalances = new Map<number, Movement>();
+      const assetBalances = new Map<number, Movement>();
+      const supplierBalances = new Map<number, Decimal>();
+      const employeeBalances = new Map<number, Movement>();
+      const factorySupplierBalances = new Map<number, Decimal>();
 
       const addMovement = (
-        target: Map<number, { debits: number; credits: number }>,
+        target: Map<number, Movement>,
         id: number | null | undefined,
-        debits: number,
-        credits: number
+        debits: Decimal,
+        credits: Decimal
       ) => {
         if (!id) return;
-        const existing = target.get(id) || { debits: 0, credits: 0 };
+        const existing = target.get(id) || NO_MOVEMENT;
         target.set(id, {
-          debits: existing.debits + debits,
-          credits: existing.credits + credits,
+          debits: existing.debits.plus(debits),
+          credits: existing.credits.plus(credits),
         });
       };
 
       for (const row of ledgerMovementRows) {
         if (!row.ledgerAccountId) continue;
-        addMovement(ledgerBalances, row.ledgerAccountId, parseFloat(row.debits || "0"), parseFloat(row.credits || "0"));
+        addMovement(ledgerBalances, row.ledgerAccountId, toMoney(row.debits), toMoney(row.credits));
       }
 
       for (const row of movementRows) {
-        const debits = parseFloat(row.debits || "0");
-        const credits = parseFloat(row.credits || "0");
+        const debits = toMoney(row.debits);
+        const credits = toMoney(row.credits);
 
         addMovement(bankBalances, row.bankAccountId, debits, credits);
         addMovement(assetBalances, row.fixedAssetId, debits, credits);
         addMovement(employeeBalances, row.employeeId, debits, credits);
 
         if (row.supplierId) {
-          const existing = supplierBalances.get(row.supplierId) || 0;
+          const existing = supplierBalances.get(row.supplierId) || ZERO;
           supplierBalances.set(
             row.supplierId,
-            existing + parseFloat(row.supplierPureCredits || "0") - parseFloat(row.supplierPureDebits || "0")
+            existing.plus(toMoney(row.supplierPureCredits)).minus(toMoney(row.supplierPureDebits))
           );
         }
 
         if (row.factorySupplierId) {
-          const existing = factorySupplierBalances.get(row.factorySupplierId) || 0;
-          factorySupplierBalances.set(
-            row.factorySupplierId,
-            existing + parseFloat(row.factorySupplierVoucherPaidUsd || "0")
-          );
+          const existing = factorySupplierBalances.get(row.factorySupplierId) || ZERO;
+          factorySupplierBalances.set(row.factorySupplierId, existing.plus(toMoney(row.factorySupplierVoucherPaidUsd)));
         }
       }
 
@@ -263,25 +262,25 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
       const calculateSignedBalance = (
         openingBalance: string,
         openingBalanceSide: string | null,
-        debits: number,
-        credits: number
+        debits: Decimal,
+        credits: Decimal
       ) => {
-        let balance = parseFloat(openingBalance || "0");
+        let balance = toMoney(openingBalance);
 
         // If opening balance has a side, convert to signed number
         if (openingBalanceSide === "Cr") {
-          balance = -balance;
+          balance = balance.negated();
         }
 
         // Add net change (debits increase, credits decrease)
-        return balance + debits - credits;
+        return balance.plus(debits).minus(credits).toNumber();
       };
 
       // Build simplified account array for sidebar
       const accounts = [
         // Bank accounts
         ...banks.map((account) => {
-          const movements = bankBalances.get(account.id) || { debits: 0, credits: 0 };
+          const movements = bankBalances.get(account.id) || NO_MOVEMENT;
           const balance = calculateSignedBalance(
             account.openingBalance || "0",
             account.openingBalanceSide,
@@ -298,16 +297,13 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           };
         }),
         ...employees.map((employee) => {
-          const movements = employeeBalances.get(employee.id) || {
-            debits: 0,
-            credits: 0,
-          };
-          const openingBalance = parseFloat(employee.openingBalance || "0");
+          const movements = employeeBalances.get(employee.id) || NO_MOVEMENT;
+          const openingBalance = toMoney(employee.openingBalance);
           // Employee accounts are liability (Cr-normal): credits increase balance, debits decrease it.
           // Positive netBalance = Cr (we owe them, the normal state).
           // This matches the payroll page's currentBalance convention.
-          const netBalance = openingBalance + movements.credits - movements.debits;
-          const balanceSide = netBalance >= 0 ? "Cr" : "Dr";
+          const netBalance = openingBalance.plus(movements.credits).minus(movements.debits);
+          const balanceSide = netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr";
 
           return {
             id: `employee-${employee.id}`,
@@ -315,9 +311,9 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
             type: "employee",
             code: employee.code,
             name: `${employee.firstName} ${employee.lastName}`,
-            balance: Math.abs(netBalance).toFixed(2),
+            balance: netBalance.abs().toFixed(2),
             balanceSide,
-            openingBalance: openingBalance,
+            openingBalance: openingBalance.toNumber(),
             openingBalanceSide: "Cr",
             active: employee.active,
             parentId: null,
@@ -325,7 +321,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         }),
         // Ledger accounts — all included (customer mirror ledgers appear alongside the customer entry)
         ...ledgers.map((account) => {
-          const movements = ledgerBalances.get(account.id) || { debits: 0, credits: 0 };
+          const movements = ledgerBalances.get(account.id) || NO_MOVEMENT;
           const signedLedgerBalance = calculateSignedBalance(
             account.openingBalance || "0",
             account.openingBalanceSide,
@@ -373,10 +369,10 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         ...suppliers
           .filter((supplier) => !isChildCompany || supplierBalances.has(supplier.id))
           .map((supplier) => {
-            const transactionBalance = supplierBalances.get(supplier.id) || 0;
-            const openingBalance = isChildCompany ? 0 : parseFloat(supplier.openingBalance || "0");
+            const transactionBalance = supplierBalances.get(supplier.id) || ZERO;
+            const openingBalance = isChildCompany ? ZERO : toMoney(supplier.openingBalance);
             // Suppliers are always Cr (we owe them). Negate so credit balance is negative in the signed system.
-            const balance = -(openingBalance + transactionBalance);
+            const balance = openingBalance.plus(transactionBalance).negated().toNumber();
 
             return {
               id: supplier.id,
@@ -390,7 +386,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         // Balance computed from factory tables (containers + payments) for accuracy,
         // matching the computeStats formula: includes freight, voucher payments, broker aggregation.
         ...fSuppliers.map((supplier) => {
-          const openingBalance = parseFloat(supplier.openingBalance || "0");
+          const openingBalance = toMoney(supplier.openingBalance);
 
           // Collect all supplier IDs to aggregate (the supplier itself + any children brokered through it)
           const linkedChildIds = fSuppliers.filter((s) => s.parentId === supplier.id).map((s) => s.id);
@@ -400,39 +396,43 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
           const supplierContainers = fContainers.filter(
             (c) => c.supplierId != null && aggregateIds.includes(c.supplierId)
           );
-          const containerValueUsd = supplierContainers.reduce((sum: number, c) => {
-            const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-            const rate = parseFloat(c.ratePerKg || "0");
-            const freight = parseFloat(c.freight || "0");
-            const fx = parseFloat(c.fxRateToUsd || "1");
-            return sum + (kg * rate + freight) * fx;
-          }, 0);
+          const containerValueUsd = sumMoney(
+            supplierContainers.map((c) => {
+              const kg = toMoney(c.actualReceivedKg || c.totalKg);
+              const fx = toMoney(c.fxRateToUsd || "1");
+              return kg.times(toMoney(c.ratePerKg)).plus(toMoney(c.freight)).times(fx);
+            })
+          );
 
           // Commission owed to this supplier as broker (exclude containers where they're also the main supplier)
           const brokerContainers = fContainers.filter(
             (c) =>
               c.commissionSupplierId === supplier.id &&
               (c.supplierId == null || !aggregateIds.includes(c.supplierId)) &&
-              parseFloat(c.commissionAmount || "0") > 0
+              toMoney(c.commissionAmount).greaterThan(0)
           );
-          const commissionValueUsd = brokerContainers.reduce((sum: number, c) => {
-            const commAmt = parseFloat(c.commissionAmount || "0");
-            const fx = parseFloat(c.fxRateToUsd || "1");
-            const commCurr = c.commissionCurrencyCode || c.currencyCode || "USD";
-            return sum + (commCurr === "USD" ? commAmt : commAmt * fx);
-          }, 0);
+          const commissionValueUsd = sumMoney(
+            brokerContainers.map((c) => {
+              const commAmt = toMoney(c.commissionAmount);
+              const commCurr = c.commissionCurrencyCode || c.currencyCode || "USD";
+              return commCurr === "USD" ? commAmt : commAmt.times(toMoney(c.fxRateToUsd || "1"));
+            })
+          );
 
           // Total paid via factorySupplierPayments (in USD) — aggregated across all linked IDs
           const supplierPayments = fPayments.filter((p) => aggregateIds.includes(p.supplierId));
-          const totalPaidUsd = supplierPayments.reduce((sum: number, p) => sum + parseFloat(p.amountUsd || "0"), 0);
+          const totalPaidUsd = sumMoney(supplierPayments.map((p) => p.amountUsd));
 
           // Total paid via non-FACTORY-PAY-* ERP voucher entries (aggregated across linked IDs)
-          const voucherPaidUsd = aggregateIds.reduce((sum, sid) => sum + (factorySupplierBalances.get(sid) || 0), 0);
+          const voucherPaidUsd = sumMoney(aggregateIds.map((sid) => factorySupplierBalances.get(sid)));
 
           // Outstanding balance (positive = we owe them). Negate for sidebar convention (negative = payable/red)
-          const outstandingUsd =
-            openingBalance + containerValueUsd + commissionValueUsd - totalPaidUsd - voucherPaidUsd;
-          const balance = -outstandingUsd;
+          const outstandingUsd = openingBalance
+            .plus(containerValueUsd)
+            .plus(commissionValueUsd)
+            .minus(totalPaidUsd)
+            .minus(voucherPaidUsd);
+          const balance = outstandingUsd.negated().toNumber();
 
           return {
             id: supplier.id,
@@ -444,7 +444,7 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
         }),
         // Fixed Assets
         ...assets.map((asset) => {
-          const movements = assetBalances.get(asset.id) || { debits: 0, credits: 0 };
+          const movements = assetBalances.get(asset.id) || NO_MOVEMENT;
           const balance = calculateSignedBalance(
             asset.openingBalance || "0",
             "Dr", // Fixed assets are always debit balance

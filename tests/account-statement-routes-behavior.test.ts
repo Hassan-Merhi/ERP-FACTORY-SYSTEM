@@ -216,6 +216,17 @@ describe("account statement route behavior", () => {
     expect(res.body).toEqual({ balance: -30 });
   });
 
+  it("sums the pre-period balance exactly", async () => {
+    // 0.1 opening + 0.2 prior debit is 0.3; the float path returned 0.30000000000000004.
+    harness.selectResults.push([{ ob: "0.1", side: "Dr" }], [{ totalDebit: "0.2", totalCredit: "0" }]);
+    const res = responseHarness();
+    await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
+      request({ params: { type: "bank", id: "3" }, query: { endDate: "2026-08-01" } }),
+      res
+    );
+    expect(res.body).toEqual({ balance: 0.3 });
+  });
+
   it("uses the factory customer-ledger combined formula before the requested period", async () => {
     harness.getCompanyById.mockResolvedValue({ id: 4, companyType: "factory" });
     harness.selectResults.push(
