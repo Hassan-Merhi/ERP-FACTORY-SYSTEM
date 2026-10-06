@@ -21,6 +21,7 @@ import {
   sectionHeader,
 } from "./_helpers";
 import { sumMoney, toMoney } from "../../../lib/money";
+import { escapeHtml } from "../../../lib/escapeHtml";
 
 export function registerInvoiceLoadingReportRoutes(app: Express) {
   // GET /api/factory/invoices/:invoiceId/loading-report/export/excel
@@ -309,7 +310,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
         const loadedBales = summary.invoiceBales.filter((b) => b.loaded);
 
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Loading Report - ${inv.invoiceNumber || "#" + inv.id}</title>
+<title>Loading Report - ${escapeHtml(inv.invoiceNumber || "#" + inv.id)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px 24px; color: #111827; background: #fff; }
@@ -353,10 +354,10 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
 </div>
 
 <div class="meta-grid">
-  <div class="meta-box"><div class="lbl">Invoice</div><div class="val">${inv.invoiceNumber || "#" + inv.id}</div></div>
-  <div class="meta-box"><div class="lbl">Customer</div><div class="val">${inv.customerName || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Date</div><div class="val">${inv.orderDate || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Status</div><div class="val">${inv.status || "—"}</div></div>
+  <div class="meta-box"><div class="lbl">Invoice</div><div class="val">${escapeHtml(inv.invoiceNumber || "#" + inv.id)}</div></div>
+  <div class="meta-box"><div class="lbl">Customer</div><div class="val">${escapeHtml(inv.customerName || "—")}</div></div>
+  <div class="meta-box"><div class="lbl">Date</div><div class="val">${escapeHtml(inv.orderDate || "—")}</div></div>
+  <div class="meta-box"><div class="lbl">Status</div><div class="val">${escapeHtml(inv.status || "—")}</div></div>
 </div>
 
 <div class="totals">
@@ -371,7 +372,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
   ${summary.lines
     .map((l) => {
       const pct = l.invoiceQty > 0 ? Math.round((l.alreadyLoaded / l.invoiceQty) * 100) : 0;
-      return `<tr${l.remaining === 0 ? ' class="loaded-row"' : ""}><td>${l.articleCode}</td><td>${l.productName || ""}</td><td class="r">${l.invoiceQty}</td><td class="r">${l.alreadyLoaded}</td><td class="r ${l.remaining === 0 ? "badge-loaded" : "badge-pending"}">${l.remaining}</td><td class="r">${pct}%</td></tr>`;
+      return `<tr${l.remaining === 0 ? ' class="loaded-row"' : ""}><td>${escapeHtml(l.articleCode)}</td><td>${escapeHtml(l.productName || "")}</td><td class="r">${l.invoiceQty}</td><td class="r">${l.alreadyLoaded}</td><td class="r ${l.remaining === 0 ? "badge-loaded" : "badge-pending"}">${l.remaining}</td><td class="r">${pct}%</td></tr>`;
     })
     .join("")}
 </table>
@@ -379,13 +380,13 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
 <div class="section-title">LOADING SESSIONS (${summary.sessions.length})</div>
 <table>
   <tr><th>#</th><th>Status</th><th>Truck</th><th>Driver</th><th>Started</th><th>Completed</th><th class="r">Bales</th></tr>
-  ${summary.sessions.map((s, i) => `<tr><td>${i + 1}</td><td class="status-${s.status.toLowerCase()}">${s.status}</td><td>${s.truckNo || "—"}</td><td>${s.driverName || "—"}</td><td>${s.startedAt ? new Date(s.startedAt).toLocaleString() : ""}</td><td>${s.completedAt ? new Date(s.completedAt).toLocaleString() : "—"}</td><td class="r">${s.totalBales}</td></tr>`).join("")}
+  ${summary.sessions.map((s, i) => `<tr><td>${i + 1}</td><td class="status-${escapeHtml(s.status.toLowerCase())}">${escapeHtml(s.status)}</td><td>${escapeHtml(s.truckNo || "—")}</td><td>${escapeHtml(s.driverName || "—")}</td><td>${s.startedAt ? new Date(s.startedAt).toLocaleString() : ""}</td><td>${s.completedAt ? new Date(s.completedAt).toLocaleString() : "—"}</td><td class="r">${s.totalBales}</td></tr>`).join("")}
 </table>
 
 <div class="section-title">LOADED BALES (${loadedBales.length})</div>
 <table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th><th class="r">Session</th></tr>
-  ${loadedBales.map((b, i) => `<tr class="loaded-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td><td class="r">${b.loadedSessionId ? "#" + b.loadedSessionId : ""}</td></tr>`).join("")}
+  ${loadedBales.map((b, i) => `<tr class="loaded-row"><td>${i + 1}</td><td>${escapeHtml(b.baleReference)}</td><td>${escapeHtml(b.articleCode || "")}</td><td>${escapeHtml(b.productName || "")}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td><td class="r">${b.loadedSessionId ? "#" + b.loadedSessionId : ""}</td></tr>`).join("")}
   <tr class="total-row"><td colspan="4">Total loaded</td><td class="r">${sumMoney(loadedBales.map((b) => b.weightKg)).toFixed(3)}</td><td class="r">${loadedBales.length} bales</td></tr>
 </table>
 
@@ -395,7 +396,7 @@ ${
     ? `<div class="all-done">All bales have been loaded.</div>`
     : `<table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th></tr>
-  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td></tr>`).join("")}
+  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${escapeHtml(b.baleReference)}</td><td>${escapeHtml(b.articleCode || "")}</td><td>${escapeHtml(b.productName || "")}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td></tr>`).join("")}
   <tr class="total-row"><td colspan="4">Total remaining</td><td class="r">${sumMoney(remainingBales.map((b) => b.weightKg)).toFixed(3)} kg · ${remainingBales.length} bales</td></tr>
 </table>`
 }

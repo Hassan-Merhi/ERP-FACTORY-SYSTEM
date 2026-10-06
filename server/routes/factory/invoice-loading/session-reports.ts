@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 
 import { buildLoadingSummary, cellFill, colHeaders, dataCell, getCompanyId, sectionHeader } from "./_helpers";
 import { sumMoney, toMoney } from "../../../lib/money";
+import { escapeHtml } from "../../../lib/escapeHtml";
 
 export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
   // GET /api/factory/invoice-loading-sessions/:sessionId/export/excel
@@ -276,7 +277,7 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
 
         const pdfTitle = buildSafeFilename([invoice?.containerNumber, invoice?.customerName, invoice?.destination], "");
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>${pdfTitle || `Loading Session #${session.id}`}</title>
+<title>${escapeHtml(pdfTitle || `Loading Session #${session.id}`)}</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px 24px; color: #111827; }
@@ -314,14 +315,14 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
 </div>
 
 <div class="meta-grid">
-  <div class="meta-box"><div class="lbl">Invoice</div><div class="val">${invoice?.invoiceNumber || "#" + session.invoiceId}</div></div>
-  <div class="meta-box"><div class="lbl">Customer</div><div class="val">${invoice?.customerName || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Truck No</div><div class="val">${session.truckNo || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Driver</div><div class="val">${session.driverName || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Status</div><div class="val">${session.status}</div></div>
+  <div class="meta-box"><div class="lbl">Invoice</div><div class="val">${escapeHtml(invoice?.invoiceNumber || "#" + session.invoiceId)}</div></div>
+  <div class="meta-box"><div class="lbl">Customer</div><div class="val">${escapeHtml(invoice?.customerName || "—")}</div></div>
+  <div class="meta-box"><div class="lbl">Truck No</div><div class="val">${escapeHtml(session.truckNo || "—")}</div></div>
+  <div class="meta-box"><div class="lbl">Driver</div><div class="val">${escapeHtml(session.driverName || "—")}</div></div>
+  <div class="meta-box"><div class="lbl">Status</div><div class="val">${escapeHtml(session.status)}</div></div>
   <div class="meta-box"><div class="lbl">Started</div><div class="val">${session.startedAt ? new Date(session.startedAt).toLocaleString() : "—"}</div></div>
   <div class="meta-box"><div class="lbl">Completed</div><div class="val">${session.completedAt ? new Date(session.completedAt).toLocaleString() : "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Notes</div><div class="val">${session.notes || "—"}</div></div>
+  <div class="meta-box"><div class="lbl">Notes</div><div class="val">${escapeHtml(session.notes || "—")}</div></div>
 </div>
 
 <div class="totals">
@@ -332,7 +333,7 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
 <div class="section-title">SCANNED BALES (${sessionBales.length})</div>
 <table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th><th>Scanned At</th></tr>
-  ${sessionBales.map((b, i) => `<tr class="scanned-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td><td>${b.scannedAt ? new Date(b.scannedAt).toLocaleString() : ""}</td></tr>`).join("")}
+  ${sessionBales.map((b, i) => `<tr class="scanned-row"><td>${i + 1}</td><td>${escapeHtml(b.baleReference)}</td><td>${escapeHtml(b.articleCode || "")}</td><td>${escapeHtml(b.productName || "")}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td><td>${b.scannedAt ? new Date(b.scannedAt).toLocaleString() : ""}</td></tr>`).join("")}
   <tr class="total-row"><td colspan="4">Total</td><td class="r">${sumMoney(sessionBales.map((b) => b.weightKg)).toFixed(3)}</td><td>${sessionBales.length} bales</td></tr>
 </table>
 
@@ -342,7 +343,7 @@ ${
     ? `<div class="all-done">All bales for this invoice have been loaded.</div>`
     : `<table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th></tr>
-  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td></tr>`).join("")}
+  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${escapeHtml(b.baleReference)}</td><td>${escapeHtml(b.articleCode || "")}</td><td>${escapeHtml(b.productName || "")}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td></tr>`).join("")}
   <tr class="total-row"><td colspan="4">Total remaining</td><td class="r">${sumMoney(remainingBales.map((b) => b.weightKg)).toFixed(3)} kg · ${remainingBales.length} bales</td></tr>
 </table>`
 }
