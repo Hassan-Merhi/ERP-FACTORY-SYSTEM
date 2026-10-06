@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches } from "@shared/schema";
 import { eq, and, desc, isNull } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchReadRoutes(app: Express) {
   app.get("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
@@ -43,9 +44,7 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
         return res.json(
           rows.map((batch) => ({
             ...batch,
-            remainingKg: (
-              (parseFloat(batch.totalWeightKg || "0") || 0) - (parseFloat(batch.usedKg || "0") || 0)
-            ).toFixed(3),
+            remainingKg: toMoney(batch.totalWeightKg).minus(toMoney(batch.usedKg)).toFixed(3),
           }))
         );
       }
@@ -59,15 +58,15 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
       // stock rate at all, which previously made valid historical batches display
       // as $0.0000/kg here even though their stored batch valuation was correct.
       const enriched = results.map((b) => {
-        const total = parseFloat(b.totalWeightKg) || 0;
-        const used = parseFloat(b.usedKg) || 0;
+        const total = toMoney(b.totalWeightKg);
+        const used = toMoney(b.usedKg);
 
         return {
           ...b,
-          remainingKg: (total - used).toFixed(3),
-          displayTotalWeightKg: (parseFloat(b.totalWeightKg || "0") || 0).toFixed(3),
-          displayTotalCost: (parseFloat(b.totalCost || "0") || 0).toFixed(6),
-          displayCostPerKg: (parseFloat(b.costPerKg || "0") || 0).toFixed(6),
+          remainingKg: total.minus(used).toFixed(3),
+          displayTotalWeightKg: total.toFixed(3),
+          displayTotalCost: toMoney(b.totalCost).toFixed(6),
+          displayCostPerKg: toMoney(b.costPerKg).toFixed(6),
         };
       });
 
@@ -95,10 +94,8 @@ export function registerFactoryMixBatchReadRoutes(app: Express) {
 
       if (!batch) return res.status(404).json({ message: "Mix batch not found" });
 
-      const total = parseFloat(batch.totalWeightKg) || 0;
-      const used = parseFloat(batch.usedKg) || 0;
       res.set("Cache-Control", "private, max-age=30");
-      res.json({ ...batch, remainingKg: (total - used).toFixed(3) });
+      res.json({ ...batch, remainingKg: toMoney(batch.totalWeightKg).minus(toMoney(batch.usedKg)).toFixed(3) });
     } catch (error: unknown) {
       logger.error("Error fetching mix batch:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
