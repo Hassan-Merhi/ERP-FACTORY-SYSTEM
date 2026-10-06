@@ -12,6 +12,7 @@ import { PostingValidationError } from "../../services/accounting/centralPosting
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { buildPaymentReceiptPostingRequest } from "../../services/accounting/paymentReceiptPosting";
+import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
 import type { BuildPaymentReceiptPostingInput } from "../../services/accounting/paymentReceiptPosting";
 
 type CentralPaymentReceiptBody = Omit<
@@ -200,6 +201,14 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         entries: createdEntries,
         direction: "apply",
         missingEmployeeBehavior: "throw",
+      });
+
+      // An edited duty/transport/office charge voucher re-prices the offloaded bales.
+      await syncContainerChargeVoucherEditTx(tx, {
+        companyId,
+        voucherNumber: lockedVoucher.voucherNumber,
+        oldTotal: lockedVoucher.totalAmount,
+        newTotal: updatedVoucher.totalAmount,
       });
 
       return {
