@@ -12,6 +12,23 @@ import { requireAuth } from "../../../../auth";
 import { employees } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { firstRow, resultRows } from "../../../../lib/queryResult";
+import { toMoney } from "../../../../lib/money";
+
+/**
+ * Balance = opening + credits - debits, computed as decimals and stored at
+ * cents (the SQL sums are exact numerics; adding them as floats could round
+ * a half-cent the wrong way).
+ */
+function rebuiltBalances(openingBalance: string | null, credits: string | null, debits: string | null) {
+  const deposits = toMoney(credits);
+  const withdrawals = toMoney(debits);
+  const balance = toMoney(openingBalance).plus(deposits).minus(withdrawals);
+  return {
+    currentBalance: balance.toFixed(2),
+    totalDeposits: deposits.toFixed(2),
+    totalWithdrawals: withdrawals.toFixed(2),
+  };
+}
 
 export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
   // POST /api/factory/employees/recalculate-balances
@@ -59,42 +76,28 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
         GROUP BY ve.employee_id
       `);
 
-      // Build a map: empId → { totalCredits, totalDebits }
-      const sumMap = new Map<number, { credits: number; debits: number }>();
+      // Build a map: empId → { credits, debits } (exact numeric text from SQL)
+      const sumMap = new Map<number, { credits: string | null; debits: string | null }>();
       for (const row of resultRows<{ employee_id: number; total_credits: string | null; total_debits: string | null }>(
         entrySums
       )) {
-        const empId = Number(row.employee_id);
-        sumMap.set(empId, {
-          credits: parseFloat(row.total_credits || "0"),
-          debits: parseFloat(row.total_debits || "0"),
-        });
+        sumMap.set(Number(row.employee_id), { credits: row.total_credits, debits: row.total_debits });
       }
 
       const results = [];
       for (const emp of allEmployees) {
-        const sums = sumMap.get(emp.id) || { credits: 0, debits: 0 };
-        const openingBal = parseFloat(emp.openingBalance || "0");
-        const newBalance = openingBal + sums.credits - sums.debits;
-        const newDeposits = sums.credits;
-        const newWithdrawals = sums.debits;
+        const sums = sumMap.get(emp.id) || { credits: null, debits: null };
+        const rebuilt = rebuiltBalances(emp.openingBalance, sums.credits, sums.debits);
 
-        await db
-          .update(employees)
-          .set({
-            currentBalance: newBalance.toFixed(2),
-            totalDeposits: newDeposits.toFixed(2),
-            totalWithdrawals: newWithdrawals.toFixed(2),
-          })
-          .where(eq(employees.id, emp.id));
+        await db.update(employees).set(rebuilt).where(eq(employees.id, emp.id));
 
         results.push({
           id: emp.id,
           name: `${emp.firstName} ${emp.lastName}`,
-          oldBalance: parseFloat(emp.currentBalance || "0"),
-          newBalance,
-          newDeposits,
-          newWithdrawals,
+          oldBalance: toMoney(emp.currentBalance).toNumber(),
+          newBalance: Number(rebuilt.currentBalance),
+          newDeposits: Number(rebuilt.totalDeposits),
+          newWithdrawals: Number(rebuilt.totalWithdrawals),
         });
       }
 
@@ -131,29 +134,17 @@ export function registerFactoryEmployeeRecalculateRoutes(app: Express) {
       `);
 
       const row = firstRow<{ total_credits: string | null; total_debits: string | null }>(entrySums);
-      const credits = parseFloat(row?.total_credits || "0");
-      const debits = parseFloat(row?.total_debits || "0");
-      const openingBal = parseFloat(emp.openingBalance || "0");
-      const newBalance = openingBal + credits - debits;
-      const newDeposits = credits;
-      const newWithdrawals = debits;
+      const rebuilt = rebuiltBalances(emp.openingBalance, row?.total_credits ?? null, row?.total_debits ?? null);
 
-      await db
-        .update(employees)
-        .set({
-          currentBalance: newBalance.toFixed(2),
-          totalDeposits: newDeposits.toFixed(2),
-          totalWithdrawals: newWithdrawals.toFixed(2),
-        })
-        .where(eq(employees.id, empId));
+      await db.update(employees).set(rebuilt).where(eq(employees.id, empId));
 
       res.json({
         id: emp.id,
         name: `${emp.firstName} ${emp.lastName}`,
-        oldBalance: parseFloat(emp.currentBalance || "0"),
-        newBalance,
-        newDeposits,
-        newWithdrawals,
+        oldBalance: toMoney(emp.currentBalance).toNumber(),
+        newBalance: Number(rebuilt.currentBalance),
+        newDeposits: Number(rebuilt.totalDeposits),
+        newWithdrawals: Number(rebuilt.totalWithdrawals),
       });
     } catch (error: unknown) {
       logger.error("Error recalculating employee balance:", { error: error });
