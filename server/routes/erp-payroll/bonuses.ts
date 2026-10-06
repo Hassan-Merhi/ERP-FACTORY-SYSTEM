@@ -378,7 +378,10 @@ export function registerPayrollBonusRoutes(app: Express) {
       const bonusCents = moneyString(parsedBonus);
 
       // Get employee
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
@@ -467,7 +470,7 @@ export function registerPayrollBonusRoutes(app: Express) {
       );
 
       // Get updated employee balance
-      const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
 
       res.json({
         voucher,
