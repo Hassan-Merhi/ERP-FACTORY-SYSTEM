@@ -19,7 +19,9 @@ import {
   vouchers,
   factorySupplierPayments,
   insertFactorySupplierPaymentSchema,
+  ledgerAccounts,
 } from "@shared/schema";
+import { toMoney } from "../../../../lib/money";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import {
   financialOperationErrorStatus,
@@ -77,12 +79,27 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
       // fxRateConfirmed flag yet, so any explicitly-supplied rate is trusted as-is.
       const payCurrency = parsed.currencyCode || "USD";
       if (payCurrency !== "USD") {
-        const suppliedRate = parseFloat(parsed.fxRateToUsd || "0");
-        if (!(suppliedRate > 0)) {
+        if (!toMoney(parsed.fxRateToUsd).greaterThan(0)) {
           return res.status(400).json({
             message: `Cannot record a ${payCurrency} payment without an explicit exchange rate to USD.`,
           });
         }
+      }
+
+      // The supplier and the paid-from account must belong to the active
+      // company; otherwise the voucher would debit another tenant's supplier
+      // or credit another tenant's bank/cash account.
+      const [ownSupplier] = await db
+        .select({ id: factorySuppliers.id })
+        .from(factorySuppliers)
+        .where(and(eq(factorySuppliers.id, parsed.supplierId), eq(factorySuppliers.companyId, companyId)));
+      if (!ownSupplier) return res.status(404).json({ message: "Supplier not found" });
+      if (parsed.paidFromAccountId) {
+        const [ownAccount] = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.id, parsed.paidFromAccountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!ownAccount) return res.status(404).json({ message: "Payment account not found" });
       }
 
       const operationKey = resolveFinancialOperationKey(req);
@@ -99,68 +116,68 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           }),
         },
         async (tx) => {
-        const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
+          const [payment] = await tx.insert(factorySupplierPayments).values(parsed).returning();
 
-        // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
-        const payAmt = parseFloat(payment.amount);
-        const payAmtStr = payAmt.toFixed(2);
-        const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
+          // Double-entry Payment voucher: DR Supplier Payable / CR Bank or Cash
+          // amount is stored at four places; the voucher takes it at cents, half up.
+          const payAmtStr = toMoney(payment.amount).toFixed(2);
+          const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
 
-        const [payVoucher] = await tx
-          .insert(vouchers)
-          .values({
+          const [payVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherType: "Payment",
+              voucherNumber: payVoucherNum,
+              voucherDate: payment.date,
+              description: `Supplier payment – see factory payment #${payment.id}`,
+              totalAmount: payAmtStr,
+              currency: payment.currencyCode || "USD",
+              exchangeRate: toMoney((payment.fxRateToUsd as string) || "1").toString(),
+              sourceModule: "FACTORY",
+              effectiveDate: (req.body.effectiveDate as string) || null,
+            })
+            .returning();
+
+          // DR: Factory Supplier (debit reduces the liability we owe them)
+          await tx.insert(voucherEntries).values({
+            voucherId: payVoucher.id,
+            factorySupplierId: payment.supplierId,
+            debitAmount: payAmtStr,
+            creditAmount: "0",
+            narration: `Payment to supplier – factory payment #${payment.id}`,
+          });
+
+          // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
+          const crAccountId = payment.paidFromAccountId
+            ? payment.paidFromAccountId
+            : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
+
+          await tx.insert(voucherEntries).values({
+            voucherId: payVoucher.id,
+            ledgerAccountId: crAccountId,
+            debitAmount: "0",
+            creditAmount: payAmtStr,
+            narration: `Bank/cash outflow – factory payment #${payment.id}`,
+          });
+
+          const [spSupplier] = await tx
+            .select({ name: factorySuppliers.name })
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
+          await writeDaybookEntry(tx, {
             companyId,
-            voucherType: "Payment",
-            voucherNumber: payVoucherNum,
-            voucherDate: payment.date,
-            description: `Supplier payment – see factory payment #${payment.id}`,
-            totalAmount: payAmtStr,
-            currency: payment.currencyCode || "USD",
-            exchangeRate: String(parseFloat((payment.fxRateToUsd as string) || "1")),
-            sourceModule: "FACTORY",
+            txDate: payment.date,
+            txType: "SUPPLIER_PAYMENT",
+            referenceId: payment.id,
+            referenceTable: "factory_supplier_payments",
+            description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${payAmtStr} ${payment.currencyCode}`,
+            amountCurrency: toMoney(payment.amount).toNumber(),
+            amountUsd: toMoney(payment.amountUsd).toNumber(),
+            currencyCode: payment.currencyCode,
             effectiveDate: (req.body.effectiveDate as string) || null,
-          })
-          .returning();
-
-        // DR: Factory Supplier (debit reduces the liability we owe them)
-        await tx.insert(voucherEntries).values({
-          voucherId: payVoucher.id,
-          factorySupplierId: payment.supplierId,
-          debitAmount: payAmtStr,
-          creditAmount: "0",
-          narration: `Payment to supplier – factory payment #${payment.id}`,
-        });
-
-        // CR: Bank/Cash ledger account (or auto-created "Factory Cash Payments" if not specified)
-        const crAccountId = payment.paidFromAccountId
-          ? payment.paidFromAccountId
-          : await getOrCreateLedgerAccount(companyId, "FACTORY_CASH_PAYMENTS", "Factory Cash Payments", "ASSET");
-
-        await tx.insert(voucherEntries).values({
-          voucherId: payVoucher.id,
-          ledgerAccountId: crAccountId,
-          debitAmount: "0",
-          creditAmount: payAmtStr,
-          narration: `Bank/cash outflow – factory payment #${payment.id}`,
-        });
-
-        const [spSupplier] = await tx
-          .select({ name: factorySuppliers.name })
-          .from(factorySuppliers)
-          .where(and(eq(factorySuppliers.id, payment.supplierId), eq(factorySuppliers.companyId, companyId)));
-        await writeDaybookEntry(tx, {
-          companyId,
-          txDate: payment.date,
-          txType: "SUPPLIER_PAYMENT",
-          referenceId: payment.id,
-          referenceTable: "factory_supplier_payments",
-          description: `Supplier payment: ${spSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}`,
-          amountCurrency: parseFloat(payment.amount),
-          amountUsd: parseFloat(payment.amountUsd),
-          currencyCode: payment.currencyCode,
-          effectiveDate: (req.body.effectiveDate as string) || null,
-        });
-        return { value: payment, resultReference: payment.id };
+          });
+          return { value: payment, resultReference: payment.id };
         }
       );
       res.json(operation.value);
@@ -219,7 +236,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           companyId,
           txDate: getClientDate(req),
           txType: "SUPPLIER_PAYMENT_DELETE",
-          description: `Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})`,
+          description: `Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${toMoney(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})`,
         });
       }
       res.json({ message: "Payment deleted" });
