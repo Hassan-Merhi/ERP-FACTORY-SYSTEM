@@ -193,10 +193,7 @@ export default function FactoryPriorityScan() {
   };
 
   const resolvePriorityRoute = async (referenceNumber: string): Promise<PriorityRouteResolution> => {
-    const response = await apiRequest(
-      "GET",
-      `${PRIORITY_SCAN_ROUTE_URL}?code=${encodeURIComponent(referenceNumber)}`
-    );
+    const response = await apiRequest("GET", `${PRIORITY_SCAN_ROUTE_URL}?code=${encodeURIComponent(referenceNumber)}`);
     return response.json() as Promise<PriorityRouteResolution>;
   };
 
@@ -389,8 +386,8 @@ export default function FactoryPriorityScan() {
         >
           {currentPriorityBale && (
             <span className="sr-only">
-              {currentPriorityBale.referenceNumber} · {tr("priorityNumber", { priority: currentPriorityBale.priority })} ·{" "}
-              {tr("loadingNumber", { orderId: currentPriorityBale.orderId })}
+              {currentPriorityBale.referenceNumber} · {tr("priorityNumber", { priority: currentPriorityBale.priority })}{" "}
+              · {tr("loadingNumber", { orderId: currentPriorityBale.orderId })}
             </span>
           )}
         </section>
