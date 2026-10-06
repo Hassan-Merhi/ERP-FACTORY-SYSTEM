@@ -146,11 +146,13 @@ export function registerShippingContainerRowRoutes(app: Express) {
           OR COALESCE(co.container_number, '') ILIKE ${index}
           OR COALESCE(co.shipping_company, '') ILIKE ${index}
           OR COALESCE(co.destination, '') ILIKE ${index}
+          OR COALESCE(r.anything, '') ILIKE ${index}
           OR regexp_replace(lower(COALESCE(co.invoice_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
           OR regexp_replace(lower(COALESCE(c.legal_name, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
           OR regexp_replace(lower(COALESCE(co.container_number, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
           OR regexp_replace(lower(COALESCE(co.shipping_company, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
           OR regexp_replace(lower(COALESCE(co.destination, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
+          OR regexp_replace(lower(COALESCE(r.anything, '')), '[^[:alnum:]]+', '', 'g') LIKE ${compactIndex}
         )`);
       }
       const whereSql = clauses.join(" AND ");
@@ -173,6 +175,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
            r.eta,
            r.container_arrived_date AS "containerArrivedDate",
            r.note,
+           r.anything,
            r.ci_number AS "ciNumber",
            r.is_done AS "isDone",
            r.done_at AS "doneAt",
@@ -229,7 +232,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { customerOrderId, orderDate, containerArrivedDate, note } = req.body;
+      const { customerOrderId, orderDate, containerArrivedDate, note, anything } = req.body;
       if (!customerOrderId || !orderDate) {
         return res.status(400).json({ message: "customerOrderId and orderDate are required" });
       }
@@ -270,6 +273,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
           orderDate,
           containerArrivedDate: containerArrivedDate || null,
           note: note || null,
+          anything: anything || null,
         })
         .returning();
 
@@ -303,6 +307,7 @@ export function registerShippingContainerRowRoutes(app: Express) {
       if (req.body.containerArrivedDate !== undefined)
         patch.containerArrivedDate = req.body.containerArrivedDate || null;
       if (req.body.note !== undefined) patch.note = req.body.note || null;
+      if (req.body.anything !== undefined) patch.anything = req.body.anything || null;
       if (req.body.ciNumber !== undefined) patch.ciNumber = req.body.ciNumber || null;
       if (req.body.trackingLink !== undefined) patch.trackingLink = req.body.trackingLink || null;
 
