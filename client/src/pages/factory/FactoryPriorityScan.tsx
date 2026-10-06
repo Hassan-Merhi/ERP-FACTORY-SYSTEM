@@ -389,7 +389,8 @@ export default function FactoryPriorityScan() {
         >
           {currentPriorityBale && (
             <span className="sr-only">
-              {currentPriorityBale.referenceNumber} · {tr("priorityNumber", { priority: currentPriorityBale.priority })} ·{" "}
+              {currentPriorityBale.referenceNumber} ·{" "}
+              {tr("priorityNumber", { priority: currentPriorityBale.priority })} ·{" "}
               {tr("loadingNumber", { orderId: currentPriorityBale.orderId })}
             </span>
           )}
