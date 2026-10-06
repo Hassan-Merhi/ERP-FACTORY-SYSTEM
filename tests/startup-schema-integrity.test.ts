@@ -154,9 +154,15 @@ import { startupMigrations } from "../server/startup-schema";
  * same position: the 9 statements became 17 (the kept updated_at column, the
  * guarded convergence of a legacy log and seven legacy index drops, replacing
  * the fss_log_color block), 1405 to 1413. Nothing else moved.
+ *
+ * Re-pinned when 008-pos-exports-and-dispatch gained the Shipping Containers
+ * "anything" column (#2083: the column in the factory_shipping_container_rows
+ * CREATE plus its ADD COLUMN) and factory_shipping_availability.details
+ * (fe59923), taking the count from 1413 to 1415. Both ADD COLUMN statements sit
+ * beside their table's other ADD COLUMNs; nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1413;
-const EXPECTED_CONTENT_HASH = "1cd4323d10c5f370593713dd2d0baf74aa98b9fe0ce6e5dbb0a5b66279908e2d";
+const EXPECTED_STATEMENT_COUNT = 1415;
+const EXPECTED_CONTENT_HASH = "aceeb76db89f985c506573989f8e26304c5b51c38376c5212b6d9144b2c63b4c";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
