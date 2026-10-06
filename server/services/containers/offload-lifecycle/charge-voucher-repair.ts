@@ -60,41 +60,86 @@ export async function findContainerChargeVoucherDriftTx(
     REPAIRABLE_PREFIXES.map((prefix) => sql`(${prefix})`),
     sql`, `
   );
+  const voucherPattern = `^(${REPAIRABLE_PREFIXES.join("|")})-(.+)-([0-9]+)$`;
+
+  // Keep this scan set-based. The old query ran one correlated vouchers scan
+  // for every offload × charge prefix, which timed out in production once the
+  // voucher table grew. Parse each candidate voucher once, aggregate it once,
+  // then join those totals back to the active offloads.
   const result = await tx.execute(sql`
-    WITH charges AS (
-      SELECT o.id AS offload_id, c.container_number, l.name AS location_name, o.offloaded_at,
-             cat.prefix, o.total_charges, o.total_bales, o.additional_cost_per_bale,
-             CASE cat.prefix
-               WHEN 'DUTY' THEN o.duties
-               WHEN 'OFFICE' THEN o.office_charges
-               WHEN 'TRANS' THEN o.transport_fees
-               ELSE o.transfer_charges
-             END AS stored,
-             (SELECT ROUND(SUM(CASE WHEN v.optional THEN 0 ELSE v.total_amount::numeric END), 2)
-                FROM vouchers v
-               WHERE v.company_id = c.company_id
-                 AND v.deleted_at IS NULL
-                 AND LEFT(v.voucher_number, LENGTH(cat.prefix) + LENGTH(c.container_number) + 2)
-                     = cat.prefix || '-' || c.container_number || '-'
-                 AND SUBSTRING(v.voucher_number FROM LENGTH(cat.prefix) + LENGTH(c.container_number) + 3)
-                     ~ '^[0-9]+$') AS vouchers
+    WITH active_offloads AS MATERIALIZED (
+      SELECT o.id AS offload_id,
+             o.location_id,
+             c.container_number,
+             l.name AS location_name,
+             o.offloaded_at,
+             o.total_charges,
+             o.total_bales,
+             o.additional_cost_per_bale,
+             o.duties,
+             o.office_charges,
+             o.transport_fees,
+             o.transfer_charges
         FROM container_offloads o
         JOIN containers c ON c.id = o.container_id
         LEFT JOIN locations l ON l.id = o.location_id
-        CROSS JOIN (VALUES ${prefixes}) AS cat(prefix)
        WHERE c.company_id = ${companyId}
          AND c.status = 'OFFLOADED'
          AND o.optional = false
+    ),
+    voucher_parts AS (
+      SELECT match[1] AS prefix,
+             match[2] AS container_number,
+             CASE WHEN v.optional THEN 0::numeric ELSE v.total_amount::numeric END AS amount
+        FROM vouchers v
+        CROSS JOIN LATERAL regexp_match(v.voucher_number, ${voucherPattern}) AS match
+       WHERE v.company_id = ${companyId}
+         AND v.deleted_at IS NULL
+    ),
+    voucher_totals AS (
+      SELECT prefix,
+             container_number,
+             ROUND(SUM(amount), 2) AS vouchers
+        FROM voucher_parts
+       GROUP BY prefix, container_number
+    ),
+    charges AS (
+      SELECT ao.offload_id,
+             ao.container_number,
+             ao.location_name,
+             ao.offloaded_at,
+             ao.total_charges,
+             ao.total_bales,
+             ao.additional_cost_per_bale,
+             cat.prefix,
+             CASE cat.prefix
+               WHEN 'DUTY' THEN ao.duties
+               WHEN 'OFFICE' THEN ao.office_charges
+               WHEN 'TRANS' THEN ao.transport_fees
+               ELSE ao.transfer_charges
+             END AS stored,
+             vt.vouchers
+        FROM active_offloads ao
+        CROSS JOIN (VALUES ${prefixes}) AS cat(prefix)
+        JOIN voucher_totals vt
+          ON vt.container_number = ao.container_number
+         AND vt.prefix = cat.prefix
+    ),
+    stock_by_offload AS (
+      SELECT oi.offload_id,
+             SUM(LEAST(GREATEST(COALESCE(i.quantity, 0), 0), oi.quantity)) AS bales_on_hand
+        FROM container_offload_items oi
+        JOIN active_offloads ao ON ao.offload_id = oi.offload_id
+        LEFT JOIN inventory i
+          ON i.location_id = ao.location_id
+         AND i.stock_item_id = oi.stock_item_id
+       GROUP BY oi.offload_id
     )
     SELECT ch.*,
-           (SELECT SUM(LEAST(GREATEST(COALESCE(i.quantity, 0), 0), oi.quantity))
-              FROM container_offload_items oi
-              JOIN container_offloads o ON o.id = oi.offload_id
-              LEFT JOIN inventory i ON i.location_id = o.location_id AND i.stock_item_id = oi.stock_item_id
-             WHERE oi.offload_id = ch.offload_id) AS bales_on_hand
+           stock.bales_on_hand
       FROM charges ch
-     WHERE ch.vouchers IS NOT NULL
-       AND ch.vouchers <> ch.stored
+      LEFT JOIN stock_by_offload stock ON stock.offload_id = ch.offload_id
+     WHERE ch.vouchers <> ch.stored
      ORDER BY ch.container_number, ch.prefix
   `);
 
