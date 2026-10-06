@@ -3,10 +3,12 @@ import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { requireAuth } from "../../../auth";
 import { db } from "../../../db";
+import { storage } from "../../../storage";
+import { getCompanyBusinessDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
-import { firstRow } from "../../../lib/queryResult";
+import { firstRow, resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
@@ -89,6 +91,32 @@ export function registerPriorityScanConfigRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      if (req.query.view === "today-history") {
+        const companySettings = await storage.getCompanySettings(companyId);
+        const businessDate = getCompanyBusinessDate(companySettings?.timezone);
+        const historyResult = await db.execute(sql`
+          SELECT id,
+                 reference_number AS "referenceNumber",
+                 product_name AS "productName",
+                 article_code AS "articleCode",
+                 order_id AS "orderId",
+                 priority,
+                 color,
+                 scanned_by AS "scannedBy",
+                 scanned_at AS "scannedAt"
+          FROM factory_priority_scan_history
+          WHERE company_id = ${companyId}
+            AND business_date = ${businessDate}
+          ORDER BY scanned_at DESC, id DESC
+        `);
+        res.set("Cache-Control", "private, no-store");
+        return res.json({
+          businessDate,
+          serverNow: new Date().toISOString(),
+          scans: resultRows(historyResult),
+        });
+      }
 
       await disableStalePriorityScanConfigs(companyId);
       await advanceSatisfiedPriorityScanConfigs(companyId);

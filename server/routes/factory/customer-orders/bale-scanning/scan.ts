@@ -9,7 +9,9 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { EXPECTED_CLIENT_RESPONSE_CODES, markExpectedClientResponse } from "../../../../lib/expectedClientResponse";
 import { parseId } from "../../../../lib/parseId";
+import { getCompanyBusinessDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
+import { storage } from "../../../../storage";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotalsForScannedArticle, type ScannedArticleTotalsPatch } from "./incrementalTotals";
 import {
@@ -61,6 +63,9 @@ export function registerOrderBaleScanRoutes(app: Express) {
       }
 
       const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
+      const priorityScanBusinessDate = isPriorityScan
+        ? getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone)
+        : null;
 
       const [order] = await db
         .select()
@@ -313,6 +318,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
+        let priorityScanSnapshot: { priority: number; color: string } | null = null;
 
         if (isPriorityScan) {
           const authoritativeTarget = effectiveArticleCode
@@ -330,6 +336,10 @@ export function registerOrderBaleScanRoutes(app: Express) {
               },
             };
           }
+          priorityScanSnapshot = {
+            priority: authoritativeTarget.priority,
+            color: authoritativeTarget.color,
+          };
         }
 
         const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
@@ -438,6 +448,26 @@ export function registerOrderBaleScanRoutes(app: Express) {
             scannedBy: scannerName,
           })
           .returning();
+
+        if (isPriorityScan && priorityScanSnapshot && priorityScanBusinessDate) {
+          await tx.execute(sql`
+            INSERT INTO factory_priority_scan_history
+              (company_id, order_id, bale_id, reference_number, product_name, article_code,
+               priority, color, business_date, scanned_by)
+            VALUES (
+              ${companyId},
+              ${orderId},
+              ${bale.id},
+              ${bale.referenceNumber},
+              ${resolvedBaleName},
+              ${effectiveArticleCode || bale.articleCode},
+              ${priorityScanSnapshot.priority},
+              ${priorityScanSnapshot.color},
+              ${priorityScanBusinessDate},
+              ${scannerName}
+            )
+          `);
+        }
 
         // V5 bales remain IN_STOCK during loading — only legacy V2/V3 orders set RESERVED_FOR_ORDER.
         if (!order.proformaIdUsed) {
