@@ -380,6 +380,46 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     ).toBe(false);
   });
 
+  it("marks an unmatched Priority Scan bale in Daily Scan using its production date", async () => {
+    const history = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-route?view=today-history");
+    expect(history.status).toBe(200);
+    const today = String(history.body.businessDate);
+
+    const loading = await createLoading();
+    const priority = await agent
+      .put(`/api/factory/customer-orders/${loading}/loading-list/priority-scan-config`)
+      .send({ color: "#0ea5e9", priority: 9999, enabled: true });
+    expect(priority.status).toBe(200);
+
+    const referenceNumber = `${PREFIX}-UNMATCHED-DAILY`;
+    await pool.query(
+      `INSERT INTO factory_bales
+         (company_id, bale_code, reference_number, article_code, product_name, erp_location_id,
+          stock_entry_date, weight_kg, cost_per_kg, total_cost, status)
+       VALUES ($1, $2, $2, $3, $4, $5, $6, '42.000', '1.00', '42.00', 'IN_STOCK')`,
+      [ctx.companyId, referenceNumber, `${PREFIX}-NOT-ON-PROFORMA`, `${PREFIX} Unmatched Product`, ctx.locationId, today]
+    );
+
+    const route = await agent.get(
+      `/api/factory/customer-orders/loading-list/priority-scan-route?code=${encodeURIComponent(referenceNumber)}`
+    );
+    expect(route.status).toBe(409);
+    expect(route.body.code).toBe("PRIORITY_SCAN_NOT_REQUIRED");
+
+    const daily = await agent.post("/api/factory/daily-bale-scans").send({ referenceNumber });
+    expect(daily.status).toBe(201);
+    expect(daily.body.reference_number).toBe(referenceNumber);
+    expect(daily.body.scan_date).toBe(today);
+
+    const saved = await pool.query<{ scan_date: string }>(
+      `SELECT scan_date::text AS scan_date
+       FROM factory_daily_bale_scans
+       WHERE company_id = $1 AND reference_number = $2`,
+      [String(ctx.companyId), referenceNumber]
+    );
+    expect(saved.rows[0]?.scan_date).toBe(today);
+  });
+
   it("clears a configuration idempotently", async () => {
     const orderId = await createLoading();
     await agent
