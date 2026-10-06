@@ -13,6 +13,7 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resultRows } from "../../../lib/queryResult";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 import { factoryRawStock, factoryMixBatches, factoryBales, baleLabelPrints } from "@shared/schema";
 import { eq, and, or, sql, inArray, not } from "drizzle-orm";
@@ -194,7 +195,7 @@ export function registerBalesReportRoutes(app: Express) {
         ]);
         const total = parseInt(String(countResult.rows[0]?.total ?? "0"), 10);
         const totalBales = parseInt(String(countResult.rows[0]?.total_bales ?? "0"), 10);
-        const totalWeight = parseFloat(String(countResult.rows[0]?.total_weight ?? "0"));
+        const totalWeight = toMoney(String(countResult.rows[0]?.total_weight ?? "0")).toNumber();
         const items = liteResult.rows.map((r) => ({ ...r, bales: [] }));
         return res.json(buildPaginatedResponse(items, total, totalBales, totalWeight));
       }
@@ -238,7 +239,7 @@ export function registerBalesReportRoutes(app: Express) {
 
       const total = parseInt(String(countResult.rows[0]?.total ?? "0"), 10);
       const totalBales = parseInt(String(countResult.rows[0]?.total_bales ?? "0"), 10);
-      const totalWeight = parseFloat(String(countResult.rows[0]?.total_weight ?? "0"));
+      const totalWeight = toMoney(String(countResult.rows[0]?.total_weight ?? "0")).toNumber();
       res.json(buildPaginatedResponse(dataResult.rows, total, totalBales, totalWeight));
     } catch (error: unknown) {
       logger.error("Error fetching stock entry history:", { error: error });
@@ -394,7 +395,11 @@ export function registerBalesReportRoutes(app: Express) {
       // ── Sub-header: period & summary ─────────────────────────────────────
       const subY = 154;
       doc.fillColor("#000000").font("Helvetica").fontSize(9);
-      doc.text(search ? "Period: All dates (reference search)" : `Period: ${effectiveStart}  →  ${effectiveEnd}`, 40, subY);
+      doc.text(
+        search ? "Period: All dates (reference search)" : `Period: ${effectiveStart}  →  ${effectiveEnd}`,
+        40,
+        subY
+      );
       doc
         .font("Helvetica-Bold")
         .text(
@@ -595,19 +600,20 @@ export function registerBalesReportRoutes(app: Express) {
       const totalBales = allBales.length;
       let pendingCount = 0;
       let finalizedCount = 0;
-      let pendingWeight = 0;
-      let finalizedWeight = 0;
+      const pendingWeights: string[] = [];
+      const finalizedWeights: string[] = [];
 
       for (const bale of allBales) {
-        const weight = parseFloat(bale.weightKg) || 0;
         if (bale.status === "PENDING_PRESSING") {
           pendingCount++;
-          pendingWeight += weight;
+          pendingWeights.push(bale.weightKg);
         } else if (bale.status === "IN_STOCK") {
           finalizedCount++;
-          finalizedWeight += weight;
+          finalizedWeights.push(bale.weightKg);
         }
       }
+      const pendingWeight = sumMoney(pendingWeights);
+      const finalizedWeight = sumMoney(finalizedWeights);
 
       const mixBatches = await db
         .select({
@@ -617,12 +623,8 @@ export function registerBalesReportRoutes(app: Express) {
         .from(factoryMixBatches)
         .where(eq(factoryMixBatches.companyId, companyId));
 
-      let totalMixWeight = 0;
-      let totalMixUsed = 0;
-      for (const mb of mixBatches) {
-        totalMixWeight += parseFloat(mb.totalWeightKg) || 0;
-        totalMixUsed += parseFloat(mb.usedKg) || 0;
-      }
+      const totalMixWeight = sumMoney(mixBatches.map((mb) => mb.totalWeightKg));
+      const totalMixUsed = sumMoney(mixBatches.map((mb) => mb.usedKg));
 
       res.json({
         totalBales,
@@ -630,12 +632,12 @@ export function registerBalesReportRoutes(app: Express) {
         finalizedCount,
         pendingWeight: pendingWeight.toFixed(3),
         finalizedWeight: finalizedWeight.toFixed(3),
-        totalWeight: (pendingWeight + finalizedWeight).toFixed(3),
+        totalWeight: pendingWeight.plus(finalizedWeight).toFixed(3),
         mixBatchUtilization: {
           totalWeightKg: totalMixWeight.toFixed(3),
           usedKg: totalMixUsed.toFixed(3),
-          remainingKg: (totalMixWeight - totalMixUsed).toFixed(3),
-          utilizationPercent: totalMixWeight > 0 ? ((totalMixUsed / totalMixWeight) * 100).toFixed(1) : "0.0",
+          remainingKg: totalMixWeight.minus(totalMixUsed).toFixed(3),
+          utilizationPercent: totalMixWeight.gt(0) ? totalMixUsed.div(totalMixWeight).times(100).toFixed(1) : "0.0",
         },
       });
     } catch (error: unknown) {
@@ -689,25 +691,27 @@ export function registerBalesReportRoutes(app: Express) {
           .where(and(eq(factoryBales.companyId, companyId), sql`${factoryBales.pressedAt} >= ${todayStart}`)),
       ]);
 
-      const totalReceived = parseFloat(rawStockTotals[0]?.totalReceived || "0");
-      const totalUsed = parseFloat(rawStockTotals[0]?.totalUsed || "0");
-      const closingStockKg = totalReceived - totalUsed;
+      const closingStockKg = toMoney(rawStockTotals[0]?.totalReceived).minus(toMoney(rawStockTotals[0]?.totalUsed));
 
-      const kgsUsedToday = todayMixBatches.reduce((sum, mb) => sum + (parseFloat(mb.totalWeightKg as string) || 0), 0);
-      const openingStockKg = closingStockKg + kgsUsedToday;
+      const kgsUsedToday = sumMoney(todayMixBatches.map((mb) => mb.totalWeightKg));
+      const openingStockKg = closingStockKg.plus(kgsUsedToday);
 
       const balesPressedToday = todayBales.length;
-      const totalBaleWeightToday = todayBales.reduce((sum, b) => sum + (parseFloat(b.weightKg as string) || 0), 0);
+      const totalBaleWeightToday = sumMoney(todayBales.map((b) => b.weightKg));
 
-      const categoryMap: Record<string, { count: number; totalKg: number }> = {};
+      const categoryMap: Record<string, { count: number; weights: string[] }> = {};
       for (const bale of todayBales) {
         const name = bale.productName || bale.category || "Unknown";
-        if (!categoryMap[name]) categoryMap[name] = { count: 0, totalKg: 0 };
+        if (!categoryMap[name]) categoryMap[name] = { count: 0, weights: [] };
         categoryMap[name].count++;
-        categoryMap[name].totalKg += parseFloat(bale.weightKg as string) || 0;
+        categoryMap[name].weights.push(bale.weightKg);
       }
       const categories = Object.entries(categoryMap)
-        .map(([name, data]) => ({ name, count: data.count, totalKg: parseFloat(data.totalKg.toFixed(3)) }))
+        .map(([name, data]) => ({
+          name,
+          count: data.count,
+          totalKg: sumMoney(data.weights).toDecimalPlaces(3).toNumber(),
+        }))
         .sort((a, b) => b.count - a.count);
 
       const _kpiResult = {
