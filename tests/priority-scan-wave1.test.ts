@@ -22,6 +22,16 @@ async function createLoading(options: { status?: string; withProforma?: boolean 
   return result.rows[0].id;
 }
 
+async function setRole(role: string): Promise<void> {
+  await pool.query(`UPDATE user_company_roles SET role = $1 WHERE user_id = $2 AND company_id = $3`, [
+    role,
+    ctx.userId,
+    ctx.companyId,
+  ]);
+  const response = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+  expect(response.status).toBe(200);
+}
+
 beforeAll(async () => {
   await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
@@ -224,6 +234,48 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       .send({ color: "Green", priority: 20, enabled: true });
     expect(noProformaResponse.status).toBe(409);
     expect(String(noProformaResponse.body.message)).toContain("proforma");
+  });
+
+  it("lets non-admin users choose colors but reserves queue positions for Admin and Developer", async () => {
+    const adminLoading = await createLoading();
+    const ownerLoading = await createLoading();
+
+    const adminConfig = await agent
+      .put(`/api/factory/customer-orders/${adminLoading}/loading-list/priority-scan-config`)
+      .send({ color: "#2563eb", priority: 1, enabled: true });
+    expect(adminConfig.status).toBe(200);
+
+    const beforeOwner = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-configs");
+    expect(beforeOwner.status).toBe(200);
+    const activeCount = beforeOwner.body.filter((row: { enabled: boolean }) => row.enabled).length;
+
+    await setRole("Owner");
+    try {
+      const colorOnly = await agent
+        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .send({ color: "#16a34a", enabled: true });
+
+      expect(colorOnly.status).toBe(200);
+      expect(colorOnly.body.color).toBe("#16a34a");
+      expect(colorOnly.body.priority).toBe(activeCount + 1);
+
+      const blockedPriority = await agent
+        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .send({ color: "#dc2626", priority: 1, enabled: true });
+
+      expect(blockedPriority.status).toBe(403);
+      expect(blockedPriority.body.code).toBe("PRIORITY_POSITION_ADMIN_ONLY");
+
+      const colorEdit = await agent
+        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .send({ color: "#dc2626", enabled: true });
+
+      expect(colorEdit.status).toBe(200);
+      expect(colorEdit.body.color).toBe("#dc2626");
+      expect(colorEdit.body.priority).toBe(activeCount + 1);
+    } finally {
+      await setRole("Admin");
+    }
   });
 
   it("persists Priority Scans in one company-wide today list and excludes older days", async () => {
