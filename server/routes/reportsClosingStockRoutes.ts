@@ -26,6 +26,26 @@ import {
   stockAdjustmentVouchers,
   stockAdjustmentItems,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../lib/money";
+
+type StockTotal = { quantity: Decimal; totalValue: Decimal };
+const ZERO = new MoneyDecimal(0);
+const NO_STOCK: StockTotal = { quantity: ZERO, totalValue: ZERO };
+
+/** Adds an exact quantity and value to a stock item's running total. */
+function addStock(target: Map<number, StockTotal>, stockItemId: number, quantity: Decimal, value: Decimal) {
+  const existing = target.get(stockItemId) ?? NO_STOCK;
+  target.set(stockItemId, {
+    quantity: existing.quantity.plus(quantity),
+    totalValue: existing.totalValue.plus(value),
+  });
+}
+
+/** Total value over quantity, or 0 when there is no positive quantity. */
+function averageRate({ quantity, totalValue }: StockTotal): Decimal {
+  return quantity.greaterThan(0) ? totalValue.dividedBy(quantity) : ZERO;
+}
 
 export function registerReportsClosingStockRoutes(app: Express) {
   // Closing Stock Summary - Current inventory values by stock group
@@ -55,22 +75,10 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       // Aggregate inventory by stock item - calculate value dynamically as qty * rate
-      const inventoryByItem = new Map<number, { quantity: number; totalValue: number }>();
+      const inventoryByItem = new Map<number, StockTotal>();
       for (const inv of inventoryData) {
-        const qty = parseFloat(inv.quantity) || 0;
-        const rate = parseFloat(inv.averageRate) || 0;
-        const val = qty * rate;
-
-        if (inventoryByItem.has(inv.stockItemId)) {
-          const existing = inventoryByItem.get(inv.stockItemId)!;
-          existing.quantity += qty;
-          existing.totalValue += val;
-        } else {
-          inventoryByItem.set(inv.stockItemId, {
-            quantity: qty,
-            totalValue: val,
-          });
-        }
+        const qty = toMoney(inv.quantity);
+        addStock(inventoryByItem, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
       }
 
       // Build stock groups summary
@@ -78,47 +86,47 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .map((group) => {
           const groupItems = allStockItems.filter((item) => item.stockGroupId === group.id);
 
-          let closingQuantity = 0;
-          let closingValue = 0;
-
+          let closing = NO_STOCK;
           for (const item of groupItems) {
             const invData = inventoryByItem.get(item.id);
             if (invData) {
-              closingQuantity += invData.quantity;
-              closingValue += invData.totalValue;
+              closing = {
+                quantity: closing.quantity.plus(invData.quantity),
+                totalValue: closing.totalValue.plus(invData.totalValue),
+              };
             }
           }
-
-          const closingRate = closingQuantity > 0 ? closingValue / closingQuantity : 0;
 
           return {
             id: group.id,
             code: group.code,
             name: group.name,
+            closingExact: closing,
             closing: {
-              quantity: closingQuantity,
-              rate: closingRate,
-              value: closingValue,
+              quantity: closing.quantity.toNumber(),
+              rate: averageRate(closing).toNumber(),
+              value: closing.totalValue.toNumber(),
             },
             itemCount: groupItems.length,
           };
         })
-        .filter((g) => g.closing.quantity > 0 || g.closing.value > 0);
+        .filter((g) => g.closingExact.quantity.greaterThan(0) || g.closingExact.totalValue.greaterThan(0));
 
       // Calculate grand totals
-      const grandTotal = {
-        quantity: stockGroupSummary.reduce((sum, g) => sum + g.closing.quantity, 0),
-        value: stockGroupSummary.reduce((sum, g) => sum + g.closing.value, 0),
-      };
-
-      const grandTotalRate = grandTotal.quantity > 0 ? grandTotal.value / grandTotal.quantity : 0;
+      const grandTotal = stockGroupSummary.reduce<StockTotal>(
+        (sum, g) => ({
+          quantity: sum.quantity.plus(g.closingExact.quantity),
+          totalValue: sum.totalValue.plus(g.closingExact.totalValue),
+        }),
+        NO_STOCK
+      );
 
       res.json({
-        stockGroups: stockGroupSummary,
+        stockGroups: stockGroupSummary.map(({ closingExact: _closingExact, ...group }) => group),
         grandTotal: {
-          quantity: grandTotal.quantity,
-          rate: grandTotalRate,
-          value: grandTotal.value,
+          quantity: grandTotal.quantity.toNumber(),
+          rate: averageRate(grandTotal).toNumber(),
+          value: grandTotal.totalValue.toNumber(),
         },
       });
     } catch (error: unknown) {
@@ -171,19 +179,10 @@ export function registerReportsClosingStockRoutes(app: Express) {
       }
 
       // Aggregate by stock item (combine quantities from multiple locations)
-      const aggregatedInventory = new Map<number, { quantity: number; totalValue: number }>();
+      const aggregatedInventory = new Map<number, StockTotal>();
       for (const inv of sourceInventory) {
-        const qty = parseFloat(inv.quantity) || 0;
-        const rate = parseFloat(inv.averageRate) || 0;
-        const val = qty * rate;
-
-        if (aggregatedInventory.has(inv.stockItemId)) {
-          const existing = aggregatedInventory.get(inv.stockItemId)!;
-          existing.quantity += qty;
-          existing.totalValue += val;
-        } else {
-          aggregatedInventory.set(inv.stockItemId, { quantity: qty, totalValue: val });
-        }
+        const qty = toMoney(inv.quantity);
+        addStock(aggregatedInventory, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
       }
 
       // Check if target company already has inventory
@@ -235,9 +234,9 @@ export function registerReportsClosingStockRoutes(app: Express) {
       }
 
       // Calculate total value for the opening balance voucher
-      let totalTransferValue = 0;
+      let totalTransferValue = ZERO;
       for (const [, data] of Array.from(aggregatedInventory)) {
-        totalTransferValue += data.totalValue;
+        totalTransferValue = totalTransferValue.plus(data.totalValue);
       }
 
       // Create opening inventory records in target company
@@ -246,9 +245,14 @@ export function registerReportsClosingStockRoutes(app: Express) {
           const targetStockItemId = stockItemMapping.get(sourceStockItemId);
           if (!targetStockItemId) continue;
 
-          const avgRate = data.quantity > 0 ? data.totalValue / data.quantity : 0;
-
-          await adjustInventory(tx, defaultLocation.id, targetStockItemId, data.quantity, targetCompanyId, avgRate);
+          await adjustInventory(
+            tx,
+            defaultLocation.id,
+            targetStockItemId,
+            data.quantity.toNumber(),
+            targetCompanyId,
+            averageRate(data).toNumber()
+          );
         }
       });
 
@@ -294,19 +298,10 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       // Aggregate by stock item (combine quantities from multiple locations)
-      const aggregatedInventory = new Map<number, { quantity: number; totalValue: number }>();
+      const aggregatedInventory = new Map<number, StockTotal>();
       for (const inv of currentInventory) {
-        const qty = parseFloat(inv.quantity) || 0;
-        const rate = parseFloat(inv.averageRate) || 0;
-        const val = qty * rate;
-
-        if (aggregatedInventory.has(inv.stockItemId)) {
-          const existing = aggregatedInventory.get(inv.stockItemId)!;
-          existing.quantity += qty;
-          existing.totalValue += val;
-        } else {
-          aggregatedInventory.set(inv.stockItemId, { quantity: qty, totalValue: val });
-        }
+        const qty = toMoney(inv.quantity);
+        addStock(aggregatedInventory, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
       }
 
       // Get sales items from vouchers AFTER the target date and add them back
@@ -329,17 +324,8 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       for (const sale of salesAfterDate) {
-        const qty = parseFloat(sale.quantity) || 0;
-        const cost = parseFloat(sale.costPrice) || 0;
-        const val = qty * cost;
-
-        if (aggregatedInventory.has(sale.stockItemId)) {
-          const existing = aggregatedInventory.get(sale.stockItemId)!;
-          existing.quantity += qty;
-          existing.totalValue += val;
-        } else {
-          aggregatedInventory.set(sale.stockItemId, { quantity: qty, totalValue: val });
-        }
+        const qty = toMoney(sale.quantity);
+        addStock(aggregatedInventory, sale.stockItemId, qty, qty.times(toMoney(sale.costPrice)));
       }
 
       // Get stock adjustments AFTER the target date and reverse them
@@ -364,22 +350,15 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       for (const adj of adjustmentsAfterDate) {
-        const qty = parseFloat(adj.quantity) || 0;
-        const rate = parseFloat(adj.rate) || 0;
-        const val = Math.abs(qty) * rate;
-
-        if (aggregatedInventory.has(adj.stockItemId)) {
-          const existing = aggregatedInventory.get(adj.stockItemId)!;
-          // Reverse the adjustment: subtract what was added (production), add back what was consumed
-          existing.quantity -= qty;
-          existing.totalValue -= qty >= 0 ? val : -val;
-        } else {
-          // If no current inventory, create with reversed values
-          aggregatedInventory.set(adj.stockItemId, {
-            quantity: -qty,
-            totalValue: qty >= 0 ? -val : val,
-          });
-        }
+        const qty = toMoney(adj.quantity);
+        const val = qty.abs().times(toMoney(adj.rate));
+        // Reverse the adjustment: subtract what was added (production), add back what was consumed
+        addStock(
+          aggregatedInventory,
+          adj.stockItemId,
+          qty.negated(),
+          qty.greaterThanOrEqualTo(0) ? val.negated() : val
+        );
       }
 
       // Get container offloads AFTER the target date and subtract them
@@ -397,24 +376,14 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       for (const offload of offloadsAfterDate) {
-        const qty = parseFloat(offload.quantity) || 0;
-        const rate = parseFloat(offload.rate) || 0;
-        const val = qty * rate;
-
-        if (aggregatedInventory.has(offload.stockItemId)) {
-          const existing = aggregatedInventory.get(offload.stockItemId)!;
-          // Subtract offloaded items to reverse the inbound transaction
-          existing.quantity -= qty;
-          existing.totalValue -= val;
-        } else {
-          // If no current inventory, create with negative values (unlikely but handle it)
-          aggregatedInventory.set(offload.stockItemId, { quantity: -qty, totalValue: -val });
-        }
+        const qty = toMoney(offload.quantity);
+        // Subtract offloaded items to reverse the inbound transaction
+        addStock(aggregatedInventory, offload.stockItemId, qty.negated(), qty.times(toMoney(offload.rate)).negated());
       }
 
       // Filter out items with zero or negative quantities
       for (const [stockItemId, data] of Array.from(aggregatedInventory)) {
-        if (data.quantity <= 0) {
+        if (data.quantity.lessThanOrEqualTo(0)) {
           aggregatedInventory.delete(stockItemId);
         }
       }
@@ -431,7 +400,7 @@ export function registerReportsClosingStockRoutes(app: Express) {
         .execute();
 
       let itemsUpdated = 0;
-      let totalValue = 0;
+      let totalValue = ZERO;
 
       // Update stock items with calculated historical inventory as new opening stock
       await db.transaction(async (tx) => {
@@ -451,19 +420,17 @@ export function registerReportsClosingStockRoutes(app: Express) {
 
         // Then update items that have historical inventory
         for (const [stockItemId, data] of Array.from(aggregatedInventory)) {
-          const avgRate = data.quantity > 0 ? data.totalValue / data.quantity : 0;
-
           await tx
             .update(stockItems)
             .set({
               openingQty: data.quantity.toFixed(3),
-              openingRate: avgRate.toFixed(2),
+              openingRate: averageRate(data).toFixed(2),
               openingValue: data.totalValue.toFixed(2),
             })
             .where(eq(stockItems.id, stockItemId));
 
           itemsUpdated++;
-          totalValue += data.totalValue;
+          totalValue = totalValue.plus(data.totalValue);
         }
       });
 
@@ -530,55 +497,47 @@ export function registerReportsClosingStockRoutes(app: Express) {
           : [];
 
       // Aggregate by stock item - calculate value dynamically as qty * rate
-      const inventoryByItem = new Map<number, { quantity: number; totalValue: number }>();
+      const inventoryByItem = new Map<number, StockTotal>();
       for (const inv of inventoryData) {
-        const qty = parseFloat(inv.quantity) || 0;
-        const rate = parseFloat(inv.averageRate) || 0;
-        const val = qty * rate;
-
-        if (inventoryByItem.has(inv.stockItemId)) {
-          const existing = inventoryByItem.get(inv.stockItemId)!;
-          existing.quantity += qty;
-          existing.totalValue += val;
-        } else {
-          inventoryByItem.set(inv.stockItemId, {
-            quantity: qty,
-            totalValue: val,
-          });
-        }
+        const qty = toMoney(inv.quantity);
+        addStock(inventoryByItem, inv.stockItemId, qty, qty.times(toMoney(inv.averageRate)));
       }
 
       // Build items list
       const items = groupItems
         .map((item) => {
-          const invData = inventoryByItem.get(item.id) || { quantity: 0, totalValue: 0 };
-          const rate = invData.quantity > 0 ? invData.totalValue / invData.quantity : 0;
+          const invData = inventoryByItem.get(item.id) ?? NO_STOCK;
           return {
-            id: item.id,
-            code: item.code,
-            name: item.name,
-            closing: {
-              quantity: invData.quantity,
-              rate: rate,
-              value: invData.totalValue,
+            invData,
+            row: {
+              id: item.id,
+              code: item.code,
+              name: item.name,
+              closing: {
+                quantity: invData.quantity.toNumber(),
+                rate: averageRate(invData).toNumber(),
+                value: invData.totalValue.toNumber(),
+              },
             },
           };
         })
-        .filter((i) => i.closing.quantity > 0 || i.closing.value > 0);
+        .filter(({ invData }) => invData.quantity.greaterThan(0) || invData.totalValue.greaterThan(0));
 
       // Calculate totals
-      const totals = {
-        quantity: items.reduce((sum, i) => sum + i.closing.quantity, 0),
-        value: items.reduce((sum, i) => sum + i.closing.value, 0),
-      };
-      const avgRate = totals.quantity > 0 ? totals.value / totals.quantity : 0;
+      const totals = items.reduce<StockTotal>(
+        (sum, { invData }) => ({
+          quantity: sum.quantity.plus(invData.quantity),
+          totalValue: sum.totalValue.plus(invData.totalValue),
+        }),
+        NO_STOCK
+      );
 
       res.json({
-        items,
+        items: items.map(({ row }) => row),
         totals: {
-          quantity: totals.quantity,
-          rate: avgRate,
-          value: totals.value,
+          quantity: totals.quantity.toNumber(),
+          rate: averageRate(totals).toNumber(),
+          value: totals.totalValue.toNumber(),
         },
       });
     } catch (error: unknown) {
