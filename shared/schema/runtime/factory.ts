@@ -23,6 +23,7 @@ import {
   boolean,
   uniqueIndex,
   date,
+  bigserial,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "../common";
@@ -505,6 +506,34 @@ export const factoryReplayConsumedTokens = pgTable(
       "btree",
       table.companyId,
       table.consumedAt.desc().nullsFirst()
+    ),
+  ]
+);
+
+/** One Priority Scan per row: which bale was scanned into which loading, at which priority, on which day. */
+export const factoryPriorityScanHistory = pgTable(
+  "factory_priority_scan_history",
+  {
+    id: bigserial({ mode: "number" }).primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    orderId: integer("order_id").notNull(),
+    baleId: integer("bale_id").notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    productName: text("product_name"),
+    articleCode: varchar("article_code", { length: 50 }),
+    priority: integer().notNull(),
+    color: varchar({ length: 64 }).notNull(),
+    businessDate: date("business_date").notNull(),
+    scannedBy: text("scanned_by"),
+    scannedAt: timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("fpsh_company_date_scanned_idx").using(
+      "btree",
+      table.companyId,
+      table.businessDate,
+      table.scannedAt.desc().nullsFirst(),
+      table.id.desc().nullsFirst()
     ),
   ]
 );
