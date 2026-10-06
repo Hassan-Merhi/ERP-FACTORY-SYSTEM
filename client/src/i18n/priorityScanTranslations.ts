@@ -67,7 +67,7 @@ const priorityScanTranslations = {
   },
   scanned: { en: "scanned", ar: "ممسوح", fr: "scannées" },
   active: { en: "Active", ar: "نشط", fr: "Active" },
-  thisSession: { en: "This scan session", ar: "جلسة المسح الحالية", fr: "Cette session de scan" },
+  thisSession: { en: "Today's priority scans", ar: "مسح الأولوية اليوم", fr: "Scans prioritaires du jour" },
   referenceProductOnly: {
     en: "Reference and product only.",
     ar: "المرجع والمنتج فقط.",
