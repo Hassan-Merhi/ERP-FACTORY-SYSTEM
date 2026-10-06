@@ -314,3 +314,21 @@ describe("DELETE /api/factory/employee-bonuses/:id", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("employee advances and bonuses at exact cents", () => {
+  it("stores a half-cent advance rounded half up", async () => {
+    // parseFloat("1.005").toFixed(2) is "1.00"; numeric(…, 2) keeps 1.01.
+    const advance = await giveAdvance("1.005");
+    const row = await advanceRow(advance.id);
+    expect(row?.amount).toBe("1.01");
+    expect(row?.remaining_balance).toBe("1.01");
+  });
+
+  it("moves the employee's balance by a half-cent bonus rounded half up", async () => {
+    const before = await employeeTotals(employeeId);
+    const bonus = (await giveBonus("1.005")) as { amount?: string };
+    expect(bonus.amount).toBe("1.01");
+    const after = await employeeTotals(employeeId);
+    expect(after.balance - before.balance).toBeCloseTo(1.01, 2);
+  });
+});
