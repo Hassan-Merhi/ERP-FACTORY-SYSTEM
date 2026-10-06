@@ -15,6 +15,15 @@ import { vouchers, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { applyVoucherOptionalInventoryChange } from "./optionalInventoryEvidence";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import {
+  assertReplacementEntryAmounts,
+  assertValidReplacementEntries,
+  linkCustomerLedgerTargets,
+  replacementErrorStatus,
+  storedEntriesAsAmountInput,
+  type ReplacementEntryInput,
+  type ReplacementEntryTargets,
+} from "../../../services/accounting/voucherEntryReplacement";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -68,6 +77,28 @@ export function registerVoucherUpdateRoutes(app: Express) {
 
       const oldEntries = await storage.getVoucherEntriesByVoucher(id);
       const wasOptional = existingVoucher.optional;
+      const willBeOptional = req.body.optional !== undefined ? req.body.optional === true : wasOptional;
+      const replacesEntries = Array.isArray(req.body.entries);
+
+      // Lines are replaced only when the request sends them. A header-only edit
+      // (date, description, optional flag) used to delete every line.
+      let replacementTargets: ReplacementEntryTargets[] = [];
+      try {
+        if (replacesEntries) {
+          replacementTargets = assertValidReplacementEntries(
+            existingVoucher.voucherType,
+            willBeOptional,
+            req.body.entries
+          );
+        } else if (wasOptional && !willBeOptional) {
+          // Activating an optional voucher posts its existing lines.
+          assertReplacementEntryAmounts(existingVoucher.voucherType, false, storedEntriesAsAmountInput(oldEntries));
+        }
+      } catch (validationError: unknown) {
+        const status = replacementErrorStatus(validationError);
+        if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
+        throw validationError;
+      }
 
       await db.transaction(async (tx) => {
         const voucherUpdates: VoucherUpdate = {};
@@ -82,21 +113,20 @@ export function registerVoucherUpdateRoutes(app: Express) {
           });
         }
 
-        await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id));
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
+        if (Object.keys(voucherUpdates).length > 0) {
+          await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id));
+        }
 
-        if (req.body.entries && Array.isArray(req.body.entries)) {
-          for (const entry of req.body.entries) {
+        if (replacesEntries) {
+          const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
+          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
+          for (const [index, entry] of (req.body.entries as ReplacementEntryInput[]).entries()) {
             await tx.insert(voucherEntries).values({
               voucherId: id,
-              ledgerAccountId: entry.ledgerAccountId || null,
-              bankAccountId: entry.bankAccountId || null,
-              supplierId: entry.supplierId || null,
-              employeeId: entry.employeeId || null,
-              fixedAssetId: entry.fixedAssetId || null,
-              debitAmount: entry.debitAmount || "0",
-              creditAmount: entry.creditAmount || "0",
-              narration: entry.narration || "",
+              ...targets[index],
+              debitAmount: String(entry.debitAmount || "0"),
+              creditAmount: String(entry.creditAmount || "0"),
+              narration: typeof entry.narration === "string" ? entry.narration : "",
             });
           }
         }

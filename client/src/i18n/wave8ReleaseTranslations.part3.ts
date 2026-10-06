@@ -112,4 +112,9 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "جارٍ التحقق...",
     fr: "Vérification...",
   },
+  {
+    en: "Only ledger account entries can be moved",
+    ar: "يمكن نقل قيود حسابات الأستاذ فقط",
+    fr: "Seules les écritures de comptes du grand livre peuvent être déplacées",
+  },
 ];

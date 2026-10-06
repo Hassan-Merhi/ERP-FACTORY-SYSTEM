@@ -20,6 +20,14 @@ import { customerOrderCharges, customerOrders, factoryDaybookEntries as fde } fr
 import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvidence";
 import { syncContainerChargeVoucherEditTx } from "../../../services/containers/offload-lifecycle/charge-voucher-sync";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { MoneyDecimal, sumMoney, toMoney, type MoneyInput } from "../../../lib/money";
+import {
+  assertValidReplacementEntries,
+  linkCustomerLedgerTargets,
+  replacementErrorStatus,
+  type ReplacementEntryInput,
+  type ReplacementEntryTargets,
+} from "../../../services/accounting/voucherEntryReplacement";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -65,14 +73,30 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
       }
 
-      const totalDebits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-      const totalCredits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
-      if (!voucher.optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
-        return res.status(400).json({ message: "Total debits must equal total credits for active vouchers" });
+      // Exact validation of the replacement set: every line posts to exactly one
+      // account, amounts are well-formed, and active balanced vouchers balance.
+      let replacementTargets: ReplacementEntryTargets[];
+      try {
+        replacementTargets = assertValidReplacementEntries(
+          voucher.voucherType ?? existingVoucher.voucherType,
+          voucher.optional === true,
+          entries
+        );
+      } catch (validationError: unknown) {
+        const status = replacementErrorStatus(validationError);
+        if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
+        throw validationError;
       }
+      const totalDebits = sumMoney(
+        entries.map((entry: ReplacementEntryInput) => toMoney(entry.debitAmount as MoneyInput))
+      );
+      const totalCredits = sumMoney(
+        entries.map((entry: ReplacementEntryInput) => toMoney(entry.creditAmount as MoneyInput))
+      );
+      const newTotal = MoneyDecimal.max(totalDebits, totalCredits).toFixed(2);
 
-      let updatedVoucher;
-      const createdEntries = [];
+      let updatedVoucher!: typeof vouchers.$inferSelect;
+      const createdEntries: (typeof voucherEntries.$inferSelect)[] = [];
       // The rows replaced by this edit, kept for the audit snapshot below.
       let oldEntries: (typeof voucherEntries.$inferSelect)[] = [];
 
@@ -89,15 +113,18 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         });
       }
 
-      try {
-        oldEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
+      // Header, lines and the factory daybook mirror change together or not at
+      // all. This used to run as separate autocommit writes with a best-effort
+      // restore that could leave a voucher with no lines or half its lines.
+      await db.transaction(async (tx) => {
+        oldEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
 
         const voucherUpdates: VoucherUpdate = {
           voucherType: voucher.voucherType,
           voucherDate: voucher.voucherDate,
           description: voucher.description !== undefined ? voucher.description || null : existingVoucher.description,
           optional: voucher.optional ?? false,
-          totalAmount: Math.max(totalDebits, totalCredits).toFixed(2),
+          totalAmount: newTotal,
         };
         if (voucher.locationId !== undefined) {
           voucherUpdates.locationId = voucher.locationId;
@@ -108,23 +135,24 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
             voucherUpdates.locationName = null;
           }
         }
-        [updatedVoucher] = await db.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
+        [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
 
         if (voucher.voucherDate) {
-          await db
+          await tx
             .update(fde)
             .set({ txDate: voucher.voucherDate })
             .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, id)));
         }
 
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
+        const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
+        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, id));
 
         const editVoucherCurrency: string = String(existingVoucher.currency || "USD");
         const editVoucherRate: string | null = existingVoucher.exchangeRate
           ? String(existingVoucher.exchangeRate)
           : null;
 
-        for (const entry of entries) {
+        for (const [index, entry] of entries.entries()) {
           let dualCurrencyFields: Record<string, unknown> = {};
           if (entry.transactionCurrency) {
             try {
@@ -174,16 +202,11 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
             }
           }
 
-          const [createdEntry] = await db
+          const [createdEntry] = await tx
             .insert(voucherEntries)
             .values({
               voucherId: id,
-              ledgerAccountId: entry.ledgerAccountId || null,
-              bankAccountId: entry.bankAccountId || null,
-              fixedAssetId: entry.fixedAssetId || null,
-              supplierId: entry.supplierId || null,
-              employeeId: entry.employeeId || null,
-              factorySupplierId: entry.factorySupplierId || null,
+              ...targets[index],
               debitAmount: entry.debitAmount || "0",
               creditAmount: entry.creditAmount || "0",
               narration: entry.narration || null,
@@ -193,39 +216,11 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
           createdEntries.push(createdEntry);
         }
 
-        const newTotal = Math.max(totalDebits, totalCredits).toFixed(2);
-        await db
+        await tx
           .update(fde)
           .set({ amountCurrency: newTotal, amountUsd: newTotal })
           .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, id)));
-      } catch (error: unknown) {
-        if (oldEntries.length > 0 && createdEntries.length === 0) {
-          for (const oldEntry of oldEntries) {
-            await db
-              .insert(voucherEntries)
-              .values({
-                voucherId: oldEntry.voucherId,
-                ledgerAccountId: oldEntry.ledgerAccountId,
-                bankAccountId: oldEntry.bankAccountId,
-                fixedAssetId: oldEntry.fixedAssetId,
-                supplierId: oldEntry.supplierId,
-                employeeId: oldEntry.employeeId,
-                debitAmount: oldEntry.debitAmount,
-                creditAmount: oldEntry.creditAmount,
-                narration: oldEntry.narration,
-                transactionCurrency: oldEntry.transactionCurrency,
-                transactionDebitAmount: oldEntry.transactionDebitAmount,
-                transactionCreditAmount: oldEntry.transactionCreditAmount,
-                baseDebitAmount: oldEntry.baseDebitAmount,
-                baseCreditAmount: oldEntry.baseCreditAmount,
-                historicalExchangeRate: oldEntry.historicalExchangeRate,
-                rateConvention: oldEntry.rateConvention,
-              })
-              .catch(() => {});
-          }
-        }
-        throw error;
-      }
+      });
 
       // An edited duty/transport/office charge voucher re-prices the offloaded bales.
       await db.transaction((tx) =>
@@ -295,7 +290,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
       const chargeMatch = existingVoucher.voucherNumber?.match(/^CHARGE-.+-(\d+)-\d+$/);
       if (chargeMatch && existingVoucher.sourceModule === "FACTORY") {
         const chargeId = parseInt(chargeMatch[1]);
-        const newAmount = Math.max(totalDebits, totalCredits);
+        const newAmount = MoneyDecimal.max(totalDebits, totalCredits).toNumber();
         const [charge] = await db
           .select({ orderId: customerOrderCharges.orderId })
           .from(customerOrderCharges)

@@ -401,6 +401,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/stock-transfers/:transferId/revisions",
   "POST /api/system/parent-company",
   "POST /api/test-data/vouchers",
+  "POST /api/voucher-entries",
   "POST /api/voucher-entries/transfer-account",
   "POST /api/vouchers",
   "POST /api/vouchers/:id/finalize",
