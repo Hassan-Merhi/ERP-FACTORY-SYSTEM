@@ -38,6 +38,11 @@ function parsePriority(raw: unknown): number | null {
   return Number.isSafeInteger(priority) && priority > 0 && priority <= MAX_PRIORITY ? priority : null;
 }
 
+function canManagePriorityPosition(req: Request): boolean {
+  const role = String(req.session.currentRole || req.session.role || req.user?.role || "").toLocaleLowerCase("en-US");
+  return role === "admin" || role === "developer";
+}
+
 function uniqueConstraint(error: unknown): string | null {
   if (!error || typeof error !== "object") return null;
   const value = error as { code?: unknown; constraint?: unknown };
@@ -325,8 +330,13 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         return res.status(400).json({ message: "Color is required and must be 64 characters or fewer." });
       }
 
-      const priority = parsePriority(req.body?.priority);
-      if (priority === null) {
+      const canManagePriority = canManagePriorityPosition(req);
+      if (!canManagePriority && req.body?.priority !== undefined) {
+        return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+      }
+
+      const requestedPriority = canManagePriority ? parsePriority(req.body?.priority) : null;
+      if (canManagePriority && requestedPriority === null) {
         return res.status(400).json({ message: "Priority must be a whole number between 1 and 10000." });
       }
 
@@ -387,6 +397,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             id: customerOrderPriorityScanConfigs.id,
             createdBy: customerOrderPriorityScanConfigs.createdBy,
             createdByName: customerOrderPriorityScanConfigs.createdByName,
+            priority: customerOrderPriorityScanConfigs.priority,
             enabled: customerOrderPriorityScanConfigs.enabled,
           })
           .from(customerOrderPriorityScanConfigs)
@@ -403,6 +414,13 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           throw new PriorityScanConfigError(409, "That color is already assigned to another active priority loading.");
         }
 
+        const remainingActiveIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
+        const effectivePriority = canManagePriority
+          ? requestedPriority!
+          : existing[0]?.enabled
+            ? existing[0].priority
+            : remainingActiveIds.length + 1;
+
         // Temporarily keep the target disabled while the active queue is rewritten.
         // This releases the partial unique indexes so moving #2 to #1 can be done
         // atomically without transient duplicate-priority failures.
@@ -413,7 +431,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             orderId,
             color: normalizedColor.color,
             colorKey: normalizedColor.colorKey,
-            priority,
+            priority: effectivePriority,
             enabled: false,
             createdBy: existing[0]?.createdBy ?? actorId,
             createdByName: existing[0]?.createdByName ?? actorName,
@@ -425,7 +443,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             set: {
               color: normalizedColor.color,
               colorKey: normalizedColor.colorKey,
-              priority,
+              priority: effectivePriority,
               enabled: false,
               updatedBy: actorId,
               updatedByName: actorName,
@@ -434,10 +452,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           })
           .returning();
 
-        const remainingActiveIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
-
         if (enabled) {
-          const insertAt = Math.min(Math.max(priority - 1, 0), remainingActiveIds.length);
+          const insertAt = Math.min(Math.max(effectivePriority - 1, 0), remainingActiveIds.length);
           const orderedIds = [...remainingActiveIds];
           orderedIds.splice(insertAt, 0, target.id);
           await rewriteActivePriorityQueue(tx, companyId, orderedIds, actorId, actorName);
