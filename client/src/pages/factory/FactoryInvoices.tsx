@@ -29,6 +29,7 @@ import {
 } from "./factoryinvoices/invoiceCalculations";
 import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
 import { InvoiceOrderRow } from "./factoryinvoices/InvoiceOrderRow";
+import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 
 export default function FactoryInvoices() {
   const { toast } = useToast();
@@ -348,6 +349,11 @@ export default function FactoryInvoices() {
               </Select>
             </div>
           </div>
+        </div>
+
+        {/* Shared container availability — same source of truth as Shipping Containers */}
+        <div className="px-4 pt-3">
+          <ShippingAvailabilityTable />
         </div>
 
         {/* Summary bar */}
