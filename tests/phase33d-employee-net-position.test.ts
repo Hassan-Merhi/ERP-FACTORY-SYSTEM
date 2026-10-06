@@ -166,9 +166,7 @@ describe("Phase 33D employee/factory net position", () => {
       expect.objectContaining({ code: "INVENTORY", value: 0 }),
       expect.objectContaining({ code: "RAW_MATERIAL", value: 0 }),
     ]);
-    expect(res.body.onUs.accounts).toEqual([
-      expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 }),
-    ]);
+    expect(res.body.onUs.accounts).toEqual([expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 })]);
   });
 
   it("uses authoritative factory sources, strips duplicate ledger categories, and separates employee payables from receivables", async () => {
@@ -214,9 +212,33 @@ describe("Phase 33D employee/factory net position", () => {
       [],
       [],
       [
-        { id: 1, status: "PENDING_VERIFICATION", orderDate: "2026-09-10", grandTotal: "60", totalQtyBales: 1, customerId: 1, customerName: "Pending Customer" },
-        { id: 2, status: "VERIFIED", orderDate: "2026-09-11", grandTotal: "70", totalQtyBales: 2, customerId: 2, customerName: "Verified Customer" },
-        { id: 3, status: "LOADING", orderDate: "2026-09-12", grandTotal: "80", totalQtyBales: 3, customerId: 3, customerName: "Loading Customer" },
+        {
+          id: 1,
+          status: "PENDING_VERIFICATION",
+          orderDate: "2026-09-10",
+          grandTotal: "60",
+          totalQtyBales: 1,
+          customerId: 1,
+          customerName: "Pending Customer",
+        },
+        {
+          id: 2,
+          status: "VERIFIED",
+          orderDate: "2026-09-11",
+          grandTotal: "70",
+          totalQtyBales: 2,
+          customerId: 2,
+          customerName: "Verified Customer",
+        },
+        {
+          id: 3,
+          status: "LOADING",
+          orderDate: "2026-09-12",
+          grandTotal: "80",
+          totalQtyBales: 3,
+          customerId: 3,
+          customerName: "Loading Customer",
+        },
       ],
       [],
       [
@@ -249,19 +271,21 @@ describe("Phase 33D employee/factory net position", () => {
     });
 
     const forUsCodes = res.body.forUs.accounts.map((account: any) => account.code);
-    expect(forUsCodes).toEqual(expect.arrayContaining([
-      "INVENTORY",
-      "RAW_MATERIAL",
-      "BALANCE_ON_TABLE",
-      "STOCK_OTW",
-      "CASH",
-      "SUPPLIER_OVERPAID",
-      "PENDING_ORDERS",
-      "VERIFIED_ORDERS",
-      "LOADING_ORDERS",
-      "EMPLOYEE_RECEIVABLE",
-      "WORKER_ADVANCES",
-    ]));
+    expect(forUsCodes).toEqual(
+      expect.arrayContaining([
+        "INVENTORY",
+        "RAW_MATERIAL",
+        "BALANCE_ON_TABLE",
+        "STOCK_OTW",
+        "CASH",
+        "SUPPLIER_OVERPAID",
+        "PENDING_ORDERS",
+        "VERIFIED_ORDERS",
+        "LOADING_ORDERS",
+        "EMPLOYEE_RECEIVABLE",
+        "WORKER_ADVANCES",
+      ])
+    );
     expect(forUsCodes).not.toEqual(expect.arrayContaining(["LEGACY_INV", "ADV", "RENT", "INS"]));
 
     const onUsCodes = res.body.onUs.accounts.map((account: any) => account.code);
