@@ -6,7 +6,7 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -20,33 +20,8 @@ import {
   vouchers,
   type LedgerAccount,
 } from "@shared/schema";
-import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
-
-/**
- * The bulk rows that will actually post: a positive amount, taken at cents, for
- * an employee of the active company. Rows for another company's employee used
- * to be counted in the voucher total and the other leg and only then skipped,
- * which left the voucher unbalanced.
- */
-async function postableAdjustments(rows: Array<{ employeeId: number; amount: unknown }>, companyId: number) {
-  const parsed = rows.flatMap((row) => {
-    const amount = parseMoneyInput(row.amount);
-    return amount && amount.gt(0) ? [{ employeeId: row.employeeId, amount: amount.toDecimalPlaces(2) }] : [];
-  });
-  const ids = Array.from(new Set(parsed.map((row) => Number(row.employeeId)).filter(Number.isInteger)));
-  const companyEmployees =
-    ids.length > 0
-      ? await db
-          .select()
-          .from(employees)
-          .where(and(inArray(employees.id, ids), eq(employees.companyId, companyId)))
-      : [];
-  const byId = new Map(companyEmployees.map((employee) => [employee.id, employee]));
-  return parsed.flatMap((row) => {
-    const employee = byId.get(Number(row.employeeId));
-    return employee ? [{ employee, amount: row.amount }] : [];
-  });
-}
+import { sumMoney, toMoney } from "../../lib/money";
+import { postableAdjustments } from "./postableAdjustments";
 
 export function registerPayrollBulkAdjustmentRoutes(app: Express) {
   // Payroll - Bulk Employee Bonus Deposit

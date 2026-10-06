@@ -8,9 +8,17 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
+import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { employeeGroupMembers, employeeGroups, employees, voucherEntries, vouchers } from "@shared/schema";
+import {
+  bankAccounts,
+  employeeGroupMembers,
+  employeeGroups,
+  employees,
+  voucherEntries,
+  vouchers,
+} from "@shared/schema";
 
 export function registerPayrollWorkerPaymentRoutes(app: Express) {
   // Payroll - Worker Direct Payment
@@ -117,14 +125,31 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
         return res.status(400).json({ message: "Payment account and date are required" });
       }
 
-      // Validate all payment amounts
+      // Validate all payment amounts; each is taken at cents so the legs balance.
+      const paymentCents: ReturnType<typeof toMoney>[] = [];
       for (const payment of payments) {
-        const amount = parseFloat(payment.amount);
-        if (isNaN(amount) || amount <= 0) {
+        const amount = parseMoneyInput(payment.amount);
+        paymentCents.push(amount ? amount.toDecimalPlaces(2) : toMoney(0));
+        if (!amount || amount.lte(0)) {
           return res.status(400).json({
             message: "All payment amounts must be positive numbers",
           });
         }
+      }
+
+      // The credited cash or bank account must belong to this company.
+      const creditAccountId = parseInt(accountId);
+      if (accountType === "cash") {
+        const companyAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
+        if (!companyAccounts.some((account) => account.id === creditAccountId)) {
+          return res.status(404).json({ message: "Cash account not found" });
+        }
+      } else {
+        const [bank] = await db
+          .select({ id: bankAccounts.id })
+          .from(bankAccounts)
+          .where(and(eq(bankAccounts.id, creditAccountId), eq(bankAccounts.companyId, req.session.currentCompanyId)));
+        if (!bank) return res.status(404).json({ message: "Payment account not found" });
       }
 
       // Build group-membership lookup: employeeId → groupName
@@ -139,7 +164,7 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
       }
 
       // Calculate total amount
-      const totalAmount = payments.reduce((sum: number, p) => sum + parseFloat(p.amount), 0);
+      const totalAmount = sumMoney(paymentCents);
 
       // Create single voucher for all payments
       const voucherNumber = `SAL-BULK-${Date.now()}`;
@@ -156,10 +181,10 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
         .returning();
 
       // Group payments by employee group and create one debit per group
-      const bulkPayByGroup = new Map<string, number>();
-      for (const p of payments) {
+      const bulkPayByGroup = new Map<string, ReturnType<typeof toMoney>>();
+      for (const [index, p] of payments.entries()) {
         const grp = (bulkPayEmpGroupMap.get(p.employeeId) || "").trim() || "__default__";
-        bulkPayByGroup.set(grp, (bulkPayByGroup.get(grp) || 0) + parseFloat(p.amount));
+        bulkPayByGroup.set(grp, (bulkPayByGroup.get(grp) ?? toMoney(0)).plus(paymentCents[index]));
       }
       const bulkPayFreshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
       for (const [grp, grpTotal] of bulkPayByGroup) {
