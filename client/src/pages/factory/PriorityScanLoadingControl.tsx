@@ -392,7 +392,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
 
           <DialogFooter className="sm:justify-between gap-2">
             <div>
-              {config && (
+              {config && canManagePriority && (
                 <Button
                   type="button"
                   variant="ghost"
