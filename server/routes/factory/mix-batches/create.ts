@@ -17,6 +17,7 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchCreateRoutes(app: Express) {
   app.post("/api/factory/mix-batches", requireAuth, async (req: Request, res: Response) => {
@@ -42,6 +43,14 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
       if (!hasSupplierSources && !hasOpeningBatch && !hasLegacySources) {
         return res.status(400).json({ message: "At least one source is required" });
       }
+
+      // Source weights are read the way parseFloat reads them; one that does not
+      // parse would otherwise reach usedKg as NaN.
+      const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
+      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
 
       const result = await db.transaction(async (tx) => {
         const year = new Date().getFullYear();
@@ -77,10 +86,10 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Opening batch not found`);
 
-          const remaining = parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg);
-          if (remaining <= 0.001) throw new Error(`Opening batch has no remaining stock`);
+          const remaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          if (remaining.lessThanOrEqualTo(0.001)) throw new Error(`Opening batch has no remaining stock`);
 
-          const cost = parseFloat(srcBatch.costPerKg);
+          const cost = toMoney(srcBatch.costPerKg);
 
           await tx
             .update(factoryMixBatches)
@@ -91,14 +100,14 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             })
             .where(eq(factoryMixBatches.id, srcBatch.id));
 
-          const dR = new Decimal(remaining);
-          const dC = new Decimal(cost);
+          const dR = remaining;
+          const dC = cost;
           dTotalWeightKg = dTotalWeightKg.plus(dR);
           dTotalCost = dTotalCost.plus(dR.times(dC));
           sourceRecords.push({
             sourceBatchId: srcBatch.id,
-            weightKg: String(remaining),
-            costPerKg: String(cost),
+            weightKg: remaining.toFixed(),
+            costPerKg: cost.toFixed(),
             totalCost: dR.times(dC).toDecimalPlaces(6).toFixed(6),
           });
         }
@@ -106,8 +115,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
         for (const source of supplierSources) {
           // costPerKg from the client is NEVER trusted for a real supplier — the
           // authoritative locked rate is always read server-side.
-          const { supplierId, weightKg } = source;
-          const weight = parseFloat(weightKg);
+          const { supplierId } = source;
+          const weight = weightOf(source);
 
           // Locked, offload-time moving-average rate — this NEVER shifts from mix
           // batch operations. FIFO row selection (which container gets debited)
@@ -120,36 +129,36 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: number }> = [];
+          const perRsDeductions: Array<{ containerId: number; deduct: Decimal }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
-            if (remaining <= 0.001) break;
-            const avail = rs.receivedKg - rs.usedKg;
-            if (avail <= 0) continue;
+            if (remaining.lessThanOrEqualTo(0.001)) break;
+            const avail = toMoney(rs.receivedKg).minus(toMoney(rs.usedKg));
+            if (avail.lessThanOrEqualTo(0)) continue;
 
-            const deduct = Math.min(remaining, avail);
+            const deduct = MoneyDecimal.min(remaining, avail);
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${deduct}` })
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${deduct.toFixed()}` })
               .where(eq(factoryRawStock.id, rs.id));
 
             perRsDeductions.push({ containerId: rs.containerId, deduct });
-            remaining -= deduct;
+            remaining = remaining.minus(deduct);
           }
 
-          if (remaining > 0.001 && supplierRawStocks.length > 0) {
+          if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
             const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining}` })
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
               .where(eq(factoryRawStock.id, lastRs.id));
             // Add to the last deduction entry if it already exists, otherwise push a new one
             const existing = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (existing) existing.deduct += remaining;
+            if (existing) existing.deduct = existing.deduct.plus(remaining);
             else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
           }
 
-          const dWs = new Decimal(weight);
+          const dWs = weight;
           const dCpks = new Decimal(costPerKg);
           dTotalWeightKg = dTotalWeightKg.plus(dWs);
           dTotalCost = dTotalCost.plus(dWs.times(dCpks));
@@ -165,7 +174,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
             }
             sourceRecords.push({
               supplierId,
-              weightKg: String(weight),
+              weightKg: weight.toFixed(),
               costPerKg: String(costPerKg),
               totalCost: dWs.times(dCpks).toDecimalPlaces(6).toFixed(6),
             });
@@ -175,9 +184,9 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
               sourceRecords.push({
                 supplierId,
                 containerId: d.containerId,
-                weightKg: String(d.deduct),
+                weightKg: d.deduct.toFixed(),
                 costPerKg: String(costPerKg),
-                totalCost: new Decimal(d.deduct).times(dCpks).toDecimalPlaces(6).toFixed(6),
+                totalCost: d.deduct.times(dCpks).toDecimalPlaces(6).toFixed(6),
               });
             }
           }
@@ -189,7 +198,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           // FIX 4: If the container has a linked supplier, use the supplier's
           // authoritative moving-average locked rate instead of the container's
           // native-currency cost.
-          const { containerId, weightKg } = source;
+          const { containerId } = source;
           const [rawStock] = await tx
             .select()
             .from(factoryRawStock)
@@ -212,35 +221,37 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           if (!ctnRow) throw new Error(`Container ${containerId} not found, deleted, or belongs to another company`);
           const ctnSupplierId = ctnRow?.supplierId ?? null;
 
-          const weight = parseFloat(weightKg);
-          let costUsd: number;
+          const weight = weightOf(source);
+          let costUsd: Decimal;
           if (ctnSupplierId) {
-            costUsd = await getLockedSupplierRate(tx, companyId, ctnSupplierId, { forUpdate: true });
+            costUsd = toMoney(await getLockedSupplierRate(tx, companyId, ctnSupplierId, { forUpdate: true }));
           } else {
-            costUsd = parseFloat(rawStock.costPerKgUsd || "0") || parseFloat(rawStock.costPerKg || "0") || 0;
+            // The USD rate when it is set, else the native rate.
+            const usdRate = toMoney(rawStock.costPerKgUsd);
+            costUsd = usdRate.isZero() ? toMoney(rawStock.costPerKg) : usdRate;
           }
 
           // Allow over-use: usedKg may exceed receivedKg, driving stock negative
           await tx
             .update(factoryRawStock)
-            .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight}` })
+            .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight.toFixed()}` })
             .where(eq(factoryRawStock.id, rawStock.id));
 
-          const dWc = new Decimal(weight);
-          const dCusd = new Decimal(costUsd);
+          const dWc = weight;
+          const dCusd = costUsd;
           dTotalWeightKg = dTotalWeightKg.plus(dWc);
           dTotalCost = dTotalCost.plus(dWc.times(dCusd));
           sourceRecords.push({
             supplierId: ctnSupplierId ?? undefined,
             containerId,
-            weightKg: String(weight),
-            costPerKg: String(costUsd),
+            weightKg: weight.toFixed(),
+            costPerKg: costUsd.toFixed(),
             totalCost: dWc.times(dCusd).toDecimalPlaces(6).toFixed(6),
           });
         }
 
         for (const bSource of batchSources) {
-          const { sourceBatchId, weightKg } = bSource;
+          const { sourceBatchId } = bSource;
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
@@ -249,27 +260,27 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg);
-          const weight = parseFloat(weightKg);
-          if (weight > batchRemaining + 0.001) {
+          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const weight = weightOf(bSource);
+          if (weight.greaterThan(batchRemaining.plus(0.001))) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
-          const cost = parseFloat(srcBatch.costPerKg);
+          const cost = toMoney(srcBatch.costPerKg);
 
           await tx
             .update(factoryMixBatches)
-            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight}`, updatedAt: new Date() })
+            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight.toFixed()}`, updatedAt: new Date() })
             .where(eq(factoryMixBatches.id, srcBatch.id));
 
-          const dWbs = new Decimal(weight);
-          const dCbs = new Decimal(cost);
+          const dWbs = weight;
+          const dCbs = cost;
           dTotalWeightKg = dTotalWeightKg.plus(dWbs);
           dTotalCost = dTotalCost.plus(dWbs.times(dCbs));
           sourceRecords.push({
             sourceBatchId,
-            weightKg: String(weight),
-            costPerKg: String(cost),
+            weightKg: weight.toFixed(),
+            costPerKg: cost.toFixed(),
             totalCost: dWbs.times(dCbs).toDecimalPlaces(6).toFixed(6),
           });
         }
@@ -330,8 +341,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
         referenceId: result.id,
         referenceTable: "factory_mix_batches",
         description: `Mix batch created: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${parseFloat(result.totalWeightKg || "0").toFixed(1)} kg)`,
-        amountCurrency: parseFloat(result.totalCost || "0"),
-        amountUsd: parseFloat(result.totalCost || "0"),
+        amountCurrency: toMoney(result.totalCost).toNumber(),
+        amountUsd: toMoney(result.totalCost).toNumber(),
       });
 
       await logAudit({
@@ -343,8 +354,8 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
         recordId: result.id,
         recordIdentifier: result.batchCode + (result.name ? ` – ${result.name}` : ""),
         changes: {
-          totalWeightKg: { old: null, new: parseFloat(result.totalWeightKg || "0").toFixed(3) },
-          totalCost: { old: null, new: parseFloat(result.totalCost || "0").toFixed(2) },
+          totalWeightKg: { old: null, new: toMoney(result.totalWeightKg).toFixed(3) },
+          totalCost: { old: null, new: toMoney(result.totalCost).toFixed(2) },
         },
       });
       res.json(result);
