@@ -20,6 +20,7 @@ import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { factorySettings as fSettings, factoryDaybookEntries as fde } from "@shared/schema";
 import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
+import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -616,6 +617,14 @@ export function registerVoucherPaymentRoutes(app: Express) {
 
         // Batch insert all new voucher entries
         const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
+
+        // An edited duty/transport/office charge voucher re-prices the offloaded bales.
+        await syncContainerChargeVoucherEditTx(tx, {
+          companyId: existingVoucher.companyId,
+          voucherNumber: existingVoucher.voucherNumber,
+          oldTotal: existingVoucher.optional ? 0 : existingVoucher.totalAmount,
+          newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
+        });
 
         return {
           voucher: updatedVoucher,

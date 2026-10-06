@@ -18,6 +18,7 @@ import { eq, and, or } from "drizzle-orm";
 import { recalculateOrderTotals } from "../../factory/_helpers";
 import { customerOrderCharges, customerOrders, factoryDaybookEntries as fde } from "@shared/schema";
 import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvidence";
+import { syncContainerChargeVoucherEditTx } from "../../../services/containers/offload-lifecycle/charge-voucher-sync";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
@@ -225,6 +226,16 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
         throw error;
       }
+
+      // An edited duty/transport/office charge voucher re-prices the offloaded bales.
+      await db.transaction((tx) =>
+        syncContainerChargeVoucherEditTx(tx, {
+          companyId: existingVoucher.companyId,
+          voucherNumber: existingVoucher.voucherNumber,
+          oldTotal: existingVoucher.optional ? 0 : existingVoucher.totalAmount,
+          newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
+        })
+      );
 
       const _oldEntriesSnap = await snapshotVoucherEntries(oldEntries).catch(() => []);
       const _newEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);

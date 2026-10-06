@@ -253,6 +253,7 @@ export const factoryShippingContainerRows = pgTable(
     eta: date("eta"),
     containerArrivedDate: date("container_arrived_date"),
     note: text("note"),
+    anything: text("anything"),
     ciNumber: text("ci_number"),
     isDone: boolean("is_done").notNull().default(false),
     doneAt: timestamp("done_at"),
@@ -285,6 +286,7 @@ export const insertFactoryShippingContainerRowSchema = createInsertSchema(factor
     orderDate: z.string().min(1),
     containerArrivedDate: z.string().optional().nullable(),
     note: z.string().optional().nullable(),
+    anything: z.string().optional().nullable(),
   });
 export type InsertFactoryShippingContainerRow = z.infer<typeof insertFactoryShippingContainerRowSchema>;
 export type FactoryShippingContainerRow = typeof factoryShippingContainerRows.$inferSelect;
@@ -344,6 +346,7 @@ export const factoryShippingAvailability = pgTable(
     shippingCompany: text("shipping_company").notNull(),
     availableContainers: integer("available_containers").notNull().default(0),
     note: text("note"),
+    details: text("details"),
     isArchived: boolean("is_archived").notNull().default(false),
     archivedAt: timestamp("archived_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -366,6 +369,7 @@ export const insertFactoryShippingAvailabilitySchema = createInsertSchema(factor
     shippingCompany: z.string().min(1),
     availableContainers: z.number().int().min(0),
     note: z.string().nullable().optional(),
+    details: z.string().nullable().optional(),
   });
 export type InsertFactoryShippingAvailability = z.infer<typeof insertFactoryShippingAvailabilitySchema>;
 export type FactoryShippingAvailability = typeof factoryShippingAvailability.$inferSelect;

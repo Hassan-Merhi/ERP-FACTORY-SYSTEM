@@ -112,6 +112,12 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     refetchInterval: visibleTabInterval(60_000),
   });
 
+  const { data: currentUser } = useQuery<{ role?: string; currentRole?: string }>({
+    queryKey: ["/api/auth/me"],
+  });
+  const effectiveRole = currentUser?.currentRole ?? currentUser?.role ?? "";
+  const canManagePriority = effectiveRole === "Admin" || effectiveRole === "Developer";
+
   const colorPresets = useMemo(
     () => resolveColorPresets(factorySettings?.priorityScanColorPresets),
     [factorySettings?.priorityScanColorPresets]
@@ -136,8 +142,8 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
   };
 
   const saveMutation = useMutation({
-    mutationFn: async ({ color, priority, palette }: { color: string; priority: number; palette: string[] }) => {
-      if (!samePalette(palette, colorPresets)) {
+    mutationFn: async ({ color, priority, palette }: { color: string; priority?: number; palette: string[] }) => {
+      if (canManagePriority && !samePalette(palette, colorPresets)) {
         const paletteRes = await apiRequest("PUT", FACTORY_SETTINGS_URL, {
           priorityScanColorPresets: palette,
         });
@@ -145,18 +151,24 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
         queryClient.setQueryData([FACTORY_SETTINGS_URL], savedSettings);
       }
 
-      const res = await apiRequest("PUT", `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`, {
+      const payload: { color: string; enabled: boolean; priority?: number } = {
         color,
-        priority,
         enabled: true,
-      });
+      };
+      if (canManagePriority && priority !== undefined) payload.priority = priority;
+
+      const res = await apiRequest(
+        "PUT",
+        `/api/factory/customer-orders/${load.id}/loading-list/priority-scan-config`,
+        payload
+      );
       return res.json() as Promise<PriorityScanConfig>;
     },
     onSuccess: async (saved) => {
       await Promise.all([refreshQueue(), queryClient.invalidateQueries({ queryKey: [FACTORY_SETTINGS_URL] })]);
       setDialogOpen(false);
       toast({
-        title: tr("prioritySaved", { priority: saved.priority }),
+        title: canManagePriority ? tr("prioritySaved", { priority: saved.priority }) : tr("colorSaved"),
         description: tr("loadingNowQueued", { orderId: load.id }),
       });
     },
@@ -249,39 +261,43 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               onClick={openEditor}
               disabled={busy}
               data-testid={`button-priority-config-${load.id}`}
-              title={tr("editPriorityTitle")}
+              title={canManagePriority ? tr("editPriorityTitle") : tr("editColorTitle")}
             >
               <span
                 className="h-3.5 w-3.5 rounded-full border border-black/15 shadow-sm"
                 style={{ backgroundColor: activeConfig.color }}
                 aria-hidden="true"
               />
-              {tr("priorityNumber", { priority: activeConfig.priority })}
+              {canManagePriority ? tr("priorityNumber", { priority: activeConfig.priority }) : tr("editColor")}
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => moveMutation.mutate(activeConfig.priority - 1)}
-              disabled={busy || activeConfig.priority <= 1}
-              data-testid={`button-priority-up-${load.id}`}
-              title={tr("moveUp")}
-            >
-              <ArrowUp className="h-3.5 w-3.5" />
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => moveMutation.mutate(activeConfig.priority + 1)}
-              disabled={busy || activeConfig.priority >= activeConfigs.length}
-              data-testid={`button-priority-down-${load.id}`}
-              title={tr("moveDown")}
-            >
-              <ArrowDown className="h-3.5 w-3.5" />
-            </Button>
+            {canManagePriority && (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => moveMutation.mutate(activeConfig.priority - 1)}
+                  disabled={busy || activeConfig.priority <= 1}
+                  data-testid={`button-priority-up-${load.id}`}
+                  title={tr("moveUp")}
+                >
+                  <ArrowUp className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => moveMutation.mutate(activeConfig.priority + 1)}
+                  disabled={busy || activeConfig.priority >= activeConfigs.length}
+                  data-testid={`button-priority-down-${load.id}`}
+                  title={tr("moveDown")}
+                >
+                  <ArrowDown className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
           </>
         ) : (
           <Button
@@ -294,7 +310,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
             title={load.proformaIdUsed ? tr("addToQueue") : tr("linkProformaFirst")}
           >
             <Palette className="h-4 w-4 mr-1.5" />
-            {tr("setPriority")}
+            {canManagePriority ? tr("setPriority") : tr("setColor")}
           </Button>
         )}
       </div>
@@ -303,7 +319,11 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{tr("dialogTitle", { orderId: load.id })}</DialogTitle>
-            <DialogDescription>{tr("dialogDescription", { customer: load.customerName })}</DialogDescription>
+            <DialogDescription>
+              {tr(canManagePriority ? "dialogDescription" : "colorOnlyDialogDescription", {
+                customer: load.customerName,
+              })}
+            </DialogDescription>
           </DialogHeader>
 
           {!load.proformaIdUsed && (
@@ -350,27 +370,29 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
               {selectedColorInUse && <p className="text-xs text-destructive">{tr("colorAlreadyAssigned")}</p>}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor={`priority-position-${load.id}`}>{tr("queuePosition")}</Label>
-              <Select value={String(selectedPriority)} onValueChange={(value) => setSelectedPriority(Number(value))}>
-                <SelectTrigger id={`priority-position-${load.id}`} data-testid={`select-priority-${load.id}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: maxSelectablePriority }, (_, index) => index + 1).map((position) => (
-                    <SelectItem key={position} value={String(position)}>
-                      {tr("priorityNumber", { priority: position })}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">{tr("autoAdvanceHint")}</p>
-            </div>
+            {canManagePriority && (
+              <div className="space-y-2">
+                <Label htmlFor={`priority-position-${load.id}`}>{tr("queuePosition")}</Label>
+                <Select value={String(selectedPriority)} onValueChange={(value) => setSelectedPriority(Number(value))}>
+                  <SelectTrigger id={`priority-position-${load.id}`} data-testid={`select-priority-${load.id}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: maxSelectablePriority }, (_, index) => index + 1).map((position) => (
+                      <SelectItem key={position} value={String(position)}>
+                        {tr("priorityNumber", { priority: position })}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{tr("autoAdvanceHint")}</p>
+              </div>
+            )}
           </div>
 
           <DialogFooter className="sm:justify-between gap-2">
             <div>
-              {config && (
+              {config && canManagePriority && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -393,14 +415,20 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
                 onClick={() =>
                   saveMutation.mutate({
                     color: selectedColor,
-                    priority: selectedPriority,
+                    priority: canManagePriority ? selectedPriority : undefined,
                     palette: draftColorPresets,
                   })
                 }
                 disabled={busy || !load.proformaIdUsed || selectedColorInUse}
                 data-testid={`button-save-priority-${load.id}`}
               >
-                {saveMutation.isPending ? tr("saving") : config ? tr("savePriority") : tr("addToQueue")}
+                {saveMutation.isPending
+                  ? tr("saving")
+                  : canManagePriority
+                    ? config
+                      ? tr("savePriority")
+                      : tr("addToQueue")
+                    : tr("saveColor")}
               </Button>
             </div>
           </DialogFooter>

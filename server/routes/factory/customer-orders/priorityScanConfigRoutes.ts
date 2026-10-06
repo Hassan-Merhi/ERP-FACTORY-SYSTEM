@@ -3,10 +3,12 @@ import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { requireAuth } from "../../../auth";
 import { db } from "../../../db";
+import { storage } from "../../../storage";
+import { getCompanyBusinessDate } from "../../../lib/dateUtils";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
-import { firstRow } from "../../../lib/queryResult";
+import { firstRow, resultRows } from "../../../lib/queryResult";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
@@ -34,6 +36,11 @@ function normalizeColor(raw: unknown): { color: string; colorKey: string } | nul
 function parsePriority(raw: unknown): number | null {
   const priority = typeof raw === "number" ? raw : Number(raw);
   return Number.isSafeInteger(priority) && priority > 0 && priority <= MAX_PRIORITY ? priority : null;
+}
+
+function canManagePriorityPosition(req: Request): boolean {
+  const role = String(req.session.currentRole || req.session.role || req.user?.role || "").toLocaleLowerCase("en-US");
+  return role === "admin" || role === "developer";
 }
 
 function uniqueConstraint(error: unknown): string | null {
@@ -89,6 +96,32 @@ export function registerPriorityScanConfigRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
+
+      if (req.query.view === "today-history") {
+        const companySettings = await storage.getCompanySettings(companyId);
+        const businessDate = getCompanyBusinessDate(companySettings?.timezone);
+        const historyResult = await db.execute(sql`
+          SELECT id,
+                 reference_number AS "referenceNumber",
+                 product_name AS "productName",
+                 article_code AS "articleCode",
+                 order_id AS "orderId",
+                 priority,
+                 color,
+                 scanned_by AS "scannedBy",
+                 scanned_at AS "scannedAt"
+          FROM factory_priority_scan_history
+          WHERE company_id = ${companyId}
+            AND business_date = ${businessDate}
+          ORDER BY scanned_at DESC, id DESC
+        `);
+        res.set("Cache-Control", "private, no-store");
+        return res.json({
+          businessDate,
+          serverNow: new Date().toISOString(),
+          scans: resultRows(historyResult),
+        });
+      }
 
       await disableStalePriorityScanConfigs(companyId);
       await advanceSatisfiedPriorityScanConfigs(companyId);
@@ -297,8 +330,13 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         return res.status(400).json({ message: "Color is required and must be 64 characters or fewer." });
       }
 
-      const priority = parsePriority(req.body?.priority);
-      if (priority === null) {
+      const canManagePriority = canManagePriorityPosition(req);
+      if (!canManagePriority && req.body?.priority !== undefined) {
+        return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+      }
+
+      const requestedPriority = canManagePriority ? parsePriority(req.body?.priority) : null;
+      if (canManagePriority && requestedPriority === null) {
         return res.status(400).json({ message: "Priority must be a whole number between 1 and 10000." });
       }
 
@@ -359,6 +397,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             id: customerOrderPriorityScanConfigs.id,
             createdBy: customerOrderPriorityScanConfigs.createdBy,
             createdByName: customerOrderPriorityScanConfigs.createdByName,
+            priority: customerOrderPriorityScanConfigs.priority,
             enabled: customerOrderPriorityScanConfigs.enabled,
           })
           .from(customerOrderPriorityScanConfigs)
@@ -375,6 +414,13 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           throw new PriorityScanConfigError(409, "That color is already assigned to another active priority loading.");
         }
 
+        const remainingActiveIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
+        const effectivePriority = canManagePriority
+          ? requestedPriority!
+          : existing[0]?.enabled
+            ? existing[0].priority
+            : remainingActiveIds.length + 1;
+
         // Temporarily keep the target disabled while the active queue is rewritten.
         // This releases the partial unique indexes so moving #2 to #1 can be done
         // atomically without transient duplicate-priority failures.
@@ -385,7 +431,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             orderId,
             color: normalizedColor.color,
             colorKey: normalizedColor.colorKey,
-            priority,
+            priority: effectivePriority,
             enabled: false,
             createdBy: existing[0]?.createdBy ?? actorId,
             createdByName: existing[0]?.createdByName ?? actorName,
@@ -397,7 +443,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             set: {
               color: normalizedColor.color,
               colorKey: normalizedColor.colorKey,
-              priority,
+              priority: effectivePriority,
               enabled: false,
               updatedBy: actorId,
               updatedByName: actorName,
@@ -406,10 +452,8 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           })
           .returning();
 
-        const remainingActiveIds = activeRows.filter((row) => row.orderId !== orderId).map((row) => row.id);
-
         if (enabled) {
-          const insertAt = Math.min(Math.max(priority - 1, 0), remainingActiveIds.length);
+          const insertAt = Math.min(Math.max(effectivePriority - 1, 0), remainingActiveIds.length);
           const orderedIds = [...remainingActiveIds];
           orderedIds.splice(insertAt, 0, target.id);
           await rewriteActivePriorityQueue(tx, companyId, orderedIds, actorId, actorName);
@@ -449,6 +493,9 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (!canManagePriorityPosition(req)) {
+          return res.status(403).json({ code: "PRIORITY_POSITION_ADMIN_ONLY", message: "Access denied" });
+        }
 
         const orderId = parseId(req.params.id);
         if (orderId === null) return res.status(400).json({ message: "Invalid loading id" });

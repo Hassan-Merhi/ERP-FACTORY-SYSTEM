@@ -47,6 +47,10 @@ import {
   OffloadOptionalToggleError,
   type OffloadOptionalToggleOutcome,
 } from "../services/containers/offloadOptionalToggle";
+import {
+  findContainerChargeVoucherDriftTx,
+  repairContainerChargeVoucherDriftTx,
+} from "../services/containers/offload-lifecycle/charge-voucher-repair";
 
 /**
  * The state the caller asked for, when it stated one.
@@ -66,6 +70,58 @@ function requestedOptionalState(body: unknown): boolean | null {
 }
 
 export function registerOffloadRoutes(app: Express) {
+  // Offloads whose DUTY/OFFICE/TRANS/XFER vouchers were edited before voucher
+  // edits re-priced the bales: preview the mismatch, then apply it.
+  app.get(
+    "/api/admin/offload-charge-voucher-repair",
+    requireAuth,
+    requireRole("Admin", "Developer", "Owner"),
+    async (req, res) => {
+      try {
+        const access = await assertActiveCompanyAccess(req);
+        const drift = await db.transaction((tx) => findContainerChargeVoucherDriftTx(tx, access.activeCompanyId));
+        res.json({ drift });
+      } catch (error: unknown) {
+        logger.error("Offload charge voucher repair preview failed", { error: getErrorMessage(error) });
+        return sendCompanyAccessError(res, error);
+      }
+    }
+  );
+
+  app.post(
+    "/api/admin/offload-charge-voucher-repair",
+    requireAuth,
+    requireRole("Admin", "Developer", "Owner"),
+    async (req, res) => {
+      try {
+        const access = await assertActiveCompanyAccess(req);
+        const rawIds: unknown = req.body?.offloadIds;
+        const offloadIds = Array.isArray(rawIds)
+          ? rawIds.map(Number).filter((id) => Number.isInteger(id) && id > 0)
+          : undefined;
+        const result = await db.transaction((tx) =>
+          repairContainerChargeVoucherDriftTx(tx, access.activeCompanyId, offloadIds)
+        );
+        logger.info("Offload charge voucher repair applied", {
+          module: "containers",
+          action: "offload-charge-voucher-repair",
+          companyId: access.activeCompanyId,
+          userId: req.session.userId,
+          repaired: result.repaired.map((row) => ({
+            offloadId: row.offloadId,
+            containerNumber: row.containerNumber,
+            prefix: row.prefix,
+            chargeDelta: row.chargeDelta,
+          })),
+        });
+        res.json(result);
+      } catch (error: unknown) {
+        logger.error("Offload charge voucher repair failed", { error: getErrorMessage(error) });
+        return sendCompanyAccessError(res, error);
+      }
+    }
+  );
+
   // List offloads for daybook view (filtered by date range and company)
   app.get("/api/offloads", requireAuth, async (req, res) => {
     try {

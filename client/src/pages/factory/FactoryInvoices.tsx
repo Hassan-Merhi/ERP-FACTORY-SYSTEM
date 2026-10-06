@@ -29,6 +29,7 @@ import {
 } from "./factoryinvoices/invoiceCalculations";
 import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
 import { InvoiceOrderRow } from "./factoryinvoices/InvoiceOrderRow";
+import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 
 export default function FactoryInvoices() {
   const { toast } = useToast();
@@ -484,6 +485,11 @@ export default function FactoryInvoices() {
             </Table>
           </div>
         )}
+
+        {/* Shared container availability — below the container loading list */}
+        <div className="border-t px-4 py-4">
+          <ShippingAvailabilityTable />
+        </div>
       </div>
     </div>
   );
