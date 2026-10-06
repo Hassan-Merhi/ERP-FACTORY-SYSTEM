@@ -66,6 +66,18 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
       }
 
+      // Each leg is written to a numeric column as sent, so a value that is not
+      // a finite number ("NaN", "12abc") is refused rather than summed as zero.
+      const validAmount = (value: unknown) =>
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        (typeof value === "number" && Number.isFinite(value)) ||
+        (typeof value === "string" && /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*$/.test(value));
+      if (!entries.every((entry) => validAmount(entry.debitAmount) && validAmount(entry.creditAmount))) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
       // Summed as decimals: in floats 0.10 + 0.20 against 0.31 differed by
       // 0.00999..., so a one-cent imbalance passed the check.
       const exactDebits = sumMoney(entries.map((entry) => entry.debitAmount));
