@@ -14,6 +14,7 @@ export interface ShippingRow {
   eta: string | null;
   containerArrivedDate: string | null;
   note: string | null;
+  anything: string | null;
   ciNumber: string | null;
   isDone: boolean;
   doneAt: string | null;
