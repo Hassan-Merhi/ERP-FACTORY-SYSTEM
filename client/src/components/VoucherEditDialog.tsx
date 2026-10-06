@@ -19,7 +19,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
 import { CalendarIcon, Plus, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDateFormat } from "@/contexts/DateFormatContext";
@@ -125,6 +125,7 @@ export function VoucherEditDialog({ voucherId, open, onOpenChange }: VoucherEdit
       queryClient.invalidateQueries({ queryKey: ["/api/accounts/all"] });
       queryClient.invalidateQueries({ queryKey: ["/api/daybook"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
+      invalidateContainerLandedCostQueries();
       onOpenChange(false);
     },
     onError: (error: Error) => {
