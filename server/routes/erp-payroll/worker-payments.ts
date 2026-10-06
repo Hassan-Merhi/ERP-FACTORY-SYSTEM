@@ -10,7 +10,14 @@ import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { employeeGroupMembers, employeeGroups, employees, voucherEntries, vouchers } from "@shared/schema";
+import {
+  bankAccounts,
+  employeeGroupMembers,
+  employeeGroups,
+  employees,
+  voucherEntries,
+  vouchers,
+} from "@shared/schema";
 
 export function registerPayrollWorkerPaymentRoutes(app: Express) {
   // Payroll - Worker Direct Payment
@@ -41,6 +48,15 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
       if (!employee) {
         return res.status(404).json({ message: "Worker not found" });
       }
+
+      // The credited bank account must belong to this company.
+      const [bank] = await db
+        .select({ id: bankAccounts.id })
+        .from(bankAccounts)
+        .where(
+          and(eq(bankAccounts.id, Number(bankAccountId)), eq(bankAccounts.companyId, req.session.currentCompanyId))
+        );
+      if (!bank) return res.status(404).json({ message: "Payment account not found" });
 
       // Get or create SALARY_EXPENSE ledger account
       const allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);

@@ -74,4 +74,38 @@ describe("single-employee payroll writes stay inside the active company", () => 
     expect(response.status).toBe(404);
     expect(await foreignEntryCount()).toBe(0);
   });
+
+  it("refuses to credit another company's cash or bank account", async () => {
+    const own = await pool.query<{ id: number }>(
+      `INSERT INTO employees (company_id, code, first_name, last_name, join_date, current_balance, total_deposits)
+       VALUES ($1, $2, 'Own', 'Tester', '2025-01-01', '0', '0') RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX}-OWN`]
+    );
+    const foreignCash = await pool.query<{ id: number }>(
+      `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, $3, 'Asset') RETURNING id`,
+      [foreignCompanyId, `${TEST_PREFIX}-FCASH`, `${TEST_PREFIX} Foreign Cash`]
+    );
+    const foreignBank = await pool.query<{ id: number }>(
+      `INSERT INTO bank_accounts (company_id, code, name, bank_name, account_number)
+       VALUES ($1, $2, $3, 'Bank', '000') RETURNING id`,
+      [foreignCompanyId, `${TEST_PREFIX}-FBANK`, `${TEST_PREFIX} Foreign Bank`]
+    );
+    try {
+      for (const [path, extra] of [
+        ["/api/payroll/withdraw-employee", { paymentAccountType: "cash", paymentAccountId: foreignCash.rows[0].id }],
+        ["/api/payroll/withdraw-employee", { paymentAccountType: "bank", paymentAccountId: foreignBank.rows[0].id }],
+        ["/api/payroll/pay-worker", { bankAccountId: foreignBank.rows[0].id }],
+      ] as const) {
+        const response = await agent
+          .post(path)
+          .send({ employeeId: own.rows[0].id, amount: "5", date: "2026-04-02", ...extra });
+        expect(response.status, path).toBe(404);
+      }
+      const entries = await pool.query(`SELECT 1 FROM voucher_entries WHERE employee_id = $1`, [own.rows[0].id]);
+      expect(entries.rowCount).toBe(0);
+    } finally {
+      await pool.query(`DELETE FROM bank_accounts WHERE id = $1`, [foreignBank.rows[0].id]);
+      await pool.query(`DELETE FROM ledger_accounts WHERE id = $1`, [foreignCash.rows[0].id]);
+    }
+  });
 });
