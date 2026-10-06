@@ -14,6 +14,7 @@ import { customerOrders, customers, factoryInvoiceLoadingSessions, factoryInvoic
 import { eq, and } from "drizzle-orm";
 
 import { buildLoadingSummary, cellFill, colHeaders, dataCell, getCompanyId, sectionHeader } from "./_helpers";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
   // GET /api/factory/invoice-loading-sessions/:sessionId/export/excel
@@ -148,7 +149,7 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
           dataCell(row.getCell(2), b.baleReference, { bold: true, fill });
           dataCell(row.getCell(3), b.articleCode || "", { fill });
           dataCell(row.getCell(4), b.productName || "", { fill });
-          dataCell(row.getCell(5), parseFloat(b.weightKg || "0").toFixed(3), { align: "right", fill });
+          dataCell(row.getCell(5), toMoney(b.weightKg).toFixed(3), { align: "right", fill });
           dataCell(row.getCell(6), b.scannedAt ? new Date(b.scannedAt).toLocaleString() : "", { fill });
           dataCell(row.getCell(7), b.scannedByName || "", { fill });
           row.height = 15;
@@ -159,7 +160,7 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
           const tr = ws.getRow(r);
           ws.mergeCells(r, 1, r, 4);
           dataCell(tr.getCell(1), `Total: ${sessionBalesRaw.length} bales`, { bold: true, fill: "FFDBEAFE" });
-          dataCell(tr.getCell(5), sessionBalesRaw.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3), {
+          dataCell(tr.getCell(5), sumMoney(sessionBalesRaw.map((b) => b.weightKg)).toFixed(3), {
             bold: true,
             align: "right",
             fill: "FFDBEAFE",
@@ -191,14 +192,14 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
             dataCell(row.getCell(2), b.baleReference, { bold: true, fill });
             dataCell(row.getCell(3), b.articleCode || "", { fill });
             dataCell(row.getCell(4), b.productName || "", { fill });
-            dataCell(row.getCell(5), parseFloat(b.weightKg || "0").toFixed(3), { align: "right", fill });
+            dataCell(row.getCell(5), toMoney(b.weightKg).toFixed(3), { align: "right", fill });
             row.height = 15;
             r++;
           });
           const tr = ws.getRow(r);
           ws.mergeCells(r, 1, r, 4);
           dataCell(tr.getCell(1), `Total remaining: ${remainingBales.length} bales`, { bold: true, fill: "FFFEF3C7" });
-          dataCell(tr.getCell(5), remainingBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3), {
+          dataCell(tr.getCell(5), sumMoney(remainingBales.map((b) => b.weightKg)).toFixed(3), {
             bold: true,
             align: "right",
             fill: "FFFEF3C7",
@@ -331,8 +332,8 @@ export function registerInvoiceLoadingSessionReportRoutes(app: Express) {
 <div class="section-title">SCANNED BALES (${sessionBales.length})</div>
 <table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th><th>Scanned At</th></tr>
-  ${sessionBales.map((b, i) => `<tr class="scanned-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${parseFloat(b.weightKg || "0").toFixed(3)}</td><td>${b.scannedAt ? new Date(b.scannedAt).toLocaleString() : ""}</td></tr>`).join("")}
-  <tr class="total-row"><td colspan="4">Total</td><td class="r">${sessionBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3)}</td><td>${sessionBales.length} bales</td></tr>
+  ${sessionBales.map((b, i) => `<tr class="scanned-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td><td>${b.scannedAt ? new Date(b.scannedAt).toLocaleString() : ""}</td></tr>`).join("")}
+  <tr class="total-row"><td colspan="4">Total</td><td class="r">${sumMoney(sessionBales.map((b) => b.weightKg)).toFixed(3)}</td><td>${sessionBales.length} bales</td></tr>
 </table>
 
 <div class="section-title">REMAINING BALES TO LOAD (${remainingBales.length})</div>
@@ -341,8 +342,8 @@ ${
     ? `<div class="all-done">All bales for this invoice have been loaded.</div>`
     : `<table>
   <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th></tr>
-  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${parseFloat(b.weightKg || "0").toFixed(3)}</td></tr>`).join("")}
-  <tr class="total-row"><td colspan="4">Total remaining</td><td class="r">${remainingBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3)} kg · ${remainingBales.length} bales</td></tr>
+  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${toMoney(b.weightKg).toFixed(3)}</td></tr>`).join("")}
+  <tr class="total-row"><td colspan="4">Total remaining</td><td class="r">${sumMoney(remainingBales.map((b) => b.weightKg)).toFixed(3)} kg · ${remainingBales.length} bales</td></tr>
 </table>`
 }
 
