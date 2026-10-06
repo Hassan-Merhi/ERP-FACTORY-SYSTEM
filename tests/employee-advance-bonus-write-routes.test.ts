@@ -332,3 +332,31 @@ describe("employee advances and bonuses at exact cents", () => {
     expect(after.balance - before.balance).toBeCloseTo(1.01, 2);
   });
 });
+
+describe("POST /api/payroll/bonus-employee", () => {
+  it("posts a half-cent bonus rounded up, not down", async () => {
+    // 1.005 parses to the float 1.00499999999999989…, which toFixed(2) wrote as 1.00.
+    const response = await agent
+      .post("/api/payroll/bonus-employee")
+      .send({ employeeId, amount: "1.005", date: "2026-04-02" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.voucher.totalAmount).toBe("1.01");
+    const entries = await pool.query<{ debit_amount: string; credit_amount: string }>(
+      `SELECT debit_amount, credit_amount FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [response.body.voucher.id]
+    );
+    expect(entries.rows.map((row) => [Number(row.debit_amount), Number(row.credit_amount)])).toEqual([
+      [1.01, 0],
+      [0, 1.01],
+    ]);
+  });
+
+  it("rejects an amount that does not parse", async () => {
+    const response = await agent
+      .post("/api/payroll/bonus-employee")
+      .send({ employeeId, amount: "abc", date: "2026-04-02" });
+
+    expect(response.status).toBe(400);
+  });
+});
