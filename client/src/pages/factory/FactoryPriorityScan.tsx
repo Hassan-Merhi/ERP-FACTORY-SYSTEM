@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { visibleTabInterval } from "@/lib/queryPolicies";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
@@ -97,6 +98,7 @@ interface ScanFeedback {
 
 export default function FactoryPriorityScan() {
   const { language } = useApplicationLanguage();
+  const { selectedCompany } = useCompany();
   const tr = useCallback(
     (key: PriorityScanTranslationKey, params?: Record<string, string | number>) =>
       translatePriorityScanText(key, language, params),
@@ -123,7 +125,7 @@ export default function FactoryPriorityScan() {
   });
 
   const { data: priorityHistory } = useQuery<PriorityScanHistoryResponse>({
-    queryKey: [PRIORITY_SCAN_HISTORY_URL],
+    queryKey: [PRIORITY_SCAN_HISTORY_URL, selectedCompany?.id ?? null],
     refetchInterval: visibleTabInterval(1_000),
     refetchIntervalInBackground: false,
   });
