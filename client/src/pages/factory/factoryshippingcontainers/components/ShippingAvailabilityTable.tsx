@@ -31,10 +31,12 @@ export function ShippingAvailabilityTable() {
   const [adding, setAdding] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [archivedExpanded, setArchivedExpanded] = useState(false);
-  const [newRow, setNewRow] = useState({ date: "", shippingCompany: "", availableContainers: "", note: "" });
+  const [newRow, setNewRow] = useState({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
 
   const { data: rows = [], isLoading } = useQuery<AvailRow[]>({
     queryKey: [AVAIL_KEY],
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 
   const activeRows = rows.filter((row) => !row.isArchived);
@@ -53,10 +55,11 @@ export function ShippingAvailabilityTable() {
         shippingCompany: newRow.shippingCompany.trim(),
         availableContainers: parseInt(newRow.availableContainers) || 0,
         note: newRow.note.trim() || null,
+        details: newRow.details.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [AVAIL_KEY] });
-      setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "" });
+      setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
       setAdding(false);
       toast({ title: "Row added" });
     },
@@ -70,6 +73,7 @@ export function ShippingAvailabilityTable() {
         shippingCompany: row.shippingCompany.trim(),
         availableContainers: parseInt(row.availableContainers) || 0,
         note: row.note.trim() || null,
+        details: row.details.trim() || null,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [AVAIL_KEY] });
@@ -112,6 +116,7 @@ export function ShippingAvailabilityTable() {
       shippingCompany: row.shippingCompany,
       availableContainers: String(row.availableContainers),
       note: row.note || "",
+      details: row.details || "",
     });
   }
 
@@ -119,7 +124,7 @@ export function ShippingAvailabilityTable() {
     if (e.key === "Enter") addMutation.mutate();
     if (e.key === "Escape") {
       setAdding(false);
-      setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "" });
+      setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
     }
   }
 
@@ -165,20 +170,21 @@ export function ShippingAvailabilityTable() {
                   <TableHead className="text-xs">Shipping Company</TableHead>
                   <TableHead className="text-xs w-40">Available Containers</TableHead>
                   <TableHead className="text-xs">Note</TableHead>
+                  <TableHead className="text-xs">Details</TableHead>
                   <TableHead className="text-xs w-40" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
                       Loading…
                     </TableCell>
                   </TableRow>
                 ) : activeRows.length === 0 && !adding ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-6 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-6 text-muted-foreground">
                       No active rows. Click "Add Row" to start.
                     </TableCell>
                   </TableRow>
@@ -229,6 +235,16 @@ export function ShippingAvailabilityTable() {
                             />
                           </TableCell>
                           <TableCell>
+                            <Input
+                              value={editing.details}
+                              onChange={(e) => setEditing({ ...editing, details: e.target.value })}
+                              onKeyDown={handleEditKey}
+                              className="h-7 text-xs"
+                              placeholder="Type anything"
+                              data-testid={`input-avail-details-${row.id}`}
+                            />
+                          </TableCell>
+                          <TableCell>
                             <div className="flex items-center gap-1">
                               <Button
                                 size="icon"
@@ -261,6 +277,7 @@ export function ShippingAvailabilityTable() {
                           <TableCell>{row.shippingCompany}</TableCell>
                           <TableCell>{row.availableContainers}</TableCell>
                           <TableCell className="text-muted-foreground">{row.note || "—"}</TableCell>
+                          <TableCell className="text-muted-foreground">{row.details || "—"}</TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
                               <Button
@@ -339,6 +356,16 @@ export function ShippingAvailabilityTable() {
                           />
                         </TableCell>
                         <TableCell>
+                          <Input
+                            value={newRow.details}
+                            onChange={(e) => setNewRow({ ...newRow, details: e.target.value })}
+                            onKeyDown={handleAddKey}
+                            className="h-7 text-xs"
+                            placeholder="Type anything"
+                            data-testid="input-new-avail-details"
+                          />
+                        </TableCell>
+                        <TableCell>
                           <div className="flex items-center gap-1">
                             <Button
                               size="icon"
@@ -354,7 +381,7 @@ export function ShippingAvailabilityTable() {
                               variant="ghost"
                               onClick={() => {
                                 setAdding(false);
-                                setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "" });
+                                setNewRow({ date: "", shippingCompany: "", availableContainers: "", note: "", details: "" });
                               }}
                               data-testid="button-new-avail-cancel"
                             >
@@ -402,6 +429,7 @@ export function ShippingAvailabilityTable() {
                     <TableHead className="text-xs">Shipping Company</TableHead>
                     <TableHead className="text-xs w-40">Available Containers</TableHead>
                     <TableHead className="text-xs">Note</TableHead>
+                    <TableHead className="text-xs">Details</TableHead>
                     <TableHead className="text-xs w-44">Archived</TableHead>
                     <TableHead className="text-xs w-40" />
                   </TableRow>
@@ -413,6 +441,7 @@ export function ShippingAvailabilityTable() {
                       <TableCell>{row.shippingCompany}</TableCell>
                       <TableCell>{row.availableContainers}</TableCell>
                       <TableCell className="text-muted-foreground">{row.note || "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">{row.details || "—"}</TableCell>
                       <TableCell className="whitespace-nowrap text-muted-foreground">
                         {row.archivedAt ? new Date(row.archivedAt).toLocaleString() : "—"}
                       </TableCell>
