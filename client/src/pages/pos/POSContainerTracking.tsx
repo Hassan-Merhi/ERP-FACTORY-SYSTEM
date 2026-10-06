@@ -210,7 +210,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col gap-4 overflow-hidden p-3 sm:p-4 lg:p-5"
+      className="flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3 sm:p-4"
       data-testid="pos-container-tracking-page"
     >
       <div className="flex shrink-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -243,38 +243,38 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
       </div>
 
       <div className="grid shrink-0 grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Active</p>
             <PackageSearch className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{isLoading ? "—" : summary.total}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.total}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Truck Assigned</p>
             <Truck className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{isLoading ? "—" : summary.withTruck}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.withTruck}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs Received</p>
             <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{isLoading ? "—" : summary.docsReceived}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.docsReceived}</p>
         </div>
-        <div className="rounded-xl border bg-card/60 p-3 shadow-sm">
+        <div className="rounded-xl border bg-card/60 px-3 py-2.5 shadow-sm">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Docs To Send</p>
             <FileClock className="h-4 w-4 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-1 text-2xl font-semibold tabular-nums">{isLoading ? "—" : summary.docsReadyNotSent}</p>
+          <p className="mt-0.5 text-xl font-semibold tabular-nums sm:text-2xl">{isLoading ? "—" : summary.docsReadyNotSent}</p>
         </div>
       </div>
 
-      <div className="shrink-0 rounded-xl border bg-card/40 p-3 shadow-sm">
-        <div className="flex flex-col gap-2 xl:flex-row xl:items-center">
+      <div className="shrink-0 rounded-xl border bg-card/40 p-2.5 shadow-sm">
+        <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Search
               className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
@@ -284,117 +284,117 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search container, supplier, truck, location, agent, transporter..."
-              className="pl-9"
+              className="h-9 pl-9"
               data-testid="input-pos-container-search"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:flex xl:flex-wrap">
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="min-w-[150px]" data-testid="select-pos-container-supplier">
-                <SelectValue placeholder="Supplier" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All suppliers</SelectItem>
-                {supplierOptions.map((supplier) => (
-                  <SelectItem key={supplier} value={supplier}>
-                    {supplier}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="min-w-[130px]" data-testid="select-pos-container-status">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {statusOptions.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={docsFilter} onValueChange={setDocsFilter}>
-              <SelectTrigger className="min-w-[150px]" data-testid="select-pos-container-docs">
-                <SelectValue placeholder="Docs" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All docs</SelectItem>
-                <SelectItem value="received">Docs received</SelectItem>
-                <SelectItem value="missing">Docs not received</SelectItem>
-                <SelectItem value="sent">Docs sent</SelectItem>
-                <SelectItem value="ready-not-sent">Received, not sent</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={transporterFilter} onValueChange={setTransporterFilter}>
-              <SelectTrigger className="min-w-[150px]" data-testid="select-pos-container-transporter">
-                <SelectValue placeholder="Transporter" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All transporters</SelectItem>
-                {transporterOptions.map((transporter) => (
-                  <SelectItem key={transporter} value={transporter}>
-                    {transporter}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={agentFilter} onValueChange={setAgentFilter}>
-              <SelectTrigger className="min-w-[130px]" data-testid="select-pos-container-agent">
-                <SelectValue placeholder="Agent" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All agents</SelectItem>
-                {agentOptions.map((agent) => (
-                  <SelectItem key={agent} value={agent}>
-                    {agent}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2" data-testid="button-pos-container-columns">
-                  <Columns3 className="h-4 w-4" aria-hidden="true" />
-                  Columns
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {COLUMN_DEFS.map((column) => (
-                  <DropdownMenuCheckboxItem
-                    key={column.key}
-                    checked={isColumnVisible(column.key)}
-                    disabled={column.key === "container"}
-                    onCheckedChange={() => toggleColumn(column.key)}
-                    onSelect={(event) => event.preventDefault()}
-                  >
-                    {column.label}
-                    {column.key === "container" ? " (fixed)" : ""}
-                  </DropdownMenuCheckboxItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-
           {hasActiveFilters ? (
-            <Button variant="ghost" size="sm" className="gap-2" onClick={clearFilters}>
+            <Button variant="ghost" size="sm" className="h-9 shrink-0 gap-2" onClick={clearFilters}>
               <FilterX className="h-4 w-4" aria-hidden="true" />
-              Clear
+              <span className="hidden sm:inline">Clear</span>
             </Button>
           ) : null}
         </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="h-9 w-full min-w-0" data-testid="select-pos-container-supplier">
+              <SelectValue placeholder="Supplier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All suppliers</SelectItem>
+              {supplierOptions.map((supplier) => (
+                <SelectItem key={supplier} value={supplier}>
+                  {supplier}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-9 w-full min-w-0" data-testid="select-pos-container-status">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {statusOptions.map((status) => (
+                <SelectItem key={status} value={status}>
+                  {status}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={docsFilter} onValueChange={setDocsFilter}>
+            <SelectTrigger className="h-9 w-full min-w-0" data-testid="select-pos-container-docs">
+              <SelectValue placeholder="Docs" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All docs</SelectItem>
+              <SelectItem value="received">Docs received</SelectItem>
+              <SelectItem value="missing">Docs not received</SelectItem>
+              <SelectItem value="sent">Docs sent</SelectItem>
+              <SelectItem value="ready-not-sent">Received, not sent</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={transporterFilter} onValueChange={setTransporterFilter}>
+            <SelectTrigger className="h-9 w-full min-w-0" data-testid="select-pos-container-transporter">
+              <SelectValue placeholder="Transporter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All transporters</SelectItem>
+              {transporterOptions.map((transporter) => (
+                <SelectItem key={transporter} value={transporter}>
+                  {transporter}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={agentFilter} onValueChange={setAgentFilter}>
+            <SelectTrigger className="h-9 w-full min-w-0" data-testid="select-pos-container-agent">
+              <SelectValue placeholder="Agent" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All agents</SelectItem>
+              {agentOptions.map((agent) => (
+                <SelectItem key={agent} value={agent}>
+                  {agent}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="h-9 w-full gap-2" data-testid="button-pos-container-columns">
+                <Columns3 className="h-4 w-4" aria-hidden="true" />
+                Columns
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel>Visible columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {COLUMN_DEFS.map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.key}
+                  checked={isColumnVisible(column.key)}
+                  disabled={column.key === "container"}
+                  onCheckedChange={() => toggleColumn(column.key)}
+                  onSelect={(event) => event.preventDefault()}
+                >
+                  {column.label}
+                  {column.key === "container" ? " (fixed)" : ""}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm" data-table-scroll-region>
+      <div className="min-h-[320px] flex-1 overflow-auto rounded-xl border bg-card/30 shadow-sm" data-table-scroll-region>
         {isLoading ? (
           <div className="space-y-2 p-4">
             {Array.from({ length: 7 }).map((_, index) => (
@@ -411,7 +411,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
             </div>
           </div>
         ) : (
-          <Table>
+          <Table className="min-w-[1120px]">
             <TableHeader className="sticky top-0 z-10 bg-background/95 backdrop-blur">
               <TableRow>
                 {isColumnVisible("container") ? <TableHead className="whitespace-nowrap">Container #</TableHead> : null}
@@ -441,7 +441,7 @@ export default function POSContainerTracking({ posUser }: { posUser?: PosUserCon
                 visibleContainers.map((container) => (
                   <TableRow
                     key={container.id}
-                    className="transition-colors hover:bg-muted/40"
+                    className="h-11 transition-colors hover:bg-muted/40"
                     data-testid={`row-pos-container-${container.id}`}
                   >
                     {isColumnVisible("container") ? (
