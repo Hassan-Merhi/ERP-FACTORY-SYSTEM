@@ -351,11 +351,6 @@ export default function FactoryInvoices() {
           </div>
         </div>
 
-        {/* Shared container availability — same source of truth as Shipping Containers */}
-        <div className="px-4 pt-3">
-          <ShippingAvailabilityTable />
-        </div>
-
         {/* Summary bar */}
         {!isLoading && filteredOrders.length > 0 && (
           <div className="px-4 pt-3 pb-0">
@@ -490,6 +485,11 @@ export default function FactoryInvoices() {
             </Table>
           </div>
         )}
+
+        {/* Shared container availability — below the container loading list */}
+        <div className="border-t px-4 py-4">
+          <ShippingAvailabilityTable />
+        </div>
       </div>
     </div>
   );
