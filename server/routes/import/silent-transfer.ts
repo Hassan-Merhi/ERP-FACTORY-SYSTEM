@@ -7,20 +7,30 @@
 import { randomUUID } from "node:crypto";
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { inventoryQuantity } from "../../lib/inventoryMath";
+import { inventoryQuantity, subtractInventoryValues, toInventoryDecimal } from "../../lib/inventoryMath";
+import { parseMoneyInput } from "../../lib/money";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { upload } from "../_helpers";
-import { inventory } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { inventory, locations, stockItems } from "@shared/schema";
+import { eq, and, inArray } from "drizzle-orm";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../../excelHelper";
 import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+
+/** The ids among `locationIds` that are locations of `companyId`. */
+async function ownLocationIds(companyId: number, locationIds: number[]): Promise<Set<number>> {
+  const rows = await db
+    .select({ id: locations.id })
+    .from(locations)
+    .where(and(eq(locations.companyId, companyId), inArray(locations.id, locationIds)));
+  return new Set(rows.map((row) => row.id));
+}
 
 export function registerSilentTransferRoutes(app: Express) {
   // Template download
@@ -63,8 +73,11 @@ export function registerSilentTransferRoutes(app: Express) {
         const dstId = parseInt(destinationLocationId);
         if (srcId === dstId) return res.status(400).json({ message: "Source and destination must be different" });
 
-        const sourceLocation = await storage.getLocationById(srcId);
-        const destLocation = await storage.getLocationById(dstId);
+        // The ids come from the request body, which the path-based company
+        // scope does not see: a location of another company reads as missing.
+        const owned = await ownLocationIds(companyId, [srcId, dstId]);
+        const sourceLocation = owned.has(srcId) ? await storage.getLocationById(srcId) : undefined;
+        const destLocation = owned.has(dstId) ? await storage.getLocationById(dstId) : undefined;
         if (!sourceLocation) return res.status(400).json({ message: "Source location not found" });
         if (!destLocation) return res.status(400).json({ message: "Destination location not found" });
 
@@ -87,7 +100,7 @@ export function registerSilentTransferRoutes(app: Express) {
           const rowNum = i + 2;
           const barcode = String(row.Barcode || row.barcode || row.Code || row.code || "").trim();
           const quantityRaw = row.Quantity ?? row.quantity ?? row.Qty ?? row.qty;
-          const quantity = parseFloat(String(quantityRaw ?? "0"));
+          const parsedQuantity = parseMoneyInput(String(quantityRaw ?? "0"));
 
           if (!barcode) continue; // blank row — silently skip
 
@@ -103,10 +116,11 @@ export function registerSilentTransferRoutes(app: Express) {
           seenBarcodes.set(barcode, rowNum);
 
           // Invalid quantity
-          if (isNaN(quantity) || quantity <= 0) {
+          if (!parsedQuantity || parsedQuantity.lte(0)) {
             errorLines.push({ rowNum, barcode, reason: "Quantity must be a positive number" });
             continue;
           }
+          const quantity = Number(inventoryQuantity(parsedQuantity));
 
           // Look up stock item
           const stockItem = await storage.getStockItemByCodeOrAlias(barcode, companyId);
@@ -122,9 +136,9 @@ export function registerSilentTransferRoutes(app: Express) {
             .where(and(eq(inventory.stockItemId, stockItem.id), eq(inventory.locationId, srcId)))
             .limit(1);
 
-          const currentStock = srcInv ? parseFloat(srcInv.quantity || "0") : 0;
-          const averageRate = srcInv ? parseFloat(srcInv.averageRate || "0") : 0;
-          const afterTransfer = currentStock - quantity;
+          const currentStock = Number(inventoryQuantity(toInventoryDecimal(srcInv?.quantity)));
+          const averageRate = toInventoryDecimal(srcInv?.averageRate).toNumber();
+          const afterTransfer = Number(inventoryQuantity(subtractInventoryValues(srcInv?.quantity, quantity)));
 
           const item = {
             rowNum,
@@ -182,6 +196,28 @@ export function registerSilentTransferRoutes(app: Express) {
       const dstId = parseInt(destinationLocationId);
       if (srcId === dstId) return res.status(400).json({ message: "Source and destination must be different" });
 
+      const owned = await ownLocationIds(companyId, [srcId, dstId]);
+      if (!owned.has(srcId)) return res.status(400).json({ message: "Source location not found" });
+      if (!owned.has(dstId)) return res.status(400).json({ message: "Destination location not found" });
+
+      // Every stock item must belong to the company before anything moves.
+      const requestedItemIds = [
+        ...new Set(
+          items
+            .map((item: { stockItemId?: unknown }) => Number(item?.stockItemId))
+            .filter((id: number) => Number.isInteger(id) && id > 0)
+        ),
+      ] as number[];
+      if (requestedItemIds.length > 0) {
+        const ownedItems = await db
+          .select({ id: stockItems.id })
+          .from(stockItems)
+          .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, requestedItemIds)));
+        if (ownedItems.length !== requestedItemIds.length) {
+          return res.status(400).json({ message: "Stock item not found" });
+        }
+      }
+
       const operationId = randomUUID();
       const occurredAt = new Date().toISOString();
       let applied = 0;
@@ -189,9 +225,10 @@ export function registerSilentTransferRoutes(app: Express) {
       await db.transaction(async (tx) => {
         for (let index = 0; index < items.length; index++) {
           const item = items[index];
-          const rawQty = parseFloat(item.quantity);
-          const qty = Number.parseFloat(inventoryQuantity(rawQty));
-          if (!Number.isFinite(qty) || qty <= 0) continue;
+          const parsedQty = parseMoneyInput(item.quantity);
+          if (!parsedQty) continue;
+          const qty = Number(inventoryQuantity(parsedQty));
+          if (qty <= 0) continue;
 
           const stockItemId = parseInt(item.stockItemId);
           if (!Number.isInteger(stockItemId) || stockItemId <= 0) continue;
@@ -201,10 +238,12 @@ export function registerSilentTransferRoutes(app: Express) {
             .from(inventory)
             .where(and(eq(inventory.stockItemId, stockItemId), eq(inventory.locationId, srcId)))
             .limit(1);
-          const sourceRate = Number.parseFloat(sourceInventory?.averageRate || "");
-          const parsedFallbackRate = parseFloat(item.averageRate || "0");
-          const fallbackRate = Number.isFinite(parsedFallbackRate) && parsedFallbackRate >= 0 ? parsedFallbackRate : 0;
-          const rate = Number.isFinite(sourceRate) ? Math.max(sourceRate, 0) : fallbackRate;
+          // The source's own average rate; the client's figure only when the source has none.
+          const parsedFallbackRate = parseMoneyInput(item.averageRate || "0");
+          const fallbackRate = parsedFallbackRate && parsedFallbackRate.gte(0) ? parsedFallbackRate.toNumber() : 0;
+          const rate = sourceInventory?.averageRate
+            ? Math.max(toInventoryDecimal(sourceInventory.averageRate).toNumber(), 0)
+            : fallbackRate;
 
           await adjustInventory(tx, srcId, stockItemId, -qty, companyId);
           await adjustInventory(tx, dstId, stockItemId, qty, companyId, rate);
