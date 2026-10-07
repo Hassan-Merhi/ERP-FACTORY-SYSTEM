@@ -8,7 +8,7 @@
  * backstop rather than the application's check.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { locations, stockItems } from "@shared/schema";
+import { ledgerAccounts, locations, stockItems } from "@shared/schema";
 import { db } from "../../db";
 
 /** Positive integer ids from untrusted input, de-duplicated; anything else is dropped. */
@@ -69,5 +69,20 @@ export async function ownStockItemIds(companyId: number, stockItemIds: readonly 
 export async function allStockItemsOwned(companyId: number, stockItemIds: readonly unknown[]): Promise<boolean> {
   const ids = positiveIds(stockItemIds);
   const owned = await ownStockItemIds(companyId, ids);
+  return ids.every((id) => owned.has(id));
+}
+
+/** True when every positive id in `ledgerAccountIds` is a ledger account of `companyId`. */
+export async function allLedgerAccountsOwned(
+  companyId: number,
+  ledgerAccountIds: readonly unknown[]
+): Promise<boolean> {
+  const ids = positiveIds(ledgerAccountIds);
+  if (ids.length === 0) return true;
+  const rows = await db
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, ids)));
+  const owned = new Set(rows.map((row) => row.id));
   return ids.every((id) => owned.has(id));
 }
