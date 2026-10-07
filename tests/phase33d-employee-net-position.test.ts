@@ -41,7 +41,14 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: harness.getClientDate }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));
-vi.mock("../server/netPositionHelper", () => ({ classifyNetPositionAccounts: harness.classifyNetPositionAccounts }));
+vi.mock("../server/netPositionHelper", () => ({
+  classifyNetPositionAccounts: harness.classifyNetPositionAccounts,
+  PERPETUAL_STOCK_ACCOUNT_CODES: new Set<string>(),
+}));
+// Before any perpetual-inventory cut-over: the computed factory values apply.
+vi.mock("../server/services/accounting/perpetualInventory/reportBasis", () => ({
+  ledgerCarriesStock: async () => false,
+}));
 vi.mock("../server/services/rental/rentalPeriodService", () => ({
   getRentalBillingDay: () => 1,
   getRentalPeriodDueDate: (year: number, month: number) => `${year}-${String(month).padStart(2, "0")}-01`,

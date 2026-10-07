@@ -101,6 +101,10 @@ const harness = vi.hoisted(() => {
   };
 });
 
+// Before any perpetual-inventory cut-over: the computed stock and on-the-way values apply.
+vi.mock("../server/services/accounting/perpetualInventory/reportBasis", () => ({
+  ledgerCarriesStock: async () => false,
+}));
 vi.mock("../server/db", () => ({ db: harness.db, pool: harness.pool }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({
