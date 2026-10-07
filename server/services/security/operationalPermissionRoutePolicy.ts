@@ -193,6 +193,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/factory/admin/repair-truncated-user-attribution",
     "POST /api/accounts/multi-currency/repair-center/plan",
     "POST /api/accounts/multi-currency/repair-center/apply",
+    "POST /api/accounting/factory-fx-repair/apply",
     "POST /api/intercompany-pos-config/rebuild",
     "POST /api/salary-advances/reconcile",
     "POST /api/stock-items/reconcile-otw-names",
