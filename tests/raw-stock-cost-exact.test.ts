@@ -96,14 +96,15 @@ describe("raw stock cost routes", () => {
     expect(harness.writes).toEqual([]);
   });
 
-  it("writes the manual purchase voucher as cent strings of kg × locked rate", async () => {
+  it("writes the manual purchase voucher as kg × locked rate, rounded to the cent", async () => {
     harness.rows = { factory_suppliers: [{ name: "Supplier" }] };
     const body = { type: "ADD", kg: "100.5", supplierId: 1, date: "2026-03-01", createVoucher: true };
     expect(await post("/api/factory/raw-stock/adjustment", body)).toBe(200);
     const entries = harness.writes.filter(([kind, table]) => kind === "insert" && table === "voucher_entries");
+    // Normalized factory entries store the USD amounts at the ledger's 6-decimal scale.
     expect(entries.map(([, , values]) => [values.debitAmount, values.creditAmount])).toEqual([
-      ["35.18", "0"],
-      ["0", "35.18"],
+      ["35.180000", "0.000000"],
+      ["0.000000", "35.180000"],
     ]);
   });
 });
