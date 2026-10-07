@@ -10,6 +10,10 @@ import * as schema from "@shared/schema";
 import type { PurchaseOrder, InsertPurchaseOrder } from "@shared/schema";
 import { getConfiguredIntercompanyCreditAccount } from "../accounting/intercompany";
 import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import {
+  removePurchaseOrderGitTx,
+  syncPurchaseOrderGitTx,
+} from "../../services/accounting/perpetualInventory/stockReceipts";
 
 type PoChargeFields = Pick<
   PurchaseOrder,
@@ -30,6 +34,8 @@ export async function createPurchaseOrder(
     const [created] = await tx.insert(schema.purchaseOrders).values(po).returning();
 
     if (po.voucherId) {
+      // Perpetual inventory (wave 8.2): the PO's cost moves to goods in transit.
+      if (created.companyId) await syncPurchaseOrderGitTx(tx, created.companyId, created.id);
       return created;
     }
 
@@ -345,6 +351,7 @@ export async function createPurchaseOrder(
       }
     }
 
+    if (created.companyId) await syncPurchaseOrderGitTx(tx, created.companyId, created.id);
     return created;
   });
 }
@@ -368,6 +375,11 @@ export async function deletePurchaseOrder(id: number): Promise<void> {
 
   const [container] = await db.select().from(schema.containers).where(eq(schema.containers.id, containerId)).limit(1);
 
+  // Perpetual inventory (wave 8.2): a deleted PO takes its goods-in-transit journal with it.
+  if (po.companyId) {
+    const poCompanyId = po.companyId;
+    await db.transaction((tx) => removePurchaseOrderGitTx(tx, poCompanyId, id));
+  }
   await db.delete(schema.poLineItems).where(eq(schema.poLineItems.poId, id));
   await db.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id));
 

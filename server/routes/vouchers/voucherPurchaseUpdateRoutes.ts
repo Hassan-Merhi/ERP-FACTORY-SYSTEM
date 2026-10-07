@@ -21,6 +21,7 @@ import { postStockMovementTx } from "../../services/inventory/stockMovementInteg
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -127,6 +128,8 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
       if (description !== undefined) voucherUpdates.description = description;
       const updated = await db.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
+      // Perpetual inventory (wave 8.2): goods in transit follows the edited PO voucher.
+      await db.transaction((tx) => syncPurchaseOrderGitTx(tx, existingVoucher.companyId, po.id));
 
       try {
         const _purChanges: Record<string, { old: unknown; new: unknown }> = {};

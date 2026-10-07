@@ -2,6 +2,11 @@ import { eq, and, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type {} from "@shared/schema";
+import { removeLinkedJournalTx } from "../../services/accounting/perpetualInventory/linkedJournal";
+import {
+  containerStockInVoucherNumber,
+  removePurchaseOrderGitTx,
+} from "../../services/accounting/perpetualInventory/stockReceipts";
 
 export async function deleteContainer(id: number): Promise<void> {
   const [container] = await db.select().from(schema.containers).where(eq(schema.containers.id, id)).limit(1);
@@ -64,6 +69,13 @@ export async function deleteContainer(id: number): Promise<void> {
   await db.delete(schema.containerDocuments).where(eq(schema.containerDocuments.containerId, id));
   await db.delete(schema.importLogs).where(eq(schema.importLogs.containerId, id));
   await db.delete(schema.containers).where(eq(schema.containers.id, id));
+
+  // Perpetual inventory (wave 8.2): the container's linked journals go with it,
+  // once everything above has gone (a failed delete leaves them in place).
+  await db.transaction(async (tx) => {
+    await removeLinkedJournalTx(tx, container.companyId, containerStockInVoucherNumber(id));
+    for (const po of pos) await removePurchaseOrderGitTx(tx, container.companyId, po.id);
+  });
 }
 
 // ---------------------------------------------------------------------------

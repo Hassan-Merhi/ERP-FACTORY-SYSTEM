@@ -10,6 +10,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ writes: [] as Array<[string, string, Record<string, unknown>]> }));
+// Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/stockReceipts", () => ({
+  syncPurchaseOrderGitTx: async () => null,
+}));
 vi.mock("../server/routes/_helpers", () => ({ logAudit: async () => undefined }));
 vi.mock("../server/routes/containers/containerHelpers", () => ({
   syncIntercoParentVoucher: async () => ({ found: true, updated: false }),

@@ -11,6 +11,7 @@ import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
 
@@ -392,6 +393,8 @@ export async function applyPurchaseOrderItemsUpdate(
         }
       }
     }
+    // Perpetual inventory (wave 8.2): goods in transit follows the edited PO voucher.
+    await syncPurchaseOrderGitTx(tx, existingPO.companyId, existingPO.id);
   });
 
   // ── Post-transaction interco sync (backup / belt-and-suspenders) ──────

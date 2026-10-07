@@ -27,6 +27,10 @@ const po = {
   freightOwnAccountId: null,
 };
 
+// Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/stockReceipts", () => ({
+  syncPurchaseOrderGitTx: async () => null,
+}));
 vi.mock("../server/auth", () => {
   const pass = (_q: unknown, _s: unknown, next: () => void) => next();
   return { requireAuth: pass, requireRole: () => pass };

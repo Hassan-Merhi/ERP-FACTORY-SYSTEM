@@ -5,6 +5,7 @@
  * went to expense when it was bought. At the cut-over that stock is
  * capitalised once, dated the eve of the cut-over:
  *
+ *   Dr Goods in Transit              purchase cost of POs not yet offloaded
  *   Dr Inventory                     ERP stock (sub-ledger value as of the eve)
  *   Dr Factory Raw Material Stock    remaining kg × landed USD cost per kg
  *   Dr Factory Work in Progress      open mix-batch kg × mix cost per kg,
@@ -146,7 +147,30 @@ export async function planOpeningInventoryJournal(
        AND co.status NOT IN ('FINALIZED', 'CANCELLED')
   `);
 
+  // Goods in transit on the eve: what Purchases absorbed for POs dated before
+  // the cut-over whose container had not been offloaded by then. Their stock
+  // arrives after the cut-over, and STOCK-IN credits goods in transit for them.
+  const transit = supplierPartner
+    ? []
+    : await rows<{ purchases: string }>(sql`
+        SELECT COALESCE(SUM(ve.debit_amount), 0)::text AS purchases
+          FROM purchase_orders po
+          JOIN containers c ON c.id = po.container_id AND c.company_id = po.company_id
+          JOIN vouchers v ON v.id = po.voucher_id AND v.company_id = po.company_id AND v.deleted_at IS NULL
+                             AND COALESCE(v.optional, false) = false
+          JOIN voucher_entries ve ON ve.voucher_id = v.id
+          JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.code = 'PURCHASES'
+         WHERE po.company_id = ${companyId} AND v.voucher_date < ${effectiveFrom}
+           AND (c.offload_date IS NULL OR c.offload_date >= ${effectiveFrom})
+      `);
+  const goodsInTransit = toMoney(transit[0]?.purchases ?? 0).toDecimalPlaces(2);
+
   const candidates: OpeningJournalLine[] = [
+    {
+      accountCode: "GOODS_IN_TRANSIT",
+      amount: goodsInTransit.toFixed(2),
+      basis: "purchase cost of POs not yet offloaded",
+    },
     { accountCode: "INVENTORY", amount: erpStock.toFixed(2), basis: `ERP stock in hand as of ${journalDate}` },
     {
       accountCode: "FACTORY_RAW_MATERIAL_STOCK",

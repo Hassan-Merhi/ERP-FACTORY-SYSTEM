@@ -31,6 +31,7 @@ import {
   relievedValue,
   removeSaleCogsTx,
 } from "../../../services/accounting/perpetualInventory/saleCogs";
+import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -399,6 +400,8 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
 
         // Update the optional field inside transaction
         await tx.update(vouchers).set({ optional }).where(eq(vouchers.id, id));
+        // Perpetual inventory (wave 8.2): an optional PO voucher is not in transit.
+        await syncPurchaseOrderGitForVoucherTx(tx, existingVoucher.companyId, id);
       });
       // Log the optional status change to audit log
       await logAudit({

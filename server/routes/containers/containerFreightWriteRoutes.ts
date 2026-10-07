@@ -61,6 +61,7 @@ async function syncContainerCharges(
 }
 import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
+import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 export function registerContainerFreightWriteRoutes(app: Express) {
   app.patch("/api/purchase-orders/:id", requireAuth, async (req, res) => {
@@ -718,6 +719,9 @@ export function registerContainerFreightWriteRoutes(app: Express) {
         // If charges were edited but grand total didn't change (or no voucher), still sync container_charges
         await syncContainerCharges(db, existingPO.containerId, poChargeRows);
       }
+
+      // Perpetual inventory (wave 8.2): goods in transit follows the edited PO voucher.
+      await db.transaction((tx) => syncPurchaseOrderGitTx(tx, existingPO.companyId, existingPO.id));
 
       // ── Inter-company sync — runs unconditionally after every charges-only update.
       // (Branch 1/items path runs its own sync inside the transaction above.)

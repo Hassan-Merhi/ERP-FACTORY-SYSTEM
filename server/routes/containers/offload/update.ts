@@ -34,6 +34,7 @@ import { nextCanonicalSourceRevision } from "../../../services/inventory/canonic
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { applyInventoryRateDeltaAndSync } from "../../../services/syncSalesItemCosts";
+import { syncContainerStockInTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -215,6 +216,9 @@ export function registerContainerOffloadUpdateRoutes(app: Express) {
           await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
           await tx.delete(vouchers).where(eq(vouchers.id, voucher.id));
         }
+
+        // Perpetual inventory (wave 8.2): the stock-in journal follows the edited offload.
+        await syncContainerStockInTx(tx, container.companyId, containerId);
       });
 
       res.json({ success: true, message: "Container offload updated successfully" });

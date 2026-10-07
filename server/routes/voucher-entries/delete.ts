@@ -36,6 +36,7 @@ import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { removeSaleCogsTx } from "../../services/accounting/perpetualInventory/saleCogs";
+import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -479,6 +480,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
         // This automatically excludes entries from balance calculations
         // (calculateAccountBalance filters by isNull(vouchers.deletedAt))
         await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
+        // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
+        await syncPurchaseOrderGitForVoucherTx(tx, companyId, id);
       });
 
       // Log the deletion to audit log (entries are soft-deleted so still fetchable)

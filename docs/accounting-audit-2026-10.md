@@ -202,7 +202,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.1 complete)
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.2 complete)
 
 - **Problem:** the GL is a cash and payables book.
   - Purchases are expensed, and sales post no COGS.
@@ -252,10 +252,22 @@ risk, modules, database and production impact, dependencies and acceptance crite
     - Gated per company and date. Supplier-partner companies are skipped, because their stock is in `sp_stock`; the opening plan does not capitalise their ERP stock either.
     - Remaining difference, to be checked by the 8.5 reconciliation: the sale delete path re-receives stock at `salesItems.costPrice` rather than by exact value.
     - Test: `perpetual-inventory-sale-cogs`.
-  - **8.2 ERP purchases:**
-    - PO import posts Dr Goods in Transit.
-    - Offload posts Dr Inventory for the sub-ledger value received, against Goods in Transit and the charge payables.
-    - PO edits follow.
+  - **8.2 ERP purchases (complete):**
+    - The PO voucher and the offload charge vouchers keep posting as before. Two linked journals carry their cost to the balance sheet:
+      - `GIT-PO-{purchaseOrderId}`, dated with the PO voucher: Dr Goods in Transit / Cr Purchases for what the PO voucher debited to Purchases.
+      - `STOCK-IN-{containerId}`, dated with the offload: Dr Inventory for the value the stock sub-ledger received (`container_offload_items` of active offloads). It credits Goods in Transit for the container's POs in transit (a PO with a GIT journal, or one dated before the cut-over, which the opening journal carries) and each account an offload charge voucher debited. The difference goes to Purchases, so a PO that disagrees with its landed value stays visible there.
+    - The opening plan has a Goods in Transit line for POs dated before the cut-over whose container was not offloaded before it.
+    - Wired paths:
+      - PO create and delete
+      - PO edits: items, charges, purchase voucher edit, container voucher sync, standalone PO repair
+      - PO voucher delete, bulk delete, restore and optional toggle
+      - offload create/replace, edit, reverse and optional toggle
+      - offload charge voucher edits (re-pricing)
+      - container delete
+    - Remaining differences, to be checked by the 8.5 reconciliation:
+      - Landed charges with no charge voucher (transfer charges, container charges) go to Purchases through the difference line.
+      - Older code: container delete hard-deletes the PO voucher without its posting identity, so the database refuses the delete (`accounting_posting_requests` restricts it), and the steps before that are not in one transaction. The linked journals are removed last, so a refused delete leaves them in place.
+    - Test: `perpetual-inventory-stock-receipts`.
   - **8.3 Stock adjustments and production/consumption:** posted on both sides against `STOCK_ADJUSTMENT`, with the voucher expectations reclassified.
   - **8.4 Factory:**
     - Offload: Dr Raw Material against import cost and capitalised charges.

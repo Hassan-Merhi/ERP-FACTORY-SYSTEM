@@ -17,6 +17,7 @@ import {
   positiveIds,
 } from "./types";
 import { firstRow } from "../../../lib/queryResult";
+import { syncContainerStockInTx } from "../../accounting/perpetualInventory/stockReceipts";
 
 /** The inventory row an offload locks FOR UPDATE before rewriting its cost. */
 type InventoryLockRow = { id: number; quantity: string; total_value: string };
@@ -363,6 +364,8 @@ export async function executeContainerOffloadLifecycle(
     }
 
     await postSupplierPartnerJournals(tx, container, purchaseOrders, input);
+    // Perpetual inventory (wave 8.2): the received stock moves to the ledger.
+    await syncContainerStockInTx(tx, input.companyId, input.containerId);
 
     return {
       offload,

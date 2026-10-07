@@ -30,6 +30,7 @@ import {
   ledgerAccounts,
 } from "@shared/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -93,10 +94,14 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId)));
           break;
         case "voucher":
-          await db
-            .update(vouchers)
-            .set({ deletedAt: null })
-            .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+          await db.transaction(async (tx) => {
+            await tx
+              .update(vouchers)
+              .set({ deletedAt: null })
+              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+            // Perpetual inventory (wave 8.2): a restored PO voucher is in transit again.
+            await syncPurchaseOrderGitForVoucherTx(tx, companyId, itemId);
+          });
           break;
         // === Wave 1 restores ===
         case "factoryCategory":

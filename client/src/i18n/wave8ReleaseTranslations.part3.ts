@@ -143,6 +143,11 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "La bascule est déjà appliquée pour cette société",
   },
   {
+    en: "A perpetual-inventory journal does not balance",
+    ar: "قيد المخزون الدائم غير متوازن",
+    fr: "Une écriture d'inventaire permanent n'est pas équilibrée",
+  },
+  {
     en: "Unknown system account code",
     ar: "رمز حساب نظام غير معروف",
     fr: "Code de compte système inconnu",

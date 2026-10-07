@@ -46,6 +46,7 @@ import { resultRows } from "../../lib/queryResult";
 import { adjustInventory, reverseInventoryByExactValue } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
+import { syncContainerStockInTx } from "../accounting/perpetualInventory/stockReceipts";
 
 /** The transaction handle drizzle passes to a `db.transaction` callback. */
 export type OffloadOptionalToggleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -310,6 +311,9 @@ export async function applyOffloadOptionalToggleTx(
       .set({ status: "OFFLOADED", offloadDate: restoredDate })
       .where(eq(containers.id, lockedContainer.id));
   }
+
+  // Perpetual inventory (wave 8.2): the stock-in journal follows the active offloads.
+  await syncContainerStockInTx(tx, companyId, lockedContainer.id);
 
   return {
     optional: targetOptional,

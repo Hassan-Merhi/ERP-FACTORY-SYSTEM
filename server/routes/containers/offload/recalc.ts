@@ -17,6 +17,7 @@ import { reverseInventoryByExactValue } from "../../../inventoryHelper";
 import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { syncContainerStockInTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -206,6 +207,8 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
 
           await tx.delete(containerOffloads).where(eq(containerOffloads.id, offloadRecord.id));
           await tx.update(containers).set({ status: "OTW" }).where(eq(containers.id, containerId));
+          // Perpetual inventory (wave 8.2): nothing is received any more, so the stock-in journal goes.
+          await syncContainerStockInTx(tx, container.companyId, containerId);
         });
 
         res.json({ success: true, message: "Container offload reversed successfully" });

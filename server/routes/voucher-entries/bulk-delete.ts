@@ -45,6 +45,7 @@ import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { removeSaleCogsTx } from "../../services/accounting/perpetualInventory/saleCogs";
+import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -487,6 +488,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
 
             // Soft delete: Set deletedAt instead of hard delete
             await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
+            // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
+            await syncPurchaseOrderGitForVoucherTx(tx, currentCompanyId, id);
 
             // Cascade: remove factory daybook entries linked to this voucher
             await tx.execute(

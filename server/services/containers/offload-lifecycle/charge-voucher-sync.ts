@@ -12,6 +12,7 @@ import {
   subtractInventoryValues,
   toInventoryDecimal,
 } from "../../../lib/inventoryMath";
+import { syncContainerStockInTx } from "../../accounting/perpetualInventory/stockReceipts";
 
 /**
  * Container offload charge vouchers are numbered `<PREFIX>-<containerNumber>-<timestamp>`
@@ -207,6 +208,9 @@ export async function applyContainerChargeDeltaTx(
       })
       .where(eq(schema.inventory.id, stock.id));
   }
+
+  // Perpetual inventory (wave 8.2): the stock-in journal follows the re-priced offload.
+  await syncContainerStockInTx(tx, change.companyId, container.id);
 
   return {
     offloadId: offload.id,

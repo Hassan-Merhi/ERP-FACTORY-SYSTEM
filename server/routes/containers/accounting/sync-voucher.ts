@@ -14,6 +14,7 @@ import { containers, purchaseOrders, vouchers, voucherEntries, suppliers } from 
 import { eq, and, inArray } from "drizzle-orm";
 import { calcPoAmountsExact, syncIntercoParentVoucher } from "../containerHelpers";
 import { toMoney } from "../../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 export function registerContainerSyncVoucherRoutes(app: Express) {
   // Sync purchase voucher amounts for a container's POs (fixes cases where voucher
@@ -283,6 +284,11 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
           }
         }
       }
+
+      // Perpetual inventory (wave 8.2): goods in transit follows the synced PO vouchers.
+      await db.transaction(async (tx) => {
+        for (const po of pos) await syncPurchaseOrderGitTx(tx, companyId, po.id);
+      });
 
       res.json({
         message: `Synced ${updatedLocalVouchers} local voucher(s) and ${updatedParentVouchers} parent JV(s)`,

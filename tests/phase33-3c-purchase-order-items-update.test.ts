@@ -64,6 +64,10 @@ const harness = vi.hoisted(() => {
   };
 });
 
+// Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/stockReceipts", () => ({
+  syncPurchaseOrderGitTx: async () => null,
+}));
 vi.mock("../server/db", () => ({ db: harness.db }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/routes/_helpers", () => ({ logAudit: harness.logAudit }));
@@ -263,10 +267,7 @@ describe("Phase 33 3C purchase-order item repricing", () => {
       harness.state.txUpdates.some(({ values }) => {
         const row = values as Record<string, unknown>;
         return (
-          row.freight === "0.00" &&
-          row.surcharge === "0.00" &&
-          row.discount === "0.00" &&
-          row.chargesEdited === true
+          row.freight === "0.00" && row.surcharge === "0.00" && row.discount === "0.00" && row.chargesEdited === true
         );
       })
     ).toBe(true);
