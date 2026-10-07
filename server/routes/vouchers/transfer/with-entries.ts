@@ -27,6 +27,7 @@ import {
   replacementErrorStatus,
   type ReplacementEntryInput,
   type ReplacementEntryTargets,
+  voucherTypeRequiresBalance,
 } from "../../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 
@@ -74,15 +75,27 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
       }
 
+      // A balanced-type voucher (Journal, Payment, Sales, ...) cannot be re-typed to
+      // a one-sided stock type ("Transfer", "Mixed", ...) that is exempt from the
+      // balance rule: that let an edit save unbalanced lines on what was a Journal
+      // (wave 9 ledger safety). Changes within the same class keep working, and a
+      // change to a balanced type is validated with the balanced rule below.
+      const nextVoucherType = voucher.voucherType ?? existingVoucher.voucherType;
+      if (
+        nextVoucherType !== existingVoucher.voucherType &&
+        voucherTypeRequiresBalance(existingVoucher.voucherType) &&
+        !voucherTypeRequiresBalance(nextVoucherType)
+      ) {
+        return res.status(400).json({
+          message: "A balanced voucher cannot be changed to a voucher type that is exempt from balancing",
+        });
+      }
+
       // Exact validation of the replacement set: every line posts to exactly one
       // account, amounts are well-formed, and active balanced vouchers balance.
       let replacementTargets: ReplacementEntryTargets[];
       try {
-        replacementTargets = assertValidReplacementEntries(
-          voucher.voucherType ?? existingVoucher.voucherType,
-          voucher.optional === true,
-          entries
-        );
+        replacementTargets = assertValidReplacementEntries(nextVoucherType, voucher.optional === true, entries);
       } catch (validationError: unknown) {
         const status = replacementErrorStatus(validationError);
         if (status) return res.status(status).json({ message: getErrorMessage(validationError) });

@@ -12,6 +12,7 @@ import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
+import { softDeleteInterCompanyCounterpartTx } from "./delete";
 import { MoneyDecimal, moneyString, toMoney } from "../../lib/money";
 
 /** A stored numeric column as the number adjustInventory takes. */
@@ -460,21 +461,22 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
             }
 
             // IMPORTANT: If this voucher is one side of an inter-company transfer,
-            // also delete the OTHER side's entries + voucher and the transfer record,
-            // so both companies' books are fully clean.
+            // also take the OTHER side out of the books and remove the transfer record,
+            // so both companies' books stay consistent.
             const linkedTransfers = await tx
               .select()
               .from(interCompanyTransfers)
               .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
             for (const transfer of linkedTransfers) {
-              const otherVoucherId = transfer.fromVoucherId === id ? transfer.toVoucherId : transfer.fromVoucherId;
-              // Delete the transfer record FIRST to release FK "restrict" constraints
-              // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
               await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-              if (otherVoucherId && otherVoucherId !== id) {
-                await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
-                await tx.delete(vouchers).where(eq(vouchers.id, otherVoucherId));
-              }
+              // Wave 9: the other side is soft-deleted (lines kept) and audited
+              // under its own company in this transaction, never hard-deleted.
+              await softDeleteInterCompanyCounterpartTx(tx, {
+                transfer,
+                voucherId: id,
+                voucherNumber: voucher.voucherNumber,
+                actor: { userId: req.session.userId, username: req.session.username },
+              });
             }
 
             // Clean up any pending IC notification requests for this voucher

@@ -19,7 +19,7 @@
  */
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import { customers } from "@shared/schema";
+import { customers, voucherEntries } from "@shared/schema";
 
 import type { db, DbTransaction } from "../../db";
 
@@ -107,6 +107,14 @@ export function assertReplacementEntryTargets(targets: ReplacementEntryTargets, 
 const ONE_SIDED_EXPECTATIONS: ReadonlySet<string> = new Set(["single-sided", "inventory-sided", "none"]);
 
 /**
+ * Whether an active voucher of this type must balance exactly. Fails closed:
+ * only the known one-sided stock types are exempt.
+ */
+export function voucherTypeRequiresBalance(voucherType: unknown): boolean {
+  return !ONE_SIDED_EXPECTATIONS.has(classifyVoucherLedgerExpectation(voucherType));
+}
+
+/**
  * Validates the amounts of a full replacement set for a voucher of the given
  * type. Active vouchers must balance exactly unless their type is a known
  * one-sided stock type, which keeps the per-line rules only.
@@ -118,9 +126,7 @@ export function assertReplacementEntryAmounts(
 ): void {
   // Fails closed: only the known one-sided stock types are exempt, so a type
   // nobody has classified must still balance.
-  const expectation = classifyVoucherLedgerExpectation(voucherType);
-  const requiresBalance = !ONE_SIDED_EXPECTATIONS.has(expectation);
-  validateManualVoucherEntryAmounts(entries, { optional: optional || !requiresBalance });
+  validateManualVoucherEntryAmounts(entries, { optional: optional || !voucherTypeRequiresBalance(voucherType) });
 }
 
 /**
@@ -165,6 +171,20 @@ export function storedEntriesAsAmountInput(
 ): ManualVoucherEntryAmountInput[] {
   // Stored debit/credit are the posted (base) amounts; balance is judged on them.
   return entries.map((entry) => ({ debitAmount: entry.debitAmount, creditAmount: entry.creditAmount }));
+}
+
+/**
+ * Re-reads a voucher's stored lines and checks them against the rules for its
+ * type and state (an active balanced-type voucher must balance exactly). Pass
+ * `optional: false` to check whether the voucher may be activated. Throws a
+ * PostingValidationError (see replacementErrorStatus) when the lines fail.
+ */
+export async function assertStoredVoucherLinesValidTx(
+  reader: typeof db | DbTransaction,
+  voucher: { id: number; voucherType: unknown; optional: boolean }
+): Promise<void> {
+  const lines = await reader.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
+  assertReplacementEntryAmounts(voucher.voucherType, voucher.optional, storedEntriesAsAmountInput(lines));
 }
 
 /**

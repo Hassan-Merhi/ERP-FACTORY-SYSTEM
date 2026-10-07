@@ -7,6 +7,12 @@ import { voucherEntries, vouchers } from "@shared/schema";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
 import { normalizeVoucherEntryAmounts } from "../services/accounting/currencyAmounts";
 import { autoReallocateLoansAccounts } from "../lib/transporterAllocation";
+import { writeAuditEvent } from "../services/audit";
+import {
+  assertStoredVoucherLinesValidTx,
+  replacementErrorStatus,
+} from "../services/accounting/voucherEntryReplacement";
+import { syncStockAdjustmentInventoryTx } from "../services/accounting/perpetualInventory/stockAdjustments";
 
 function canEditVoucherDate(role: string, voucherDate: string | Date): boolean {
   if (role === "Admin" || role === "Owner" || role === "Developer") return true;
@@ -106,24 +112,67 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         historicalRate,
       });
 
-      const [updated] = await db.transaction((tx) =>
-        tx
-          .update(voucherEntries)
-          .set({
-            transactionCurrency: normalized.transactionCurrency,
-            transactionDebitAmount: normalized.transactionDebitAmount,
-            transactionCreditAmount: normalized.transactionCreditAmount,
-            baseDebitAmount: normalized.baseDebitAmount,
-            baseCreditAmount: normalized.baseCreditAmount,
-            historicalExchangeRate: normalized.historicalExchangeRate,
-            rateConvention: normalized.rateConvention,
-            debitAmount: normalized.debitAmount,
-            creditAmount: normalized.creditAmount,
-            narration: req.body.narration ?? row.entry.narration,
-          })
-          .where(eq(voucherEntries.id, id))
-          .returning()
-      );
+      // The edited line and the voucher re-validation share one transaction: an
+      // amount edit must not leave an active balanced-type voucher out of balance
+      // (wave 9 ledger safety; this live handler shadows the validated one in
+      // voucher-entries/write.ts, which used to be the only one that checked).
+      const companyId = row.voucher.companyId;
+      let updated: typeof voucherEntries.$inferSelect;
+      try {
+        updated = await db.transaction(async (tx) => {
+          const [written] = await tx
+            .update(voucherEntries)
+            .set({
+              transactionCurrency: normalized.transactionCurrency,
+              transactionDebitAmount: normalized.transactionDebitAmount,
+              transactionCreditAmount: normalized.transactionCreditAmount,
+              baseDebitAmount: normalized.baseDebitAmount,
+              baseCreditAmount: normalized.baseCreditAmount,
+              historicalExchangeRate: normalized.historicalExchangeRate,
+              rateConvention: normalized.rateConvention,
+              debitAmount: normalized.debitAmount,
+              creditAmount: normalized.creditAmount,
+              narration: req.body.narration ?? row.entry.narration,
+            })
+            .where(eq(voucherEntries.id, id))
+            .returning();
+          // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+          await syncStockAdjustmentInventoryTx(tx, companyId, row.voucher.id);
+          await assertStoredVoucherLinesValidTx(tx, row.voucher);
+          // Audit rides the same transaction, so the edit and its record commit together.
+          await writeAuditEvent(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "voucher_entries",
+              recordId: id,
+              recordIdentifier: row.voucher.voucherNumber,
+              changes: {
+                debitAmount: { old: row.entry.debitAmount, new: written.debitAmount },
+                creditAmount: { old: row.entry.creditAmount, new: written.creditAmount },
+                transactionDebitAmount: { old: row.entry.transactionDebitAmount, new: written.transactionDebitAmount },
+                transactionCreditAmount: {
+                  old: row.entry.transactionCreditAmount,
+                  new: written.transactionCreditAmount,
+                },
+                transactionCurrency: { old: row.entry.transactionCurrency, new: written.transactionCurrency },
+                historicalExchangeRate: {
+                  old: row.entry.historicalExchangeRate,
+                  new: written.historicalExchangeRate,
+                },
+              },
+            },
+            tx
+          );
+          return written;
+        });
+      } catch (validationError: unknown) {
+        const status = replacementErrorStatus(validationError);
+        if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
+        throw validationError;
+      }
 
       if (row.entry.ledgerAccountId && req.session.currentCompanyId) {
         autoReallocateLoansAccounts(req.session.currentCompanyId, [row.entry.ledgerAccountId]).catch(() => {});

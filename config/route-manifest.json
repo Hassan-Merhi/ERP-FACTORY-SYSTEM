@@ -1727,7 +1727,7 @@
     "POST /api/admin/delete-orphaned-pos-sales [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/admin/rebuild-inventory [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/inventory/negative [requireAuth > requireNonPOS > <anonymous>]",
-    "POST /api/vouchers/:id/finalize [requireAuth > requireNonPOS > <anonymous>]",
+    "POST /api/vouchers/:id/finalize [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "POST /api/dev/seed [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/admin/repair-inventory-values/preview [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/admin/repair-inventory-values [requireAuth > <anonymous> > <anonymous>]",

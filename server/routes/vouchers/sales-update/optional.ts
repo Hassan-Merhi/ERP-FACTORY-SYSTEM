@@ -34,6 +34,10 @@ import {
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import {
+  assertStoredVoucherLinesValidTx,
+  replacementErrorStatus,
+} from "../../../services/accounting/voucherEntryReplacement";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -79,6 +83,19 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
 
       const wasOptional = existingVoucher.optional;
       const willBeOptional = optional;
+
+      // Activation (optional → active) is refused before any side effect when the
+      // stored lines do not satisfy the active-voucher rules for the type (an active
+      // balanced-type voucher must balance exactly) — wave 9 ledger safety.
+      if (wasOptional && !willBeOptional) {
+        try {
+          await assertStoredVoucherLinesValidTx(db, { ...existingVoucher, optional: false });
+        } catch (validationError: unknown) {
+          const status = replacementErrorStatus(validationError);
+          if (status) return res.status(status).json({ message: getErrorMessage(validationError) });
+          throw validationError;
+        }
+      }
 
       // Wrap entire optional toggle in a transaction
       await db.transaction(async (tx) => {

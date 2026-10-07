@@ -5,8 +5,10 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
+import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
+import { writeAuditEvent } from "../../../services/audit";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import {
   factoryCategories,
@@ -23,6 +25,7 @@ import {
   stockGroups,
   bankAccounts,
   vouchers,
+  voucherEntries,
   suppliers,
   customers,
   locations,
@@ -33,6 +36,13 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+
+/**
+ * Wave 9 (ledger safety): restoring a voucher puts it back into every balance,
+ * so it is an Admin/Owner action (Developer passes, as with requireRole). The
+ * other item types keep the route-level non-POS rule.
+ */
+const VOUCHER_RESTORE_ROLES = new Set(["Admin", "Owner", "Developer"]);
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -95,7 +105,23 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .set({ deletedAt: null, active: true })
             .where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId)));
           break;
-        case "voucher":
+        case "voucher": {
+          if (!VOUCHER_RESTORE_ROLES.has(req.user?.role ?? "")) {
+            return res.status(403).json({ message: "Forbidden" });
+          }
+          const [voucher] = await db
+            .select()
+            .from(vouchers)
+            .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId), isNotNull(vouchers.deletedAt)));
+          if (!voucher) {
+            return res.status(404).json({ message: `${type} not found in Deleted Items` });
+          }
+          const blockedVoucherReason = voucherMutationBlockReason(voucher);
+          if (blockedVoucherReason) {
+            return res.status(403).json({ message: blockedVoucherReason });
+          }
+          // The closed-period trigger refuses clearing deleted_at on a voucher
+          // dated inside closed books; that error rolls this back and answers 409.
           await db.transaction(async (tx) => {
             await tx
               .update(vouchers)
@@ -107,8 +133,40 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             await syncStockAdjustmentInventoryTx(tx, companyId, itemId);
             // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
             await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, itemId);
+            const entries = await tx
+              .select({
+                ledgerAccountId: voucherEntries.ledgerAccountId,
+                bankAccountId: voucherEntries.bankAccountId,
+                supplierId: voucherEntries.supplierId,
+                customerId: voucherEntries.customerId,
+                employeeId: voucherEntries.employeeId,
+                debitAmount: voucherEntries.debitAmount,
+                creditAmount: voucherEntries.creditAmount,
+              })
+              .from(voucherEntries)
+              .where(eq(voucherEntries.voucherId, itemId));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "restore",
+                tableName: "vouchers",
+                recordId: itemId,
+                recordIdentifier: voucher.voucherNumber,
+                changes: {
+                  deletedAt: { old: voucher.deletedAt, new: null },
+                  voucherType: { new: voucher.voucherType },
+                  date: { new: voucher.voucherDate },
+                  amount: { new: voucher.totalAmount },
+                  entries: { new: entries },
+                },
+              },
+              tx
+            );
           });
           break;
+        }
         // === Wave 1 restores ===
         case "factoryCategory":
           await db
@@ -220,7 +278,7 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
 
       res.json({ message: `${type} restored successfully` });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 }

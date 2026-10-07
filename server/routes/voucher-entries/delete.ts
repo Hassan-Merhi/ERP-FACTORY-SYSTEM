@@ -7,7 +7,8 @@
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
+import { writeAuditEvent } from "../../services/audit";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
@@ -40,6 +41,69 @@ import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perp
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+
+type InterCompanyTransferRow = typeof interCompanyTransfers.$inferSelect;
+
+/**
+ * Wave 9 (ledger safety): deleting one side of an inter-company transfer takes
+ * the other company's side out of the books by soft delete — deleted_at set,
+ * lines kept, exactly like the voucher being deleted — never by hard delete.
+ * The counterpart's audit row is written in the same transaction, under the
+ * counterpart's company. The transfer link row is still removed, as before; the
+ * audit row keeps a copy of it.
+ */
+export async function softDeleteInterCompanyCounterpartTx(
+  tx: DbTransaction,
+  params: {
+    transfer: InterCompanyTransferRow;
+    voucherId: number;
+    voucherNumber: string;
+    actor: { userId?: string | null; username?: string | null };
+  }
+): Promise<void> {
+  const { transfer, voucherId } = params;
+  const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
+  if (!otherVoucherId || otherVoucherId === voucherId) return;
+
+  const [counterpart] = await tx.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
+  if (!counterpart || counterpart.deletedAt) return;
+
+  const deletedAt = new Date();
+  await tx.update(vouchers).set({ deletedAt }).where(eq(vouchers.id, otherVoucherId));
+
+  const entries = await tx
+    .select({
+      ledgerAccountId: voucherEntries.ledgerAccountId,
+      bankAccountId: voucherEntries.bankAccountId,
+      supplierId: voucherEntries.supplierId,
+      customerId: voucherEntries.customerId,
+      employeeId: voucherEntries.employeeId,
+      debitAmount: voucherEntries.debitAmount,
+      creditAmount: voucherEntries.creditAmount,
+      narration: voucherEntries.narration,
+    })
+    .from(voucherEntries)
+    .where(eq(voucherEntries.voucherId, otherVoucherId));
+
+  await writeAuditEvent(
+    {
+      userId: params.actor.userId ?? "unknown",
+      username: params.actor.username || "unknown",
+      companyId: counterpart.companyId,
+      action: "delete",
+      tableName: "vouchers",
+      recordId: otherVoucherId,
+      recordIdentifier: counterpart.voucherNumber,
+      changes: {
+        ...buildVoucherChangesForDelete(counterpart, entries),
+        deletedAt: { old: null, new: deletedAt },
+        interCompanyCounterpartOf: { old: { voucherId, voucherNumber: params.voucherNumber } },
+        interCompanyTransfer: { old: transfer },
+      },
+    },
+    tx
+  );
+}
 
 export function registerVoucherDeleteRoutes(app: Express) {
   // Delete a voucher (Admin only)
@@ -453,20 +517,21 @@ export function registerVoucherDeleteRoutes(app: Express) {
         }
 
         // IMPORTANT: If this voucher is one side of an inter-company transfer,
-        // also delete the OTHER side's entries + voucher and the transfer record.
-        // Delete the transfer record FIRST to release the FK "restrict" constraints
-        // on fromVoucherId / toVoucherId before hard-deleting those voucher rows.
+        // also take the OTHER side out of the books and remove the transfer record.
+        // Wave 9: the other side is soft-deleted (lines kept) and audited under its
+        // own company, in this transaction — it used to be hard-deleted unaudited.
         const linkedTransfersSingle = await tx
           .select()
           .from(interCompanyTransfers)
           .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)));
         for (const transfer of linkedTransfersSingle) {
-          const otherVoucherId = transfer.fromVoucherId === id ? transfer.toVoucherId : transfer.fromVoucherId;
           await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-          if (otherVoucherId && otherVoucherId !== id) {
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
-            await tx.delete(vouchers).where(eq(vouchers.id, otherVoucherId));
-          }
+          await softDeleteInterCompanyCounterpartTx(tx, {
+            transfer,
+            voucherId: id,
+            voucherNumber: voucher.voucherNumber,
+            actor: { userId: req.session.userId, username: req.session.username },
+          });
         }
 
         // Clean up any pending IC notification requests for this voucher

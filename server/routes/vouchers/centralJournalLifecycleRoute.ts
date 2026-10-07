@@ -20,6 +20,7 @@ import { storage } from "../../storage";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { createDatabasePostingDependencies } from "../../services/accounting/databasePostingDependencies";
 import { buildManualJournalPostingRequest } from "../../services/accounting/manualJournalPosting";
+import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import {
@@ -509,12 +510,14 @@ async function deleteActiveJournal(req: Request, res: Response, next: NextFuncti
           or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
         );
       for (const transfer of linkedTransfers) {
-        const otherVoucherId = transfer.fromVoucherId === voucherId ? transfer.toVoucherId : transfer.fromVoucherId;
+        // Wave 9: the other company's voucher is soft-deleted and audited, never hard-deleted.
         await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-        if (otherVoucherId && otherVoucherId !== voucherId) {
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
-          await tx.delete(vouchers).where(eq(vouchers.id, otherVoucherId));
-        }
+        await softDeleteInterCompanyCounterpartTx(tx, {
+          transfer,
+          voucherId,
+          voucherNumber: voucher.voucherNumber,
+          actor: { userId: req.session.userId, username: req.session.username },
+        });
       }
 
       await tx

@@ -350,6 +350,30 @@ risk, modules, database and production impact, dependencies and acceptance crite
 - **Not in scope:** moving master-record opening balances into journals needs its own reviewed migration. Every reader adds `opening_balance` to its entries, so posting them as journals without zeroing the master records would double count.
 
 
+### Wave 9 — Ledger safety (CRITICAL) — complete in code, except the items listed as open
+
+Fixes CRITICAL items 1–4 from the re-audit (section 7). Item 5 (inventory paths with no ledger counterpart) belongs to wave 11.
+
+- **Balance guard v2** (`voucherBalanceGuard.ts`): every active voucher *created* after the guard's install must balance at commit, in every company. The install time is the `voucher_balance_guard_since` system setting. Vouchers created before it are history and are never checked, so legacy rows stay editable and the integrity diagnostic keeps reporting them. Stock adjustment types are still checked only under perpetual inventory in a non-supplier-partner company. Lines all in one transaction currency are compared in that currency.
+- **FX revaluation:** saving an exchange rate no longer posts an `FX-REVAL-` journal. Existing ones are not touched; the integrity diagnostic lists them (`automatic_fx_revaluation_journals`, warn) for review.
+- **Unbalanced-activation paths closed:**
+  - the live voucher-line PATCH (`voucherEntryCurrencyEditRoutes.ts`, which had shadowed wave 2's validated route) now runs in one transaction: it syncs the stock adjustment, validates the stored lines and writes its audit inside the transaction;
+  - `PATCH /api/vouchers/:id/optional` and `POST /api/vouchers/:id/finalize` validate the lines before activating; finalize now needs Admin or Owner and is audited;
+  - `PUT /with-entries` refuses changing a balanced voucher to a type exempt from balancing.
+- **Balance sheet** (`/api/reports/balance-sheet`) is rebuilt on the trial balance: the optional and deleted filters, opening sides, every account type, parties by sign and a current-earnings line. Its remaining difference equals the trial balance's unexplained difference.
+- **Destructive admin routes:**
+  - the three company reset routes are Owner-only, act only on the session's company, run in one transaction and are audited. The audit row records the vouchers removed and the previous opening balances;
+  - the hard reset removes posting identities with their vouchers and refuses a set that contains a fiscal-period closing voucher;
+  - undo restores only the vouchers its own reset deleted (matched by the recorded `resetAt`), once. Resets run before this change have no audit row and cannot be undone;
+  - voucher restore and permanent delete need Admin, Owner or Developer, run in one transaction and are audited with the lines. Permanent delete refuses a fiscal-period closing voucher instead of deleting the closure;
+  - deleting one side of an inter-company transfer soft-deletes and audits the other company's voucher, keeping its lines, on every path: single delete (Payment/Receipt, Journal and other types) and bulk delete.
+- **Still open:**
+  - company delete still removes `audit_log`;
+  - permanent delete of an orphaned POS sale is still autocommit and unaudited;
+  - permanent delete of an engine-posted voucher fails on its posting identity (it now rolls back cleanly);
+  - the reset page still offers any company and shows to Admins; the server refuses both.
+- Tests: `voucher-balance-guard`, `balance-sheet-from-trial-balance`, `wave9-ledger-safety-routes`, `wave9-admin-history-safety`.
+
 ## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
 
 Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**

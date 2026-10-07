@@ -5,8 +5,9 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
+import { writeAuditEvent } from "../../../services/audit";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import {
   factoryCategories,
@@ -149,6 +150,14 @@ async function isInDeletedItems(type: string, itemId: number, companyId: number)
   return (rows?.[0] as { found?: boolean } | undefined)?.found === true;
 }
 
+/**
+ * Wave 9 (ledger safety): permanently deleting a voucher erases accounting
+ * history, so it is an Admin/Owner action (Developer passes, as with
+ * requireRole). The other item types keep the route-level non-POS rule.
+ */
+const VOUCHER_PERMANENT_DELETE_ROLES = new Set(["Admin", "Owner", "Developer"]);
+const CLOSING_VOUCHER_MESSAGE = "A fiscal-period closing voucher cannot be deleted";
+
 export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
   // Permanently delete an item
   app.delete("/api/deleted-items/:type/:id/permanent", requireAuth, requireNonPOS, async (req, res) => {
@@ -273,53 +282,91 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           await db.delete(bankAccounts).where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId)));
           break;
         case "voucher": {
-          // ── Step 1: Null out nullable FKs in tables with onDelete: "restrict" ──
-          await db.update(purchaseOrders).set({ voucherId: null }).where(eq(purchaseOrders.voucherId, itemId));
-          await db.update(containerSales).set({ voucherId: null }).where(eq(containerSales.voucherId, itemId));
-          await db
-            .update(interCompanyTransfers)
-            .set({ fromVoucherId: null })
-            .where(eq(interCompanyTransfers.fromVoucherId, itemId));
-          await db
-            .update(interCompanyTransfers)
-            .set({ toVoucherId: null })
-            .where(eq(interCompanyTransfers.toVoucherId, itemId));
-          await db.update(salaryAdvances).set({ voucherId: null }).where(eq(salaryAdvances.voucherId, itemId));
-          await db
-            .update(customerOrderCharges)
-            .set({ voucherId: null })
-            .where(eq(customerOrderCharges.voucherId, itemId));
-          await db.update(wasteDispatches).set({ voucherId: null }).where(eq(wasteDispatches.voucherId, itemId));
-          await db.update(propertyPayments).set({ voucherId: null }).where(eq(propertyPayments.voucherId, itemId));
-          await db
-            .update(factoryTransporterTransactions)
-            .set({ voucherId: null })
-            .where(eq(factoryTransporterTransactions.voucherId, itemId));
-
-          // ── Step 2: Delete rows with notNull FKs ──────────────────────────
-          // stock_transfer_vouchers.voucherId is notNull — delete its items first
-          const stvRows = await db
-            .select({ id: stockTransferVouchers.id })
-            .from(stockTransferVouchers)
-            .where(eq(stockTransferVouchers.voucherId, itemId));
-          if (stvRows.length > 0) {
-            const stvIds = stvRows.map((r) => r.id);
-            // transferId is the correct FK column on stock_transfer_items
-            await db.delete(stockTransferItems).where(inArray(stockTransferItems.transferId, stvIds));
-            await db.delete(stockTransferVouchers).where(inArray(stockTransferVouchers.id, stvIds));
+          if (!VOUCHER_PERMANENT_DELETE_ROLES.has(req.user?.role ?? "")) {
+            return res.status(403).json({ message: "Forbidden" });
           }
-          // fiscal_period_closures.closingVoucherId is notNull — delete the closure row if it exists
-          try {
-            await db.delete(fiscalPeriodClosures).where(eq(fiscalPeriodClosures.closingVoucherId, itemId));
-          } catch {
-            // If no matching row or table schema differs in production, continue safely
+          // A fiscal close's journal is referenced by its closure row. Deleting
+          // that row would silently reopen the period, so refuse instead.
+          const [closure] = await db
+            .select({ id: fiscalPeriodClosures.id })
+            .from(fiscalPeriodClosures)
+            .where(eq(fiscalPeriodClosures.closingVoucherId, itemId))
+            .limit(1);
+          if (closure) {
+            return res.status(409).json({ message: CLOSING_VOUCHER_MESSAGE });
           }
 
-          // ── Step 3: Delete voucher entries (also cascade, but be explicit) ─
-          await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
+          // One transaction: the voucher, its lines and every unlinked
+          // reference go together, or nothing changes.
+          await db.transaction(async (tx) => {
+            const [voucher] = await tx
+              .select()
+              .from(vouchers)
+              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+            const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
 
-          // ── Step 4: Delete the voucher itself ────────────────────────────
-          await db.delete(vouchers).where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+            // ── Step 1: Null out nullable FKs in tables with onDelete: "restrict" ──
+            await tx.update(purchaseOrders).set({ voucherId: null }).where(eq(purchaseOrders.voucherId, itemId));
+            await tx.update(containerSales).set({ voucherId: null }).where(eq(containerSales.voucherId, itemId));
+            await tx
+              .update(interCompanyTransfers)
+              .set({ fromVoucherId: null })
+              .where(eq(interCompanyTransfers.fromVoucherId, itemId));
+            await tx
+              .update(interCompanyTransfers)
+              .set({ toVoucherId: null })
+              .where(eq(interCompanyTransfers.toVoucherId, itemId));
+            await tx.update(salaryAdvances).set({ voucherId: null }).where(eq(salaryAdvances.voucherId, itemId));
+            await tx
+              .update(customerOrderCharges)
+              .set({ voucherId: null })
+              .where(eq(customerOrderCharges.voucherId, itemId));
+            await tx.update(wasteDispatches).set({ voucherId: null }).where(eq(wasteDispatches.voucherId, itemId));
+            await tx.update(propertyPayments).set({ voucherId: null }).where(eq(propertyPayments.voucherId, itemId));
+            await tx
+              .update(factoryTransporterTransactions)
+              .set({ voucherId: null })
+              .where(eq(factoryTransporterTransactions.voucherId, itemId));
+
+            // ── Step 2: Delete rows with notNull FKs ──────────────────────────
+            // stock_transfer_vouchers.voucherId is notNull — delete its items first
+            const stvRows = await tx
+              .select({ id: stockTransferVouchers.id })
+              .from(stockTransferVouchers)
+              .where(eq(stockTransferVouchers.voucherId, itemId));
+            if (stvRows.length > 0) {
+              const stvIds = stvRows.map((r) => r.id);
+              // transferId is the correct FK column on stock_transfer_items
+              await tx.delete(stockTransferItems).where(inArray(stockTransferItems.transferId, stvIds));
+              await tx.delete(stockTransferVouchers).where(inArray(stockTransferVouchers.id, stvIds));
+            }
+
+            // ── Step 3: Delete voucher entries (also cascade, but be explicit) ─
+            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
+
+            // ── Step 4: Delete the voucher itself ────────────────────────────
+            await tx.delete(vouchers).where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+
+            // ── Step 5: Audit, with the header and lines as they were ────────
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "vouchers",
+                recordId: itemId,
+                recordIdentifier: voucher?.voucherNumber ?? null,
+                changes: {
+                  permanentDelete: { new: true },
+                  voucher: { old: voucher ?? null },
+                  entries: { old: entries },
+                  unlinkedStockTransferVoucherIds: { old: stvRows.map((r) => r.id) },
+                },
+              },
+              tx
+            );
+          });
           break;
         }
         case "orphanedPosSale":
@@ -400,7 +447,7 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
 
       res.json({ message: `${type} permanently deleted` });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });
 
