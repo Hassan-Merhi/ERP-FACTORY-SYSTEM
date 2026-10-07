@@ -8,6 +8,8 @@
  *     another company's locations;
  *   - stock transfers: accepted another company's destination, sources and
  *     stock items;
+ *   - posted stock transfer edits: could re-point a transfer at another
+ *     company's location;
  *   - credit and debit notes: booked stock at another company's location;
  *   - silent production: adjusted stock at another company's location.
  */
@@ -189,6 +191,29 @@ describe("stock transfer tenant scope", () => {
       ownItemId,
     ]);
     expect(own.rows[0].quantity).toBe("100.000");
+    const foreign = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
+    expect(foreign.rowCount).toBe(0);
+  });
+});
+
+describe("posted stock transfer edit tenant scope", () => {
+  it("refuses to point an edited transfer at another company's location", async () => {
+    const ownItemId = ctx.stockItemIds[0];
+    const created = await agent.post("/api/stock-transfers").send({
+      sourceLocationId: ctx.locationId,
+      destinationLocationId: ctx.location2Id,
+      items: [{ stockItemId: ownItemId, quantity: "2" }],
+    });
+    expect(created.status).toBe(201);
+    const voucherId = created.body.voucherId ?? created.body.transfer?.voucherId ?? created.body.voucher?.id;
+    expect(voucherId).toBeTruthy();
+
+    const edit = await agent.patch(`/api/vouchers/${voucherId}/transfer`).send({
+      destinationLocationId: foreignLocationId,
+      items: [{ stockItemId: ownItemId, sourceLocationId: ctx.locationId, quantity: 2, rate: 10 }],
+    });
+    expect(edit.status).toBe(400);
+    expect(edit.body.message).toBe("Location not found");
     const foreign = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
     expect(foreign.rowCount).toBe(0);
   });
