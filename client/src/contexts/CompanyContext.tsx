@@ -70,6 +70,8 @@ interface CompanyContextType {
 interface CompanyCommitOptions {
   prefetch: boolean;
   serverSynced: boolean;
+  /** False when another tab already wrote the selection to localStorage. */
+  persist?: boolean;
 }
 
 const CompanyContext = createContext<CompanyContextType | undefined>(undefined);
@@ -134,13 +136,15 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
     .filter(
       (company, index, allCompanies) => index === allCompanies.findIndex((candidate) => candidate.id === company.id)
     );
+  const companiesRef = useRef(companies);
+  companiesRef.current = companies;
 
   const commitCompanySelection = useCallback((company: Company, options: CompanyCommitOptions) => {
     setAppTimezone(null);
     lastSyncedCompanyId.current = options.serverSynced ? company.id : null;
     selectedCompanyRef.current = company;
     setSelectedCompany(company);
-    localStorage.setItem("selectedCompanyId", company.id.toString());
+    if (options.persist !== false) localStorage.setItem("selectedCompanyId", company.id.toString());
     if (options.prefetch) prefetchReferenceData(company.id, company.role);
   }, []);
 
@@ -285,23 +289,54 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
   // The company lives in the server session, which every tab of this browser
   // shares. When another tab switches company, this tab's next request would
   // carry its old company and be refused (CROSS_COMPANY_ACCESS_DENIED), and the
-  // page would sit on data from a company the session has left. Follow the
-  // switch instead: localStorage only changes after a switch commits, and the
-  // storage event fires in the other tabs only.
+  // page would sit on data from a company the session has left. The other
+  // tab's localStorage write (made only after its switch committed) fires a
+  // storage event here; on it, adopt whatever company the session points at
+  // now. A follower never writes the session or localStorage itself, so it
+  // cannot race a newer switch back to an older company, and reading the
+  // session rather than the event value makes the order of events irrelevant.
   useEffect(() => {
-    const followOtherTab = (event: StorageEvent) => {
-      if (event.key !== "selectedCompanyId") return;
-      const companyId = parseSavedCompanyId(event.newValue);
-      if (!companyId || companyId === selectedCompanyRef.current?.id) return;
-      const company = companies.find((candidate) => candidate.id === companyId);
-      if (!company) return;
-      void selectCompany(company).catch((error: unknown) => {
-        console.error("[Company] Failed to follow the company selected in another tab.", error);
+    let retryTimer: number | null = null;
+
+    const followSession = (attempt: number) => {
+      void switchQueueRef.current!.enqueue(async () => {
+        let sessionCompanyId: number | null;
+        try {
+          ({ companyId: sessionCompanyId } = await fetchSessionCompany());
+        } catch (error: unknown) {
+          if (attempt < 3) {
+            retryTimer = window.setTimeout(() => followSession(attempt + 1), 2000);
+          } else {
+            console.error("[Company] Could not read the session company after another tab switched.", error);
+          }
+          return;
+        }
+        if (!sessionCompanyId || sessionCompanyId === selectedCompanyRef.current?.id) return;
+        const company = companiesRef.current.find((candidate) => candidate.id === sessionCompanyId);
+        if (!company) return;
+
+        await cancelCompanySessionQueries(queryClient);
+        removeCompanySessionQueries(queryClient, { resetAuthenticatedUser: true });
+        commitCompanySelection(company, { prefetch: true, serverSynced: true, persist: false });
+        refreshRealtimeSessionScope();
       });
     };
+
+    const followOtherTab = (event: StorageEvent) => {
+      if (event.key !== "selectedCompanyId" || !selectedCompanyRef.current) return;
+      const companyId = parseSavedCompanyId(event.newValue);
+      if (!companyId || companyId === selectedCompanyRef.current.id) return;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      retryTimer = null;
+      followSession(0);
+    };
+
     window.addEventListener("storage", followOtherTab);
-    return () => window.removeEventListener("storage", followOtherTab);
-  }, [companies, selectCompany]);
+    return () => {
+      window.removeEventListener("storage", followOtherTab);
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+    };
+  }, [commitCompanySelection]);
 
   return (
     <CompanyContext.Provider
