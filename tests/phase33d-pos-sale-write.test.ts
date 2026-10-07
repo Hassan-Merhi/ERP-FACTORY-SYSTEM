@@ -79,6 +79,11 @@ const harness = vi.hoisted(() => {
 });
 
 vi.mock("../server/db", () => ({ db: harness.db }));
+// Perpetual-inventory cost of sales is covered by its own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/factoryPosCogs", () => ({
+  factoryBalesCostTx: async () => ({ toDecimalPlaces: () => ({ gt: () => false }) }),
+  postFactoryPosCogsTx: async () => null,
+}));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any) => next() }));
 vi.mock("../server/routes/factory/_helpers", () => ({ getOrCreateLedgerAccount: harness.getOrCreateLedgerAccount }));
 vi.mock("../server/services/accounting/durableFinancialOperation", () => ({
