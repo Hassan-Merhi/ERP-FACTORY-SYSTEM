@@ -10,6 +10,7 @@ import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
+import { allStockItemsOwned, ownLocationIds } from "../../helpers/companyOwnership";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import { logAudit, buildItemLevelChanges } from "../../_helpers";
@@ -61,6 +62,27 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
         return res.status(403).json({
           message: "Access denied: Voucher belongs to a different company",
         });
+      }
+
+      // Body locations and items are outside the path-based company scope.
+      const ownedLocations = await ownLocationIds(existingVoucher.companyId, [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
+      ]);
+      const foreignLocation = [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId).filter(Boolean),
+      ].some((locationId) => !ownedLocations.has(Number(locationId)));
+      if (foreignLocation) return res.status(400).json({ message: "Location not found" });
+      if (
+        !(await allStockItemsOwned(
+          existingVoucher.companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Stock item not found" });
       }
 
       const blockedVoucherReason = voucherMutationBlockReason(existingVoucher);

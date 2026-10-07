@@ -21,7 +21,10 @@ import {
   factoryWorkerDeductions,
   factoryAttendance,
 } from "@shared/schema";
-import { computeMonthlyPay, computeMonthlyPayFromAttendance, getFactoryCompanyId } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
+import { getFactoryCompanyId } from "./_helpers";
+import { computeWorkerPayAmounts, daysInMonthOf } from "./workerPayAmounts";
 
 export function registerPayrollPreviewRoutes(app: Express) {
   // POST /api/factory/payrolls/preview - Preview payroll calculation with attendance breakdown (no DB writes)
@@ -35,7 +38,16 @@ export function registerPayrollPreviewRoutes(app: Express) {
       const days = daysCount
         ? parseInt(daysCount)
         : Math.floor((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const bonus = parseFloat(bonusPerWorker || "0");
+      const parsedBonus = parseMoneyInput(bonusPerWorker || "0");
+      if (!parsedBonus) return res.status(400).json({ message: "Invalid amount" });
+      // Same cents as generate-bulk, so the preview shows what will be stored.
+      const bonus = parsedBonus.toDecimalPlaces(2);
+      const transportOverrideFor = (workerId: number) => {
+        const value = transportOverrides?.[String(workerId)];
+        if (value === undefined || value === null) return null;
+        const parsed = parseMoneyInput(value);
+        return parsed && parsed.gte(0) ? parsed : null;
+      };
 
       let targetWorkers;
       if (workerIds && workerIds.length > 0) {
@@ -80,19 +92,21 @@ export function registerPayrollPreviewRoutes(app: Express) {
         .where(and(eq(factoryWorkerAdvances.companyId, companyId), eq(factoryWorkerAdvances.fullyPaid, false)))
         .orderBy(factoryWorkerAdvances.advanceDate);
       // Separate salary-deduction advances (auto-deducted from pay) from loans (informational only)
-      const advanceByWorker: Record<number, number> = {};
+      const advanceByWorker: Record<number, Decimal> = {};
       const advanceListByWorker: Record<number, typeof allAdvances> = {};
       const loanListByWorker: Record<number, typeof allAdvances> = {};
-      const loanBalByWorker: Record<number, number> = {};
+      const loanBalByWorker: Record<number, Decimal> = {};
       for (const adv of allAdvances) {
         if (adv.repaymentType === "salary_deduction") {
-          advanceByWorker[adv.workerId] =
-            (advanceByWorker[adv.workerId] || 0) + parseFloat(adv.remainingBalance || "0");
+          advanceByWorker[adv.workerId] = (advanceByWorker[adv.workerId] ?? new MoneyDecimal(0)).plus(
+            toMoney(adv.remainingBalance)
+          );
           if (!advanceListByWorker[adv.workerId]) advanceListByWorker[adv.workerId] = [];
           advanceListByWorker[adv.workerId].push(adv);
         } else {
-          loanBalByWorker[adv.workerId] =
-            (loanBalByWorker[adv.workerId] || 0) + parseFloat(adv.remainingBalance || "0");
+          loanBalByWorker[adv.workerId] = (loanBalByWorker[adv.workerId] ?? new MoneyDecimal(0)).plus(
+            toMoney(adv.remainingBalance)
+          );
           if (!loanListByWorker[adv.workerId]) loanListByWorker[adv.workerId] = [];
           loanListByWorker[adv.workerId].push(adv);
         }
@@ -103,14 +117,15 @@ export function registerPayrollPreviewRoutes(app: Express) {
         .select()
         .from(factoryWorkerDeductions)
         .where(and(eq(factoryWorkerDeductions.companyId, companyId), eq(factoryWorkerDeductions.applied, false)));
-      const pendingDeductionByWorker: Record<number, number> = {};
+      const pendingDeductionByWorker: Record<number, Decimal> = {};
       const pendingDeductionRecordsByWorker: Record<
         number,
         { id: number; amount: string; reason: string | null; deductionDate: string }[]
       > = {};
       for (const ded of allPendingDeductions) {
-        pendingDeductionByWorker[ded.workerId] =
-          (pendingDeductionByWorker[ded.workerId] || 0) + parseFloat(ded.amount || "0");
+        pendingDeductionByWorker[ded.workerId] = (pendingDeductionByWorker[ded.workerId] ?? new MoneyDecimal(0)).plus(
+          toMoney(ded.amount)
+        );
         if (!pendingDeductionRecordsByWorker[ded.workerId]) pendingDeductionRecordsByWorker[ded.workerId] = [];
         pendingDeductionRecordsByWorker[ded.workerId].push({
           id: ded.id,
@@ -124,29 +139,10 @@ export function registerPayrollPreviewRoutes(app: Express) {
       // This ensures two half-month runs (e.g. Apr 1-15 + Apr 16-30) add up to
       // exactly the full monthly transport allowance for a fully-present worker.
       // e.g. for April (30 days): daily rate = $80/30 = $2.67 → 15d = $40
-      const transportMonthDays = (() => {
-        const d = new Date(periodStart);
-        return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-      })();
+      const transportMonthDays = daysInMonthOf(periodStart);
 
       const result = targetWorkers.map((worker) => {
-        const baseSal = parseFloat(worker.baseSalary || "0");
-        const freq = worker.payFrequency || worker.salaryType || "Monthly";
-        let base: number;
-        if (freq === "Weekly") base = (days / 7) * baseSal;
-        else if (freq === "Bi-Weekly") base = (days / 14) * baseSal;
-        else if (freq === "Daily" || worker.salaryType === "Daily") base = days * baseSal;
-        else {
-          // Monthly: use attendance-based calculation if records exist
-          const workerAttRecords = attendanceByWorker.get(worker.id) || [];
-          if (workerAttRecords.length === 0) {
-            base = computeMonthlyPay(baseSal, periodStart, periodEnd);
-          } else {
-            base = computeMonthlyPayFromAttendance(baseSal, periodStart, workerAttRecords);
-          }
-        }
-
-        // Transport allowance — prorated by attendance
+        // Attendance breakdown shown next to the amounts
         const workerAttRecs = attendanceByWorker.get(worker.id) || [];
         let presentDays = 0;
         let absentDays = 0;
@@ -173,28 +169,20 @@ export function registerPayrollPreviewRoutes(app: Express) {
         absentDates.sort((a, b) => a.date.localeCompare(b.date));
         halfDayDates.sort((a, b) => a.date.localeCompare(b.date));
 
-        const workerTransportDefault = parseFloat(worker.transportAllowance || "0");
-        const transportOverrideAmt = transportOverrides
-          ? parseFloat(transportOverrides[String(worker.id)] ?? "-1")
-          : -1;
-        const transportMonthly = transportOverrideAmt >= 0 ? transportOverrideAmt : workerTransportDefault;
-
-        let transport = 0;
-        if (transportMonthly > 0) {
-          if (workerAttRecs.length > 0 && transportMonthDays > 0) {
-            // dailyRate = monthlyRate / daysInMonth
-            // transport = dailyRate * presentDays
-            transport = (presentDays / transportMonthDays) * transportMonthly;
-          } else {
-            transport = transportMonthly;
-          }
-        }
-
-        const totalAdvanceBalance = advanceByWorker[worker.id] || 0;
-        const advanceDeduction = Math.min(totalAdvanceBalance, base + bonus + transport);
-        const pendingDeductions = pendingDeductionByWorker[worker.id] || 0;
+        const totalAdvanceBalance = advanceByWorker[worker.id] ?? new MoneyDecimal(0);
         const pendingDeductionRecords = pendingDeductionRecordsByWorker[worker.id] || [];
-        const net = base + bonus + transport - advanceDeduction - pendingDeductions;
+        const pay = computeWorkerPayAmounts({
+          worker,
+          days,
+          periodStart,
+          periodEnd,
+          attendance: workerAttRecs,
+          bonus,
+          transportOverride: transportOverrideFor(worker.id),
+          advanceBalance: totalAdvanceBalance,
+          advanceOverride: null,
+          pendingDeductions: pendingDeductionByWorker[worker.id] ?? new MoneyDecimal(0),
+        });
         const pendingAdvances = (advanceListByWorker[worker.id] || []).map((a) => ({
           id: a.id,
           advanceDate: a.advanceDate,
@@ -211,25 +199,25 @@ export function registerPayrollPreviewRoutes(app: Express) {
           notes: a.notes,
           repaymentType: a.repaymentType,
         }));
-        const totalLoanBalance = loanBalByWorker[worker.id] || 0;
+        const totalLoanBalance = loanBalByWorker[worker.id] ?? new MoneyDecimal(0);
 
         return {
           id: worker.id,
           employeeCode: worker.employeeCode || null,
           name: worker.fullName,
           position: worker.position || null,
-          base,
-          bonus,
-          transport,
-          transportMonthly,
-          advanceDeduction,
-          totalAdvanceBalance,
+          base: pay.base.toNumber(),
+          bonus: bonus.toNumber(),
+          transport: pay.transport.toNumber(),
+          transportMonthly: pay.transportMonthly.toNumber(),
+          advanceDeduction: pay.advanceDeduction.toNumber(),
+          totalAdvanceBalance: totalAdvanceBalance.toNumber(),
           pendingAdvances,
-          pendingDeductions,
+          pendingDeductions: pay.pendingDeductions.toNumber(),
           pendingDeductionRecords,
           outstandingLoans,
-          totalLoanBalance,
-          net,
+          totalLoanBalance: totalLoanBalance.toNumber(),
+          net: pay.net.toNumber(),
           totalWorkingDays: transportMonthDays, // full month days — denominator used for proration
           presentDays,
           absentDays,

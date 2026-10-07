@@ -14,12 +14,15 @@ import { requireAuth, requireNonPOS } from "../auth";
 import { logger } from "../lib/logger";
 import {
   locations,
+  stockAdjustmentVouchers,
   stockItems,
+  vouchers,
   wasteDispatches,
   wasteDispatchItems,
   updateStockAdjustmentSchema,
 } from "@shared/schema";
 import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
+import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
 
 export function registerStockAdjustmentWasteRoutes(app: Express) {
   // Stock Adjustments - GET endpoint
@@ -49,6 +52,8 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
   // Stock Adjustments - PUT endpoint (update)
   app.put("/api/stock-adjustments/:id", requireAuth, requireNonPOS, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id);
       if (!id) {
         return res.status(400).json({ message: "Adjustment ID is required" });
@@ -64,6 +69,26 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       }
 
       const { locationId, adjustmentType, notes, items } = parseResult.data;
+
+      // The adjustment is reached by id and its location and items come from
+      // the body; none of them is under the path-based company scope.
+      const [owned] = await db
+        .select({ id: stockAdjustmentVouchers.id })
+        .from(stockAdjustmentVouchers)
+        .innerJoin(vouchers, eq(vouchers.id, stockAdjustmentVouchers.voucherId))
+        .where(and(eq(stockAdjustmentVouchers.id, id), eq(vouchers.companyId, companyId)));
+      if (!owned) return res.status(404).json({ message: "Adjustment not found" });
+      if (!(await ownLocationIds(companyId, [locationId])).has(locationId)) {
+        return res.status(400).json({ message: "Location not found" });
+      }
+      if (
+        !(await allStockItemsOwned(
+          companyId,
+          items.map((item) => item.stockItemId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Stock item not found" });
+      }
 
       // Convert numbers back to strings with fixed precision for storage layer
       const itemsForStorage = items.map((item) => ({
@@ -186,8 +211,19 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       const dispatchNumber = `WD-${year}-${String(seq).padStart(4, "0")}`;
 
       // Get location name for voucher description
-      const [location] = await db.select().from(locations).where(eq(locations.id, locationId));
+      const [location] = await db
+        .select()
+        .from(locations)
+        .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId)));
       if (!location) return res.status(400).json({ message: "Location not found" });
+      if (
+        !(await allStockItemsOwned(
+          companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Stock item not found" });
+      }
 
       // Calculate total (will be updated after createStockAdjustment to use actual rates)
       const itemsForAdj = items.map((item) => ({

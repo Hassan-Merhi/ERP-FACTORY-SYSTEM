@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
+import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 import { requireAuth } from "../../../auth";
 
 import { adjustInventory } from "../../../inventoryHelper";
@@ -73,6 +74,9 @@ export function registerBalesFinalizeRoutes(app: Express) {
         return res
           .status(400)
           .json({ message: "pressingBatchId, scannedBaleIds, erpLocationId, and mixBatchId are required" });
+      }
+      if (!(await isFactorySessionLocation(req.session, erpLocationId))) {
+        return res.status(400).json({ message: "Location not found" });
       }
 
       const result = await db.transaction(async (tx) => {

@@ -9,6 +9,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
+import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
@@ -43,6 +44,9 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
       if (!erpLocationId) {
         return res.status(400).json({ message: "Location is required" });
+      }
+      if (!(await isFactorySessionLocation(req.session, erpLocationId))) {
+        return res.status(400).json({ message: "Location not found" });
       }
 
       // Parse optional backdated entry date; default to today so history is always populated.
@@ -421,6 +425,9 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
       const { erpLocationId, bales } = req.body;
       if (!erpLocationId) return res.status(400).json({ message: "Location is required" });
+      if (!(await isFactorySessionLocation(req.session, erpLocationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
       if (!bales || !Array.isArray(bales) || bales.length === 0) {
         return res.status(400).json({ message: "No bales to import" });
       }
