@@ -10,6 +10,7 @@
  *     stock items;
  *   - posted stock transfer edits: could re-point a transfer at another
  *     company's location;
+ *   - POS import: validated and imported sales at another company's location;
  *   - credit and debit notes: booked stock at another company's location;
  *   - silent production: adjusted stock at another company's location.
  */
@@ -216,6 +217,26 @@ describe("posted stock transfer edit tenant scope", () => {
     expect(edit.body.message).toBe("Location not found");
     const foreign = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
     expect(foreign.rowCount).toBe(0);
+  });
+});
+
+describe("POS import tenant scope", () => {
+  it("refuses another company's location on validate and import", async () => {
+    const validate = await agent.post("/api/pos-import/validate").send({
+      locationId: foreignLocationId,
+      items: [{ barcode: `${TEST_PREFIX}-ITEM1`, quantity: 1, price: 1 }],
+    });
+    expect(validate.status).toBe(200);
+    expect(validate.body.errors).toEqual(["Selected location not found"]);
+
+    const imported = await agent.post("/api/pos-import/import").send({
+      locationId: foreignLocationId,
+      saleDate: "2026-10-07",
+      cashAccountId: ctx.cashAccountId,
+      items: [{ barcode: `${TEST_PREFIX}-ITEM1`, quantity: 1, price: 1 }],
+    });
+    expect(imported.status).toBe(400);
+    expect(imported.body.message).toBe("Location not found");
   });
 });
 
