@@ -12,7 +12,10 @@
  *                   ledger-side total. Credit/Debit Notes are the important case:
  *                   the refund/receipt header can differ from inventory cost and
  *                   the variance account makes the ledger balance at cost value.
- * "single-sided"    Exactly one GL side is posted. Inventory is the contra side.
+ * "single-sided"    Exactly one GL side is posted and inventory is the contra
+ *                   side; or, once the company's perpetual-inventory cut-over
+ *                   applies, the voucher also carries its inventory line and
+ *                   both sides are posted and equal.
  * "inventory-sided" One or both GL sides can be posted and inventory carries the
  *                   net contra. Mixed production/consumption documents use this.
  * "none"            The document posts no ledger entry at all; stock evidence is

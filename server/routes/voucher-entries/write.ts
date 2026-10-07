@@ -20,6 +20,7 @@ import {
   replacementErrorStatus,
   storedEntriesAsAmountInput,
 } from "../../services/accounting/voucherEntryReplacement";
+import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 
 /**
  * After a single-line write, the voucher's stored lines must still satisfy the
@@ -105,6 +106,8 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
               narration: typeof req.body.narration === "string" ? req.body.narration : null,
             })
             .returning();
+          // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+          await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucher.id);
           await assertStoredVoucherLinesValid(tx, voucher);
           return created;
         });
@@ -219,6 +222,8 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
             .set(allowedUpdates)
             .where(eq(voucherEntries.id, id))
             .returning();
+          // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+          await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucher.id);
           await assertStoredVoucherLinesValid(tx, voucher);
           return row;
         });

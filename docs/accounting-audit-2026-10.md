@@ -202,7 +202,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.2 complete)
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.3 complete)
 
 - **Problem:** the GL is a cash and payables book.
   - Purchases are expensed, and sales post no COGS.
@@ -238,6 +238,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
       - Dr Finished Goods: bales held, at recorded cost.
       - Cr Opening Balance Equity: the total.
       - Rows with no cost are listed, never valued. Bales marked sold on unfinalized orders are reported.
+      - Each line posts its value less what the ledger already holds on the account as of the eve: opening balances and active postings. Credit and debit notes have always posted to Inventory, so a full-value line would count them twice. A line whose ledger balance exceeds its value credits the account. Added in 8.3; no cut-over had been applied.
     - `POST /api/accounting/perpetual-inventory/apply` (Owner, `confirm`) posts the journal and records the cut-over in one locked transaction, once per company. It is refused while posting is not ready, for a future date, and a second time.
     - Test: `perpetual-inventory-cutover`.
   - **8.1 ERP sales (complete):**
@@ -268,7 +269,18 @@ risk, modules, database and production impact, dependencies and acceptance crite
       - Landed charges with no charge voucher (transfer charges, container charges) go to Purchases through the difference line.
       - Older code: container delete hard-deletes the PO voucher without its posting identity, so the database refuses the delete (`accounting_posting_requests` restricts it), and the steps before that are not in one transaction. The linked journals are removed last, so a refused delete leaves them in place.
     - Test: `perpetual-inventory-stock-receipts`.
-  - **8.3 Stock adjustments and production/consumption:** posted on both sides against `STOCK_ADJUSTMENT`, with the voucher expectations reclassified.
+  - **8.3 Stock adjustments and production/consumption (complete):**
+    - A stock adjustment voucher (Production, Consumption, Mixed, Stock Adjustment) keeps its `STOCK_ADJUSTMENT` lines. Once the cut-over applies, it also carries one line on the inventory control account for the net of its other lines, so the voucher balances: production Dr Inventory, consumption Cr Inventory.
+    - The line is derived from the voucher's current lines and marked by its narration. An inventory line entered by hand is left alone and counted with the others. Optional, deleted and pre-cut-over vouchers and supplier-partner companies carry none.
+    - Wired paths:
+      - adjustment create and edit
+      - adjustment date change
+      - generic line replacement and single-line writes
+      - header edit and optional toggle
+      - restore
+    - Voucher expectations reclassified: "single-sided" (Stock Adjustment, Production, Consumption) now accepts one side posted (periodic) or both sides posted and equal (perpetual), in the convergence reconciler and the phase 3 audit.
+    - Credit and debit notes already post their inventory line at cost, with a variance line, before and after the cut-over. The 8.5 reconciliation checks them with the rest.
+    - Test: `perpetual-inventory-stock-adjustments`.
   - **8.4 Factory:**
     - Offload: Dr Raw Material against import cost and capitalised charges.
     - Mix: Dr WIP / Cr Raw Material.

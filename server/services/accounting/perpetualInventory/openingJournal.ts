@@ -13,6 +13,12 @@
  *   Dr Factory Finished Goods        bales held, at their recorded cost
  *      Cr Opening Balance Equity     the total
  *
+ * Each line posts the difference between that value and what the ledger
+ * already holds on the account as of the eve (credit and debit notes have
+ * always posted to Inventory), so nothing already in the ledger is counted
+ * twice; a line whose ledger balance exceeds its value credits the account.
+ * A supplier-partner company's Goods in Transit and Inventory are left alone.
+ *
  * The plan is read-only. Rows that carry no cost are listed, never valued at a
  * guess. Applying requires an Owner, PERPETUAL_INVENTORY_POSTING_READY, and a
  * cut-over date that is today or earlier (the factory figures are current
@@ -33,6 +39,11 @@ import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, ge
 
 export interface OpeningJournalLine {
   accountCode: string;
+  /** What the account should hold at the cut-over. */
+  target: string;
+  /** What the ledger already holds on the account as of the eve (debit positive). */
+  ledgerBalance: string;
+  /** What the journal posts: target minus ledger balance (positive debits the account). */
   amount: string;
   basis: string;
 }
@@ -79,6 +90,16 @@ function dayBefore(date: string): string {
 
 async function rows<T>(query: ReturnType<typeof sql>): Promise<T[]> {
   return (await db.execute(query)).rows as unknown as T[];
+}
+
+/** The opening journal's debit side: the lines it debits, and equity when the lines net to a credit. */
+function openingDebitTotal(plan: Pick<OpeningInventoryPlan, "lines" | "total">): Decimal {
+  const debits = plan.lines.reduce(
+    (sum, line) => (toMoney(line.amount).isPositive() ? sum.plus(line.amount) : sum),
+    new MoneyDecimal(0)
+  );
+  const net = toMoney(plan.total);
+  return net.isNegative() ? debits.plus(net.negated()) : debits;
 }
 
 /** Read-only: the opening inventory journal for one company. */
@@ -165,30 +186,71 @@ export async function planOpeningInventoryJournal(
       `);
   const goodsInTransit = toMoney(transit[0]?.purchases ?? 0).toDecimalPlaces(2);
 
-  const candidates: OpeningJournalLine[] = [
-    {
-      accountCode: "GOODS_IN_TRANSIT",
-      amount: goodsInTransit.toFixed(2),
-      basis: "purchase cost of POs not yet offloaded",
-    },
-    { accountCode: "INVENTORY", amount: erpStock.toFixed(2), basis: `ERP stock in hand as of ${journalDate}` },
+  const targets: Array<{ accountCode: string; target: Decimal; basis: string }> = [
+    // A supplier-partner company's ERP inventory accounts are left as they are.
+    ...(supplierPartner
+      ? []
+      : [
+          {
+            accountCode: "GOODS_IN_TRANSIT",
+            target: goodsInTransit,
+            basis: "purchase cost of POs not yet offloaded",
+          },
+          { accountCode: "INVENTORY", target: erpStock, basis: `ERP stock in hand as of ${journalDate}` },
+        ]),
     {
       accountCode: "FACTORY_RAW_MATERIAL_STOCK",
-      amount: rawValue.toDecimalPlaces(2).toFixed(2),
+      target: rawValue.toDecimalPlaces(2),
       basis: "remaining kg × landed USD cost per kg",
     },
     {
       accountCode: "FACTORY_WIP",
-      amount: wipValue.toDecimalPlaces(2).toFixed(2),
+      target: wipValue.toDecimalPlaces(2),
       basis: "open mix-batch kg × mix cost per kg, and bales awaiting pressing",
     },
     {
       accountCode: "FACTORY_FINISHED_GOODS",
-      amount: finishedValue.toDecimalPlaces(2).toFixed(2),
+      target: finishedValue.toDecimalPlaces(2),
       basis: "bales held, at their recorded cost",
     },
   ];
-  const lines = candidates.filter((line) => !toMoney(line.amount).isZero());
+
+  // What the ledger already holds on these accounts as of the eve: their
+  // opening balances and every active posting (credit and debit notes, for
+  // one, have always posted to Inventory). The journal posts only the
+  // difference, so nothing already in the ledger is counted twice.
+  const codes = targets.map((line) => line.accountCode);
+  const held = await rows<{ code: string; balance: string }>(sql`
+    SELECT la.code,
+           (COALESCE(SUM(CASE WHEN la.opening_balance_side = 'Cr' THEN -la.opening_balance ELSE la.opening_balance END), 0)
+            + COALESCE(SUM(posted.balance), 0))::text AS balance
+      FROM ledger_accounts la
+      LEFT JOIN LATERAL (
+        SELECT SUM(ve.debit_amount - ve.credit_amount) AS balance
+          FROM voucher_entries ve
+          JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
+                         AND COALESCE(v.optional, false) = false AND v.voucher_date <= ${journalDate}
+         WHERE ve.ledger_account_id = la.id
+      ) posted ON true
+     WHERE la.company_id = ${companyId} AND la.deleted_at IS NULL AND la.code IN (${sql.join(
+       codes.map((code) => sql`${code}`),
+       sql`, `
+     )})
+     GROUP BY la.code
+  `);
+  const ledgerBalance = new Map(held.map((row) => [row.code, toMoney(row.balance).toDecimalPlaces(2)]));
+  const lines: OpeningJournalLine[] = targets
+    .map((line) => {
+      const balance = ledgerBalance.get(line.accountCode) ?? new MoneyDecimal(0);
+      return {
+        accountCode: line.accountCode,
+        target: line.target.toFixed(2),
+        ledgerBalance: balance.toFixed(2),
+        amount: line.target.minus(balance).toFixed(2),
+        basis: line.basis,
+      };
+    })
+    .filter((line) => !toMoney(line.amount).isZero());
   const total = lines.reduce((sum, line) => sum.plus(line.amount), new MoneyDecimal(0));
 
   return {
@@ -257,28 +319,38 @@ export async function applyOpeningInventoryJournal(
           voucherType: "Journal",
           voucherDate: plan.journalDate,
           description: ["Opening inventory at the perpetual-inventory cut-over", effectiveFrom].join(" "),
-          totalAmount: plan.total,
+          totalAmount: openingDebitTotal(plan).toFixed(2),
           currency: "USD",
           exchangeRate: "1",
         },
         infrastructurePostingIdentity("perpetual-inventory-opening", companyId)
       );
       id = voucher.id;
+      // A line whose ledger balance exceeds its target credits the account.
+      const sides = (amount: string) => {
+        const value = toMoney(amount);
+        return value.isNegative()
+          ? { debitAmount: "0.00", creditAmount: value.negated().toFixed(2) }
+          : { debitAmount: value.toFixed(2), creditAmount: "0.00" };
+      };
+      const equity = toMoney(plan.total).negated().toFixed(2);
       await tx.insert(voucherEntries).values([
         ...plan.lines.map((line) => ({
           voucherId: id!,
           ledgerAccountId: accountId.get(line.accountCode)!,
-          debitAmount: line.amount,
-          creditAmount: "0",
+          ...sides(line.amount),
           narration: line.basis,
         })),
-        {
-          voucherId: id,
-          ledgerAccountId: accountId.get("OPENING_BALANCE_EQUITY")!,
-          debitAmount: "0",
-          creditAmount: plan.total,
-          narration: "Stock on hand capitalised at the cut-over",
-        },
+        ...(toMoney(equity).isZero()
+          ? []
+          : [
+              {
+                voucherId: id,
+                ledgerAccountId: accountId.get("OPENING_BALANCE_EQUITY")!,
+                ...sides(equity),
+                narration: "Stock on hand capitalised at the cut-over",
+              },
+            ]),
       ]);
     }
     await tx.execute(sql`

@@ -21,6 +21,7 @@ import {
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
+import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -631,6 +632,9 @@ export async function updateStockAdjustment(
       .update(schema.vouchers)
       .set({ totalAmount: headerTotal, locationId })
       .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
+
+    // Perpetual inventory (wave 8.3): the voucher carries the inventory side of the adjustment.
+    await syncStockAdjustmentInventoryTx(tx, voucher.companyId, existingAdjustment.voucherId);
 
     return { adjustment: updatedAdjustment, items: adjustmentItems };
   });

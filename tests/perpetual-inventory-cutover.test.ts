@@ -76,6 +76,35 @@ beforeAll(async () => {
     await bale("B3", "PENDING_PRESSING", "30");
     await bale("B4", "SOLD", "99");
     await bale("B5", "IN_STOCK", "0");
+
+    // The ledger already holds 25.00 of finished goods as of the eve: a 5.00
+    // opening balance and a 20.00 posting. A posting after the eve is ignored.
+    const account = async (code: string, opening: string) =>
+      (
+        await q(
+          `INSERT INTO ledger_accounts (company_id, code, name, account_type, opening_balance, opening_balance_side)
+           VALUES ($1, $2::varchar, $2::text, 'Asset', $3, 'Dr') RETURNING id`,
+          [companyId, code, opening]
+        )
+      ).rows[0].id;
+    const finished = await account("FACTORY_FINISHED_GOODS", "5");
+    const cash = await account(`${PREFIX.toUpperCase()}_CASH`, "0");
+    const posting = async (n: string, date: string, amount: string) => {
+      const voucherId = (
+        await q(
+          `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+           VALUES ($1, $2, 'Journal', $3, $4) RETURNING id`,
+          [companyId, `${PREFIX}-${n}`, date, amount]
+        )
+      ).rows[0].id;
+      await q(
+        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount)
+         VALUES ($1, $2, $4, 0), ($1, $3, 0, $4)`,
+        [voucherId, finished, cash, amount]
+      );
+    };
+    await posting("J1", "2026-10-15", "20");
+    await posting("J2", "2026-11-05", "7");
   });
 }, 60000);
 
@@ -98,12 +127,13 @@ describe("opening inventory journal", () => {
   it("values factory stock from its own costing and lists what has no cost", async () => {
     const plan = await asMaintenance(() => planOpeningInventoryJournal(companyId, "2026-11-01"));
     expect(plan.journalDate).toBe("2026-10-31");
-    expect(plan.lines.map((line) => [line.accountCode, line.amount])).toEqual([
-      ["FACTORY_RAW_MATERIAL_STOCK", "510.00"],
-      ["FACTORY_WIP", "138.00"],
-      ["FACTORY_FINISHED_GOODS", "85.50"],
+    // Each line posts its value less what the ledger already holds on the account.
+    expect(plan.lines.map((line) => [line.accountCode, line.target, line.ledgerBalance, line.amount])).toEqual([
+      ["FACTORY_RAW_MATERIAL_STOCK", "510.00", "0.00", "510.00"],
+      ["FACTORY_WIP", "138.00", "0.00", "138.00"],
+      ["FACTORY_FINISHED_GOODS", "85.50", "25.00", "60.50"],
     ]);
-    expect(plan.total).toBe("733.50");
+    expect(plan.total).toBe("708.50");
     expect(plan.unvalued.map((row) => [row.source, row.reason])).toEqual([
       ["factory_raw_stock", "no USD cost per kg"],
       ["factory_bales", "no recorded cost"],
@@ -137,8 +167,8 @@ describe("opening inventory journal", () => {
     expect(lines.rows).toEqual([
       { code: "FACTORY_RAW_MATERIAL_STOCK", d: "510.00", c: "0.00", date: "2026-10-31" },
       { code: "FACTORY_WIP", d: "138.00", c: "0.00", date: "2026-10-31" },
-      { code: "FACTORY_FINISHED_GOODS", d: "85.50", c: "0.00", date: "2026-10-31" },
-      { code: "OPENING_BALANCE_EQUITY", d: "0.00", c: "733.50", date: "2026-10-31" },
+      { code: "FACTORY_FINISHED_GOODS", d: "60.50", c: "0.00", date: "2026-10-31" },
+      { code: "OPENING_BALANCE_EQUITY", d: "0.00", c: "708.50", date: "2026-10-31" },
     ]);
 
     expect(await asMaintenance(() => isPerpetualInventoryActive(db, companyId, "2026-10-31"))).toBe(false);

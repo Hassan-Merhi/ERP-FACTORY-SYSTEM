@@ -28,6 +28,7 @@ import {
   type ReplacementEntryInput,
   type ReplacementEntryTargets,
 } from "../../../services/accounting/voucherEntryReplacement";
+import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -220,6 +221,9 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
           .update(fde)
           .set({ amountCurrency: newTotal, amountUsd: newTotal })
           .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, id)));
+
+        // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+        await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
       });
 
       // An edited duty/transport/office charge voucher re-prices the offloaded bales.

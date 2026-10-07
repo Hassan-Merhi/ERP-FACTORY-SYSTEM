@@ -24,6 +24,7 @@ import {
   type ReplacementEntryInput,
   type ReplacementEntryTargets,
 } from "../../../services/accounting/voucherEntryReplacement";
+import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -130,6 +131,9 @@ export function registerVoucherUpdateRoutes(app: Express) {
             });
           }
         }
+
+        // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
+        await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
       });
 
       const updated = await storage.getVoucherById(id);

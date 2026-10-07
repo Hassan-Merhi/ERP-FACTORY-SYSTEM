@@ -134,12 +134,23 @@ describe("reconciliation by ledger expectation", () => {
     expect(debited.discrepancies).toEqual([]);
   });
 
-  it("reports a single-sided type that posted both sides or neither", async () => {
+  it("accepts a single-sided type balanced by its perpetual-inventory line", async () => {
+    const balanced = await reconcileConvergenceTx(
+      tx,
+      7,
+      adapterFor([
+        snapshot({ voucherId: 17, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "50" }),
+      ])
+    );
+    expect(balanced.discrepancies).toEqual([]);
+  });
+
+  it("reports a single-sided type that posted unequal sides or neither", async () => {
     const both = await reconcileConvergenceTx(
       tx,
       7,
       adapterFor([
-        snapshot({ voucherId: 15, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "50" }),
+        snapshot({ voucherId: 15, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "30" }),
       ])
     );
     const neither = await reconcileConvergenceTx(

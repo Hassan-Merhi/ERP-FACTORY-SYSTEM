@@ -31,6 +31,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -101,6 +102,8 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
               .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
             // Perpetual inventory (wave 8.2): a restored PO voucher is in transit again.
             await syncPurchaseOrderGitForVoucherTx(tx, companyId, itemId);
+            // Perpetual inventory (wave 8.3): a restored stock adjustment carries its inventory line again.
+            await syncStockAdjustmentInventoryTx(tx, companyId, itemId);
           });
           break;
         // === Wave 1 restores ===

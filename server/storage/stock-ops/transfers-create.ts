@@ -18,6 +18,7 @@ import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuar
 import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
+import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -661,6 +662,9 @@ export async function createStockAdjustment(
         ...(voucherHeader?.currency ? { currency: voucherHeader.currency } : {}),
       })
       .where(eq(schema.vouchers.id, voucherId));
+
+    // Perpetual inventory (wave 8.3): the voucher carries the inventory side of the adjustment.
+    await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucherId);
 
     return { adjustment, items: adjustmentItems };
   });

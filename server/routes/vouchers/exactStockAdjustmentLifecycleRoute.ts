@@ -10,6 +10,7 @@ import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
 import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
+import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 
 const ADJUSTMENT_TYPES = ["Production", "Consumption", "Mixed"] as const;
 type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
@@ -116,6 +117,8 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
           })
           .where(eq(vouchers.id, voucherId))
           .returning();
+        // Perpetual inventory (wave 8.3): the inventory line follows the voucher's (possibly new) date.
+        await db.transaction((tx) => syncStockAdjustmentInventoryTx(tx, companyId, voucherId));
 
         return res.json(updatedVoucher);
       } catch (error: unknown) {
