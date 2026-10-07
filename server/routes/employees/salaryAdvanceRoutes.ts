@@ -16,6 +16,13 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+
+/** An advance is paid off only when nothing is left at cents. */
+function isPaidOff(remaining: Decimal): boolean {
+  return !remaining.toDecimalPlaces(2).greaterThan(0);
+}
 
 export function registerSalaryAdvanceRoutes(app: Express): void {
   app.get("/api/salary-advances", requireAuth, requireNonPOS, async (req, res) => {
@@ -28,20 +35,15 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
     }
   });
 
-  app.get(
-    "/api/salary-advances/employee/:employeeId",
-    requireAuth,
-    requireNonPOS,
-    async (req, res) => {
-      try {
-        const employeeId = parseInt(req.params.employeeId);
-        if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
-        res.json(await storage.getSalaryAdvancesByEmployee(employeeId));
-      } catch (error: unknown) {
-        res.status(500).json({ message: getErrorMessage(error) });
-      }
-    },
-  );
+  app.get("/api/salary-advances/employee/:employeeId", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const employeeId = parseInt(req.params.employeeId);
+      if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
+      res.json(await storage.getSalaryAdvancesByEmployee(employeeId));
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
 
   app.post("/api/salary-advances", requireAuth, requireNonPOS, async (req, res) => {
     try {
@@ -117,9 +119,9 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
       }
       if (advance.fullyPaid) return res.status(400).json({ message: "Salary advance is already fully paid" });
 
-      const deductionAmount = parseFloat(parsed.deductionAmount);
-      const remainingBalance = parseFloat(advance.remainingBalance);
-      if (deductionAmount > remainingBalance) {
+      const deductionAmount = toMoney(parsed.deductionAmount);
+      const remainingBalance = toMoney(advance.remainingBalance);
+      if (deductionAmount.greaterThan(remainingBalance)) {
         return res.status(400).json({
           message: `Deduction amount cannot exceed remaining balance of ${remainingBalance}`,
         });
@@ -130,8 +132,10 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         payrollMonth: parsed.payrollMonth,
         deductionAmount: parsed.deductionAmount,
       });
-      const newRemainingBalance = remainingBalance - deductionAmount;
-      const fullyPaid = newRemainingBalance <= 0.01;
+      const newRemainingBalance = remainingBalance.minus(deductionAmount);
+      // Paid only when nothing is left at cents: "<= 0.01" marked an advance
+      // with one cent still owed as fully paid and blocked further deductions.
+      const fullyPaid = isPaidOff(newRemainingBalance);
       await db
         .update(salaryAdvances)
         .set({ remainingBalance: newRemainingBalance.toFixed(2), fullyPaid })
@@ -178,55 +182,76 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         .from(salaryAdvanceDeductions)
         .where(
           allAdvances.length
-            ? inArray(salaryAdvanceDeductions.salaryAdvanceId, allAdvances.map((advance) => advance.id))
-            : sql`false`,
+            ? inArray(
+                salaryAdvanceDeductions.salaryAdvanceId,
+                allAdvances.map((advance) => advance.id)
+              )
+            : sql`false`
         );
-      const manualByAdvance = new Map<number, number>();
+      const manualByAdvance = new Map<number, Decimal>();
       for (const deduction of allManualDeductions) {
         manualByAdvance.set(
           deduction.salaryAdvanceId,
-          (manualByAdvance.get(deduction.salaryAdvanceId) || 0) + parseFloat(deduction.deductionAmount || "0"),
+          (manualByAdvance.get(deduction.salaryAdvanceId) ?? new MoneyDecimal(0)).plus(
+            toMoney(deduction.deductionAmount)
+          )
         );
       }
       const paidRuns = await db
         .select({ id: erpPayrollRuns.id })
         .from(erpPayrollRuns)
         .where(and(eq(erpPayrollRuns.companyId, companyId), eq(erpPayrollRuns.status, "PAID")));
-      const payrollByEmployee = new Map<number, number>();
+      const payrollByEmployee = new Map<number, Decimal>();
       if (paidRuns.length) {
         const items = await db
           .select({ employeeId: erpPayrollRunItems.employeeId, deduction: erpPayrollRunItems.deduction })
           .from(erpPayrollRunItems)
-          .where(inArray(erpPayrollRunItems.runId, paidRuns.map((run) => run.id)));
+          .where(
+            inArray(
+              erpPayrollRunItems.runId,
+              paidRuns.map((run) => run.id)
+            )
+          );
         for (const item of items) {
-          const amount = parseFloat(item.deduction || "0");
-          if (amount > 0 && item.employeeId) {
-            payrollByEmployee.set(item.employeeId, (payrollByEmployee.get(item.employeeId) || 0) + amount);
+          const amount = toMoney(item.deduction);
+          if (amount.greaterThan(0) && item.employeeId) {
+            payrollByEmployee.set(
+              item.employeeId,
+              (payrollByEmployee.get(item.employeeId) ?? new MoneyDecimal(0)).plus(amount)
+            );
           }
         }
       }
       const grouped = new Map<number, typeof allAdvances>();
-      for (const advance of allAdvances) grouped.set(advance.employeeId, [...(grouped.get(advance.employeeId) || []), advance]);
+      for (const advance of allAdvances)
+        grouped.set(advance.employeeId, [...(grouped.get(advance.employeeId) || []), advance]);
 
       let fixed = 0;
       await db.transaction(async (tx) => {
         for (const [employeeId, advances] of grouped) {
           const balances = advances.map((advance) => ({
             id: advance.id,
-            balance: Math.max(0, parseFloat(advance.amount || "0") - (manualByAdvance.get(advance.id) || 0)),
+            balance: MoneyDecimal.max(
+              0,
+              toMoney(advance.amount).minus(manualByAdvance.get(advance.id) ?? new MoneyDecimal(0))
+            ),
           }));
-          let payrollRemaining = payrollByEmployee.get(employeeId) || 0;
+          let payrollRemaining: Decimal = payrollByEmployee.get(employeeId) ?? new MoneyDecimal(0);
           for (const entry of balances) {
-            if (payrollRemaining <= 0) break;
-            const deduction = Math.min(entry.balance, payrollRemaining);
-            entry.balance -= deduction;
-            payrollRemaining -= deduction;
+            if (!payrollRemaining.greaterThan(0)) break;
+            const deduction = MoneyDecimal.min(entry.balance, payrollRemaining);
+            entry.balance = entry.balance.minus(deduction);
+            payrollRemaining = payrollRemaining.minus(deduction);
           }
           for (let index = 0; index < advances.length; index++) {
             const advance = advances[index];
-            const newBalance = parseFloat(Math.max(0, balances[index].balance).toFixed(2));
-            const fullyPaid = newBalance <= 0.01;
-            if (Math.abs(parseFloat(advance.remainingBalance || "0") - newBalance) > 0.01 || advance.fullyPaid !== fullyPaid) {
+            const newBalance = MoneyDecimal.max(0, balances[index].balance).toDecimalPlaces(2);
+            const fullyPaid = isPaidOff(newBalance);
+            // Any difference at cents is corrected (a 0.01 drift used to be left in place).
+            if (
+              !toMoney(advance.remainingBalance).toDecimalPlaces(2).equals(newBalance) ||
+              advance.fullyPaid !== fullyPaid
+            ) {
               await tx
                 .update(salaryAdvances)
                 .set({ remainingBalance: newBalance.toFixed(2), fullyPaid })
