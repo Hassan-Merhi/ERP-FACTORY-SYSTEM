@@ -13,7 +13,7 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { sumMoney } from "../lib/money";
-import { ownLocationIds, positiveIds } from "./helpers/companyOwnership";
+import { ownLocationIds, positiveIds, strictIds } from "./helpers/companyOwnership";
 import {
   baleTransfers,
   baleTransferItems,
@@ -319,9 +319,8 @@ export function registerBaleTransferRoutes(app: Express) {
 
       if (Array.isArray(items)) {
         // Edited lines must be lines of this transfer; new lines must add this company's bales.
-        const editedIds = positiveIds(
-          items.filter((item: { id?: unknown }) => item?.id).map((item: { id: unknown }) => item.id)
-        );
+        const editedIds = strictIds(items.map((item: { id?: unknown }) => item?.id));
+        if (editedIds === null) return res.status(404).json({ message: "Transfer not found" });
         if (editedIds.length > 0) {
           const lines = await db
             .select({ id: baleTransferItems.id })

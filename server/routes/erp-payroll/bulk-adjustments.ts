@@ -205,7 +205,12 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         [paymentAccount] = await db
           .select()
           .from(bankAccounts)
-          .where(eq(bankAccounts.id, parseInt(paymentAccountId)));
+          .where(
+            and(
+              eq(bankAccounts.id, parseInt(paymentAccountId)),
+              eq(bankAccounts.companyId, req.session.currentCompanyId!)
+            )
+          );
       } else {
         const allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
         paymentAccount = allAccounts.find((a) => a.id === parseInt(paymentAccountId));
