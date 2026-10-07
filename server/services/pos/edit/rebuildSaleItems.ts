@@ -22,11 +22,16 @@ import {
   subtractInventoryValues,
   toInventoryDecimal,
 } from "../../../lib/inventoryMath";
+import type Decimal from "decimal.js";
+import { MoneyDecimal } from "../../../lib/money";
+import { relievedValue } from "../../accounting/perpetualInventory/saleCogs";
 
 export interface RebuildSaleItemsResult {
   grandTotal: number;
   totalSupplierCostEdit: number;
   totalQtySoldEdit: number;
+  /** The exact value the rebuilt sale took out of inventory (its COGS). */
+  relieved: Decimal;
 }
 
 export async function rebuildSaleItems(
@@ -49,6 +54,7 @@ export async function rebuildSaleItems(
   );
   let grandTotal = toInventoryDecimal(0);
   let totalSupplierCostEdit = toInventoryDecimal(0);
+  let relieved: Decimal = new MoneyDecimal(0);
   let totalQtySoldEdit = toInventoryDecimal(0);
   const issueOrdinalByStockItem = new Map<number, number>();
 
@@ -108,7 +114,7 @@ export async function rebuildSaleItems(
       configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
     });
 
-    await adjustInventory(
+    const issued = await adjustInventory(
       tx,
       targetLocationId,
       stockItemId,
@@ -118,6 +124,7 @@ export async function rebuildSaleItems(
       "pos-sale",
       voucherId
     );
+    relieved = relieved.plus(relievedValue(issued));
 
     if (canonicalRevision !== undefined && !sellQty.isZero()) {
       const issueOrdinal = (issueOrdinalByStockItem.get(stockItemId) ?? 0) + 1;
@@ -152,5 +159,6 @@ export async function rebuildSaleItems(
     grandTotal: grandTotal.toNumber(),
     totalSupplierCostEdit: totalSupplierCostEdit.toNumber(),
     totalQtySoldEdit: totalQtySoldEdit.toNumber(),
+    relieved,
   };
 }

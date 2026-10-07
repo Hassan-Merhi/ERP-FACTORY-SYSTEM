@@ -35,6 +35,7 @@ import { eq, and, or, sql } from "drizzle-orm";
 import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { removeSaleCogsTx } from "../../services/accounting/perpetualInventory/saleCogs";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -322,6 +323,11 @@ export function registerVoucherDeleteRoutes(app: Express) {
             logger.info(`[POS Delete] Deleting ${saleItems.length} sales items for voucher ${id}`);
             await tx.delete(salesItems).where(eq(salesItems.voucherId, id));
           }
+        }
+
+        // Perpetual inventory (wave 8.1): a deleted sale takes its COGS journal with it.
+        if (voucher.voucherType === "Receipt" || voucher.voucherType === "Sales") {
+          await removeSaleCogsTx(tx, companyId, id);
         }
 
         // IMPORTANT: Reverse inventory movements for Credit Note / Debit Note vouchers

@@ -49,6 +49,8 @@ export interface OpeningInventoryPlan {
   unvalued: UnvaluedRow[];
   /** Bales already marked sold on orders that are not finalized: shipped but not yet invoiced. */
   soldNotInvoiced: { bales: number; cost: string };
+  /** Supplier-partner company: ERP stock is carried in sp_stock and not capitalised here. */
+  supplierPartner: boolean;
   alreadyApplied: boolean;
   postingReady: boolean;
 }
@@ -84,7 +86,15 @@ export async function planOpeningInventoryJournal(
   const journalDate = dayBefore(effectiveFrom);
   const unvalued: UnvaluedRow[] = [];
 
-  const erpStock = toMoney(await computeStockInHand(companyId, journalDate)).toDecimalPlaces(2);
+  // Supplier-partner companies carry their stock in their own sp_stock
+  // accounts already; their ERP stock is not capitalised a second time.
+  const company = await rows<{ company_type: string | null }>(
+    sql`SELECT company_type FROM companies WHERE id = ${companyId}`
+  );
+  const supplierPartner = company[0]?.company_type === "supplier_partner";
+  const erpStock = supplierPartner
+    ? new MoneyDecimal(0)
+    : toMoney(await computeStockInHand(companyId, journalDate)).toDecimalPlaces(2);
 
   const raw = await rows<{ id: number; remaining: string; cost: string | null }>(sql`
     SELECT id, (received_kg - used_kg)::text AS remaining, cost_per_kg_usd::text AS cost
@@ -162,6 +172,7 @@ export async function planOpeningInventoryJournal(
     total: total.toFixed(2),
     unvalued,
     soldNotInvoiced: { bales: sold[0]?.count ?? 0, cost: toMoney(sold[0]?.cost ?? 0).toFixed(2) },
+    supplierPartner,
     alreadyApplied: (await getInventoryCutover(db, companyId)) !== null,
     postingReady: PERPETUAL_INVENTORY_POSTING_READY,
   };

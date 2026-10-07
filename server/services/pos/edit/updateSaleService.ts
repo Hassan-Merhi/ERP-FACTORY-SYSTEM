@@ -41,6 +41,7 @@ import {
   postGoldenCoastPosAccountingTx,
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../../accounting/perpetualInventory/saleCogs";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -234,6 +235,19 @@ export async function applyPosSaleUpdateTx(
       supplierPayableAccountId: editSpPayableAccountId!,
       payableAmountUsd: payableAmount,
       actor: { userId, username, reason: `Edit Golden Coast itemized POS sale ${lockedVoucher.voucherNumber}` },
+    });
+  }
+
+  // Perpetual inventory (wave 8.1): the edited sale's COGS replaces the old one.
+  if (!isSpCompanyEdit) {
+    await postSaleCogsTx(tx, {
+      companyId: lockedVoucher.companyId,
+      saleVoucherId: voucherId,
+      saleVoucherNumber: lockedVoucher.voucherNumber,
+      voucherDate: String(voucherDate || lockedVoucher.voucherDate),
+      locationId: targetLocationId,
+      relieved: rebuildResult.relieved,
+      optional: lockedVoucher.optional === true,
     });
   }
 

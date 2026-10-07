@@ -42,6 +42,8 @@ import { insertSaleVoucher } from "./createSaleVoucher";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
 import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
+import { MoneyDecimal } from "../../lib/money";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
   return { status: result.status, body: result.body };
@@ -242,13 +244,14 @@ export async function createPosSale(
 
       const txSaleItems = [];
       const issueOrdinalByStockItem = new Map<number, number>();
+      let relievedTotal = new MoneyDecimal(0);
 
       for (const validatedItem of inventoryValidation) {
         const { item } = validatedItem;
         const issueOrdinal = (issueOrdinalByStockItem.get(item.stockItemId) ?? 0) + 1;
         issueOrdinalByStockItem.set(item.stockItemId, issueOrdinal);
 
-        const { costPrice } = await lockAndDeductInventoryForSaleItem(
+        const { costPrice, relieved } = await lockAndDeductInventoryForSaleItem(
           tx,
           parsedLocationId,
           parsedLocationId,
@@ -261,6 +264,7 @@ export async function createPosSale(
           }
         );
 
+        relievedTotal = relievedTotal.plus(relieved);
         const [stockItem] = await tx.select().from(stockItems).where(eq(stockItems.id, item.stockItemId));
 
         const qty = toInventoryDecimal(item.quantity);
@@ -327,6 +331,20 @@ export async function createPosSale(
           supplierPayableAccountId: spCtx.spPosPayableAccountId!,
           payableAmountUsd: payableAmount,
           actor: { userId, username, reason: "Golden Coast itemized POS sale settlement" },
+        });
+      }
+
+      // Perpetual inventory (wave 8.1): the exact value this sale took out of
+      // stock, as its COGS journal. Supplier-partner companies carry their stock
+      // in their own sp_stock accounts and are not posted here.
+      if (!isSpCompany) {
+        await postSaleCogsTx(tx, {
+          companyId: currentCompanyId,
+          saleVoucherId: txVoucher.id,
+          saleVoucherNumber: voucherNumber,
+          voucherDate: String(txVoucher.voucherDate),
+          locationId: parsedLocationId,
+          relieved: relievedTotal,
         });
       }
 

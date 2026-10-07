@@ -202,7 +202,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0 complete)
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.1 complete)
 
 - **Problem:** the GL is a cash and payables book.
   - Purchases are expensed, and sales post no COGS.
@@ -240,7 +240,18 @@ risk, modules, database and production impact, dependencies and acceptance crite
       - Rows with no cost are listed, never valued. Bales marked sold on unfinalized orders are reported.
     - `POST /api/accounting/perpetual-inventory/apply` (Owner, `confirm`) posts the journal and records the cut-over in one locked transaction, once per company. It is refused while posting is not ready, for a future date, and a second time.
     - Test: `perpetual-inventory-cutover`.
-  - **8.1 ERP sales:** COGS = the exact value `adjustInventory` relieves (POS create/edit/import/credit sales/delete/optional toggle); fix the one-debit/one-credit assumptions.
+  - **8.1 ERP sales (complete):**
+    - Each sale posts a linked journal, `COGS-{saleVoucherId}`: Dr COGS / Cr Inventory for the exact value the stock sub-ledger relieved. That value is the drop in `inventory.total_value` that `adjustInventory` reports, so ledger inventory moves with the sub-ledger.
+    - Keeping COGS out of the sale voucher leaves every one-debit/one-credit sale reader valid.
+    - Wired paths:
+      - POS create
+      - POS edit: replaces the journal
+      - POS import and credit-sales import
+      - delete and bulk delete: remove the journal
+      - optional toggle: optional removes it; active re-posts it at the value taken out again
+    - Gated per company and date. Supplier-partner companies are skipped, because their stock is in `sp_stock`; the opening plan does not capitalise their ERP stock either.
+    - Remaining difference, to be checked by the 8.5 reconciliation: the sale delete path re-receives stock at `salesItems.costPrice` rather than by exact value.
+    - Test: `perpetual-inventory-sale-cogs`.
   - **8.2 ERP purchases:**
     - PO import posts Dr Goods in Transit.
     - Offload posts Dr Inventory for the sub-ledger value received, against Goods in Transit and the charge payables.

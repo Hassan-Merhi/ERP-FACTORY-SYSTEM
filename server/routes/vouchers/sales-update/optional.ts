@@ -25,6 +25,12 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { nextCanonicalSourceRevision } from "../../../services/inventory/canonicalSourceRevision";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { MoneyDecimal } from "../../../lib/money";
+import {
+  postSaleCogsTx,
+  relievedValue,
+  removeSaleCogsTx,
+} from "../../../services/accounting/perpetualInventory/saleCogs";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -285,6 +291,7 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
           // Handle Sales items inventory when toggling optional
           const hasSalesItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, id));
 
+          let saleRelieved = new MoneyDecimal(0);
           if (hasSalesItems.length > 0 && existingVoucher.locationId) {
             for (const item of hasSalesItems) {
               const quantity = Number(item.quantity);
@@ -301,13 +308,14 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
                 );
               } else {
                 // Apply: deduct stock for the sale
-                await adjustInventory(
+                const issued = await adjustInventory(
                   tx,
                   existingVoucher.locationId,
                   item.stockItemId,
                   -quantity,
                   existingVoucher.companyId
                 );
+                saleRelieved = saleRelieved.plus(relievedValue(issued));
               }
               await postStockMovementTx(
                 tx,
@@ -330,6 +338,23 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
                 },
                 canonicalStockMovementAdapter
               );
+            }
+          }
+
+          // Perpetual inventory (wave 8.1): an optional sale holds no stock, so it
+          // has no COGS; activating it posts the exact value it takes out again.
+          if (hasSalesItems.length > 0) {
+            if (willBeOptional) {
+              await removeSaleCogsTx(tx, existingVoucher.companyId, id);
+            } else {
+              await postSaleCogsTx(tx, {
+                companyId: existingVoucher.companyId,
+                saleVoucherId: id,
+                saleVoucherNumber: existingVoucher.voucherNumber,
+                voucherDate: String(existingVoucher.voucherDate),
+                locationId: existingVoucher.locationId,
+                relieved: saleRelieved,
+              });
             }
           }
 

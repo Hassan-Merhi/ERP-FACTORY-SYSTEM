@@ -35,6 +35,8 @@ import {
   stockItemLocationPrices,
   type Voucher,
 } from "@shared/schema";
+import { MoneyDecimal } from "../lib/money";
+import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
 
 /**
  * One POS-import line: what the parse endpoint emits, and what the validate and
@@ -240,6 +242,7 @@ export function registerPosImportRoutes(app: Express) {
       // `let` keeps the voucher's type: TypeScript cannot see that a callback ran.
       const createdVoucher = await db.transaction(async (tx): Promise<Voucher> => {
         const voucherNumber = `SALES-${Date.now()}`;
+        let relieved = new MoneyDecimal(0);
         const [voucher] = await tx
           .insert(vouchers)
           .values({
@@ -301,13 +304,14 @@ export function registerPosImportRoutes(app: Express) {
             })
             .returning({ id: salesItems.id });
 
-          await adjustInventory(
+          const issued = await adjustInventory(
             tx,
             locationId,
             stockItem.id,
             quantity.negated().toNumber(),
             req.session.currentCompanyId!
           );
+          relieved = relieved.plus(relievedValue(issued));
           await postStockMovementTx(
             tx,
             {
@@ -350,6 +354,15 @@ export function registerPosImportRoutes(app: Express) {
           narration: `Sales Revenue - ${items.length} items`,
         });
         await tx.update(vouchers).set({ totalAmount: totalSalesAmount }).where(eq(vouchers.id, voucher.id));
+        // Perpetual inventory (wave 8.1): the exact value the import took out of stock.
+        await postSaleCogsTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          saleVoucherId: voucher.id,
+          saleVoucherNumber: voucherNumber,
+          voucherDate: saleDate,
+          locationId,
+          relieved,
+        });
         return voucher;
       });
 

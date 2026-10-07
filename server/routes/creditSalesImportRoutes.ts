@@ -42,6 +42,7 @@ import {
   financialOperationRequestPayload,
   resolveFinancialOperationKey,
 } from "../services/accounting/financialOperationRequest";
+import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -298,6 +299,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
         },
         async (tx) => {
           const voucherNumber = `CREDIT-SALES-${Date.now()}`;
+          let relieved = new MoneyDecimal(0);
 
           const [voucher] = await tx
             .insert(vouchers)
@@ -367,7 +369,14 @@ export function registerCreditSalesImportRoutes(app: Express) {
               })
               .returning({ id: salesItems.id });
 
-            await adjustInventory(tx, locationId, stockItem.id, -quantity.toNumber(), req.session.currentCompanyId!);
+            const issued = await adjustInventory(
+              tx,
+              locationId,
+              stockItem.id,
+              -quantity.toNumber(),
+              req.session.currentCompanyId!
+            );
+            relieved = relieved.plus(relievedValue(issued));
             await postStockMovementTx(
               tx,
               {
@@ -424,6 +433,15 @@ export function registerCreditSalesImportRoutes(app: Express) {
             .where(eq(vouchers.id, voucher.id));
 
           createdVoucher = voucher;
+          // Perpetual inventory (wave 8.1): the exact value the import took out of stock.
+          await postSaleCogsTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            saleVoucherId: voucher.id,
+            saleVoucherNumber: voucherNumber,
+            voucherDate: saleDate,
+            locationId,
+            relieved,
+          });
 
           // Add customer balance transaction (credit sale = debit to customer = they owe us)
           // Get current running balance for this customer
