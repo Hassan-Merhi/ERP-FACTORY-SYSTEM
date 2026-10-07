@@ -21,33 +21,11 @@ import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
-import { ownLocationIds } from "./helpers/companyOwnership";
+import { resolveTransferLocations } from "./helpers/transferLocations";
+import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferItem } from "./stockTransferImportTypes";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
-
-type SpreadsheetCell = string | number | null | undefined;
-type SpreadsheetRow = Record<string, SpreadsheetCell>;
-
-interface ParsedStockTransferItem {
-  rowNum: number;
-  barcode: string;
-  quantity: number;
-  sourceLocation?: string;
-}
-
-interface ValidatedStockTransferItem extends ParsedStockTransferItem {
-  sourceLocationId?: number;
-  stockItemId?: number;
-  stockItemName?: string;
-  stockItemUom?: string;
-  currentStock?: number;
-  remainingStock?: number;
-  averageRate?: string | null;
-  rate?: string | null;
-  error?: string;
-  warning?: string;
-}
 
 export function registerStockTransferImportRoutes(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
@@ -132,19 +110,13 @@ export function registerStockTransferImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedStockTransferItem[] = [];
 
-      // Validate locations exist in this company. The ids come from the body,
-      // which the path-based company scope does not see.
-      const ownedLocations = await ownLocationIds(req.session.currentCompanyId, [
+      // Validate locations exist in this company (body ids are outside the path-based scope).
+      const { sourceLocation, destLocation, foreignItemSource } = await resolveTransferLocations(
+        req.session.currentCompanyId,
         sourceLocationId,
         destinationLocationId,
-        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
-      ]);
-      const sourceLocation = ownedLocations.has(Number(sourceLocationId))
-        ? await storage.getLocationById(sourceLocationId)
-        : undefined;
-      const destLocation = ownedLocations.has(Number(destinationLocationId))
-        ? await storage.getLocationById(destinationLocationId)
-        : undefined;
+        items
+      );
 
       if (!sourceLocation) {
         errors.push("Source location not found");
@@ -156,12 +128,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         return res.json({ errors, warnings, validatedItems });
       }
 
-      if (
-        items.some(
-          (item: { sourceLocationId?: unknown }) =>
-            item?.sourceLocationId && !ownedLocations.has(Number(item.sourceLocationId))
-        )
-      ) {
+      if (foreignItemSource) {
         errors.push("Source location not found");
         return res.json({ errors, warnings, validatedItems });
       }
@@ -245,20 +212,11 @@ export function registerStockTransferImportRoutes(app: Express) {
       }
 
       // Validate locations in this company (body ids are outside the path-based scope).
-      const ownedLocations = await ownLocationIds(req.session.currentCompanyId, [
+      const { sourceLocation, destLocation, foreignItemSource } = await resolveTransferLocations(
+        req.session.currentCompanyId,
         sourceLocationId,
         destinationLocationId,
-        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
-      ]);
-      const sourceLocation = ownedLocations.has(Number(sourceLocationId))
-        ? await storage.getLocationById(sourceLocationId)
-        : undefined;
-      const destLocation = ownedLocations.has(Number(destinationLocationId))
-        ? await storage.getLocationById(destinationLocationId)
-        : undefined;
-      const foreignItemSource = items.some(
-        (item: { sourceLocationId?: unknown }) =>
-          item?.sourceLocationId && !ownedLocations.has(Number(item.sourceLocationId))
+        items
       );
       if (foreignItemSource) {
         return res.status(400).json({ message: "Source location not found" });
