@@ -21,9 +21,12 @@
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
+import { voucherEntries } from "@shared/schema";
+
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { computeStockInHand } from "../../../routes/stats/netProfitStockSection";
+import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "../infrastructureVoucherIdentity";
 import { ensureSystemAccounts } from "../systemAccounts";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
 
@@ -222,24 +225,37 @@ export async function applyOpeningInventoryJournal(
         }
         accountId.set(status.code, status.accountId);
       }
-      const voucher = await tx.execute<{ id: number } & Record<string, unknown>>(sql`
-        INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, description, total_amount, currency, exchange_rate)
-        VALUES (${companyId}, ${`GL-INVENTORY-OPENING-${companyId}`}, 'Journal', ${plan.journalDate},
-                ${`Opening inventory at the perpetual-inventory cut-over (${effectiveFrom})`}, ${plan.total}, 'USD', 1)
-        RETURNING id
-      `);
-      id = (voucher.rows[0] as { id: number }).id;
-      for (const line of plan.lines) {
-        await tx.execute(sql`
-          INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-          VALUES (${id}, ${accountId.get(line.accountCode)!}, ${line.amount}, 0, ${line.basis})
-        `);
-      }
-      await tx.execute(sql`
-        INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-        VALUES (${id}, ${accountId.get("OPENING_BALANCE_EQUITY")!}, 0, ${plan.total},
-                'Stock on hand capitalised at the perpetual-inventory cut-over')
-      `);
+      const { voucher } = await insertInfrastructureVoucherTx(
+        tx,
+        {
+          companyId,
+          voucherNumber: `GL-INVENTORY-OPENING-${companyId}`,
+          voucherType: "Journal",
+          voucherDate: plan.journalDate,
+          description: `Opening inventory at the perpetual-inventory cut-over (${effectiveFrom})`,
+          totalAmount: plan.total,
+          currency: "USD",
+          exchangeRate: "1",
+        },
+        infrastructurePostingIdentity("perpetual-inventory-opening", companyId)
+      );
+      id = voucher.id;
+      await tx.insert(voucherEntries).values([
+        ...plan.lines.map((line) => ({
+          voucherId: id!,
+          ledgerAccountId: accountId.get(line.accountCode)!,
+          debitAmount: line.amount,
+          creditAmount: "0",
+          narration: line.basis,
+        })),
+        {
+          voucherId: id,
+          ledgerAccountId: accountId.get("OPENING_BALANCE_EQUITY")!,
+          debitAmount: "0",
+          creditAmount: plan.total,
+          narration: "Stock on hand capitalised at the cut-over",
+        },
+      ]);
     }
     await tx.execute(sql`
       INSERT INTO gl_inventory_cutovers (company_id, effective_from, opening_voucher_id, opening_plan, applied_by)

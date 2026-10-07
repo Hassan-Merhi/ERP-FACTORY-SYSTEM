@@ -14,10 +14,17 @@
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
+import { voucherEntries } from "@shared/schema";
+
 import type { DbTransaction } from "../../../db";
 import type { AdjustInventoryResult } from "../../../inventoryHelper";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getOrCreateInventoryControlAccount } from "../inventoryControlAccount";
+import {
+  deleteInfrastructurePostingIdentityForVoucherTx,
+  infrastructurePostingIdentity,
+  insertInfrastructureVoucherTx,
+} from "../infrastructureVoucherIdentity";
 import { ensureSystemAccounts } from "../systemAccounts";
 import { isPerpetualInventoryActive } from "./cutover";
 
@@ -29,15 +36,16 @@ export function relievedValue(result: Pick<AdjustInventoryResult, "previousTotal
   return relieved.isNegative() ? new MoneyDecimal(0) : relieved;
 }
 
-/** Removes a sale's COGS journal, if any. */
+/** Removes a sale's COGS journal and its posting identity, if any. */
 export async function removeSaleCogsTx(tx: DbTransaction, companyId: number, saleVoucherId: number): Promise<void> {
-  const number = saleCogsVoucherNumber(saleVoucherId);
-  await tx.execute(sql`
-    DELETE FROM voucher_entries WHERE voucher_id IN (
-      SELECT id FROM vouchers WHERE company_id = ${companyId} AND voucher_number = ${number}
-    )
+  const existing = await tx.execute<{ id: number } & Record<string, unknown>>(sql`
+    SELECT id FROM vouchers WHERE company_id = ${companyId} AND voucher_number = ${saleCogsVoucherNumber(saleVoucherId)}
   `);
-  await tx.execute(sql`DELETE FROM vouchers WHERE company_id = ${companyId} AND voucher_number = ${number}`);
+  for (const { id } of existing.rows as unknown as { id: number }[]) {
+    await deleteInfrastructurePostingIdentityForVoucherTx(tx, id);
+    await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${id}`);
+    await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id} AND company_id = ${companyId}`);
+  }
 }
 
 /**
@@ -74,19 +82,38 @@ export async function postSaleCogsTx(
     throw new Error("A required system account is not available");
   }
   const { id: inventoryAccountId } = await getOrCreateInventoryControlAccount(tx, params.companyId);
-  const voucher = await tx.execute<{ id: number } & Record<string, unknown>>(sql`
-    INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, description, total_amount,
-                          currency, exchange_rate, location_id, optional)
-    VALUES (${params.companyId}, ${saleCogsVoucherNumber(params.saleVoucherId)}, 'Journal', ${params.voucherDate},
-            ${`Cost of goods sold - ${params.saleVoucherNumber}`}, ${amount.toFixed(2)}, 'USD', 1,
-            ${params.locationId ?? null}, ${params.optional === true})
-    RETURNING id
-  `);
-  const id = (voucher.rows[0] as { id: number }).id;
-  await tx.execute(sql`
-    INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-    VALUES (${id}, ${cogs.accountId}, ${amount.toFixed(2)}, 0, ${`Cost of goods sold - ${params.saleVoucherNumber}`}),
-           (${id}, ${inventoryAccountId}, 0, ${amount.toFixed(2)}, ${`Stock issued - ${params.saleVoucherNumber}`})
-  `);
+  const { voucher } = await insertInfrastructureVoucherTx(
+    tx,
+    {
+      companyId: params.companyId,
+      voucherNumber: saleCogsVoucherNumber(params.saleVoucherId),
+      voucherType: "Journal",
+      voucherDate: params.voucherDate,
+      description: `Cost of goods sold - ${params.saleVoucherNumber}`,
+      totalAmount: amount.toFixed(2),
+      currency: "USD",
+      exchangeRate: "1",
+      locationId: params.locationId ?? null,
+      optional: params.optional === true,
+    },
+    infrastructurePostingIdentity("perpetual-sale-cogs", params.saleVoucherId)
+  );
+  const id = voucher.id;
+  await tx.insert(voucherEntries).values([
+    {
+      voucherId: id,
+      ledgerAccountId: cogs.accountId,
+      debitAmount: amount.toFixed(2),
+      creditAmount: "0",
+      narration: `Cost of goods sold - ${params.saleVoucherNumber}`,
+    },
+    {
+      voucherId: id,
+      ledgerAccountId: inventoryAccountId,
+      debitAmount: "0",
+      creditAmount: amount.toFixed(2),
+      narration: `Stock issued - ${params.saleVoucherNumber}`,
+    },
+  ]);
   return id;
 }
