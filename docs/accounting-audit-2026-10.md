@@ -202,8 +202,56 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger; opening balances as journals (CRITICAL, architectural) — specified, not started
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0 complete)
 
-- **Problem:** the GL is a cash/payables book: purchases are expensed, sales post no COGS, inventory lives only in the sub-ledger, stock adjustments post one side, factory revenue and receivables never reach the GL, and opening balances sit on master records outside the journal. No trial balance or balance sheet built from the ledger can balance, which is why the old reports mixed operational tables in and plugged the gap.
-- **Decisions required from the business before implementation:** perpetual vs periodic inventory in the GL; whether factory management costing (bale production price, offload weight cost) is also the book cost; the cut-over date and opening-balance journal per company (the openings imbalance per company is in the Wave 3 production expectation).
-- **Plan once decided:** AR/AP and Inventory control accounts in the registry; purchases Dr Inventory / Cr AP; sales Dr COGS / Cr Inventory at the sub-ledger cost; stock adjustments Dr/Cr Inventory against STOCK_ADJUSTMENT (balanced); factory order finalize Dr AR / Cr Sales; one dated opening-balance journal per company against Opening Balance Equity replacing master-record openings; then a deferred database constraint enforcing debit = credit per voucher.
+- **Problem:** the GL is a cash and payables book.
+  - Purchases are expensed, and sales post no COGS.
+  - Inventory lives only in the sub-ledgers.
+  - Stock adjustments post one side.
+  - Factory revenue and receivables never reach the GL; finalize and dispatch invoicing write `customer_balances` only.
+  - Opening balances sit on master records.
+- **Decisions (owner, 2026-10-07):**
+  - **Perpetual inventory.**
+  - **The factory's existing costing is the book cost:**
+    - raw material at landed cost (`dCostPerKgUsd`)
+    - mixes at the supplier moving-average rate
+    - bales at their recorded `total_cost`
+    - differences go to a production variance account
+  - **Cut-over on 2026-11-01**, with one reviewable opening inventory journal per company that an Owner applies.
+- **Findings that shape the build** (read-only maps of every posting path):
+  - ERP purchases post at PO import while stock arrives at container offload, so a goods-in-transit step is needed.
+  - Offload charges are in the stock sub-ledger value but expensed in the GL.
+  - POS posts its GL lines before relieving stock, and `adjustInventory`'s relieved value is discarded.
+  - Several paths assume a sale voucher has one debit and one credit: `rebuildSaleAccounting`, `purchaseOrderItemsUpdate`, and the `balanced` expectation for Sales/Purchase.
+  - Factory bale cost on the main stock-entry path is the catalogue `productionPrice` × kg, while the production-value report treats `productionPrice` as per bale. Pressing finalize reads the native-currency raw cost.
+  - Customer-balance formulas exclude `INV-%`/`CHARGE-%` vouchers inconsistently, so receivable vouchers must be designed with them.
+  - P&L and net position add a computed stock-in-hand figure that would double count a GL inventory balance.
+- **Phases:** the company switch cannot be turned on until 8.5 (`PERPETUAL_INVENTORY_POSTING_READY`). Turning it on with some paths unconverted would leave half-periodic books.
+  - **8.0 Foundation (complete):**
+    - Registry accounts: `GOODS_IN_TRANSIT`, `FACTORY_RAW_MATERIAL_STOCK`, `FACTORY_WIP`, `FACTORY_FINISHED_GOODS`, `PRODUCTION_VARIANCE`.
+    - The `gl_inventory_cutovers` table, declared in `shared/schema` and created at boot with the same constraint names.
+    - The gate `isPerpetualInventoryActive(executor, company, date)`: true only on or after the company's applied cut-over date.
+    - `GET /api/accounting/perpetual-inventory/opening-plan`:
+      - Dr Inventory: ERP stock as of the eve, via `computeStockInHand`.
+      - Dr Raw Material: remaining kg × landed USD cost.
+      - Dr WIP: open mix kg × mix cost, plus bales awaiting pressing.
+      - Dr Finished Goods: bales held, at recorded cost.
+      - Cr Opening Balance Equity: the total.
+      - Rows with no cost are listed, never valued. Bales marked sold on unfinalized orders are reported.
+    - `POST /api/accounting/perpetual-inventory/apply` (Owner, `confirm`) posts the journal and records the cut-over in one locked transaction, once per company. It is refused while posting is not ready, for a future date, and a second time.
+    - Test: `perpetual-inventory-cutover`.
+  - **8.1 ERP sales:** COGS = the exact value `adjustInventory` relieves (POS create/edit/import/credit sales/delete/optional toggle); fix the one-debit/one-credit assumptions.
+  - **8.2 ERP purchases:**
+    - PO import posts Dr Goods in Transit.
+    - Offload posts Dr Inventory for the sub-ledger value received, against Goods in Transit and the charge payables.
+    - PO edits follow.
+  - **8.3 Stock adjustments and production/consumption:** posted on both sides against `STOCK_ADJUSTMENT`, with the voucher expectations reclassified.
+  - **8.4 Factory:**
+    - Offload: Dr Raw Material against import cost and capitalised charges.
+    - Mix: Dr WIP / Cr Raw Material.
+    - Bale entry: Dr Finished Goods / Cr WIP, with the variance.
+    - Finalize/dispatch: Dr customer / Cr Sales and Dr COGS / Cr Finished Goods.
+    - Post-finalize edits, unfinalize, and the customer-balance formulas.
+  - **8.5 Reports and the switch:** P&L and net position read the GL for a switched-on company; the deferred debit = credit constraint; `PERPETUAL_INVENTORY_POSTING_READY = true`.
+- **Not in scope:** moving master-record opening balances into journals needs its own reviewed migration. Every reader adds `opening_balance` to its entries, so posting them as journals without zeroing the master records would double count.
+

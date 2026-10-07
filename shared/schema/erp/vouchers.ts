@@ -304,3 +304,21 @@ export const insertFiscalPeriodClosureSchema = createInsertSchema(fiscalPeriodCl
 
 export type InsertFiscalPeriodClosure = z.infer<typeof insertFiscalPeriodClosureSchema>;
 export type FiscalPeriodClosure = typeof fiscalPeriodClosures.$inferSelect;
+
+/**
+ * Perpetual-inventory cut-over per company (2026-10 accounting audit, wave 8).
+ * One row once an Owner applies the opening inventory journal; documents dated
+ * on or after `effectiveFrom` then post under perpetual inventory. Also created
+ * at boot by ensureInventoryCutoverSchema (production skips schema pushes).
+ */
+export const glInventoryCutovers = pgTable("gl_inventory_cutovers", {
+  companyId: integer("company_id")
+    .primaryKey()
+    .references(() => companies.id, { onDelete: "restrict" }),
+  effectiveFrom: date("effective_from").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  openingVoucherId: integer("opening_voucher_id").references(() => vouchers.id, { onDelete: "restrict" }),
+  openingPlan: jsonb("opening_plan").notNull(),
+  appliedBy: text("applied_by"),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+});

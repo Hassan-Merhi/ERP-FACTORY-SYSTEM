@@ -123,6 +123,26 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "Une ligne historique a changé pendant la réparation ; rien n'a été appliqué",
   },
   {
+    en: "A required system account is not available",
+    ar: "حساب نظام مطلوب غير متاح",
+    fr: "Un compte système requis n'est pas disponible",
+  },
+  {
+    en: "Perpetual inventory posting is not complete yet; the cut-over cannot be applied",
+    ar: "ترحيل المخزون الدائم لم يكتمل بعد؛ لا يمكن تطبيق التحويل",
+    fr: "La comptabilisation de l'inventaire permanent n'est pas encore terminée ; la bascule ne peut pas être appliquée",
+  },
+  {
+    en: "The cut-over can be applied on or after its date",
+    ar: "يمكن تطبيق التحويل في تاريخه أو بعده",
+    fr: "La bascule peut être appliquée à sa date ou après",
+  },
+  {
+    en: "The cut-over is already applied for this company",
+    ar: "تم تطبيق التحويل بالفعل لهذه الشركة",
+    fr: "La bascule est déjà appliquée pour cette société",
+  },
+  {
     en: "Unknown system account code",
     ar: "رمز حساب نظام غير معروف",
     fr: "Code de compte système inconnu",

@@ -43,6 +43,11 @@ import {
 import { runAccountingIntegrityDiagnostic } from "../../services/accounting/integrity/accountingIntegrityDiagnostic";
 import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
 import { applyFactoryFxLegacyRepair, planFactoryFxLegacyRepair } from "../../services/factory/factoryFxLegacyRepair";
+import {
+  OpeningJournalRefusal,
+  applyOpeningInventoryJournal,
+  planOpeningInventoryJournal,
+} from "../../services/accounting/perpetualInventory/openingJournal";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -224,6 +229,56 @@ export function registerAccountingIntegrityRoutes(app: Express) {
       }
       res.json(plan);
     } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Perpetual-inventory cut-over (wave 8): the opening inventory journal is
+  // planned read-only and applied once per company by an Owner, only when every
+  // posting path is converted (PERPETUAL_INVENTORY_POSTING_READY).
+  app.get(
+    "/api/accounting/perpetual-inventory/opening-plan",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const effectiveFrom = typeof req.query.effectiveFrom === "string" ? req.query.effectiveFrom : undefined;
+        if (effectiveFrom !== undefined && !ISO_DATE.test(effectiveFrom)) {
+          return res.status(400).json({ message: "Invalid date" });
+        }
+        res.json(await planOpeningInventoryJournal(companyId, effectiveFrom));
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  app.post("/api/accounting/perpetual-inventory/apply", requireAuth, requireRole("Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+      const effectiveFrom = req.body?.effectiveFrom;
+      if (typeof effectiveFrom !== "string" || !ISO_DATE.test(effectiveFrom)) {
+        return res.status(400).json({ message: "Invalid date" });
+      }
+      const result = await applyOpeningInventoryJournal(companyId, effectiveFrom, req.session.username || "unknown");
+      await logAudit({
+        userId: req.session.userId!,
+        username: req.session.username || "unknown",
+        companyId,
+        action: "create",
+        tableName: "gl_inventory_cutovers",
+        recordIdentifier: "perpetual-inventory-cutover",
+        changes: { cutover: { new: { effectiveFrom, voucherId: result.voucherId, total: result.plan.total } } },
+      });
+      res.json(result);
+    } catch (error: unknown) {
+      if (error instanceof OpeningJournalRefusal) {
+        return res.status(error.code === "INVALID_DATE" ? 400 : 409).json({ message: error.message, code: error.code });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

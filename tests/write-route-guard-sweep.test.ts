@@ -162,6 +162,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/vouchers/:id/transfer",
   "POST /api/accounting/account-types/normalize",
   "POST /api/accounting/factory-fx-repair/apply",
+  "POST /api/accounting/perpetual-inventory/apply",
   "POST /api/accounting/system-accounts/ensure",
   "POST /api/admin/account-migration/execute",
   "POST /api/admin/account-migration/preview",
