@@ -37,9 +37,13 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
 
   app.get("/api/salary-advances/employee/:employeeId", requireAuth, requireNonPOS, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const employeeId = parseInt(req.params.employeeId);
       if (isNaN(employeeId)) return res.status(400).json({ message: "Invalid employee ID" });
-      res.json(await storage.getSalaryAdvancesByEmployee(employeeId));
+      // Only the active company's advances: any employee id used to return that
+      // employee's advances whatever company they belonged to.
+      res.json(await storage.getSalaryAdvancesByEmployee(employeeId, companyId));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

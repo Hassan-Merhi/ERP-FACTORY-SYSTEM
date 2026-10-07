@@ -422,11 +422,14 @@ export async function getSalaryAdvanceById(id: number): Promise<schema.SalaryAdv
   return advance;
 }
 
-export async function getSalaryAdvancesByEmployee(employeeId: number): Promise<schema.SalaryAdvance[]> {
+export async function getSalaryAdvancesByEmployee(
+  employeeId: number,
+  companyId: number
+): Promise<schema.SalaryAdvance[]> {
   return await db
     .select()
     .from(schema.salaryAdvances)
-    .where(eq(schema.salaryAdvances.employeeId, employeeId))
+    .where(and(eq(schema.salaryAdvances.employeeId, employeeId), eq(schema.salaryAdvances.companyId, companyId)))
     .orderBy(sql`${schema.salaryAdvances.advanceDate} DESC`);
 }
 

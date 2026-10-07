@@ -5,6 +5,8 @@
  *     "remaining <= 0.01"), which then refused any further deduction.
  *   - Reconciliation ignored differences of 0.01 between the stored and the
  *     rebuilt remaining balance.
+ *   - The per-employee list returned any employee's advances regardless of
+ *     company.
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -75,5 +77,33 @@ describe("salary advance cent balances", () => {
     const response = await agent.post("/api/salary-advances/reconcile");
     expect(response.status).toBe(200);
     expect(await row(id)).toEqual({ remaining_balance: "5.00", fully_paid: false });
+  });
+
+  it("lists only the active company's advances for an employee id", async () => {
+    const company = await pool.query<{ id: number }>(
+      `INSERT INTO companies (code, name, company_type, base_currency) VALUES ($1, $2, 'erp', 'USD') RETURNING id`,
+      [`${TEST_PREFIX.toUpperCase()}F`, `${TEST_PREFIX}_Foreign`]
+    );
+    const foreignCompanyId = company.rows[0].id;
+    const employee = await pool.query<{ id: number }>(
+      `INSERT INTO employees (company_id, code, first_name, last_name, join_date)
+       VALUES ($1, $2, 'Foreign', 'Employee', '2025-01-01') RETURNING id`,
+      [foreignCompanyId, `${TEST_PREFIX}-FE`]
+    );
+    const foreignEmployeeId = employee.rows[0].id;
+    await pool.query(
+      `INSERT INTO salary_advances (company_id, employee_id, advance_date, amount, remaining_balance)
+       VALUES ($1, $2, '2026-09-01', '75.00', '75.00')`,
+      [foreignCompanyId, foreignEmployeeId]
+    );
+    try {
+      const response = await agent.get(`/api/salary-advances/employee/${foreignEmployeeId}`);
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
+    } finally {
+      await pool.query(`DELETE FROM salary_advances WHERE employee_id = $1`, [foreignEmployeeId]);
+      await pool.query(`DELETE FROM employees WHERE id = $1`, [foreignEmployeeId]);
+      await pool.query(`DELETE FROM companies WHERE id = $1`, [foreignCompanyId]);
+    }
   });
 });
