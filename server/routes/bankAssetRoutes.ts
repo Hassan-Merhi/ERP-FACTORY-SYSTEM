@@ -16,6 +16,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, sql, isNull } from "drizzle-orm";
 import { readExcel, sheetToJson } from "../excelHelper";
+import { parseMoneyInput, toMoney } from "../lib/money";
 
 /**
  * The container-import spreadsheet, as this route reads it.
@@ -92,7 +93,7 @@ export function registerBankAssetRoutes(app: Express) {
       }
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
       const hasSide = !!parsed.openingBalanceSide;
 
       if (hasBalance && !hasSide) {
@@ -158,7 +159,7 @@ export function registerBankAssetRoutes(app: Express) {
       const parsed = insertBankAccountSchema.partial().parse(req.body);
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
       const hasSide = !!parsed.openingBalanceSide;
 
       if (hasBalance && !hasSide) {
@@ -493,8 +494,8 @@ export function registerBankAssetRoutes(app: Express) {
         );
         for (const row of histRows.rows) {
           assetHistMap.set(parseInt(row.fixed_asset_id), {
-            historicalCostBase: parseFloat(row.hist_debit),
-            historicalDepreciationBase: parseFloat(row.hist_credit),
+            historicalCostBase: toMoney(row.hist_debit).toNumber(),
+            historicalDepreciationBase: toMoney(row.hist_credit).toNumber(),
           });
         }
       }
@@ -518,7 +519,11 @@ export function registerBankAssetRoutes(app: Express) {
 
   app.post("/api/fixed-assets", requireAuth, async (req, res) => {
     try {
-      const parsed = insertFixedAssetSchema.parse(req.body);
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // The asset always belongs to the active company; a companyId in the body
+      // used to be trusted, so an asset could be created in any tenant.
+      const parsed = insertFixedAssetSchema.parse({ ...req.body, companyId });
 
       // Check for duplicate code
       const existing = await storage.getFixedAssetByCode(parsed.code);
@@ -631,9 +636,9 @@ export function registerBankAssetRoutes(app: Express) {
         return value === undefined ? "" : String(value);
       };
 
-      /** A column as a number, matching the previous `parseFloat(value || "0")`. */
+      /** A column as a number read the way parseFloat reads it; NaN when it does not parse. */
       const columnNumber = (row: ImportSheetRow, ...possibleNames: string[]): number =>
-        parseFloat(String(getColumnValue(row, ...possibleNames) || "0"));
+        parseMoneyInput(String(getColumnValue(row, ...possibleNames) || "0"))?.toNumber() ?? NaN;
 
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
@@ -646,7 +651,7 @@ export function registerBankAssetRoutes(app: Express) {
           chargeRows.push({
             rowNum,
             chargeType: String(chargeType),
-            amount: parseFloat(String(chargeAmount)),
+            amount: parseMoneyInput(String(chargeAmount))?.toNumber() ?? NaN,
             containerNumber: columnText(row, "Container_Number", "Container Number"),
           });
         } else if (
