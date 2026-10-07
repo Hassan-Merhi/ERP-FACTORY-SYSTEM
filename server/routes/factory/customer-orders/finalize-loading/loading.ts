@@ -26,6 +26,7 @@ import {
   factoryDaybookEntries,
 } from "@shared/schema";
 import { eq, and, inArray, isNull, ne } from "drizzle-orm";
+import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 export function registerOrderLoadingRoutes(app: Express) {
   app.post("/api/factory/customer-orders-loading", requireAuth, async (req: Request, res: Response) => {
@@ -36,6 +37,9 @@ export function registerOrderLoadingRoutes(app: Express) {
       const { customerId, proformaIdUsed, locationId, orderDate, containerNotes } = req.body;
       if (!customerId) return res.status(400).json({ message: "Customer is required" });
       if (!locationId) return res.status(400).json({ message: "Location is required" });
+      if (!(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       const parsedCustomerId = parseInt(customerId);
       const parsedProformaId = proformaIdUsed ? parseInt(proformaIdUsed) : null;

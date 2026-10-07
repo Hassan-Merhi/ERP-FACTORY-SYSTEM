@@ -1,8 +1,9 @@
 /**
  * Factory stock entry, bale import and bale finalize take an `erpLocationId`
- * from the body and put stock there. The path-based company scope never sees
- * it, so each route now refuses a location that belongs to neither the
- * factory company nor the session company.
+ * from the body and put stock there; customer order loading, bale scanning
+ * and product import record a location that later steps use. The path-based
+ * company scope never sees it, so each route now refuses a location that
+ * belongs to neither the factory company nor the session company.
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -73,6 +74,21 @@ describe("factory routes refuse another company's ERP location", () => {
     ]);
     const rows = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
     expect(rows.rowCount).toBe(0);
+  });
+
+  it("customer order loading and bale scanning refuse it too", async () => {
+    const responses = [
+      await agent.post("/api/factory/customer-orders-loading").send({ customerId: 1, locationId: foreignLocationId }),
+      await agent.post("/api/factory/customer-orders/1/bales").send({ scanCode: "X", locationId: foreignLocationId }),
+      await agent
+        .post("/api/factory/customer-orders/1/bales/bulk-import")
+        .send({ locationId: foreignLocationId, refNumbers: ["X"] }),
+    ];
+    expect(responses.map((response) => [response.status, response.body.message])).toEqual([
+      [400, "Location not found"],
+      [400, "Location not found"],
+      [400, "Location not found"],
+    ]);
   });
 
   it("still accepts the company's own location past the location check", async () => {

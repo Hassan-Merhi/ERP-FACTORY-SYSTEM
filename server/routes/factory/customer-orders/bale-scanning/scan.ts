@@ -36,6 +36,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
+import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 export function registerOrderBaleScanRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
@@ -48,6 +49,9 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
       const { scanCode, locationId } = req.body;
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
+      if (!(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       const isPriorityScan = req.body.priorityScan === true;
       if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
