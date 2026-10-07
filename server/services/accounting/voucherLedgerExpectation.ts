@@ -29,6 +29,7 @@ const VOUCHER_LEDGER_EXPECTATIONS: Record<string, VoucherLedgerExpectation> = {
   Journal: "balanced",
   Payment: "balanced",
   Receipt: "balanced",
+  Contra: "balanced",
   Sales: "balanced",
   Purchase: "balanced",
   "Credit Note": "balanced-only",

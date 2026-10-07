@@ -61,6 +61,14 @@ describe("assertValidReplacementEntries", () => {
     expect(() => assertValidReplacementEntries("Payment", true, [line("10.00", "0"), line("0", "9.99")])).not.toThrow();
   });
 
+  it("requires Contra and unclassified active vouchers to balance", () => {
+    for (const voucherType of ["Contra", "Some New Voucher", ""]) {
+      expect(() => assertValidReplacementEntries(voucherType, false, [line("10.00", "0"), line("0", "9.99")])).toThrow(
+        /debits must equal total credits/
+      );
+    }
+  });
+
   it("keeps the per-line rules only for one-sided stock vouchers", () => {
     expect(() => assertValidReplacementEntries("Consumption", false, [line("12.50", "0")])).not.toThrow();
     expect(() => assertValidReplacementEntries("Consumption", false, [line("-1", "0")])).toThrow();

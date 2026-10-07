@@ -104,18 +104,22 @@ export function assertReplacementEntryTargets(targets: ReplacementEntryTargets, 
   }
 }
 
+const ONE_SIDED_EXPECTATIONS: ReadonlySet<string> = new Set(["single-sided", "inventory-sided", "none"]);
+
 /**
  * Validates the amounts of a full replacement set for a voucher of the given
- * type. Active vouchers of a balanced type must balance exactly; one-sided
- * stock vouchers keep the per-line rules only.
+ * type. Active vouchers must balance exactly unless their type is a known
+ * one-sided stock type, which keeps the per-line rules only.
  */
 export function assertReplacementEntryAmounts(
   voucherType: unknown,
   optional: boolean,
   entries: readonly ManualVoucherEntryAmountInput[]
 ): void {
+  // Fails closed: only the known one-sided stock types are exempt, so a type
+  // nobody has classified must still balance.
   const expectation = classifyVoucherLedgerExpectation(voucherType);
-  const requiresBalance = expectation === "balanced" || expectation === "balanced-only";
+  const requiresBalance = !ONE_SIDED_EXPECTATIONS.has(expectation);
   validateManualVoucherEntryAmounts(entries, { optional: optional || !requiresBalance });
 }
 

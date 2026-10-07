@@ -218,9 +218,10 @@ export const LEDGER_GUARD_CONSTRAINTS: readonly string[] = [
 
 async function installedVersion(client: { query: Pool["query"] }): Promise<string | null> {
   const result = await client.query<{ version: string | null }>(
-    `SELECT obj_description('erp_voucher_entry_target_guard()'::regprocedure, 'pg_proc') AS version
-      WHERE to_regprocedure('erp_voucher_entry_target_guard()') IS NOT NULL
-        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_target_guard' AND NOT tgisinternal)
+    // to_regprocedure, not a ::regprocedure cast: the cast raises on a database
+    // where the function does not exist yet, which is every first install.
+    `SELECT obj_description(to_regprocedure('erp_voucher_entry_target_guard()'), 'pg_proc') AS version
+      WHERE EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_target_guard' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ledger_accounts_delete_guard' AND NOT tgisinternal)
         AND (SELECT COUNT(*) FROM pg_constraint
               WHERE conrelid = 'voucher_entries'::regclass
