@@ -11,8 +11,10 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, isNull, inArray, isNotNull, lte } from "drizzle-orm";
+import { eq, and, isNull, inArray, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { buildTrialBalance } from "../accounting/integrity/trialBalance";
+import { canonicalAccountType, PROFIT_AND_LOSS_ACCOUNT_TYPES } from "../accounting/accountClassification";
 
 // ---------------------------------------------------------------------------
 // getProfitLoss — /api/reports/profit-loss
@@ -129,221 +131,112 @@ export async function getProfitLoss(
 
 // ---------------------------------------------------------------------------
 // getBalanceSheet — /api/reports/balance-sheet
-// Returns assets, liabilities, equity as of the given date.
+//
+// Built on the trial balance (wave 9), so every figure is a posted line of a
+// live, non-optional voucher or an opening balance with its own side, and the
+// statement balances exactly when the ledger does:
+//   - ledger accounts by type: asset types are assets, liability types are
+//     liabilities, Equity is equity, income-statement types make the current
+//     earnings line; any other type is listed as unclassified;
+//   - bank accounts and fixed assets are assets;
+//   - customers, suppliers, employees and factory suppliers count on the side
+//     their balance falls (a supplier in debit is an asset, a customer in
+//     credit a liability);
+//   - lines on missing accounts or on no account are listed as unclassified;
+//   - `difference` is assets − (liabilities + equity + current earnings +
+//     unclassified), which is the trial balance's unexplained difference
+//     (unbalanced openings, single-sided stock vouchers), never plugged.
 // ---------------------------------------------------------------------------
-export async function getBalanceSheet(
-  companyId: number,
-  asOfDate: string | undefined
-): Promise<{
-  assets: {
-    ledgers: Array<{ id: number; code: string; name: string; balance: number }>;
-    banks: Array<{ id: number; code: string; name: string; balance: number }>;
-    fixedAssets: Array<{ id: number; code: string; name: string; balance: number }>;
-    total: number;
-  };
-  liabilities: {
-    ledgers: Array<{ id: number; code: string; name: string; balance: number }>;
-    suppliers: Array<{ id: number; code: string; name: string; balance: number }>;
-    total: number;
-  };
-  equity: {
-    accounts: Array<{ id: number; code: string; name: string; balance: number }>;
-    total: number;
-  };
+export interface BalanceSheetLine {
+  kind: string;
+  id: number | null;
+  code: string | null;
+  name: string;
+  accountType: string | null;
+  balance: string;
+}
+
+export interface BalanceSheet {
   asOfDate: string | null;
-}> {
-  // Build conditions for voucher date filter
-  const conditions = [eq(vouchers.companyId, companyId)];
-  if (asOfDate) {
-    conditions.push(lte(vouchers.voucherDate, asOfDate));
-  }
+  assets: { lines: BalanceSheetLine[]; total: string };
+  liabilities: { lines: BalanceSheetLine[]; total: string };
+  equity: { lines: BalanceSheetLine[]; currentEarnings: string; total: string };
+  unclassified: { lines: BalanceSheetLine[]; total: string };
+  /** Assets − (liabilities + equity + unclassified). Zero when the ledger balances. */
+  difference: string;
+  balanced: boolean;
+}
 
-  // Parallel fetch: all accounts + all entries (JOIN replaces two-step inArray)
-  const [ledgers, banks, assets, _employees, suppliers, allEntries] = await Promise.all([
-    storage.getAllLedgerAccounts(companyId),
-    storage.getAllBankAccounts(companyId),
-    storage.getAllFixedAssets(companyId),
-    storage.getAllEmployees(companyId),
-    storage.getAllSuppliers(),
-    db
-      .select({
-        voucherId: voucherEntries.voucherId,
-        ledgerAccountId: voucherEntries.ledgerAccountId,
-        bankAccountId: voucherEntries.bankAccountId,
-        fixedAssetId: voucherEntries.fixedAssetId,
-        supplierId: voucherEntries.supplierId,
-        employeeId: voucherEntries.employeeId,
-        debitAmount: voucherEntries.debitAmount,
-        creditAmount: voucherEntries.creditAmount,
-      })
-      .from(voucherEntries)
-      .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-      .where(and(...conditions))
-      .execute(),
-  ]);
+const BALANCE_SHEET_ASSET_TYPES = new Set(["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash", "Customer"]);
+const BALANCE_SHEET_LIABILITY_TYPES = new Set([
+  "Liability",
+  "Loan",
+  "Loans",
+  "Duty Agent",
+  "Transporter Agent",
+  "Accounts Payable",
+  "Supplier",
+  "Government Taxes",
+  "Intercompany",
+]);
+const BALANCE_SHEET_EARNINGS_TYPES = new Set([...PROFIT_AND_LOSS_ACCOUNT_TYPES, "Revenue", "Profit"]);
+const PARTY_KINDS = new Set(["customer", "supplier", "employee", "factorySupplier"]);
 
-  // Calculate balances
-  type Totals = { debits: Decimal; credits: Decimal };
-  const none = (): Totals => ({ debits: new MoneyDecimal(0), credits: new MoneyDecimal(0) });
-  const ledgerBalances = new Map<number, Totals>();
-  const bankBalances = new Map<number, Totals>();
-  const assetBalances = new Map<number, Totals>();
-  const employeeBalances = new Map<number, Totals>();
-  const supplierBalances = new Map<number, Totals>();
+export async function getBalanceSheet(companyId: number, asOfDate: string | undefined): Promise<BalanceSheet> {
+  const trialBalance = await buildTrialBalance(companyId, asOfDate ?? null);
+  const assets: BalanceSheetLine[] = [];
+  const liabilities: BalanceSheetLine[] = [];
+  const equity: BalanceSheetLine[] = [];
+  const unclassified: BalanceSheetLine[] = [];
+  let currentEarnings: Decimal = new MoneyDecimal(0);
 
-  for (const entry of allEntries) {
-    const debit = toMoney(entry.debitAmount);
-    const credit = toMoney(entry.creditAmount);
-
-    if (entry.ledgerAccountId) {
-      const existing = ledgerBalances.get(entry.ledgerAccountId) ?? none();
-      ledgerBalances.set(entry.ledgerAccountId, {
-        debits: existing.debits.plus(debit),
-        credits: existing.credits.plus(credit),
-      });
-    }
-
-    if (entry.bankAccountId) {
-      const existing = bankBalances.get(entry.bankAccountId) ?? none();
-      bankBalances.set(entry.bankAccountId, {
-        debits: existing.debits.plus(debit),
-        credits: existing.credits.plus(credit),
-      });
-    }
-
-    if (entry.fixedAssetId) {
-      const existing = assetBalances.get(entry.fixedAssetId) ?? none();
-      assetBalances.set(entry.fixedAssetId, {
-        debits: existing.debits.plus(debit),
-        credits: existing.credits.plus(credit),
-      });
-    }
-
-    if (entry.supplierId) {
-      const existing = supplierBalances.get(entry.supplierId) ?? none();
-      // Only count pure credit or pure debit entries to prevent double-counting
-      // This matches the logic in /api/suppliers/stats
-      if (credit.gt(0) && debit.isZero()) {
-        supplierBalances.set(entry.supplierId, {
-          debits: existing.debits,
-          credits: existing.credits.plus(credit),
-        });
-      } else if (debit.gt(0) && credit.isZero()) {
-        supplierBalances.set(entry.supplierId, {
-          debits: existing.debits.plus(debit),
-          credits: existing.credits,
-        });
-      }
-    }
-
-    if (entry.employeeId) {
-      const existing = employeeBalances.get(entry.employeeId) ?? none();
-      employeeBalances.set(entry.employeeId, {
-        debits: existing.debits.plus(debit),
-        credits: existing.credits.plus(credit),
-      });
+  for (const row of trialBalance.rows) {
+    // Debit-positive closing balance.
+    const debit = toMoney(row.closingDebit).minus(toMoney(row.closingCredit));
+    if (debit.isZero()) continue;
+    const type = canonicalAccountType(row.accountType) ?? row.accountType ?? null;
+    const line = (balance: Decimal): BalanceSheetLine => ({
+      kind: row.kind,
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      accountType: row.accountType,
+      balance: balance.toFixed(2),
+    });
+    if (row.kind === "bank" || row.kind === "fixedAsset") {
+      assets.push(line(debit));
+    } else if (PARTY_KINDS.has(row.kind)) {
+      if (debit.isPositive()) assets.push(line(debit));
+      else liabilities.push(line(debit.negated()));
+    } else if (row.kind === "ledger" && type && BALANCE_SHEET_ASSET_TYPES.has(type)) {
+      assets.push(line(debit));
+    } else if (row.kind === "ledger" && type && BALANCE_SHEET_LIABILITY_TYPES.has(type)) {
+      liabilities.push(line(debit.negated()));
+    } else if (row.kind === "ledger" && type === "Equity") {
+      equity.push(line(debit.negated()));
+    } else if (row.kind === "ledger" && type && BALANCE_SHEET_EARNINGS_TYPES.has(type)) {
+      currentEarnings = currentEarnings.minus(debit);
+    } else {
+      // Credit-positive, like the right-hand side it is compared with.
+      unclassified.push(line(debit.negated()));
     }
   }
 
-  // Categorize and calculate net balances
-  const assetAccounts = ledgers
-    .filter((l) => l.accountType === "Asset")
-    .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) ?? none();
-      const openingBalance = toMoney(acc.openingBalance);
-      return {
-        id: acc.id,
-        code: acc.code,
-        name: acc.name,
-        balance: openingBalance.plus(bal.debits).minus(bal.credits).toNumber(),
-      };
-    });
-
-  const bankAccountItems = banks.map((bank) => {
-    const bal = bankBalances.get(bank.id) ?? none();
-    const openingBalance = toMoney(bank.openingBalance);
-    return {
-      id: bank.id,
-      code: bank.accountNumber,
-      name: bank.bankName,
-      balance: openingBalance.plus(bal.debits).minus(bal.credits).toNumber(),
-    };
-  });
-
-  const fixedAssetAccounts = assets.map((asset) => {
-    const bal = assetBalances.get(asset.id) ?? none();
-    const purchaseValue = toMoney(asset.purchaseAmount);
-    return {
-      id: asset.id,
-      code: asset.code,
-      name: asset.name,
-      balance: purchaseValue.plus(bal.debits).minus(bal.credits).toNumber(),
-    };
-  });
-
-  const liabilityAccounts = ledgers
-    .filter((l) => l.accountType === "Liability")
-    .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) ?? none();
-      const openingBalance = toMoney(acc.openingBalance);
-      return {
-        id: acc.id,
-        code: acc.code,
-        name: acc.name,
-        balance: openingBalance.plus(bal.credits).minus(bal.debits).toNumber(),
-      };
-    });
-
-  const supplierAccounts = suppliers
-    .map((supplier) => {
-      const bal = supplierBalances.get(supplier.id) ?? none();
-      return {
-        id: supplier.id,
-        code: supplier.code,
-        name: supplier.legalName,
-        balance: bal.credits.minus(bal.debits).toNumber(),
-      };
-    })
-    .filter((s) => s.balance !== 0);
-
-  const equityAccounts = ledgers
-    .filter((l) => l.accountType === "Equity")
-    .map((acc) => {
-      const bal = ledgerBalances.get(acc.id) ?? none();
-      const openingBalance = toMoney(acc.openingBalance);
-      return {
-        id: acc.id,
-        code: acc.code,
-        name: acc.name,
-        balance: openingBalance.plus(bal.credits).minus(bal.debits).toNumber(),
-      };
-    });
-
-  // Each balance above is an exact sum read once as a number, so these totals re-add short decimals.
-  const totalAssets = sumMoney(
-    [...assetAccounts, ...bankAccountItems, ...fixedAssetAccounts].map((item) => item.balance)
-  ).toNumber();
-
-  const totalLiabilities = sumMoney([...liabilityAccounts, ...supplierAccounts].map((item) => item.balance)).toNumber();
-
-  const totalEquity = sumMoney(equityAccounts.map((item) => item.balance)).toNumber();
+  const total = (lines: BalanceSheetLine[]) =>
+    lines.reduce((sum, item) => sum.plus(toMoney(item.balance)), new MoneyDecimal(0));
+  const assetsTotal = total(assets);
+  const liabilitiesTotal = total(liabilities);
+  const equityTotal = total(equity).plus(currentEarnings);
+  const unclassifiedTotal = total(unclassified);
+  const difference = assetsTotal.minus(liabilitiesTotal).minus(equityTotal).minus(unclassifiedTotal);
 
   return {
-    assets: {
-      ledgers: assetAccounts.filter((a) => a.balance !== 0),
-      banks: bankAccountItems.filter((b) => b.balance !== 0),
-      fixedAssets: fixedAssetAccounts.filter((f) => f.balance !== 0),
-      total: totalAssets,
-    },
-    liabilities: {
-      ledgers: liabilityAccounts.filter((l) => l.balance !== 0),
-      suppliers: supplierAccounts,
-      total: totalLiabilities,
-    },
-    equity: {
-      accounts: equityAccounts.filter((e) => e.balance !== 0),
-      total: totalEquity,
-    },
-    asOfDate: asOfDate || null,
+    asOfDate: asOfDate ?? null,
+    assets: { lines: assets, total: assetsTotal.toFixed(2) },
+    liabilities: { lines: liabilities, total: liabilitiesTotal.toFixed(2) },
+    equity: { lines: equity, currentEarnings: currentEarnings.toFixed(2), total: equityTotal.toFixed(2) },
+    unclassified: { lines: unclassified, total: unclassifiedTotal.toFixed(2) },
+    difference: difference.toFixed(2),
+    balanced: difference.isZero(),
   };
 }

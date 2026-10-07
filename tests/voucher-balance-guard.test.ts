@@ -1,25 +1,29 @@
 /**
- * Voucher balance guard (wave 8.5).
+ * Voucher balance guard (waves 8.5 and 9).
  *
- * From a company's perpetual-inventory cut-over, an active voucher dated on or
- * after it must balance when its transaction commits. Lines may be written one
- * by one inside the transaction; vouchers dated before the cut-over, optional
- * vouchers, companies without a cut-over and supplier-partner companies are
- * left alone; re-activating an unbalanced voucher is refused; a reviewed repair
- * can bypass the guard for its own transaction.
+ * An active voucher created after the guard's install must balance when its
+ * transaction commits, in every company; lines may be written one by one
+ * inside the transaction. Left alone: vouchers created before the install
+ * (history), optional vouchers, and stock adjustments under periodic inventory
+ * (before a cut-over, or in a supplier-partner company). From a company's
+ * cut-over its stock adjustments must balance too. Lines in one transaction
+ * currency balance in that currency; re-activating an unbalanced voucher is
+ * refused; a reviewed repair can bypass the guard for its own transaction.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
-import { ensureVoucherBalanceGuard } from "../server/services/accounting/voucherBalanceGuard";
+import {
+  ensureVoucherBalanceGuard,
+  VOUCHER_BALANCE_GUARD_SINCE_KEY,
+} from "../server/services/accounting/voucherBalanceGuard";
 import { ensureLedgerIntegrityGuard } from "../server/services/accounting/ledgerIntegrityGuard";
 import { ensureInventoryCutoverSchema } from "../server/services/accounting/perpetualInventory/cutover";
 
 const PREFIX = `vbg${Date.now().toString(36)}`;
 let companyId: number;
 let partnerId: number;
-let debitAccount: number;
-let creditAccount: number;
+const accounts = new Map<number, { debit: number; credit: number }>();
 let sequence = 0;
 
 type Q = (text: string, values?: unknown[]) => Promise<{ rows: any[] }>;
@@ -39,19 +43,38 @@ async function transaction(work: (q: Q) => Promise<unknown>) {
   }
 }
 
-async function voucher(q: Q, company: number, date: string, lines: Array<[string, string]>, optional = false) {
+type Line = [debit: string, credit: string, currency?: string, native?: string];
+
+async function voucher(
+  q: Q,
+  company: number,
+  date: string,
+  lines: Line[],
+  options: { optional?: boolean; type?: string } = {}
+) {
   sequence += 1;
   const id = (
     await q(
       `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, optional)
-       VALUES ($1, $2, 'Journal', $3, 0, $4) RETURNING id`,
-      [company, `${PREFIX}-V${sequence}`, date, optional]
+       VALUES ($1, $2, $3, $4, 0, $5) RETURNING id`,
+      [company, `${PREFIX}-V${sequence}`, options.type ?? "Journal", date, options.optional ?? false]
     )
   ).rows[0].id;
-  for (const [debit, credit] of lines) {
+  for (const [debit, credit, currency, native] of lines) {
+    const isDebit = Number(debit) > 0;
     await q(
-      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, $3, $4)`,
-      [id, Number(debit) > 0 ? debitAccount : creditAccount, debit, credit]
+      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount,
+                                    transaction_currency, transaction_debit_amount, transaction_credit_amount)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        id,
+        isDebit ? accounts.get(company)!.debit : accounts.get(company)!.credit,
+        debit,
+        credit,
+        currency ?? null,
+        currency ? (isDebit ? native : "0") : null,
+        currency ? (isDebit ? "0" : native) : null,
+      ]
     );
   }
   return id as number;
@@ -79,8 +102,12 @@ beforeAll(async () => {
           [company, code]
         )
       ).rows[0].id;
-    debitAccount = await account(companyId, `${PREFIX}_DR`);
-    creditAccount = await account(companyId, `${PREFIX}_CR`);
+    for (const company of [companyId, partnerId]) {
+      accounts.set(company, {
+        debit: await account(company, `${PREFIX}_${company}_DR`),
+        credit: await account(company, `${PREFIX}_${company}_CR`),
+      });
+    }
     for (const company of [companyId, partnerId]) {
       await q(
         `INSERT INTO gl_inventory_cutovers (company_id, effective_from, opening_plan, applied_by) VALUES ($1, '2026-11-01', '{}'::jsonb, 'test')`,
@@ -104,13 +131,17 @@ afterAll(async () => {
       await q(`DELETE FROM companies WHERE id = $1`, [company]);
     }
   });
+  // The rest of the suite writes fixtures freely: leave the database as it was.
+  await pool.query(`DROP TRIGGER IF EXISTS voucher_entries_balance_guard ON voucher_entries`);
+  await pool.query(`DROP TRIGGER IF EXISTS vouchers_balance_guard ON vouchers`);
+  await pool.query(`DELETE FROM system_settings WHERE key = $1`, [VOUCHER_BALANCE_GUARD_SINCE_KEY]);
 }, 60000);
 
 describe("voucher balance guard", () => {
   it("accepts a voucher whose lines balance at commit, written one by one", async () => {
     await expect(
       transaction((q) =>
-        voucher(q, companyId, "2026-11-02", [
+        voucher(q, companyId, "2026-10-02", [
           ["60", "0"],
           ["40", "0"],
           ["0", "100"],
@@ -119,41 +150,63 @@ describe("voucher balance guard", () => {
     ).resolves.toBeGreaterThan(0);
   });
 
-  it("refuses an unbalanced voucher dated on or after the cut-over", async () => {
-    await expect(
-      transaction((q) =>
-        voucher(q, companyId, "2026-11-01", [
-          ["100", "0"],
-          ["0", "90"],
-        ])
-      )
-    ).rejects.toThrow(/does not balance/);
+  it("refuses an unbalanced voucher in any company, whatever its date", async () => {
+    for (const date of ["2026-10-01", "2026-11-01"]) {
+      await expect(
+        transaction((q) =>
+          voucher(q, companyId, date, [
+            ["100", "0"],
+            ["0", "90"],
+          ])
+        )
+      ).rejects.toThrow(/does not balance/);
+    }
   });
 
-  it("leaves vouchers before the cut-over, optional ones and supplier-partner companies alone", async () => {
+  it("leaves history, optional vouchers and periodic stock adjustments alone", async () => {
+    // A voucher created before the install is history: its lines stay editable.
+    const legacy = (await transaction(async (q) => {
+      await q(`SET LOCAL app.ledger_integrity_bypass = 'on'`);
+      const id = await voucher(q, companyId, "2026-09-01", [["100", "0"]]);
+      await q(`UPDATE vouchers SET created_at = '2020-01-01' WHERE id = $1`, [id]);
+      return id;
+    })) as number;
     await expect(
-      transaction((q) =>
-        voucher(q, companyId, "2026-10-31", [
-          ["100", "0"],
-          ["0", "90"],
-        ])
-      )
-    ).resolves.toBeGreaterThan(0);
-    const optionalId = (await transaction((q) => voucher(q, companyId, "2026-11-03", [["100", "0"]], true))) as number;
-    await expect(
-      transaction((q) =>
-        q(
-          `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
-           VALUES ($1, $2, 'Stock Adjustment', '2026-11-03', 0)`,
-          [partnerId, `${PREFIX}-SP1`]
-        )
-      )
+      transaction((q) => q(`UPDATE voucher_entries SET debit_amount = 90 WHERE voucher_id = $1`, [legacy]))
     ).resolves.toBeDefined();
 
-    // Re-activating the unbalanced optional voucher is refused.
+    // Stock adjustments are one-sided before a cut-over and in a supplier partner.
+    await expect(
+      transaction((q) => voucher(q, companyId, "2026-10-31", [["0", "50"]], { type: "Production" }))
+    ).resolves.toBeGreaterThan(0);
+    await expect(
+      transaction((q) => voucher(q, partnerId, "2026-11-03", [["0", "50"]], { type: "Stock Adjustment" }))
+    ).resolves.toBeGreaterThan(0);
+    // From the cut-over, a stock adjustment carries its inventory line and must balance.
+    await expect(
+      transaction((q) => voucher(q, companyId, "2026-11-03", [["0", "50"]], { type: "Production" }))
+    ).rejects.toThrow(/does not balance/);
+
+    // An unbalanced optional voucher is allowed; activating it is refused.
+    const optionalId = (await transaction((q) =>
+      voucher(q, companyId, "2026-11-03", [["100", "0"]], { optional: true })
+    )) as number;
     await expect(
       transaction((q) => q(`UPDATE vouchers SET optional = false WHERE id = $1`, [optionalId]))
     ).rejects.toThrow(/does not balance/);
+  });
+
+  it("balances lines in one transaction currency in that currency", async () => {
+    // XOF 500 + 500 against XOF 1,000: the per-line USD bases are a cent apart.
+    await expect(
+      transaction((q) =>
+        voucher(q, companyId, "2026-10-05", [
+          ["0.83", "0", "XOF", "500"],
+          ["0.83", "0", "XOF", "500"],
+          ["0", "1.67", "XOF", "1000"],
+        ])
+      )
+    ).resolves.toBeGreaterThan(0);
   });
 
   it("lets a reviewed repair bypass the guard for its own transaction", async () => {

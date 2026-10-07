@@ -391,6 +391,27 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     )
   );
 
+  // 11. Revaluation journals that saving an exchange rate used to post (wave 9
+  // stopped it). They revalued every Cash account as if it held CFA, so each is
+  // a candidate for a reviewed reversal; none is changed here.
+  const revaluations = await rows<{ id: number; voucher_number: string; voucher_date: string; amount: string }>(sql`
+    SELECT v.id, v.voucher_number, v.voucher_date::text AS voucher_date, v.total_amount::text AS amount
+      FROM vouchers v
+     WHERE v.company_id = ${companyId} AND v.voucher_number LIKE 'FX-REVAL-%'
+       AND v.deleted_at IS NULL AND COALESCE(v.optional, false) = false
+     ORDER BY v.voucher_date, v.id
+  `);
+  checks.push(
+    check(
+      "automatic_fx_revaluation_journals",
+      revaluations.length ? "warn" : "pass",
+      revaluations.length,
+      "Journals posted automatically when an exchange rate was saved. They revalued every Cash account as if it held CFA, whatever its currency, so their amounts need review; no new ones are posted.",
+      revaluations,
+      revaluations.reduce((sum, row) => sum.plus(toMoney(row.amount)), new MoneyDecimal(0)).toFixed(2)
+    )
+  );
+
   const status: IntegrityStatus = checks.some((c) => c.status === "fail")
     ? "fail"
     : checks.some((c) => c.status === "warn")

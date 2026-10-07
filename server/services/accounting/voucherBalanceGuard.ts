@@ -4,44 +4,84 @@ import { logger } from "../../lib/logger";
 import { getErrorMessage } from "../../lib/httpHandlers";
 
 /**
- * Voucher balance guard (2026-10 accounting audit, wave 8.5).
+ * Voucher balance guard (2026-10 accounting audit, waves 8.5 and 9).
  *
- * Once a company's perpetual-inventory cut-over is applied, every voucher it
- * posts balances: the stock adjustments carry their inventory line, and the
- * linked journals (COGS, goods in transit, stock-in, factory invoices, the
- * factory stock journal) are balanced by construction. This guard makes that a
- * database rule: at COMMIT, an active (not deleted, not optional) voucher of
- * such a company dated on or after its cut-over must have debits equal to
- * credits (to the cent).
+ * A deferred constraint trigger: at COMMIT, an active (not deleted, not
+ * optional) voucher must have debits equal to credits (to the cent), so a
+ * writer may add lines one by one inside its transaction and fails only if it
+ * leaves the voucher unbalanced. Lines all in one transaction currency are
+ * compared in that currency (per-line conversion can leave the USD columns a
+ * cent apart); otherwise the USD base columns are compared.
  *
- * It is a deferred constraint trigger, so a writer may add a voucher's lines
- * one by one inside its transaction; it fails only if the voucher is left
- * unbalanced when the transaction commits. Every writer posts a voucher and its
- * lines in one transaction (the last ones were converted with this guard).
+ * Which vouchers it checks:
+ *   - every voucher created after the guard was first installed (the
+ *     `voucher_balance_guard_since` system setting), except the stock
+ *     adjustment types (Stock Adjustment, Production, Consumption, Mixed),
+ *     which are one-sided by design under periodic inventory;
+ *   - every voucher dated on or after a company's perpetual-inventory
+ *     cut-over, stock adjustments included (they carry their inventory line),
+ *     unless the company is a supplier partner.
+ * Vouchers created before the install are history and are never checked, so
+ * legacy rows stay editable; the integrity diagnostic reports them.
  *
- * Left alone: vouchers dated before the cut-over (periodic history, where stock
- * adjustments were one-sided by design), companies without a cut-over, and
- * supplier-partner companies, whose stock is carried in their sp_stock accounts
- * and whose stock adjustments stay one-sided. A reviewed repair can
- * `SET LOCAL app.ledger_integrity_bypass = 'on'` for its own transaction.
+ * Every writer posts a voucher and its lines in one transaction (the last ones
+ * were converted in wave 8.5). Re-activating, re-dating or moving a voucher is
+ * checked too. A reviewed repair can `SET LOCAL app.ledger_integrity_bypass =
+ * 'on'` for its own transaction.
  */
+/** The system_settings key holding when the guard was first installed. */
+export const VOUCHER_BALANCE_GUARD_SINCE_KEY = "voucher_balance_guard_since";
+
 export const VOUCHER_BALANCE_GUARD_DDL: readonly string[] = [
+  // When the guard was first installed: vouchers created before it are history
+  // and are never checked (legacy one-sided rows stay editable).
+  `INSERT INTO system_settings (key, value) VALUES ('${VOUCHER_BALANCE_GUARD_SINCE_KEY}', now()::text)
+   ON CONFLICT (key) DO NOTHING`,
   `CREATE OR REPLACE FUNCTION erp_voucher_balance_check(p_voucher_id integer) RETURNS void
    LANGUAGE plpgsql AS $fn$
    DECLARE
      v record;
+     guard_since timestamptz;
+     currencies integer;
+     all_in_currency boolean;
      total_debit numeric;
      total_credit numeric;
    BEGIN
      IF p_voucher_id IS NULL OR erp_ledger_integrity_bypassed() THEN RETURN; END IF;
-     SELECT vo.id, vo.voucher_number, vo.voucher_date, vo.company_id INTO v
-       FROM vouchers vo
-       JOIN gl_inventory_cutovers c ON c.company_id = vo.company_id AND c.effective_from <= vo.voucher_date
-       JOIN companies co ON co.id = vo.company_id AND COALESCE(co.company_type, '') <> 'supplier_partner'
+     SELECT vo.id, vo.voucher_number, vo.voucher_type, vo.created_at, COALESCE(co.company_type, '') AS company_type,
+            EXISTS (SELECT 1 FROM gl_inventory_cutovers c
+                     WHERE c.company_id = vo.company_id AND c.effective_from <= vo.voucher_date) AS perpetual
+       INTO v
+       FROM vouchers vo JOIN companies co ON co.id = vo.company_id
       WHERE vo.id = p_voucher_id AND vo.deleted_at IS NULL AND COALESCE(vo.optional, false) = false;
      IF NOT FOUND THEN RETURN; END IF;
-     SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0) INTO total_debit, total_credit
+
+     IF v.voucher_type IN ('Stock Adjustment', 'Production', 'Consumption', 'Mixed') THEN
+       -- One-sided by design under periodic inventory; balanced (they carry their
+       -- inventory line) from a non-supplier-partner company's cut-over.
+       IF NOT v.perpetual OR v.company_type = 'supplier_partner' THEN RETURN; END IF;
+     ELSE
+       SELECT value::timestamptz INTO guard_since FROM system_settings WHERE key = '${VOUCHER_BALANCE_GUARD_SINCE_KEY}';
+       IF NOT ((v.perpetual AND v.company_type <> 'supplier_partner')
+               OR (guard_since IS NOT NULL AND v.created_at >= guard_since)) THEN
+         RETURN;
+       END IF;
+     END IF;
+
+     -- Lines in one transaction currency balance in that currency (per-line base
+     -- rounding can leave the USD columns a cent apart); otherwise in the base.
+     SELECT COUNT(DISTINCT transaction_currency) FILTER (WHERE transaction_currency IS NOT NULL),
+            COALESCE(bool_and(transaction_currency IS NOT NULL), false)
+       INTO currencies, all_in_currency
        FROM voucher_entries WHERE voucher_id = p_voucher_id;
+     IF currencies = 1 AND all_in_currency THEN
+       SELECT COALESCE(SUM(transaction_debit_amount), 0), COALESCE(SUM(transaction_credit_amount), 0)
+         INTO total_debit, total_credit
+         FROM voucher_entries WHERE voucher_id = p_voucher_id;
+     ELSE
+       SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0) INTO total_debit, total_credit
+         FROM voucher_entries WHERE voucher_id = p_voucher_id;
+     END IF;
      IF round(total_debit, 2) <> round(total_credit, 2) THEN
        RAISE EXCEPTION 'Voucher % does not balance: debits %, credits %',
          v.voucher_number, round(total_debit, 2), round(total_credit, 2)
@@ -77,7 +117,7 @@ export const VOUCHER_BALANCE_GUARD_DDL: readonly string[] = [
 ];
 
 /** Version of VOUCHER_BALANCE_GUARD_DDL. Bump it whenever a statement changes. */
-export const VOUCHER_BALANCE_GUARD_VERSION = "2026-10-voucher-balance-v1";
+export const VOUCHER_BALANCE_GUARD_VERSION = "2026-10-voucher-balance-v2";
 
 const INSTALL_LOCK_KEY = 2026_10_85;
 
