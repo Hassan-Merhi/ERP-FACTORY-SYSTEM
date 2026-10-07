@@ -6,6 +6,8 @@
  *     view, complete, delete and edit reached a transfer by id alone;
  *   - stock transfer import: the single-source validate and import accepted
  *     another company's locations;
+ *   - stock transfers: accepted another company's destination, sources and
+ *     stock items;
  *   - silent production: adjusted stock at another company's location.
  */
 import request from "supertest";
@@ -158,6 +160,36 @@ describe("stock transfer import tenant scope", () => {
       ctx.companyId,
     ]);
     expect(vouchersAfter.rows[0].n).toBe(vouchersBefore.rows[0].n);
+  });
+});
+
+describe("stock transfer tenant scope", () => {
+  it("refuses another company's destination, source or stock item and moves nothing", async () => {
+    const ownItemId = ctx.stockItemIds[2];
+    const attempts = [
+      { sourceLocationId: ctx.locationId, destinationLocationId: foreignLocationId, stockItemId: ownItemId },
+      { sourceLocationId: foreignLocationId, destinationLocationId: ctx.location2Id, stockItemId: ownItemId },
+    ];
+    for (const { stockItemId, ...locations } of attempts) {
+      const response = await agent
+        .post("/api/stock-transfers")
+        .send({ ...locations, items: [{ stockItemId, quantity: "1" }] });
+      expect(response.status).toBe(404);
+    }
+    const foreignItem = await agent.post("/api/stock-transfers").send({
+      sourceLocationId: ctx.locationId,
+      destinationLocationId: ctx.location2Id,
+      items: [{ stockItemId: 999999999, quantity: "1" }],
+    });
+    expect(foreignItem.status).toBe(400);
+
+    const own = await pool.query(`SELECT quantity FROM inventory WHERE location_id = $1 AND stock_item_id = $2`, [
+      ctx.locationId,
+      ownItemId,
+    ]);
+    expect(own.rows[0].quantity).toBe("100.000");
+    const foreign = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
+    expect(foreign.rowCount).toBe(0);
   });
 });
 
