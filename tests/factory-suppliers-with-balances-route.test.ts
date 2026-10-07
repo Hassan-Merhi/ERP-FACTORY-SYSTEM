@@ -28,6 +28,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "fswb";
@@ -96,29 +97,35 @@ async function makeContainer(
   return row.rows[0].id;
 }
 
-/** A voucher carrying a debit against a factory supplier — a payment. */
+/**
+ * A voucher carrying a debit against a factory supplier — a payment — and its
+ * balancing cash credit, written together: the voucher balance guard checks the
+ * voucher at COMMIT. The cash leg names no supplier, so it moves no balance.
+ */
 async function makeSupplierVoucher(
   supplierId: number,
   options: { amount: string; voucherNumber: string; optional?: boolean; currency?: string; exchangeRate?: string }
 ) {
-  const voucher = await pool.query<{ id: number }>(
-    `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency, exchange_rate, optional)
-     VALUES ($1, 'Payment', $2, '2026-06-10', $3, $4, $5, $6) RETURNING id`,
-    [
-      ctx.companyId,
-      `${TEST_PREFIX}-${options.voucherNumber}`,
-      options.amount,
-      options.currency ?? "USD",
-      options.exchangeRate ?? null,
-      options.optional ?? false,
-    ]
-  );
-  await pool.query(
-    `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, debit_amount, credit_amount)
-     VALUES ($1, $2, $3, '0')`,
-    [voucher.rows[0].id, supplierId, options.amount]
-  );
-  return voucher.rows[0].id;
+  return withFixtureTransaction(async (client) => {
+    const voucher = await client.query<{ id: number }>(
+      `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency, exchange_rate, optional)
+       VALUES ($1, 'Payment', $2, '2026-06-10', $3, $4, $5, $6) RETURNING id`,
+      [
+        ctx.companyId,
+        `${TEST_PREFIX}-${options.voucherNumber}`,
+        options.amount,
+        options.currency ?? "USD",
+        options.exchangeRate ?? null,
+        options.optional ?? false,
+      ]
+    );
+    await client.query(
+      `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
+       VALUES ($1, $2, NULL, $3, '0'), ($1, NULL, $4, '0', $3)`,
+      [voucher.rows[0].id, supplierId, options.amount, ctx.cashAccountId]
+    );
+    return voucher.rows[0].id;
+  });
 }
 
 async function fetchBalances(query = ""): Promise<SupplierBalance[]> {
@@ -206,17 +213,19 @@ describe("GET /api/factory/suppliers/with-balances", () => {
        VALUES ($1, $2, '80', 'USD', '1', '80', '2026-06-11')`,
       [ctx.companyId, supplierId]
     );
-    // The auto-generated mirror of that same payment.
-    const mirror = await pool.query<{ id: number }>(
-      `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency)
-       VALUES ($1, 'Payment', $2, '2026-06-11', '80', 'USD') RETURNING id`,
-      [ctx.companyId, `FACTORY-PAY-${supplierId}-1`]
-    );
-    await pool.query(
-      `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, debit_amount, credit_amount)
-       VALUES ($1, $2, '80', '0')`,
-      [mirror.rows[0].id, supplierId]
-    );
+    // The auto-generated mirror of that same payment, with its cash leg.
+    await withFixtureTransaction(async (client) => {
+      const mirror = await client.query<{ id: number }>(
+        `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, total_amount, currency)
+         VALUES ($1, 'Payment', $2, '2026-06-11', '80', 'USD') RETURNING id`,
+        [ctx.companyId, `FACTORY-PAY-${supplierId}-1`]
+      );
+      await client.query(
+        `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
+         VALUES ($1, $2, NULL, '80', '0'), ($1, NULL, $3, '0', '80')`,
+        [mirror.rows[0].id, supplierId, ctx.cashAccountId]
+      );
+    });
 
     const supplier = findSupplier(await fetchBalances(), supplierId);
 

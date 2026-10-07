@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "sprecon";
@@ -176,10 +177,16 @@ describe("SP full reconciliation independent totals", () => {
   it("fails the supplier statement surface when the two OTW legs disagree", async () => {
     // Dr Goods OTW / Cr OTW Clearing is one posting seen from two sides, so the
     // liability leg has to equal the asset leg. Editing one of them is exactly the
-    // drift this surface exists for.
-    const edited = await pool.query(
-      `UPDATE voucher_entries SET credit_amount = '1000' WHERE voucher_id = $1 AND credit_amount::numeric > 0`,
-      [otwVoucherId]
+    // drift this surface exists for. The drifted voucher models a legacy
+    // unbalanced row predating the voucher balance guard, so the edit is written
+    // with the ledger integrity bypass; the restore below balances it again.
+    const edited = await withFixtureTransaction(
+      (client) =>
+        client.query(
+          `UPDATE voucher_entries SET credit_amount = '1000' WHERE voucher_id = $1 AND credit_amount::numeric > 0`,
+          [otwVoucherId]
+        ),
+      { legacyUnbalanced: true }
     );
     expect(edited.rowCount).toBe(1);
 

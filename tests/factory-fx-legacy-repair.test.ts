@@ -120,11 +120,6 @@ beforeAll(async () => {
       ["expense", "40", "0"],
       ["supplier", "0", "40"],
     ]);
-    // One leg recognised, the other not: the voucher is left whole.
-    await voucher(q, "mixed", "AUD", "0.65", "200", "2026-09-10", [
-      ["expense", "200", "0"],
-      ["supplier", "0", "199"],
-    ]);
     // In a closed period.
     await voucher(q, "closed", "EUR", "1.1", "10", "2026-01-15", [
       ["expense", "10", "0"],
@@ -138,6 +133,16 @@ beforeAll(async () => {
        VALUES ($1, '2026-01-01', '2026-01-31', $4, $2, $3, 0, 0, 0, 'CLOSED')`,
       [companyId, voucherIds.closed, cashId, userId]
     );
+  });
+  // One leg recognised, the other not: the voucher is left whole. It models a
+  // legacy unbalanced row predating the voucher balance guard, so it is written
+  // in its own transaction with the ledger integrity bypass.
+  await maintenance(async (q) => {
+    await q(`SET LOCAL app.ledger_integrity_bypass = 'on'`);
+    await voucher(q, "mixed", "AUD", "0.65", "200", "2026-09-10", [
+      ["expense", "200", "0"],
+      ["supplier", "0", "199"],
+    ]);
   });
 }, 60000);
 

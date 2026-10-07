@@ -8,6 +8,7 @@ import {
   teardownGoldenCoastPhase5Fixture,
   type GoldenCoastPhase5Fixture,
 } from "./helpers/goldenCoastPhase5Fixture";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 
 const PREFIX = "p18sp";
 const TX_DATE = "2026-09-14";
@@ -80,27 +81,31 @@ async function insertBalancedSupplierVoucher(input: {
   amount: number;
   voucherNumber: string;
 }): Promise<number> {
-  const voucher = await pool.query<{ id: number }>(
-    `INSERT INTO vouchers
-       (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, currency, exchange_rate, source_module)
-     VALUES ($1, 'Journal', $2, $3, 'Phase 18 supplier payable control', $4, 'USD', '1', 'SP')
-     RETURNING id`,
-    [input.companyId, input.voucherNumber, TX_DATE, String(input.amount)]
-  );
-  const voucherId = voucher.rows[0].id;
-  await pool.query(
-    `INSERT INTO voucher_entries
-       (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, $3, '0', 'Phase 18 supplier purchase debit')`,
-    [voucherId, input.debitAccountId, String(input.amount)]
-  );
-  await pool.query(
-    `INSERT INTO voucher_entries
-       (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, $3, '0', $4, 'Phase 18 supplier payable credit')`,
-    [voucherId, input.payableAccountId, input.supplierId, String(input.amount)]
-  );
-  return voucherId;
+  // The voucher and both legs go in one transaction: the voucher balance guard
+  // checks the voucher at COMMIT.
+  return withFixtureTransaction(async (client) => {
+    const voucher = await client.query<{ id: number }>(
+      `INSERT INTO vouchers
+         (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, currency, exchange_rate, source_module)
+       VALUES ($1, 'Journal', $2, $3, 'Phase 18 supplier payable control', $4, 'USD', '1', 'SP')
+       RETURNING id`,
+      [input.companyId, input.voucherNumber, TX_DATE, String(input.amount)]
+    );
+    const voucherId = voucher.rows[0].id;
+    await client.query(
+      `INSERT INTO voucher_entries
+         (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, $3, '0', 'Phase 18 supplier purchase debit')`,
+      [voucherId, input.debitAccountId, String(input.amount)]
+    );
+    await client.query(
+      `INSERT INTO voucher_entries
+         (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, $3, '0', $4, 'Phase 18 supplier payable credit')`,
+      [voucherId, input.payableAccountId, input.supplierId, String(input.amount)]
+    );
+    return voucherId;
+  });
 }
 
 function surface(report: ReconciliationReport, key: string): ReconciliationSurface {

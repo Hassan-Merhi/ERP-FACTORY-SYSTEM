@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "spreconclose";
@@ -72,6 +73,20 @@ async function insertVoucher(voucherType: string, totalAmount: string, suffix: s
   const id = result.rows[0].id;
   voucherIds.push(id);
   return id;
+}
+
+/**
+ * Drifts one leg of a posted voucher so the reconciliation has something to
+ * detect. The result models a legacy unbalanced voucher predating the voucher
+ * balance guard, so it is written with the ledger integrity bypass.
+ */
+async function corruptLeg(text: string, values: unknown[]): Promise<void> {
+  await withFixtureTransaction(
+    async (client) => {
+      await client.query(text, values);
+    },
+    { legacyUnbalanced: true }
+  );
 }
 
 beforeAll(async () => {
@@ -160,7 +175,7 @@ describe("SP full reconciliation closeout", () => {
     expect(consistent.reportValue).toBeCloseTo(100, 2);
     expect(consistent.pass).toBe(true);
 
-    await pool.query(
+    await corruptLeg(
       `UPDATE voucher_entries SET debit_amount = '90'
        WHERE voucher_id = $1 AND ledger_account_id = $2`,
       [voucherId, cashAccountId]
@@ -190,7 +205,7 @@ describe("SP full reconciliation closeout", () => {
     expect(consistent.reportValue).toBeCloseTo(75, 2);
     expect(consistent.pass).toBe(true);
 
-    await pool.query(
+    await corruptLeg(
       `UPDATE voucher_entries SET debit_amount = '70'
        WHERE voucher_id = $1 AND supplier_id IS NULL`,
       [voucherId]
@@ -226,7 +241,7 @@ describe("SP full reconciliation closeout", () => {
     expect(consistent.reportValue).toBeCloseTo(200, 2);
     expect(consistent.pass).toBe(true);
 
-    await pool.query(
+    await corruptLeg(
       `UPDATE voucher_entries SET debit_amount = '150'
        WHERE voucher_id = $1 AND ledger_account_id = $2`,
       [voucherId, prepaidAccountId]

@@ -8,6 +8,7 @@ import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "w3integ";
@@ -17,20 +18,24 @@ let ctx: TestContext;
 let agent: request.SuperAgentTest;
 let assetId: number;
 
+// The voucher and its lines go in one transaction: the voucher balance guard
+// checks the voucher at COMMIT.
 async function voucher(type: string, number: string, lines: [number | null, string, string][], customerId?: number) {
-  const created = await pool.query<{ id: number }>(
-    `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
-     VALUES ($1, $2, $3, $4, 0) RETURNING id`,
-    [ctx.companyId, `${TEST_PREFIX}-${number}`, type, DATE]
-  );
-  for (const [accountId, debit, credit] of lines) {
-    await pool.query(
-      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, customer_id, debit_amount, credit_amount)
-       VALUES ($1, $2, $3, $4, $5)`,
-      [created.rows[0].id, accountId, customerId ?? null, debit, credit]
+  return withFixtureTransaction(async (client) => {
+    const created = await client.query<{ id: number }>(
+      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+       VALUES ($1, $2, $3, $4, 0) RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX}-${number}`, type, DATE]
     );
-  }
-  return created.rows[0].id;
+    for (const [accountId, debit, credit] of lines) {
+      await client.query(
+        `INSERT INTO voucher_entries (voucher_id, ledger_account_id, customer_id, debit_amount, credit_amount)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [created.rows[0].id, accountId, customerId ?? null, debit, credit]
+      );
+    }
+    return created.rows[0].id;
+  });
 }
 
 beforeAll(async () => {

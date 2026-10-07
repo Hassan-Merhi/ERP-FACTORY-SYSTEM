@@ -18,6 +18,10 @@ let companyB: number;
 let subsidiary: number;
 let accountA: number;
 let accountB: number;
+// Balancing legs: the voucher balance guard checks every voucher at COMMIT, so
+// a line this file expects to be accepted is written with its counter-line.
+let accountA2: number;
+let accountSub: number;
 let voucherA: number;
 let voucherSub: number;
 
@@ -71,6 +75,8 @@ beforeAll(async () => {
       ).rows[0].id;
     accountA = await account(companyA, "ACC-A");
     accountB = await account(companyB, "ACC-B");
+    accountA2 = await account(companyA, "ACC-A2");
+    accountSub = await account(subsidiary, "ACC-S");
     const voucher = async (companyId: number, number: string) =>
       (
         await q(
@@ -96,6 +102,10 @@ afterAll(async () => {
 
 const insertLine = `INSERT INTO voucher_entries (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount)
                     VALUES ($1, $2, $3, $4, $5)`;
+// A line and its balancing counter-line in one statement, for the cases that
+// must commit: the voucher balance guard refuses a one-sided voucher.
+const insertBalancedLines = `INSERT INTO voucher_entries (voucher_id, ledger_account_id, supplier_id, debit_amount, credit_amount)
+                    VALUES ($1, $2, $3, $4, $5), ($1, $6, NULL, $5, $4)`;
 
 describe("voucher_entries target guard", () => {
   it("refuses a line on another company's account", async () => {
@@ -141,14 +151,14 @@ describe("voucher_entries target guard", () => {
       parentSupplier = await supplier(companyA, "SUP-A");
       otherSupplier = await supplier(companyB, "SUP-B");
     });
-    expect(await attempt(insertLine, [voucherSub, null, parentSupplier, "0", "10"])).toBeNull();
-    expect(await attempt(insertLine, [voucherSub, null, otherSupplier, "0", "10"])).toMatch(
+    expect(await attempt(insertBalancedLines, [voucherSub, null, parentSupplier, "0", "10", accountSub])).toBeNull();
+    expect(await attempt(insertBalancedLines, [voucherSub, null, otherSupplier, "0", "10", accountSub])).toMatch(
       /SUPPLIER_COMPANY_MISMATCH/
     );
   });
 
   it("accepts a valid line and keeps it editable for narration", async () => {
-    expect(await attempt(insertLine, [voucherA, accountA, null, "10", "0"])).toBeNull();
+    expect(await attempt(insertBalancedLines, [voucherA, accountA, null, "10", "0", accountA2])).toBeNull();
     expect(
       await attempt(
         `UPDATE voucher_entries SET narration = 'edited' WHERE voucher_id = $1 AND ledger_account_id = $2`,
