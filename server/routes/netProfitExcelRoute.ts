@@ -29,6 +29,8 @@ import {
 } from "./netProfitExcelSheets";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
+import { PERPETUAL_STOCK_ACCOUNT_CODES } from "../netPositionHelper";
 
 export function registerNetProfitExcelRoute(app: Express) {
   app.get("/api/reports/net-profit-excel", requireAuth, async (req, res) => {
@@ -46,6 +48,10 @@ export function registerNetProfitExcelRoute(app: Express) {
       const startDate = req.query.startDate ? new Date(req.query.startDate as string) : null;
       const endDate = req.query.endDate ? new Date(req.query.endDate as string) : null;
       const periodLabel = (req.query.periodLabel as string) || "All Time";
+      // Perpetual inventory (wave 8.5): when the ledger carries the stock as of the
+      // period end, cost of sales is in the ledger (COGS) and the periodic opening
+      // and closing stock terms, and the computed stock in net position, drop out.
+      const ledgerStock = await ledgerCarriesStock(companyId, endDate ? endDate.toISOString().split("T")[0] : null);
 
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
 
@@ -227,7 +233,7 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       // Opening Stock
       const allStockItems = await storage.getAllStockItems(companyId);
-      const openingStockValue = sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
+      const openingStockValue = ledgerStock ? 0 : sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
 
       // Closing Stock (current inventory)
       const activeLocData = await db
@@ -246,6 +252,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         for (const inv of invData)
           closingStockExact = closingStockExact.plus(toMoney(inv.quantity).times(toMoney(inv.averageRate)));
       }
+      if (ledgerStock) closingStockExact = ZERO;
       const closingStockValue = closingStockExact.toNumber();
 
       // Net Position - same calculation as dashboard (/api/stats/net-profit)
@@ -329,6 +336,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         const nameLower = (acc.name || "").toLowerCase();
         const codeLower = (acc.code || "").toLowerCase();
         if (npAssetTypes.includes(acc.accountType || "")) {
+          if (ledgerStock && PERPETUAL_STOCK_ACCOUNT_CODES.has((acc.code || "").trim().toUpperCase())) return false;
           if (npStockPatterns.some((p: string) => nameLower.includes(p))) return true;
           if (
             npStockCodes.some(
@@ -418,7 +426,8 @@ export function registerNetProfitExcelRoute(app: Express) {
           .from(containers)
           .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")))
           .execute();
-        for (const c of xlsxOtwContainers) {
+        // From the cut-over, Goods in Transit in the ledger carries them.
+        for (const c of ledgerStock ? [] : xlsxOtwContainers) {
           npForUs = npForUs.plus(toMoney(c.grandTotal || c.itemsTotal));
         }
       }

@@ -6,7 +6,11 @@ import { pool } from "../../../db";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { classifyNetPositionAccounts, type AccountLike } from "../../../netPositionHelper";
+import {
+  classifyNetPositionAccounts,
+  PERPETUAL_STOCK_ACCOUNT_CODES,
+  type AccountLike,
+} from "../../../netPositionHelper";
 
 import {
   customerOrders,
@@ -27,6 +31,7 @@ import { computeNetPositionSupplierBalances } from "./netPositionSupplierBalance
 import { resultRows } from "../../../lib/queryResult";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { ledgerCarriesStock } from "../../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerEmployeeNetPositionRoutes(app: Express) {
   app.get("/api/factory/net-position", requireAuth, async (req: Request, res: Response) => {
@@ -152,7 +157,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         "FREIGHT",
       ]);
 
+      // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the
+      // factory's stock (raw material, work in progress, finished goods).
+      const ledgerStock = await ledgerCarriesStock(companyId, asOf);
       const classified = classifyNetPositionAccounts(factoryAccounts as AccountLike[], accBalances, {
+        ledgerStockAccounts: ledgerStock,
         additionalExcludedCodes: factoryExcludedCodes,
         // Supplier-type ledger accounts excluded: factory supplier balances are
         // calculated separately above from factorySuppliers / factoryContainers.
@@ -332,15 +341,28 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Only Stock In Hand switches valuation mode; Balance on Table stays on
       // its original all-time blended raw-material cost basis.
       const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
-      const { inventorySellValue, inventorySellingValue, rawMaterialStockValue, stockOtwValue, balanceOnTableValue } =
-        await computeNetPositionInventory({
-          companyId,
-          asOf,
-          getConfigFx,
-          configFxRates,
-          supplierLockedRateMapNp,
-          allContainersF,
-        });
+      const {
+        inventorySellValue: computedInventorySellValue,
+        inventorySellingValue,
+        rawMaterialStockValue: computedRawMaterialStockValue,
+        stockOtwValue,
+        balanceOnTableValue: computedBalanceOnTableValue,
+      } = await computeNetPositionInventory({
+        companyId,
+        asOf,
+        getConfigFx,
+        configFxRates,
+        supplierLockedRateMapNp,
+        allContainersF,
+      });
+
+      // From the cut-over the ledger's factory stock accounts replace the computed
+      // values (the selling-price view keeps its bale value, in place of the
+      // ledger's finished goods at cost).
+      const sellingView = valuationMode === "selling";
+      const inventorySellValue = ledgerStock ? 0 : computedInventorySellValue;
+      const rawMaterialStockValue = ledgerStock ? 0 : computedRawMaterialStockValue;
+      const balanceOnTableValue = ledgerStock ? 0 : computedBalanceOnTableValue;
 
       // ── 4. Pending, Verified & Loading orders (upcoming receivables) ──────────
       // Fetched here (before forUsTotal) so PENDING/VERIFIED totals can be
@@ -401,10 +423,17 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // reality because advance repayments/deductions aren't always posted back to it.
       // factory_worker_advances.remaining_balance (used by the Payroll & Benefits "Advances"
       // KPI) is the authoritative source; we recompute it fresh below instead.
+      const keepsLedgerStock = (a: { code?: string | null }) => {
+        const code = (a.code || "").trim().toUpperCase();
+        if (!ledgerStock || !PERPETUAL_STOCK_ACCOUNT_CODES.has(code)) return false;
+        return !(sellingView && code === "FACTORY_FINISHED_GOODS");
+      };
       const cleanLedgerForUs = ledgerForUs.filter(
         (a) =>
-          !inventoryCategoryRx.test(a.category) &&
-          !inventoryCategoryRx.test(a.name) &&
+          (keepsLedgerStock(a) ||
+            (!inventoryCategoryRx.test(a.category) &&
+              !inventoryCategoryRx.test(a.name) &&
+              !(ledgerStock && (a.code || "").trim().toUpperCase() === "FACTORY_FINISHED_GOODS"))) &&
           (a.name || "").toLowerCase().trim().replace(/\s+/g, " ") !== "factory worker advances" &&
           // Exclude per-worker insurance liability accounts (e.g. "Insurance - أحمد علي رمضان")
           // — these are tracked separately via the Insurance section, not Net Position assets
@@ -580,9 +609,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           selectedBalanceOnTableValue +
           stockOtwValue +
           totalCustomerDr +
-          pendingTotal +
-          verifiedTotal +
-          loadingTotal +
+          // At cost from the cut-over, the orders' bales are in the ledger's finished goods.
+          (ledgerStock && !sellingView ? 0 : pendingTotal + verifiedTotal + loadingTotal) +
           totalSupplierOverpaymentsRounded +
           prepaidRent +
           employeeReceivablesTotal +

@@ -120,6 +120,14 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     purpose: "Profit-and-loss side of stock production and consumption.",
   },
   {
+    code: "FACTORY_BALE_SALES_INCOME",
+    name: "Factory Bale Sales Income",
+    accountType: "Income",
+    required: false,
+    purpose:
+      "Factory bale sales: POS sales and invoices (wave 8.4). Older rows typed Revenue are reported, not changed.",
+  },
+  {
     code: "SALES-RETURNS",
     name: "Sales Returns & Allowances",
     accountType: "Income",

@@ -58,7 +58,22 @@ export interface ClassifyOptions {
    * Defaults to true.
    */
   includeSupplierTypeAccounts?: boolean;
+  /**
+   * Perpetual inventory (wave 8.5): the company's ledger carries its stock, so
+   * the system stock accounts count as assets and the caller adds no computed
+   * stock figure. Other stock-named accounts stay excluded.
+   */
+  ledgerStockAccounts?: boolean;
 }
+
+/** The stock accounts the perpetual-inventory postings keep (systemAccounts registry codes). */
+export const PERPETUAL_STOCK_ACCOUNT_CODES: ReadonlySet<string> = new Set([
+  "INVENTORY",
+  "GOODS_IN_TRANSIT",
+  "FACTORY_RAW_MATERIAL_STOCK",
+  "FACTORY_WIP",
+  "FACTORY_FINISHED_GOODS",
+]);
 
 export interface ClassifyResult {
   forUsTotal: number;
@@ -78,7 +93,8 @@ export interface ClassifyResult {
 
 const assetDefaultDrTypes = ["Asset", "Current Asset", "Bank", "Cash", "Customer"];
 const liabilityAccountTypes = ["Liability", "Duty Agent", "Transporter Agent", "Loan", "Loans"];
-const excludedAccountTypes = ["Income", "Profit", "Equity", "EQUITY", "Fixed Asset", "Intercompany"];
+// "Revenue" is how factory sales income accounts were typed; it is income, never a liability.
+const excludedAccountTypes = ["Income", "Revenue", "Profit", "Equity", "EQUITY", "Fixed Asset", "Intercompany"];
 export const expenseTypes = ["Expense", "Direct Expense", "Indirect Expense"];
 const assetAccountTypes = ["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash"];
 
@@ -196,7 +212,11 @@ export function classifyNetPositionAccounts(
   balanceMap: Map<number, AccountBalance>,
   options: ClassifyOptions = {}
 ): ClassifyResult {
-  const { additionalExcludedCodes = new Set<string>(), includeSupplierTypeAccounts = true } = options;
+  const {
+    additionalExcludedCodes = new Set<string>(),
+    includeSupplierTypeAccounts = true,
+    ledgerStockAccounts = false,
+  } = options;
 
   // Build the set of accounts excluded from expense tracking (IMPORT_CHARGES
   // children, PURCHASES, etc.) — the same set the ERP uses.
@@ -234,6 +254,7 @@ export function classifyNetPositionAccounts(
     const codeLower = (acc.code || "").toLowerCase();
 
     if (assetAccountTypes.includes(acc.accountType || "")) {
+      if (ledgerStockAccounts && PERPETUAL_STOCK_ACCOUNT_CODES.has((acc.code || "").trim().toUpperCase())) return false;
       if (stockInventoryPatterns.some((p) => nameLower.includes(p))) return true;
       if (stockInventoryCodes.some((c) => codeLower === c.toLowerCase() || codeLower.startsWith(c.toLowerCase() + "_")))
         return true;
@@ -256,7 +277,7 @@ export function classifyNetPositionAccounts(
   for (const acc of accounts) {
     // Skip expense and income types — not part of balance-sheet net position
     const isExpenseType = expenseTypes.includes(acc.accountType || "");
-    const isIncomeType = acc.accountType === "Income";
+    const isIncomeType = acc.accountType === "Income" || acc.accountType === "Revenue";
     if (isExpenseType || isIncomeType) continue;
 
     if (isExcludedFromNetPosition(acc)) continue;

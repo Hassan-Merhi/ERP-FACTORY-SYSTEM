@@ -349,7 +349,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               companyId,
               "FACTORY_BALE_SALES_INCOME",
               "Factory Bale Sales Income",
-              "Revenue"
+              "Income"
             );
             await tx.insert(voucherEntries).values({
               voucherId: vch.id,
@@ -659,7 +659,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               companyId,
               "FACTORY_BALE_SALES_INCOME",
               "Factory Bale Sales Income",
-              "Revenue"
+              "Income"
             );
             await tx.insert(voucherEntries).values({
               voucherId: vchId,

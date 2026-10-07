@@ -17,6 +17,7 @@ import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
+import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
 
 /**
  * The two grouped balance projections read below.
@@ -248,8 +249,11 @@ export async function calculateNetPositionAsOf(
           a.subType === "sp_hadi_intercompany"
       )
     : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing");
+  // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
+  const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
   const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
     includeSupplierTypeAccounts: shouldIncludeSuppliers,
+    ledgerStockAccounts: ledgerStock,
   });
   const equity = classifyEquityAccounts(companyAccounts, accountBalances);
 
@@ -291,7 +295,7 @@ export async function calculateNetPositionAsOf(
   const activeLocationIds = activeLocationsData.map((l) => l.id);
 
   let stockFloorTotal = 0;
-  if (activeLocationIds.length > 0) {
+  if (activeLocationIds.length > 0 && !ledgerStock) {
     const allHistorical = await Promise.all(
       activeLocationIds.map((locId) => calculateHistoricalLocationInventory(locId, companyId, toDate))
     );
@@ -332,11 +336,7 @@ export async function calculateNetPositionAsOf(
   // must not erase an accounting position. Keep ERP Employees and Workers
   // separated exactly like the live dashboard.
   const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-  const payrollPosition = computeEmployeeWorkerNetPosition(
-    companyEmployees,
-    employeeBalances,
-    managedSalaryAdvances
-  );
+  const payrollPosition = computeEmployeeWorkerNetPosition(companyEmployees, employeeBalances, managedSalaryAdvances);
   const employeePosition = payrollPosition.employees;
   const payrollWorkerIds = new Set(
     companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
@@ -415,7 +415,8 @@ export async function calculateNetPositionAsOf(
   // ── Stock OTW ─────────────────────────────────────────────────────────
   // SP companies track OTW via their sp_goods_otw ledger account ("Goods On The Way"),
   // so we skip the containers-based calculation to avoid double-counting.
-  if (!isSupplierPartner) {
+  // From the cut-over, Goods in Transit in the ledger carries the containers on the way.
+  if (!isSupplierPartner && !ledgerStock) {
     const otwContainers = await db
       .select({ grandTotal: containers.grandTotal, itemsTotal: containers.itemsTotal })
       .from(containers)

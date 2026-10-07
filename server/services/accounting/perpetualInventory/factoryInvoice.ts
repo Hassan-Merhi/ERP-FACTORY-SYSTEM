@@ -142,7 +142,7 @@ export async function syncFactoryInvoiceTx(
     companyId,
     "FACTORY_BALE_SALES_INCOME",
     "Factory Bale Sales Income",
-    "Revenue"
+    "Income"
   );
   const customerAccountId = await customerLedgerAccountTx(tx, companyId, order.customer_id);
   const number = factoryInvoiceVoucherNumber(companyId, orderId);

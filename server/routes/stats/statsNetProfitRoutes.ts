@@ -23,6 +23,7 @@ import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
+import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -109,8 +110,11 @@ export function registerStatsNetProfitRoutes(app: Express) {
               a.subType === "sp_payable"
           )
         : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing");
+      // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
+      const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
         includeSupplierTypeAccounts: shouldIncludeSuppliers,
+        ledgerStockAccounts: ledgerStock,
       });
       const equity = classifyEquityAccounts(companyAccounts, accountBalances);
       let forUsTotal = classified.forUsTotal;
@@ -283,7 +287,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // /api/factory/net-position — this endpoint is ERP-only.
       const factoryLedgerCodesToStrip = new Set(["FACTORY_RAW_MATERIAL_STOCK", "FACTORY_STOCK_IN_HAND"]);
       const factoryLedgerNamesToStrip = ["factory raw material stock", "factory stock in hand"];
-      {
+      if (!ledgerStock) {
         let i = forUsAccounts.length - 1;
         while (i >= 0) {
           const acc = forUsAccounts[i];
@@ -301,7 +305,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
 
       // ERP Stock In Hand - location inventory at weighted-average cost,
       // computed in ./netProfitStockSection.
-      const stockOnFloor = await computeStockInHand(companyId, toDate);
+      const stockOnFloor = ledgerStock ? 0 : await computeStockInHand(companyId, toDate);
       if (stockOnFloor > 0) {
         forUsTotal += stockOnFloor;
         categoryTotals["asset_Stock In Hand"] = stockOnFloor;
@@ -500,7 +504,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // SP (supplier_partner) companies track OTW via the sp_goods_otw ledger account instead
       // of the containers table, so skip the container-based calculation to avoid double-counting.
       const isSpCompany = companyRecord?.companyType === "supplier_partner";
-      if (!isSpCompany) {
+      // From the cut-over, Goods in Transit in the ledger carries the containers on the way.
+      if (!isSpCompany && !ledgerStock) {
         // Rule: a container was OTW as of toDate if it was imported by then AND either
         //   (a) it is still OTW (never formally offloaded via the offload workflow), OR
         //   (b) it was formally offloaded AFTER toDate (so it was still in transit as of toDate).

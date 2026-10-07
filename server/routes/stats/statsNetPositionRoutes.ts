@@ -18,6 +18,7 @@ import {
   type NetPositionAccount,
 } from "../../netPositionHelper";
 import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
+import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerStatsNetPositionRoutes(app: Express) {
   app.get("/api/stats/net-position-excel", requireAuth, requireNonPOS, async (req, res) => {
@@ -140,8 +141,11 @@ export function registerStatsNetPositionRoutes(app: Express) {
               a.subType !== "sp_cost_clearing" &&
               !(a.accountType === "Liability" && (a.name as string)?.startsWith("Insurance"))
           );
+      // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
+      const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
         includeSupplierTypeAccounts: shouldIncludeSuppliers,
+        ledgerStockAccounts: ledgerStock,
       });
       const equity = classifyEquityAccounts(companyAccounts, accountBalances);
       let forUsTotal = classified.forUsTotal;
@@ -184,7 +188,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         .execute();
       const activeLocIds = activeLocsData.map((l) => l.id);
       const stockLines: Array<{ quantity: string | null; averageRate: string | null }> = [];
-      if (activeLocIds.length > 0) {
+      if (activeLocIds.length > 0 && !ledgerStock) {
         if (toDate) {
           // Parallelize across locations — each location is independent
           const allHistorical = await Promise.all(
@@ -292,7 +296,8 @@ export function registerStatsNetPositionRoutes(app: Express) {
             )
           )
         : and(eq(containers.companyId, companyId), eq(containers.status, "OTW"));
-      const otwContainers = await db.select().from(containers).where(excelOtwQuery).execute();
+      // From the cut-over, Goods in Transit in the ledger carries the containers on the way.
+      const otwContainers = ledgerStock ? [] : await db.select().from(containers).where(excelOtwQuery).execute();
       const stockOtwValue = sumMoney(
         otwContainers.map((container) => {
           const gTotal = toMoney(container.grandTotal);

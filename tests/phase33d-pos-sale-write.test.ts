@@ -250,7 +250,8 @@ describe("Phase 33D factory POS sale writes", () => {
       7,
       "FACTORY_BALE_SALES_INCOME",
       "Factory Bale Sales Income",
-      "Revenue"
+      // Income, as the P&L readers and the registry expect (it was "Revenue").
+      "Income"
     );
   });
 
