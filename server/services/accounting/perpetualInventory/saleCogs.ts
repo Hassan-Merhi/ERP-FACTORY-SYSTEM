@@ -89,7 +89,7 @@ export async function postSaleCogsTx(
       voucherNumber: saleCogsVoucherNumber(params.saleVoucherId),
       voucherType: "Journal",
       voucherDate: params.voucherDate,
-      description: `Cost of goods sold - ${params.saleVoucherNumber}`,
+      description: ["Cost of goods sold", params.saleVoucherNumber].join(" - "),
       totalAmount: amount.toFixed(2),
       currency: "USD",
       exchangeRate: "1",
@@ -105,14 +105,14 @@ export async function postSaleCogsTx(
       ledgerAccountId: cogs.accountId,
       debitAmount: amount.toFixed(2),
       creditAmount: "0",
-      narration: `Cost of goods sold - ${params.saleVoucherNumber}`,
+      narration: ["Cost of goods sold", params.saleVoucherNumber].join(" - "),
     },
     {
       voucherId: id,
       ledgerAccountId: inventoryAccountId,
       debitAmount: "0",
       creditAmount: amount.toFixed(2),
-      narration: `Stock issued - ${params.saleVoucherNumber}`,
+      narration: ["Stock issued", params.saleVoucherNumber].join(" - "),
     },
   ]);
   return id;

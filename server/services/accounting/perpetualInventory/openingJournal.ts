@@ -232,7 +232,7 @@ export async function applyOpeningInventoryJournal(
           voucherNumber: `GL-INVENTORY-OPENING-${companyId}`,
           voucherType: "Journal",
           voucherDate: plan.journalDate,
-          description: `Opening inventory at the perpetual-inventory cut-over (${effectiveFrom})`,
+          description: ["Opening inventory at the perpetual-inventory cut-over", effectiveFrom].join(" "),
           totalAmount: plan.total,
           currency: "USD",
           exchangeRate: "1",
