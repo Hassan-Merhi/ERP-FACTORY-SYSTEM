@@ -34,7 +34,7 @@ export interface LinkedJournalLine {
 }
 
 /** Supplier-partner companies carry their stock in their own sp_stock accounts and are not posted. */
-export async function isSupplierPartnerCompany(tx: DbTransaction, companyId: number): Promise<boolean> {
+export async function isSupplierPartnerCompany(tx: DatabaseOrTransaction, companyId: number): Promise<boolean> {
   const result = await tx.execute<{ company_type: string | null } & Record<string, unknown>>(
     sql`SELECT company_type FROM companies WHERE id = ${companyId}`
   );

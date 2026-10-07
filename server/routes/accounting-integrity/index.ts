@@ -50,6 +50,7 @@ import {
 } from "../../services/accounting/perpetualInventory/openingJournal";
 import { syncFactoryStockJournalTx } from "../../services/accounting/perpetualInventory/factoryStockJournal";
 import { listUnpostedFactoryInvoices } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { reconcilePerpetualInventory } from "../../services/accounting/perpetualInventory/reconciliation";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -269,6 +270,22 @@ export function registerAccountingIntegrityRoutes(app: Express) {
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         const result = await db.transaction((tx) => syncFactoryStockJournalTx(tx, companyId));
         res.json(result);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Perpetual inventory (wave 8.5): ledger against stock sub-ledgers, account by account.
+  app.get(
+    "/api/accounting/perpetual-inventory/reconciliation",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        res.json(await reconcilePerpetualInventory(db, companyId));
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
       }
