@@ -152,6 +152,21 @@ describe("opening inventory journal", () => {
     ).rejects.toThrow(/on or after its date/);
   });
 
+  it("is refused while a document is posted on or after the cut-over date", async () => {
+    await expect(
+      asMaintenance(() =>
+        applyOpeningInventoryJournal(companyId, "2026-11-01", "test", { postingReady: true, today: "2026-11-01" })
+      )
+    ).rejects.toThrow(/already posted on or after the cut-over date/);
+    // J2 (dated 2026-11-05) goes; the cut-over can then be applied.
+    await asMaintenance(() =>
+      pool.query(`UPDATE vouchers SET deleted_at = now() WHERE company_id = $1 AND voucher_number = $2`, [
+        companyId,
+        `${PREFIX}-J2`,
+      ])
+    );
+  });
+
   it("posts a balanced journal once and turns the gate on from the cut-over date", async () => {
     const result = await asMaintenance(() =>
       applyOpeningInventoryJournal(companyId, "2026-11-01", "test", { postingReady: true, today: "2026-11-01" })

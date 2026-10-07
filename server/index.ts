@@ -37,6 +37,7 @@ import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
 import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { ensureLedgerIntegrityGuard } from "./services/accounting/ledgerIntegrityGuard";
 import { ensureInventoryCutoverSchema } from "./services/accounting/perpetualInventory/cutover";
+import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
@@ -261,6 +262,8 @@ let migrationsDone = false;
       await ensureClosedPeriodGuard(pool);
       await ensureLedgerIntegrityGuard(pool);
       await ensureInventoryCutoverSchema(pool);
+      // Needs gl_inventory_cutovers and the ledger guard's bypass function.
+      await ensureVoucherBalanceGuard(pool);
       await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });

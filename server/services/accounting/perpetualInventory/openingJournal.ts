@@ -22,7 +22,9 @@
  * The plan is read-only. Rows that carry no cost are listed, never valued at a
  * guess. Applying requires an Owner, PERPETUAL_INVENTORY_POSTING_READY, and a
  * cut-over date that is today or earlier (the factory figures are current
- * values; the ERP figure is computed as of the eve). It posts the journal and
+ * values; the ERP figure is computed as of the eve), with no document yet
+ * posted on or after that date (it would carry none of its perpetual-inventory
+ * postings). It posts the journal and
  * records the cut-over in one transaction, once per company.
  */
 import type Decimal from "decimal.js";
@@ -70,7 +72,8 @@ export interface OpeningInventoryPlan {
 
 export class OpeningJournalRefusal extends Error {
   constructor(
-    readonly code: "POSTING_NOT_READY" | "ALREADY_APPLIED" | "CUTOVER_IN_FUTURE" | "INVALID_DATE",
+    readonly code:
+      "POSTING_NOT_READY" | "ALREADY_APPLIED" | "CUTOVER_IN_FUTURE" | "DOCUMENTS_ON_OR_AFTER_CUTOVER" | "INVALID_DATE",
     message: string
   ) {
     super(message);
@@ -259,6 +262,19 @@ export async function applyOpeningInventoryJournal(
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('gl_inventory_cutover'), ${companyId})`);
     if (await getInventoryCutover(tx, companyId)) {
       throw new OpeningJournalRefusal("ALREADY_APPLIED", "The cut-over is already applied for this company");
+    }
+    // A document dated on or after the cut-over that was posted before it was
+    // applied carries none of its perpetual-inventory postings; the cut-over is
+    // applied before the first document of its date (or moved to a later date).
+    const posted = await tx.execute(sql`
+      SELECT 1 FROM vouchers WHERE company_id = ${companyId} AND voucher_date >= ${effectiveFrom}::date
+         AND deleted_at IS NULL LIMIT 1
+    `);
+    if (posted.rows.length > 0) {
+      throw new OpeningJournalRefusal(
+        "DOCUMENTS_ON_OR_AFTER_CUTOVER",
+        "Documents are already posted on or after the cut-over date; choose a later date"
+      );
     }
     let id: number | null = null;
     if (plan.lines.length > 0) {

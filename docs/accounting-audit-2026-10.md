@@ -165,7 +165,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
 ### Wave 7 — Atomic posting for remaining writers (HIGH) — partially complete
 
 - **Done:** PO creation (`createPurchaseOrder`) writes the PO, its voucher(s), lines and voucher link in one transaction with exact decimals (float totals could leave a PO voucher a cent out of balance); payroll `pay-worker` and `bulk-pay-workers` post voucher and lines in one transaction with exact cents (bulk vouchers could miss balance by a cent) and refuse workers of another company; ERP manual container create commits container, purchase voucher and both lines together; factory supplier FX transfer create/delete are transactional and an allocation failure rolls the transfer back instead of being swallowed.
-- **Not done (remaining risk):** PO line-item / charge edits outside one transaction; factory container create; factory payroll "mark PAID" posts no cash voucher and one payroll generator posts no accrual; advance delete leaves repayment vouchers; inter-company counterpart re-scaling outside the edit transaction; a database balance constraint (blocked until every writer posts in one transaction — ~70 writer files).
+- **Not done (remaining risk):** PO line-item / charge edits outside one transaction; factory container create; factory payroll "mark PAID" posts no cash voucher and one payroll generator posts no accrual; advance delete leaves repayment vouchers; inter-company counterpart re-scaling outside the edit transaction (converted in 8.5); a database balance constraint (installed in 8.5 for perpetual-inventory companies from their cut-over).
 
 ### Wave 6 — Factory foreign-currency base amounts (HIGH) — complete in code; legacy repair not yet applied
 
@@ -202,7 +202,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.4 complete)
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — built (8.0–8.5 complete; the switch is off until production is checked)
 
 - **Problem:** the GL is a cash and payables book.
   - Purchases are expensed, and sales post no COGS.
@@ -309,6 +309,38 @@ risk, modules, database and production impact, dependencies and acceptance crite
       - Sold bales keep the cost they were invoiced at when a cost cascade later revalues them.
       - The ERP bale mirror is never reduced on a factory sale.
     - Test: `perpetual-inventory-factory`.
-  - **8.5 Reports and the switch:** P&L and net position read the GL for a switched-on company; the deferred debit = credit constraint; `PERPETUAL_INVENTORY_POSTING_READY = true`.
+  - **8.5 Reports, reconciliation and the balance guard (complete; the switch stays off).** Owner decisions, 2026-10-07: convert the remaining voucher writers to one transaction each, then install the balance constraint; keep `PERPETUAL_INVENTORY_POSTING_READY = false` until production has been checked.
+    - **Reports read the ledger's stock** once a company's cut-over covers the report date (`reportBasis.ts`). A report dated before the cut-over keeps the computed figures. Reports changed:
+      - `/api/stats/net-profit` (and Group Net Position, which replays it)
+      - `calculateNetPositionAsOf` (monthly Excel, WhatsApp, the net-position scheduler)
+      - `/api/stats/net-position-excel`
+      - `/api/factory/net-position`
+      - the net-profit Excel
+    - **What each report now does after the cut-over:**
+      - The net-position classifier counts Inventory, Goods in Transit and the three factory stock accounts as assets (`ledgerStockAccounts`).
+      - The computed stock in hand and containers on the way are not added.
+      - The factory net position replaces its computed bale, raw-material and work-in-progress values with the ledger accounts. The selling-price view keeps its bale value in place of finished goods at cost. Pending, verified and loading orders are left out of the total at cost, since their bales are in finished goods.
+      - The net-profit Excel drops its periodic opening and closing stock terms, because cost of sales is in the ledger. A period spanning the cut-over should be run as two periods split at the cut-over.
+    - **Account type.** `FACTORY_BALE_SALES_INCOME` joins the registry as Income.
+      - It had been created as "Revenue", which every P&L reader ignored while net position counted its credit balance as a liability.
+      - New accounts are created as Income, and net position treats Revenue-typed accounts as income.
+      - Existing Revenue-typed rows are reported as `type_differs` by the integrity diagnostic, for an Owner to correct; they are not changed automatically.
+    - **Reconciliation.** `GET /api/accounting/perpetual-inventory/reconciliation` (read-only) compares the ledger with the sub-ledgers, account by account:
+      - Inventory with ERP stock in hand, without the bale mirror
+      - Goods in Transit with the purchase cost of POs not yet offloaded
+      - the factory accounts with the factory costing
+      - It also lists unposted factory invoices.
+    - **Voucher balance guard** (`voucherBalanceGuard.ts`, installed at boot): a deferred constraint trigger.
+      - At commit it refuses an active voucher dated on or after its company's cut-over whose debits and credits differ.
+      - It leaves alone earlier vouchers, companies without a cut-over and supplier-partner companies.
+      - Re-activating, re-dating or moving a voucher is checked too.
+      - A reviewed repair can bypass it with `app.ledger_integrity_bypass`.
+      - Before installing it, the 39 writers that wrote a voucher's lines in separate autocommit statements were converted to one transaction each: payroll, factory containers, PO import, SP migration tools, admin repairs, and intercompany counterpart rescaling.
+    - **Applying the cut-over** is now refused while any voucher is already dated on or after the cut-over date. Such a document would carry none of its perpetual-inventory postings, so the cut-over is applied before the first document of its date.
+    - **Before turning the switch on:**
+      - run the opening plan and the reconciliation against production
+      - correct the Revenue-typed `FACTORY_BALE_SALES_INCOME` rows
+      - review the remaining differences listed under 8.1–8.4
+    - Tests: `perpetual-inventory-reports`, `voucher-balance-guard`.
 - **Not in scope:** moving master-record opening balances into journals needs its own reviewed migration. Every reader adds `opening_balance` to its entries, so posting them as journals without zeroing the master records would double count.
 

@@ -143,6 +143,11 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "La bascule est déjà appliquée pour cette société",
   },
   {
+    en: "Documents are already posted on or after the cut-over date; choose a later date",
+    ar: "توجد مستندات مرحّلة في تاريخ التحويل أو بعده؛ اختر تاريخًا لاحقًا",
+    fr: "Des documents sont déjà comptabilisés à la date de bascule ou après ; choisissez une date ultérieure",
+  },
+  {
     en: "A perpetual-inventory journal does not balance",
     ar: "قيد المخزون الدائم غير متوازن",
     fr: "Une écriture d'inventaire permanent n'est pas équilibrée",

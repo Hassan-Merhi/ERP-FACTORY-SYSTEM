@@ -134,9 +134,12 @@ beforeAll(async () => {
         [orderId, baleId, `${PREFIX}-R${index}`, location]
       );
     }
-    // The charge voucher debits the customer's ledger once the invoice posts it; here it
-    // debits the customer directly, as charge vouchers do.
-    const chargeVoucher = await voucher(`CHARGE-INV-900001-1-1`, [[freightIncome, "0", "50", null]]);
+    // The charge's own CHARGE- voucher (Dr the customer side / Cr freight income).
+    const chargeDebit = await account(`${PREFIX}_CHARGE_DR`, "Asset");
+    const chargeVoucher = await voucher(`CHARGE-INV-900001-1-1`, [
+      [chargeDebit, "50", "0", null],
+      [freightIncome, "0", "50", null],
+    ]);
     await q(
       `INSERT INTO customer_order_charges (order_id, name, amount, charge_type, voucher_id) VALUES ($1, 'Freight', 50, 'FREIGHT', $2)`,
       [orderId, chargeVoucher]
