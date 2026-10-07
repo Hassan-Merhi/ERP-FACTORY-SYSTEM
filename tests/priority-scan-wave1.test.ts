@@ -380,6 +380,24 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     ).toBe(false);
   });
 
+  it("answers an unchanged poll without re-sending the history", async () => {
+    const url = "/api/factory/customer-orders/loading-list/priority-scan-route?view=today-history";
+    const full = await agent.get(url);
+    expect(full.status).toBe(200);
+    expect(full.body.signature).toMatch(/^\d{4}-\d{2}-\d{2}:\d+:\d+$/);
+    expect(Array.isArray(full.body.scans)).toBe(true);
+
+    const unchanged = await agent.get(`${url}&known=${encodeURIComponent(full.body.signature)}`);
+    expect(unchanged.status).toBe(200);
+    expect(unchanged.body).toMatchObject({ unchanged: true, signature: full.body.signature });
+    expect(unchanged.body.scans).toBeUndefined();
+    expect(unchanged.body.serverNow).toBeTruthy();
+
+    const stale = await agent.get(`${url}&known=${encodeURIComponent("1999-01-01:0:0")}`);
+    expect(stale.body.unchanged).toBeUndefined();
+    expect(stale.body.scans).toEqual(full.body.scans);
+  });
+
   it("marks an unmatched Priority Scan bale in Daily Scan using its production date", async () => {
     const history = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-route?view=today-history");
     expect(history.status).toBe(200);

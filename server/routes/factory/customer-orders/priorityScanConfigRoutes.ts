@@ -100,6 +100,21 @@ export function registerPriorityScanConfigRoutes(app: Express) {
       if (req.query.view === "today-history") {
         const companySettings = await storage.getCompanySettings(companyId);
         const businessDate = getCompanyBusinessDate(companySettings?.timezone);
+        // The scanner polls this every second. Most polls find nothing new, so
+        // a client that sends back the signature of the list it already has
+        // gets a few bytes instead of the whole day's history again.
+        const signatureResult = await db.execute(sql`
+          SELECT count(*)::int AS "count", coalesce(max(id), 0)::text AS "maxId"
+          FROM factory_priority_scan_history
+          WHERE company_id = ${companyId}
+            AND business_date = ${businessDate}
+        `);
+        const [signatureRow] = resultRows(signatureResult) as Array<{ count: number; maxId: string }>;
+        const signature = `${businessDate}:${signatureRow?.count ?? 0}:${signatureRow?.maxId ?? 0}`;
+        res.set("Cache-Control", "private, no-store");
+        if (req.query.known === signature) {
+          return res.json({ businessDate, serverNow: new Date().toISOString(), signature, unchanged: true });
+        }
         const historyResult = await db.execute(sql`
           SELECT id,
                  reference_number AS "referenceNumber",
@@ -115,10 +130,10 @@ export function registerPriorityScanConfigRoutes(app: Express) {
             AND business_date = ${businessDate}
           ORDER BY scanned_at DESC, id DESC
         `);
-        res.set("Cache-Control", "private, no-store");
         return res.json({
           businessDate,
           serverNow: new Date().toISOString(),
+          signature,
           scans: resultRows(historyResult),
         });
       }
