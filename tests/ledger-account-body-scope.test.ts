@@ -76,6 +76,21 @@ describe("routes refuse another company's ledger account from the body", () => {
     expect(await voucherCount()).toBe(before);
   });
 
+  it("payroll run payment refuses an account id that does not read the same way everywhere", async () => {
+    const responses = [
+      await agent
+        .patch(`/api/payroll/runs/${runId}`)
+        .send({ action: "pay", paymentAccountId: `${foreignAccountId}junk`, date: "2026-10-01" }),
+      await agent
+        .patch(`/api/payroll/runs/${runId}`)
+        .send({ action: "pay", paymentAccountId: `${ctx.cashAccountId}e0`, date: "2026-10-01" }),
+    ];
+    expect(responses.map((response) => [response.status, response.body.message])).toEqual([
+      [404, "Payment account not found"],
+      [404, "Payment account not found"],
+    ]);
+  });
+
   it("factory POS sale refuses a foreign cash account, expense account or location", async () => {
     const before = await voucherCount();
     const items = [{ productName: "Item", quantity: 1, unitPrice: "10" }];
@@ -94,15 +109,19 @@ describe("routes refuse another company's ledger account from the body", () => {
     expect(await voucherCount()).toBe(before);
   });
 
-  it("raw-stock offload refuses foreign freight, duty and commission accounts", async () => {
+  it("raw-stock offload refuses foreign freight, duty, commission and additional-charge accounts", async () => {
     const responses = [
       await agent.post("/api/factory/raw-stock/offload").send({ containerId: 1, freightAccountId: foreignAccountId }),
       await agent.post("/api/factory/raw-stock/offload").send({ containerId: 1, dutyAccountId: foreignAccountId }),
       await agent
         .post("/api/factory/raw-stock/offload")
         .send({ containerId: 1, commission: { ledgerAccountId: String(foreignAccountId) } }),
+      await agent
+        .post("/api/factory/raw-stock/offload")
+        .send({ containerId: 1, additionalCharges: [{ amount: "5", ledgerAccountId: String(foreignAccountId) }] }),
     ];
     expect(responses.map((response) => [response.status, response.body.message])).toEqual([
+      [400, "Account not found"],
       [400, "Account not found"],
       [400, "Account not found"],
       [400, "Account not found"],

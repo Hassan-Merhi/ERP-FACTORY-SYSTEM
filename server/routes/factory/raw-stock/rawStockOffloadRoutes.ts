@@ -73,6 +73,9 @@ export function registerRawStockOffloadRoutes(app: Express) {
         reqOtherChargesAccountId,
         reqDutyAccountId,
         commission?.ledgerAccountId,
+        ...(Array.isArray(reqAdditionalCharges) ? reqAdditionalCharges : []).map(
+          (charge: { ledgerAccountId?: unknown }) => charge?.ledgerAccountId
+        ),
       ];
       if (!(await allLedgerAccountsOwned(companyId, chargeAccountIds))) {
         return res.status(400).json({ message: "Account not found" });
