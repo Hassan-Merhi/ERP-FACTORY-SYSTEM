@@ -206,12 +206,26 @@ const INSTALL_LOCK_KEY = 741_220_263;
  */
 export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v1";
 
+// A schema push drops constraints it does not know about while the version
+// comment survives, so the constraints are checked as well as the version.
+export const LEDGER_GUARD_CONSTRAINTS: readonly string[] = [
+  "voucher_entries_ledger_account_id_fkey",
+  "voucher_entries_bank_account_id_fkey",
+  "voucher_entries_fixed_asset_id_fkey",
+  "voucher_entries_amounts_non_negative",
+  "voucher_entries_single_side",
+];
+
 async function installedVersion(client: { query: Pool["query"] }): Promise<string | null> {
   const result = await client.query<{ version: string | null }>(
     `SELECT obj_description('erp_voucher_entry_target_guard()'::regprocedure, 'pg_proc') AS version
       WHERE to_regprocedure('erp_voucher_entry_target_guard()') IS NOT NULL
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_target_guard' AND NOT tgisinternal)
-        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ledger_accounts_delete_guard' AND NOT tgisinternal)`
+        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ledger_accounts_delete_guard' AND NOT tgisinternal)
+        AND (SELECT COUNT(*) FROM pg_constraint
+              WHERE conrelid = 'voucher_entries'::regclass
+                AND conname = ANY($1::text[])) = cardinality($1::text[])`,
+    [LEDGER_GUARD_CONSTRAINTS]
   );
   return result.rows[0]?.version ?? null;
 }

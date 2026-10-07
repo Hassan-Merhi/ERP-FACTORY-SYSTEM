@@ -16,6 +16,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { CANONICAL_ACCOUNT_TYPES } from "../accountClassification";
+import { LEDGER_GUARD_CONSTRAINTS } from "../ledgerIntegrityGuard";
 import { SYSTEM_ACCOUNTS, diagnoseSystemAccounts } from "../systemAccounts";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
@@ -349,12 +350,20 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
      WHERE NOT tgisinternal
        AND tgname IN ('voucher_entries_target_guard', 'ledger_accounts_delete_guard',
                       'voucher_entries_closed_period_guard', 'vouchers_closed_period_guard')
+    UNION ALL
+    SELECT conname AS name FROM pg_constraint
+     WHERE conrelid = 'voucher_entries'::regclass
+       AND conname IN (${sql.join(
+         LEDGER_GUARD_CONSTRAINTS.map((name) => sql`${name}`),
+         sql`, `
+       )})
   `);
   const missingGuards = [
     "voucher_entries_target_guard",
     "ledger_accounts_delete_guard",
     "voucher_entries_closed_period_guard",
     "vouchers_closed_period_guard",
+    ...LEDGER_GUARD_CONSTRAINTS,
   ].filter((name) => !guards.some((guard) => guard.name === name));
   checks.push(
     check(
