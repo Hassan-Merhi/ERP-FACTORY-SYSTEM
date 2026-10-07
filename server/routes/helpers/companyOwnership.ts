@@ -8,15 +8,49 @@
  * backstop rather than the application's check.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { locations, stockItems } from "@shared/schema";
+import { ledgerAccounts, locations, stockItems } from "@shared/schema";
 import { db } from "../../db";
 
-/** Positive integer ids from untrusted input, de-duplicated; anything else is dropped. */
+/**
+ * A positive integer id written canonically (42 or "42"), else null. Routes
+ * later read ids with parseInt or Number, which disagree on input such as
+ * "42junk" or "1e2", so only the form both read the same way is accepted.
+ */
+function canonicalId(value: unknown): number | null {
+  if (typeof value === "number") return Number.isSafeInteger(value) && value > 0 ? value : null;
+  if (typeof value === "string" && /^[1-9]\d*$/.test(value)) {
+    const id = Number(value);
+    return Number.isSafeInteger(id) ? id : null;
+  }
+  return null;
+}
+
+/** An optional id the request left out: null, undefined, empty, or zero. */
+function isAbsentId(value: unknown): boolean {
+  return value == null || value === "" || value === 0 || value === "0";
+}
+
+/** Canonical positive integer ids from untrusted input, de-duplicated; anything else is dropped. */
 export function positiveIds(values: readonly unknown[]): number[] {
   const ids = new Set<number>();
   for (const value of values) {
-    const id = Number(value);
-    if (Number.isInteger(id) && id > 0) ids.add(id);
+    const id = canonicalId(value);
+    if (id !== null) ids.add(id);
+  }
+  return [...ids];
+}
+
+/**
+ * The supplied ids, de-duplicated, or null when any supplied value is not a
+ * canonical positive integer. Absent values (see isAbsentId) are skipped.
+ */
+export function strictIds(values: readonly unknown[]): number[] | null {
+  const ids = new Set<number>();
+  for (const value of values) {
+    if (isAbsentId(value)) continue;
+    const id = canonicalId(value);
+    if (id === null) return null;
+    ids.add(id);
   }
   return [...ids];
 }
@@ -65,9 +99,26 @@ export async function ownStockItemIds(companyId: number, stockItemIds: readonly 
   return new Set(rows.map((row) => row.id));
 }
 
-/** True when every positive id in `stockItemIds` is a stock item of `companyId`. */
+/** True when every supplied id in `stockItemIds` is a canonical id of a stock item of `companyId`. */
 export async function allStockItemsOwned(companyId: number, stockItemIds: readonly unknown[]): Promise<boolean> {
-  const ids = positiveIds(stockItemIds);
+  const ids = strictIds(stockItemIds);
+  if (ids === null) return false;
   const owned = await ownStockItemIds(companyId, ids);
+  return ids.every((id) => owned.has(id));
+}
+
+/** True when every supplied id in `ledgerAccountIds` is a canonical id of a ledger account of `companyId`. */
+export async function allLedgerAccountsOwned(
+  companyId: number,
+  ledgerAccountIds: readonly unknown[]
+): Promise<boolean> {
+  const ids = strictIds(ledgerAccountIds);
+  if (ids === null) return false;
+  if (ids.length === 0) return true;
+  const rows = await db
+    .select({ id: ledgerAccounts.id })
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, ids)));
+  const owned = new Set(rows.map((row) => row.id));
   return ids.every((id) => owned.has(id));
 }

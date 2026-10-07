@@ -26,6 +26,7 @@ import { registerRawStockReverseOffloadRoute } from "./rawStockReverseOffloadRou
 import { computeOffloadCosting } from "./offloadCosting";
 import { applySubsequentReceipt } from "./subsequentReceipt";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { allLedgerAccountsOwned } from "../../helpers/companyOwnership";
 
 /** A request amount as the number parseFloat read it (NaN when it does not parse). */
 function requestNumber(value: unknown): number {
@@ -66,6 +67,19 @@ export function registerRawStockOffloadRoutes(app: Express) {
         idempotencyKey,
       } = req.body;
       if (!containerId) return res.status(400).json({ message: "Container ID is required" });
+      // Charge and commission accounts are body ids the path-based company scope never sees.
+      const chargeAccountIds = [
+        reqFreightAccountId,
+        reqOtherChargesAccountId,
+        reqDutyAccountId,
+        commission?.ledgerAccountId,
+        ...(Array.isArray(reqAdditionalCharges) ? reqAdditionalCharges : []).map(
+          (charge: { ledgerAccountId?: unknown }) => charge?.ledgerAccountId
+        ),
+      ];
+      if (!(await allLedgerAccountsOwned(companyId, chargeAccountIds))) {
+        return res.status(400).json({ message: "Account not found" });
+      }
 
       // Validate receivedKg upfront — required for both first and subsequent receipts.
       // An explicit positive finite value is mandatory; the old `receivedKg || declaredKg`

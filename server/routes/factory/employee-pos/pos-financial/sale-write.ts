@@ -30,6 +30,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import { allLedgerAccountsOwned, isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
 function requestCents(value: unknown) {
@@ -87,6 +88,23 @@ function saleAmounts(body: {
   };
 }
 
+/**
+ * The sale's location, cash account and expense accounts are body ids the
+ * path-based company scope never sees: each must be the user's own.
+ */
+async function refusedSaleBodyId(
+  session: Request["session"],
+  companyId: number,
+  locationId: unknown,
+  cashAccountId: unknown,
+  expenseRows: readonly { accountId: number }[]
+): Promise<string | null> {
+  if (locationId && !(await isFactorySessionLocation(session, locationId))) return "Location not found";
+  const accountIds = [cashAccountId, ...expenseRows.map((row) => row.accountId)];
+  if (!(await allLedgerAccountsOwned(companyId, accountIds))) return "Account not found";
+  return null;
+}
+
 export function registerPosSaleWriteRoutes(app: Express) {
   // POST /api/factory/pos/sale — create a factory POS sale
   app.post("/api/factory/pos/sale", requireAuth, async (req: Request, res: Response) => {
@@ -124,6 +142,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
       const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
       if (!amounts) return res.status(400).json({ message: "Invalid amount" });
       const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
+      if (refused) return res.status(400).json({ message: refused });
 
       // Generate sale number
       const [seqRow] = await db
@@ -400,6 +420,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
       const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
       if (!amounts) return res.status(400).json({ message: "Invalid amount" });
       const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
+      if (refused) return res.status(400).json({ message: refused });
 
       const result = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
         // Step 1: Restore bales for old items
