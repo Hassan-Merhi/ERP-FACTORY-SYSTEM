@@ -25,7 +25,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
-import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
@@ -78,8 +78,7 @@ export async function writeDaybookEntry(
     );
   }
   const fxRate = opts.fxRateToUsd || 1;
-  const amtUsd =
-    opts.amountUsd !== undefined ? opts.amountUsd : currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
   const [inserted] = await dbOrTx
     .insert(factoryDaybookEntries)
     .values({
@@ -94,7 +93,7 @@ export async function writeDaybookEntry(
       currencyCode: currency,
       amountCurrency: String(amtCurrency),
       fxRateToUsd: String(fxRate),
-      amountUsd: String(amtUsd),
+      amountUsd: amtUsd,
       createdBy: opts.createdBy || null,
       effectiveDate: opts.effectiveDate || null,
     })

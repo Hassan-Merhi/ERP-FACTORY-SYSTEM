@@ -10,6 +10,7 @@ import { logger } from "../../../lib/logger";
 import {
   addInventoryValues,
   divideInventoryValues,
+  toInventoryDecimal,
   inventoryMoney,
   inventoryQuantity,
   inventoryUnitCost,
@@ -26,6 +27,11 @@ import {
   locations,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+
+/** A stored inventory numeric as a plain number for the preview; missing is 0. */
+function previewNumber(value: string | null | undefined): number {
+  return toInventoryDecimal(value).toNumber() || 0;
+}
 
 export function registerStockItemMergeRoutes(app: Express) {
   app.get("/api/stock-items/:id/merge-preview", requireAuth, requireNonPOS, async (req: Request, res: Response) => {
@@ -85,27 +91,21 @@ export function registerStockItemMergeRoutes(app: Express) {
       for (const locId of Array.from(dupMap.keys())) {
         const dupRow = dupMap.get(locId)!;
         const keptRow = keptMap.get(locId);
-        const dupQty = parseFloat(dupRow.quantity);
-        const dupValue = parseFloat(dupRow.totalValue);
-        const dupRate = parseFloat(dupRow.averageRate);
-        const keptQty = keptRow ? parseFloat(keptRow.quantity) : 0;
-        const keptValue = keptRow ? parseFloat(keptRow.totalValue) : 0;
-        const keptRate = keptRow ? parseFloat(keptRow.averageRate) : 0;
-        const combinedQty = keptQty + dupQty;
-        const combinedValue = keptValue + dupValue;
-        const combinedRate = combinedQty > 0 ? combinedValue / combinedQty : 0;
+        // The preview adds exactly, as the merge itself does below.
+        const combinedQty = addInventoryValues(keptRow?.quantity, dupRow.quantity);
+        const combinedValue = addInventoryValues(keptRow?.totalValue, dupRow.totalValue);
         impactLocations.push({
           locationId: locId,
           locationName: locationNameMap.get(locId) ?? `Location ${locId}`,
-          keptQty,
-          keptValue,
-          keptRate,
-          dupQty,
-          dupValue,
-          dupRate,
-          combinedQty,
-          combinedValue,
-          combinedRate,
+          keptQty: previewNumber(keptRow?.quantity),
+          keptValue: previewNumber(keptRow?.totalValue),
+          keptRate: previewNumber(keptRow?.averageRate),
+          dupQty: previewNumber(dupRow.quantity),
+          dupValue: previewNumber(dupRow.totalValue),
+          dupRate: previewNumber(dupRow.averageRate),
+          combinedQty: combinedQty.toNumber(),
+          combinedValue: combinedValue.toNumber(),
+          combinedRate: combinedQty.greaterThan(0) ? combinedValue.dividedBy(combinedQty).toNumber() : 0,
           action: keptRow ? "combine" : "reassign",
         });
       }
@@ -115,22 +115,22 @@ export function registerStockItemMergeRoutes(app: Express) {
           impactLocations.push({
             locationId: locId,
             locationName: locationNameMap.get(locId) ?? `Location ${locId}`,
-            keptQty: parseFloat(r.quantity),
-            keptValue: parseFloat(r.totalValue),
-            keptRate: parseFloat(r.averageRate),
+            keptQty: previewNumber(r.quantity),
+            keptValue: previewNumber(r.totalValue),
+            keptRate: previewNumber(r.averageRate),
             dupQty: 0,
             dupValue: 0,
             dupRate: 0,
-            combinedQty: parseFloat(r.quantity),
-            combinedValue: parseFloat(r.totalValue),
-            combinedRate: parseFloat(r.averageRate),
+            combinedQty: previewNumber(r.quantity),
+            combinedValue: previewNumber(r.totalValue),
+            combinedRate: previewNumber(r.averageRate),
             action: "no_change",
           });
         }
       }
 
-      const totalValueBefore = [...keptInv, ...dupInv].reduce((s, r) => s + parseFloat(r.totalValue), 0);
-      const totalValueAfter = impactLocations.reduce((s, l) => s + l.combinedValue, 0);
+      const totalValueBefore = addInventoryValues(...[...keptInv, ...dupInv].map((row) => row.totalValue)).toNumber();
+      const totalValueAfter = addInventoryValues(...impactLocations.map((l) => l.combinedValue)).toNumber();
 
       const keptAliases = await db
         .select()

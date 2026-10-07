@@ -8,6 +8,7 @@ import type { Database } from "../../db";
 import type { Express, Request, Response, RequestHandler } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { MoneyDecimal, sumMoney, toMoney, type MoneyInput } from "../../lib/money";
 import { eq, and, sql } from "drizzle-orm";
 
 import {
@@ -19,6 +20,8 @@ import {
   containerFreight,
   customerOrderBales,
 } from "@shared/schema";
+
+const cents = (value: MoneyInput): number => toMoney(value).toDecimalPlaces(2).toNumber();
 
 export function registerFactoryProfitabilityRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   app.get("/api/factory/profitability/bales", requireAuth, async (req: Request, res: Response) => {
@@ -32,8 +35,8 @@ export function registerFactoryProfitabilityRoutes(app: Express, requireAuth: Re
 
       const [settings] = await db.select().from(factorySettings).where(eq(factorySettings.companyId, companyId));
 
-      const laborCostPerKg = parseFloat(settings?.laborCostPerKg || "0");
-      const overheadPerKg = parseFloat(settings?.overheadPerKg || "0");
+      const laborCostPerKg = toMoney(settings?.laborCostPerKg);
+      const overheadPerKg = toMoney(settings?.overheadPerKg);
 
       const bales = await db
         .select()
@@ -77,30 +80,31 @@ export function registerFactoryProfitabilityRoutes(app: Express, requireAuth: Re
       const _freightEntries = await db.select().from(containerFreight).where(eq(containerFreight.companyId, companyId));
 
       const result = bales.map((bale) => {
-        const weightKg = parseFloat(bale.weightKg || "0");
-        const materialCost = parseFloat(bale.totalCost || "0");
-        const laborCost = weightKg * laborCostPerKg;
-        const overheadCost = weightKg * overheadPerKg;
+        const weight = toMoney(bale.weightKg);
+        const weightKg = weight.toNumber();
+        const materialCost = toMoney(bale.totalCost);
+        const laborCost = weight.times(laborCostPerKg);
+        const overheadCost = weight.times(overheadPerKg);
 
-        const freightAllocated = 0;
-        const totalCost = materialCost + laborCost + overheadCost + freightAllocated;
+        const freightAllocated = new MoneyDecimal(0);
+        const totalCost = sumMoney([materialCost, laborCost, overheadCost, freightAllocated]);
 
         const ob = orderBaleMap.get(bale.id);
-        const salePrice = ob ? parseFloat(ob.priceUsed || "0") : null;
-        const profit = salePrice !== null ? salePrice - totalCost : null;
+        const salePrice = ob ? toMoney(ob.priceUsed).toNumber() : null;
+        const profit = ob ? toMoney(ob.priceUsed).minus(totalCost) : null;
 
         return {
           baleId: bale.id,
           referenceNumber: bale.referenceNumber,
           productName: bale.productName,
           weightKg,
-          materialCost: Math.round(materialCost * 100) / 100,
-          laborCost: Math.round(laborCost * 100) / 100,
-          overheadCost: Math.round(overheadCost * 100) / 100,
-          freightAllocated: Math.round(freightAllocated * 100) / 100,
-          totalCost: Math.round(totalCost * 100) / 100,
+          materialCost: cents(materialCost),
+          laborCost: cents(laborCost),
+          overheadCost: cents(overheadCost),
+          freightAllocated: cents(freightAllocated),
+          totalCost: cents(totalCost),
           salePrice,
-          profit: profit !== null ? Math.round(profit * 100) / 100 : null,
+          profit: profit !== null ? cents(profit) : null,
         };
       });
 
@@ -169,8 +173,8 @@ export function registerFactoryProfitabilityRoutes(app: Express, requireAuth: Re
 
       const [settings] = await db.select().from(factorySettings).where(eq(factorySettings.companyId, companyId));
 
-      const laborCostPerKg = parseFloat(settings?.laborCostPerKg || "0");
-      const overheadPerKg = parseFloat(settings?.overheadPerKg || "0");
+      const laborCostPerKg = toMoney(settings?.laborCostPerKg);
+      const overheadPerKg = toMoney(settings?.overheadPerKg);
 
       const mixSources = await db
         .select()
@@ -184,41 +188,34 @@ export function registerFactoryProfitabilityRoutes(app: Express, requireAuth: Re
 
       const result = containers.map((container) => {
         const containerRawStock = rawStockEntries.filter((r) => r.containerId === container.id);
-        const rawStockCost = containerRawStock.reduce(
-          (s: number, r) => s + parseFloat(r.receivedKg || "0") * parseFloat(r.costPerKg || "0"),
-          0
-        );
+        const rawStockCost = sumMoney(containerRawStock.map((r) => toMoney(r.receivedKg).times(toMoney(r.costPerKg))));
 
-        const containerFreightTotal = freightEntries
-          .filter((f) => f.containerId === container.id)
-          .reduce((s: number, f) => s + parseFloat(f.freightAmount || "0"), 0);
+        const containerFreightTotal = sumMoney(
+          freightEntries.filter((f) => f.containerId === container.id).map((f) => f.freightAmount)
+        );
 
         const containerMixSources = mixSources.filter((s) => s.containerId === container.id);
         const mixBatchIds = Array.from(new Set(containerMixSources.map((s) => s.mixBatchId)));
 
         const containerBales = allBales.filter((b) => b.mixBatchId !== null && mixBatchIds.includes(b.mixBatchId));
-        const baleTotalKg = containerBales.reduce((s: number, b) => s + parseFloat(b.weightKg || "0"), 0);
-        const baleLaborCost = baleTotalKg * laborCostPerKg;
-        const baleOverheadCost = baleTotalKg * overheadPerKg;
+        const baleTotalKg = sumMoney(containerBales.map((b) => b.weightKg));
+        const baleLaborCost = baleTotalKg.times(laborCostPerKg);
+        const baleOverheadCost = baleTotalKg.times(overheadPerKg);
 
-        const totalCost = rawStockCost + containerFreightTotal + baleLaborCost + baleOverheadCost;
+        const totalCost = sumMoney([rawStockCost, containerFreightTotal, baleLaborCost, baleOverheadCost]);
 
-        let totalRevenue = 0;
-        for (const bale of containerBales) {
-          const ob = orderBaleMap.get(bale.id);
-          if (ob) totalRevenue += parseFloat(ob.priceUsed || "0");
-        }
+        const totalRevenue = sumMoney(containerBales.map((bale) => orderBaleMap.get(bale.id)?.priceUsed));
 
-        const profit = totalRevenue - totalCost;
-        const marginPct = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+        const profit = totalRevenue.minus(totalCost);
+        const marginPct = totalRevenue.gt(0) ? profit.div(totalRevenue).times(100) : new MoneyDecimal(0);
 
         return {
           containerId: container.id,
           containerNumber: container.containerNumber,
-          totalCost: Math.round(totalCost * 100) / 100,
-          totalRevenue: Math.round(totalRevenue * 100) / 100,
-          profit: Math.round(profit * 100) / 100,
-          marginPct: Math.round(marginPct * 100) / 100,
+          totalCost: cents(totalCost),
+          totalRevenue: cents(totalRevenue),
+          profit: cents(profit),
+          marginPct: cents(marginPct),
         };
       });
 

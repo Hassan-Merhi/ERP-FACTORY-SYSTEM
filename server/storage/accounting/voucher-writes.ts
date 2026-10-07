@@ -1,7 +1,9 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { adjustInventory } from "../../inventoryHelper";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import type { VoucherEntry, InsertVoucherEntry } from "@shared/schema";
@@ -39,8 +41,8 @@ export async function deleteVoucher(id: number): Promise<void> {
       const salesItemsList = await tx.select().from(schema.salesItems).where(eq(schema.salesItems.voucherId, id));
 
       for (const saleItem of salesItemsList) {
-        const quantity = parseFloat(saleItem.quantity);
-        const costPrice = parseFloat(saleItem.costPrice);
+        const quantity = Number(saleItem.quantity);
+        const costPrice = Number(saleItem.costPrice);
         await adjustInventory(
           tx,
           voucher.locationId,
@@ -90,8 +92,8 @@ export async function deleteVoucher(id: number): Promise<void> {
         const destinationLocationId = transferVoucher.destinationLocationId;
 
         for (const item of transferItems) {
-          const quantity = parseFloat(item.quantity);
-          const rate = parseFloat(item.rate);
+          const quantity = Number(item.quantity);
+          const rate = Number(item.rate);
 
           if (!sourceLocationId)
             throw new Error(`Cannot reverse stock transfer: source location ID is missing for transfer voucher ${id}`);
@@ -167,9 +169,9 @@ export async function deleteVoucher(id: number): Promise<void> {
         const adjustmentType = adjustmentVoucher.adjustmentType;
 
         for (const item of adjustmentItems) {
-          const rawQuantity = parseFloat(item.quantity);
+          const rawQuantity = Number(item.quantity);
           const quantity = Math.abs(rawQuantity);
-          const rate = parseFloat(item.rate);
+          const rate = Number(item.rate);
 
           const isConsumption = adjustmentType === "Consumption" || (adjustmentType === "Mixed" && rawQuantity < 0);
           const reversedQuantity = isConsumption ? quantity : -quantity;
@@ -218,17 +220,17 @@ export async function deleteVoucher(id: number): Promise<void> {
     const linkedPOs = await tx.select().from(schema.purchaseOrders).where(eq(schema.purchaseOrders.voucherId, id));
 
     if (linkedPOs.length > 0) {
-      const containerUpdates = new Map<number, { itemsTotal: number; containerNumber: string }>();
+      const containerUpdates = new Map<number, { itemsTotal: Decimal; containerNumber: string }>();
       for (const po of linkedPOs) {
-        const itemsTotal = parseFloat(po.itemsTotal || "0");
+        const itemsTotal = toMoney(po.itemsTotal);
         const container = await tx
           .select()
           .from(schema.containers)
           .where(eq(schema.containers.id, po.containerId))
           .limit(1);
         const containerNumber = container.length > 0 ? container[0].containerNumber : "";
-        const existing = containerUpdates.get(po.containerId) || { itemsTotal: 0, containerNumber };
-        containerUpdates.set(po.containerId, { itemsTotal: existing.itemsTotal + itemsTotal, containerNumber });
+        const existing = containerUpdates.get(po.containerId) || { itemsTotal: new MoneyDecimal(0), containerNumber };
+        containerUpdates.set(po.containerId, { itemsTotal: existing.itemsTotal.plus(itemsTotal), containerNumber });
         await tx.delete(schema.poLineItems).where(eq(schema.poLineItems.poId, po.id));
       }
 
@@ -241,17 +243,25 @@ export async function deleteVoucher(id: number): Promise<void> {
           .where(eq(schema.containers.id, containerId))
           .limit(1);
         if (container) {
+          const prefix = `CHARGE-${container.containerNumber}-`;
           const chargeVouchers = await tx
             .select({ id: schema.vouchers.id })
             .from(schema.vouchers)
-            .where(sql`${schema.vouchers.voucherNumber} LIKE ${"CHARGE-" + container.containerNumber + "-%"}`);
+            .where(
+              and(
+                eq(schema.vouchers.companyId, container.companyId),
+                // Prefix match without LIKE so a "_" or "%" in the container
+                // number cannot widen it to other containers' charge vouchers.
+                sql`left(${schema.vouchers.voucherNumber}, ${prefix.length}) = ${prefix}`
+              )
+            );
           for (const chargeVoucher of chargeVouchers) {
             await tx.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, chargeVoucher.id));
             await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, chargeVoucher.id));
           }
-          const newItemsTotal = Math.max(0, parseFloat(container.itemsTotal || "0") - totals.itemsTotal);
-          const newChargesTotal = 0;
-          const newGrandTotal = newItemsTotal + newChargesTotal;
+          const newItemsTotal = MoneyDecimal.max(0, toMoney(container.itemsTotal).minus(totals.itemsTotal));
+          const newChargesTotal = new MoneyDecimal(0);
+          const newGrandTotal = newItemsTotal.plus(newChargesTotal);
           const remainingPOs = await tx
             .select()
             .from(schema.purchaseOrders)
@@ -264,9 +274,9 @@ export async function deleteVoucher(id: number): Promise<void> {
             await tx
               .update(schema.containers)
               .set({
-                itemsTotal: newItemsTotal.toString(),
-                chargesTotal: newChargesTotal.toString(),
-                grandTotal: newGrandTotal.toString(),
+                itemsTotal: newItemsTotal.toFixed(2),
+                chargesTotal: newChargesTotal.toFixed(2),
+                grandTotal: newGrandTotal.toFixed(2),
               })
               .where(eq(schema.containers.id, containerId));
           }

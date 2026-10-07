@@ -17,6 +17,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerOrderChargesRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/charges", requireAuth, async (req: Request, res: Response) => {
@@ -56,12 +57,13 @@ export function registerOrderChargesRoutes(app: Express) {
         .where(eq(customerOrderCharges.orderId, orderId));
 
       const resolvedLedgerAccountId = newCharge?.ledgerAccountId;
-      const chargeAmt = parseFloat(String(amount) || "0");
+      // Read as parseFloat read it; one that does not parse posts no voucher.
+      const chargeAmt = parseMoneyInput(String(amount)) ?? toMoney(0);
 
       // Sync customerBalances ledger entry if the order is already finalized
       let chargeWarning: string | undefined;
       if (updatedOrder.status === "FINALIZED") {
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [existingLedgerEntry] = await db
           .select({ id: customerBalances.id })
           .from(customerBalances)
@@ -75,14 +77,14 @@ export function registerOrderChargesRoutes(app: Express) {
         if (existingLedgerEntry) {
           await db
             .update(customerBalances)
-            .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+            .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
 
         // Create charge voucher (FINALIZED path)
         // Gate: charge must have a ledger account linked + charge amount > 0
         // invoiceNumber is optional — fall back to ORD-{id} so old orders aren't silently skipped
-        if (newCharge && resolvedLedgerAccountId && chargeAmt > 0) {
+        if (newCharge && resolvedLedgerAccountId && chargeAmt.greaterThan(0)) {
           const [customer] = await db
             .select({ ledgerAccountId: customers.ledgerAccountId, legalName: customers.legalName })
             .from(customers)
@@ -117,7 +119,7 @@ export function registerOrderChargesRoutes(app: Express) {
                 voucherNumber: chargeVoucherNumber,
                 voucherDate: updatedOrder.orderDate || getClientDate(req),
                 description: chargeDesc,
-                totalAmount: String(chargeAmt),
+                totalAmount: moneyString(chargeAmt),
                 sourceModule: "FACTORY",
               })
               .returning();
@@ -125,7 +127,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: customerLedgerAccountId,
               customerId: order.customerId,
-              debitAmount: String(chargeAmt),
+              debitAmount: moneyString(chargeAmt),
               creditAmount: "0",
               narration: chargeDesc,
             });
@@ -133,7 +135,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: resolvedLedgerAccountId,
               debitAmount: "0",
-              creditAmount: String(chargeAmt),
+              creditAmount: moneyString(chargeAmt),
               narration: chargeDesc,
             });
             await tx
@@ -141,14 +143,14 @@ export function registerOrderChargesRoutes(app: Express) {
               .set({ voucherId: chargeVoucher.id })
               .where(eq(customerOrderCharges.id, newCharge.id));
           });
-        } else if (newCharge && !resolvedLedgerAccountId && chargeAmt > 0) {
+        } else if (newCharge && !resolvedLedgerAccountId && chargeAmt.greaterThan(0)) {
           chargeWarning = "Charge saved but no ledger entry was created — no ledger account was linked to this charge.";
         }
       }
 
       // Sync daybook INVOICE row with new grand total (FINALIZED path)
       if (updatedOrder.status === "FINALIZED") {
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [daybookEntry] = await db
           .select({ id: factoryDaybookEntries.id })
           .from(factoryDaybookEntries)
@@ -162,14 +164,14 @@ export function registerOrderChargesRoutes(app: Express) {
         if (daybookEntry) {
           await db
             .update(factoryDaybookEntries)
-            .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
+            .set({ amountCurrency: newGrandTotal, amountUsd: newGrandTotal })
             .where(eq(factoryDaybookEntries.id, daybookEntry.id));
         }
       }
 
       // Sync daybook ORDER_VERIFIED row with new grand total (VERIFIED path)
       if (updatedOrder.status === "VERIFIED") {
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [verifiedDaybookEntry] = await db
           .select({ id: factoryDaybookEntries.id })
           .from(factoryDaybookEntries)
@@ -183,7 +185,7 @@ export function registerOrderChargesRoutes(app: Express) {
         if (verifiedDaybookEntry) {
           await db
             .update(factoryDaybookEntries)
-            .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
+            .set({ amountCurrency: newGrandTotal, amountUsd: newGrandTotal })
             .where(eq(factoryDaybookEntries.id, verifiedDaybookEntry.id));
         }
       }
@@ -195,7 +197,7 @@ export function registerOrderChargesRoutes(app: Express) {
         ["PENDING_VERIFICATION", "VERIFIED"].includes(updatedOrder.status) &&
         newCharge &&
         resolvedLedgerAccountId &&
-        chargeAmt > 0
+        chargeAmt.greaterThan(0)
       ) {
         const [customer] = await db
           .select({ ledgerAccountId: customers.ledgerAccountId })
@@ -217,7 +219,7 @@ export function registerOrderChargesRoutes(app: Express) {
                 voucherNumber: preVoucherNumber,
                 voucherDate: order.orderDate || getClientDate(req),
                 description: chargeDesc,
-                totalAmount: String(chargeAmt),
+                totalAmount: moneyString(chargeAmt),
                 sourceModule: "FACTORY",
               })
               .returning();
@@ -225,7 +227,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: customer.ledgerAccountId,
               customerId: order.customerId,
-              debitAmount: String(chargeAmt),
+              debitAmount: moneyString(chargeAmt),
               creditAmount: "0",
               narration: chargeDesc,
             });
@@ -233,7 +235,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: resolvedLedgerAccountId,
               debitAmount: "0",
-              creditAmount: String(chargeAmt),
+              creditAmount: moneyString(chargeAmt),
               narration: chargeDesc,
             });
             await tx
@@ -297,7 +299,7 @@ export function registerOrderChargesRoutes(app: Express) {
           .from(customerOrderCharges)
           .where(and(eq(customerOrderCharges.orderId, orderId), isNull(customerOrderCharges.voucherId)));
 
-        const actionableCharges = unlinkedCharges.filter((c) => parseFloat(c.amount || "0") > 0);
+        const actionableCharges = unlinkedCharges.filter((c) => toMoney(c.amount).greaterThan(0));
         if (actionableCharges.length === 0) {
           return res.json({ linked: 0, message: "All charges already have ledger entries — nothing to relink." });
         }
@@ -345,7 +347,7 @@ export function registerOrderChargesRoutes(app: Express) {
         let linked = 0;
 
         for (const charge of resolvedCharges) {
-          const chargeAmt = parseFloat(charge.amount || "0");
+          const chargeAmt = toMoney(charge.amount);
           const chargeVoucherNumber = `CHARGE-${voucherRef}-${charge.id}-${Date.now()}`;
           const chargeDesc = order.containerNumber
             ? `${charge.name} for offloaded container - ${order.containerNumber}`
@@ -360,7 +362,7 @@ export function registerOrderChargesRoutes(app: Express) {
                 voucherNumber: chargeVoucherNumber,
                 voucherDate: order.orderDate || getClientDate(req),
                 description: chargeDesc,
-                totalAmount: String(chargeAmt),
+                totalAmount: moneyString(chargeAmt),
                 sourceModule: "FACTORY",
               })
               .returning();
@@ -368,7 +370,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: customerLedgerAccountId,
               customerId: order.customerId,
-              debitAmount: String(chargeAmt),
+              debitAmount: moneyString(chargeAmt),
               creditAmount: "0",
               narration: chargeDesc,
             });
@@ -376,7 +378,7 @@ export function registerOrderChargesRoutes(app: Express) {
               voucherId: chargeVoucher.id,
               ledgerAccountId: charge.resolvedLedgerAccountId,
               debitAmount: "0",
-              creditAmount: String(chargeAmt),
+              creditAmount: moneyString(chargeAmt),
               narration: chargeDesc,
             });
             await tx
@@ -422,7 +424,11 @@ export function registerOrderChargesRoutes(app: Express) {
       const updateData: Record<string, unknown> = {};
       if (ledgerAccountId !== undefined)
         updateData.ledgerAccountId = ledgerAccountId ? parseInt(ledgerAccountId) : null;
-      if (amount !== undefined) updateData.amount = parseFloat(amount).toFixed(2);
+      // The charge and its voucher get the same cents: the float toFixed(2)
+      // stored 1.005 as 1.00 while the voucher's numeric(…, 2) kept 1.01.
+      const newAmountCents = amount !== undefined ? parseMoneyInput(amount) : null;
+      if (amount !== undefined && !newAmountCents) return res.status(400).json({ message: "Invalid amount" });
+      if (newAmountCents) updateData.amount = moneyString(newAmountCents);
       if (name !== undefined) updateData.name = name;
 
       if (Object.keys(updateData).length === 0) return res.status(400).json({ message: "Nothing to update" });
@@ -444,19 +450,16 @@ export function registerOrderChargesRoutes(app: Express) {
 
         // If amount is changing on a FINALIZED invoice with a linked voucher, sync the voucher entries
         if (amount !== undefined && order.status === "FINALIZED" && chargeBeforeUpdate.voucherId) {
-          const newAmt = parseFloat(amount);
+          const newAmt = moneyString(newAmountCents);
           const linkedVoucherId = chargeBeforeUpdate.voucherId;
 
           // Update voucher header total
-          await tx
-            .update(vouchers)
-            .set({ totalAmount: String(newAmt) })
-            .where(eq(vouchers.id, linkedVoucherId));
+          await tx.update(vouchers).set({ totalAmount: newAmt }).where(eq(vouchers.id, linkedVoucherId));
 
           // Update the debit-side entry (customer account)
           await tx
             .update(voucherEntries)
-            .set({ debitAmount: String(newAmt) })
+            .set({ debitAmount: newAmt })
             .where(
               and(
                 eq(voucherEntries.voucherId, linkedVoucherId),
@@ -467,7 +470,7 @@ export function registerOrderChargesRoutes(app: Express) {
           // Update the credit-side entry (charge ledger account)
           await tx
             .update(voucherEntries)
-            .set({ creditAmount: String(newAmt) })
+            .set({ creditAmount: newAmt })
             .where(
               and(
                 eq(voucherEntries.voucherId, linkedVoucherId),
@@ -482,15 +485,12 @@ export function registerOrderChargesRoutes(app: Express) {
           ["PENDING_VERIFICATION", "VERIFIED"].includes(order.status) &&
           chargeBeforeUpdate.voucherId
         ) {
-          const newAmt = parseFloat(amount);
+          const newAmt = moneyString(newAmountCents);
           const linkedVoucherId = chargeBeforeUpdate.voucherId;
-          await tx
-            .update(vouchers)
-            .set({ totalAmount: String(newAmt) })
-            .where(eq(vouchers.id, linkedVoucherId));
+          await tx.update(vouchers).set({ totalAmount: newAmt }).where(eq(vouchers.id, linkedVoucherId));
           await tx
             .update(voucherEntries)
-            .set({ debitAmount: String(newAmt) })
+            .set({ debitAmount: newAmt })
             .where(
               and(
                 eq(voucherEntries.voucherId, linkedVoucherId),
@@ -499,7 +499,7 @@ export function registerOrderChargesRoutes(app: Express) {
             );
           await tx
             .update(voucherEntries)
-            .set({ creditAmount: String(newAmt) })
+            .set({ creditAmount: newAmt })
             .where(
               and(
                 eq(voucherEntries.voucherId, linkedVoucherId),
@@ -520,8 +520,10 @@ export function registerOrderChargesRoutes(app: Express) {
             .select()
             .from(customerOrderCharges)
             .where(eq(customerOrderCharges.id, chargeId));
-          const chargeAmt = parseFloat(updatedCharge?.amount || String(amount) || "0");
-          if (chargeAmt > 0) {
+          const chargeAmt = updatedCharge?.amount
+            ? toMoney(updatedCharge.amount)
+            : (parseMoneyInput(String(amount)) ?? toMoney(0));
+          if (chargeAmt.greaterThan(0)) {
             const [customer] = await tx
               .select({ ledgerAccountId: customers.ledgerAccountId })
               .from(customers)
@@ -543,7 +545,7 @@ export function registerOrderChargesRoutes(app: Express) {
                   voucherNumber: voucherNum,
                   voucherDate: order.orderDate || getClientDate(req),
                   description: chargeDesc,
-                  totalAmount: String(chargeAmt),
+                  totalAmount: moneyString(chargeAmt),
                   sourceModule: "FACTORY",
                 })
                 .returning();
@@ -551,7 +553,7 @@ export function registerOrderChargesRoutes(app: Express) {
                 voucherId: chargeVoucher.id,
                 ledgerAccountId: customer.ledgerAccountId,
                 customerId: order.customerId,
-                debitAmount: String(chargeAmt),
+                debitAmount: moneyString(chargeAmt),
                 creditAmount: "0",
                 narration: chargeDesc,
               });
@@ -559,7 +561,7 @@ export function registerOrderChargesRoutes(app: Express) {
                 voucherId: chargeVoucher.id,
                 ledgerAccountId: newLedgerAccountId,
                 debitAmount: "0",
-                creditAmount: String(chargeAmt),
+                creditAmount: moneyString(chargeAmt),
                 narration: chargeDesc,
               });
               await tx
@@ -576,7 +578,7 @@ export function registerOrderChargesRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = moneyString(recalcOrder?.grandTotal);
 
           const [existingLedgerEntry] = await tx
             .select({ id: customerBalances.id })
@@ -591,7 +593,7 @@ export function registerOrderChargesRoutes(app: Express) {
           if (existingLedgerEntry) {
             await tx
               .update(customerBalances)
-              .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+              .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
               .where(eq(customerBalances.id, existingLedgerEntry.id));
           }
 
@@ -608,7 +610,7 @@ export function registerOrderChargesRoutes(app: Express) {
           if (daybookEntry) {
             await tx
               .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
+              .set({ amountCurrency: newGrandTotal, amountUsd: newGrandTotal })
               .where(eq(factoryDaybookEntries.id, daybookEntry.id));
           }
         }
@@ -619,7 +621,7 @@ export function registerOrderChargesRoutes(app: Express) {
             .select({ grandTotal: customerOrders.grandTotal })
             .from(customerOrders)
             .where(eq(customerOrders.id, orderId));
-          const newGrandTotal = parseFloat(recalcOrder?.grandTotal || "0");
+          const newGrandTotal = moneyString(recalcOrder?.grandTotal);
           const [verifiedDaybookEntry] = await tx
             .select({ id: factoryDaybookEntries.id })
             .from(factoryDaybookEntries)
@@ -633,7 +635,7 @@ export function registerOrderChargesRoutes(app: Express) {
           if (verifiedDaybookEntry) {
             await tx
               .update(factoryDaybookEntries)
-              .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
+              .set({ amountCurrency: newGrandTotal, amountUsd: newGrandTotal })
               .where(eq(factoryDaybookEntries.id, verifiedDaybookEntry.id));
           }
         }
@@ -717,7 +719,7 @@ export function registerOrderChargesRoutes(app: Express) {
 
       // Sync customerBalances ledger entry if the order is already finalized
       if (updatedOrder.status === "FINALIZED") {
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [existingLedgerEntry] = await db
           .select({ id: customerBalances.id })
           .from(customerBalances)
@@ -731,14 +733,14 @@ export function registerOrderChargesRoutes(app: Express) {
         if (existingLedgerEntry) {
           await db
             .update(customerBalances)
-            .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
+            .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
       }
 
       // Sync daybook ORDER_VERIFIED entry when a charge is deleted from a VERIFIED order
       if (updatedOrder.status === "VERIFIED") {
-        const newGrandTotal = parseFloat(updatedOrder.grandTotal || "0");
+        const newGrandTotal = moneyString(updatedOrder.grandTotal);
         const [verifiedDaybookEntry] = await db
           .select({ id: factoryDaybookEntries.id })
           .from(factoryDaybookEntries)
@@ -752,7 +754,7 @@ export function registerOrderChargesRoutes(app: Express) {
         if (verifiedDaybookEntry) {
           await db
             .update(factoryDaybookEntries)
-            .set({ amountCurrency: String(newGrandTotal), amountUsd: String(newGrandTotal) })
+            .set({ amountCurrency: newGrandTotal, amountUsd: newGrandTotal })
             .where(eq(factoryDaybookEntries.id, verifiedDaybookEntry.id));
         }
       }

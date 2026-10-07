@@ -130,7 +130,7 @@ export default function FactoryPriorityScan() {
     refetchInterval: visibleTabInterval(1_000),
     refetchIntervalInBackground: false,
   });
-  const sessionScans = priorityHistory?.scans ?? [];
+  const sessionScans = useMemo(() => priorityHistory?.scans ?? [], [priorityHistory?.scans]);
 
   const condensedSessionScans = useMemo(() => {
     const grouped = new Map<
@@ -158,9 +158,7 @@ export default function FactoryPriorityScan() {
       }
     }
 
-    return Array.from(grouped.values()).sort(
-      (a, b) => Date.parse(b.latestScannedAt) - Date.parse(a.latestScannedAt)
-    );
+    return Array.from(grouped.values()).sort((a, b) => Date.parse(b.latestScannedAt) - Date.parse(a.latestScannedAt));
   }, [sessionScans, tr]);
 
   const activeQueue = useMemo(() => {
@@ -556,9 +554,7 @@ export default function FactoryPriorityScan() {
                   <div key={scan.id} className="px-4 py-3 flex items-center gap-3">
                     <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
                     <div className="font-mono font-medium min-w-[150px]">{scan.referenceNumber}</div>
-                    <div className="flex-1 min-w-0 text-sm truncate">
-                      {scan.productName || tr("unnamedProduct")}
-                    </div>
+                    <div className="flex-1 min-w-0 text-sm truncate">{scan.productName || tr("unnamedProduct")}</div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span
                         className="h-3.5 w-3.5 rounded-full border border-black/10"

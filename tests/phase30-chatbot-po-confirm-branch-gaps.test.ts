@@ -373,6 +373,41 @@ describe("Phase 30 chatbot PO confirm branch gaps", () => {
     expect(res.body.grandTotal).toBe("7.00");
   });
 
+  it("stores half-cent line totals rounded half up and totals the stored lines", async () => {
+    queueQueries([], [], []);
+    harness.getContainerByNumber.mockResolvedValue({ id: 444, containerNumber: "MSKU1234567" });
+    harness.createPurchaseOrder.mockResolvedValue({ id: 445, poNumber: "PO-30-CONFIRM" });
+    const handler = captureConfirmHandler();
+    const res = responseHarness();
+
+    // 1.3 x 0.35 = 0.455; the float product 0.45499999999999996 was stored as 0.45.
+    await handler(
+      confirmRequest({
+        lines: [{ stockItemId: 20, itemName: "Widget", qty: "1.3", rate: "0.35" }],
+        charges: undefined,
+      }),
+      res
+    );
+
+    expect(harness.insertValues).toHaveBeenCalledWith(expect.objectContaining({ lineTotal: "0.46" }));
+    expect(harness.createPurchaseOrder).toHaveBeenCalledWith(
+      expect.objectContaining({ itemsTotal: "0.46" }),
+      "2026-09-15"
+    );
+    expect(res.body.grandTotal).toBe("0.46");
+  });
+
+  it("refuses a line whose quantity does not parse instead of storing NaN", async () => {
+    const handler = captureConfirmHandler();
+    const res = responseHarness();
+
+    await handler(confirmRequest({ lines: [{ stockItemId: 20, itemName: "Widget", qty: "abc", rate: "2" }] }), res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid amount" });
+    expect(harness.createPurchaseOrder).not.toHaveBeenCalled();
+  });
+
   it("converts an unexpected confirmation failure into a controlled 500", async () => {
     harness.listSuppliers.mockRejectedValue(new Error("supplier visibility query failed"));
     const handler = captureConfirmHandler();

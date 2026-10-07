@@ -179,7 +179,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
             try {
               const debitAmt = String(entry.debitAmount || "0");
               const creditAmt = String(entry.creditAmount || "0");
-              if (parseFloat(debitAmt) + parseFloat(creditAmt) > 0) {
+              if (toMoney(debitAmt).plus(toMoney(creditAmt)).greaterThan(0)) {
                 const norm = normalizeVoucherEntryAmounts({
                   transactionCurrency: editVoucherCurrency,
                   baseCurrency: "USD",
@@ -254,11 +254,11 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         if (ict) {
           const otherVoucherId = ict.fromVoucherId === id ? ict.toVoucherId : ict.fromVoucherId;
           if (otherVoucherId) {
-            const newTotal = parseFloat(updatedVoucher.totalAmount || "0");
+            const newTotal = toMoney(updatedVoucher.totalAmount);
             const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
             if (otherVoucher) {
-              const oldTotal = parseFloat(otherVoucher.totalAmount || "0");
-              const ratio = oldTotal > 0 ? newTotal / oldTotal : 1;
+              const oldTotal = toMoney(otherVoucher.totalAmount);
+              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
               const otherEntries = await db
                 .select()
                 .from(voucherEntries)
@@ -267,8 +267,8 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
                 await db
                   .update(voucherEntries)
                   .set({
-                    debitAmount: (parseFloat(e.debitAmount || "0") * ratio).toFixed(2),
-                    creditAmount: (parseFloat(e.creditAmount || "0") * ratio).toFixed(2),
+                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
+                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
                   })
                   .where(eq(voucherEntries.id, e.id));
               }

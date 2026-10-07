@@ -6,10 +6,19 @@ import {
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
-import { sumMoney, toMoney } from "../../lib/money";
 import * as schema from "@shared/schema";
 import type { PurchaseOrder, InsertPurchaseOrder } from "@shared/schema";
 import { getConfiguredIntercompanyCreditAccount } from "../accounting/intercompany";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+
+type PoChargeFields = Pick<
+  PurchaseOrder,
+  "freight" | "surcharge" | "fumigation" | "documentCharges" | "discount" | "otherCharges"
+>;
+
+/** A PO's charges net of its discount, exactly. */
+const poChargesOf = (po: PoChargeFields) =>
+  sumMoney([po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges]).minus(toMoney(po.discount));
 
 export async function createPurchaseOrder(
   po: InsertPurchaseOrder,
@@ -24,18 +33,10 @@ export async function createPurchaseOrder(
       return created;
     }
 
-    // Exact decimals: the voucher's debit and credit lines are rounded from
-    // these, so float sums could leave a PO voucher a cent out of balance.
-    const poItemsTotal = toMoney(po.itemsTotal);
-    const poFreight = toMoney(po.freight);
-    const poChargesAmount = sumMoney([
-      poFreight,
-      po.surcharge,
-      po.fumigation,
-      po.documentCharges,
-      po.otherCharges,
-    ]).minus(toMoney(po.discount));
-    const poTotal = poItemsTotal.plus(poChargesAmount);
+    // The voucher is built from the row as stored (numeric(20, 2) columns), so it
+    // agrees with the PO to the cent whatever precision the input carried.
+    const poFreight = toMoney(created.freight);
+    const poTotal = toMoney(created.itemsTotal).plus(poChargesOf(created));
 
     if (poTotal.gt(0) && po.companyId) {
       let containerNum = "";
@@ -362,14 +363,8 @@ export async function deletePurchaseOrder(id: number): Promise<void> {
   if (!po) throw new Error("Purchase order not found");
 
   const containerId = po.containerId;
-  const poItemsTotal = parseFloat(po.itemsTotal || "0");
-  const poFreight = parseFloat(po.freight || "0");
-  const poSurcharge = parseFloat(po.surcharge || "0");
-  const poFumigation = parseFloat(po.fumigation || "0");
-  const poDocumentCharges = parseFloat(po.documentCharges || "0");
-  const poDiscount = parseFloat(po.discount || "0");
-  const poOtherCharges = parseFloat(po.otherCharges || "0");
-  const poCharges = poFreight + poSurcharge + poFumigation + poDocumentCharges - poDiscount + poOtherCharges;
+  const poItemsTotal = toMoney(po.itemsTotal);
+  const poCharges = poChargesOf(po);
 
   const [container] = await db.select().from(schema.containers).where(eq(schema.containers.id, containerId)).limit(1);
 
@@ -417,15 +412,15 @@ export async function deletePurchaseOrder(id: number): Promise<void> {
     await db.delete(schema.importLogs).where(eq(schema.importLogs.containerId, containerId));
     await db.delete(schema.containers).where(eq(schema.containers.id, containerId));
   } else if (container) {
-    const newItemsTotal = Math.max(0, parseFloat(container.itemsTotal || "0") - poItemsTotal);
-    const newChargesTotal = Math.max(0, parseFloat(container.chargesTotal || "0") - poCharges);
-    const newGrandTotal = newItemsTotal + newChargesTotal;
+    const newItemsTotal = MoneyDecimal.max(0, toMoney(container.itemsTotal).minus(poItemsTotal));
+    const newChargesTotal = MoneyDecimal.max(0, toMoney(container.chargesTotal).minus(poCharges));
+    const newGrandTotal = newItemsTotal.plus(newChargesTotal);
     await db
       .update(schema.containers)
       .set({
-        itemsTotal: newItemsTotal.toString(),
-        chargesTotal: newChargesTotal.toString(),
-        grandTotal: newGrandTotal.toString(),
+        itemsTotal: newItemsTotal.toFixed(2),
+        chargesTotal: newChargesTotal.toFixed(2),
+        grandTotal: newGrandTotal.toFixed(2),
       })
       .where(eq(schema.containers.id, containerId));
   }

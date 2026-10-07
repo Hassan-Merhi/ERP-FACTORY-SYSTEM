@@ -14,13 +14,14 @@ import { requireAuth } from "../../../auth";
 import {
   resolveStoredFxRate,
   resolveStoredFxRateOrThrow,
-  applyFxRate,
   UnresolvedExchangeRateError,
 } from "../../../services/factory/currencyConversion";
 import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
 import { eq, and, or, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import type Decimal from "decimal.js";
+import { parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerUpdateRoutes(app: Express) {
   app.patch("/api/factory/containers/:id", requireAuth, async (req: Request, res: Response) => {
@@ -114,10 +115,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // A partial PATCH that touches an unrelated field must preserve existing commission FX.
       const commissionChanged = b.commissionAmount !== undefined || b.commissionCurrencyCode !== undefined;
       if (commissionChanged) {
-        const effCommAmt = parseFloat(
-          updateData.commissionAmount !== undefined
-            ? (updateData.commissionAmount ?? "0")
-            : (existing.commissionAmount ?? "0")
+        const effCommAmt = toMoney(
+          updateData.commissionAmount !== undefined ? updateData.commissionAmount : existing.commissionAmount
         );
         const effCommCcy = (
           updateData.commissionCurrencyCode !== undefined
@@ -126,17 +125,16 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         ).toUpperCase();
         const effContainerCcy = (updateData.currencyCode || existing.currencyCode || "USD").toUpperCase();
         const effDate = updateData.arrivalDate || existing.arrivalDate || getClientDate(req);
-        if (effCommAmt > 0) {
-          let commFxResolved: number;
+        if (effCommAmt.greaterThan(0)) {
+          let commFxResolved: Decimal;
           if (effCommCcy === "USD") {
-            commFxResolved = 1;
+            commFxResolved = toMoney(1);
           } else if (effCommCcy === effContainerCcy) {
             // Same currency as container: use the (possibly just-updated) container FX
-            const containerFxNum =
-              updateData.fxRateToUsd !== undefined
-                ? parseFloat(updateData.fxRateToUsd ?? "0")
-                : parseFloat(existing.fxRateToUsd ?? "0");
-            if (!containerFxNum || containerFxNum <= 0) {
+            const containerFxNum = toMoney(
+              updateData.fxRateToUsd !== undefined ? updateData.fxRateToUsd : existing.fxRateToUsd
+            );
+            if (containerFxNum.lessThanOrEqualTo(0)) {
               return res.status(400).json({
                 message: `Cannot resolve commission FX for ${effCommCcy}: container FX rate is not confirmed.`,
               });
@@ -144,14 +142,14 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             commFxResolved = containerFxNum;
           } else {
             try {
-              commFxResolved = parseFloat(await getOrFetchFxRateToUsd(companyId, effCommCcy, effDate));
+              commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, effCommCcy, effDate));
             } catch (err: unknown) {
               return res.status(400).json({
                 message: `Cannot resolve FX rate for commission currency ${effCommCcy} on ${effDate}. ${getErrorMessage(err)}`,
               });
             }
           }
-          updateData.commissionFxRateToUsd = String(commFxResolved);
+          updateData.commissionFxRateToUsd = commFxResolved.toFixed();
           updateData.commissionFxRateConfirmed = true;
           updateData.commissionFxRateDate = effDate;
         } else {
@@ -176,17 +174,16 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           updateData.fxRateDateImport = importDate;
           updateData.fxRateSource = "auto";
           updateData.fxRateConfirmed = true; // real auto-fetch, not a guess
-          const ratePerKg = parseFloat(updateData.ratePerKg || existing.ratePerKg || "0");
-          const fxRateNum = parseFloat(fxRate);
-          updateData.ratePerKgUsd = String(applyFxRate(ratePerKg, currencyCode, fxRateNum));
+          const ratePerKg = toMoney(updateData.ratePerKg || existing.ratePerKg);
+          updateData.ratePerKgUsd = (currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate))).toFixed();
         } else {
           // Manual: trust an fxRateToUsd explicitly provided in THIS request regardless of
           // value; otherwise fall back to the existing stored rate, but only if it's actually
           // confirmed already (or, absent the flag on this row, looks like a real explicit
           // rate under the legacy heuristic).
-          const explicitRate = b.fxRateToUsd !== undefined ? parseFloat(dec(b.fxRateToUsd) ?? "") : NaN;
-          let fxRateNum: number;
-          if (!isNaN(explicitRate) && explicitRate > 0) {
+          const explicitRate = b.fxRateToUsd !== undefined ? parseMoneyInput(dec(b.fxRateToUsd) ?? "") : null;
+          let fxRateNum: Decimal;
+          if (explicitRate && explicitRate.greaterThan(0)) {
             fxRateNum = explicitRate;
             updateData.fxRateConfirmed = true; // freshly supplied by this request
           } else {
@@ -198,15 +195,15 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             if (!looksSet) {
               return res.status(400).json({ message: new UnresolvedExchangeRateError(currencyCode).message });
             }
-            fxRateNum = fxRate;
+            fxRateNum = toMoney(fxRate);
             // Carries forward an already-confirmed rate; leave fxRateConfirmed untouched.
           }
-          const ratePerKg = parseFloat(updateData.ratePerKg || existing.ratePerKg || "0");
-          updateData.fxRateToUsd = String(fxRateNum);
-          updateData.fxRateToUsdImport = String(fxRateNum);
+          const ratePerKg = toMoney(updateData.ratePerKg || existing.ratePerKg);
+          updateData.fxRateToUsd = fxRateNum.toFixed();
+          updateData.fxRateToUsdImport = fxRateNum.toFixed();
           updateData.fxRateDateImport = importDate;
           updateData.fxRateSource = "manual";
-          updateData.ratePerKgUsd = String(applyFxRate(ratePerKg, currencyCode, fxRateNum));
+          updateData.ratePerKgUsd = (currencyCode === "USD" ? ratePerKg : ratePerKg.times(fxRateNum)).toFixed();
         }
       }
 
@@ -221,7 +218,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       const effectiveSupplierId = updateData.supplierId !== undefined ? updateData.supplierId : existing.supplierId;
 
       // Auto-create freight ledger account if effective freight > 0 and no account selected
-      if (!updateData.freightAccountId && parseFloat(effectiveFreight || "0") > 0) {
+      if (!updateData.freightAccountId && toMoney(effectiveFreight).greaterThan(0)) {
         updateData.freightAccountId = await getOrCreateLedgerAccount(companyId, "FREIGHT", "Freight");
       }
 
@@ -229,8 +226,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       // leaves a stale value in the opposing field.  Rules are enforced using
       // the EFFECTIVE values (not just what was sent in this request).
       {
-        const canonFreightAmt = parseFloat(effectiveFreight || "0");
-        if (canonFreightAmt <= 0) {
+        if (toMoney(effectiveFreight).lessThanOrEqualTo(0)) {
           // Rule A: no freight → clear both payer fields
           updateData.freightSupplierId = null;
           updateData.freightOwnAccountId = null;
@@ -303,20 +299,20 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         )
         .limit(1);
 
-      const newFreightAmt = parseFloat(updated.freight || "0");
+      const newFreightAmt = toMoney(updated.freight);
       const newFreightAcctId = updated.freightAccountId ?? null;
       const newFreightPaidBy = updated.freightPaidBy || "supplier";
       const newFreightOwnAcctId = updated.freightOwnAccountId ?? null;
       const freightCcy = updated.freightCurrencyCode || updated.currencyCode || "USD";
 
-      if (newFreightAmt > 0 && newFreightAcctId) {
+      if (newFreightAmt.greaterThan(0) && newFreightAcctId) {
         if (existingFV) {
           if (freightNeedsSync) {
             // Full re-sync: update voucher amount/type and re-compute entries with FX
             await db
               .update(vouchers)
               .set({
-                totalAmount: String(newFreightAmt),
+                totalAmount: newFreightAmt.toFixed(),
                 voucherType: newFreightPaidBy === "own" ? "Payment" : "Journal",
               })
               .where(eq(vouchers.id, existingFV.id));
@@ -325,12 +321,22 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
               freightCcy === (updated.currencyCode || "USD")
                 ? resolveStoredFxRateOrThrow(updated.currencyCode, updated.fxRateToUsd, updated.fxRateConfirmed)
                 : 1;
-            const normFreightDr = normFactoryEntry(freightCcy, String(newFreightAmt), "0", updateFreightFactoryFxRate);
-            const normFreightCr = normFactoryEntry(freightCcy, "0", String(newFreightAmt), updateFreightFactoryFxRate);
+            const normFreightDr = normFactoryEntry(
+              freightCcy,
+              newFreightAmt.toFixed(),
+              "0",
+              updateFreightFactoryFxRate
+            );
+            const normFreightCr = normFactoryEntry(
+              freightCcy,
+              "0",
+              newFreightAmt.toFixed(),
+              updateFreightFactoryFxRate
+            );
             // Update entries
             const fEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
             for (const fe of fEntries) {
-              if (parseFloat(fe.debitAmount || "0") > 0) {
+              if (toMoney(fe.debitAmount).greaterThan(0)) {
                 // Dr Freight Expense — update amount and account
                 await db
                   .update(voucherEntries)
@@ -385,7 +391,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
               voucherNumber: `FACTORY-FREIGHT-${id}`,
               voucherDate: updated.arrivalDate || containerCreatedDate,
               description: `Freight on container ${updated.containerNumber}`,
-              totalAmount: String(newFreightAmt),
+              totalAmount: newFreightAmt.toFixed(),
               currency: freightCcy,
               sourceModule: "FACTORY",
             })
@@ -397,21 +403,21 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: newFV.id,
             ledgerAccountId: newFreightAcctId,
-            ...normFactoryEntry(freightCcy, String(newFreightAmt), "0", newFreightFactoryFxRate),
+            ...normFactoryEntry(freightCcy, newFreightAmt.toFixed(), "0", newFreightFactoryFxRate),
             narration: `Freight expense - container ${updated.containerNumber}`,
           });
           if (newFreightPaidBy === "own" && newFreightOwnAcctId) {
             await db.insert(voucherEntries).values({
               voucherId: newFV.id,
               ledgerAccountId: newFreightOwnAcctId,
-              ...normFactoryEntry(freightCcy, "0", String(newFreightAmt), newFreightFactoryFxRate),
+              ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
               narration: `Freight paid via own account - container ${updated.containerNumber}`,
             });
           } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
             await db.insert(voucherEntries).values({
               voucherId: newFV.id,
               factorySupplierId: updated.supplierId,
-              ...normFactoryEntry(freightCcy, "0", String(newFreightAmt), newFreightFactoryFxRate),
+              ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
               narration: `Freight payable to supplier - container ${updated.containerNumber}`,
             });
           }
@@ -446,8 +452,10 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             .where(eq(factorySuppliers.id, updated.supplierId));
           supplierNameForSync = sup?.name || "";
         }
-        const kgForSync = parseFloat(updated.totalKg || "0");
-        const rateForSync = parseFloat(updated.ratePerKg || "0");
+        const kgExact = toMoney(updated.totalKg);
+        const rateExact = toMoney(updated.ratePerKg);
+        const kgForSync = kgExact.toNumber();
+        const rateForSync = rateExact.toNumber();
         const ccyForSync = updated.currencyCode || "USD";
         const syncDescParts = [
           updated.containerNumber,
@@ -456,12 +464,13 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           rateForSync > 0 ? `${rateForSync} ${ccyForSync}/kg` : null,
         ].filter(Boolean);
         const syncDesc = syncDescParts.join(" · ");
-        const syncAmount = rateForSync * kgForSync;
-        const syncFxRate = parseFloat(updated.fxRateToUsd || "1") || 1;
+        const syncAmount = rateExact.times(kgExact);
+        const storedFx = toMoney(updated.fxRateToUsd);
+        const syncFxRate = storedFx.isZero() ? toMoney(1) : storedFx;
         const daybookUpdateSet: Partial<typeof factoryDaybookEntries.$inferInsert> = { description: syncDesc };
-        if (syncAmount > 0) {
-          daybookUpdateSet.amountCurrency = String(syncAmount);
-          daybookUpdateSet.amountUsd = String(syncAmount * syncFxRate);
+        if (syncAmount.greaterThan(0)) {
+          daybookUpdateSet.amountCurrency = syncAmount.toFixed();
+          daybookUpdateSet.amountUsd = syncAmount.times(syncFxRate).toFixed();
         }
         if ("arrivalDate" in updateData && updated.arrivalDate) {
           daybookUpdateSet.txDate = updated.arrivalDate;

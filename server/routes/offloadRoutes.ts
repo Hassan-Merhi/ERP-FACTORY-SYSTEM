@@ -18,6 +18,7 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
 import { getOrCreateLedgerAccount } from "./factory/_helpers";
+import { parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 import { assertActiveCompanyAccess, sendCompanyAccessError } from "../security/companyAccessBoundary";
 import {
   containerCharges,
@@ -237,12 +238,12 @@ export function registerOffloadRoutes(app: Express) {
         .execute();
 
       // Aggregate PO charges for display
-      const poFreight = pos.reduce((s, p) => s + parseFloat(p.freight || "0"), 0);
-      const poSurcharge = pos.reduce((s, p) => s + parseFloat(p.surcharge || "0"), 0);
-      const poFumigation = pos.reduce((s, p) => s + parseFloat(p.fumigation || "0"), 0);
-      const poDocumentCharges = pos.reduce((s, p) => s + parseFloat(p.documentCharges || "0"), 0);
-      const poDiscount = pos.reduce((s, p) => s + parseFloat(p.discount || "0"), 0);
-      const poOtherCharges = pos.reduce((s, p) => s + parseFloat(p.otherCharges || "0"), 0);
+      const poFreight = sumMoney(pos.map((p) => p.freight)).toNumber();
+      const poSurcharge = sumMoney(pos.map((p) => p.surcharge)).toNumber();
+      const poFumigation = sumMoney(pos.map((p) => p.fumigation)).toNumber();
+      const poDocumentCharges = sumMoney(pos.map((p) => p.documentCharges)).toNumber();
+      const poDiscount = sumMoney(pos.map((p) => p.discount)).toNumber();
+      const poOtherCharges = sumMoney(pos.map((p) => p.otherCharges)).toNumber();
 
       // Fetch additional charges (fumigation, misc charges attached to the container)
       const additionalCharges = await db
@@ -262,7 +263,7 @@ export function registerOffloadRoutes(app: Express) {
         documentCharges: poDocumentCharges,
         discount: poDiscount,
         otherCharges: poOtherCharges,
-        total: parseFloat(offload.containerChargesTotal || "0"),
+        total: toMoney(offload.containerChargesTotal).toNumber(),
       };
 
       // Fetch LIVE voucher totals for this container so external edits are reflected immediately
@@ -286,9 +287,7 @@ export function registerOffloadRoutes(app: Express) {
         .execute();
 
       const sumByPrefix = (prefix: string) =>
-        liveVouchers
-          .filter((v) => v.voucherNumber.startsWith(`${prefix}-${cn}-`))
-          .reduce((s, v) => s + parseFloat(v.totalAmount || "0"), 0);
+        sumMoney(liveVouchers.filter((v) => v.voucherNumber.startsWith(`${prefix}-${cn}-`)).map((v) => v.totalAmount));
 
       const liveDuties = sumByPrefix("DUTY");
       const liveOfficeCharges = sumByPrefix("OFFICE");
@@ -296,21 +295,29 @@ export function registerOffloadRoutes(app: Express) {
       const liveTransferCharges = sumByPrefix("XFER");
       const liveAddlCharges = sumByPrefix("CHG");
 
-      const liveTotalOffloadCharges =
-        liveDuties + liveOfficeCharges + liveTransportFees + liveTransferCharges + liveAddlCharges;
-      const liveTotalAllCharges = liveTotalOffloadCharges + poCharges.total;
-      const totalBalesNum = parseFloat(offload.totalBales || "0");
-      const liveAdditionalCostPerBale =
-        totalBalesNum > 0 ? Math.round((liveTotalAllCharges / totalBalesNum) * 100) / 100 : 0;
+      const liveTotalOffloadCharges = sumMoney([
+        liveDuties,
+        liveOfficeCharges,
+        liveTransportFees,
+        liveTransferCharges,
+        liveAddlCharges,
+      ]);
+      const liveTotalAllCharges = liveTotalOffloadCharges.plus(toMoney(offload.containerChargesTotal));
+      const totalBales = toMoney(offload.totalBales);
+      // Exact, then rounded half up to cents; the float division could land a
+      // half cent below its true value and round down.
+      const liveAdditionalCostPerBale = totalBales.greaterThan(0)
+        ? liveTotalAllCharges.dividedBy(totalBales).toDecimalPlaces(2).toNumber()
+        : 0;
 
       const liveCharges = {
-        duties: liveDuties,
-        officeCharges: liveOfficeCharges,
-        transportFees: liveTransportFees,
-        transferCharges: liveTransferCharges,
-        additionalCharges: liveAddlCharges,
-        totalOffloadCharges: liveTotalOffloadCharges,
-        totalAllCharges: liveTotalAllCharges,
+        duties: liveDuties.toNumber(),
+        officeCharges: liveOfficeCharges.toNumber(),
+        transportFees: liveTransportFees.toNumber(),
+        transferCharges: liveTransferCharges.toNumber(),
+        additionalCharges: liveAddlCharges.toNumber(),
+        totalOffloadCharges: liveTotalOffloadCharges.toNumber(),
+        totalAllCharges: liveTotalAllCharges.toNumber(),
         additionalCostPerBale: liveAdditionalCostPerBale,
         hasVouchers: liveVouchers.length > 0,
       };
@@ -434,7 +441,7 @@ export function registerOffloadRoutes(app: Express) {
 
           for (const item of lineItems) {
             const issues: string[] = [];
-            const quantityParsed = parseFloat(item.quantity);
+            const quantityParsed = parseMoneyInput(item.quantity)?.toNumber() ?? NaN;
 
             // Check for issues
             if (!item.stockItemId || item.stockItemId === 0) {
@@ -628,14 +635,14 @@ export function registerOffloadRoutes(app: Express) {
             const containerNumber: string = row.container_number || `#${containerId}`;
             const ledgerAccountId: number = row.ledger_account_id;
             const description: string = row.description || "Post-offload charge";
-            const amount = parseFloat(row.amount || "0");
+            const amount = toMoney(row.amount);
             const chargeCcy: string = row.currency_code || "USD";
-            const chargeFx = parseFloat(row.fx_rate_to_usd || "1");
+            const chargeFx = row.fx_rate_to_usd ? toMoney(row.fx_rate_to_usd) : toMoney(1);
             const voucherDate: string = row.created_at
               ? new Date(row.created_at).toISOString().slice(0, 10)
               : new Date().toISOString().slice(0, 10);
 
-            if (amount <= 0) {
+            if (amount.lessThanOrEqualTo(0)) {
               skippedExisting++;
               continue;
             }
@@ -688,9 +695,9 @@ export function registerOffloadRoutes(app: Express) {
                 voucherNumber: voucherNum,
                 voucherDate,
                 description: `${description} (post-offload) — container ${containerNumber}`,
-                totalAmount: String(amount),
+                totalAmount: amount.toFixed(),
                 currency: chargeCcy,
-                exchangeRate: String(chargeFx),
+                exchangeRate: chargeFx.toFixed(),
                 sourceModule: "FACTORY",
               })
               .returning();
@@ -699,7 +706,7 @@ export function registerOffloadRoutes(app: Express) {
             await db.insert(voucherEntries).values({
               voucherId: voucher.id,
               ledgerAccountId: cpAcctId,
-              debitAmount: String(amount),
+              debitAmount: amount.toFixed(),
               creditAmount: "0",
               narration: `${description} payable — container ${containerNumber}`,
             });
@@ -708,7 +715,7 @@ export function registerOffloadRoutes(app: Express) {
               voucherId: voucher.id,
               ledgerAccountId,
               debitAmount: "0",
-              creditAmount: String(amount),
+              creditAmount: amount.toFixed(),
               narration: `${description} — container ${containerNumber}`,
             });
 

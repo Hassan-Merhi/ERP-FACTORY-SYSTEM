@@ -10,6 +10,12 @@ import { db } from "../../db";
 import { inventory, stockItems } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import type { HandlerErrorResult, PosSaleItemInput, ValidatedInventoryItem } from "./posSaleTypes";
+import { MoneyDecimal, parseMoneyInput } from "../../lib/money";
+
+/** A request amount read as parseFloat read it; NaN when it does not parse. */
+function requestNumber(value: unknown): number {
+  return parseMoneyInput(String(value))?.toNumber() ?? NaN;
+}
 
 /** Input validation assertions for inventory safety. */
 export function validateItemsBasic(
@@ -24,7 +30,7 @@ export function validateItemsBasic(
     if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
       return { error: { status: 400, body: { message: `Invalid stockItemId: ${item.stockItemId}` } } };
     }
-    const qty = parseFloat(String(item.quantity));
+    const qty = requestNumber(item.quantity);
     if (isNaN(qty) || !isFinite(qty) || qty <= 0) {
       return {
         error: { status: 400, body: { message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` } },
@@ -34,22 +40,28 @@ export function validateItemsBasic(
   return null;
 }
 
-/** Validate and calculate total. */
+/**
+ * Validate and calculate total. Each line is taken at cents (half up), as the
+ * stored sale line is, and the total is their sum, so the voucher equals its
+ * lines: 1.3 x 0.35 is 0.46 (the float product 0.45499... gave 0.45).
+ */
 export function calculateGrandTotal(items: PosSaleItemInput[]): { grandTotal: number } | { error: HandlerErrorResult } {
-  let grandTotal = 0;
+  let grandTotal = new MoneyDecimal(0);
   for (const item of items) {
     if (!item.stockItemId) {
       return { error: { status: 400, body: { message: "Stock item ID is required for all items" } } };
     }
-    if (!item.quantity || parseFloat(String(item.quantity)) <= 0) {
+    const quantity = parseMoneyInput(String(item.quantity));
+    const rate = parseMoneyInput(String(item.rate));
+    if (!item.quantity || !quantity || quantity.lessThanOrEqualTo(0)) {
       return { error: { status: 400, body: { message: "Quantity must be positive for all items" } } };
     }
-    if (!item.rate || parseFloat(String(item.rate)) < 0) {
+    if (!item.rate || !rate || rate.lessThan(0)) {
       return { error: { status: 400, body: { message: "Rate must be non-negative for all items" } } };
     }
-    grandTotal += parseFloat(String(item.quantity)) * parseFloat(String(item.rate));
+    grandTotal = grandTotal.plus(quantity.times(rate).toDecimalPlaces(2));
   }
-  return { grandTotal };
+  return { grandTotal: grandTotal.toNumber() };
 }
 
 /**
@@ -82,8 +94,8 @@ export async function validateInventoryAvailability(
       throw new Error(`Inventory not found for item ${item.stockItemId} at location ${locationId}`);
     }
 
-    const currentQty = parseFloat(inventoryRecord.quantity);
-    const saleQty = parseFloat(String(item.quantity));
+    const currentQty = Number(inventoryRecord.quantity);
+    const saleQty = requestNumber(item.quantity);
     const itemDisplayName = inventoryRecord.itemName || `item ${item.stockItemId}`;
 
     if (currentQty < saleQty && !canSellNegativeStock) {
@@ -96,7 +108,7 @@ export async function validateInventoryAvailability(
       currentQty,
       saleQty,
       newQty: currentQty - saleQty,
-      currentRate: parseFloat(inventoryRecord.averageRate),
+      currentRate: Number(inventoryRecord.averageRate),
     });
   }
 

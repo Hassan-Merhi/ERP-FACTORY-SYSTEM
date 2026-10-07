@@ -49,9 +49,7 @@ async function canShowUnassignedContainers(context: PosTrackingContext): Promise
     .where(and(eq(userCompanyRoles.companyId, context.companyId), eq(userCompanyRoles.role, "POS")));
 
   const assignedLocationIds = new Set(
-    rows
-      .map((row) => Number(row.assignedLocationId))
-      .filter((id) => Number.isInteger(id) && id > 0)
+    rows.map((row) => Number(row.assignedLocationId)).filter((id) => Number.isInteger(id) && id > 0)
   );
 
   return assignedLocationIds.size === 1 && assignedLocationIds.has(context.location.id);

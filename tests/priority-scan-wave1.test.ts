@@ -391,13 +391,20 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       .send({ color: "#0ea5e9", priority: 9999, enabled: true });
     expect(priority.status).toBe(200);
 
-    const referenceNumber = `${PREFIX}-UNMATCHED-DAILY`;
+    const referenceNumber = `${PREFIX.toUpperCase()}-UNMATCHED-DAILY`;
     await pool.query(
       `INSERT INTO factory_bales
          (company_id, bale_code, reference_number, article_code, product_name, erp_location_id,
           stock_entry_date, weight_kg, cost_per_kg, total_cost, status)
        VALUES ($1, $2, $2, $3, $4, $5, $6, '42.000', '1.00', '42.00', 'IN_STOCK')`,
-      [ctx.companyId, referenceNumber, `${PREFIX}-NOT-ON-PROFORMA`, `${PREFIX} Unmatched Product`, ctx.locationId, today]
+      [
+        ctx.companyId,
+        referenceNumber,
+        `${PREFIX}-NOT-ON-PROFORMA`,
+        `${PREFIX} Unmatched Product`,
+        ctx.locationId,
+        today,
+      ]
     );
 
     const route = await agent.get(

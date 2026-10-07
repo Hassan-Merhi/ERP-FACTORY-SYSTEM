@@ -13,6 +13,7 @@ import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import {
@@ -215,16 +216,18 @@ export function registerStockTransferCreateRoutes(app: Express) {
             })
             .returning();
 
-          let totalAmount = 0;
+          // Line totals are taken at cents and the voucher total is their sum,
+          // so the header always equals the lines it carries.
+          let totalAmount = new MoneyDecimal(0);
           const transferItems = [];
 
           for (const item of normalizedMovementItems) {
-            const quantity = parseFloat(item.quantity);
+            const quantity = toMoney(item.quantity);
             const sourceInv = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
             const rateText = sourceInv?.average_rate ?? item.rate ?? "0";
-            const rate = parseFloat(String(rateText || "0"));
-            const totalItemAmount = quantity * rate;
-            totalAmount += totalItemAmount;
+            const rate = toMoney(String(rateText || "0"));
+            const totalItemAmount = quantity.times(rate).toDecimalPlaces(2);
+            totalAmount = totalAmount.plus(totalItemAmount);
 
             const [insertedItem] = await tx
               .insert(stockTransferItems)

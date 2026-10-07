@@ -10,6 +10,7 @@ import path from "path";
 import fs from "fs";
 import { factoryDaybookEntries } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
+import { daybookAmountUsd } from "../../lib/money";
 
 /**
  * Daybook writing plus the PDF and Excel generators for the supplier-usage
@@ -38,8 +39,7 @@ export async function writeDaybookEntry(
   const currency = opts.currencyCode || "USD";
   const fxRate = opts.fxRateToUsd || 1;
   const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd =
-    opts.amountUsd !== undefined ? opts.amountUsd : currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
   await dbOrTx.insert(factoryDaybookEntries).values({
     companyId: opts.companyId,
     txDate: opts.txDate,
@@ -51,7 +51,7 @@ export async function writeDaybookEntry(
     currencyCode: currency,
     amountCurrency: String(amtCurrency),
     fxRateToUsd: String(fxRate),
-    amountUsd: String(amtUsd),
+    amountUsd: amtUsd,
     createdBy: opts.createdBy || null,
   });
 }

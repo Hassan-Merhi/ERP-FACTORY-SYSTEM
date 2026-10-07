@@ -1,6 +1,7 @@
 import { pgTable, text, varchar, serial, integer, decimal, date, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import { isPositiveNumeric } from "../../numericString";
 
 // ─── Factory FX Rates ─────────────────────────────────────────────────────────
 export const factoryFxRates = pgTable(
@@ -28,7 +29,7 @@ export const insertFactoryFxRateSchema = createInsertSchema(factoryFxRates)
   .extend({
     companyId: z.number().min(1, "Company is required"),
     currencyCode: z.string().min(1, "Currency code is required"),
-    rateToUsd: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Rate must be positive"),
+    rateToUsd: z.string().refine(isPositiveNumeric, "Rate must be positive"),
     effectiveDate: z.string().min(1, "Date is required"),
   });
 

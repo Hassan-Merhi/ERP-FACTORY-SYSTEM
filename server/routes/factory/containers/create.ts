@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerCreateRoutes(app: Express) {
   app.post("/api/factory/containers", requireAuth, async (req: Request, res: Response) => {
@@ -50,9 +51,8 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         fxRate = await getOrFetchFxRateToUsd(companyId, currencyCode, importDate);
       }
 
-      const ratePerKg = parseFloat(parsed.ratePerKg || "0");
-      const fxRateNum = parseFloat(fxRate);
-      const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg * fxRateNum;
+      const ratePerKg = toMoney(parsed.ratePerKg);
+      const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate));
 
       const values = {
         ...parsed,
@@ -61,7 +61,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         fxRateToUsdImport: fxRate,
         fxRateSource: fxRateSource === "manual" ? "manual" : "auto",
         fxRateDateImport: importDate,
-        ratePerKgUsd: String(ratePerKgUsd),
+        ratePerKgUsd: ratePerKgUsd.toFixed(),
         // Explicitly resolved above (manual user entry or a real auto-fetch) — trust it.
         fxRateConfirmed: true,
       };
@@ -97,7 +97,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       }
 
       // Auto-create commission ledger account for the broker if commission amount > 0
-      const commissionAmt = parseFloat(values.commissionAmount || "0");
+      const commissionAmt = toMoney(values.commissionAmount);
       if (!values.commissionAccountId && values.commissionSupplierId) {
         const [broker] = await db
           .select({ id: factorySuppliers.id, name: factorySuppliers.name })
@@ -119,24 +119,24 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       // Using the container fxRateToUsd for that case gives a wrong commissionTotalUsd.
       const commFxCcy = (values.commissionCurrencyCode || currencyCode || "USD").toUpperCase();
       const containerCcyUpper = (currencyCode || "USD").toUpperCase();
-      if (commissionAmt > 0) {
-        let commFxResolved: number;
+      if (commissionAmt.greaterThan(0)) {
+        let commFxResolved: ReturnType<typeof toMoney>;
         if (commFxCcy === "USD") {
-          commFxResolved = 1;
+          commFxResolved = toMoney(1);
         } else if (commFxCcy === containerCcyUpper) {
           // Same currency as container — container FX is correct
-          commFxResolved = parseFloat(fxRate);
+          commFxResolved = toMoney(fxRate);
         } else {
           // Different non-USD currency: resolve independently
           try {
-            commFxResolved = parseFloat(await getOrFetchFxRateToUsd(companyId, commFxCcy, importDate));
+            commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, commFxCcy, importDate));
           } catch (err: unknown) {
             return res.status(400).json({
               message: `Cannot resolve FX rate for commission currency ${commFxCcy} on ${importDate}. ${getErrorMessage(err)}`,
             });
           }
         }
-        values.commissionFxRateToUsd = String(commFxResolved);
+        values.commissionFxRateToUsd = commFxResolved.toFixed();
         values.commissionFxRateConfirmed = true;
         values.commissionFxRateDate = importDate;
       } else {
@@ -146,7 +146,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       }
 
       // Auto-create freight ledger account if freight > 0 and no account selected
-      if (!values.freightAccountId && parseFloat(values.freight || "0") > 0) {
+      if (!values.freightAccountId && toMoney(values.freight).greaterThan(0)) {
         values.freightAccountId = await getOrCreateLedgerAccount(companyId, "FREIGHT", "Freight");
       }
 
@@ -155,8 +155,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       // Rule B — Own Account: require freightOwnAccountId, clear supplier link.
       // Rule C — By Supplier: require a purchase supplier, clear own account, auto-fill freightSupplierId.
       const freightPaidByOnCreate = values.freightPaidBy || "supplier";
-      const freightAmtOnCreate = parseFloat(values.freight || "0");
-      if (freightAmtOnCreate <= 0) {
+      if (toMoney(values.freight).lessThanOrEqualTo(0)) {
         // Rule A: no freight → clear both
         values.freightSupplierId = null;
         values.freightOwnAccountId = null;
@@ -189,8 +188,8 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
           .where(eq(factorySuppliers.id, container.supplierId));
         supplierNameForDesc = sup?.name || "";
       }
-      const kgForDesc = parseFloat(container.totalKg || "0");
-      const rateForDesc = parseFloat(container.ratePerKg || "0");
+      const kgForDesc = toMoney(container.totalKg).toNumber();
+      const rateForDesc = toMoney(container.ratePerKg).toNumber();
       const ccyForDesc = container.currencyCode || "USD";
       const descParts = [
         container.containerNumber,
@@ -198,6 +197,10 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         kgForDesc > 0 ? `${kgForDesc.toLocaleString()} kg` : null,
         rateForDesc > 0 ? `${rateForDesc} ${ccyForDesc}/kg` : null,
       ].filter(Boolean);
+
+      // Exact: 1000.5 kg at 0.35 is 350.175, kept as 350.18; the float product
+      // 350.17499999999995 was kept as 350.17.
+      const goodsValue = toMoney(container.ratePerKg).times(toMoney(container.totalKg));
 
       await writeDaybookEntry(db, {
         companyId,
@@ -207,13 +210,12 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         referenceTable: "factory_containers",
         description: descParts.join(" · "),
         currencyCode: ccyForDesc,
-        amountCurrency: parseFloat(container.ratePerKg || "0") * parseFloat(container.totalKg || "0"),
+        amountCurrency: goodsValue.toNumber(),
         fxRateToUsd: resolveStoredFxRateOrThrow(ccyForDesc, container.fxRateToUsd, container.fxRateConfirmed),
       });
 
       // Double-entry: Goods value — Dr Factory Import Cost / Cr Supplier Payable
-      const goodsValue = parseFloat(container.ratePerKg || "0") * parseFloat(container.totalKg || "0");
-      if (goodsValue > 0 && container.supplierId) {
+      if (goodsValue.greaterThan(0) && container.supplierId) {
         const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
         const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
         const [importVoucher] = await db
@@ -224,7 +226,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
             voucherNumber: importVoucherNum,
             voucherDate: container.arrivalDate || today,
             description: `Goods import - container ${container.containerNumber}`,
-            totalAmount: String(goodsValue),
+            totalAmount: goodsValue.toFixed(),
             currency: container.currencyCode || "USD",
             exchangeRate: String(
               resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
@@ -240,13 +242,13 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         await db.insert(voucherEntries).values({
           voucherId: importVoucher.id,
           ledgerAccountId: importCostAccId,
-          ...normFactoryEntry(container.currencyCode || "USD", String(goodsValue), "0", importFactoryFxRate),
+          ...normFactoryEntry(container.currencyCode || "USD", goodsValue.toFixed(), "0", importFactoryFxRate),
           narration: `Goods import cost - container ${container.containerNumber}`,
         });
         await db.insert(voucherEntries).values({
           voucherId: importVoucher.id,
           factorySupplierId: container.supplierId,
-          ...normFactoryEntry(container.currencyCode || "USD", "0", String(goodsValue), importFactoryFxRate),
+          ...normFactoryEntry(container.currencyCode || "USD", "0", goodsValue.toFixed(), importFactoryFxRate),
           narration: `Goods payable to supplier - container ${container.containerNumber}`,
         });
       }
@@ -258,11 +260,11 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       // Double-entry: Freight
       // If freightPaidBy='own': Dr Freight Expense / Cr own ledger account
       // If freightPaidBy='supplier' (default): Dr Freight Expense / Cr Supplier Payable
-      const freightAmt = parseFloat(container.freight || "0");
+      const freightAmt = toMoney(container.freight);
       const freightCcy = container.freightCurrencyCode || container.currencyCode || "USD";
       const freightPaidBy = container.freightPaidBy || "supplier";
       const freightOwnAcctId = container.freightOwnAccountId ?? null;
-      if (freightAmt > 0 && container.freightAccountId) {
+      if (freightAmt.greaterThan(0) && container.freightAccountId) {
         const freightVoucherNum = `FACTORY-FREIGHT-${container.id}`;
         const [freightVoucher] = await db
           .insert(vouchers)
@@ -272,7 +274,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
             voucherNumber: freightVoucherNum,
             voucherDate: container.arrivalDate || today,
             description: `Freight on container ${container.containerNumber}`,
-            totalAmount: String(freightAmt),
+            totalAmount: freightAmt.toFixed(),
             currency: freightCcy,
             exchangeRate:
               freightCcy === (container.currencyCode || "USD")
@@ -292,7 +294,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         await db.insert(voucherEntries).values({
           voucherId: freightVoucher.id,
           ledgerAccountId: container.freightAccountId,
-          ...normFactoryEntry(freightCcy, String(freightAmt), "0", freightFactoryFxRate),
+          ...normFactoryEntry(freightCcy, freightAmt.toFixed(), "0", freightFactoryFxRate),
           narration: `Freight expense - container ${container.containerNumber}`,
         });
         if (freightPaidBy === "own" && freightOwnAcctId) {
@@ -300,7 +302,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: freightVoucher.id,
             ledgerAccountId: freightOwnAcctId,
-            ...normFactoryEntry(freightCcy, "0", String(freightAmt), freightFactoryFxRate),
+            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
             narration: `Freight paid via own account - container ${container.containerNumber}`,
           });
         } else if (freightPaidBy === "supplier" && container.supplierId) {
@@ -308,7 +310,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: freightVoucher.id,
             factorySupplierId: container.supplierId,
-            ...normFactoryEntry(freightCcy, "0", String(freightAmt), freightFactoryFxRate),
+            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
             narration: `Freight payable to supplier - container ${container.containerNumber}`,
           });
         }

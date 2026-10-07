@@ -26,6 +26,31 @@ import {
   locations,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+
+/** Bale cost columns are numeric(20, 7). */
+const BALE_COST_SCALE = 7;
+
+/**
+ * Blended cost per kg of a mix batch's sources, each priced at its
+ * container's raw-stock cost when there is one; null when the sources
+ * weigh nothing.
+ */
+function blendedSourceCost(
+  sources: Array<{ weightKg: string; costPerKg: string; containerId: number | null }>,
+  rawStockCostMap: Map<number, Decimal>
+): Decimal | null {
+  let totalCost = new MoneyDecimal(0);
+  let totalWeight = new MoneyDecimal(0);
+  for (const src of sources) {
+    const w = toMoney(src.weightKg);
+    const c = (src.containerId && rawStockCostMap.get(src.containerId)) || toMoney(src.costPerKg);
+    totalCost = totalCost.plus(w.times(c));
+    totalWeight = totalWeight.plus(w);
+  }
+  return totalWeight.greaterThan(0) ? totalCost.dividedBy(totalWeight) : null;
+}
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 
@@ -67,7 +92,7 @@ export function registerBalesFinalizeRoutes(app: Express) {
 
         if (!mixBatch) throw new Error("Mix batch not found");
 
-        const mixRemaining = parseFloat(mixBatch.totalWeightKg) - parseFloat(mixBatch.usedKg);
+        const mixRemaining = toMoney(mixBatch.totalWeightKg).minus(toMoney(mixBatch.usedKg));
 
         const pendingBales = await tx
           .select()
@@ -85,12 +110,12 @@ export function registerBalesFinalizeRoutes(app: Express) {
         const balesToFinalize = pendingBales.filter((b) => scannedSet.has(b.id));
         const missingBales = pendingBales.filter((b) => !scannedSet.has(b.id));
 
-        let totalWeight = 0;
+        let totalWeight = new MoneyDecimal(0);
         for (const bale of balesToFinalize) {
-          totalWeight += parseFloat(bale.weightKg);
+          totalWeight = totalWeight.plus(toMoney(bale.weightKg));
         }
 
-        if (totalWeight > mixRemaining + 0.001) {
+        if (totalWeight.greaterThan(mixRemaining.plus(0.001))) {
           throw new Error(
             `Not enough mix batch remaining. Need ${totalWeight.toFixed(3)} kg but only ${mixRemaining.toFixed(3)} kg available`
           );
@@ -107,41 +132,29 @@ export function registerBalesFinalizeRoutes(app: Express) {
           .from(factoryMixBatchSources)
           .where(eq(factoryMixBatchSources.mixBatchId, mixBatchId));
 
-        let costPerKg: number;
+        let costPerKg: Decimal;
         if (mixSources.length > 0) {
           const sourceContainerIds = mixSources.map((s) => s.containerId).filter(Boolean) as number[];
-          const rawStockCostMap: Record<number, number> = {};
+          const rawStockCostMap = new Map<number, Decimal>();
           if (sourceContainerIds.length > 0) {
             const rawStockRecs = await tx
               .select({ containerId: factoryRawStock.containerId, costPerKg: factoryRawStock.costPerKg })
               .from(factoryRawStock)
               .where(inArray(factoryRawStock.containerId, sourceContainerIds));
             for (const r of rawStockRecs) {
-              rawStockCostMap[r.containerId] = parseFloat(r.costPerKg);
+              rawStockCostMap.set(r.containerId, toMoney(r.costPerKg));
             }
           }
-          let sourceTotalCost = 0;
-          let sourceTotalWeight = 0;
-          for (const src of mixSources) {
-            const w = parseFloat(src.weightKg);
-            const c =
-              src.containerId && rawStockCostMap[src.containerId] !== undefined
-                ? rawStockCostMap[src.containerId]
-                : parseFloat(src.costPerKg);
-            sourceTotalCost += w * c;
-            sourceTotalWeight += w;
-          }
-          costPerKg = sourceTotalWeight > 0 ? sourceTotalCost / sourceTotalWeight : parseFloat(mixBatch.costPerKg);
+          costPerKg = blendedSourceCost(mixSources, rawStockCostMap) ?? toMoney(mixBatch.costPerKg);
         } else {
-          costPerKg = parseFloat(mixBatch.costPerKg);
+          costPerKg = toMoney(mixBatch.costPerKg);
         }
 
         const now = new Date();
         const updatedBales = [];
 
         for (const bale of balesToFinalize) {
-          const weight = parseFloat(bale.weightKg);
-          const baleTotalCost = weight * costPerKg;
+          const baleTotalCost = toMoney(bale.weightKg).times(costPerKg);
 
           const [updated] = await tx
             .update(factoryBales)
@@ -149,8 +162,8 @@ export function registerBalesFinalizeRoutes(app: Express) {
               status: "IN_STOCK",
               erpLocationId,
               mixBatchId,
-              costPerKg: String(costPerKg),
-              totalCost: String(baleTotalCost),
+              costPerKg: costPerKg.toFixed(BALE_COST_SCALE),
+              totalCost: baleTotalCost.toFixed(BALE_COST_SCALE),
               finalizedAt: now,
               updatedAt: now,
             })
@@ -162,7 +175,7 @@ export function registerBalesFinalizeRoutes(app: Express) {
 
         await tx
           .update(factoryMixBatches)
-          .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${totalWeight}`, updatedAt: now })
+          .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${totalWeight.toFixed()}`, updatedAt: now })
           .where(eq(factoryMixBatches.id, mixBatchId));
 
         const isFullyFinalized = missingBales.length === 0;
@@ -286,11 +299,9 @@ export function registerBalesFinalizeRoutes(app: Express) {
             stockItemCache.set(itemCode, erpStockItemId!);
           }
 
-          const weight = parseFloat(bale.weightKg);
-          const baleCostPerKg = parseFloat(bale.costPerKg || "0");
-          const baleRate = weight * baleCostPerKg;
+          const baleRate = toMoney(bale.weightKg).times(toMoney(bale.costPerKg));
 
-          await adjustInventory(tx, erpLocationId, erpStockItemId!, 1, companyId, baleRate);
+          await adjustInventory(tx, erpLocationId, erpStockItemId!, 1, companyId, baleRate.toNumber());
 
           // Canonical evidence for the bale this finalisation brought into ERP
           // stock, on the same transaction that raised the inventory. A bale is
@@ -389,33 +400,23 @@ export function registerBalesFinalizeRoutes(app: Express) {
         .where(inArray(factoryMixBatchSources.mixBatchId, uniqueMixIds));
 
       const allContainerIds = [...new Set(allSources.map((s) => s.containerId).filter(Boolean))] as number[];
-      const rawStockCostMap: Record<number, number> = {};
+      const rawStockCostMap = new Map<number, Decimal>();
       if (allContainerIds.length > 0) {
         const rawStockRecs = await db
           .select({ containerId: factoryRawStock.containerId, costPerKg: factoryRawStock.costPerKg })
           .from(factoryRawStock)
           .where(inArray(factoryRawStock.containerId, allContainerIds));
         for (const r of rawStockRecs) {
-          rawStockCostMap[r.containerId] = parseFloat(r.costPerKg);
+          rawStockCostMap.set(r.containerId, toMoney(r.costPerKg));
         }
       }
 
-      const mixCostMap: Record<number, number> = {};
+      const mixCostMap = new Map<number, Decimal>();
       for (const mixId of uniqueMixIds) {
         const sources = allSources.filter((s) => s.mixBatchId === mixId);
         if (sources.length === 0) continue;
-        let totalCost = 0,
-          totalWt = 0;
-        for (const src of sources) {
-          const w = parseFloat(src.weightKg);
-          const c =
-            src.containerId && rawStockCostMap[src.containerId] !== undefined
-              ? rawStockCostMap[src.containerId]
-              : parseFloat(src.costPerKg);
-          totalCost += w * c;
-          totalWt += w;
-        }
-        if (totalWt > 0) mixCostMap[mixId] = totalCost / totalWt;
+        const blended = blendedSourceCost(sources, rawStockCostMap);
+        if (blended) mixCostMap.set(mixId, blended);
       }
 
       let updated = 0;
@@ -423,12 +424,16 @@ export function registerBalesFinalizeRoutes(app: Express) {
       for (const bale of balesWithMix) {
         const isGarbage = bale.articleCode?.startsWith("HMD16");
         if (isGarbage) continue;
-        const newCost = bale.mixBatchId ? mixCostMap[bale.mixBatchId] : undefined;
+        const newCost = bale.mixBatchId ? mixCostMap.get(bale.mixBatchId) : undefined;
         if (newCost === undefined) continue;
-        const newTotal = parseFloat(bale.weightKg) * newCost;
+        const newTotal = toMoney(bale.weightKg).times(newCost);
         await db
           .update(factoryBales)
-          .set({ costPerKg: String(newCost), totalCost: String(newTotal), updatedAt: now })
+          .set({
+            costPerKg: newCost.toFixed(BALE_COST_SCALE),
+            totalCost: newTotal.toFixed(BALE_COST_SCALE),
+            updatedAt: now,
+          })
           .where(eq(factoryBales.id, bale.id));
         updated++;
       }

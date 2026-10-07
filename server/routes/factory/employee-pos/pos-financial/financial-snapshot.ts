@@ -20,6 +20,8 @@ import {
   factoryWorkerAdvances,
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ne, isNull } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, signedOpeningBalance, sumMoney, toMoney } from "../../../../lib/money";
 
 export function registerFactoryFinancialSnapshotRoutes(app: Express) {
   // ─────────────────────────────────────────────────────────────────────────
@@ -30,7 +32,8 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+      // Cents, rounded half away from zero as Postgres numeric rounds.
+      const round2 = (n: Decimal) => n.toDecimalPlaces(2).toNumber();
 
       // ── 1. Raw material value (remaining kg × cost per kg USD) ────────────
       const rawStockRows = await db
@@ -43,11 +46,12 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
         .from(factoryRawStock)
         .where(eq(factoryRawStock.companyId, companyId));
 
-      let rawMaterialValue = 0;
+      let rawMaterialValue = new MoneyDecimal(0);
       for (const r of rawStockRows) {
-        const remaining = parseFloat(r.receivedKg || "0") - parseFloat(r.usedKg || "0");
-        const cost = parseFloat(r.costPerKgUsd || "0") || parseFloat(r.costPerKg || "0");
-        rawMaterialValue += remaining * cost;
+        const remaining = toMoney(r.receivedKg).minus(toMoney(r.usedKg));
+        const costUsd = toMoney(r.costPerKgUsd);
+        const cost = costUsd.isZero() ? toMoney(r.costPerKg) : costUsd;
+        rawMaterialValue = rawMaterialValue.plus(remaining.times(cost));
       }
 
       // ── 2. Mix batch value (non-finalized batches: not COMPLETED or CLOSED) ─
@@ -67,11 +71,10 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
           )
         );
 
-      let mixBatchValue = 0;
+      let mixBatchValue = new MoneyDecimal(0);
       for (const b of mixBatchRows) {
-        const remaining = parseFloat(b.totalWeightKg || "0") - parseFloat(b.usedKg || "0");
-        const cost = parseFloat(b.costPerKg || "0");
-        if (remaining > 0) mixBatchValue += remaining * cost;
+        const remaining = toMoney(b.totalWeightKg).minus(toMoney(b.usedKg));
+        if (remaining.greaterThan(0)) mixBatchValue = mixBatchValue.plus(remaining.times(toMoney(b.costPerKg)));
       }
 
       // ── 3. Bale stock weight — only physically-present bales ──────────────
@@ -88,9 +91,9 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
           and(eq(factoryBales.companyId, companyId), inArray(factoryBales.status, ["IN_STOCK", "RESERVED_FOR_ORDER"]))
         );
 
-      const baleWeightTotal = parseFloat(baleAgg[0]?.totalWeight || "0");
+      const baleWeightTotal = toMoney(baleAgg[0]?.totalWeight);
       const baleCount = parseInt(baleAgg[0]?.totalCount || "0");
-      const baleValueTotal = parseFloat(baleAgg[0]?.totalValue || "0");
+      const baleValueTotal = toMoney(baleAgg[0]?.totalValue);
 
       // ── 4. Outstanding worker advances ────────────────────────────────────
       const advanceAgg = await db
@@ -101,7 +104,7 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
         .from(factoryWorkerAdvances)
         .where(and(eq(factoryWorkerAdvances.companyId, companyId), eq(factoryWorkerAdvances.fullyPaid, false)));
 
-      const outstandingAdvances = parseFloat(advanceAgg[0]?.total || "0");
+      const outstandingAdvances = toMoney(advanceAgg[0]?.total);
       const advanceCount = parseInt(advanceAgg[0]?.count || "0");
 
       // ── 5. Active worker count ────────────────────────────────────────────
@@ -135,7 +138,7 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
         );
 
       // Get voucher entries for equity accounts
-      let capitalTotal = 0;
+      let capitalTotal = new MoneyDecimal(0);
       if (equityAccounts.length > 0) {
         const equityIds = equityAccounts.map((a) => a.id);
         const equityEntries = await db
@@ -157,20 +160,20 @@ export function registerFactoryFinancialSnapshotRoutes(app: Express) {
           .where(inArray(voucherEntries.ledgerAccountId, equityIds))
           .groupBy(voucherEntries.ledgerAccountId);
 
-        const balMap = new Map<number, { debit: number; credit: number }>();
+        const netMovement = new Map<number, Decimal>();
         for (const e of equityEntries) {
           if (e.ledgerAccountId === null) continue;
-          balMap.set(e.ledgerAccountId, { debit: parseFloat(e.debit || "0"), credit: parseFloat(e.credit || "0") });
+          netMovement.set(e.ledgerAccountId, toMoney(e.debit).minus(toMoney(e.credit)));
         }
 
-        for (const acc of equityAccounts) {
-          const opening = parseFloat(acc.openingBalance || "0");
-          const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : -1;
-          const signedOpening = opening * openingSide;
-          const bal = balMap.get(acc.id) || { debit: 0, credit: 0 };
-          const net = signedOpening + bal.debit - bal.credit;
-          capitalTotal += net;
-        }
+        // Equity openings without a side count as credit balances.
+        capitalTotal = sumMoney(
+          equityAccounts.map((acc) =>
+            signedOpeningBalance(acc.openingBalance, acc.openingBalanceSide === "Dr" ? "Dr" : "Cr").plus(
+              netMovement.get(acc.id) ?? 0
+            )
+          )
+        );
       }
 
       res.json({

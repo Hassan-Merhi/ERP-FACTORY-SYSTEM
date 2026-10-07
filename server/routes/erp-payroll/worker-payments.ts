@@ -12,6 +12,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney } from "../../lib/money";
 import {
+  bankAccounts,
   employeeGroupMembers,
   employeeGroups,
   employees,
@@ -74,6 +75,13 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
       if (!employee) {
         return res.status(404).json({ message: "Worker not found" });
       }
+
+      // The credited bank account must belong to this company.
+      const [bank] = await db
+        .select({ id: bankAccounts.id })
+        .from(bankAccounts)
+        .where(and(eq(bankAccounts.id, Number(bankAccountId)), eq(bankAccounts.companyId, companyId)));
+      if (!bank) return res.status(404).json({ message: "Payment account not found" });
 
       // Dr Salary Expense / Cr bank, posted together or not at all.
       const voucherNumber = `SAL-PAY-${Date.now()}`;
@@ -165,6 +173,22 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
         return res.status(404).json({ message: "Worker not found" });
       }
 
+      // The credited cash or bank account must belong to this company.
+      const creditAccountId = parseInt(accountId);
+      if (accountType === "cash") {
+        const [cash] = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.id, creditAccountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!cash) return res.status(404).json({ message: "Cash account not found" });
+      } else {
+        const [bank] = await db
+          .select({ id: bankAccounts.id })
+          .from(bankAccounts)
+          .where(and(eq(bankAccounts.id, creditAccountId), eq(bankAccounts.companyId, companyId)));
+        if (!bank) return res.status(404).json({ message: "Payment account not found" });
+      }
+
       // Build group-membership lookup: employeeId → groupName
       const bulkPayGroupMemberships = await db
         .select({ employeeId: employeeGroupMembers.employeeId, groupName: employeeGroups.name })
@@ -226,9 +250,7 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
           debitAmount: "0",
           creditAmount: moneyString(totalAmount),
           narration: `Bulk salary payment - ${payments.length} workers - ${voucherNumber}`,
-          ...(accountType === "cash"
-            ? { ledgerAccountId: parseInt(accountId) }
-            : { bankAccountId: parseInt(accountId) }),
+          ...(accountType === "cash" ? { ledgerAccountId: creditAccountId } : { bankAccountId: creditAccountId }),
         });
         return created;
       });

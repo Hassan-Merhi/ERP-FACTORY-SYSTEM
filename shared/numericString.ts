@@ -7,3 +7,5 @@ export const numericStringWhere = (test: (value: number) => boolean) => (val: st
   val.trim() !== "" && Number.isFinite(Number(val)) && test(Number(val));
 export const isPositiveNumeric = numericStringWhere((value) => value > 0);
 export const isNonNegativeNumeric = numericStringWhere((value) => value >= 0);
+export const isNonZeroNumeric = numericStringWhere((value) => value !== 0);
+export const isNumericString = numericStringWhere(() => true);
