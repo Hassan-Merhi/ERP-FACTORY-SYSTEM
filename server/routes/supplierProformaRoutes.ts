@@ -191,6 +191,13 @@ export function registerSupplierProformaRoutes(app: Express, requireAuth: Reques
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const proformaId = parseId(req.params.proformaId);
       if (proformaId === null) return res.status(400).json({ message: "Invalid id" });
+      // Lines are removed only once the proforma is confirmed to belong to the
+      // company; they used to be deleted first, for any proforma id.
+      const [owned] = await db
+        .select({ id: supplierProformas.id })
+        .from(supplierProformas)
+        .where(and(eq(supplierProformas.id, proformaId), eq(supplierProformas.companyId, companyId)));
+      if (!owned) return res.status(404).json({ message: "Proforma not found" });
       await db.delete(supplierProformaLines).where(eq(supplierProformaLines.proformaId, proformaId));
       await db
         .delete(supplierProformas)
