@@ -13,6 +13,8 @@
  *   - POS import: validated and imported sales at another company's location;
  *   - stock adjustment edits and waste dispatches: reached another
  *     company's adjustment, or used another company's location;
+ *   - location prices and stock group archives: priced or archived at another
+ *     company's location, and deleted another company's price;
  *   - credit and debit notes: booked stock at another company's location;
  *   - silent production: adjusted stock at another company's location.
  */
@@ -87,6 +89,10 @@ afterAll(async () => {
   await pool.query(`DELETE FROM production_bales WHERE id = ANY($1)`, [[foreignBaleId, ownBaleId]]);
   await pool.query(`DELETE FROM stock_movements WHERE company_id = $1`, [foreignCompanyId]).catch(() => undefined);
   await pool.query(`DELETE FROM inventory WHERE location_id = $1`, [foreignLocationId]);
+  await pool.query(`DELETE FROM stock_item_location_prices WHERE location_id = $1`, [foreignLocationId]);
+  await pool
+    .query(`DELETE FROM stock_group_location_archives WHERE location_id = $1`, [foreignLocationId])
+    .catch(() => undefined);
   await pool.query(`DELETE FROM locations WHERE company_id = $1`, [foreignCompanyId]);
   await pool.query(`DELETE FROM companies WHERE id = $1`, [foreignCompanyId]);
   await cleanupTestData(TEST_PREFIX);
@@ -291,6 +297,37 @@ describe("stock adjustment and waste dispatch tenant scope", () => {
     });
     expect(response.status).toBe(400);
     expect(response.body.message).toBe("Location not found");
+  });
+});
+
+describe("location prices and stock group archives tenant scope", () => {
+  it("refuses another company's location and another company's price", async () => {
+    const price = await agent
+      .post(`/api/stock-items/${ctx.stockItemIds[1]}/location-prices`)
+      .send({ locationId: foreignLocationId, sellingPrice: "9.99" });
+    expect(price.status).toBe(400);
+    expect(price.body.message).toBe("Location not found");
+
+    const archive = await agent
+      .post("/api/stock-group-archives")
+      .send({ locationId: foreignLocationId, stockGroupId: null });
+    expect(archive.status).toBe(400);
+    expect(archive.body.message).toBe("Location not found");
+
+    const foreignItem = await pool.query<{ id: number }>(
+      `INSERT INTO stock_items (company_id, code, name, uom, active) VALUES ($1, 'BSF-PRICE', 'Foreign priced', 'PCS', true) RETURNING id`,
+      [foreignCompanyId]
+    );
+    const foreignPrice = await pool.query<{ id: number }>(
+      `INSERT INTO stock_item_location_prices (stock_item_id, location_id, selling_price) VALUES ($1, $2, '5.00') RETURNING id`,
+      [foreignItem.rows[0].id, foreignLocationId]
+    );
+    const removed = await agent.delete(`/api/stock-item-location-prices/${foreignPrice.rows[0].id}`);
+    expect(removed.status).toBe(404);
+    const still = await pool.query(`SELECT 1 FROM stock_item_location_prices WHERE id = $1`, [foreignPrice.rows[0].id]);
+    expect(still.rowCount).toBe(1);
+    await pool.query(`DELETE FROM stock_item_location_prices WHERE id = $1`, [foreignPrice.rows[0].id]);
+    await pool.query(`DELETE FROM stock_items WHERE id = $1`, [foreignItem.rows[0].id]);
   });
 });
 
