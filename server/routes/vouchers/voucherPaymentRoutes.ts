@@ -21,12 +21,39 @@ import { factorySettings as fSettings, factoryDaybookEntries as fde } from "@sha
 import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
 import { syncContainerChargeVoucherEditTx } from "../../services/containers/offload-lifecycle/charge-voucher-sync";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
  * look for order charges linked to that ledger account for that customer.
  * If exactly one charge is found, update its amount and recalculate the order totals.
  */
+
+/**
+ * A payment or receipt voucher's totals, exact: the entries summed in the
+ * voucher currency and the base (USD) total stored on the voucher, CFA ÷ rate
+ * for non-USD vouchers. Null when an entry amount is not a number.
+ */
+function paymentVoucherTotals(
+  entries: readonly { amount?: unknown }[],
+  currency: string,
+  rateRaw: string | number | null
+): { transactionTotal: Decimal; baseTotal: Decimal } | null {
+  let transactionTotal: Decimal = new MoneyDecimal(0);
+  for (const entry of entries) {
+    const amount =
+      entry.amount === undefined || entry.amount === null || entry.amount === ""
+        ? new MoneyDecimal(0)
+        : parseMoneyInput(entry.amount);
+    if (!amount) return null;
+    transactionTotal = transactionTotal.plus(amount);
+  }
+  const cfaPerUsd = currency !== "USD" && rateRaw ? parseMoneyInput(rateRaw) : null;
+  const baseTotal =
+    currency !== "USD" && cfaPerUsd && cfaPerUsd.gt(0) ? transactionTotal.div(cfaPerUsd) : transactionTotal;
+  return { transactionTotal, baseTotal };
+}
 
 export function registerVoucherPaymentRoutes(app: Express) {
   app.post("/api/vouchers/payment-receipt", requireAuth, requireNonPOS, async (req, res) => {
@@ -70,11 +97,11 @@ export function registerVoucherPaymentRoutes(app: Express) {
       // baseTotal is the historical base-currency (USD) equivalent stored on the voucher.
       const vCurrency = (currency as string | undefined) || "USD";
       const vRateRaw = (exchangeRate as string | number | undefined) || null;
-      const cfaPerUsd = vCurrency !== "USD" && vRateRaw ? parseFloat(String(vRateRaw)) : 1;
-      const transactionTotal = entries.reduce((sum: number, entry) => sum + parseFloat(entry.amount || "0"), 0);
       // For CFA vouchers: baseTotal = transactionTotal / cfaPerUsd (CFA ÷ rate = USD)
       // For USD vouchers: baseTotal = transactionTotal (no conversion)
-      const baseTotal = vCurrency !== "USD" && cfaPerUsd > 0 ? transactionTotal / cfaPerUsd : transactionTotal;
+      const totals = paymentVoucherTotals(entries, vCurrency, vRateRaw);
+      if (!totals) return res.status(400).json({ message: "Invalid amount" });
+      const { baseTotal } = totals;
 
       // Generate voucher number
       const voucherNumber = `${voucherType.toUpperCase()}-${Date.now()}`;
@@ -357,11 +384,11 @@ export function registerVoucherPaymentRoutes(app: Express) {
           const daybookCurrency = result.voucher.currency || "USD";
           // vouchers.totalAmount now stores the historical base (USD) amount.
           // transactionTotal (CFA) = baseTotal * cfaPerUsd for non-USD vouchers.
-          const daybookBaseTotal = parseFloat(result.voucher.totalAmount || "0");
-          const daybookRate = result.voucher.exchangeRate ? parseFloat(result.voucher.exchangeRate) : 1;
+          const daybookBaseTotal = toMoney(result.voucher.totalAmount);
+          const daybookRate = result.voucher.exchangeRate ? toMoney(result.voucher.exchangeRate) : new MoneyDecimal(1);
           // Reconstruct the original CFA total: base × rate (TRANSACTION_PER_BASE).
           const daybookAmtCurrency =
-            daybookCurrency !== "USD" && daybookRate > 0 ? daybookBaseTotal * daybookRate : daybookBaseTotal;
+            daybookCurrency !== "USD" && daybookRate.gt(0) ? daybookBaseTotal.times(daybookRate) : daybookBaseTotal;
           // factory_daybook_entries.fx_rate_to_usd expects USD-per-foreign-unit.
           // The ERP voucher stores CFA-per-USD (TRANSACTION_PER_BASE), so we invert.
           const daybookFxRateToUsd = erpRateToDaybookFxRateToUsd(daybookCurrency, "USD", result.voucher.exchangeRate);
@@ -373,9 +400,9 @@ export function registerVoucherPaymentRoutes(app: Express) {
             referenceTable: "vouchers",
             description: result.voucher.description || `${vType} voucher #${result.voucher.voucherNumber}`,
             currencyCode: daybookCurrency,
-            amountCurrency: String(daybookAmtCurrency),
+            amountCurrency: daybookAmtCurrency.toFixed(),
             fxRateToUsd: daybookFxRateToUsd,
-            amountUsd: String(daybookBaseTotal),
+            amountUsd: daybookBaseTotal.toFixed(),
             createdBy: null,
             effectiveDate: result.voucher.effectiveDate || null,
           });
@@ -485,11 +512,10 @@ export function registerVoucherPaymentRoutes(app: Express) {
       // Determine currency/rate for the PATCH (may preserve existing if not re-sent).
       const pCurrency = (currency as string | undefined) || "USD";
       const pRateRaw = (exchangeRate as string | number | undefined) || null;
-      const pCfaPerUsd = pCurrency !== "USD" && pRateRaw ? parseFloat(String(pRateRaw)) : 1;
-      // Transaction total (voucher currency, e.g. CFA)
-      const pTransactionTotal = entries.reduce((sum: number, e) => sum + parseFloat(e.amount || "0"), 0);
       // Base total (historical USD) — stored in vouchers.totalAmount
-      const pBaseTotal = pCurrency !== "USD" && pCfaPerUsd > 0 ? pTransactionTotal / pCfaPerUsd : pTransactionTotal;
+      const pTotals = paymentVoucherTotals(entries, pCurrency, pRateRaw);
+      if (!pTotals) return res.status(400).json({ message: "Invalid amount" });
+      const pBaseTotal = pTotals.baseTotal;
 
       // Use database transaction for atomic operation
       const result = await db.transaction(async (tx) => {
