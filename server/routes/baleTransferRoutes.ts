@@ -8,10 +8,12 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { sumMoney } from "../lib/money";
+import { ownLocationIds, positiveIds } from "./helpers/companyOwnership";
 import {
   baleTransfers,
   baleTransferItems,
@@ -20,6 +22,27 @@ import {
   factorySettings as fSettings,
   factoryDaybookEntries as fde,
 } from "@shared/schema";
+
+/** The transfer when it belongs to `companyId`; every route by id goes through this. */
+async function ownTransfer(transferId: number, companyId: number) {
+  const [transfer] = await db
+    .select()
+    .from(baleTransfers)
+    .where(and(eq(baleTransfers.id, transferId), eq(baleTransfers.companyId, companyId)));
+  return transfer;
+}
+
+/** True when every production bale id is a bale of `companyId`. */
+async function allBalesOwned(companyId: number, baleIds: readonly unknown[]): Promise<boolean> {
+  const ids = positiveIds(baleIds);
+  if (ids.length !== baleIds.length) return false;
+  if (ids.length === 0) return true;
+  const rows = await db
+    .select({ id: productionBales.id })
+    .from(productionBales)
+    .where(and(eq(productionBales.companyId, companyId), inArray(productionBales.id, ids)));
+  return rows.length === ids.length;
+}
 
 export function registerBaleTransferRoutes(app: Express) {
   // Bale Transfer Routes
@@ -75,6 +98,20 @@ export function registerBaleTransferRoutes(app: Express) {
           message: "Missing required fields: sourceLocationId, destinationLocationId, transferDate, and items array",
         });
       }
+      // Locations and bales come from the body, outside the path-based company
+      // scope: all of them must belong to this company before anything moves.
+      const ownedLocations = await ownLocationIds(companyId, [sourceLocationId, destinationLocationId]);
+      if (!ownedLocations.has(Number(sourceLocationId)) || !ownedLocations.has(Number(destinationLocationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
+      if (
+        !(await allBalesOwned(
+          companyId,
+          items.map((item: { productionBaleId?: unknown }) => item?.productionBaleId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Bale not found" });
+      }
       const createdBy = req.session.username || "system";
 
       const result = await db.transaction(async (tx) => {
@@ -108,7 +145,7 @@ export function registerBaleTransferRoutes(app: Express) {
               status: "IN_STOCK",
               updatedAt: sql`now()`,
             })
-            .where(eq(productionBales.id, item.productionBaleId));
+            .where(and(eq(productionBales.id, item.productionBaleId), eq(productionBales.companyId, companyId)));
         }
 
         return transfer;
@@ -118,7 +155,9 @@ export function registerBaleTransferRoutes(app: Express) {
       try {
         const [fSetting] = await db.select().from(fSettings).where(eq(fSettings.companyId, companyId));
         if (fSetting) {
-          const totalCost = items.reduce((s: number, it) => s + parseFloat(it.totalCost || "0"), 0);
+          const totalCost = sumMoney(items.map((it: { totalCost?: string | number | null }) => it.totalCost)).toFixed(
+            2
+          );
           await db.insert(fde).values({
             companyId,
             txDate: transferDate,
@@ -146,6 +185,8 @@ export function registerBaleTransferRoutes(app: Express) {
 
   app.get("/api/bale-transfers/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const transferId = parseInt(req.params.id);
       if (isNaN(transferId)) return res.status(400).json({ message: "Invalid transfer ID" });
 
@@ -166,7 +207,7 @@ export function registerBaleTransferRoutes(app: Express) {
           destinationLocationName: sql<string>`(SELECT name FROM locations WHERE id = ${baleTransfers.destinationLocationId})`,
         })
         .from(baleTransfers)
-        .where(eq(baleTransfers.id, transferId));
+        .where(and(eq(baleTransfers.id, transferId), eq(baleTransfers.companyId, companyId)));
 
       if (!transfer) return res.status(404).json({ message: "Transfer not found" });
 
@@ -202,10 +243,12 @@ export function registerBaleTransferRoutes(app: Express) {
 
   app.patch("/api/bale-transfers/:id/complete", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const transferId = parseInt(req.params.id);
       if (isNaN(transferId)) return res.status(400).json({ message: "Invalid transfer ID" });
 
-      const [transfer] = await db.select().from(baleTransfers).where(eq(baleTransfers.id, transferId));
+      const transfer = await ownTransfer(transferId, companyId);
 
       if (!transfer) return res.status(404).json({ message: "Transfer not found" });
 
@@ -228,10 +271,12 @@ export function registerBaleTransferRoutes(app: Express) {
 
   app.delete("/api/bale-transfers/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const transferId = parseInt(req.params.id);
       if (isNaN(transferId)) return res.status(400).json({ message: "Invalid transfer ID" });
 
-      const [transfer] = await db.select().from(baleTransfers).where(eq(baleTransfers.id, transferId));
+      const transfer = await ownTransfer(transferId, companyId);
 
       if (!transfer) return res.status(404).json({ message: "Transfer not found" });
 
@@ -249,7 +294,7 @@ export function registerBaleTransferRoutes(app: Express) {
               locationId: transfer.sourceLocationId,
               updatedAt: sql`now()`,
             })
-            .where(eq(productionBales.id, item.productionBaleId));
+            .where(and(eq(productionBales.id, item.productionBaleId), eq(productionBales.companyId, companyId)));
         }
 
         await tx.delete(baleTransferItems).where(eq(baleTransferItems.transferId, transferId));
@@ -265,9 +310,30 @@ export function registerBaleTransferRoutes(app: Express) {
 
   app.patch("/api/bale-transfers/:id", requireAuth, async (req, res) => {
     try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { items, status, notes } = req.body;
       const transferId = parseInt(req.params.id, 10);
       if (isNaN(transferId)) return res.status(400).json({ message: "Invalid transfer ID" });
+      if (!(await ownTransfer(transferId, companyId))) return res.status(404).json({ message: "Transfer not found" });
+
+      if (Array.isArray(items)) {
+        // Edited lines must be lines of this transfer; new lines must add this company's bales.
+        const editedIds = positiveIds(
+          items.filter((item: { id?: unknown }) => item?.id).map((item: { id: unknown }) => item.id)
+        );
+        if (editedIds.length > 0) {
+          const lines = await db
+            .select({ id: baleTransferItems.id })
+            .from(baleTransferItems)
+            .where(and(eq(baleTransferItems.transferId, transferId), inArray(baleTransferItems.id, editedIds)));
+          if (lines.length !== editedIds.length) return res.status(404).json({ message: "Transfer not found" });
+        }
+        const addedBaleIds = items
+          .filter((item: { id?: unknown }) => !item?.id)
+          .map((item: { productionBaleId?: unknown }) => item?.productionBaleId);
+        if (!(await allBalesOwned(companyId, addedBaleIds))) return res.status(400).json({ message: "Bale not found" });
+      }
 
       await storage.updateBaleTransfer(transferId, {
         status,

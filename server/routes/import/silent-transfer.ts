@@ -14,23 +14,15 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { upload } from "../_helpers";
-import { inventory, locations, stockItems } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { inventory } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
+import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../../excelHelper";
 import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
-
-/** The ids among `locationIds` that are locations of `companyId`. */
-async function ownLocationIds(companyId: number, locationIds: number[]): Promise<Set<number>> {
-  const rows = await db
-    .select({ id: locations.id })
-    .from(locations)
-    .where(and(eq(locations.companyId, companyId), inArray(locations.id, locationIds)));
-  return new Set(rows.map((row) => row.id));
-}
 
 export function registerSilentTransferRoutes(app: Express) {
   // Template download
@@ -201,21 +193,13 @@ export function registerSilentTransferRoutes(app: Express) {
       if (!owned.has(dstId)) return res.status(400).json({ message: "Destination location not found" });
 
       // Every stock item must belong to the company before anything moves.
-      const requestedItemIds = [
-        ...new Set(
-          items
-            .map((item: { stockItemId?: unknown }) => Number(item?.stockItemId))
-            .filter((id: number) => Number.isInteger(id) && id > 0)
-        ),
-      ] as number[];
-      if (requestedItemIds.length > 0) {
-        const ownedItems = await db
-          .select({ id: stockItems.id })
-          .from(stockItems)
-          .where(and(eq(stockItems.companyId, companyId), inArray(stockItems.id, requestedItemIds)));
-        if (ownedItems.length !== requestedItemIds.length) {
-          return res.status(400).json({ message: "Stock item not found" });
-        }
+      if (
+        !(await allStockItemsOwned(
+          companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Stock item not found" });
       }
 
       const operationId = randomUUID();

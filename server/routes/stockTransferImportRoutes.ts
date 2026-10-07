@@ -21,6 +21,7 @@ import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { ownLocationIds } from "./helpers/companyOwnership";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
@@ -131,9 +132,19 @@ export function registerStockTransferImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedStockTransferItem[] = [];
 
-      // Validate locations exist
-      const sourceLocation = await storage.getLocationById(sourceLocationId);
-      const destLocation = await storage.getLocationById(destinationLocationId);
+      // Validate locations exist in this company. The ids come from the body,
+      // which the path-based company scope does not see.
+      const ownedLocations = await ownLocationIds(req.session.currentCompanyId, [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
+      ]);
+      const sourceLocation = ownedLocations.has(Number(sourceLocationId))
+        ? await storage.getLocationById(sourceLocationId)
+        : undefined;
+      const destLocation = ownedLocations.has(Number(destinationLocationId))
+        ? await storage.getLocationById(destinationLocationId)
+        : undefined;
 
       if (!sourceLocation) {
         errors.push("Source location not found");
@@ -142,6 +153,16 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       if (!destLocation) {
         errors.push("Destination location not found");
+        return res.json({ errors, warnings, validatedItems });
+      }
+
+      if (
+        items.some(
+          (item: { sourceLocationId?: unknown }) =>
+            item?.sourceLocationId && !ownedLocations.has(Number(item.sourceLocationId))
+        )
+      ) {
+        errors.push("Source location not found");
         return res.json({ errors, warnings, validatedItems });
       }
 
@@ -223,9 +244,25 @@ export function registerStockTransferImportRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Validate locations
-      const sourceLocation = await storage.getLocationById(sourceLocationId);
-      const destLocation = await storage.getLocationById(destinationLocationId);
+      // Validate locations in this company (body ids are outside the path-based scope).
+      const ownedLocations = await ownLocationIds(req.session.currentCompanyId, [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
+      ]);
+      const sourceLocation = ownedLocations.has(Number(sourceLocationId))
+        ? await storage.getLocationById(sourceLocationId)
+        : undefined;
+      const destLocation = ownedLocations.has(Number(destinationLocationId))
+        ? await storage.getLocationById(destinationLocationId)
+        : undefined;
+      const foreignItemSource = items.some(
+        (item: { sourceLocationId?: unknown }) =>
+          item?.sourceLocationId && !ownedLocations.has(Number(item.sourceLocationId))
+      );
+      if (foreignItemSource) {
+        return res.status(400).json({ message: "Source location not found" });
+      }
 
       if (!sourceLocation) {
         return res.status(400).json({ message: "Source location not found" });
@@ -550,9 +587,9 @@ export function registerStockTransferImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedStockTransferItem[] = [];
 
-      // Validate destination location exists
+      // Validate destination location exists in this company
       const destLocation = await storage.getLocationById(destinationLocationId);
-      if (!destLocation) {
+      if (!destLocation || destLocation.companyId !== req.session.currentCompanyId) {
         errors.push("Destination location not found");
         return res.json({ errors, warnings, validatedItems });
       }
