@@ -23,13 +23,35 @@ export function positiveIds(values: readonly unknown[]): number[] {
 
 /** The ids among `locationIds` that are locations of `companyId`. */
 export async function ownLocationIds(companyId: number, locationIds: readonly unknown[]): Promise<Set<number>> {
+  return locationIdsOfCompanies([companyId], locationIds);
+}
+
+/**
+ * The ids among `locationIds` that are locations of any of `companyIds`.
+ * Factory routes write under the factory company while the location picker
+ * lists the session company's locations; both are the user's own.
+ */
+export async function locationIdsOfCompanies(
+  companyIds: readonly (number | null | undefined)[],
+  locationIds: readonly unknown[]
+): Promise<Set<number>> {
   const ids = positiveIds(locationIds);
-  if (ids.length === 0) return new Set();
+  const companies = positiveIds(companyIds);
+  if (ids.length === 0 || companies.length === 0) return new Set();
   const rows = await db
     .select({ id: locations.id })
     .from(locations)
-    .where(and(eq(locations.companyId, companyId), inArray(locations.id, ids)));
+    .where(and(inArray(locations.companyId, companies), inArray(locations.id, ids)));
   return new Set(rows.map((row) => row.id));
+}
+
+/** True when `locationId` is a location of the factory company or the session company. */
+export async function isFactorySessionLocation(
+  session: { factoryCompanyId?: number | null; currentCompanyId?: number | null },
+  locationId: unknown
+): Promise<boolean> {
+  const owned = await locationIdsOfCompanies([session.factoryCompanyId, session.currentCompanyId], [locationId]);
+  return owned.has(Number(locationId));
 }
 
 /** The ids among `stockItemIds` that are stock items of `companyId`. */

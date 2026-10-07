@@ -8,6 +8,7 @@
  *     another company's locations;
  *   - stock transfers: accepted another company's destination, sources and
  *     stock items;
+ *   - credit and debit notes: booked stock at another company's location;
  *   - silent production: adjusted stock at another company's location.
  */
 import request from "supertest";
@@ -190,6 +191,29 @@ describe("stock transfer tenant scope", () => {
     expect(own.rows[0].quantity).toBe("100.000");
     const foreign = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
     expect(foreign.rowCount).toBe(0);
+  });
+});
+
+describe("credit note tenant scope", () => {
+  it("refuses another company's location and books nothing", async () => {
+    const vouchersBefore = await pool.query(`SELECT count(*)::int AS n FROM vouchers WHERE company_id = $1`, [
+      ctx.companyId,
+    ]);
+    const response = await agent.post("/api/credit-notes").send({
+      noteType: "Credit Note",
+      voucherDate: "2026-10-07",
+      cashAccountId: ctx.cashAccountId,
+      cashAccountType: "ledger",
+      items: [{ stockItemId: ctx.stockItemIds[0], locationId: foreignLocationId, quantity: "1", rate: "10" }],
+    });
+    expect(response.status).not.toBe(200);
+    expect(response.body.message).toBe(`Location ${foreignLocationId} not found`);
+    const vouchersAfter = await pool.query(`SELECT count(*)::int AS n FROM vouchers WHERE company_id = $1`, [
+      ctx.companyId,
+    ]);
+    expect(vouchersAfter.rows[0].n).toBe(vouchersBefore.rows[0].n);
+    const rows = await pool.query(`SELECT 1 FROM inventory WHERE location_id = $1`, [foreignLocationId]);
+    expect(rows.rowCount).toBe(0);
   });
 });
 
