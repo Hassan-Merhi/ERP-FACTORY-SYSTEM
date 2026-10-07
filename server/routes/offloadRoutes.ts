@@ -52,6 +52,7 @@ import {
   findContainerChargeVoucherDriftTx,
   repairContainerChargeVoucherDriftTx,
 } from "../services/containers/offload-lifecycle/charge-voucher-repair";
+import { factoryEntryAmountsOrLegacy } from "../services/factory/factoryVoucherEntryAmounts";
 
 /**
  * The state the caller asked for, when it stated one.
@@ -606,6 +607,7 @@ export function registerOffloadRoutes(app: Express) {
           c.amount,
           c.currency_code,
           c.fx_rate_to_usd,
+          c.fx_rate_confirmed,
           c.ledger_account_id,
           c.created_at,
           fc.container_number
@@ -621,6 +623,7 @@ export function registerOffloadRoutes(app: Express) {
           amount: string | null;
           currency_code: string | null;
           fx_rate_to_usd: string | null;
+          fx_rate_confirmed: boolean | null;
           ledger_account_id: number;
           created_at: Date | string | null;
           container_number: string;
@@ -638,6 +641,7 @@ export function registerOffloadRoutes(app: Express) {
             const amount = toMoney(row.amount);
             const chargeCcy: string = row.currency_code || "USD";
             const chargeFx = row.fx_rate_to_usd ? toMoney(row.fx_rate_to_usd) : toMoney(1);
+            const confirmed = row.fx_rate_confirmed ?? undefined;
             const voucherDate: string = row.created_at
               ? new Date(row.created_at).toISOString().slice(0, 10)
               : new Date().toISOString().slice(0, 10);
@@ -706,16 +710,14 @@ export function registerOffloadRoutes(app: Express) {
             await db.insert(voucherEntries).values({
               voucherId: voucher.id,
               ledgerAccountId: cpAcctId,
-              debitAmount: amount.toFixed(),
-              creditAmount: "0",
+              ...factoryEntryAmountsOrLegacy(chargeCcy, amount.toFixed(), "0", chargeFx.toFixed(), confirmed),
               narration: `${description} payable — container ${containerNumber}`,
             });
             // CR chosen ledger account
             await db.insert(voucherEntries).values({
               voucherId: voucher.id,
               ledgerAccountId,
-              debitAmount: "0",
-              creditAmount: amount.toFixed(),
+              ...factoryEntryAmountsOrLegacy(chargeCcy, "0", amount.toFixed(), chargeFx.toFixed(), confirmed),
               narration: `${description} — container ${containerNumber}`,
             });
 

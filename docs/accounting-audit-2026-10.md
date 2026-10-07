@@ -167,11 +167,40 @@ risk, modules, database and production impact, dependencies and acceptance crite
 - **Done:** PO creation (`createPurchaseOrder`) writes the PO, its voucher(s), lines and voucher link in one transaction with exact decimals (float totals could leave a PO voucher a cent out of balance); payroll `pay-worker` and `bulk-pay-workers` post voucher and lines in one transaction with exact cents (bulk vouchers could miss balance by a cent) and refuse workers of another company; ERP manual container create commits container, purchase voucher and both lines together; factory supplier FX transfer create/delete are transactional and an allocation failure rolls the transfer back instead of being swallowed.
 - **Not done (remaining risk):** PO line-item / charge edits outside one transaction; factory container create; factory payroll "mark PAID" posts no cash voucher and one payroll generator posts no accrual; advance delete leaves repayment vouchers; inter-company counterpart re-scaling outside the edit transaction; a database balance constraint (blocked until every writer posts in one transaction — ~70 writer files).
 
-### Wave 6 — Factory foreign-currency base amounts (HIGH) — specified, not started
+### Wave 6 — Factory foreign-currency base amounts (HIGH) — complete in code; legacy repair not yet applied
 
-- **Problem:** factory freight / other-charge / charge vouchers in EUR and AUD store the native amount in `debit_amount`/`credit_amount` (the USD base columns) with no `transaction_*` fields (462 lines in company 12, still being written); own-account legs of the same vouchers store USD. About 31 server files read these lines and convert `debit_amount` from `vouchers.currency` themselves, so the native-in-base convention is load-bearing for factory supplier balances, statements and net position.
-- **Why not done here:** fixing writers alone double-converts every factory supplier balance; fixing writers, readers and history together changes the factory's core financial figures, and the only acceptable proof is a differential run of every factory statement on a restored production snapshot (the repo's backup-restore workflow), which this session could not run.
-- **Plan:** (1) readers switch to `COALESCE(transaction_debit_amount, debit_amount)` as the native amount — a no-op on today's data; (2) writers post through `normalizeFactoryVoucherEntryAmounts` (USD base = native × the voucher's own USD-per-unit rate, `BASE_PER_TRANSACTION`); (3) a dry-run/apply repair fills `transaction_*` for the legacy lines at each voucher's own stored rate (never a current rate) under `app.ledger_integrity_bypass`, with a before/after statement diff; (4) the diagnostic's `foreign_currency_lines_without_native_amount` must read 0.
+- **Problem:**
+  - Factory freight, other-charge, charge, payment and manual-purchase vouchers in EUR and AUD stored the native amount in `debit_amount`/`credit_amount`, which are the USD base columns, and left the `transaction_*` fields empty. Company 12 has 462 such lines, and they were still being written.
+  - Own-account legs of the same vouchers stored USD.
+  - The expense, payable and cash accounts and the trial balance therefore summed EUR/AUD as USD.
+- **Reader inventory:** two read-only sweeps covered every reader of these lines.
+  - Supplier balances come from the container, charge and payment tables. Their voucher-payment readers read only debit lines and exclude `FACTORY-PAY-*`, so normalizing the factory writers cannot double-convert a supplier balance.
+  - The general readers (net profit, cash and bank summaries, statements, reports) already use `base_*`/`transaction_*` when present.
+  - Eight factory-supplier readers converted `debit_amount` from the voucher's currency on every row: single balance, with-balances, statement, net position, raw-material reconciliation, voucher sidebar, broker statement and broker visual statement. They therefore converted already-normalized rows a second time, for example CFA payments, which the trigger stores in USD.
+- **Changed — readers:** `server/services/factory/voucherEntryCurrency.ts` gives an entry's native amount (`transaction_*` when normalized, else `debit_amount` in the voucher's currency) and its stored USD base (normalized entries, and legacy USD entries).
+  - The eight readers use the stored base for normalized entries and keep their existing conversion for legacy entries only.
+  - No legacy figure changes. Normalized CFA payments to factory suppliers are no longer converted twice.
+- **Changed — writers:** every leg is now normalized, with the USD base = native × the factory USD-per-unit rate (`BASE_PER_TRANSACTION`).
+  - Writers covered: offload freight, other charges and additional charges; post-offload charges and their backfill; supplier payments (`FACTORY-PAY`); manual raw-material purchases; reverse-offload freight restore.
+  - A non-USD amount whose rate was never set keeps the legacy shape, so the diagnostic still reports it instead of normalizing it at a guessed 1.
+- **Fixed — rounding:**
+  - `normFactoryEntry` stored the inverse rate rounded to 10 places as `TRANSACTION_PER_BASE`. That reproduced the base only for small amounts, so the production currency trigger refused larger lines (AUD 250,000 at 0.6543219 gives 163,580.475000 against .475003).
+  - It now stores the factory rate itself, and both factory normalizers compute the base from the stored rate.
+- **Fixed — third-currency freight:** container create and update posted freight in a third currency (neither USD nor the container's) at rate 1. They now use the freight's own confirmed rate and refuse the write when it is missing.
+- **Added — legacy repair:** `GET /api/accounting/factory-fx-repair` (plan, read-only) and `POST /api/accounting/factory-fx-repair/apply` (`{"confirm": true}`, Admin/Owner, audited).
+  - Each line is classified from its own voucher. An amount equal to the voucher total is native. An amount equal to the total at the voucher's stored rate is already USD.
+  - Lines are reported and left alone when they match neither or both, when the rate was never set, or when the voucher is in a closed period. Every other line of such a voucher is also left alone, so no voucher is half-converted.
+  - Lines are converted at the voucher's own stored rate, never a current one. The plan is re-derived under row locks inside the apply transaction, and only lines still in the legacy shape are changed.
+  - The plan reports the USD change by account, supplier and bank, which is the before/after ledger diff.
+- **Tests:**
+  - `factory-fx-entry-readers`: helpers, and a normalized CFA payment against a legacy EUR payment on the supplier balance.
+  - `factory-fx-legacy-repair`: the production currency trigger from `migrations/20260720_005` is installed for the test, because neither the test database nor CI installs it. It accepts the normalized writer output and the repair UPDATE. The test covers classification, skips, idempotence and the closed period.
+  - `factory-container-fx-voucher-normalization` is updated for the stored-rate convention.
+- **Production:**
+  - The writers take effect on deploy.
+  - The legacy lines change only when an Owner/Admin applies the repair, which must happen after reviewing `GET /api/accounting/factory-fx-repair`. The plan's `usdChangeByTarget` is the expected movement of the expense, payable and cash balances.
+  - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
+  - The repair was not run in this session: the production database is not reachable from it.
 
 ### Wave 8 — Inventory, COGS and factory revenue in the ledger; opening balances as journals (CRITICAL, architectural) — specified, not started
 

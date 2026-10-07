@@ -118,6 +118,11 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "Seules les écritures de comptes du grand livre peuvent être déplacées",
   },
   {
+    en: "A legacy line changed during the repair; nothing was applied",
+    ar: "تغيّر سطر قديم أثناء الإصلاح؛ لم يُطبَّق أي شيء",
+    fr: "Une ligne historique a changé pendant la réparation ; rien n'a été appliqué",
+  },
+  {
     en: "Unknown system account code",
     ar: "رمز حساب نظام غير معروف",
     fr: "Code de compte système inconnu",

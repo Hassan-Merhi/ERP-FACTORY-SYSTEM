@@ -42,6 +42,7 @@ import {
 } from "../../services/accounting/systemAccounts";
 import { runAccountingIntegrityDiagnostic } from "../../services/accounting/integrity/accountingIntegrityDiagnostic";
 import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
+import { applyFactoryFxLegacyRepair, planFactoryFxLegacyRepair } from "../../services/factory/factoryFxLegacyRepair";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -172,6 +173,56 @@ export function registerAccountingIntegrityRoutes(app: Express) {
         });
       }
       res.json({ normalized: fixable.length, accounts: fixable });
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  // Legacy factory foreign-currency lines (wave 6): the plan is read-only; the
+  // apply converts only lines classified from their own voucher, at that
+  // voucher's stored rate, and reports everything else.
+  app.get("/api/accounting/factory-fx-repair", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      res.json(await planFactoryFxLegacyRepair(companyId));
+    } catch (error: unknown) {
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/accounting/factory-fx-repair/apply", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+      const plan = await applyFactoryFxLegacyRepair(companyId);
+      if (plan.repairableLines > 0) {
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || "unknown",
+          companyId,
+          action: "update",
+          tableName: "voucher_entries",
+          recordIdentifier: "factory-fx-legacy-repair",
+          changes: {
+            lines: {
+              old: plan.lines
+                .filter((line) => !line.skipReason)
+                .map((line) => ({ id: line.entryId, amount: line.storedAmount })),
+              new: plan.lines
+                .filter((line) => !line.skipReason)
+                .map((line) => ({
+                  id: line.entryId,
+                  amount: line.newStoredAmount,
+                  native: `${line.currency} ${line.transactionAmount}`,
+                  rate: line.rate,
+                })),
+            },
+          },
+        });
+      }
+      res.json(plan);
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

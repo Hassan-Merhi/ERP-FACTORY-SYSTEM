@@ -32,6 +32,7 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../../services/accounting/durableFinancialOperation";
+import { factoryEntryAmountsOrLegacy } from "../../../../services/factory/factoryVoucherEntryAmounts";
 
 export function registerFactorySupplierPaymentRoutes(app: Express) {
   app.get("/api/factory/supplier-payments", requireAuth, async (req: Request, res: Response) => {
@@ -122,6 +123,10 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           // amount is stored at four places; the voucher takes it at cents, half up.
           const payAmtStr = toMoney(payment.amount).toFixed(2);
           const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
+          // Both legs normalized at the payment's own rate (wave 6): the cash or
+          // bank leg used to carry the native amount in the USD columns.
+          const payAmounts = (debit: string, credit: string) =>
+            factoryEntryAmountsOrLegacy(payment.currencyCode, debit, credit, payment.fxRateToUsd as string | null);
 
           const [payVoucher] = await tx
             .insert(vouchers)
@@ -143,8 +148,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: payVoucher.id,
             factorySupplierId: payment.supplierId,
-            debitAmount: payAmtStr,
-            creditAmount: "0",
+            ...payAmounts(payAmtStr, "0"),
             narration: `Payment to supplier – factory payment #${payment.id}`,
           });
 
@@ -156,8 +160,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: payVoucher.id,
             ledgerAccountId: crAccountId,
-            debitAmount: "0",
-            creditAmount: payAmtStr,
+            ...payAmounts("0", payAmtStr),
             narration: `Bank/cash outflow – factory payment #${payment.id}`,
           });
 

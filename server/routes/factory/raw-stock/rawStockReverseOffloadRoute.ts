@@ -37,6 +37,7 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../services/accounting/durableFinancialOperation";
+import { factoryEntryAmountsOrLegacy } from "../../../services/factory/factoryVoucherEntryAmounts";
 
 const REVERSAL_STATUS_MESSAGE = "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed";
 const REVERSAL_SUCCESS_MESSAGE = "Offload reversed successfully. Container is back to its previous status.";
@@ -374,6 +375,10 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           (restoredFreightCreditSupplierId !== null || hasRestoredFreightCreditLedger)
         ) {
           const restoredFreightVoucherNum = `FACTORY-FREIGHT-${containerId}`;
+          // Posted normalized at the voucher's own rate (wave 6), or in the legacy
+          // shape when that rate was never set, so it is reported, not guessed.
+          const restoredFreightAmounts = (debit: string, credit: string) =>
+            factoryEntryAmountsOrLegacy(restoredFreightCurrencyCode, debit, credit, container.fxRateToUsd ?? "1");
           const [restoredFreightVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -398,8 +403,7 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: restoredFreightVoucher.id,
             ledgerAccountId: restoredFreightAccountId,
-            debitAmount: String(restoredFreightAmt),
-            creditAmount: "0",
+            ...restoredFreightAmounts(String(restoredFreightAmt), "0"),
             narration: `Freight expense - container ${container.containerNumber}`,
           });
           // Cr: supplier when pre-offload freight was supplier-paid;
@@ -410,16 +414,14 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
             await tx.insert(voucherEntries).values({
               voucherId: restoredFreightVoucher.id,
               factorySupplierId: restoredFreightCreditSupplierId,
-              debitAmount: "0",
-              creditAmount: String(restoredFreightAmt),
+              ...restoredFreightAmounts("0", String(restoredFreightAmt)),
               narration: `Freight payable to supplier - container ${container.containerNumber}`,
             });
           } else if (hasRestoredFreightCreditLedger) {
             await tx.insert(voucherEntries).values({
               voucherId: restoredFreightVoucher.id,
               ledgerAccountId: restoredFreightCreditAccountId,
-              debitAmount: "0",
-              creditAmount: String(restoredFreightAmt),
+              ...restoredFreightAmounts("0", String(restoredFreightAmt)),
               narration: `Freight paid via own account - container ${container.containerNumber}`,
             });
           }

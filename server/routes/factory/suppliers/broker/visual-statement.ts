@@ -23,6 +23,12 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, toMoney } from "../../../../lib/money";
 import type Decimal from "decimal.js";
+import {
+  entryNativeAmounts,
+  entryStoredUsdAmounts,
+  voucherEntryCurrencyColumns,
+  type VoucherEntryCurrencyRow,
+} from "../../../../services/factory/voucherEntryCurrency";
 
 export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
   // ── Broker Visual Statement (container-centric view for the new dedicated page) ──
@@ -114,14 +120,12 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       const fxTransfers = await fxQuery.orderBy(factorySupplierFxTransfers.date);
 
       // Voucher payments (non-optional only)
-      type VoucherPaymentRow = {
+      type VoucherPaymentRow = VoucherEntryCurrencyRow & {
         id: number;
-        debitAmount: string | null;
         supplierId: number | null;
         voucherDate: string;
         description: string | null;
         voucherNumber: string;
-        currency: string;
         optional: boolean;
       };
       let vpayRows: VoucherPaymentRow[] = [];
@@ -129,12 +133,11 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
         let vpayQ = db
           .select({
             id: voucherEntries.id,
-            debitAmount: voucherEntries.debitAmount,
+            ...voucherEntryCurrencyColumns,
             supplierId: voucherEntries.factorySupplierId,
             voucherDate: vouchers.voucherDate,
             description: vouchers.description,
             voucherNumber: vouchers.voucherNumber,
-            currency: vouchers.currency,
             optional: vouchers.optional,
           })
           .from(voucherEntries)
@@ -190,15 +193,19 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       }
 
       for (const v of vpayRows) {
-        const amt = toMoney(v.debitAmount).toNumber();
+        // Native amount in its own currency; the USD figure is the stored base
+        // of a normalized entry, and the raw amount (as before) of a legacy one.
+        const native = entryNativeAmounts(v);
+        const amt = native.debit.toNumber();
+        const stored = entryStoredUsdAmounts(v);
         paymentRows.push({
           id: `vpay-${v.id}`,
           date: v.voucherDate ? String(v.voucherDate) : null,
           type: "voucher",
-          fromCurrency: v.currency || "USD",
+          fromCurrency: native.currency,
           fromAmount: amt,
           fxRate: null,
-          usdAmount: amt,
+          usdAmount: stored ? stored.debit.toNumber() : toMoney(v.debitAmount).toNumber(),
           notes: v.voucherNumber || v.description || null,
           supplierName: v.supplierId === null ? undefined : nameMap[v.supplierId],
         });

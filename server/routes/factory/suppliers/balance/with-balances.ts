@@ -24,6 +24,11 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { buildBrokerStatement, isPayableContainer, isSupplierPaidFreight, resolveDisplayFx } from "./_helpers";
+import {
+  entryNativeAmounts,
+  entryStoredUsdAmounts,
+  voucherEntryCurrencyColumns,
+} from "../../../../services/factory/voucherEntryCurrency";
 
 // Balances are summed as exact decimals (server/lib/money.ts) and only turned
 // into numbers or fixed-point strings when the response is built.
@@ -84,8 +89,7 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
         const voucherPaymentRows = await db
           .select({
             factorySupplierId: voucherEntries.factorySupplierId,
-            debitAmount: voucherEntries.debitAmount,
-            currency: vouchers.currency,
+            ...voucherEntryCurrencyColumns,
             exchangeRate: vouchers.exchangeRate,
             optional: vouchers.optional,
           })
@@ -102,11 +106,16 @@ export function registerSupplierWithBalancesRoutes(app: Express) {
           const suppId = row.factorySupplierId;
           if (!suppId) continue;
           if (row.optional) continue; // optional vouchers don't affect the balance
-          const amt = toMoney(row.debitAmount);
-          const curr = row.currency || "USD";
+          // Native amount in its own currency; a normalized entry also holds
+          // its USD base, and only a legacy foreign-currency entry is
+          // converted from the voucher's rate.
+          const native = entryNativeAmounts(row);
+          const amt = native.debit;
+          const curr = native.currency;
+          const stored = entryStoredUsdAmounts(row);
           let usdAmt: Decimal;
-          if (curr === "USD") {
-            usdAmt = amt;
+          if (stored) {
+            usdAmt = stored.debit;
           } else {
             // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
             const { fxRate: fx, looksSet } = resolveStoredFxRate(curr, row.exchangeRate);

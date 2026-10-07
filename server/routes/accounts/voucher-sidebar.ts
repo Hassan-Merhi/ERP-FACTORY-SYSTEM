@@ -135,6 +135,11 @@ export function registerAccountVoucherSidebarRoutes(app: Express) {
                   AND CAST(${voucherEntries.debitAmount} AS numeric) > 0
                   AND CAST(${voucherEntries.creditAmount} AS numeric) = 0
                 THEN CASE
+                  -- A normalized entry already holds its USD base; only a legacy
+                  -- foreign-currency entry is converted from the voucher's rate.
+                  WHEN ${voucherEntries.transactionCurrency} IS NOT NULL AND ${voucherEntries.transactionCurrency} <> ''
+                    AND ${voucherEntries.baseDebitAmount} IS NOT NULL AND ${voucherEntries.baseCreditAmount} IS NOT NULL
+                    THEN CAST(${voucherEntries.baseDebitAmount} AS numeric)
                   WHEN COALESCE(${vouchers.currency}, 'USD') = 'USD'
                     THEN CAST(${voucherEntries.debitAmount} AS numeric)
                   ELSE CAST(${voucherEntries.debitAmount} AS numeric) /

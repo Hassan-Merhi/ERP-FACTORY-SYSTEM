@@ -20,6 +20,7 @@ import {
 import { eq, and, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+import { factoryEntryAmountsOrLegacy } from "../../../services/factory/factoryVoucherEntryAmounts";
 
 const ZERO = new MoneyDecimal(0);
 
@@ -341,12 +342,11 @@ export function registerRawStockAdjRoutes(app: Express) {
             })
             .returning();
 
-          // Dr Raw Material Stock
+          // Dr Raw Material Stock (both legs normalized at the purchase's rate, wave 6)
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             ledgerAccountId: rawMaterialAcctId,
-            debitAmount: moneyString(totalAmount),
-            creditAmount: "0",
+            ...factoryEntryAmountsOrLegacy(ccy, moneyString(totalAmount), "0", fxRate),
             narration: `Raw material stock — ${kgNum} kg from ${supplierName}`,
           });
 
@@ -354,8 +354,7 @@ export function registerRawStockAdjRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             factorySupplierId: resolvedSupplierId,
-            debitAmount: "0",
-            creditAmount: moneyString(totalAmount),
+            ...factoryEntryAmountsOrLegacy(ccy, "0", moneyString(totalAmount), fxRate),
             narration: `Payable to ${supplierName} for raw material`,
           });
 

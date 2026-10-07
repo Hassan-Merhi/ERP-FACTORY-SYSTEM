@@ -30,6 +30,7 @@ import { getLockedRateDiagnosticsForCompany, type LockedRateDiagnosticRow } from
 import { resolveStoredFxRate } from "./currencyConversion";
 import { resolveParentCompanyId } from "../../routes/helpers/supplierBalanceHelpers";
 import { toMoney } from "../../lib/money";
+import { entryNativeAmounts, entryStoredUsdAmounts, voucherEntryCurrencyColumns } from "./voucherEntryCurrency";
 
 // The report returns numbers; every sum and product is taken exactly first.
 const amountOf = (value: string | null | undefined) => toMoney(value).toNumber();
@@ -494,9 +495,8 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
       ? await db
           .select({
             id: voucherEntries.id,
-            debitAmount: voucherEntries.debitAmount,
+            ...voucherEntryCurrencyColumns,
             supplierId: voucherEntries.factorySupplierId,
-            currency: vouchers.currency,
             exchangeRate: vouchers.exchangeRate,
             optional: vouchers.optional,
             voucherNumber: vouchers.voucherNumber,
@@ -513,13 +513,18 @@ export async function getRawMaterialReconciliation(companyId: number): Promise<R
       : [];
   for (const p of allVoucherPayments) {
     if (p.optional || !p.supplierId) continue;
-    const cc = p.currency || "USD";
-    const amt = amountOf(p.debitAmount);
+    // A normalized entry carries its native amount and USD base; only a
+    // legacy entry is converted from the voucher's stored rate.
+    const native = entryNativeAmounts(p);
+    const cc = native.currency;
+    const amt = amountOf(native.debit.toFixed());
     if (!amt) continue;
+    const stored = entryStoredUsdAmounts(p);
     const rate =
       p.exchangeRate !== null && p.exchangeRate !== undefined ? amountOf(p.exchangeRate) : cc === "USD" ? 1 : null;
-    const resolved = cc === "USD" ? true : rate !== null && rate > 0;
-    addPayment(p.supplierId, cc, amt, resolved ? times(amt, rate ?? 1) : null);
+    const resolved = stored !== null || cc === "USD" || (rate !== null && rate > 0);
+    const usd = stored ? amountOf(stored.debit.toFixed()) : resolved ? times(amt, rate ?? 1) : null;
+    addPayment(p.supplierId, cc, amt, usd);
     if (!resolved) {
       unresolvedFxRows.push({
         supplierId: p.supplierId,

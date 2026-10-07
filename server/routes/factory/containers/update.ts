@@ -11,15 +11,12 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  resolveStoredFxRate,
-  resolveStoredFxRateOrThrow,
-  UnresolvedExchangeRateError,
-} from "../../../services/factory/currencyConversion";
+import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
 import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
 import { eq, and, or, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
 
@@ -317,10 +314,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
               })
               .where(eq(vouchers.id, existingFV.id));
             // Compute normalized amounts for the updated freight entries
-            const updateFreightFactoryFxRate =
-              freightCcy === (updated.currencyCode || "USD")
-                ? resolveStoredFxRateOrThrow(updated.currencyCode, updated.fxRateToUsd, updated.fxRateConfirmed)
-                : 1;
+            const updateFreightFactoryFxRate = containerFreightFxRateToUsd(updated);
             const normFreightDr = normFactoryEntry(
               freightCcy,
               newFreightAmt.toFixed(),
@@ -393,13 +387,11 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
               description: `Freight on container ${updated.containerNumber}`,
               totalAmount: newFreightAmt.toFixed(),
               currency: freightCcy,
+              exchangeRate: String(containerFreightFxRateToUsd(updated)),
               sourceModule: "FACTORY",
             })
             .returning();
-          const newFreightFactoryFxRate =
-            freightCcy === (updated.currencyCode || "USD")
-              ? resolveStoredFxRateOrThrow(updated.currencyCode, updated.fxRateToUsd, updated.fxRateConfirmed)
-              : 1;
+          const newFreightFactoryFxRate = containerFreightFxRateToUsd(updated);
           await db.insert(voucherEntries).values({
             voucherId: newFV.id,
             ledgerAccountId: newFreightAcctId,

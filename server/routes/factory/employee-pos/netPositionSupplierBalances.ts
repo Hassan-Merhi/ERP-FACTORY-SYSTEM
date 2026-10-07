@@ -16,6 +16,11 @@ import { resolveStoredFxRate } from "../../../services/factory/currencyConversio
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  entryNativeAmounts,
+  isNormalizedEntry,
+  voucherEntryCurrencyColumns,
+} from "../../../services/factory/voucherEntryCurrency";
 
 /**
  * Section 1 of the factory net-position report: what the company owes its
@@ -121,8 +126,7 @@ export async function computeNetPositionSupplierBalances(
     const voucherRows = await db
       .select({
         factorySupplierId: voucherEntries.factorySupplierId,
-        debitAmount: voucherEntries.debitAmount,
-        currency: vouchers.currency,
+        ...voucherEntryCurrencyColumns,
         exchangeRate: vouchers.exchangeRate,
         optional: vouchers.optional,
       })
@@ -140,9 +144,12 @@ export async function computeNetPositionSupplierBalances(
       const sid = row.factorySupplierId;
       if (!sid) continue;
       if (row.optional) continue; // optional vouchers don't affect the balance
-      const amt = toMoney(row.debitAmount);
-      const cc = row.currency || "USD";
-      if (cc !== "USD") {
+      // Bucketed in the entry's own currency. A normalized entry carries its
+      // native amount and rate; only a legacy one depends on the voucher's rate.
+      const native = entryNativeAmounts(row);
+      const amt = native.debit;
+      const cc = native.currency;
+      if (cc !== "USD" && !isNormalizedEntry(row)) {
         // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
         const { looksSet } = resolveStoredFxRate(cc, row.exchangeRate);
         // Exclude this payment from the total rather than guess at a rate of 1.

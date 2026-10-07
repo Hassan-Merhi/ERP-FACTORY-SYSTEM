@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { isSupplierPaidFreight } from "./_helpers";
+import { entryStoredUsdAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
 
 export function registerSupplierBalanceSingleRoutes(app: Express) {
   app.get("/api/factory/suppliers/:id/balance", requireAuth, async (req: Request, res: Response) => {
@@ -66,8 +67,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
       const voucherPaymentRows = await db
         .select({
           factorySupplierId: voucherEntries.factorySupplierId,
-          debitAmount: voucherEntries.debitAmount,
-          currency: vouchers.currency,
+          ...voucherEntryCurrencyColumns,
           exchangeRate: vouchers.exchangeRate,
           optional: vouchers.optional,
         })
@@ -86,9 +86,12 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         if (row.optional) continue; // optional vouchers don't affect the balance
         const amt = toMoney(row.debitAmount);
         const curr = row.currency || "USD";
+        // A normalized entry already holds its USD base; only a legacy
+        // foreign-currency entry is converted from the voucher's rate.
+        const stored = entryStoredUsdAmounts(row);
         let usdAmt: Decimal;
-        if (curr === "USD") {
-          usdAmt = amt;
+        if (stored) {
+          usdAmt = stored.debit;
         } else {
           // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
           const { fxRate: fx, looksSet } = resolveStoredFxRate(curr, row.exchangeRate);

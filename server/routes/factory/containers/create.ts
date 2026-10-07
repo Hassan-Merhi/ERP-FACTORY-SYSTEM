@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
 import { toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerCreateRoutes(app: Express) {
@@ -276,20 +277,12 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
             description: `Freight on container ${container.containerNumber}`,
             totalAmount: freightAmt.toFixed(),
             currency: freightCcy,
-            exchangeRate:
-              freightCcy === (container.currencyCode || "USD")
-                ? String(
-                    resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-                  )
-                : "1",
+            exchangeRate: String(containerFreightFxRateToUsd(container)),
             sourceModule: "FACTORY",
           })
           .returning();
-        // Compute factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign)
-        const freightFactoryFxRate =
-          freightCcy === (container.currencyCode || "USD")
-            ? resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-            : 1; // USD-denominated freight — treat as USD-equivalent
+        // Factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign unit)
+        const freightFactoryFxRate = containerFreightFxRateToUsd(container);
         // Dr Freight Expense
         await db.insert(voucherEntries).values({
           voucherId: freightVoucher.id,

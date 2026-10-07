@@ -9,6 +9,7 @@ import { requireAuth } from "../../../auth";
 import { applyOffloadMovingAverage } from "../../../services/factory/rawStockLockedRate";
 import { resolveStoredFxRate, resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
 import { writeDaybookEntry, getOrFetchFxRateToUsd } from "../_helpers";
+import { normFactoryEntry } from "../../../services/factory/factoryVoucherEntryAmounts";
 import {
   factoryContainers,
   factoryRawStock,
@@ -200,10 +201,8 @@ export function registerRawStockOffloadRoutes(app: Express) {
         commInsertValues,
         freightCcy,
         freightFxRateVal,
-        freightUsd,
         ocCcy,
         ocFxRateVal,
-        ocUsd,
         dInclusiveCostPerKg,
         dCostPerKgUsd,
         finalPayableAmount,
@@ -569,6 +568,13 @@ export function registerRawStockOffloadRoutes(app: Express) {
           );
 
         // 8. Freight voucher (double-entry)
+        //
+        // Every leg of the freight, other-charge and additional-charge vouchers is
+        // posted normalized: debit/credit hold the USD base (native × the factory
+        // USD-per-unit rate, exactly), transaction_* hold the native amount. The
+        // supplier-paid legs used to keep the native amount in the USD columns,
+        // which put EUR/AUD figures into the expense accounts and the trial
+        // balance as if they were USD (2026-10 accounting audit, wave 6).
         if (freightVal > 0 && (reqFreightAccountId || effectiveFreightSupplierId)) {
           const freightVoucherNum = `FACTORY-FREIGHT-${containerId}-${Date.now()}`;
           const freightVoucherCcy = reqFreightCurrencyCode || currencyCode;
@@ -592,15 +598,13 @@ export function registerRawStockOffloadRoutes(app: Express) {
             await tx.insert(voucherEntries).values({
               voucherId: freightVoucher.id,
               ledgerAccountId: freightExpenseAcctId!,
-              debitAmount: String(freightVal),
-              creditAmount: "0",
+              ...normFactoryEntry(freightVoucherCcy, String(freightVal), "0", freightFx),
               narration: `Freight expense - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: freightVoucher.id,
               factorySupplierId: effectiveFreightSupplierId,
-              debitAmount: "0",
-              creditAmount: String(freightVal),
+              ...normFactoryEntry(freightVoucherCcy, "0", String(freightVal), freightFx),
               narration: `Freight payable to supplier - container ${container.containerNumber}`,
             });
           } else {
@@ -608,20 +612,16 @@ export function registerRawStockOffloadRoutes(app: Express) {
             // that physically paid the freight, e.g. Embassy Shipping).
             // reqFreightAccountId here is the credit/own account (set from
             // container.freightOwnAccountId by the offload dialog).
-            // Both legs are plain ledger accounts — amounts are stored in USD
-            // (freightUsd) so GL readers that assume USD are always correct.
             await tx.insert(voucherEntries).values({
               voucherId: freightVoucher.id,
               ledgerAccountId: freightExpenseAcctId!,
-              debitAmount: String(freightUsd),
-              creditAmount: "0",
+              ...normFactoryEntry(freightVoucherCcy, String(freightVal), "0", freightFx),
               narration: `Freight expense - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: freightVoucher.id,
               ledgerAccountId: parseInt(reqFreightAccountId),
-              debitAmount: "0",
-              creditAmount: String(freightUsd),
+              ...normFactoryEntry(freightVoucherCcy, "0", String(freightVal), freightFx),
               narration: `Freight paid via own account - container ${container.containerNumber}`,
             });
           }
@@ -651,33 +651,27 @@ export function registerRawStockOffloadRoutes(app: Express) {
             await tx.insert(voucherEntries).values({
               voucherId: ocMainVoucher.id,
               ledgerAccountId: ocExpenseAcctId!,
-              debitAmount: String(otherChargesVal),
-              creditAmount: "0",
+              ...normFactoryEntry(ocVoucherCcy, String(otherChargesVal), "0", ocFx),
               narration: `Other charges expense - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: ocMainVoucher.id,
               factorySupplierId: parseInt(reqOtherChargesSupplierId),
-              debitAmount: "0",
-              creditAmount: String(otherChargesVal),
+              ...normFactoryEntry(ocVoucherCcy, "0", String(otherChargesVal), ocFx),
               narration: `Other charges payable to supplier - container ${container.containerNumber}`,
             });
           } else {
             // Own-account other charges: Dr OC Expense / Cr chosen account.
-            // Both legs are plain ledger accounts so amounts must be in USD (ocUsd)
-            // — same reasoning as the freight branch above.
             await tx.insert(voucherEntries).values({
               voucherId: ocMainVoucher.id,
               ledgerAccountId: ocExpenseAcctId!,
-              debitAmount: String(ocUsd),
-              creditAmount: "0",
+              ...normFactoryEntry(ocVoucherCcy, String(otherChargesVal), "0", ocFx),
               narration: `Other charges expense - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: ocMainVoucher.id,
               ledgerAccountId: parseInt(reqOtherChargesAccountId),
-              debitAmount: "0",
-              creditAmount: String(ocUsd),
+              ...normFactoryEntry(ocVoucherCcy, "0", String(otherChargesVal), ocFx),
               narration: `Other charges paid via own account - container ${container.containerNumber}`,
             });
           }
@@ -692,11 +686,6 @@ export function registerRawStockOffloadRoutes(app: Express) {
           const addlChargeCcy = inserted.currencyCode || currencyCode;
           const addlChargeFxNum = requestNumber(inserted.fxRateToUsd || String(fxRate));
           const addlChargeFx = String(addlChargeFxNum);
-          // Exact: 1.3 at 0.35 is 0.455, kept as 0.46; the float product
-          // 0.45499999999999996 was kept as 0.45.
-          const addlChargeUsd = (
-            addlChargeCcy === "USD" ? chargeExact : chargeExact.times(toMoney(addlChargeFx))
-          ).toFixed();
           const ocVoucherNum = `FACTORY-OC-${containerId}-${inserted.id}-${Date.now()}`;
           const [ocVoucher] = await tx
             .insert(vouchers)
@@ -713,41 +702,29 @@ export function registerRawStockOffloadRoutes(app: Express) {
             })
             .returning();
           if (inserted.ledgerAccountId) {
-            // Both legs are plain ledger accounts (no factorySupplierId) — post in
-            // USD (addlChargeUsd), not the raw native-currency chargeAmount, for the
-            // same reason as the freight/other-charges branches above: nothing
-            // downstream converts a bare ledgerAccountId leg, so a non-USD amount
-            // here silently misstates Net Position and every other USD-summed report.
             await tx.insert(voucherEntries).values({
               voucherId: ocVoucher.id,
               ledgerAccountId: chargesPayableAcctId,
-              debitAmount: String(addlChargeUsd),
-              creditAmount: "0",
+              ...normFactoryEntry(addlChargeCcy, chargeExact.toFixed(), "0", addlChargeFx),
               narration: `${inserted.description} payable - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: ocVoucher.id,
               ledgerAccountId: inserted.ledgerAccountId,
-              debitAmount: "0",
-              creditAmount: String(addlChargeUsd),
+              ...normFactoryEntry(addlChargeCcy, "0", chargeExact.toFixed(), addlChargeFx),
               narration: `${inserted.description} - container ${container.containerNumber}`,
             });
           } else if (inserted.supplierId) {
-            // Supplier-linked leg: keep native currency. Supplier balance routes
-            // re-derive USD downstream from vouchers.currency/exchangeRate, so both
-            // legs of this voucher stay in the charge's own currency.
             await tx.insert(voucherEntries).values({
               voucherId: ocVoucher.id,
               ledgerAccountId: chargesPayableAcctId,
-              debitAmount: String(chargeAmount),
-              creditAmount: "0",
+              ...normFactoryEntry(addlChargeCcy, chargeExact.toFixed(), "0", addlChargeFx),
               narration: `${inserted.description} payable - container ${container.containerNumber}`,
             });
             await tx.insert(voucherEntries).values({
               voucherId: ocVoucher.id,
               factorySupplierId: inserted.supplierId,
-              debitAmount: "0",
-              creditAmount: String(chargeAmount),
+              ...normFactoryEntry(addlChargeCcy, "0", chargeExact.toFixed(), addlChargeFx),
               narration: `${inserted.description} - container ${container.containerNumber}`,
             });
           }
