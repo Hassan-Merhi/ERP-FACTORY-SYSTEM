@@ -11,6 +11,8 @@
  *   - posted stock transfer edits: could re-point a transfer at another
  *     company's location;
  *   - POS import: validated and imported sales at another company's location;
+ *   - stock adjustment edits and waste dispatches: reached another
+ *     company's adjustment, or used another company's location;
  *   - credit and debit notes: booked stock at another company's location;
  *   - silent production: adjusted stock at another company's location.
  */
@@ -75,6 +77,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.query(`DELETE FROM bale_transfer_items WHERE production_bale_id = ANY($1)`, [[foreignBaleId, ownBaleId]]);
+  await pool.query(
+    `DELETE FROM stock_adjustment_vouchers WHERE voucher_id IN (SELECT id FROM vouchers WHERE voucher_number LIKE $1)`,
+    [`${TEST_PREFIX.toUpperCase()}-ADJ-%`]
+  );
+  await pool.query(`DELETE FROM vouchers WHERE voucher_number LIKE $1`, [`${TEST_PREFIX.toUpperCase()}-ADJ-%`]);
   await pool.query(`DELETE FROM bale_transfers WHERE company_id = ANY($1)`, [[foreignCompanyId, ctx.companyId]]);
   await pool.query(`DELETE FROM factory_daybook_entries WHERE company_id = $1`, [ctx.companyId]).catch(() => undefined);
   await pool.query(`DELETE FROM production_bales WHERE id = ANY($1)`, [[foreignBaleId, ownBaleId]]);
@@ -237,6 +244,53 @@ describe("POS import tenant scope", () => {
     });
     expect(imported.status).toBe(400);
     expect(imported.body.message).toBe("Location not found");
+  });
+});
+
+describe("stock adjustment and waste dispatch tenant scope", () => {
+  async function adjustment(companyId: number, locationId: number, suffix: string): Promise<number> {
+    const voucher = await pool.query<{ id: number }>(
+      `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
+       VALUES ($1, $2, 'Stock Adjustment', '2026-10-07', '0') RETURNING id`,
+      [companyId, `${TEST_PREFIX.toUpperCase()}-ADJ-${suffix}`]
+    );
+    const row = await pool.query<{ id: number }>(
+      `INSERT INTO stock_adjustment_vouchers (voucher_id, location_id, adjustment_type) VALUES ($1, $2, 'Production') RETURNING id`,
+      [voucher.rows[0].id, locationId]
+    );
+    return row.rows[0].id;
+  }
+
+  it("refuses to edit another company's adjustment, or to move one's own to a foreign location", async () => {
+    const body = (locationId: number) => ({
+      locationId,
+      adjustmentType: "Production",
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: 1, rate: 1 }],
+    });
+    const foreignAdjustmentId = await adjustment(foreignCompanyId, foreignLocationId, "F");
+    const foreignEdit = await agent.put(`/api/stock-adjustments/${foreignAdjustmentId}`).send(body(ctx.locationId));
+    expect(foreignEdit.status).toBe(404);
+
+    const ownAdjustmentId = await adjustment(ctx.companyId, ctx.locationId, "O");
+    const moved = await agent.put(`/api/stock-adjustments/${ownAdjustmentId}`).send(body(foreignLocationId));
+    expect(moved.status).toBe(400);
+    expect(moved.body.message).toBe("Location not found");
+
+    const stored = await pool.query(
+      `SELECT location_id FROM stock_adjustment_vouchers WHERE id = ANY($1) ORDER BY id`,
+      [[foreignAdjustmentId, ownAdjustmentId]]
+    );
+    expect(stored.rows.map((row) => row.location_id)).toEqual([foreignLocationId, ctx.locationId]);
+  });
+
+  it("refuses a waste dispatch from another company's location", async () => {
+    const response = await agent.post("/api/waste-dispatches").send({
+      locationId: foreignLocationId,
+      dispatchDate: "2026-10-07",
+      items: [{ stockItemId: ctx.stockItemIds[1], quantity: "1" }],
+    });
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Location not found");
   });
 });
 
