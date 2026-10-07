@@ -104,12 +104,12 @@ export function registerPriorityScanConfigRoutes(app: Express) {
         // a client that sends back the signature of the list it already has
         // gets a few bytes instead of the whole day's history again.
         const signatureResult = await db.execute(sql`
-          SELECT count(*)::int AS "count", coalesce(max(id), 0)::int AS "maxId"
+          SELECT count(*)::int AS "count", coalesce(max(id), 0)::text AS "maxId"
           FROM factory_priority_scan_history
           WHERE company_id = ${companyId}
             AND business_date = ${businessDate}
         `);
-        const [signatureRow] = resultRows(signatureResult) as Array<{ count: number; maxId: number }>;
+        const [signatureRow] = resultRows(signatureResult) as Array<{ count: number; maxId: string }>;
         const signature = `${businessDate}:${signatureRow?.count ?? 0}:${signatureRow?.maxId ?? 0}`;
         res.set("Cache-Control", "private, no-store");
         if (req.query.known === signature) {
