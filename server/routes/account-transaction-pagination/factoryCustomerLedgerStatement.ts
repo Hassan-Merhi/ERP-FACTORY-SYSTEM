@@ -87,6 +87,7 @@ export function factoryCustomerAllRowsCte(): string {
       AND v.optional = false
       AND v.deleted_at IS NULL
       AND v.voucher_number NOT LIKE 'CHARGE-%'
+      AND v.voucher_number NOT LIKE 'INV-%'
       AND (
         ve.ledger_account_id = $3
         OR (ve.customer_id = $2 AND ve.ledger_account_id IS NULL)

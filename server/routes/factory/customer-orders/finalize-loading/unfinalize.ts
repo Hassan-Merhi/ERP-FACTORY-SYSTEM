@@ -24,6 +24,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderUnfinalizeRoutes(app: Express) {
   app.post(
@@ -202,6 +203,9 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(customerOrders.id, orderId));
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, orderId);
 
         // Daybook entry
         const [unfCustomer] = await tx

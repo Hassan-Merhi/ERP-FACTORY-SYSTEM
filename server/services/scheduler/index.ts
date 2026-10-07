@@ -51,10 +51,21 @@ export function startScheduler(): void {
 
   cron.schedule("* * * * *", locationStockTick);
 
+  // Perpetual inventory (wave 8.4): the factory stock journal, every evening (UTC),
+  // for each company whose cut-over is applied.
+  const factoryStockTick = createSchedulerTick("factoryStockJournal", async () => {
+    const { runFactoryStockJournals } = await import("../accounting/perpetualInventory/factoryStockJournal");
+    await runFactoryStockJournals();
+  });
+  cron.schedule("45 23 * * *", factoryStockTick, { timezone: "UTC" });
+
   logger.info("Location stock WhatsApp scheduler registered", {
     module: "scheduler",
     action: "start",
-    jobs: ["locationStockWhatsApp(every minute; per-location timezone/time/day rules)"],
+    jobs: [
+      "locationStockWhatsApp(every minute; per-location timezone/time/day rules)",
+      "factoryStockJournal(23:45 UTC daily)",
+    ],
   });
 }
 

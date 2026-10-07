@@ -125,7 +125,9 @@ export async function buildFactoryCustomerLedgerEntries(
   //
   // This MUST mirror the canonical Customers-page formula in
   // /api/accounts/all and /api/accounts/ledger/:id/balance EXACTLY:
-  //   - exclude only `CHARGE-%` voucher numbers (other prefixes are real txns)
+  //   - exclude `CHARGE-%` and `INV-%` voucher numbers: the finalized order's
+  //     grand_total above already carries both (INV-% is the perpetual-inventory
+  //     invoice journal, wave 8.4); other prefixes are real txns
   //   - exclude `optional = true` and soft-deleted vouchers
   //   - L1 = ledgerAccountId = X
   //   - L2 = customerId = Y AND ledgerAccountId IS NULL
@@ -167,7 +169,7 @@ export async function buildFactoryCustomerLedgerEntries(
         eq(vouchers.companyId, companyId),
         eq(vouchers.optional, false),
         sql`${vouchers.deletedAt} IS NULL`,
-        sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
+        sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
         ...dateFilters
       )
     )

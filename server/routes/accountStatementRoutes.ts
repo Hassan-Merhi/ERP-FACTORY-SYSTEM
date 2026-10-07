@@ -181,7 +181,7 @@ export function registerAccountStatementRoutes(app: Express) {
                     eq(voucherEntries.ledgerAccountId, accountId),
                     eq(vouchers.optional, false),
                     isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
+                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
                     dateFilter
                   )
                 ),
@@ -197,7 +197,7 @@ export function registerAccountStatementRoutes(app: Express) {
                     isNull(voucherEntries.ledgerAccountId),
                     eq(vouchers.optional, false),
                     isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
+                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
                     dateFilter
                   )
                 ),

@@ -11,6 +11,7 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
@@ -27,6 +28,8 @@ export function registerPosSaleDeleteRoutes(app: Express) {
       if (sale.status === "VOIDED") return res.status(400).json({ message: "Sale already voided" });
 
       await db.transaction(async (tx) => {
+        // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
+        await removeFactoryPosCogsTx(tx, companyId, saleId);
         // Restore bales to IN_STOCK by finding bales that were sold around the sale date/product
         const items = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
         for (const item of items) {

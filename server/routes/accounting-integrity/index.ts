@@ -48,6 +48,8 @@ import {
   applyOpeningInventoryJournal,
   planOpeningInventoryJournal,
 } from "../../services/accounting/perpetualInventory/openingJournal";
+import { syncFactoryStockJournalTx } from "../../services/accounting/perpetualInventory/factoryStockJournal";
+import { listUnpostedFactoryInvoices } from "../../services/accounting/perpetualInventory/factoryInvoice";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -249,6 +251,41 @@ export function registerAccountingIntegrityRoutes(app: Express) {
           return res.status(400).json({ message: "Invalid date" });
         }
         res.json(await planOpeningInventoryJournal(companyId, effectiveFrom));
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Perpetual inventory (wave 8.4): today's factory stock journal, run now
+  // (the scheduler runs it every evening).
+  app.post(
+    "/api/accounting/perpetual-inventory/factory-stock-journal",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const result = await db.transaction((tx) => syncFactoryStockJournalTx(tx, companyId));
+        res.json(result);
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
+  // Factory invoices on or after the cut-over that carry no ledger journal
+  // (a currency other than USD has no exchange rate to post at).
+  app.get(
+    "/api/accounting/perpetual-inventory/unposted-factory-invoices",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        res.json(await listUnpostedFactoryInvoices(db, companyId));
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
       }

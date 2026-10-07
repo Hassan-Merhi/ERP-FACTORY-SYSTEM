@@ -121,7 +121,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
                   eq(vouchers.companyId, companyId),
                   eq(vouchers.optional, false),
                   isNull(vouchers.deletedAt),
-                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
+                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
                 )
               )
               .where(eq(voucherEntries.ledgerAccountId, ledgerAccountId)),
@@ -138,7 +138,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
                   eq(vouchers.companyId, companyId),
                   eq(vouchers.optional, false),
                   isNull(vouchers.deletedAt),
-                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
+                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
                 )
               )
               .where(and(eq(voucherEntries.customerId, custId), isNull(voucherEntries.ledgerAccountId))),

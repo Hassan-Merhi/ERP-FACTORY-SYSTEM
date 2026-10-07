@@ -33,6 +33,7 @@ import {
 } from "../../../services/accounting/perpetualInventory/saleCogs";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -405,6 +406,8 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
         await syncPurchaseOrderGitForVoucherTx(tx, existingVoucher.companyId, id);
         // Perpetual inventory (wave 8.3): an optional stock adjustment carries no inventory line.
         await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
+        // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
+        await syncFactoryInvoiceForChargeVoucherTx(tx, existingVoucher.companyId, id);
       });
       // Log the optional status change to audit log
       await logAudit({

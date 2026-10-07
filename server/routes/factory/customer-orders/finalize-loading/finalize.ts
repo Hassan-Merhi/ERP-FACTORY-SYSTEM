@@ -30,6 +30,7 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
+import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderFinalizeRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/finalize", requireAuth, async (req: Request, res: Response) => {
@@ -242,6 +243,9 @@ export function registerOrderFinalizeRoutes(app: Express) {
             }
           }
         }
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, orderId);
 
         const [finalOrder] = await tx
           .select({

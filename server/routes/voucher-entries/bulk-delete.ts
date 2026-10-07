@@ -46,6 +46,7 @@ import { createDatabaseStockMovementAdapter } from "../../services/inventory/dat
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { removeSaleCogsTx } from "../../services/accounting/perpetualInventory/saleCogs";
 import { syncPurchaseOrderGitForVoucherTx } from "../../services/accounting/perpetualInventory/stockReceipts";
+import { syncFactoryInvoiceForChargeVoucherTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -490,6 +491,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
             await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, id));
             // Perpetual inventory (wave 8.2): a deleted PO voucher is no longer in transit.
             await syncPurchaseOrderGitForVoucherTx(tx, currentCompanyId, id);
+            // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
+            await syncFactoryInvoiceForChargeVoucherTx(tx, currentCompanyId, id);
 
             // Cascade: remove factory daybook entries linked to this voucher
             await tx.execute(

@@ -32,9 +32,11 @@ import { voucherEntries } from "@shared/schema";
 
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { computeStockInHand } from "../../../routes/stats/netProfitStockSection";
+import { calculateHistoricalLocationInventory } from "../../../routes/helpers/inventoryHistoryHelpers";
 import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "../infrastructureVoucherIdentity";
 import { ensureSystemAccounts } from "../systemAccounts";
+import { ledgerBalancesByCode } from "./linkedJournal";
+import { factoryBaleMirrorStockItemIds, factoryStockValuation, type UnvaluedRow } from "./factoryValuation";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
 
 export interface OpeningJournalLine {
@@ -48,11 +50,7 @@ export interface OpeningJournalLine {
   basis: string;
 }
 
-export interface UnvaluedRow {
-  source: "factory_raw_stock" | "factory_mix_batches" | "factory_bales";
-  id: number;
-  reason: string;
-}
+export type { UnvaluedRow } from "./factoryValuation";
 
 export interface OpeningInventoryPlan {
   companyId: number;
@@ -92,6 +90,25 @@ async function rows<T>(query: ReturnType<typeof sql>): Promise<T[]> {
   return (await db.execute(query)).rows as unknown as T[];
 }
 
+/**
+ * ERP stock in hand as of a date (as computeStockInHand values it), leaving out
+ * the stock items that mirror factory bales: the factory values those bales.
+ */
+async function erpStockInHandExcludingBaleMirror(companyId: number, asOf: string): Promise<Decimal> {
+  const mirror = await factoryBaleMirrorStockItemIds(db, companyId);
+  const locations = await rows<{ id: number }>(sql`
+    SELECT id FROM locations WHERE company_id = ${companyId} AND active = true AND deleted_at IS NULL
+  `);
+  let value: Decimal = new MoneyDecimal(0);
+  for (const location of locations) {
+    for (const item of await calculateHistoricalLocationInventory(location.id, companyId, asOf)) {
+      if (mirror.has(item.stockItemId)) continue;
+      value = value.plus(toMoney(item.quantity).times(toMoney(item.averageRate)));
+    }
+  }
+  return value.toDecimalPlaces(2);
+}
+
 /** The opening journal's debit side: the lines it debits, and equity when the lines net to a credit. */
 function openingDebitTotal(plan: Pick<OpeningInventoryPlan, "lines" | "total">): Decimal {
   const debits = plan.lines.reduce(
@@ -109,8 +126,6 @@ export async function planOpeningInventoryJournal(
 ): Promise<OpeningInventoryPlan> {
   if (!ISO_DATE.test(effectiveFrom)) throw new OpeningJournalRefusal("INVALID_DATE", "Invalid date");
   const journalDate = dayBefore(effectiveFrom);
-  const unvalued: UnvaluedRow[] = [];
-
   // Supplier-partner companies carry their stock in their own sp_stock
   // accounts already; their ERP stock is not capitalised a second time.
   const company = await rows<{ company_type: string | null }>(
@@ -119,54 +134,13 @@ export async function planOpeningInventoryJournal(
   const supplierPartner = company[0]?.company_type === "supplier_partner";
   const erpStock = supplierPartner
     ? new MoneyDecimal(0)
-    : toMoney(await computeStockInHand(companyId, journalDate)).toDecimalPlaces(2);
+    : await erpStockInHandExcludingBaleMirror(companyId, journalDate);
 
-  const raw = await rows<{ id: number; remaining: string; cost: string | null }>(sql`
-    SELECT id, (received_kg - used_kg)::text AS remaining, cost_per_kg_usd::text AS cost
-      FROM factory_raw_stock
-     WHERE company_id = ${companyId} AND received_kg - used_kg > 0
-  `);
-  let rawValue: Decimal = new MoneyDecimal(0);
-  for (const row of raw) {
-    if (row.cost === null) {
-      unvalued.push({ source: "factory_raw_stock", id: row.id, reason: "no USD cost per kg" });
-      continue;
-    }
-    rawValue = rawValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
-  }
-
-  const mixes = await rows<{ id: number; remaining: string; cost: string }>(sql`
-    SELECT id, (total_weight_kg - used_kg)::text AS remaining, cost_per_kg::text AS cost
-      FROM factory_mix_batches
-     WHERE company_id = ${companyId} AND deleted_at IS NULL AND status <> 'CLOSED'
-       AND total_weight_kg - used_kg > 0
-  `);
-  let wipValue: Decimal = new MoneyDecimal(0);
-  for (const row of mixes) wipValue = wipValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
-
-  const bales = await rows<{ status: string; count: number; cost: string; zero_cost: number[] }>(sql`
-    SELECT status, COUNT(*)::int AS count, COALESCE(SUM(total_cost), 0)::text AS cost,
-           COALESCE(array_agg(id) FILTER (WHERE COALESCE(total_cost, 0) = 0), '{}') AS zero_cost
-      FROM factory_bales
-     WHERE company_id = ${companyId} AND deleted_at IS NULL
-       AND status IN ('PENDING_PRESSING', 'IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH')
-     GROUP BY status
-  `);
-  let finishedValue: Decimal = new MoneyDecimal(0);
-  for (const row of bales) {
-    if (row.status === "PENDING_PRESSING") wipValue = wipValue.plus(toMoney(row.cost));
-    else finishedValue = finishedValue.plus(toMoney(row.cost));
-    for (const id of row.zero_cost) unvalued.push({ source: "factory_bales", id, reason: "no recorded cost" });
-  }
-
-  const sold = await rows<{ count: number; cost: string }>(sql`
-    SELECT COUNT(DISTINCT b.id)::int AS count, COALESCE(SUM(b.total_cost), 0)::text AS cost
-      FROM factory_bales b
-      JOIN customer_order_bales cob ON cob.bale_id = b.id
-      JOIN customer_orders co ON co.id = cob.order_id
-     WHERE b.company_id = ${companyId} AND b.deleted_at IS NULL AND b.status = 'SOLD'
-       AND co.status NOT IN ('FINALIZED', 'CANCELLED')
-  `);
+  const factory = await factoryStockValuation(db, companyId);
+  const { unvalued } = factory;
+  const rawValue = factory.raw;
+  const wipValue = factory.wip;
+  const finishedValue = factory.finished;
 
   // Goods in transit on the eve: what Purchases absorbed for POs dated before
   // the cut-over whose container had not been offloaded by then. Their stock
@@ -219,26 +193,12 @@ export async function planOpeningInventoryJournal(
   // opening balances and every active posting (credit and debit notes, for
   // one, have always posted to Inventory). The journal posts only the
   // difference, so nothing already in the ledger is counted twice.
-  const codes = targets.map((line) => line.accountCode);
-  const held = await rows<{ code: string; balance: string }>(sql`
-    SELECT la.code,
-           (COALESCE(SUM(CASE WHEN la.opening_balance_side = 'Cr' THEN -la.opening_balance ELSE la.opening_balance END), 0)
-            + COALESCE(SUM(posted.balance), 0))::text AS balance
-      FROM ledger_accounts la
-      LEFT JOIN LATERAL (
-        SELECT SUM(ve.debit_amount - ve.credit_amount) AS balance
-          FROM voucher_entries ve
-          JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
-                         AND COALESCE(v.optional, false) = false AND v.voucher_date <= ${journalDate}
-         WHERE ve.ledger_account_id = la.id
-      ) posted ON true
-     WHERE la.company_id = ${companyId} AND la.deleted_at IS NULL AND la.code IN (${sql.join(
-       codes.map((code) => sql`${code}`),
-       sql`, `
-     )})
-     GROUP BY la.code
-  `);
-  const ledgerBalance = new Map(held.map((row) => [row.code, toMoney(row.balance).toDecimalPlaces(2)]));
+  const ledgerBalance = await ledgerBalancesByCode(
+    db,
+    companyId,
+    targets.map((line) => line.accountCode),
+    journalDate
+  );
   const lines: OpeningJournalLine[] = targets
     .map((line) => {
       const balance = ledgerBalance.get(line.accountCode) ?? new MoneyDecimal(0);
@@ -260,7 +220,7 @@ export async function planOpeningInventoryJournal(
     lines,
     total: total.toFixed(2),
     unvalued,
-    soldNotInvoiced: { bales: sold[0]?.count ?? 0, cost: toMoney(sold[0]?.cost ?? 0).toFixed(2) },
+    soldNotInvoiced: factory.soldNotInvoiced,
     supplierPartner,
     alreadyApplied: (await getInventoryCutover(db, companyId)) !== null,
     postingReady: PERPETUAL_INVENTORY_POSTING_READY,

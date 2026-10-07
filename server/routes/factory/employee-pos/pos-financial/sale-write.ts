@@ -30,6 +30,10 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import {
+  factoryBalesCostTx,
+  postFactoryPosCogsTx,
+} from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
 function requestCents(value: unknown) {
@@ -147,6 +151,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
           }),
         },
         async (tx) => {
+          const soldBaleIds: number[] = [];
           // 1. Create sale record
           const [sale] = await tx
             .insert(factoryPosSales)
@@ -216,6 +221,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
                 .update(factoryBales)
                 .set({ status: "SOLD", updatedAt: new Date() })
                 .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+              soldBaleIds.push(...baleIds);
             }
           }
 
@@ -354,6 +360,14 @@ export function registerPosSaleWriteRoutes(app: Express) {
             });
           }
 
+          // Perpetual inventory (wave 8.4): the sale posts the cost of the bales it took.
+          await postFactoryPosCogsTx(tx, {
+            companyId,
+            saleId: sale.id,
+            voucherDate: String(sale.txDate),
+            cost: await factoryBalesCostTx(tx, companyId, soldBaleIds),
+          });
+
           return { value: sale, resultReference: sale.id };
         }
       );
@@ -452,6 +466,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
           .where(and(eq(factoryPosSales.id, saleId), eq(factoryPosSales.companyId, companyId)))
           .returning();
 
+        const soldBaleIds: number[] = [];
         // Step 4: Insert new items and mark bales as SOLD
         for (const [index, item] of items.entries()) {
           const { qty, price } = lines[index];
@@ -492,6 +507,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               .update(factoryBales)
               .set({ status: "SOLD", updatedAt: new Date() })
               .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+            soldBaleIds.push(...baleIds);
           }
         }
 
@@ -654,6 +670,14 @@ export function registerPosSaleWriteRoutes(app: Express) {
             });
           }
         }
+
+        // Perpetual inventory (wave 8.4): the edited sale posts the cost of the bales it now takes.
+        await postFactoryPosCogsTx(tx, {
+          companyId,
+          saleId,
+          voucherDate: String(updatedSale.txDate),
+          cost: await factoryBalesCostTx(tx, companyId, soldBaleIds),
+        });
 
         return updatedSale;
       });

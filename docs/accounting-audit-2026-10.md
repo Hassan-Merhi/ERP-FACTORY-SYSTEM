@@ -202,7 +202,7 @@ risk, modules, database and production impact, dependencies and acceptance crite
   - After applying, `foreign_currency_lines_without_native_amount` falls to the lines the plan reported as skipped.
   - The repair was not run in this session: the production database is not reachable from it.
 
-### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.3 complete)
+### Wave 8 — Inventory, COGS and factory revenue in the ledger (CRITICAL, architectural) — in progress (8.0–8.4 complete)
 
 - **Problem:** the GL is a cash and payables book.
   - Purchases are expensed, and sales post no COGS.
@@ -281,12 +281,34 @@ risk, modules, database and production impact, dependencies and acceptance crite
     - Voucher expectations reclassified: "single-sided" (Stock Adjustment, Production, Consumption) now accepts one side posted (periodic) or both sides posted and equal (perpetual), in the convergence reconciler and the phase 3 audit.
     - Credit and debit notes already post their inventory line at cost, with a variance line, before and after the cut-over. The 8.5 reconciliation checks them with the rest.
     - Test: `perpetual-inventory-stock-adjustments`.
-  - **8.4 Factory:**
-    - Offload: Dr Raw Material against import cost and capitalised charges.
-    - Mix: Dr WIP / Cr Raw Material.
-    - Bale entry: Dr Finished Goods / Cr WIP, with the variance.
-    - Finalize/dispatch: Dr customer / Cr Sales and Dr COGS / Cr Finished Goods.
-    - Post-finalize edits, unfinalize, and the customer-balance formulas.
+  - **8.4 Factory (complete).** Owner decisions, 2026-10-07:
+    - the receivable posts to each customer's own ledger;
+    - the stock chain posts one derived journal a day;
+    - invoices in a currency other than USD post nothing and are listed.
+    - **Factory invoices.** A finalized order, including a dispatch-batch invoice, posts `INV-GL-{company}-{order}`:
+      - Dr customer ledger / Cr Factory Bale Sales Income, for the grand total less the charges that have their own `CHARGE-` voucher.
+      - Dr COGS / Cr Factory Finished Goods, for the recorded cost of its bales.
+      - Voucher numbers are unique across companies while invoice sequences are per company, hence the company and order in the number; the invoice number is in the description.
+      - The journal is rebuilt from the order on every path that changes it: finalize, dispatch invoicing, un-finalize, and every totals recalculation (`recalculateOrderTotals`, which covers repricing, charges, swaps, removals, exchanges, recoveries and charge-journal syncs). It is also rebuilt when a charge voucher is deleted, restored or made optional.
+      - A customer with no ledger account gets `CUST-{id}`, as the charge vouchers already do.
+    - **Customer readers.** The five factory customer readers that rebuild the invoice from `grand_total` now skip `INV-%` vouchers, as the factory statements already did: the customer ledger builder, the paginated statement, `/api/accounts/all`, the ledger balance, and the statement opening balance. The ledger readers (trial balance, net position, the generic customer balance) now include the invoice they were missing.
+    - **Factory POS.** A factory POS sale posts `FPOS-COGS-{sale}`: Dr COGS / Cr Finished Goods for the cost of the bales it marks sold. Edits replace it and voids remove it. A sale does not record which bales it took, so an edit's reverted bales can differ; the difference goes to the daily variance.
+    - **Daily factory stock journal.** `GL-FACTORY-STOCK-{company}-{date}` is posted every evening at 23:45 UTC by the scheduler, and on demand through `POST /api/accounting/perpetual-inventory/factory-stock-journal` (Admin/Owner).
+      - It moves Raw Material, WIP and Finished Goods to the value the factory costing holds now, the same valuation the opening journal uses.
+      - It credits the raw material received since the previous journal (`factory_container_receipts`, USD) to the expense accounts the container's `FACTORY-` vouchers debited, in proportion, or to Factory Import Cost when there are none.
+      - The rest goes to Production Variance: mixing and pressing differences, write-offs, waste, removals, revaluations.
+      - It is posted for today only, replaced when it runs again the same day, and never recomputed for a past day.
+    - **Valuation fixes,** shared by the opening plan and the daily journal (`factoryValuation.ts`):
+      - Deleted raw-stock rows are left out.
+      - Sold bales on orders not yet invoiced stay in finished goods until their invoice posts their cost.
+      - ERP stock items that mirror factory bales (unit BALE, coded as a bale product) are left out of the opening Inventory line; the factory values those bales.
+    - **Unposted invoices.** `GET /api/accounting/perpetual-inventory/unposted-factory-invoices` lists finalized invoices on or after the cut-over with no journal; today that is only non-USD dispatch invoices. The 8.5 switch must stay off while any are listed.
+    - **Remaining differences,** for the 8.5 reconciliation:
+      - Manual raw-material ADD adjustments already debit Raw Material, but the costing does not value them; the daily journal reverses them into variance.
+      - Opening-balance raw stock carries no expense, so its value reaches the ledger through variance.
+      - Sold bales keep the cost they were invoiced at when a cost cascade later revalues them.
+      - The ERP bale mirror is never reduced on a factory sale.
+    - Test: `perpetual-inventory-factory`.
   - **8.5 Reports and the switch:** P&L and net position read the GL for a switched-on company; the deferred debit = credit constraint; `PERPETUAL_INVENTORY_POSTING_READY = true`.
 - **Not in scope:** moving master-record opening balances into journals needs its own reviewed migration. Every reader adds `opening_balance` to its entries, so posting them as journals without zeroing the master records would double count.
 

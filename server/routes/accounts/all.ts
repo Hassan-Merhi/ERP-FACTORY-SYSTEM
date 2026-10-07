@@ -115,7 +115,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
                 eq(vouchers.companyId, companyId),
                 eq(vouchers.optional, false),
                 isNull(vouchers.deletedAt),
-                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
+                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
               )
             )
             .where(inArray(voucherEntries.ledgerAccountId, linkedLedgerIds))
@@ -134,7 +134,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
                 eq(vouchers.companyId, companyId),
                 eq(vouchers.optional, false),
                 isNull(vouchers.deletedAt),
-                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
+                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
               )
             )
             .where(and(inArray(voucherEntries.customerId, linkedCustIds), isNull(voucherEntries.ledgerAccountId)))

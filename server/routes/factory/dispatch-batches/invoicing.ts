@@ -22,6 +22,7 @@ import {
 import { getCompanyId } from "./_helpers";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
+import { syncFactoryInvoiceTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 type RawProformaLineRow = { article_code: string; quantity: number };
 
@@ -383,6 +384,9 @@ export function registerDispatchInvoiceRoutes(app: Express) {
           INSERT INTO customer_balances (company_id, customer_id, transaction_date, transaction_type, reference_type, reference_id, debit_amount, credit_amount, balance, currency, description, created_at)
           VALUES (${companyId}, ${batch.customer_id}, ${orderDate}, 'SALE', 'INVOICE', ${orderId}, ${grandTotal.toFixed(2)}, '0', ${grandTotal.toFixed(2)}, ${batch.currency || "USD"}, ${"Invoice " + invoiceNumber}, now())
         `);
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, Number(orderId));
 
         // 12. Update batch: INVOICED + finalOrderId
         await tx.execute(sql`

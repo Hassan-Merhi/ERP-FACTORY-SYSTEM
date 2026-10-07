@@ -32,6 +32,7 @@ import {
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerDeletedItemsRestoreRoutes(app: Express) {
   // Restore a deleted item
@@ -104,6 +105,8 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             await syncPurchaseOrderGitForVoucherTx(tx, companyId, itemId);
             // Perpetual inventory (wave 8.3): a restored stock adjustment carries its inventory line again.
             await syncStockAdjustmentInventoryTx(tx, companyId, itemId);
+            // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
+            await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, itemId);
           });
           break;
         // === Wave 1 restores ===

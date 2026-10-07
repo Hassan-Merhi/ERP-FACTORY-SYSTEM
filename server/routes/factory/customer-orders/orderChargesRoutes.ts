@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+import { syncFactoryInvoiceTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderChargesRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/charges", requireAuth, async (req: Request, res: Response) => {
@@ -245,6 +246,9 @@ export function registerOrderChargesRoutes(app: Express) {
           });
         }
       }
+
+      // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+      await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
       res.json({ ...updatedOrder, charges: updatedCharges, warning: chargeWarning });
     } catch (error: unknown) {
@@ -647,6 +651,9 @@ export function registerOrderChargesRoutes(app: Express) {
         .from(customerOrderCharges)
         .where(eq(customerOrderCharges.orderId, orderId));
 
+      // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+      await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
+
       res.json({ ...updatedOrder, charges: updatedCharges });
     } catch (error: unknown) {
       logger.error("[PATCH charge]", { error: error });
@@ -758,6 +765,9 @@ export function registerOrderChargesRoutes(app: Express) {
             .where(eq(factoryDaybookEntries.id, verifiedDaybookEntry.id));
         }
       }
+
+      // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+      await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
       res.json({ ...updatedOrder, charges: updatedCharges });
     } catch (error: unknown) {

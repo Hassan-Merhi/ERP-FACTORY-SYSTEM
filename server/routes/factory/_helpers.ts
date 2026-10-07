@@ -27,6 +27,7 @@ import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
 import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
+import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
   try {
@@ -326,6 +327,16 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
       updatedAt: new Date(),
     })
     .where(eq(customerOrders.id, orderId));
+
+  // Perpetual inventory (wave 8.4): a finalized order's invoice journal follows its new totals.
+  const [owner] = await dbConn
+    .select({ companyId: customerOrders.companyId, status: customerOrders.status })
+    .from(customerOrders)
+    .where(eq(customerOrders.id, orderId));
+  if (owner?.status === "FINALIZED") {
+    const sync = (tx: DbTransaction) => syncFactoryInvoiceTx(tx, owner.companyId, orderId);
+    await ("rollback" in dbConn ? sync(dbConn as DbTransaction) : db.transaction(sync));
+  }
 }
 
 /**

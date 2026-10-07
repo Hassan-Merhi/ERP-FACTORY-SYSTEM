@@ -21,6 +21,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, sql, ilike } from "drizzle-orm";
+import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderBaleSwapRoutes(app: Express) {
   // GET /api/factory/bales/:id/order-info — get the order a bale is allocated to (for the confirmation dialog)
@@ -198,6 +199,8 @@ export function registerOrderBaleSwapRoutes(app: Express) {
               .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
               .where(eq(customerBalances.id, ledgerEntry.id));
           }
+          // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+          await syncFactoryInvoiceTx(tx, companyId, order.id);
 
           const [daybookEntry] = await tx
             .select({ id: factoryDaybookEntries.id })
