@@ -219,38 +219,40 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       if (goodsValue.greaterThan(0) && container.supplierId) {
         const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
         const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
-        const [importVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: "Journal",
-            voucherNumber: importVoucherNum,
-            voucherDate: container.arrivalDate || today,
-            description: `Goods import - container ${container.containerNumber}`,
-            totalAmount: goodsValue.toFixed(),
-            currency: container.currencyCode || "USD",
-            exchangeRate: String(
-              resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-            ),
-            sourceModule: "FACTORY",
-          })
-          .returning();
-        const importFactoryFxRate = resolveStoredFxRateOrThrow(
-          container.currencyCode,
-          container.fxRateToUsd,
-          container.fxRateConfirmed
-        );
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          ledgerAccountId: importCostAccId,
-          ...normFactoryEntry(container.currencyCode || "USD", goodsValue.toFixed(), "0", importFactoryFxRate),
-          narration: `Goods import cost - container ${container.containerNumber}`,
-        });
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          factorySupplierId: container.supplierId,
-          ...normFactoryEntry(container.currencyCode || "USD", "0", goodsValue.toFixed(), importFactoryFxRate),
-          narration: `Goods payable to supplier - container ${container.containerNumber}`,
+        await db.transaction(async (tx) => {
+          const [importVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherType: "Journal",
+              voucherNumber: importVoucherNum,
+              voucherDate: container.arrivalDate || today,
+              description: `Goods import - container ${container.containerNumber}`,
+              totalAmount: goodsValue.toFixed(),
+              currency: container.currencyCode || "USD",
+              exchangeRate: String(
+                resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
+              ),
+              sourceModule: "FACTORY",
+            })
+            .returning();
+          const importFactoryFxRate = resolveStoredFxRateOrThrow(
+            container.currencyCode,
+            container.fxRateToUsd,
+            container.fxRateConfirmed
+          );
+          await tx.insert(voucherEntries).values({
+            voucherId: importVoucher.id,
+            ledgerAccountId: importCostAccId,
+            ...normFactoryEntry(container.currencyCode || "USD", goodsValue.toFixed(), "0", importFactoryFxRate),
+            narration: `Goods import cost - container ${container.containerNumber}`,
+          });
+          await tx.insert(voucherEntries).values({
+            voucherId: importVoucher.id,
+            factorySupplierId: container.supplierId,
+            ...normFactoryEntry(container.currencyCode || "USD", "0", goodsValue.toFixed(), importFactoryFxRate),
+            narration: `Goods payable to supplier - container ${container.containerNumber}`,
+          });
         });
       }
 
@@ -267,46 +269,48 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
       const freightOwnAcctId = container.freightOwnAccountId ?? null;
       if (freightAmt.greaterThan(0) && container.freightAccountId) {
         const freightVoucherNum = `FACTORY-FREIGHT-${container.id}`;
-        const [freightVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: freightPaidBy === "own" ? "Payment" : "Journal",
-            voucherNumber: freightVoucherNum,
-            voucherDate: container.arrivalDate || today,
-            description: `Freight on container ${container.containerNumber}`,
-            totalAmount: freightAmt.toFixed(),
-            currency: freightCcy,
-            exchangeRate: String(containerFreightFxRateToUsd(container)),
-            sourceModule: "FACTORY",
-          })
-          .returning();
-        // Factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign unit)
-        const freightFactoryFxRate = containerFreightFxRateToUsd(container);
-        // Dr Freight Expense
-        await db.insert(voucherEntries).values({
-          voucherId: freightVoucher.id,
-          ledgerAccountId: container.freightAccountId,
-          ...normFactoryEntry(freightCcy, freightAmt.toFixed(), "0", freightFactoryFxRate),
-          narration: `Freight expense - container ${container.containerNumber}`,
+        await db.transaction(async (tx) => {
+          const [freightVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherType: freightPaidBy === "own" ? "Payment" : "Journal",
+              voucherNumber: freightVoucherNum,
+              voucherDate: container.arrivalDate || today,
+              description: `Freight on container ${container.containerNumber}`,
+              totalAmount: freightAmt.toFixed(),
+              currency: freightCcy,
+              exchangeRate: String(containerFreightFxRateToUsd(container)),
+              sourceModule: "FACTORY",
+            })
+            .returning();
+          // Factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign unit)
+          const freightFactoryFxRate = containerFreightFxRateToUsd(container);
+          // Dr Freight Expense
+          await tx.insert(voucherEntries).values({
+            voucherId: freightVoucher.id,
+            ledgerAccountId: container.freightAccountId,
+            ...normFactoryEntry(freightCcy, freightAmt.toFixed(), "0", freightFactoryFxRate),
+            narration: `Freight expense - container ${container.containerNumber}`,
+          });
+          if (freightPaidBy === "own" && freightOwnAcctId) {
+            // Cr Own account (paid by company itself)
+            await tx.insert(voucherEntries).values({
+              voucherId: freightVoucher.id,
+              ledgerAccountId: freightOwnAcctId,
+              ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
+              narration: `Freight paid via own account - container ${container.containerNumber}`,
+            });
+          } else if (freightPaidBy === "supplier" && container.supplierId) {
+            // Cr Supplier Payable
+            await tx.insert(voucherEntries).values({
+              voucherId: freightVoucher.id,
+              factorySupplierId: container.supplierId,
+              ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
+              narration: `Freight payable to supplier - container ${container.containerNumber}`,
+            });
+          }
         });
-        if (freightPaidBy === "own" && freightOwnAcctId) {
-          // Cr Own account (paid by company itself)
-          await db.insert(voucherEntries).values({
-            voucherId: freightVoucher.id,
-            ledgerAccountId: freightOwnAcctId,
-            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
-            narration: `Freight paid via own account - container ${container.containerNumber}`,
-          });
-        } else if (freightPaidBy === "supplier" && container.supplierId) {
-          // Cr Supplier Payable
-          await db.insert(voucherEntries).values({
-            voucherId: freightVoucher.id,
-            factorySupplierId: container.supplierId,
-            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
-            narration: `Freight payable to supplier - container ${container.containerNumber}`,
-          });
-        }
       }
 
       logger.info("factory container create succeeded", {

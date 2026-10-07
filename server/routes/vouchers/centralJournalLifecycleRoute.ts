@@ -156,20 +156,22 @@ async function syncIntercompanyCounterpart(voucherId: number, newTotal: number):
     const ratio = oldTotal > 0 ? newTotal / oldTotal : 1;
     const otherEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
 
-    for (const entry of otherEntries) {
-      await db
-        .update(voucherEntries)
-        .set({
-          debitAmount: (Number(entry.debitAmount || 0) * ratio).toFixed(2),
-          creditAmount: (Number(entry.creditAmount || 0) * ratio).toFixed(2),
-        })
-        .where(eq(voucherEntries.id, entry.id));
-    }
+    await db.transaction(async (tx) => {
+      for (const entry of otherEntries) {
+        await tx
+          .update(voucherEntries)
+          .set({
+            debitAmount: (Number(entry.debitAmount || 0) * ratio).toFixed(2),
+            creditAmount: (Number(entry.creditAmount || 0) * ratio).toFixed(2),
+          })
+          .where(eq(voucherEntries.id, entry.id));
+      }
 
-    await db
-      .update(vouchers)
-      .set({ totalAmount: newTotal.toFixed(2) })
-      .where(eq(vouchers.id, otherVoucherId));
+      await tx
+        .update(vouchers)
+        .set({ totalAmount: newTotal.toFixed(2) })
+        .where(eq(vouchers.id, otherVoucherId));
+    });
     await db
       .update(factoryDaybookEntries)
       .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })

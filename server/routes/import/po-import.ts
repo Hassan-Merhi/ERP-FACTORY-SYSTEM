@@ -15,7 +15,13 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { ledgerAccounts, purchaseOrders, voucherEntries, type Container } from "@shared/schema";
+import {
+  ledgerAccounts,
+  purchaseOrders,
+  voucherEntries,
+  type Container,
+  type InsertVoucherEntry,
+} from "@shared/schema";
 import { eq, and, isNull, like } from "drizzle-orm";
 import {
   ParentCompanyPostingScopeError,
@@ -392,18 +398,8 @@ export function registerPoImportRoutes(app: Express) {
         // Create voucher for this PO
         // If subsidiary with parent credit account: entries created here at import time
         // Otherwise: entries created at container offload time per Tally conventions
-        const voucher = await storage.createVoucher({
-          companyId: currentCompanyId,
-          postingSource: infrastructurePostingIdentity("po-import", `${currentCompanyId}:${poNumber}`, "purchase"),
-          currency: "USD",
-          voucherNumber: `PO-${poNumber}-${Date.now()}`,
-          voucherType: "Purchase",
-          voucherDate: importDate,
-          description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
-          totalAmount: (resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal).toString(),
-          optional: false,
-          sourceModule: "ERP",
-        });
+        // The header and its entries are written together below, in one transaction.
+        const localEntries: Omit<InsertVoucherEntry, "voucherId">[] = [];
 
         // Parent-side accounting is deliberately separate from the local
         // posting. A Supplier Partner keeps its OTW/Clearing voucher in the
@@ -556,8 +552,7 @@ export function registerPoImportRoutes(app: Express) {
           }
 
           // DR Goods OTW (Asset increases — goods are on the way)
-          await storage.createVoucherEntry({
-            voucherId: voucher.id,
+          localEntries.push({
             ledgerAccountId: otwAcct.id,
             debitAmount: poGrandTotal.toFixed(2),
             creditAmount: "0",
@@ -565,8 +560,7 @@ export function registerPoImportRoutes(app: Express) {
           });
 
           // CR OTW Clearing (Liability — we owe for goods in transit)
-          await storage.createVoucherEntry({
-            voucherId: voucher.id,
+          localEntries.push({
             ledgerAccountId: otwClrAcct.id,
             supplierId: supplierId,
             debitAmount: "0",
@@ -650,16 +644,14 @@ export function registerPoImportRoutes(app: Express) {
             // to the parent account — the parent will settle freight with the freight company.
             const subsidiaryVoucherAmount =
               resolvedFreightPaidBy === "parent" && poFreight > 0 ? poGrandTotal : poIntercoTotal;
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               ledgerAccountId: purchasesAccount.id,
               debitAmount: subsidiaryVoucherAmount.toFixed(2),
               creditAmount: "0",
               narration: `PO ${poNumber} - Container ${containerNumber}`,
             });
 
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               ledgerAccountId: parentCreditAccountId,
               debitAmount: "0",
               creditAmount: subsidiaryVoucherAmount.toFixed(2),
@@ -695,8 +687,7 @@ export function registerPoImportRoutes(app: Express) {
           const goodsAmount = hasParentFreight ? poIntercoTotal : poGrandTotal;
 
           // DR Purchases — goods portion
-          await storage.createVoucherEntry({
-            voucherId: voucher.id,
+          localEntries.push({
             ledgerAccountId: purchasesAccount.id,
             debitAmount: goodsAmount.toFixed(2),
             creditAmount: "0",
@@ -714,16 +705,14 @@ export function registerPoImportRoutes(app: Express) {
             supplierId,
           });
           if (creditTarget.kind === "intercompany") {
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               ledgerAccountId: creditTarget.ledgerAccountId,
               debitAmount: "0",
               creditAmount: goodsAmount.toFixed(2),
               narration: `PO ${poNumber} - Intercompany credit`,
             });
           } else if (creditTarget.supplierId) {
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               supplierId: creditTarget.supplierId,
               debitAmount: "0",
               creditAmount: goodsAmount.toFixed(2),
@@ -734,16 +723,14 @@ export function registerPoImportRoutes(app: Express) {
           // When freight is parent-paid: add freight entries to this same purchase voucher
           if (hasParentFreight) {
             // DR Purchases — freight portion (same account as goods debit)
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               ledgerAccountId: purchasesAccount.id,
               debitAmount: poFreight.toFixed(2),
               creditAmount: "0",
               narration: `Freight - PO ${poNumber} - Container ${containerNumber}`,
             });
             // CR FreightParentAccount — we owe money to the freight company
-            await storage.createVoucherEntry({
-              voucherId: voucher.id,
+            localEntries.push({
               ledgerAccountId: resolvedFreightParentAccountId!,
               debitAmount: "0",
               creditAmount: poFreight.toFixed(2),
@@ -751,6 +738,33 @@ export function registerPoImportRoutes(app: Express) {
             });
           }
         }
+
+        const voucher = await db.transaction(async (tx) => {
+          const voucherFields = {
+            companyId: currentCompanyId,
+            currency: "USD",
+            voucherNumber: `PO-${poNumber}-${Date.now()}`,
+            voucherType: "Purchase",
+            voucherDate: importDate,
+            description: `${containerNumber} ${supplier?.legalName || "Unknown"}`,
+            totalAmount: (resolvedFreightPaidBy === "parent" ? poGrandTotal : poIntercoTotal).toString(),
+            optional: false,
+            sourceModule: "ERP",
+          };
+          const { voucher: localVoucher } = await insertInfrastructureVoucherTx(
+            tx,
+            voucherFields,
+            infrastructurePostingIdentity("po-import", `${currentCompanyId}:${poNumber}`, "purchase"),
+            voucherFields,
+            { replaceEntriesOnReplay: false }
+          );
+          if (localEntries.length > 0) {
+            await tx
+              .insert(voucherEntries)
+              .values(localEntries.map((entry) => ({ voucherId: localVoucher.id, ...entry })));
+          }
+          return localVoucher;
+        });
 
         if (isSubsidiary && parentCompanyId) {
           // Every write in there lands in the parent company, which this request is not pinned

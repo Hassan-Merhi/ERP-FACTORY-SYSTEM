@@ -39,59 +39,62 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
       const totalAmount = validWithdrawals.reduce((s: number, w) => s + parseFloat(w.amount), 0);
       const voucherNumber = `EMP-WD-BULK-${Date.now()}`;
 
-      const [bulkVoucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Bulk withdrawal - ${validWithdrawals.length} employees`,
-          totalAmount: totalAmount.toFixed(2),
-        })
-        .returning();
+      const { bulkVoucher, results } = await db.transaction(async (tx) => {
+        const [bulkVoucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId,
+            voucherNumber,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: notes || `Bulk withdrawal - ${validWithdrawals.length} employees`,
+            totalAmount: totalAmount.toFixed(2),
+          })
+          .returning();
 
-      // CR: Cash (total)
-      await db.insert(voucherEntries).values({
-        voucherId: bulkVoucher.id,
-        ledgerAccountId: cashAccount.id,
-        debitAmount: "0",
-        creditAmount: totalAmount.toFixed(2),
-        narration: notes || `Bulk withdrawal - ${validWithdrawals.length} employees - ${voucherNumber}`,
-      });
-
-      const results = [];
-      for (const wd of validWithdrawals) {
-        const empId = parseInt(wd.employeeId);
-        const amount = parseFloat(wd.amount);
-        const [emp] = await db
-          .select()
-          .from(employees)
-          .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
-        if (!emp) continue;
-
-        // DR: Employee
-        await db.insert(voucherEntries).values({
+        // CR: Cash (total)
+        await tx.insert(voucherEntries).values({
           voucherId: bulkVoucher.id,
-          ledgerAccountId: null,
-          employeeId: empId,
-          debitAmount: amount.toFixed(2),
-          creditAmount: "0",
-          narration: wd.notes || `Withdrawal for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
+          ledgerAccountId: cashAccount.id,
+          debitAmount: "0",
+          creditAmount: totalAmount.toFixed(2),
+          narration: notes || `Bulk withdrawal - ${validWithdrawals.length} employees - ${voucherNumber}`,
         });
 
-        const newBalance = parseFloat(emp.currentBalance || "0") - amount;
-        const newWithdrawals = parseFloat(emp.totalWithdrawals || "0") + amount;
-        await db
-          .update(employees)
-          .set({
-            currentBalance: newBalance.toFixed(2),
-            totalWithdrawals: newWithdrawals.toFixed(2),
-          })
-          .where(eq(employees.id, empId));
+        const results = [];
+        for (const wd of validWithdrawals) {
+          const empId = parseInt(wd.employeeId);
+          const amount = parseFloat(wd.amount);
+          const [emp] = await tx
+            .select()
+            .from(employees)
+            .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
+          if (!emp) continue;
 
-        results.push({ employeeId: empId, amount, name: `${emp.firstName} ${emp.lastName}` });
-      }
+          // DR: Employee
+          await tx.insert(voucherEntries).values({
+            voucherId: bulkVoucher.id,
+            ledgerAccountId: null,
+            employeeId: empId,
+            debitAmount: amount.toFixed(2),
+            creditAmount: "0",
+            narration: wd.notes || `Withdrawal for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
+          });
+
+          const newBalance = parseFloat(emp.currentBalance || "0") - amount;
+          const newWithdrawals = parseFloat(emp.totalWithdrawals || "0") + amount;
+          await tx
+            .update(employees)
+            .set({
+              currentBalance: newBalance.toFixed(2),
+              totalWithdrawals: newWithdrawals.toFixed(2),
+            })
+            .where(eq(employees.id, empId));
+
+          results.push({ employeeId: empId, amount, name: `${emp.firstName} ${emp.lastName}` });
+        }
+        return { bulkVoucher, results };
+      });
 
       res.json({ voucher: bulkVoucher, results, totalAmount });
     } catch (error: unknown) {

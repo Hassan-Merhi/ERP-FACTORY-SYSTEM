@@ -157,50 +157,52 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
           bonByCity.set(city, (bonByCity.get(city) || 0) + bon);
         }
 
-        // Delete the old single-city debit entry
-        await db.execute(sql`DELETE FROM voucher_entries WHERE id = ${row.entry_id}`);
+        await db.transaction(async (tx) => {
+          // Delete the old single-city debit entry
+          await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${row.entry_id}`);
 
-        // Insert new split entries
-        const newEntries = [];
-        const allCities = new Set([...salByCity.keys(), ...bonByCity.keys()]);
-        for (const city of allCities) {
-          const salAmt = salByCity.get(city) || 0;
-          const bonAmt = bonByCity.get(city) || 0;
-          if (city) {
-            const capCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
-            if (salAmt > 0) {
-              const salAccId = salaryAccByCity.get(city) ?? legacyAcc.id;
-              newEntries.push({
-                voucherId: row.id,
-                ledgerAccountId: salAccId,
-                ...normUsd(salAmt.toFixed(2), "0"),
-                narration: `Salary expense - ${capCity} (${periodStart} – ${periodEnd})`,
-              });
-            }
-            if (bonAmt > 0) {
-              const bonAccId = bonusAccByCity.get(city) ?? legacyAcc.id;
-              newEntries.push({
-                voucherId: row.id,
-                ledgerAccountId: bonAccId,
-                ...normUsd(bonAmt.toFixed(2), "0"),
-                narration: `Bonus expense - ${capCity} (${periodStart} – ${periodEnd})`,
-              });
-            }
-          } else {
-            const total = salAmt + bonAmt;
-            if (total > 0) {
-              newEntries.push({
-                voucherId: row.id,
-                ledgerAccountId: legacyAcc.id,
-                ...normUsd(total.toFixed(2), "0"),
-                narration: `Payroll expense (no city) (${periodStart} – ${periodEnd})`,
-              });
+          // Insert new split entries
+          const newEntries = [];
+          const allCities = new Set([...salByCity.keys(), ...bonByCity.keys()]);
+          for (const city of allCities) {
+            const salAmt = salByCity.get(city) || 0;
+            const bonAmt = bonByCity.get(city) || 0;
+            if (city) {
+              const capCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+              if (salAmt > 0) {
+                const salAccId = salaryAccByCity.get(city) ?? legacyAcc.id;
+                newEntries.push({
+                  voucherId: row.id,
+                  ledgerAccountId: salAccId,
+                  ...normUsd(salAmt.toFixed(2), "0"),
+                  narration: `Salary expense - ${capCity} (${periodStart} – ${periodEnd})`,
+                });
+              }
+              if (bonAmt > 0) {
+                const bonAccId = bonusAccByCity.get(city) ?? legacyAcc.id;
+                newEntries.push({
+                  voucherId: row.id,
+                  ledgerAccountId: bonAccId,
+                  ...normUsd(bonAmt.toFixed(2), "0"),
+                  narration: `Bonus expense - ${capCity} (${periodStart} – ${periodEnd})`,
+                });
+              }
+            } else {
+              const total = salAmt + bonAmt;
+              if (total > 0) {
+                newEntries.push({
+                  voucherId: row.id,
+                  ledgerAccountId: legacyAcc.id,
+                  ...normUsd(total.toFixed(2), "0"),
+                  narration: `Payroll expense (no city) (${periodStart} – ${periodEnd})`,
+                });
+              }
             }
           }
-        }
-        if (newEntries.length > 0) {
-          await db.insert(voucherEntries).values(newEntries);
-        }
+          if (newEntries.length > 0) {
+            await tx.insert(voucherEntries).values(newEntries);
+          }
+        });
         vouchersUpdated++;
       }
 
@@ -244,34 +246,36 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
         const paidDate = wb.paid_date || wb.bonus_date;
         const narration = wb.notes || `Bonus for ${workerName}`;
 
-        const [bVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber: `WBONUS-${wb.id}-${Date.now()}`,
-            voucherType: "Journal",
-            voucherDate: paidDate,
-            description: narration,
-            totalAmount: amt.toFixed(2),
-            currency: "USD",
-            sourceModule: "FACTORY",
-          })
-          .returning();
+        await db.transaction(async (tx) => {
+          const [bVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherNumber: `WBONUS-${wb.id}-${Date.now()}`,
+              voucherType: "Journal",
+              voucherDate: paidDate,
+              description: narration,
+              totalAmount: amt.toFixed(2),
+              currency: "USD",
+              sourceModule: "FACTORY",
+            })
+            .returning();
 
-        await db.insert(voucherEntries).values([
-          {
-            voucherId: bVoucher.id,
-            ledgerAccountId: expAcc.id,
-            ...normUsd(amt.toFixed(2), "0"),
-            narration: `Bonus - ${workerName}: ${narration}`,
-          },
-          {
-            voucherId: bVoucher.id,
-            ledgerAccountId: Number(wb.cash_account_id),
-            ...normUsd("0", amt.toFixed(2)),
-            narration,
-          },
-        ]);
+          await tx.insert(voucherEntries).values([
+            {
+              voucherId: bVoucher.id,
+              ledgerAccountId: expAcc.id,
+              ...normUsd(amt.toFixed(2), "0"),
+              narration: `Bonus - ${workerName}: ${narration}`,
+            },
+            {
+              voucherId: bVoucher.id,
+              ledgerAccountId: Number(wb.cash_account_id),
+              ...normUsd("0", amt.toFixed(2)),
+              narration,
+            },
+          ]);
+        });
         bonusesRecorded++;
       }
 
@@ -358,41 +362,43 @@ export function registerPayrollCoreMigrationRoutes(app: Express) {
           workerAccMap.set(p.worker_id, { salaryId: sa.id, bonusId: ba.id });
         }
 
-        // Delete existing DR (expense) entries for this voucher — CR entries (payable/advances) are preserved
-        await db.execute(sql`
-          DELETE FROM voucher_entries
-          WHERE voucher_id = ${row.id}
-            AND CAST(debit_amount AS numeric) > 0
-        `);
+        await db.transaction(async (tx) => {
+          // Delete existing DR (expense) entries for this voucher — CR entries (payable/advances) are preserved
+          await tx.execute(sql`
+            DELETE FROM voucher_entries
+            WHERE voucher_id = ${row.id}
+              AND CAST(debit_amount AS numeric) > 0
+          `);
 
-        // Insert new per-worker DR entries
-        const newEntries = [];
-        for (const p of payrollData.rows) {
-          const workerName = (p.full_name as string) || `Worker #${p.worker_id}`;
-          const accs = workerAccMap.get(p.worker_id)!;
-          const salAmt =
-            parseFloat(p.base_salary || "0") + parseFloat(p.transport || "0") - parseFloat(p.deductions || "0");
-          const bonAmt = parseFloat(p.bonuses || "0");
-          if (salAmt > 0) {
-            newEntries.push({
-              voucherId: row.id,
-              ledgerAccountId: accs.salaryId,
-              ...normUsd(salAmt.toFixed(2), "0"),
-              narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
-            });
+          // Insert new per-worker DR entries
+          const newEntries = [];
+          for (const p of payrollData.rows) {
+            const workerName = (p.full_name as string) || `Worker #${p.worker_id}`;
+            const accs = workerAccMap.get(p.worker_id)!;
+            const salAmt =
+              parseFloat(p.base_salary || "0") + parseFloat(p.transport || "0") - parseFloat(p.deductions || "0");
+            const bonAmt = parseFloat(p.bonuses || "0");
+            if (salAmt > 0) {
+              newEntries.push({
+                voucherId: row.id,
+                ledgerAccountId: accs.salaryId,
+                ...normUsd(salAmt.toFixed(2), "0"),
+                narration: `Salary - ${workerName} (${periodStart} – ${periodEnd})`,
+              });
+            }
+            if (bonAmt > 0) {
+              newEntries.push({
+                voucherId: row.id,
+                ledgerAccountId: accs.bonusId,
+                ...normUsd(bonAmt.toFixed(2), "0"),
+                narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
+              });
+            }
           }
-          if (bonAmt > 0) {
-            newEntries.push({
-              voucherId: row.id,
-              ledgerAccountId: accs.bonusId,
-              ...normUsd(bonAmt.toFixed(2), "0"),
-              narration: `Bonus - ${workerName} (${periodStart} – ${periodEnd})`,
-            });
+          if (newEntries.length > 0) {
+            await tx.insert(voucherEntries).values(newEntries);
           }
-        }
-        if (newEntries.length > 0) {
-          await db.insert(voucherEntries).values(newEntries);
-        }
+        });
         vouchersUpdated++;
       }
 

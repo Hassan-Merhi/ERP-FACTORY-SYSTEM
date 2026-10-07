@@ -191,32 +191,35 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
 
       const voucherNumber = `EMP-BON-${Date.now()}`;
       const desc = notes || `Bonus for ${emp.firstName} ${emp.lastName}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: bonusDate,
-          description: desc,
-          totalAmount: moneyString(amt),
-        })
-        .returning();
+      const voucher = await db.transaction(async (tx) => {
+        const [voucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId,
+            voucherNumber,
+            voucherType: "Journal",
+            voucherDate: bonusDate,
+            description: desc,
+            totalAmount: moneyString(amt),
+          })
+          .returning();
 
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: payrollExpenseAccount.id,
-        debitAmount: moneyString(amt),
-        creditAmount: "0",
-        narration: desc,
-      });
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: parseInt(employeeId),
-        debitAmount: "0",
-        creditAmount: moneyString(amt),
-        narration: desc,
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: payrollExpenseAccount.id,
+          debitAmount: moneyString(amt),
+          creditAmount: "0",
+          narration: desc,
+        });
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: null,
+          employeeId: parseInt(employeeId),
+          debitAmount: "0",
+          creditAmount: moneyString(amt),
+          narration: desc,
+        });
+        return voucher;
       });
 
       const newBalance = toMoney(emp.currentBalance).plus(moneyString(amt));

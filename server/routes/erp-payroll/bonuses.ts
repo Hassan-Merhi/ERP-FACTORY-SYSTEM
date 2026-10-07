@@ -424,36 +424,39 @@ export function registerPayrollBonusRoutes(app: Express) {
 
       // Create voucher
       const voucherNumber = `BONUS-${Date.now()}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId: req.session.currentCompanyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: notes || `Bonus for ${employee.firstName} ${employee.lastName}`,
-          totalAmount: bonusCents,
-        })
-        .returning();
+      const voucher = await db.transaction(async (tx) => {
+        const [voucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId: req.session.currentCompanyId!,
+            voucherNumber,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: notes || `Bonus for ${employee.firstName} ${employee.lastName}`,
+            totalAmount: bonusCents,
+          })
+          .returning();
 
-      // Create voucher entries (double-entry)
-      // Debit: Bonus Expense - {Group} (or Bonus Expense for ungrouped)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: bonusSingleAccount.id,
-        debitAmount: bonusCents,
-        creditAmount: "0",
-        narration: `Bonus payment - ${voucherNumber}`,
-      });
+        // Create voucher entries (double-entry)
+        // Debit: Bonus Expense - {Group} (or Bonus Expense for ungrouped)
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: bonusSingleAccount.id,
+          debitAmount: bonusCents,
+          creditAmount: "0",
+          narration: `Bonus payment - ${voucherNumber}`,
+        });
 
-      // Credit: Employee (using employeeId field directly instead of separate ledger account)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: employee.id,
-        debitAmount: "0",
-        creditAmount: bonusCents,
-        narration: `Bonus payment - ${voucherNumber}`,
+        // Credit: Employee (using employeeId field directly instead of separate ledger account)
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: null,
+          employeeId: employee.id,
+          debitAmount: "0",
+          creditAmount: bonusCents,
+          narration: `Bonus payment - ${voucherNumber}`,
+        });
+        return voucher;
       });
 
       // Sync employee balance from voucher entries (instead of direct update)

@@ -245,31 +245,33 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
         const today = getClientDate(req);
         const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
         const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
-        const [importVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: "Journal",
-            voucherNumber: importVoucherNum,
-            voucherDate: container.arrivalDate || today,
-            description: `Goods import - container ${container.containerNumber}`,
-            totalAmount: String(goodsValue),
-            currency: container.currencyCode || "USD",
-            exchangeRate: String(backfillFxRate),
-            sourceModule: "FACTORY",
-          })
-          .returning();
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          ledgerAccountId: importCostAccId,
-          ...normFactoryEntry(container.currencyCode || "USD", String(goodsValue), "0", backfillFxRate),
-          narration: `Goods import cost - container ${container.containerNumber}`,
-        });
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          factorySupplierId: container.supplierId,
-          ...normFactoryEntry(container.currencyCode || "USD", "0", String(goodsValue), backfillFxRate),
-          narration: `Goods payable to supplier - container ${container.containerNumber}`,
+        await db.transaction(async (tx) => {
+          const [importVoucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherType: "Journal",
+              voucherNumber: importVoucherNum,
+              voucherDate: container.arrivalDate || today,
+              description: `Goods import - container ${container.containerNumber}`,
+              totalAmount: String(goodsValue),
+              currency: container.currencyCode || "USD",
+              exchangeRate: String(backfillFxRate),
+              sourceModule: "FACTORY",
+            })
+            .returning();
+          await tx.insert(voucherEntries).values({
+            voucherId: importVoucher.id,
+            ledgerAccountId: importCostAccId,
+            ...normFactoryEntry(container.currencyCode || "USD", String(goodsValue), "0", backfillFxRate),
+            narration: `Goods import cost - container ${container.containerNumber}`,
+          });
+          await tx.insert(voucherEntries).values({
+            voucherId: importVoucher.id,
+            factorySupplierId: container.supplierId,
+            ...normFactoryEntry(container.currencyCode || "USD", "0", String(goodsValue), backfillFxRate),
+            narration: `Goods payable to supplier - container ${container.containerNumber}`,
+          });
         });
         created++;
       }

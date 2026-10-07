@@ -267,19 +267,21 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
                 .select()
                 .from(voucherEntries)
                 .where(eq(voucherEntries.voucherId, otherVoucherId));
-              for (const e of otherEntries) {
-                await db
-                  .update(voucherEntries)
-                  .set({
-                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
-                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
-                  })
-                  .where(eq(voucherEntries.id, e.id));
-              }
-              await db
-                .update(vouchers)
-                .set({ totalAmount: newTotal.toFixed(2) })
-                .where(eq(vouchers.id, otherVoucherId));
+              await db.transaction(async (tx) => {
+                for (const e of otherEntries) {
+                  await tx
+                    .update(voucherEntries)
+                    .set({
+                      debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
+                      creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
+                    })
+                    .where(eq(voucherEntries.id, e.id));
+                }
+                await tx
+                  .update(vouchers)
+                  .set({ totalAmount: newTotal.toFixed(2) })
+                  .where(eq(vouchers.id, otherVoucherId));
+              });
               await db
                 .update(fde)
                 .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })

@@ -691,34 +691,37 @@ export function registerOffloadRoutes(app: Express) {
 
             // Insert the voucher
             const voucherNum = `FACTORY-POC-BACKFILL-${containerId}-${chargeId}`;
-            const [voucher] = await db
-              .insert(vouchers)
-              .values({
-                companyId: voucherCompanyId,
-                voucherType: "Journal",
-                voucherNumber: voucherNum,
-                voucherDate,
-                description: `${description} (post-offload) — container ${containerNumber}`,
-                totalAmount: amount.toFixed(),
-                currency: chargeCcy,
-                exchangeRate: chargeFx.toFixed(),
-                sourceModule: "FACTORY",
-              })
-              .returning();
+            const voucher = await db.transaction(async (tx) => {
+              const [posted] = await tx
+                .insert(vouchers)
+                .values({
+                  companyId: voucherCompanyId,
+                  voucherType: "Journal",
+                  voucherNumber: voucherNum,
+                  voucherDate,
+                  description: `${description} (post-offload) — container ${containerNumber}`,
+                  totalAmount: amount.toFixed(),
+                  currency: chargeCcy,
+                  exchangeRate: chargeFx.toFixed(),
+                  sourceModule: "FACTORY",
+                })
+                .returning();
 
-            // DR FACTORY_CHARGES_PAYABLE
-            await db.insert(voucherEntries).values({
-              voucherId: voucher.id,
-              ledgerAccountId: cpAcctId,
-              ...factoryEntryAmountsOrLegacy(chargeCcy, amount.toFixed(), "0", chargeFx.toFixed(), confirmed),
-              narration: `${description} payable — container ${containerNumber}`,
-            });
-            // CR chosen ledger account
-            await db.insert(voucherEntries).values({
-              voucherId: voucher.id,
-              ledgerAccountId,
-              ...factoryEntryAmountsOrLegacy(chargeCcy, "0", amount.toFixed(), chargeFx.toFixed(), confirmed),
-              narration: `${description} — container ${containerNumber}`,
+              // DR FACTORY_CHARGES_PAYABLE
+              await tx.insert(voucherEntries).values({
+                voucherId: posted.id,
+                ledgerAccountId: cpAcctId,
+                ...factoryEntryAmountsOrLegacy(chargeCcy, amount.toFixed(), "0", chargeFx.toFixed(), confirmed),
+                narration: `${description} payable — container ${containerNumber}`,
+              });
+              // CR chosen ledger account
+              await tx.insert(voucherEntries).values({
+                voucherId: posted.id,
+                ledgerAccountId,
+                ...factoryEntryAmountsOrLegacy(chargeCcy, "0", amount.toFixed(), chargeFx.toFixed(), confirmed),
+                narration: `${description} — container ${containerNumber}`,
+              });
+              return posted;
             });
 
             created++;

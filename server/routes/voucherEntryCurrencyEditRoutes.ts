@@ -57,11 +57,9 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         if (req.body.narration === undefined) {
           return res.status(400).json({ message: "No supported updates supplied" });
         }
-        const [updated] = await db
-          .update(voucherEntries)
-          .set({ narration: req.body.narration })
-          .where(eq(voucherEntries.id, id))
-          .returning();
+        const [updated] = await db.transaction((tx) =>
+          tx.update(voucherEntries).set({ narration: req.body.narration }).where(eq(voucherEntries.id, id)).returning()
+        );
         return res.json(updated);
       }
 
@@ -108,22 +106,24 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         historicalRate,
       });
 
-      const [updated] = await db
-        .update(voucherEntries)
-        .set({
-          transactionCurrency: normalized.transactionCurrency,
-          transactionDebitAmount: normalized.transactionDebitAmount,
-          transactionCreditAmount: normalized.transactionCreditAmount,
-          baseDebitAmount: normalized.baseDebitAmount,
-          baseCreditAmount: normalized.baseCreditAmount,
-          historicalExchangeRate: normalized.historicalExchangeRate,
-          rateConvention: normalized.rateConvention,
-          debitAmount: normalized.debitAmount,
-          creditAmount: normalized.creditAmount,
-          narration: req.body.narration ?? row.entry.narration,
-        })
-        .where(eq(voucherEntries.id, id))
-        .returning();
+      const [updated] = await db.transaction((tx) =>
+        tx
+          .update(voucherEntries)
+          .set({
+            transactionCurrency: normalized.transactionCurrency,
+            transactionDebitAmount: normalized.transactionDebitAmount,
+            transactionCreditAmount: normalized.transactionCreditAmount,
+            baseDebitAmount: normalized.baseDebitAmount,
+            baseCreditAmount: normalized.baseCreditAmount,
+            historicalExchangeRate: normalized.historicalExchangeRate,
+            rateConvention: normalized.rateConvention,
+            debitAmount: normalized.debitAmount,
+            creditAmount: normalized.creditAmount,
+            narration: req.body.narration ?? row.entry.narration,
+          })
+          .where(eq(voucherEntries.id, id))
+          .returning()
+      );
 
       if (row.entry.ledgerAccountId && req.session.currentCompanyId) {
         autoReallocateLoansAccounts(req.session.currentCompanyId, [row.entry.ledgerAccountId]).catch(() => {});

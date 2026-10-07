@@ -60,36 +60,40 @@ export function registerAdminPoFixRoutes(app: Express) {
       // Generate a unique voucher number with TEST- prefix
       const voucherNumber = `TEST-${Date.now()}`;
 
-      // Create the voucher as optional (excluded from calculations by default)
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: date,
-          description: description || `Test data entry`,
-          totalAmount: moneyString(parsedAmount),
-          optional: true, // Start as draft/optional
-        })
-        .returning();
+      const voucher = await db.transaction(async (tx) => {
+        // Create the voucher as optional (excluded from calculations by default)
+        const [voucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId,
+            voucherNumber,
+            voucherType: "Journal",
+            voucherDate: date,
+            description: description || `Test data entry`,
+            totalAmount: moneyString(parsedAmount),
+            optional: true, // Start as draft/optional
+          })
+          .returning();
 
-      // Create debit entry
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: debitAccountId,
-        debitAmount: moneyString(parsedAmount),
-        creditAmount: "0",
-        narration: `Test data - ${description || debitAccount.name}`,
-      });
+        // Create debit entry
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: debitAccountId,
+          debitAmount: moneyString(parsedAmount),
+          creditAmount: "0",
+          narration: `Test data - ${description || debitAccount.name}`,
+        });
 
-      // Create credit entry
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: creditAccountId,
-        debitAmount: "0",
-        creditAmount: moneyString(parsedAmount),
-        narration: `Test data - ${description || creditAccount.name}`,
+        // Create credit entry
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: creditAccountId,
+          debitAmount: "0",
+          creditAmount: moneyString(parsedAmount),
+          narration: `Test data - ${description || creditAccount.name}`,
+        });
+
+        return voucher;
       });
 
       res.status(201).json({
@@ -267,36 +271,38 @@ export function registerAdminPoFixRoutes(app: Express) {
           // SUBSIDIARY VOUCHER - Transfer liability from Supplier to Parent Credit
           // ============================================================
           const voucherNumber = `INTERCO-${po.poNumber}-${Date.now()}`;
-          const [voucher] = await db
-            .insert(vouchers)
-            .values({
-              companyId: company.id,
-              voucherNumber,
-              voucherType: "Journal",
-              voucherDate,
-              description: `Transfer supplier liability to ${parentCompany.name} Credit - PO ${po.poNumber} - Container ${container.containerNumber}`,
-              totalAmount: moneyString(poTotal),
-            })
-            .returning();
+          await db.transaction(async (tx) => {
+            const [voucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId: company.id,
+                voucherNumber,
+                voucherType: "Journal",
+                voucherDate,
+                description: `Transfer supplier liability to ${parentCompany.name} Credit - PO ${po.poNumber} - Container ${container.containerNumber}`,
+                totalAmount: moneyString(poTotal),
+              })
+              .returning();
 
-          // Debit: Supplier account (reduce payable - they got paid by parent company)
-          if (po.supplierId) {
-            await db.insert(voucherEntries).values({
+            // Debit: Supplier account (reduce payable - they got paid by parent company)
+            if (po.supplierId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: voucher.id,
+                supplierId: po.supplierId,
+                debitAmount: moneyString(poTotal),
+                creditAmount: "0",
+                narration: `Transfer to ${parentCompany.name} Credit - PO ${po.poNumber}`,
+              });
+            }
+
+            // Credit: Parent Credit account (we owe parent company, who paid the supplier)
+            await tx.insert(voucherEntries).values({
               voucherId: voucher.id,
-              supplierId: po.supplierId,
-              debitAmount: moneyString(poTotal),
-              creditAmount: "0",
-              narration: `Transfer to ${parentCompany.name} Credit - PO ${po.poNumber}`,
+              ledgerAccountId: creditAccount[0].id,
+              debitAmount: "0",
+              creditAmount: moneyString(poTotal),
+              narration: `PO ${po.poNumber} - Container ${container.containerNumber} (${parentCompany.name} paid)`,
             });
-          }
-
-          // Credit: Parent Credit account (we owe parent company, who paid the supplier)
-          await db.insert(voucherEntries).values({
-            voucherId: voucher.id,
-            ledgerAccountId: creditAccount[0].id,
-            debitAmount: "0",
-            creditAmount: moneyString(poTotal),
-            narration: `PO ${po.poNumber} - Container ${container.containerNumber} (${parentCompany.name} paid)`,
           });
 
           // ============================================================
@@ -336,37 +342,39 @@ export function registerAdminPoFixRoutes(app: Express) {
 
           // Create Journal voucher in parent company
           const parentVoucherNumber = `INTERCO-PARENT-${po.poNumber}-${Date.now()}`;
-          const [parentVoucher] = await db
-            .insert(vouchers)
-            .values({
-              companyId: parentCompany.id,
-              voucherNumber: parentVoucherNumber,
-              voucherType: "Journal",
-              voucherDate,
-              description: `${container.containerNumber} ${poSupplier?.legalName || "Unknown Supplier"}`,
-              totalAmount: moneyString(poTotal),
-            })
-            .returning();
+          await db.transaction(async (tx) => {
+            const [parentVoucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId: parentCompany.id,
+                voucherNumber: parentVoucherNumber,
+                voucherType: "Journal",
+                voucherDate,
+                description: `${container.containerNumber} ${poSupplier?.legalName || "Unknown Supplier"}`,
+                totalAmount: moneyString(poTotal),
+              })
+              .returning();
 
-          // DR [Subsidiary] Credit (they owe us)
-          await db.insert(voucherEntries).values({
-            voucherId: parentVoucher.id,
-            ledgerAccountId: subsidiaryReceivableAccount[0].id,
-            debitAmount: moneyString(poTotal),
-            creditAmount: "0",
-            narration: `PO ${po.poNumber} - ${company.name} owes us`,
-          });
-
-          // CR Supplier (we owe supplier)
-          if (po.supplierId) {
-            await db.insert(voucherEntries).values({
+            // DR [Subsidiary] Credit (they owe us)
+            await tx.insert(voucherEntries).values({
               voucherId: parentVoucher.id,
-              supplierId: po.supplierId,
-              debitAmount: "0",
-              creditAmount: moneyString(poTotal),
-              narration: `PO ${po.poNumber} - Supplier payment`,
+              ledgerAccountId: subsidiaryReceivableAccount[0].id,
+              debitAmount: moneyString(poTotal),
+              creditAmount: "0",
+              narration: `PO ${po.poNumber} - ${company.name} owes us`,
             });
-          }
+
+            // CR Supplier (we owe supplier)
+            if (po.supplierId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: parentVoucher.id,
+                supplierId: po.supplierId,
+                debitAmount: "0",
+                creditAmount: moneyString(poTotal),
+                narration: `PO ${po.poNumber} - Supplier payment`,
+              });
+            }
+          });
 
           totalFixed++;
           totalAmount = totalAmount.plus(poTotal);
@@ -474,30 +482,33 @@ export function registerAdminPoFixRoutes(app: Express) {
         }
 
         let fixedThisPO = false;
+        const { voucherId, supplierId } = po;
 
-        // Add DR Purchases entry if missing
-        if (existingPurchaseEntry.length === 0) {
-          await db.insert(voucherEntries).values({
-            voucherId: po.voucherId,
-            ledgerAccountId: purchasesAccount.id,
-            debitAmount: moneyString(poTotal),
-            creditAmount: "0",
-            narration: `PO ${po.poNumber} - Fix missing entry`,
-          });
-          fixedThisPO = true;
-        }
+        await db.transaction(async (tx) => {
+          // Add DR Purchases entry if missing
+          if (existingPurchaseEntry.length === 0) {
+            await tx.insert(voucherEntries).values({
+              voucherId,
+              ledgerAccountId: purchasesAccount.id,
+              debitAmount: moneyString(poTotal),
+              creditAmount: "0",
+              narration: `PO ${po.poNumber} - Fix missing entry`,
+            });
+            fixedThisPO = true;
+          }
 
-        // Add CR Supplier entry if missing
-        if (existingSupplierEntry.length === 0) {
-          await db.insert(voucherEntries).values({
-            voucherId: po.voucherId,
-            supplierId: po.supplierId,
-            debitAmount: "0",
-            creditAmount: moneyString(poTotal),
-            narration: `PO ${po.poNumber} - Fix missing supplier entry`,
-          });
-          fixedThisPO = true;
-        }
+          // Add CR Supplier entry if missing
+          if (existingSupplierEntry.length === 0) {
+            await tx.insert(voucherEntries).values({
+              voucherId,
+              supplierId,
+              debitAmount: "0",
+              creditAmount: moneyString(poTotal),
+              narration: `PO ${po.poNumber} - Fix missing supplier entry`,
+            });
+            fixedThisPO = true;
+          }
+        });
 
         if (fixedThisPO) {
           fixed++;

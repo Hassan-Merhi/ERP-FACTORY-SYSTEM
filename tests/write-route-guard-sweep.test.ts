@@ -354,6 +354,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/payroll/runs/migrate-group-expenses",
   "POST /api/payroll/withdraw-employee",
   "POST /api/payroll/workers/:id/deductions",
+  "POST /api/po-import/backfill",
   "POST /api/po-import/import",
   "POST /api/po-import/validate",
   "POST /api/pos-import/import",

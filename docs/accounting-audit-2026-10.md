@@ -336,6 +336,11 @@ risk, modules, database and production impact, dependencies and acceptance crite
       - Re-activating, re-dating or moving a voucher is checked too.
       - A reviewed repair can bypass it with `app.ledger_integrity_bypass`.
       - Before installing it, the 39 writers that wrote a voucher's lines in separate autocommit statements were converted to one transaction each: payroll, factory containers, PO import, SP migration tools, admin repairs, and intercompany counterpart rescaling.
+    - **Writers that can still leave a voucher one-sided by their own logic.** These were converted as they are. After a company's cut-over the guard refuses them (the request fails and nothing is written) instead of letting them post one-sided:
+      - a factory container freight voucher paid by its own account with no account set, or by the supplier with no supplier set;
+      - a factory bulk withdrawal that skips an employee it cannot find but credits cash for the full total;
+      - the payroll run migration for a run with no payment account;
+      - the admin PO-credit fixes for a PO with no supplier, or one missing only one leg.
     - **Applying the cut-over** is now refused while any voucher is already dated on or after the cut-over date. Such a document would carry none of its perpetual-inventory postings, so the cut-over is applied before the first document of its date.
     - **Before turning the switch on:**
       - run the opening plan and the reconciliation against production

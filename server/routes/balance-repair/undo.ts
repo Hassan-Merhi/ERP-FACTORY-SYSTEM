@@ -34,29 +34,34 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
         }
 
         // 2. Remove inserted voucher entries
-        for (const entryId of snapshot.voucherEntriesAdded ?? []) {
-          await db.execute(sql`DELETE FROM voucher_entries WHERE id = ${entryId}`);
-        }
-
         // 3. Re-soft-delete vouchers that were un-deleted
-        for (const v of snapshot.vouchersUndeleted ?? []) {
-          await db.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id}`);
-        }
+        // Both run in one transaction so no voucher is left half-reverted at commit.
+        await db.transaction(async (tx) => {
+          for (const entryId of snapshot.voucherEntriesAdded ?? []) {
+            await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${entryId}`);
+          }
+
+          for (const v of snapshot.vouchersUndeleted ?? []) {
+            await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id}`);
+          }
+        });
 
         // 4. Restore deleted orphaned vouchers + their entries, then re-link transfer
         for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
-          // Re-insert voucher with same id (use raw SQL to preserve id)
-          await db.execute(sql`
-            INSERT INTO vouchers (id, company_id, voucher_number, voucher_type, voucher_date, description, total_amount)
-            VALUES (${ov.id}, ${ov.companyId}, ${ov.voucherNumber}, ${ov.voucherType}, ${ov.voucherDate}::date, ${ov.description}, ${ov.totalAmount})
-            ON CONFLICT (id) DO NOTHING
-          `);
-          for (const e of ov.entries) {
-            await db.execute(sql`
-              INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-              VALUES (${ov.id}, ${e.ledgerAccountId}, ${e.debitAmount}, ${e.creditAmount}, ${e.narration})
+          await db.transaction(async (tx) => {
+            // Re-insert voucher with same id (use raw SQL to preserve id)
+            await tx.execute(sql`
+              INSERT INTO vouchers (id, company_id, voucher_number, voucher_type, voucher_date, description, total_amount)
+              VALUES (${ov.id}, ${ov.companyId}, ${ov.voucherNumber}, ${ov.voucherType}, ${ov.voucherDate}::date, ${ov.description}, ${ov.totalAmount})
+              ON CONFLICT (id) DO NOTHING
             `);
-          }
+            for (const e of ov.entries) {
+              await tx.execute(sql`
+                INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
+                VALUES (${ov.id}, ${e.ledgerAccountId}, ${e.debitAmount}, ${e.creditAmount}, ${e.narration})
+              `);
+            }
+          });
         }
 
         // 5. Re-insert deleted inter_company_transfers rows
