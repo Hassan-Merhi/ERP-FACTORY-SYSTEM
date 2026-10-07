@@ -349,3 +349,73 @@ risk, modules, database and production impact, dependencies and acceptance crite
     - Tests: `perpetual-inventory-reports`, `voucher-balance-guard`.
 - **Not in scope:** moving master-record opening balances into journals needs its own reviewed migration. Every reader adds `opening_balance` to its entries, so posting them as journals without zeroing the master records would double count.
 
+
+## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
+
+Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**
+
+### Score
+
+| Category | Before (2026-10-06) | Branch code (2026-10-07) |
+|---|---|---|
+| Chart of Accounts | 20 | 40 |
+| Double Entry | 35 | 35 |
+| General Ledger | 25 | 40 |
+| Posting Engine | 40 | 40 |
+| AR/AP | 30 | 25 |
+| Inventory | 15 | 36 |
+| Factory Accounting | 15 | 30 |
+| Multi-Currency | 40 | 28 |
+| Multi-Company | 55 | 45 |
+| Reporting | 10 | 22 |
+| Data Integrity | 30 | 45 |
+| Audit Trail | 40 | 28 |
+
+**ACCOUNTING SCORE — branch code: 35/100. Production as deployed: unchanged at 28/100** (and lower under this re-audit's stricter reading, since its new findings also apply to `main`).
+
+The categories that fell did not regress. The re-audit found defects that already existed and that the first audit missed: the automatic FX revaluation, more balance engines, and gaps in the audit trail. The real gains are the removed plugs, the trial balance and diagnostic, the database guards, the account registry, the fiscal close, normalized factory FX writers and atomic writers. The perpetual-inventory build (wave 8) is off, so it does not yet change the books.
+
+### Wave-log claims corrected by the re-audit
+
+- **Wave 2:** the validated `PATCH /api/voucher-entries/:id` in `voucher-entries/write.ts` never runs. `voucherEntryCurrencyEditRoutes.ts` registers the same path first (`registerLedgerRoutes` comes before `registerVoucherEntryRoutes`) and edits a line with no balance check.
+- **Wave 8.5:** the voucher balance guard applies only from a company's cut-over, and no cut-over can be applied while the switch is off. **Today the database enforces balance for no company.**
+- **Wave 8:** the reconciliation and the opening plan value stock as quantity × average rate, while every posting moves `total_value`. Negative stock makes sale COGS smaller than the stock later received. Once switched on, the ledger would not reconcile to the sub-ledger from the first negative-stock cycle.
+
+### Remaining defects that matter most
+
+CRITICAL:
+1. `POST /api/exchange-rates` (any signed-in user, including POS) posts an automatic revaluation on every rate save. It treats every Cash account as CFA, uses float maths and autocommit writes, posts again when the same rate is re-saved, and writes no audit (`exchangeRateRoutes.ts:91-321`).
+2. Active vouchers can still be committed unbalanced:
+   - the live voucher-line PATCH;
+   - `PATCH /api/vouchers/:id/optional` and `POST /api/vouchers/:id/finalize` activate optional vouchers without a balance check;
+   - `PUT /with-entries` lets the client change the voucher type to an exempt one.
+3. `/api/reports/balance-sheet` (`financialReportsService.ts`) is wrong in several independent ways: it has no optional/deleted filter, ignores opening sides, recognises only three types, has no customers or factory suppliers, and has no current-year earnings line.
+4. Destructive admin routes have no audit and no transaction:
+   - company data reset, permanent delete, voucher restore;
+   - the intercompany counterpart hard-delete;
+   - company delete, which also removes `audit_log`.
+5. Inventory paths outside the perpetual design move stock with no ledger counterpart: quick adjust, silent imports, closing-stock transfer, cost corrections, repair and rebuild tools.
+
+HIGH:
+- Factory POS sales post at rate 1 and leave credit revenue out of the GL.
+- Factory FX rates ignore the transaction date.
+- The currency normalization trigger has no installer in code.
+- The net-profit Excel divides cash by the CFA rate and uses undated stock.
+- Indirect Income is classified as a liability.
+- At least six net-position engines and more than ten receivable engines disagree.
+- Opening balances are still on master rows and can be edited after a close.
+- Factory bale cost mixes native-currency and catalogue prices, so finished goods and COGS would be in mixed units.
+- About 109 writer files write no audit.
+- Edits overwrite lines in place, and their audit is written after commit.
+
+### Before the perpetual switch, and next waves
+
+- **Wave 9, ledger safety:** fix the five CRITICAL items above, starting with the FX revaluation and the unbalanced-activation paths. Extend the balance guard to every company for vouchers created after its install date, so legacy rows stay untouched.
+- **Wave 10, one balance engine:** a single receivable and payable engine shared by statements, pages, net position and the trial balance; fix the balance sheet and Indirect Income.
+- **Wave 11, inventory fidelity:**
+  - value stock by `total_value` everywhere;
+  - post the remaining inventory paths;
+  - make reversals value-exact;
+  - fix the factory bale cost basis.
+  - Then re-run the reconciliation on production data before setting `PERPETUAL_INVENTORY_POSTING_READY = true`.
+- **Wave 12, audit trail:** write audit in the posting transaction, and use reversal entries instead of in-place edits for posted vouchers.
