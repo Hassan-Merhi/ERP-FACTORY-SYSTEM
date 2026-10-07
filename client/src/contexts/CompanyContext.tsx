@@ -282,6 +282,27 @@ export function CompanyProvider({ children }: { children: ReactNode }) {
       });
   }, [adoptServerCompany, companies, initialSyncAttempt, scheduleInitialSyncRetry, selectCompany, selectedCompany]);
 
+  // The company lives in the server session, which every tab of this browser
+  // shares. When another tab switches company, this tab's next request would
+  // carry its old company and be refused (CROSS_COMPANY_ACCESS_DENIED), and the
+  // page would sit on data from a company the session has left. Follow the
+  // switch instead: localStorage only changes after a switch commits, and the
+  // storage event fires in the other tabs only.
+  useEffect(() => {
+    const followOtherTab = (event: StorageEvent) => {
+      if (event.key !== "selectedCompanyId") return;
+      const companyId = parseSavedCompanyId(event.newValue);
+      if (!companyId || companyId === selectedCompanyRef.current?.id) return;
+      const company = companies.find((candidate) => candidate.id === companyId);
+      if (!company) return;
+      void selectCompany(company).catch((error: unknown) => {
+        console.error("[Company] Failed to follow the company selected in another tab.", error);
+      });
+    };
+    window.addEventListener("storage", followOtherTab);
+    return () => window.removeEventListener("storage", followOtherTab);
+  }, [companies, selectCompany]);
+
   return (
     <CompanyContext.Provider
       value={{
