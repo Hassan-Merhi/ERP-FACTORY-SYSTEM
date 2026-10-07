@@ -328,7 +328,14 @@ describe("post-offload charge mutation positive paths", () => {
         }),
         expect.objectContaining({
           table: harness.tables.voucherEntries,
-          values: expect.objectContaining({ factorySupplierId: 66, creditAmount: "60" }),
+          // Normalized (wave 6): USD base in credit_amount, the native EUR 60 in transaction_*.
+          values: expect.objectContaining({
+            factorySupplierId: 66,
+            creditAmount: "120.000000",
+            transactionCurrency: "EUR",
+            transactionCreditAmount: "60.000000",
+            rateConvention: "BASE_PER_TRANSACTION",
+          }),
         }),
       ])
     );
