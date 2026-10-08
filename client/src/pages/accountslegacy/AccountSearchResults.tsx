@@ -49,7 +49,9 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
                 <span
                   className={cn(
                     "font-mono tabular-nums text-sm font-medium shrink-0",
-                    balanceSide === "Dr" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"
+                    balanceSide === "Dr"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-400"
                   )}
                 >
                   {model.formatAmountForAccount(Math.abs(acc.balance), acc.type)}

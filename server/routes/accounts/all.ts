@@ -15,8 +15,9 @@ import {
   getSupplierBalanceForContext,
   isSupplierVisibleToCompany,
 } from "../helpers/supplierBalanceHelpers";
-import { vouchers, voucherEntries, customerBalances, customerOrders } from "@shared/schema";
-import { eq, and, inArray, sql, isNull } from "drizzle-orm";
+import { vouchers, voucherEntries } from "@shared/schema";
+import { eq, and, sql, isNull } from "drizzle-orm";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { resultRows } from "../../lib/queryResult";
@@ -31,14 +32,13 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     // Analytics renders only ledger, bank and fixed-asset balances. Avoid
     // loading employee/supplier account families that would be discarded by
     // the compact profile after all their balance work had already run.
-    const [currentCompany, ledgersAll, banks, assets, employees, allSuppliers, companyCustomers] = await Promise.all([
+    const [currentCompany, ledgersAll, banks, assets, employees, allSuppliers] = await Promise.all([
       storage.getCompanyById(companyId),
       storage.getAllLedgerAccounts(companyId, true),
       storage.getAllBankAccounts(companyId),
       storage.getAllFixedAssets(companyId),
       analyticsProfile ? Promise.resolve([]) : storage.getAllEmployees(companyId),
       analyticsProfile ? Promise.resolve([]) : storage.getAllSuppliers(),
-      storage.getAllCustomers(companyId),
     ]);
     const ledgers = ledgersAll.filter(
       (a) => !["sp_stock", "sp_opnbal"].includes(a.subType ?? "") && !isSystemOnlyLedgerAccount(a)
@@ -64,121 +64,10 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       ),
     ]);
 
-    const customerObMap = new Map<number, { openingBalance: string; openingBalanceSide: string | null }>();
-    for (const cust of companyCustomers) {
-      if (cust.ledgerAccountId) {
-        customerObMap.set(cust.ledgerAccountId, {
-          openingBalance: cust.openingBalance ?? "0",
-          openingBalanceSide: cust.openingBalanceSide ?? "Dr",
-        });
-      }
-    }
-
-    // For factory companies, compute the same combined customer balance used
-    // by the Factory Customers page.
-    const customerLedgerOverrides = new Map<number, { balance: string; balanceSide: string }>();
-    if (isFactoryCompany) {
-      const linkedCustomers = companyCustomers.filter((c) => c.ledgerAccountId);
-      if (linkedCustomers.length > 0) {
-        const linkedCustIds = linkedCustomers.map((c) => c.id);
-        const linkedLedgerIds = linkedCustomers.map((c) => c.ledgerAccountId!);
-
-        const [salesRows, cbRows, lVoucherRows, cVoucherRows] = await Promise.all([
-          db
-            .select({
-              customerId: customerOrders.customerId,
-              total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)`,
-            })
-            .from(customerOrders)
-            .where(
-              and(
-                inArray(customerOrders.customerId, linkedCustIds),
-                eq(customerOrders.companyId, companyId),
-                eq(customerOrders.status, "FINALIZED")
-              )
-            )
-            .groupBy(customerOrders.customerId),
-
-          db
-            .select({
-              customerId: customerBalances.customerId,
-              net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-            })
-            .from(customerBalances)
-            .where(
-              and(
-                inArray(customerBalances.customerId, linkedCustIds),
-                eq(customerBalances.companyId, companyId),
-                sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`
-              )
-            )
-            .groupBy(customerBalances.customerId),
-
-          db
-            .select({
-              ledgerAccountId: voucherEntries.ledgerAccountId,
-              net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-            })
-            .from(voucherEntries)
-            .innerJoin(
-              vouchers,
-              and(
-                eq(voucherEntries.voucherId, vouchers.id),
-                eq(vouchers.companyId, companyId),
-                eq(vouchers.optional, false),
-                isNull(vouchers.deletedAt),
-                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
-              )
-            )
-            .where(inArray(voucherEntries.ledgerAccountId, linkedLedgerIds))
-            .groupBy(voucherEntries.ledgerAccountId),
-
-          db
-            .select({
-              customerId: voucherEntries.customerId,
-              net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-            })
-            .from(voucherEntries)
-            .innerJoin(
-              vouchers,
-              and(
-                eq(voucherEntries.voucherId, vouchers.id),
-                eq(vouchers.companyId, companyId),
-                eq(vouchers.optional, false),
-                isNull(vouchers.deletedAt),
-                sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`
-              )
-            )
-            .where(and(inArray(voucherEntries.customerId, linkedCustIds), isNull(voucherEntries.ledgerAccountId)))
-            .groupBy(voucherEntries.customerId),
-        ]);
-
-        const salesMap = new Map(salesRows.map((r) => [r.customerId!, toMoney(r.total)]));
-        const nonInvMap = new Map(cbRows.map((r) => [r.customerId!, toMoney(r.net)]));
-        const vNetByLedger = new Map(
-          lVoucherRows.filter((r) => r.ledgerAccountId).map((r) => [r.ledgerAccountId!, toMoney(r.net)])
-        );
-        const vNetByCustomer = new Map(
-          cVoucherRows.filter((r) => r.customerId).map((r) => [r.customerId!, toMoney(r.net)])
-        );
-        const NONE = new MoneyDecimal(0);
-
-        for (const cust of linkedCustomers) {
-          const salesTotal = salesMap.get(cust.id) ?? NONE;
-          const nonInvNet = nonInvMap.get(cust.id) ?? NONE;
-          const voucherNet = (vNetByLedger.get(cust.ledgerAccountId!) ?? NONE).plus(
-            vNetByCustomer.get(cust.id) ?? NONE
-          );
-          const ob = toMoney(cust.openingBalance);
-          const obSide = cust.openingBalanceSide || "Dr";
-          const total = (obSide === "Dr" ? ob : ob.negated()).plus(salesTotal).plus(nonInvNet).plus(voucherNet);
-          customerLedgerOverrides.set(cust.ledgerAccountId!, {
-            balance: total.abs().toFixed(2),
-            balanceSide: total.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
-          });
-        }
-      }
-    }
+    // For factory companies, the "Factory worker advances" ledger shows its
+    // ledger balance; what the factory_worker_advances table holds over it is
+    // reported in `notInLedgerTotal` (it used to replace the balance).
+    const workerAdvanceTables = new Map<number, Decimal>();
 
     if (isFactoryCompany) {
       const workerAdvLedger = ledgers.find(
@@ -193,10 +82,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           `);
         const workerAdvRow = resultRows(workerAdvRes)[0] ?? {};
         const workerAdvancesValue = toMoney(String(workerAdvRow.total ?? "0"));
-        customerLedgerOverrides.set(workerAdvLedger.id, {
-          balance: workerAdvancesValue.toFixed(2),
-          balanceSide: "Dr",
-        });
+        workerAdvanceTables.set(workerAdvLedger.id, workerAdvancesValue);
       }
     }
 
@@ -207,6 +93,26 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     const rawEndDate =
       typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
     const effectiveEndDate = rawEndDate && rawEndDate < asOfDate ? rawEndDate : asOfDate;
+
+    // A ledger account a customer owns shows that customer's balance from the
+    // one balance engine (customer-owned opening counted once, its linked
+    // ledger and customer-tagged lines, effective-date basis), the same figure
+    // as the trial balance. Amounts not yet in the ledger (factory invoices
+    // before the perpetual cut-over, factory POS credit sales, cache-only rows)
+    // are reported in `notInLedgerTotal`, never added to `balance`; the factory
+    // composite that used to add them is retired.
+    const customerParties = await getPartyBalances(db, {
+      companyId,
+      kind: "customer",
+      asOf: effectiveEndDate,
+      from: balStartDate ?? null,
+      memo: true,
+    });
+    const customerByLedger = new Map(
+      customerParties.parties
+        .filter((party) => party.linkedLedgerAccountId !== null)
+        .map((party) => [party.linkedLedgerAccountId as number, party])
+    );
 
     // Every posted voucher up to the end date counts. With a start date the
     // lines before it are carried into the opening (opening + movements before
@@ -304,12 +210,13 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     const accounts = [
       ...ledgers.map((account) => {
         const movements = ledgerBalances.get(account.id) || NO_MOVEMENT;
-        const custOb = customerObMap.get(account.id);
-        const effectiveOB = custOb?.openingBalance ?? account.openingBalance ?? "0";
-        const effectiveOBSide = custOb?.openingBalanceSide ?? account.openingBalanceSide;
+        const effectiveOB = account.openingBalance ?? "0";
+        const effectiveOBSide = account.openingBalanceSide;
 
-        const override = customerLedgerOverrides.get(account.id);
-        if (override) {
+        const customerParty = customerByLedger.get(account.id);
+        if (customerParty) {
+          const closing = toMoney(customerParty.closing);
+          const opening = toMoney(balStartDate ? customerParty.opening : customerParty.masterOpening);
           return {
             id: `ledger-${account.id}`,
             accountId: account.id,
@@ -318,12 +225,15 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             name: account.name,
             accountType: account.accountType,
             subType: account.subType,
-            balance: override.balance,
-            balanceSide: override.balanceSide,
-            openingBalance: toMoney(effectiveOB).toNumber(),
-            openingBalanceSide: effectiveOBSide || "Dr",
+            balance: closing.abs().toFixed(2),
+            balanceSide: closing.lessThan(0) ? "Cr" : "Dr",
+            openingBalance: opening.abs().toNumber(),
+            openingBalanceSide: opening.lessThan(0) ? "Cr" : "Dr",
             active: account.active,
             parentId: account.parentId,
+            customerId: customerParty.id,
+            balanceBasis: "ledger" as const,
+            notInLedgerTotal: customerParty.memoTotal,
           };
         }
 
@@ -332,6 +242,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           effectiveOBSide,
           movements
         );
+        const workerTable = workerAdvanceTables.get(account.id);
         return {
           id: `ledger-${account.id}`,
           accountId: account.id,
@@ -346,6 +257,9 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           openingBalanceSide: balStartDate ? carriedOpeningSide : effectiveOBSide || "Dr",
           active: account.active,
           parentId: account.parentId,
+          ...(workerTable
+            ? { notInLedgerTotal: workerTable.minus(balanceSide === "Dr" ? balance : balance.negated()).toFixed(2) }
+            : {}),
         };
       }),
       ...banks.map((account) => {

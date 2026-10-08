@@ -27,6 +27,7 @@ import { getDefaultPeriodValue, PeriodFilterValue } from "@/components/ui/period
 import { LedgerAccount, BankAccount, insertBankAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
 import type { InsertBankAccount, UpdateLedgerAccount } from "@shared/schema";
 import { Account, Transaction, WaRule, WaChat } from "../accounts/accountTypes";
+import { readNotInLedger } from "./NotInLedgerSection";
 
 /** Voucher type → Vouchers page tab, for statement row navigation. */
 const VOUCHER_TAB_MAP: Record<string, string> = {
@@ -726,6 +727,7 @@ export function useAccountsLegacyModel() {
     periodFilter,
     setPeriodFilter,
     vouchersWithBalance,
+    notInLedger: readNotInLedger(rawTransactionData),
     broughtForwardBalance,
     closingBalance,
     transactionsLoading,

@@ -38,10 +38,8 @@ export function registerPosCustomerRoutes(app: Express): void {
         return res.status(403).json({ message: "Access denied: You do not have permission to access customers" });
       }
 
-      // Same ledger rules as /api/customers/stats and the voucher sidebar. The
-      // linked-customer path used to group lines by voucher and then keep only
-      // pure-side rows, so a voucher both debiting and crediting the customer
-      // vanished; unlinked customers read the customer_balances cache only.
+      // The one balance engine's customer closing, as /api/customers/stats and
+      // the voucher sidebar (customers/customerBalanceQuery.ts).
       const customersWithBalances = await getCustomersWithBalances(req.session.currentCompanyId);
 
       res.json(customersWithBalances);
@@ -116,8 +114,10 @@ export function registerPosCustomerRoutes(app: Express): void {
         name: `${customer.legalName} - Customer Account`,
         accountType: "Asset",
         subType: "Accounts Receivable",
-        openingBalance: parsed.openingBalance || "0",
-        openingBalanceSide: parsed.openingBalanceSide || "Dr",
+        // The customer record owns the opening (counted once by the balance
+        // engine); the linked ledger starts at zero.
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
         active: true,
       });
 

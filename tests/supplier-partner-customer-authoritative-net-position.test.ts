@@ -6,18 +6,12 @@ const root = path.resolve(process.cwd());
 const read = (relativePath: string) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
 describe("supplier partner customer Net Position", () => {
-  it("excludes all customer-like ledger accounts from Supplier Partner Net Position", () => {
-    const helper = read("server/helpers/supplierPartnerCustomerNetPosition.ts");
-
-    expect(helper).toContain('account.accountType === "Customer"');
-    expect(helper).toContain('account.subType === "Accounts Receivable"');
-    expect(helper).toContain('startsWith("CUST-")');
-    expect(helper).toContain('includes("customer account")');
-    expect(helper).toContain("items: []");
-    expect(helper).toContain("ledgerAccountIds: new Set(customerLedgerIds)");
-  });
-
-  it("applies the customer exclusion only through Supplier Partner Net Position paths", () => {
+  // Wave 10 (one balance engine): the three Net Position paths read customers
+  // from the engine and skip them for supplier-partner companies. The old
+  // supplierPartnerCustomerNetPosition helper always returned no customer items
+  // and every customer-like ledger id, so its account clause could never admit
+  // a ledger; the paths now simply leave customers out, with the same result.
+  it("excludes customers from Supplier Partner Net Position on every path", () => {
     const paths = [
       "server/routes/stats/statsNetProfitRoutes.ts",
       "server/helpers/calculateNetPositionAsOf.ts",
@@ -26,11 +20,13 @@ describe("supplier partner customer Net Position", () => {
 
     for (const relativePath of paths) {
       const source = read(relativePath);
-      expect(source).toContain("getSupplierPartnerCustomerNetPosition");
-      expect(source).toContain("supplierPartnerCustomerPosition?.ledgerAccountIds.has(a.id)");
-      expect(source).toContain("supplierPartnerCustomerPosition.items");
+      expect(source).toContain("loadNetPositionParties");
+      expect(source).toContain("customers: !isSupplierPartner");
+      expect(source).toContain("parties.customerLedgerIds.has(a.id)");
+      expect(source).not.toContain('startsWith("CUST-")');
       expect(source).toContain("isSupplierPartner");
     }
+    expect(fs.existsSync(path.join(root, "server/helpers/supplierPartnerCustomerNetPosition.ts"))).toBe(false);
   });
 
   it("does not re-add customer balances in the live Golden Coast residual-equity projection", () => {

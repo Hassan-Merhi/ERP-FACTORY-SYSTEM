@@ -16,7 +16,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
-import { buildFactoryCustomerLedgerEntries } from "../server/lib/factoryCustomerLedger";
+import {
+  loadCustomerLedgerLines,
+  loadCustomerNotInLedger,
+} from "../server/services/accounting/balances/customerLedgerStatement";
 import {
   listUnpostedFactoryInvoices,
   syncFactoryInvoiceTx,
@@ -227,12 +230,18 @@ describe("factory invoices in the ledger", () => {
       ["FACTORY_FINISHED_GOODS", "0.00", "100.00", null],
     ]);
 
-    // The factory customer ledger rebuilds the invoice from grand_total and skips the journal.
-    const entries = await asMaintenance(() =>
-      buildFactoryCustomerLedgerEntries(customerId, customer.ledger_account_id, companyId)
-    );
+    // Wave 10: the customer's statement is its ledger lines on the balance
+    // engine (the factory composite that rebuilt the invoice from grand_total
+    // and skipped this journal is retired). The journal carries the 450
+    // receivable; the invoice is in the ledger, so nothing is listed as not
+    // yet in the ledger. (This fixture's 50 charge voucher debits another
+    // account, not the customer.)
+    const window = { companyId, customerId };
+    const entries = await asMaintenance(() => loadCustomerLedgerLines(db, window));
     const debits = entries.reduce((sum, entry) => sum + Number(entry.debitAmount ?? 0), 0);
-    expect(debits).toBeCloseTo(500, 2);
+    expect(debits).toBeCloseTo(450, 2);
+    const memo = await asMaintenance(() => loadCustomerNotInLedger(db, window));
+    expect(memo.rows).toEqual([]);
 
     // A second sync replaces it; un-finalizing removes it.
     await asMaintenance(() => db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId)));

@@ -22,11 +22,9 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "./money";
-import {
-  buildFactoryCustomerLedgerEntries,
-  getCustomerByLedgerId,
-  getFactoryCustomerLedgerPrePeriodTotals,
-} from "./factoryCustomerLedger";
+import { getCustomerByLedgerId } from "./factoryCustomerLedger";
+import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
+import { loadCustomerLedgerLines } from "../services/accounting/balances/customerLedgerStatement";
 import { isParentCompanyContext } from "../routes/helpers/supplierBalanceHelpers";
 
 export interface StatementPdfOptions {
@@ -53,6 +51,16 @@ interface StatementSourceEntry {
   narration: string | null;
   debitAmount: string | null;
   creditAmount: string | null;
+}
+
+/** The customer's ledger lines (balance engine rules) as statement rows. */
+async function customerStatementEntries(
+  companyId: number,
+  customerId: number,
+  startDate: string | undefined,
+  endDate: string | undefined
+): Promise<StatementSourceEntry[]> {
+  return loadCustomerLedgerLines(db, { companyId, customerId, from: startDate ?? null, to: endDate ?? null });
 }
 
 export async function generateAccountStatementPdf(opts: StatementPdfOptions): Promise<Buffer> {
@@ -144,38 +152,25 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   let rawOB: number;
   let obSide: string;
 
+  // A customer, or a ledger account a customer owns, is the customer's ledger
+  // statement on the balance engine: the lines the engine attributes to the
+  // customer, opened at the engine's period opening.
+  let customerOwnerId: number | null = null;
+  if (accountType === "customer") {
+    customerOwnerId = accountId;
+  } else if (accountType === "ledger") {
+    const owner = await getCustomerByLedgerId(accountId);
+    if (owner && owner.companyId === companyId) customerOwnerId = owner.id;
+  }
+
   if (accountType === "ledger") {
     const [acct] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, accountId));
     accountName = acct?.name ?? "Ledger Account";
-    const [linkedCust] = await db
-      .select({
-        id: customers.id,
-        companyId: customers.companyId,
-        openingBalance: customers.openingBalance,
-        openingBalanceSide: customers.openingBalanceSide,
-      })
-      .from(customers)
-      .where(eq(customers.ledgerAccountId, accountId))
-      .limit(1);
-    rawOB = toMoney(linkedCust?.openingBalance ?? acct?.openingBalance).toNumber();
-    obSide = linkedCust?.openingBalanceSide ?? acct?.openingBalanceSide ?? "Dr";
-
-    let useFactoryView = false;
-    if (linkedCust) {
-      const company = await storage.getCompanyById(linkedCust.companyId);
-      if (company?.companyType === "factory") useFactoryView = true;
-    }
-    if (useFactoryView && linkedCust) {
-      rawEntries = await buildFactoryCustomerLedgerEntries(
-        linkedCust.id,
-        accountId,
-        linkedCust.companyId,
-        startDate,
-        endDate
-      );
-    } else {
-      rawEntries = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
-    }
+    rawOB = toMoney(acct?.openingBalance).toNumber();
+    obSide = acct?.openingBalanceSide ?? "Dr";
+    rawEntries = customerOwnerId
+      ? await customerStatementEntries(companyId, customerOwnerId, startDate, endDate)
+      : await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
   } else if (accountType === "bank") {
     rawEntries = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate);
     const [acct] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, accountId));
@@ -211,20 +206,13 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = "Cr";
   } else if (accountType === "customer") {
-    const customerStmt = await storage.getCustomerStatement(accountId, companyId, startDate, endDate);
-    rawEntries = customerStmt.map((row) => ({
-      voucherId: row.referenceId ?? row.id,
-      voucherNumber: row.referenceType ? `${row.referenceType}-${row.referenceId}` : `CB-${row.id}`,
-      voucherType: row.transactionType,
-      voucherDate: row.transactionDate,
-      voucherDescription: row.description || "",
-      narration: row.description || "",
-      debitAmount: row.debitAmount,
-      creditAmount: row.creditAmount,
-    }));
-    const [acct] = await db.select().from(customers).where(eq(customers.id, accountId));
+    rawEntries = await customerStatementEntries(companyId, accountId, startDate, endDate);
+    const [acct] = await db
+      .select()
+      .from(customers)
+      .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
     accountName = acct?.legalName ?? "Customer";
-    rawOB = toMoney(acct?.openingBalance).toNumber();
+    rawOB = 0;
     obSide = "Dr";
   } else {
     throw new Error(`Unknown account type: ${accountType}`);
@@ -233,25 +221,15 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   // ── 2. Opening balance (pre-period if startDate given) ──
   let openingBalanceExact: Decimal = toMoney(isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB);
 
-  if (startDate) {
-    let factoryPrePeriodApplied = false;
-    if (accountType === "ledger") {
-      const linkedCust = await getCustomerByLedgerId(accountId);
-      if (linkedCust) {
-        const company = await storage.getCompanyById(linkedCust.companyId);
-        if (company?.companyType === "factory") {
-          const tot = await getFactoryCustomerLedgerPrePeriodTotals(
-            linkedCust.id,
-            accountId,
-            linkedCust.companyId,
-            startDate
-          );
-          openingBalanceExact = openingBalanceExact.plus(tot.debit).minus(tot.credit);
-          factoryPrePeriodApplied = true;
-        }
-      }
-    }
-
+  if (customerOwnerId) {
+    const party = await getPartyBalance(db, {
+      companyId,
+      kind: "customer",
+      id: customerOwnerId,
+      from: startDate ?? null,
+    });
+    openingBalanceExact = toMoney(party?.opening);
+  } else if (startDate) {
     const typeToColumn: Record<string, AnyPgColumn | undefined> = {
       bank: voucherEntries.bankAccountId,
       "fixed-asset": voucherEntries.fixedAssetId,
@@ -259,7 +237,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       employee: voucherEntries.employeeId,
       customer: voucherEntries.customerId,
     };
-    if (accountType === "ledger" && !factoryPrePeriodApplied) {
+    if (accountType === "ledger") {
       typeToColumn.ledger = voucherEntries.ledgerAccountId;
     }
     const col = typeToColumn[accountType];

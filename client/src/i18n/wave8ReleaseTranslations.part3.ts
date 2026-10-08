@@ -172,4 +172,109 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "بداية الفترة بعد نهايتها",
     fr: "Le début de la période est après sa fin",
   },
+  {
+    en: "Not yet in the ledger",
+    ar: "لم يُرحَّل إلى الدفتر بعد",
+    fr: "Pas encore au grand livre",
+  },
+  {
+    en: "Shown for information only; not part of the ledger balance above.",
+    ar: "معروض للعلم فقط؛ ليس جزءًا من رصيد الدفتر أعلاه.",
+    fr: "Affiché à titre d'information ; ne fait pas partie du solde du grand livre ci-dessus.",
+  },
+  {
+    en: "Total not yet in the ledger",
+    ar: "إجمالي ما لم يُرحَّل إلى الدفتر بعد",
+    fr: "Total pas encore au grand livre",
+  },
+  {
+    en: "Operational amounts shown for information. They are not included in What We Have or What We Owe.",
+    ar: "مبالغ تشغيلية معروضة للعلم. لا تدخل في ما لدينا ولا في ما علينا.",
+    fr: "Montants opérationnels affichés à titre d'information. Ils ne sont inclus ni dans Ce que nous avons ni dans Ce que nous devons.",
+  },
+  {
+    en: 'Unfinalized orders are not receivables yet: they are listed under "Not yet in the ledger" and are not included in "What We Have." Loading orders update live as bales are scanned.',
+    ar: 'الطلبات غير المُنهاة ليست ذمماً مدينة بعد: تُدرج ضمن "لم يُرحَّل إلى الدفتر بعد" ولا تدخل في "ما لدينا". تتحدث طلبات التحميل مباشرة أثناء مسح البالات.',
+    fr: "Les commandes non finalisées ne sont pas encore des créances : elles figurent sous « Pas encore au grand livre » et ne sont pas incluses dans « Ce que nous avons ». Les commandes en chargement se mettent à jour en direct lors du scan des balles.",
+  },
+  {
+    en: "Factory invoices not yet in the ledger",
+    ar: "فواتير المصنع غير المُرحَّلة إلى الدفتر بعد",
+    fr: "Factures d'usine pas encore au grand livre",
+  },
+  {
+    en: "Factory POS credit sales not yet in the ledger",
+    ar: "مبيعات آجلة من نقاط بيع المصنع غير مُرحَّلة بعد",
+    fr: "Ventes à crédit du PDV d'usine pas encore au grand livre",
+  },
+  {
+    en: "Deposits on factory POS credit sales not yet in the ledger",
+    ar: "عربون مبيعات نقاط بيع المصنع الآجلة غير مُرحَّل بعد",
+    fr: "Acomptes sur ventes à crédit du PDV d'usine pas encore au grand livre",
+  },
+  {
+    en: "Other customer balance records not in the ledger",
+    ar: "سجلات أرصدة عملاء أخرى غير موجودة في الدفتر",
+    fr: "Autres enregistrements de solde client absents du grand livre",
+  },
+  {
+    en: "Container goods not yet in the ledger (legacy containers)",
+    ar: "بضائع حاويات غير مُرحَّلة بعد (حاويات قديمة)",
+    fr: "Marchandises de conteneurs pas encore au grand livre (anciens conteneurs)",
+  },
+  {
+    en: "Supplier-paid container freight not yet in the ledger",
+    ar: "شحن حاويات مدفوع من المورد غير مُرحَّل بعد",
+    fr: "Fret de conteneur payé par le fournisseur pas encore au grand livre",
+  },
+  {
+    en: "Container commission not yet in the ledger",
+    ar: "عمولة الحاويات غير مُرحَّلة بعد",
+    fr: "Commission de conteneur pas encore au grand livre",
+  },
+  {
+    en: "Salary advances: advances-table remaining balance differs from the ledger",
+    ar: "سلف الرواتب: الرصيد المتبقي في جدول السلف يختلف عن الدفتر",
+    fr: "Avances sur salaire : le solde restant du tableau des avances diffère du grand livre",
+  },
+  {
+    en: "Payroll: the payroll page's current balance differs from the ledger",
+    ar: "الرواتب: الرصيد الحالي في صفحة الرواتب يختلف عن الدفتر",
+    fr: "Paie : le solde actuel de la page de paie diffère du grand livre",
+  },
+  {
+    en: "Pending orders at selling price (not invoiced)",
+    ar: "طلبات معلقة بسعر البيع (غير مفوترة)",
+    fr: "Commandes en attente au prix de vente (non facturées)",
+  },
+  {
+    en: "Verified orders at selling price (not invoiced)",
+    ar: "طلبات مُتحقق منها بسعر البيع (غير مفوترة)",
+    fr: "Commandes vérifiées au prix de vente (non facturées)",
+  },
+  {
+    en: "Loading orders at selling price (not invoiced)",
+    ar: "طلبات قيد التحميل بسعر البيع (غير مفوترة)",
+    fr: "Commandes en chargement au prix de vente (non facturées)",
+  },
+  {
+    en: "Factory worker advances: the advances table differs from the ledger",
+    ar: "سلف عمال المصنع: جدول السلف يختلف عن الدفتر",
+    fr: "Avances aux ouvriers d'usine : le tableau des avances diffère du grand livre",
+  },
+  {
+    en: "Workers Payable",
+    ar: "مستحقات العمال",
+    fr: "Ouvriers à payer",
+  },
+  {
+    en: "Not yet in the ledger (not included in the net position)",
+    ar: "لم يُرحَّل إلى الدفتر بعد (غير مُدرج في صافي المركز)",
+    fr: "Pas encore au grand livre (non inclus dans la position nette)",
+  },
+  {
+    en: "Container amount not yet in the ledger, in a currency without a confirmed rate",
+    ar: "مبلغ حاوية غير مُرحَّل بعد، بعملة بلا سعر صرف مؤكد",
+    fr: "Montant de conteneur pas encore au grand livre, dans une devise sans taux confirmé",
+  },
 ];

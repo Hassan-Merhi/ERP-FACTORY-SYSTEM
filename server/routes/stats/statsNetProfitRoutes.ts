@@ -3,9 +3,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { containers, employees, exchangeRates } from "@shared/schema";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { eq, and, or, desc, sql, isNull, lte } from "drizzle-orm";
+import { containers, exchangeRates } from "@shared/schema";
+import { eq, and, or, desc, sql, lte } from "drizzle-orm";
 import {
   classifyEquityAccounts,
   classifyNetPositionAccounts,
@@ -18,10 +17,12 @@ import { computeRentalOutstanding } from "./netProfitRentalSection";
 import { computeStockInHand } from "./netProfitStockSection";
 import { loadNetProfitData } from "./netProfitDataLoad";
 import { getNetPositionCurrencySummary } from "../../services/accounting/netPositionCurrency";
-import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
+import {
+  loadNetPositionParties,
+  type NetPositionPartyLine,
+} from "../../services/accounting/balances/netPositionParties";
 import { storage } from "../../storage";
 import { getSupplierPartnerPosProfit } from "./realizedProfit";
-import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 import {
@@ -65,8 +66,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
         hasMigratedEntries: _hasMigratedEntries,
         companyBaseCurrency,
         accountBalances,
-        supplierBalances,
-        employeeBalances: _employeeBalances,
       } = reportData;
 
       // ============ NET POSITION CALCULATION ============
@@ -98,23 +97,33 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // For non-SP: exclude sp_stock (inventory table is authoritative) and sp_cost_clearing (double-counts).
       const isSupplierPartner = companyRecord?.companyType === "supplier_partner";
       const equityIncludedInNetPosition = isSupplierPartner;
-      const supplierPartnerCustomerPosition = isSupplierPartner
-        ? await getSupplierPartnerCustomerNetPosition(companyId, toDate)
-        : null;
-      const accountsForClassify = isSupplierPartner
-        ? companyAccounts.filter(
-            (a) =>
-              a.accountType === "Cash" ||
-              a.accountType === "Loan" ||
-              a.accountType === "Loans" ||
-              ((a.accountType === "Customer" ||
-                a.subType === "Accounts Receivable" ||
-                (a.code || "").toUpperCase().startsWith("CUST-") ||
-                (a.name || "").toLowerCase().includes("customer account")) &&
-                !supplierPartnerCustomerPosition?.ledgerAccountIds.has(a.id)) ||
-              a.subType === "sp_payable"
-          )
-        : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing");
+      // Customers, suppliers and employees come from the one balance engine
+      // (services/accounting/balances/netPositionParties.ts): effective-date
+      // basis, master openings with their side, each line counted once.
+      // Supplier-partner companies exclude customers by design. Amounts not in
+      // the ledger are reported in `notInLedger`, never in the totals.
+      const parties = await loadNetPositionParties(companyId, {
+        asOf: toDate,
+        customers: !isSupplierPartner,
+        suppliers: shouldIncludeSuppliers,
+        factorySuppliers: false,
+        employees: "erp",
+        codes: "erp",
+        payrollCurrentBalanceMemo: true,
+      });
+      // Ledger accounts a customer owns are left out: the engine rolls them
+      // into the customer line added below.
+      const accountsForClassify = (
+        isSupplierPartner
+          ? companyAccounts.filter(
+              (a) =>
+                a.accountType === "Cash" ||
+                a.accountType === "Loan" ||
+                a.accountType === "Loans" ||
+                a.subType === "sp_payable"
+            )
+          : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing")
+      ).filter((a) => !parties.customerLedgerIds.has(a.id));
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
       const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
@@ -127,37 +136,6 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const forUsAccounts = classified.forUsAccounts;
       const onUsAccounts = classified.onUsAccounts;
       const categoryTotals = classified.categoryTotals;
-
-      // Linked customer ledgers are replaced by the authoritative customer balance below,
-      // which also includes direct customer-targeted journal/receipt entries.
-      if (supplierPartnerCustomerPosition) {
-        for (const customer of supplierPartnerCustomerPosition.items) {
-          const value = round2(Math.abs(customer.signedBalance));
-          if (customer.signedBalance > 0) {
-            forUsTotal = round2(forUsTotal + value);
-            categoryTotals["asset_Asset"] = round2((categoryTotals["asset_Asset"] || 0) + value);
-            forUsAccounts.push({
-              id: customer.ledgerAccountId ?? undefined,
-              name: customer.name,
-              code: customer.code,
-              value,
-              category: "Asset",
-            });
-          } else {
-            onUsTotal = round2(onUsTotal + value);
-            categoryTotals["liability_Liability"] = round2((categoryTotals["liability_Liability"] || 0) + value);
-            onUsAccounts.push({
-              id: customer.ledgerAccountId ?? undefined,
-              name: customer.name,
-              code: customer.code,
-              value,
-              category: "Liability",
-            });
-          }
-        }
-        forUsAccounts.sort((a, b) => b.value - a.value);
-        onUsAccounts.sort((a, b) => b.value - a.value);
-      }
 
       // Exclude ledger-based "Accrued Rent Payable" — the computed rentPayable
       // (expected − paid up to asOf) is always more accurate than the accrual-
@@ -354,155 +332,34 @@ export function registerStatsNetProfitRoutes(app: Express) {
       stripPayrollEntries(forUsAccounts, "asset");
       stripPayrollEntries(onUsAccounts, "liability");
 
-      // Legacy fallback: include inactive employees too. Deactivating a worker must never
-      // erase an unpaid salary liability from Net Position.
-      const companyEmployees = await db
-        .select({
-          id: employees.id,
-          companyId: employees.companyId,
-          employeeType: employees.employeeType,
-          currentBalance: employees.currentBalance,
-          openingBalance: employees.openingBalance,
-          openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
-        })
-        .from(employees)
-        .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
-        .execute();
-
-      const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-      const payrollEmployees = companyEmployees.filter((employee) => employee.employeeType !== "Worker");
-      const payrollWorkerIds = new Set(
-        companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
-      );
-
-      // Current ERP Payroll is maintained in employees.currentBalance. This is the same
-      // balance shown on Payroll → Employees and includes legacy/imported salary state
-      // that cannot be reconstructed reliably from voucher history/opening_balance_side.
-      // Keep it as one net control account, scoped to Employee rows only.
-      const payrollSignedBalance = round2(
-        payrollEmployees.reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
-      );
-
-      // Worker advances have their own authoritative lifecycle table. Do not rebuild
-      // them from employee voucher debits: deleting an old advance historically left
-      // its voucher behind, which creates orphan debits and overstates advances.
-      const workerAdvancesDisplay = round2(
-        managedSalaryAdvances
-          .filter((advance) => payrollWorkerIds.has(advance.employeeId))
-          .reduce((sum, advance) => sum + advance.remainingBalance, 0)
-      );
-
-      // Strip any "advance"-related ledger accounts that classifyNetPositionAccounts may have
-      // captured (e.g. "Worker Advances", "Salary Advances", "Employee Advances",
-      // "Factory Worker Advances"). The table-based query below is the single source of truth
-      // for advances outstanding, so we must remove them from the classifier output to prevent
-      // double-counting.
-      const advanceLedgerPattern = /(?:worker|salary|employee|factory)\s+advance/i;
-      {
-        let i = forUsAccounts.length - 1;
-        while (i >= 0) {
-          const acc = forUsAccounts[i];
-          if (advanceLedgerPattern.test(acc.name || "")) {
-            forUsTotal = round2(forUsTotal - acc.value);
-            const catKey = `asset_${acc.category || acc.name}`;
-            if (categoryTotals[catKey] !== undefined) delete categoryTotals[catKey];
-            forUsAccounts.splice(i, 1);
-          }
-          i--;
-        }
-      }
-
-      const payrollPayableDisplay = Math.max(0, payrollSignedBalance);
-      const payrollOverpaymentDisplay = Math.max(0, -payrollSignedBalance);
-
-      if (payrollPayableDisplay > 0) {
-        onUsTotal = round2(onUsTotal + payrollPayableDisplay);
-        categoryTotals["liability_Payroll"] = round2(
-          (categoryTotals["liability_Payroll"] || 0) + payrollPayableDisplay
-        );
-        onUsAccounts.push({
-          name: "Payroll Payable",
-          code: "PAYROLL_PAYABLE",
-          value: payrollPayableDisplay,
-          category: "Payroll",
-        });
-      }
-      if (payrollOverpaymentDisplay > 0) {
-        forUsTotal = round2(forUsTotal + payrollOverpaymentDisplay);
-        categoryTotals["asset_Payroll"] = round2((categoryTotals["asset_Payroll"] || 0) + payrollOverpaymentDisplay);
-        forUsAccounts.push({
-          name: "Payroll Overpayment",
-          code: "PAYROLL_PAYABLE",
-          value: payrollOverpaymentDisplay,
-          category: "Payroll",
-        });
-      }
-      if (workerAdvancesDisplay > 0) {
-        forUsTotal = round2(forUsTotal + workerAdvancesDisplay);
-        categoryTotals["asset_Worker Advances"] = round2(
-          (categoryTotals["asset_Worker Advances"] || 0) + workerAdvancesDisplay
-        );
-        forUsAccounts.push({
-          name: "Worker Advances (Prepaid)",
-          code: "COMPUTED",
-          value: workerAdvancesDisplay,
-          category: "Worker Advances",
-        });
-      }
-
-      // Supplier master rows are company-owned. Load the full company-scoped set so
-      // an opening-balance-only supplier is still included even when it has no voucher activity.
-      // The company_id index keeps this bounded to the current company rather than scanning
-      // unrelated suppliers.
-      const allSuppliers = await db
-        .select({
-          id: companyScopedSuppliers.id,
-          legalName: companyScopedSuppliers.legalName,
-          code: companyScopedSuppliers.code,
-          openingBalance: companyScopedSuppliers.openingBalance,
-        })
-        .from(companyScopedSuppliers)
-        .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
-        .execute();
-      let supplierLiabilities = 0;
-      let supplierAssets = 0;
-
-      for (const sup of allSuppliers) {
-        const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-        const opening = parseFloat(sup.openingBalance || "0");
-        // Suppliers: Credit = we owe them, Debit = we paid them.
-        // Net positive = we owe them (liability), Net negative = they owe us (asset).
-        const netBalance = opening + balance.credit - balance.debit;
-        if (netBalance > 0) {
-          supplierLiabilities += netBalance;
-          onUsAccounts.push({
-            name: sup.legalName,
-            code: sup.code || "",
-            value: netBalance,
-            category: "Supplier",
-          });
-        } else if (netBalance < 0) {
-          supplierAssets += Math.abs(netBalance);
-          forUsAccounts.push({
-            name: sup.legalName,
-            code: sup.code || "",
-            value: Math.abs(netBalance),
-            category: "Supplier Overpayment",
+      // Customers, suppliers, payroll (Employees, netted) and workers from the
+      // balance engine. The salary-advance table and employees.current_balance
+      // are no longer the figures: what they add over the ledger is reported in
+      // `notInLedger` (the advance-named ledger accounts the table used to
+      // replace are ledger balances and stay in the classification).
+      const partyCategoryKey = (line: NetPositionPartyLine, side: "asset" | "liability") => {
+        if (line.partyKind === "supplier")
+          return side === "asset" ? "asset_Supplier Overpayment" : "liability_Suppliers";
+        return `${side}_${line.category}`;
+      };
+      for (const [lines, side] of [
+        [parties.forUs, "asset"],
+        [parties.onUs, "liability"],
+      ] as const) {
+        for (const line of lines) {
+          const key = partyCategoryKey(line, side);
+          categoryTotals[key] = round2((categoryTotals[key] || 0) + line.value);
+          (side === "asset" ? forUsAccounts : onUsAccounts).push({
+            ...(line.id !== undefined ? { id: line.id } : {}),
+            name: line.name,
+            code: line.code,
+            value: line.value,
+            category: line.category,
           });
         }
       }
-
-      // Supplier balances are already in the report's base-value convention.
-      const supplierLiabilitiesDisplay = supplierLiabilities;
-      const supplierAssetsDisplay = supplierAssets;
-      if (supplierLiabilitiesDisplay > 0) {
-        onUsTotal += supplierLiabilitiesDisplay;
-        categoryTotals["liability_Suppliers"] = supplierLiabilitiesDisplay;
-      }
-      if (supplierAssetsDisplay > 0) {
-        forUsTotal += supplierAssetsDisplay;
-        categoryTotals["asset_Supplier Overpayment"] = supplierAssetsDisplay;
-      }
+      forUsTotal = round2(forUsTotal + parties.forUsTotal);
+      onUsTotal = round2(onUsTotal + parties.onUsTotal);
 
       // Stock OTW — historical as of toDate (containers that were in transit on that date).
       // SP (supplier_partner) companies track OTW via the sp_goods_otw ledger account instead
@@ -746,6 +603,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         onUsTotal,
         incomeTotal,
         expensesTotal,
+        notInLedger: parties.notInLedger,
         currency: {
           ...netPositionCurrency,
           currentCashBankTranslationApplied: false,

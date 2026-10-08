@@ -25,6 +25,9 @@ const harness = vi.hoisted(() => {
     getCompanyById: vi.fn(),
     isParentCompanyContext: vi.fn(),
     generateAccountStatementPdf: vi.fn(),
+    getCustomerByLedgerId: vi.fn(),
+    getPartyBalance: vi.fn(),
+    loadCustomerNotInLedger: vi.fn(),
   };
 });
 
@@ -37,6 +40,16 @@ vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
 vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/lib/accountStatementPdfGenerator", () => ({
   generateAccountStatementPdf: harness.generateAccountStatementPdf,
+}));
+// Wave 10: a ledger account a customer owns opens at the balance engine's
+// customer opening, with what is not yet in the ledger reported separately.
+vi.mock("../server/lib/factoryCustomerLedger", () => ({ getCustomerByLedgerId: harness.getCustomerByLedgerId }));
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalance: harness.getPartyBalance,
+}));
+vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
+  loadCustomerNotInLedger: harness.loadCustomerNotInLedger,
+  loadCustomerLedgerEntryRows: vi.fn(async () => []),
 }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
@@ -167,6 +180,7 @@ describe("account statement route behavior", () => {
     harness.isParentCompanyContext.mockResolvedValue(true);
     harness.getCompanyById.mockResolvedValue({ id: 4, companyType: "erp" });
     harness.generateAccountStatementPdf.mockResolvedValue(Buffer.from("%PDF-1.4\npdf-statement"));
+    harness.getCustomerByLedgerId.mockResolvedValue(null);
   });
 
   it("returns recoverable deleted vouchers for a supported account type", async () => {
@@ -230,22 +244,26 @@ describe("account statement route behavior", () => {
     expect(res.body).toEqual({ balance: 0.3 });
   });
 
-  it("uses the factory customer-ledger combined formula before the requested period", async () => {
+  it("opens a customer-owned ledger at the balance engine's customer opening before the period", async () => {
+    // The factory composite (orders + cache + vouchers without CHARGE-/INV-) is
+    // retired: the ledger figure is the engine's, the operational part is reported apart.
     harness.getCompanyById.mockResolvedValue({ id: 4, companyType: "factory" });
-    harness.selectResults.push(
-      [{ ob: "0", side: "Dr" }],
-      [{ id: 44, ob: "10", side: "Dr" }],
-      [{ total: "120" }],
-      [{ net: "-15" }],
-      [{ net: "30" }],
-      [{ net: "5" }]
-    );
+    harness.selectResults.push([{ id: 12 }]);
+    harness.getCustomerByLedgerId.mockResolvedValue({ id: 44, companyId: 4 });
+    harness.getPartyBalance.mockResolvedValue({ opening: "150.00" });
+    harness.loadCustomerNotInLedger.mockResolvedValue({ prePeriodTotal: "120.00", rows: [] });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "ledger", id: "12" }, query: { endDate: "2026-08-01" } }),
       res
     );
-    expect(res.body).toEqual({ balance: 150 });
+    expect(res.body).toEqual({ balance: 150, notInLedgerBefore: "120.00" });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "customer",
+      id: 44,
+      from: "2026-08-01",
+    });
   });
 
   it("rejects unknown account types and invalid identifiers", async () => {

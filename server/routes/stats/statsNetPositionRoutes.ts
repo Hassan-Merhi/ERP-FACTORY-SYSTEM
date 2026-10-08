@@ -8,9 +8,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { sumMoney, toMoney } from "../../lib/money";
-import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
-import { inventory, containers, vouchers, locations, factoryWorkerAdvances } from "@shared/schema";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { inventory, containers, locations } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
 import {
   classifyEquityAccounts,
@@ -18,7 +16,7 @@ import {
   round2,
   type NetPositionAccount,
 } from "../../netPositionHelper";
-import { getSupplierPartnerCustomerNetPosition } from "../../helpers/supplierPartnerCustomerNetPosition";
+import { loadNetPositionParties } from "../../services/accounting/balances/netPositionParties";
 import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
 
 export function registerStatsNetPositionRoutes(app: Express) {
@@ -38,61 +36,31 @@ export function registerStatsNetPositionRoutes(app: Express) {
       // ── 1. Accounts & voucher entries (cumulative up to toDate) ──────────
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
 
-      const voucherConds = [
-        eq(vouchers.companyId, companyId),
-        eq(vouchers.optional, false),
-        isNull(vouchers.deletedAt),
-      ];
-      if (toDate) voucherConds.push(lte(vouchers.voucherDate, toDate));
-
-      const voucherAcctConds = [eq(vouchers.optional, false), isNull(vouchers.deletedAt)];
-      if (toDate) voucherAcctConds.push(lte(vouchers.voucherDate, toDate));
-
-      // Two separate queries — see net-profit route for rationale:
-      // companyEntries  → supplier/employee balances (scoped to voucher's company)
-      // ledgerAccEntries → ledger account balances (scoped to account's company so
-      //                    migrated accounts appear correctly in the destination)
-      //
-      // COALESCE(base_debit_amount, debit_amount): uses historical USD base when available
-      // (i.e. after backfill), falls back to debit_amount for legacy rows.
+      // Ledger accounts: scoped to the account's company so migrated accounts
+      // appear correctly in the destination; vouchers count from
+      // COALESCE(effective_date, voucher_date). COALESCE(base_debit_amount,
+      // debit_amount): the historical USD base when available. Customers,
+      // suppliers and employees come from the balance engine below.
       const _npExcelParams = toDate ? [companyId, toDate] : [companyId];
-      const _npExcelDateClause = toDate ? "AND v.voucher_date <= $2" : "";
+      const _npExcelDateClause = toDate ? "AND COALESCE(v.effective_date, v.voucher_date) <= $2" : "";
 
-      const [companyEntriesRaw, ledgerAccEntriesRaw] = await Promise.all([
-        pool.query<{
-          ledger_account_id: string;
-          supplier_id: string | null;
-          debit_amount: string;
-          credit_amount: string;
-        }>(
-          `SELECT ve.ledger_account_id,
-                  ve.supplier_id,
-                  COALESCE(ve.base_debit_amount,  ve.debit_amount)  AS debit_amount,
-                  COALESCE(ve.base_credit_amount, ve.credit_amount) AS credit_amount
-           FROM voucher_entries ve
-           JOIN vouchers v ON ve.voucher_id = v.id
-           WHERE v.company_id = $1
-             AND v.optional   = false
-             AND v.deleted_at IS NULL
-             ${_npExcelDateClause}`,
-          _npExcelParams
-        ),
-        pool.query<{ ledger_account_id: string; debit_amount: string; credit_amount: string }>(
-          `SELECT ve.ledger_account_id,
-                  COALESCE(ve.base_debit_amount,  ve.debit_amount)  AS debit_amount,
-                  COALESCE(ve.base_credit_amount, ve.credit_amount) AS credit_amount
-           FROM voucher_entries ve
-           JOIN vouchers        v  ON ve.voucher_id        = v.id
-           JOIN ledger_accounts la ON ve.ledger_account_id = la.id
-           WHERE la.company_id = $1
-             AND v.optional    = false
-             AND v.deleted_at IS NULL
-             ${_npExcelDateClause}`,
-          _npExcelParams
-        ),
-      ]);
-
-      const companyEntries = companyEntriesRaw.rows;
+      const ledgerAccEntriesRaw = await pool.query<{
+        ledger_account_id: string;
+        debit_amount: string;
+        credit_amount: string;
+      }>(
+        `SELECT ve.ledger_account_id,
+                COALESCE(ve.base_debit_amount,  ve.debit_amount)  AS debit_amount,
+                COALESCE(ve.base_credit_amount, ve.credit_amount) AS credit_amount
+         FROM voucher_entries ve
+         JOIN vouchers        v  ON ve.voucher_id        = v.id
+         JOIN ledger_accounts la ON ve.ledger_account_id = la.id
+         WHERE la.company_id = $1
+           AND v.optional    = false
+           AND v.deleted_at IS NULL
+           ${_npExcelDateClause}`,
+        _npExcelParams
+      );
       const ledgerAccEntries = ledgerAccEntriesRaw.rows;
 
       // Sum each id's debits and credits exactly, then hand numbers to the classifiers.
@@ -113,35 +81,40 @@ export function registerStatsNetPositionRoutes(app: Express) {
         return balances;
       };
       const accountBalances = exactBalances(ledgerAccEntries.map((e) => ({ ...e, id: e.ledger_account_id })));
-      const supplierBalances = exactBalances(companyEntries.map((e) => ({ ...e, id: e.supplier_id })));
 
       // ── 2. Classify accounts ──────────────────────────────────────────────
       const parentCompanyId = await storage.getParentCompanyId();
       const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
       // SP formula: Cash + Customer A/R + Stock (inventory) → What We Have; sp_payable and Loan/Loans → What We Owe.
       const isSupplierPartner = company?.companyType === "supplier_partner";
-      const supplierPartnerCustomerPosition = isSupplierPartner
-        ? await getSupplierPartnerCustomerNetPosition(companyId, toDate)
-        : null;
-      const accountsForClassify = isSupplierPartner
-        ? companyAccounts.filter(
-            (a) =>
-              a.accountType === "Cash" ||
-              a.accountType === "Loan" ||
-              a.accountType === "Loans" ||
-              ((a.accountType === "Customer" ||
-                a.subType === "Accounts Receivable" ||
-                (a.code || "").toUpperCase().startsWith("CUST-") ||
-                (a.name || "").toLowerCase().includes("customer account")) &&
-                !supplierPartnerCustomerPosition?.ledgerAccountIds.has(a.id)) ||
-              a.subType === "sp_payable"
-          )
-        : companyAccounts.filter(
-            (a) =>
-              a.subType !== "sp_stock" &&
-              a.subType !== "sp_cost_clearing" &&
-              !(a.accountType === "Liability" && (a.name as string)?.startsWith("Insurance"))
-          );
+      // Customers, suppliers and employees from the one balance engine (as the
+      // live /api/stats/net-profit); supplier-partner companies exclude
+      // customers by design. Amounts not in the ledger are listed separately.
+      const parties = await loadNetPositionParties(companyId, {
+        asOf: toDate,
+        customers: !isSupplierPartner,
+        suppliers: shouldIncludeSuppliers,
+        factorySuppliers: false,
+        employees: "erp",
+        codes: "erp",
+        payrollCurrentBalanceMemo: true,
+      });
+      const accountsForClassify = (
+        isSupplierPartner
+          ? companyAccounts.filter(
+              (a) =>
+                a.accountType === "Cash" ||
+                a.accountType === "Loan" ||
+                a.accountType === "Loans" ||
+                a.subType === "sp_payable"
+            )
+          : companyAccounts.filter(
+              (a) =>
+                a.subType !== "sp_stock" &&
+                a.subType !== "sp_cost_clearing" &&
+                !(a.accountType === "Liability" && (a.name as string)?.startsWith("Insurance"))
+            )
+      ).filter((a) => !parties.customerLedgerIds.has(a.id));
       // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
       const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
       const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
@@ -153,33 +126,6 @@ export function registerStatsNetPositionRoutes(app: Express) {
       let onUsTotal = classified.onUsTotal;
       const forUsAccounts = [...classified.forUsAccounts];
       const onUsAccounts = [...classified.onUsAccounts];
-
-      if (supplierPartnerCustomerPosition) {
-        for (const customer of supplierPartnerCustomerPosition.items) {
-          const value = round2(Math.abs(customer.signedBalance));
-          if (customer.signedBalance > 0) {
-            forUsTotal = round2(forUsTotal + value);
-            forUsAccounts.push({
-              id: customer.ledgerAccountId ?? undefined,
-              name: customer.name,
-              code: customer.code,
-              value,
-              category: "Asset",
-            });
-          } else {
-            onUsTotal = round2(onUsTotal + value);
-            onUsAccounts.push({
-              id: customer.ledgerAccountId ?? undefined,
-              name: customer.name,
-              code: customer.code,
-              value,
-              category: "Liability",
-            });
-          }
-        }
-        forUsAccounts.sort((a, b) => b.value - a.value);
-        onUsAccounts.sort((a, b) => b.value - a.value);
-      }
 
       // ── 3. Stock In Hand — historical as of toDate ────────────────────────
       const activeLocsData = await db
@@ -222,74 +168,14 @@ export function registerStatsNetPositionRoutes(app: Express) {
         });
       }
 
-      // ── 4. Factory worker advances only (Factory Net Position is isolated from ERP) ──
-      // ERP employee advances are NOT included here — they belong in the ERP Net Position.
-      // Factory workers live in factory_workers / factory_worker_advances tables, not employees.
-      // Remove the "Factory Worker Advances" ledger account (replaced by table sum below).
-      const fwaLedgerIdx2 = forUsAccounts.findIndex((a) => (a.name || "").toLowerCase() === "factory worker advances");
-      if (fwaLedgerIdx2 !== -1) {
-        forUsTotal = round2(forUsTotal - forUsAccounts[fwaLedgerIdx2].value);
-        forUsAccounts.splice(fwaLedgerIdx2, 1);
-      }
-      // Use the authoritative factory_worker_advances table as the sole source.
-      {
-        const [fwAdvRow2] = await db
-          .select({ total: sql<string>`COALESCE(SUM(CAST(remaining_balance AS numeric)), 0)` })
-          .from(factoryWorkerAdvances)
-          .where(and(eq(factoryWorkerAdvances.companyId, companyId), eq(factoryWorkerAdvances.fullyPaid, false)));
-        const workerAdvances = toMoney(fwAdvRow2?.total).toNumber();
-        if (workerAdvances > 0) {
-          forUsTotal += workerAdvances;
-          forUsAccounts.push({
-            name: "Worker Advances (Prepaid)",
-            code: "COMPUTED",
-            value: workerAdvances,
-            category: "Worker Advances",
-          });
-        }
-      }
-
-      // ── 5. Supplier balances ──────────────────────────────────────────────
-      // Include every supplier owned by this company, not only suppliers that already
-      // have voucher rows. This keeps opening-balance-only suppliers in Excel and makes
-      // the export reconcile with the live Net Position endpoint.
-      const allSuppliers = await db
-        .select({
-          id: companyScopedSuppliers.id,
-          legalName: companyScopedSuppliers.legalName,
-          code: companyScopedSuppliers.code,
-          openingBalance: companyScopedSuppliers.openingBalance,
-        })
-        .from(companyScopedSuppliers)
-        .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
-        .execute();
-      const supplierOpeningSides = await loadPartyOpeningSides(
-        "suppliers",
-        allSuppliers.map((sup) => sup.id)
-      );
-      let supplierLiabilities = 0;
-      let supplierAssets = 0;
-      for (const sup of allSuppliers) {
-        const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-        // Cr positive; the opening follows suppliers.opening_balance_side (null → Cr).
-        const openingAmount = toMoney(sup.openingBalance);
-        const opening = supplierOpeningSides.get(sup.id) === "Dr" ? openingAmount.negated() : openingAmount;
-        const netBalance = opening.plus(balance.credit).minus(balance.debit).toNumber();
-        if (netBalance > 0) {
-          supplierLiabilities += netBalance;
-          onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: netBalance, category: "Supplier" });
-        } else if (netBalance < 0) {
-          supplierAssets += Math.abs(netBalance);
-          forUsAccounts.push({
-            name: sup.legalName,
-            code: sup.code || "",
-            value: Math.abs(netBalance),
-            category: "Supplier Overpayment",
-          });
-        }
-      }
-      if (supplierLiabilities > 0) onUsTotal += supplierLiabilities;
-      if (supplierAssets > 0) forUsTotal += supplierAssets;
+      // ── 4–5. Customers, suppliers, payroll and workers (balance engine) ─────
+      // The factory_worker_advances table this export used to add (and the
+      // ledger account it replaced) belong to the factory net position; the
+      // ERP export now matches the live ERP net position.
+      forUsAccounts.push(...parties.forUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line));
+      onUsAccounts.push(...parties.onUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line));
+      forUsTotal += parties.forUsTotal;
+      onUsTotal += parties.onUsTotal;
 
       // ── 6. OTW containers — historical as of toDate ───────────────────────
       // Same logic as the main endpoint: use status='OFFLOADED' (not offloadDate) as the
@@ -471,6 +357,17 @@ export function registerStatsNetPositionRoutes(app: Express) {
       netRow.height = 22;
 
       ws1.addRow([]);
+
+      // Amounts not yet in the ledger: shown for information, not in the totals above.
+      if (parties.notInLedger.lines.length > 0) {
+        addSubheader(ws1, "Not yet in the ledger (not included in the net position)", DARK_NAVY);
+        for (const line of parties.notInLedger.lines) {
+          const r = ws1.addRow([line.label, currency(round2(line.value)), `${line.count} items`]);
+          r.getCell(2).alignment = { horizontal: "right" };
+          r.getCell(1).font = { italic: true };
+        }
+        ws1.addRow([]);
+      }
 
       // Category breakdown — Assets
       addSubheader(ws1, "Assets Breakdown by Category", DARK_GREEN);

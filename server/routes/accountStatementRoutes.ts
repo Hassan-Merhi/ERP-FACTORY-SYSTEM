@@ -17,26 +17,25 @@ import {
 } from "../lib/accountStatementExportSafety";
 import path from "path";
 import fs from "fs";
-import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
-import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import { MoneyDecimal, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
 import { loadPartyOpeningSides } from "./helpers/partyOpeningSide";
+import { liveVoucherInCompany, voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
 import {
-  customerVoucherLineFilter,
-  postedVoucherInCompany,
-  voucherBalanceDateSql,
-  type CustomerLedgerIdentity,
-} from "../storage/accounting/customer-ledger-balance";
+  loadCustomerLedgerEntryRows,
+  loadCustomerNotInLedger,
+} from "../services/accounting/balances/customerLedgerStatement";
+import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
   bankAccounts,
   companies,
-  customerBalances,
-  customerOrders,
   customers,
   employees,
   fixedAssets,
@@ -129,100 +128,51 @@ export function registerAccountStatementRoutes(app: Express) {
       const entryColumn = typeToColumn[accountType];
       if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
 
+      // A customer, or a ledger account a customer owns, opens at the balance
+      // engine's period opening: the customer's opening plus the lines the
+      // engine attributes to it before endDate (effective-date basis). Amounts
+      // not yet in the ledger before endDate are reported separately.
+      let customerOwnerId: number | null = null;
+      if (accountType === "customer" || accountType === "ledger") {
+        if (accountType === "customer") {
+          const [cust] = await db
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
+          if (!cust) return res.status(404).json({ message: "Account not found" });
+          customerOwnerId = cust.id;
+        } else {
+          const [acct] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
+          if (!acct) return res.status(404).json({ message: "Account not found" });
+          const owner = await getCustomerByLedgerId(accountId);
+          if (owner && owner.companyId === companyId) customerOwnerId = owner.id;
+        }
+      }
+      if (customerOwnerId !== null) {
+        const window = { companyId, customerId: customerOwnerId, from: endDate ?? null, to: null };
+        const [party, notInLedger] = await Promise.all([
+          getPartyBalance(db, { companyId, kind: "customer", id: customerOwnerId, from: endDate ?? null }),
+          loadCustomerNotInLedger(db, window),
+        ]);
+        return res.json({
+          balance: toMoney(party?.opening).toNumber(),
+          notInLedgerBefore: endDate ? notInLedger.prePeriodTotal : "0.00",
+        });
+      }
+
       let rawOB = new MoneyDecimal(0);
       let obSide = "Dr";
-      let customerIdentity: CustomerLedgerIdentity | null = null;
       if (accountType === "ledger") {
         const [acct] = await db
           .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
           .from(ledgerAccounts)
           .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
         if (!acct) return res.status(404).json({ message: "Account not found" });
-        // The customer record owns the opening of its linked ledger (counted once).
-        const [linkedCust] = await db
-          .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
-          .from(customers)
-          .where(and(eq(customers.ledgerAccountId, accountId), eq(customers.companyId, companyId)))
-          .limit(1);
-        rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
-        obSide = linkedCust?.side ?? acct?.side ?? "Dr";
-
-        if (linkedCust) {
-          const currentCompany = await storage.getCompanyById(companyId);
-          if (currentCompany?.companyType === "factory") {
-            const custId = linkedCust.id;
-            const dateFilter = endDate ? sql`${voucherBalanceDateSql} < ${endDate}` : sql`1=1`;
-            const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
-            const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
-
-            const [salesRows, cbRows, lVRows, cVRows] = await Promise.all([
-              db
-                .select({ total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)` })
-                .from(customerOrders)
-                .where(
-                  and(
-                    eq(customerOrders.customerId, custId),
-                    eq(customerOrders.companyId, companyId),
-                    eq(customerOrders.status, "FINALIZED"),
-                    orderDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-                })
-                .from(customerBalances)
-                .where(
-                  and(
-                    eq(customerBalances.customerId, custId),
-                    eq(customerBalances.companyId, companyId),
-                    sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`,
-                    cbDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.ledgerAccountId, accountId),
-                    eq(vouchers.companyId, companyId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-                    dateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.customerId, custId),
-                    isNull(voucherEntries.ledgerAccountId),
-                    eq(vouchers.companyId, companyId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-                    dateFilter
-                  )
-                ),
-            ]);
-
-            const ob = toMoney(linkedCust.ob);
-            const side = linkedCust.side || "Dr";
-            const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
-              sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVRows[0]?.net, cVRows[0]?.net])
-            );
-            return res.json({ balance: prePeriodBalance.toNumber() });
-          }
-        }
+        rawOB = toMoney(acct.ob);
+        obSide = acct.side ?? "Dr";
       } else if (accountType === "bank") {
         const [acct] = await db
           .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
@@ -253,20 +203,6 @@ export function registerAccountStatementRoutes(app: Express) {
         rawOB = toMoney(acct.ob);
         // employees.opening_balance_side, null → Cr.
         obSide = (await loadPartyOpeningSides("employees", [accountId])).get(accountId) ?? "Cr";
-      } else if (accountType === "customer") {
-        const [acct] = await db
-          .select({
-            id: customers.id,
-            ledgerAccountId: customers.ledgerAccountId,
-            ob: customers.openingBalance,
-            side: customers.openingBalanceSide,
-          })
-          .from(customers)
-          .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        customerIdentity = { id: acct.id, ledgerAccountId: acct.ledgerAccountId };
-        rawOB = toMoney(acct.ob);
-        obSide = acct.side === "Cr" ? "Cr" : "Dr";
       } else if (accountType === "fixed-asset") {
         const [acct] = await db
           .select({ ob: fixedAssets.openingBalance })
@@ -289,12 +225,11 @@ export function registerAccountStatementRoutes(app: Express) {
 
       if (endDate) {
         // Same rules as the statement list: posted vouchers of this company,
-        // dated COALESCE(effective_date, voucher_date); a customer owns the
-        // lines on its linked ledger plus its customer-tagged lines with no ledger.
+        // dated COALESCE(effective_date, voucher_date).
         const conditions = [
-          customerIdentity ? customerVoucherLineFilter(customerIdentity) : eq(entryColumn, accountId),
-          postedVoucherInCompany(companyId),
-          sql`${voucherBalanceDateSql} < ${endDate}`,
+          eq(entryColumn, accountId),
+          liveVoucherInCompany(companyId),
+          sql`${voucherBookedOnSql} < ${endDate}`,
         ];
         const [totals] = await db
           .select({
@@ -434,6 +369,7 @@ export function registerAccountStatementRoutes(app: Express) {
       let accountName = "Account";
       let openingBalanceExact = new MoneyDecimal(0);
       let openingBalanceSide = "Dr";
+      let ownedCustomerId: number | null = null;
 
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
 
@@ -450,6 +386,16 @@ export function registerAccountStatementRoutes(app: Express) {
         accountName = acct.name;
         openingBalanceExact = toMoney(acct.openingBalance);
         openingBalanceSide = acct.openingBalanceSide || "Dr";
+        // A ledger a customer owns exports that customer's ledger statement
+        // (balance engine lines and the customer-owned opening).
+        const owner = await getCustomerByLedgerId(accountId);
+        if (owner && owner.companyId === companyId) {
+          const party = await getPartyBalance(db, { companyId, kind: "customer", id: owner.id });
+          const master = toMoney(party?.masterOpening);
+          ownedCustomerId = owner.id;
+          openingBalanceExact = master.abs();
+          openingBalanceSide = master.isNegative() ? "Cr" : "Dr";
+        }
       } else if (accountType === "bank") {
         const [acct] = await db
           .select({ name: bankAccounts.name })
@@ -474,7 +420,14 @@ export function registerAccountStatementRoutes(app: Express) {
       }
 
       let txRows: AccountStatementEntryRow[] = [];
-      if (accountType === "ledger") {
+      if (ownedCustomerId !== null) {
+        txRows = await loadCustomerLedgerEntryRows(db, {
+          companyId,
+          customerId: ownedCustomerId,
+          from: startDate ?? null,
+          to: endDate ?? null,
+        });
+      } else if (accountType === "ledger") {
         txRows = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
       } else if (accountType === "bank") {
         txRows = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId);
@@ -485,7 +438,9 @@ export function registerAccountStatementRoutes(app: Express) {
       }
 
       let allTxForBF: AccountStatementEntryRow[] = [];
-      if (startDate && accountType === "ledger") {
+      if (startDate && ownedCustomerId !== null) {
+        allTxForBF = await loadCustomerLedgerEntryRows(db, { companyId, customerId: ownedCustomerId, to: startDate });
+      } else if (startDate && accountType === "ledger") {
         allTxForBF = await storage.getVoucherEntriesByLedger(accountId, undefined, undefined, companyId);
       }
       // Balances are kept exact and become numbers only for the worksheet cells.

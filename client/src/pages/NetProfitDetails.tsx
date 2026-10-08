@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { useCurrencyContext } from "@/contexts/CurrencyContext";
 import { useCompany } from "@/contexts/CompanyContext";
+import { NotInLedgerCard, type NotInLedgerSectionData } from "@/components/netposition/NotInLedgerCard";
 
 interface AccountItem {
   id?: number;
@@ -69,6 +70,8 @@ interface NetProfitData {
   onUsTotal: number;
   incomeTotal: number;
   expensesTotal: number;
+  /** Amounts not yet in the ledger: shown separately, never in the totals. */
+  notInLedger?: NotInLedgerSectionData;
   currency?: {
     rateConvention: string;
     nativeDebitByCurrency: Record<string, string>;
@@ -667,6 +670,9 @@ export default function NetProfitDetails() {
           formatAmount={formatAmount}
         />
       </div>
+
+      {/* ── Amounts not yet in the ledger (never in the totals) ── */}
+      <NotInLedgerCard section={data?.notInLedger} formatAmount={formatAmount} />
 
       {/* ── Partner capital / equity (Supplier Partner only) ── */}
       {showPartnerEquity && (

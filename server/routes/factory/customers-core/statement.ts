@@ -9,12 +9,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  customerVoucherLineFilter,
-  postedVoucherInCompany,
-  voucherBalanceDateSql,
-} from "../../../storage/accounting/customer-ledger-balance";
-import { customerOrders, customerBalances, customers, voucherEntries, vouchers } from "@shared/schema";
+import { toMoney } from "../../../lib/money";
+import { NOT_IN_LEDGER_LABEL } from "../../../services/accounting/balances/customerLedgerStatement";
+import { customerOrders, customerBalances, customers } from "@shared/schema";
+import { buildFactoryCustomerStatement, withRunningBalances } from "./statementRows";
 import { eq, and, desc, sql } from "drizzle-orm";
 
 export function registerFactoryCustomerStatementRoutes(app: Express) {
@@ -72,148 +70,35 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
       );
       const totalQtyBalesByOrderId = new Map<number, number>(invoices.map((inv) => [inv.id, inv.totalQtyBales ?? 0]));
       const totalWeightKgByOrderId = new Map<number, number>(
-        invoices.map((inv) => [inv.id, parseFloat(inv.totalWeightKg ?? "0")])
+        invoices.map((inv) => [inv.id, toMoney(inv.totalWeightKg).toNumber()])
       );
 
-      // Build a map of orderId → current grandTotal so we can correct stale
-      // INVOICE rows on the fly (read-only — no DB writes from a GET).
-      const invoiceGrandTotalMap = new Map<number, string>(invoices.map((inv) => [inv.id, inv.grandTotal]));
-
-      // Map orderId → finalized date (date portion of finalizedAt, or orderDate fallback for legacy rows)
-      const invoiceFinalizedDateMap = new Map<number, string>(
-        invoices.map((inv) => {
-          const d: Date | null = inv.finalizedAt ?? null;
-          return [inv.id, d ? d.toISOString().slice(0, 10) : (inv.orderDate as string)];
-        })
-      );
-
-      // Get all balance history entries ordered by date
-      const rawBalanceRows = await db
-        .select()
-        .from(customerBalances)
-        .where(and(eq(customerBalances.companyId, companyId), eq(customerBalances.customerId, customerId)))
-        .orderBy(customerBalances.transactionDate, customerBalances.id);
-
-      const balanceRows = rawBalanceRows.map((row) => {
-        if (row.referenceType === "INVOICE" && row.referenceId) {
-          const overrides: Record<string, unknown> = {};
-          if (invoiceGrandTotalMap.has(row.referenceId)) {
-            const actualAmt = invoiceGrandTotalMap.get(row.referenceId)!;
-            overrides.debitAmount = actualAmt;
-            overrides.balance = actualAmt;
-          }
-          if (invoiceFinalizedDateMap.has(row.referenceId)) {
-            overrides.transactionDate = invoiceFinalizedDateMap.get(row.referenceId);
-          }
-          return { ...row, ...overrides };
-        }
-        return row;
-      });
-
-      // Also pull voucher entries for this customer (by ledgerAccountId or direct customerId link)
-      // to include manual accounting vouchers that don't flow through customerBalances.
-      // Exclude CHARGE-* vouchers (those are already included via invoices).
-      // Lines on the linked ledger plus customer-tagged lines with no other
-      // ledger — a customer-tagged line posted to another account belongs to
-      // that account (storage/accounting/customer-ledger-balance.ts). Only
-      // posted vouchers of this company count, dated by effective date.
-      const voucherRows = [];
-      const voucherConditions = customerVoucherLineFilter(customer);
-
-      const rawVoucherRows = await db
-        .select({
-          id: voucherEntries.id,
-          voucherId: voucherEntries.voucherId,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          voucherDate: sql<string>`${voucherBalanceDateSql}::text`,
-          description: vouchers.description,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          narration: voucherEntries.narration,
-          optional: vouchers.optional,
-        })
-        .from(voucherEntries)
-        .innerJoin(
-          vouchers,
-          and(
-            eq(voucherEntries.voucherId, vouchers.id),
-            postedVoucherInCompany(companyId),
-            sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-            sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
-          )
-        )
-        .where(voucherConditions)
-        .orderBy(voucherBalanceDateSql, voucherEntries.id);
-
-      // Convert to unified row format matching customerBalances shape
-      for (const ve of rawVoucherRows) {
-        if (ve.optional) continue; // optional vouchers don't affect the balance
-        voucherRows.push({
-          id: `ve-${ve.id}`,
-          customerId,
-          companyId,
-          transactionDate: ve.voucherDate,
-          transactionType: ve.voucherType || "VOUCHER",
-          referenceType: "VOUCHER",
-          referenceId: ve.voucherId,
-          referenceNumber: ve.voucherNumber,
-          description: ve.narration || ve.description || ve.voucherType,
-          debitAmount: ve.debitAmount ?? "0",
-          creditAmount: ve.creditAmount ?? "0",
-          balance: "0",
-          _fromVoucher: true,
-        });
-      }
-
-      // Merge customerBalances + voucher rows, sort by date then id
-      const allRows = [...balanceRows.map((r) => ({ ...r, _fromVoucher: false })), ...voucherRows].sort((a, b) => {
-        const da = (a.transactionDate || "").toString();
-        const db2 = (b.transactionDate || "").toString();
-        if (da < db2) return -1;
-        if (da > db2) return 1;
-        // same date: customerBalances rows first (they have numeric ids)
-        const ia = a._fromVoucher ? 1 : 0;
-        const ib = b._fromVoucher ? 1 : 0;
-        return ia - ib;
-      });
-
-      // Build running balance
-      const openingBalance = parseFloat(customer.openingBalance || "0");
-      const openingSide = customer.openingBalanceSide || "Dr";
-      let runningBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
-
-      const balanceHistory = allRows.map((row) => {
-        const debit = parseFloat(row.debitAmount || "0");
-        const credit = parseFloat(row.creditAmount || "0");
-        runningBalance += debit - credit;
-        const containerNumber =
-          row.referenceType === "INVOICE" && row.referenceId ? (containerByOrderId.get(row.referenceId) ?? null) : null;
-        const destination =
-          row.referenceType === "INVOICE" && row.referenceId
-            ? (destinationByOrderId.get(row.referenceId) ?? null)
-            : null;
-        const totalQtyBales =
-          row.referenceType === "INVOICE" && row.referenceId
-            ? (totalQtyBalesByOrderId.get(row.referenceId) ?? null)
-            : null;
-        const totalWeightKg =
-          row.referenceType === "INVOICE" && row.referenceId
-            ? (totalWeightKgByOrderId.get(row.referenceId) ?? null)
-            : null;
+      // Ledger rows from the balance engine plus the amounts not yet in the
+      // ledger as flagged memo rows (statementRows.ts). `runningBalance` and
+      // `currentBalance` keep the page's combined meaning (ledger + not in the
+      // ledger); `ledgerRunningBalance` / `ledgerBalance` are the ledger alone.
+      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const balanceHistory = withRunningBalances(statement).map(({ row, combined, ledger }) => {
+        const { ledgerEffect: _ledgerEffect, combinedEffect: _combinedEffect, ...rest } = row;
+        const orderId = row.referenceType === "INVOICE" ? row.referenceId : null;
         return {
-          ...row,
-          containerNumber,
-          destination,
-          totalQtyBales,
-          totalWeightKg,
-          runningBalance,
-          runningBalanceSide: runningBalance >= 0 ? "Dr" : "Cr",
+          ...rest,
+          containerNumber: orderId ? (containerByOrderId.get(orderId) ?? null) : null,
+          destination: orderId ? (destinationByOrderId.get(orderId) ?? null) : null,
+          totalQtyBales: orderId ? (totalQtyBalesByOrderId.get(orderId) ?? null) : null,
+          totalWeightKg: orderId ? (totalWeightKgByOrderId.get(orderId) ?? null) : null,
+          runningBalance: combined.toNumber(),
+          runningBalanceSide: combined.lessThan(0) ? "Cr" : "Dr",
+          ledgerRunningBalance: ledger.toNumber(),
+          ledgerRunningBalanceSide: ledger.lessThan(0) ? "Cr" : "Dr",
         };
       });
 
-      const currentBalance = Math.abs(runningBalance);
-      const currentBalanceSide = runningBalance >= 0 ? "Dr" : "Cr";
+      const combinedClosing = statement.ledgerClosing.plus(statement.notInLedgerTotal);
+      const currentBalance = combinedClosing.abs().toNumber();
+      const currentBalanceSide = combinedClosing.lessThan(0) ? "Cr" : "Dr";
+      const openingBalance = toMoney(customer.openingBalance).toNumber();
+      const openingSide = customer.openingBalanceSide || "Dr";
 
       res.json({
         customer,
@@ -221,6 +106,11 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         balanceHistory,
         currentBalance,
         currentBalanceSide,
+        balanceBasis: "ledger+notInLedger",
+        ledgerBalance: statement.ledgerClosing.abs().toNumber(),
+        ledgerBalanceSide: statement.ledgerClosing.lessThan(0) ? "Cr" : "Dr",
+        notInLedgerTotal: statement.notInLedgerTotal.toNumber(),
+        notInLedgerLabel: NOT_IN_LEDGER_LABEL,
         openingBalance,
         openingBalanceSide: openingSide,
       });

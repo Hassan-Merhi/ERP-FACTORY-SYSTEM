@@ -3,6 +3,7 @@
  *
  * Extracted from FactoryNetPosition.tsx during the Phase 4 god-file split.
  */
+import type { NotInLedgerSectionData } from "@/components/netposition/NotInLedgerCard";
 
 export interface BrokerBreakdownLine {
   label: string;
@@ -51,6 +52,8 @@ export interface NetPositionData {
   pendingTotal: number;
   verifiedTotal: number;
   loadingTotal: number;
+  /** Amounts not yet in the ledger: shown separately, never in the totals. */
+  notInLedger?: NotInLedgerSectionData;
 }
 
 export interface CustomViewAccount {

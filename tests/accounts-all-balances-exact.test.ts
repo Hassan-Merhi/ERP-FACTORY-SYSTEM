@@ -51,6 +51,11 @@ vi.mock("../server/db", () => {
   return { db: { select: () => ({ from: () => chain(rows) }) } };
 });
 
+// Customer-owned ledgers come from the balance engine (none here).
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalances: async () => ({ parties: [] }),
+}));
+
 import { serveAccountListForCompany } from "../server/routes/accounts/all";
 
 describe("account list balances", () => {

@@ -1,4 +1,9 @@
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import {
+  customerLedgerNetBefore,
+  loadCustomerNotInLedger,
+} from "../../services/accounting/balances/customerLedgerStatement";
+import { customerOwnedLinePredicate, liveVoucherPredicate } from "../../services/accounting/balances/partyLineRules";
 import {
   ContinuousCursorError,
   continuousCursorScope,
@@ -33,29 +38,17 @@ export async function runCustomerBalanceStatement(options: {
   continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
   const { customerId, companyId, pagination, dates, continuous } = options;
-  // The statement lists the customer's posted voucher lines under the shared
-  // ledger rules (storage/accounting/customer-ledger-balance.ts), so opening +
-  // these rows equals the balance /api/customers/stats and the voucher sidebar
-  // report. It used to list the customer_balances cache only, which misses
-  // voucher receipts and double-reads nothing the ledger already carries.
-  const customerResult = await pool.query<{ ledger_account_id: number | null }>(
-    `SELECT ledger_account_id FROM customers WHERE id = $1 AND company_id = $2`,
-    [customerId, companyId]
-  );
-  const ledgerAccountId = customerResult.rows[0]?.ledger_account_id ?? null;
-
+  // The statement lists the lines the balance engine attributes to the
+  // customer (services/accounting/balances/partyLineRules.ts), so opening +
+  // these rows equals the engine closing: the trial balance's customer row,
+  // /api/customers/stats and the voucher sidebar. Amounts not yet in the
+  // ledger come in a separate `notInLedger` section on the first page/chunk.
   const values: unknown[] = [customerId, companyId];
   const bindBase = (value: unknown): string => {
     values.push(value);
     return `$${values.length}`;
   };
-  const lineFilter =
-    ledgerAccountId !== null
-      ? `(ve.ledger_account_id = ${bindBase(ledgerAccountId)} OR (ve.customer_id = $1 AND ve.ledger_account_id IS NULL))`
-      : "ve.customer_id = $1";
-  const postedConditions = [lineFilter, "v.company_id = $2", "v.optional = false", "v.deleted_at IS NULL"];
-  const lineValues = [...values];
-  const conditions = [...postedConditions];
+  const conditions = [customerOwnedLinePredicate("ve", "$2", "$1"), liveVoucherPredicate("v", "$2")];
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bindBase(dates.rawStart)}::date`);
   }
@@ -96,22 +89,16 @@ export async function runCustomerBalanceStatement(options: {
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
 
-  const loadPrePeriodNet = async (): Promise<number> => {
-    if (!dates.rawStart) return 0;
-    const preValues = [...lineValues, dates.rawStart];
-    const preResult = await pool.query(
-      `SELECT COALESCE(
-         SUM(ve.debit_amount::numeric - ve.credit_amount::numeric),
-         0
-       )::text AS net
-       FROM voucher_entries ve
-       JOIN vouchers v ON v.id = ve.voucher_id
-       WHERE ${postedConditions.join(" AND ")}
-         AND COALESCE(v.effective_date::date, v.voucher_date::date) < $${preValues.length}::date`,
-      preValues
-    );
-    return Number(preResult.rows[0]?.net || "0") || 0;
-  };
+  // The engine's carried-forward movement before the period (0 without a start).
+  const loadPrePeriodNet = (): Promise<number> =>
+    customerLedgerNetBefore(db, companyId, customerId, dates.rawStart ?? null);
+  const loadNotInLedger = () =>
+    loadCustomerNotInLedger(db, {
+      companyId,
+      customerId,
+      from: dates.rawStart ?? null,
+      to: dates.effectiveEndDate,
+    });
 
   if (continuous) {
     const scope = continuousCursorScope("customer-statement", {
@@ -177,7 +164,7 @@ export async function runCustomerBalanceStatement(options: {
         meta,
       } satisfies CustomerCursor);
     }
-    return buildContinuousResponse({
+    const response = buildContinuousResponse({
       rows,
       summary: summaryFromContinuousMeta(meta),
       prePeriodNet: meta.prePeriodNet,
@@ -188,6 +175,7 @@ export async function runCustomerBalanceStatement(options: {
       hasMore,
       nextCursor,
     });
+    return cursor ? response : { ...response, notInLedger: await loadNotInLedger() };
   }
 
   const pageQuery = `WITH ${cte}
@@ -208,21 +196,25 @@ export async function runCustomerBalanceStatement(options: {
            LIMIT $${baseCount + 1}
          ) previous`;
 
-  const [pageResult, summaryResult, precedingResult, prePeriodNet] = await Promise.all([
+  const [pageResult, summaryResult, precedingResult, prePeriodNet, notInLedger] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
     pool.query(summaryQuery, values),
     precedingQuery
       ? pool.query(precedingQuery, [...values, pagination.offset])
       : Promise.resolve({ rows: [{ net: "0" }] }),
     loadPrePeriodNet(),
+    loadNotInLedger(),
   ]);
   const rows = pageResult.rows.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
-  return buildPageResponse(
-    rows,
-    summaryResult.rows[0],
-    Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
-    prePeriodNet,
-    pagination,
-    dates
-  );
+  return {
+    ...buildPageResponse(
+      rows,
+      summaryResult.rows[0],
+      Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+      prePeriodNet,
+      pagination,
+      dates
+    ),
+    notInLedger,
+  };
 }

@@ -1,5 +1,7 @@
-import { pool } from "../../db";
-import { computeCustomerLedgerBalances } from "../../storage/accounting/customer-ledger-balance";
+import { db, pool } from "../../db";
+import { getPartyBalances } from "../accounting/balances/ledgerBalanceEngine";
+import { customerOwnedLinePredicate } from "../accounting/balances/partyLineRules";
+import { toMoney } from "../../lib/money";
 
 export interface OverdueCustomerBalanceRow {
   id: number;
@@ -15,18 +17,15 @@ type OverdueCandidateRow = {
   legal_name: string;
   payment_terms_days: number;
   company_id: number;
-  ledger_account_id: number | null;
-  opening_balance: string | null;
-  opening_balance_side: string | null;
   earliest_invoice_date: string | Date | null;
 };
 
 /**
  * Customers with payment terms, and the earliest day they were charged: the
- * first posted voucher line that debits them (same line ownership as the
- * balance rules) or, for operational invoices not yet posted, the first debit
- * in the customer_balances cache. The balance itself comes from the ledger
- * rules in storage/accounting/customer-ledger-balance.ts, so a voucher receipt
+ * first posted voucher line that debits them (the balance engine's line
+ * ownership, partyLineRules.ts) or, for operational invoices not yet posted,
+ * the first debit in the customer_balances cache. The balance itself is the
+ * one balance engine's customer closing (ledger only), so a voucher receipt
  * reduces it and a null opening side counts as the customer default (Dr).
  */
 export const OVERDUE_CUSTOMER_CANDIDATES_SQL = `
@@ -35,9 +34,6 @@ export const OVERDUE_CUSTOMER_CANDIDATES_SQL = `
     c.legal_name,
     c.payment_terms_days,
     c.company_id,
-    c.ledger_account_id,
-    c.opening_balance,
-    c.opening_balance_side,
     LEAST(
       (
         SELECT MIN(COALESCE(v.effective_date, v.voucher_date))
@@ -47,10 +43,7 @@ export const OVERDUE_CUSTOMER_CANDIDATES_SQL = `
           AND v.optional = false
           AND v.deleted_at IS NULL
           AND COALESCE(ve.debit_amount, 0)::numeric > COALESCE(ve.credit_amount, 0)::numeric
-          AND (
-            (c.ledger_account_id IS NOT NULL AND ve.ledger_account_id = c.ledger_account_id)
-            OR (ve.customer_id = c.id AND (c.ledger_account_id IS NULL OR ve.ledger_account_id IS NULL))
-          )
+          AND ${customerOwnedLinePredicate("ve", "c.company_id", "c.id")}
       ),
       (
         SELECT MIN(cb.transaction_date)
@@ -77,17 +70,14 @@ export async function loadOverdueCustomerBalances(): Promise<OverdueCustomerBala
 
   const rows: OverdueCustomerBalanceRow[] = [];
   for (const [companyId, candidates] of byCompany) {
-    const balances = await computeCustomerLedgerBalances(
+    const { parties } = await getPartyBalances(db, {
       companyId,
-      candidates.map((c) => ({
-        id: c.id,
-        ledgerAccountId: c.ledger_account_id,
-        openingBalance: c.opening_balance,
-        openingBalanceSide: c.opening_balance_side,
-      }))
-    );
+      kind: "customer",
+      ids: candidates.map((c) => c.id),
+    });
+    const closing = new Map(parties.map((party) => [party.id, toMoney(party.closing)]));
     for (const candidate of candidates) {
-      const signed = balances.get(candidate.id)?.signed;
+      const signed = closing.get(candidate.id);
       if (!signed || !signed.greaterThan(0)) continue;
       rows.push({
         id: candidate.id,

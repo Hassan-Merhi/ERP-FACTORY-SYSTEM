@@ -130,8 +130,12 @@ export const customerService = {
         name: `${customer.legalName} - Customer Account`,
         accountType: "Asset",
         subType: "Accounts Receivable",
-        openingBalance: parsed.openingBalance || "0",
-        openingBalanceSide: parsed.openingBalanceSide || "Dr",
+        // The customer record owns the opening (owner rule 1): the balance
+        // engine counts customers.opening_balance once and ignores the linked
+        // ledger's own opening, so the new ledger starts at zero instead of a
+        // copy that every ledger-only reader used to add a second time.
+        openingBalance: "0",
+        openingBalanceSide: "Dr",
         active: true,
       });
       await storage.updateCustomer(customer.id, { ledgerAccountId: ledgerAccount.id });
@@ -172,49 +176,9 @@ export const customerService = {
       changes: customerChanges(existing, updated),
     });
 
-    if (updated.ledgerAccountId && (parsed.openingBalance !== undefined || parsed.openingBalanceSide !== undefined)) {
-      const ledgerUpdate: { openingBalance?: string; openingBalanceSide?: string } = {};
-      if (parsed.openingBalance !== undefined) ledgerUpdate.openingBalance = updated.openingBalance ?? "0";
-      if (parsed.openingBalanceSide !== undefined) {
-        ledgerUpdate.openingBalanceSide = updated.openingBalanceSide ?? "Dr";
-      }
-      if (Object.keys(ledgerUpdate).length > 0) {
-        await storage.updateLedgerAccount({ id: updated.ledgerAccountId, ...ledgerUpdate } as {
-          id: number;
-          active?: boolean | undefined;
-          deletedAt?: Date | null | undefined;
-          isHidden?: boolean | undefined;
-          companyId?: number | undefined;
-          code?: string | undefined;
-          name?: string | undefined;
-          accountType?:
-            | "Asset"
-            | "Liability"
-            | "Equity"
-            | "Income"
-            | "Expense"
-            | "Bank"
-            | "Cash"
-            | "Indirect Expense"
-            | "Direct Expense"
-            | "Government Taxes"
-            | "Loans"
-            | "Duty Agent"
-            | "Transporter Agent"
-            | "Accounts Payable"
-            | "Profit"
-            | undefined;
-          subType?: string | null | undefined;
-          openingBalance?: string | undefined;
-          openingBalanceSide?: "" | "Dr" | "Cr" | undefined;
-          openingBalanceNativeAmount?: string | null | undefined;
-          openingBalanceCurrency?: "USD" | "CFA" | null | undefined;
-          openingBalanceHistoricalRate?: string | null | undefined;
-          openingBalanceBaseAmount?: string | null | undefined;
-          parentId?: number | null | undefined;
-        });
-      }
-    }
+    // The customer record owns its opening (owner rule 1). It is no longer
+    // copied onto the linked ledger account, whose own opening the balance
+    // engine never counts.
 
     return updated;
   },

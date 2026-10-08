@@ -43,6 +43,13 @@ export interface NetPositionSupplierContext {
   asOf: string;
   round2: (n: number) => number;
   getConfigFx: (cc: string) => number;
+  /**
+   * Load only the container context (locked rates and containers) the
+   * inventory valuations need. The factory net position takes its supplier
+   * figures from the balance engine (wave 10); the balance part below is the
+   * Suppliers-page formula and is kept for comparison callers.
+   */
+  contextOnly?: boolean;
 }
 
 export interface NetPositionSupplierBalances {
@@ -86,6 +93,16 @@ export async function computeNetPositionSupplierBalances(
         sql`DATE(${factoryContainers.createdAt}) <= ${ctx.asOf}::date`
       )
     );
+
+  if (ctx.contextOnly) {
+    return {
+      supplierLockedRateMapNp,
+      allContainersF,
+      supplierItems: [],
+      totalSupplierLiabilities: 0,
+      totalSupplierOverpayments: 0,
+    };
+  }
 
   const allPaymentsF = await db
     .select()

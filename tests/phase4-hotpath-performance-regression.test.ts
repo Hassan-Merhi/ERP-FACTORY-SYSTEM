@@ -63,16 +63,14 @@ describe("Phase 4 hot-path performance regressions", () => {
   });
 
   it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {
-    // Wave 10: the aggregate moved to the shared customer ledger-balance module
-    // that getCustomersWithBalances and the other customer readers call.
+    // Wave 10: customer balances come from the one balance engine, which
+    // aggregates every line in one grouped PostgreSQL query.
     const wrapper = read("server/routes/customers/customerBalanceQuery.ts");
-    expect(wrapper).toContain("computeCustomerLedgerBalances");
-    const source = read("server/storage/accounting/customer-ledger-balance.ts");
+    expect(wrapper).toContain("getPartyBalances");
+    const source = read("server/services/accounting/balances/ledgerBalanceEngine.ts");
 
-    expect(source).toContain("netSql");
-    expect(source).toContain("baseNetSql");
-    expect(source).toContain(".groupBy(ve.ledgerAccountId)");
-    expect(source).toContain(".groupBy(ve.customerId)");
+    expect(source).toContain("GROUP BY a.kind, a.target_id");
+    expect(source).toContain("base_movement");
     expect(source).not.toContain("for (const entry of ledgerEntries)");
     expect(source).not.toContain("for (const entry of customerEntries)");
   });

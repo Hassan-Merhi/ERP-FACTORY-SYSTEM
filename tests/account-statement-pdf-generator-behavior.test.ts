@@ -40,9 +40,15 @@ vi.mock("../server/storage", () => ({
   },
 }));
 vi.mock("../server/lib/factoryCustomerLedger", () => ({
-  buildFactoryCustomerLedgerEntries: vi.fn(async () => []),
   getCustomerByLedgerId: vi.fn(async () => null),
-  getFactoryCustomerLedgerPrePeriodTotals: vi.fn(async () => ({ debit: 0, credit: 0 })),
+}));
+// Wave 10: a customer statement is the customer's ledger lines on the balance
+// engine (no longer the customer_balances cache), opened at the engine opening.
+vi.mock("../server/services/accounting/balances/customerLedgerStatement", () => ({
+  loadCustomerLedgerLines: vi.fn(async () => harness.customerStatement),
+}));
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalance: vi.fn(async () => ({ opening: "200.00" })),
 }));
 vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
   isParentCompanyContext: vi.fn(async () => true),
@@ -202,21 +208,23 @@ describe("account statement PDF generator behavior", () => {
     harness.customerStatement.push(
       {
         id: 1,
-        referenceId: 44,
-        referenceType: "SALE",
-        transactionType: "Sales",
-        transactionDate: "2026-08-07",
-        description: "فاتورة مبيعات",
+        voucherId: 44,
+        voucherNumber: "SALE-44",
+        voucherType: "Sales",
+        voucherDate: "2026-08-07",
+        voucherDescription: "فاتورة مبيعات",
+        narration: "فاتورة مبيعات",
         debitAmount: "1250",
         creditAmount: "0",
       },
       {
         id: 2,
-        referenceId: 45,
-        referenceType: "RECEIPT",
-        transactionType: "Receipt",
-        transactionDate: "2026-08-08",
-        description: "دفعة نقدية",
+        voucherId: 45,
+        voucherNumber: "RECEIPT-45",
+        voucherType: "Receipt",
+        voucherDate: "2026-08-08",
+        voucherDescription: "دفعة نقدية",
+        narration: "دفعة نقدية",
         debitAmount: "0",
         creditAmount: "500",
       }

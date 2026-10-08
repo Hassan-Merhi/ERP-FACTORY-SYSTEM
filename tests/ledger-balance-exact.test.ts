@@ -29,6 +29,9 @@ vi.mock("../server/db", async () => {
   return { db: { select: () => ({ from: (table: never) => chain(rows[getTableName(table)] ?? []) }) } };
 });
 
+// Wave 10: a customer-owned ledger is answered by the balance engine; none owns this one.
+vi.mock("../server/lib/factoryCustomerLedger", () => ({ getCustomerByLedgerId: async () => null }));
+
 import { registerAccountLedgerBalanceRoutes } from "../server/routes/accounts/ledger-balance";
 
 describe("ledger balance", () => {

@@ -17,15 +17,17 @@
  *   3. Balances come from the ledger only: posted base amounts
  *      (debit_amount / credit_amount, USD) of vouchers of the company that are
  *      neither optional nor soft-deleted. Unposted operational amounts are not
- *      balances; they will be attached as memo lines (`memoLines`), never
- *      mixed into `closing`.
+ *      balances; with `memo: true` they are attached as labelled memo lines
+ *      (`memoLines`, `memoTotal`, see unpostedMemo.ts), never mixed into
+ *      `closing`.
  *   4. A line belongs to its voucher's company (vouchers.company_id). A line on
  *      a ledger account that does not exist in that company is reported as
  *      `missingAccount`, never folded into another company's account.
  *
- * Attribution: each line goes to exactly one row, by target priority
- * ledger > bank > fixed asset > supplier > employee > factory supplier >
- * customer. A line on a ledger account linked to a customer goes to that
+ * Attribution (defined once in partyLineRules.ts, which the statements use
+ * to list the same lines): each line goes to exactly one row, by target
+ * priority ledger > bank > fixed asset > supplier > employee > factory
+ * supplier > customer. A line on a ledger account linked to a customer goes to that
  * customer (the account has no row of its own), so a customer's balance is its
  * opening + the lines on its linked ledger + its customer_id lines that name no
  * other target, each line counted once. Where several customers link the same
@@ -46,6 +48,8 @@ import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { customerLinksBody, intLiteral, noNonCustomerTarget } from "./partyLineRules";
+import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
 
 export const PARTY_BALANCE_KINDS = [
   "ledger",
@@ -71,16 +75,11 @@ export function liveVouchersOf(companyId: number, asOf: string | null | undefine
 
 /**
  * Ledger accounts linked to a customer of the company, one owner per account
- * (rule 1 and the attribution above). A CTE body named `customer_links`.
+ * (rule 1 and the attribution above). A CTE body named `customer_links`,
+ * defined once in partyLineRules.ts so the statements select the same lines.
  */
 function customerLinksCte(companyId: number): SQL {
-  return sql`customer_links AS (
-    SELECT DISTINCT ON (c.ledger_account_id) c.ledger_account_id, c.id AS customer_id
-      FROM customers c
-      JOIN ledger_accounts la ON la.id = c.ledger_account_id AND la.company_id = c.company_id
-     WHERE c.company_id = ${companyId}
-     ORDER BY c.ledger_account_id, c.id
-  )`;
+  return sql.raw(`customer_links AS (${customerLinksBody(intLiteral(companyId))})`);
 }
 
 export interface BalanceScope {
@@ -113,6 +112,11 @@ export interface BalanceRow {
   carriedForward: Decimal;
   periodDebit: Decimal;
   periodCredit: Decimal;
+  /**
+   * Net historical base amounts (base_debit/base_credit, falling back to
+   * debit/credit) of every line up to `asOf`, before and inside the period.
+   */
+  baseMovement: Decimal;
 }
 
 interface RawLineRow {
@@ -121,6 +125,7 @@ interface RawLineRow {
   carried: string | null;
   period_debit: string | null;
   period_credit: string | null;
+  base_movement: string | null;
 }
 
 interface RawOpeningRow {
@@ -163,6 +168,8 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
       SELECT ve.ledger_account_id, ve.bank_account_id, ve.fixed_asset_id, ve.supplier_id, ve.employee_id,
              ve.factory_supplier_id, ve.customer_id,
              COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0) AS net,
+             COALESCE(ve.base_debit_amount, ve.debit_amount, 0) - COALESCE(ve.base_credit_amount, ve.credit_amount, 0)
+               AS base_net,
              ${VOUCHER_BOOKED_ON} AS booked_on
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
@@ -178,7 +185,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
           WHEN p.supplier_id IS NOT NULL THEN 'supplier'
           WHEN p.employee_id IS NOT NULL THEN 'employee'
           WHEN p.factory_supplier_id IS NOT NULL THEN 'factorySupplier'
-          WHEN p.customer_id IS NOT NULL THEN 'customer'
+          WHEN p.customer_id IS NOT NULL AND ${sql.raw(noNonCustomerTarget("p"))} THEN 'customer'
           ELSE 'unassigned'
         END AS kind,
         CASE
@@ -186,7 +193,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
           ELSE COALESCE(p.ledger_account_id, p.bank_account_id, p.fixed_asset_id, p.supplier_id, p.employee_id,
                         p.factory_supplier_id, p.customer_id)
         END AS target_id,
-        p.net, p.booked_on
+        p.net, p.base_net, p.booked_on
       FROM posted p
       LEFT JOIN ledger_accounts la ON la.id = p.ledger_account_id AND la.company_id = ${companyId}
       LEFT JOIN customer_links cl ON cl.ledger_account_id = la.id
@@ -194,7 +201,8 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
     SELECT a.kind, a.target_id,
            COALESCE(SUM(a.net) FILTER (WHERE ${beforeFrom}), 0)::text AS carried,
            COALESCE(SUM(GREATEST(a.net, 0)) FILTER (WHERE ${inPeriod}), 0)::text AS period_debit,
-           COALESCE(SUM(GREATEST(-a.net, 0)) FILTER (WHERE ${inPeriod}), 0)::text AS period_credit
+           COALESCE(SUM(GREATEST(-a.net, 0)) FILTER (WHERE ${inPeriod}), 0)::text AS period_credit,
+           COALESCE(SUM(a.base_net), 0)::text AS base_movement
       FROM attributed a
      WHERE ${scopeFilter(scope, sql`a.kind`, sql`a.target_id`)}
      GROUP BY a.kind, a.target_id
@@ -279,6 +287,7 @@ export async function loadBalanceRows(executor: DatabaseOrTransaction, scope: Ba
       carriedForward: ZERO,
       periodDebit: ZERO,
       periodCredit: ZERO,
+      baseMovement: ZERO,
     });
   }
   for (const line of lines) {
@@ -298,28 +307,19 @@ export async function loadBalanceRows(executor: DatabaseOrTransaction, scope: Ba
         carriedForward: ZERO,
         periodDebit: ZERO,
         periodCredit: ZERO,
+        baseMovement: ZERO,
       };
       rows.set(k, entry);
     }
     entry.carriedForward = entry.carriedForward.plus(toMoney(line.carried));
     entry.periodDebit = entry.periodDebit.plus(toMoney(line.period_debit));
     entry.periodCredit = entry.periodCredit.plus(toMoney(line.period_credit));
+    entry.baseMovement = entry.baseMovement.plus(toMoney(line.base_movement));
   }
   return [...rows.values()];
 }
 
-/**
- * An amount that is not on the ledger but belongs next to a party's balance
- * (an unposted invoice, an operational table's figure). Never part of
- * `closing`. Not produced yet: a later wave attaches them.
- */
-export interface PartyBalanceMemoLine {
-  source: string;
-  reference: string | null;
-  /** Debit positive. */
-  amount: string;
-  note: string | null;
-}
+export type { PartyBalanceMemoLine } from "./unpostedMemo";
 
 /** A party's ledger balance. Amounts are 2-decimal strings, debit positive. */
 export interface PartyBalance {
@@ -340,8 +340,17 @@ export interface PartyBalance {
   periodCredit: string;
   /** opening + periodDebit − periodCredit. */
   closing: string;
+  /** masterOpening + historical base amounts of every line up to `asOf` (USD at posting rates). */
+  historicalBaseClosing: string;
   openingSideAssumed: boolean;
+  /**
+   * Amounts that are not in the ledger yet (owner rule 3), dated on or before
+   * `asOf`: listed only when the query asks for them (`memo: true`), never
+   * part of `closing`.
+   */
   memoLines: PartyBalanceMemoLine[];
+  /** Sum of memoLines (debit positive), reported next to `closing`, never in it. */
+  memoTotal: string;
 }
 
 export interface PartyBalanceQuery {
@@ -352,6 +361,8 @@ export interface PartyBalanceQuery {
   asOf?: string | null;
   /** Inclusive start of the period; omitted for opening-to-date. */
   from?: string | null;
+  /** Attach the "not yet in the ledger" memo lines (customers and factory suppliers). */
+  memo?: boolean;
 }
 
 export interface PartyBalanceResult {
@@ -382,8 +393,10 @@ export function toPartyBalance(row: BalanceRow): PartyBalance {
     periodDebit: money(row.periodDebit),
     periodCredit: money(row.periodCredit),
     closing: money(opening.plus(row.periodDebit).minus(row.periodCredit)),
+    historicalBaseClosing: money(row.masterOpening.plus(row.baseMovement)),
     openingSideAssumed: row.openingSideAssumed,
     memoLines: [],
+    memoTotal: "0.00",
   };
 }
 
@@ -404,6 +417,9 @@ export async function getPartyBalances(
   const parties = rows
     .map(toPartyBalance)
     .sort((a, b) => (a.code ?? a.name).localeCompare(b.code ?? b.name) || (a.id ?? 0) - (b.id ?? 0));
+  if (query.memo && (query.kind === "customer" || query.kind === "factorySupplier")) {
+    await attachMemoLines(executor, query, query.kind, parties);
+  }
   return {
     companyId: query.companyId,
     kind: query.kind,
@@ -411,6 +427,21 @@ export async function getPartyBalances(
     period: { from: query.from ?? null, to: query.asOf ?? null },
     parties,
   };
+}
+
+async function attachMemoLines(
+  executor: DatabaseOrTransaction,
+  query: PartyBalanceQuery,
+  kind: MemoPartyKind,
+  parties: PartyBalance[]
+): Promise<void> {
+  const ids = parties.map((party) => party.id).filter((id): id is number => id !== null);
+  const memo = await loadPartyMemoLines(executor, { companyId: query.companyId, kind, ids, asOf: query.asOf });
+  for (const party of parties) {
+    const lines = party.id === null ? [] : (memo.get(party.id) ?? []);
+    party.memoLines = lines;
+    party.memoTotal = memoTotal(lines).toFixed(2);
+  }
 }
 
 /** Convenience for one party; null when it has neither a master record nor lines. */

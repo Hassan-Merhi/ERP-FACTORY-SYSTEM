@@ -8,18 +8,13 @@
 
 import { db, type RawQueryRow } from "../db";
 import { storage } from "../storage";
-import { locations, employees, containers } from "@shared/schema";
+import { locations, containers } from "@shared/schema";
 import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
 import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../netPositionHelper";
 import { calculateHistoricalLocationInventory } from "../routes/_helpers";
-import { getSupplierPartnerCustomerNetPosition } from "./supplierPartnerCustomerNetPosition";
+import { loadNetPositionParties, type NotInLedgerSection } from "../services/accounting/balances/netPositionParties";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
-import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
-import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
-import { toMoney } from "../lib/money";
-import { loadPartyOpeningSides } from "../routes/helpers/partyOpeningSide";
 
 /**
  * The two grouped balance projections read below.
@@ -36,11 +31,6 @@ interface GroupedBalanceRow {
 
 interface LedgerBalanceRow extends GroupedBalanceRow {
   ledger_account_id: number | string | null;
-}
-
-interface PartyBalanceRow extends GroupedBalanceRow {
-  supplier_id: number | string | null;
-  employee_id: number | string | null;
 }
 
 function groupedAmounts(row: GroupedBalanceRow): { debit: number; credit: number } {
@@ -64,6 +54,8 @@ export interface NetPositionSnapshot {
   netPositionLabel: string;
   forUsLines: NetPositionLineItem[];
   onUsLines: NetPositionLineItem[];
+  /** Amounts not yet in the ledger: shown separately, never part of the totals (wave 10). */
+  notInLedger?: NotInLedgerSection;
 }
 
 export async function calculateNetPositionAsOf(
@@ -74,14 +66,11 @@ export async function calculateNetPositionAsOf(
   const companyRow = await storage.getCompanyById(companyId);
   const isSupplierPartner = companyRow?.companyType === "supplier_partner";
 
-  // Two separate aggregation queries — same rationale as the net-profit route:
-  //
-  //   acctGrouped  — filters by ACCOUNT's company_id so that ledger accounts
-  //                  migrated between companies show their full balance in the
-  //                  destination company even when their vouchers weren't moved.
-  //
-  //   suppGrouped  — filters by VOUCHER's company_id for supplier/employee
-  //                  balances, which are always booked to the voucher's company.
+  // Ledger accounts: filtered by the ACCOUNT's company_id so that ledger
+  // accounts migrated between companies show their full balance in the
+  // destination company even when their vouchers weren't moved (same rationale
+  // as the net-profit route). Vouchers count from
+  // COALESCE(effective_date, voucher_date), as in the balance engine.
   const loadAccountBalances = async () => {
     try {
       return await db.execute<RawQueryRow<LedgerBalanceRow>>(sql`
@@ -95,7 +84,7 @@ export async function calculateNetPositionAsOf(
         WHERE la.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
-          AND v.voucher_date <= ${toDate}
+          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
         GROUP BY ve.ledger_account_id
       `);
     } catch {
@@ -110,57 +99,28 @@ export async function calculateNetPositionAsOf(
         WHERE la.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
-          AND v.voucher_date <= ${toDate}
+          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
         GROUP BY ve.ledger_account_id
       `);
     }
   };
 
-  // Supplier and employee lines: every line nets debit − credit (a supplier
-  // line carrying both a debit and a credit is netted, not dropped), counted
-  // from COALESCE(effective_date, voucher_date).
-  const loadPartyBalances = async () => {
-    try {
-      return await db.execute<RawQueryRow<PartyBalanceRow>>(sql`
-        SELECT
-          ve.supplier_id,
-          ve.employee_id,
-          SUM(COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric) AS total_debit,
-          SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit
-        FROM voucher_entries ve
-        INNER JOIN vouchers v ON ve.voucher_id = v.id
-        WHERE v.company_id = ${companyId}
-          AND v.optional = false
-          AND v.deleted_at IS NULL
-          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
-          AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
-        GROUP BY ve.supplier_id, ve.employee_id
-      `);
-    } catch {
-      return db.execute<RawQueryRow<PartyBalanceRow>>(sql`
-        SELECT
-          ve.supplier_id,
-          ve.employee_id,
-          SUM(ve.debit_amount::numeric) AS total_debit,
-          SUM(ve.credit_amount::numeric) AS total_credit
-        FROM voucher_entries ve
-        INNER JOIN vouchers v ON ve.voucher_id = v.id
-        WHERE v.company_id = ${companyId}
-          AND v.optional = false
-          AND v.deleted_at IS NULL
-          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
-          AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
-        GROUP BY ve.supplier_id, ve.employee_id
-      `);
-    }
-  };
-
-  const [acctGrouped, suppGrouped] = await Promise.all([loadAccountBalances(), loadPartyBalances()]);
+  const [acctGrouped, parties] = await Promise.all([
+    loadAccountBalances(),
+    // Customers, suppliers and employees come from the one balance engine
+    // (services/accounting/balances/netPositionParties.ts); supplier-partner
+    // companies exclude customers by design.
+    loadNetPositionParties(companyId, {
+      asOf: toDate,
+      customers: !isSupplierPartner,
+      suppliers: companyRow?.parentCompanyId == null,
+      factorySuppliers: false,
+      employees: "erp",
+      codes: "erp",
+    }),
+  ]);
 
   const accountBalances = new Map<number, { debit: number; credit: number }>();
-  const supplierBalances = new Map<number, { debit: number; credit: number }>();
-  const employeeBalances = new Map<number, { debit: number; credit: number }>();
-
   for (const row of acctGrouped.rows) {
     const { debit, credit } = groupedAmounts(row);
     const id = toPositiveInteger(row.ledger_account_id);
@@ -169,49 +129,32 @@ export async function calculateNetPositionAsOf(
       accountBalances.set(id, { debit: cur.debit + debit, credit: cur.credit + credit });
     }
   }
-  for (const row of suppGrouped.rows) {
-    const { debit, credit } = groupedAmounts(row);
-    const supplierId = toPositiveInteger(row.supplier_id);
-    if (supplierId !== undefined) {
-      const cur = supplierBalances.get(supplierId) || { debit: 0, credit: 0 };
-      supplierBalances.set(supplierId, { debit: cur.debit + debit, credit: cur.credit + credit });
-    }
-    const employeeId = toPositiveInteger(row.employee_id);
-    if (employeeId !== undefined) {
-      const cur = employeeBalances.get(employeeId) || { debit: 0, credit: 0 };
-      employeeBalances.set(employeeId, { debit: cur.debit + debit, credit: cur.credit + credit });
-    }
-  }
 
   // Match the live dashboard: supplier balances are delegated only by an
   // explicit per-company parent link. A standalone ERP company still owns and
   // reports its suppliers even when some unrelated global parent exists.
   const shouldIncludeSuppliers = companyRow?.parentCompanyId == null;
-  const supplierPartnerCustomerPosition = isSupplierPartner
-    ? await getSupplierPartnerCustomerNetPosition(companyId, toDate)
-    : null;
 
-  // SP formula: What We Have = Cash + Customer A/R + SP-HADI-IC receivable (Hadi holds the cash on SP's behalf);
-  // What We Owe = Supplier Cash Payable plus Loan/Loans balances.
+  // SP formula: What We Have = Cash + SP-HADI-IC receivable (Hadi holds the cash on SP's behalf);
+  // What We Owe = Supplier Cash Payable plus Loan/Loans balances. Customers are excluded by design.
   // sp_hadi_intercompany is included so that when cash is transferred to Hadi via interco POS
   // transfer, the receivable offsets the supplier payable and Net Position stays at 0.
   // All other SP ledger accounts (OTW, prepaid, clearing, etc.) are excluded.
   // For non-SP companies, the generic exclusion of internal sp_stock / sp_cost_clearing applies.
-  const accountsForClassify = isSupplierPartner
-    ? companyAccounts.filter(
-        (a) =>
-          a.accountType === "Cash" ||
-          a.accountType === "Loan" ||
-          a.accountType === "Loans" ||
-          ((a.accountType === "Customer" ||
-            a.subType === "Accounts Receivable" ||
-            (a.code || "").toUpperCase().startsWith("CUST-") ||
-            (a.name || "").toLowerCase().includes("customer account")) &&
-            !supplierPartnerCustomerPosition?.ledgerAccountIds.has(a.id)) ||
-          a.subType === "sp_payable" ||
-          a.subType === "sp_hadi_intercompany"
-      )
-    : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing");
+  // Ledger accounts a customer owns are left out everywhere: the engine rolls them
+  // into the customer, whose line comes from loadNetPositionParties.
+  const accountsForClassify = (
+    isSupplierPartner
+      ? companyAccounts.filter(
+          (a) =>
+            a.accountType === "Cash" ||
+            a.accountType === "Loan" ||
+            a.accountType === "Loans" ||
+            a.subType === "sp_payable" ||
+            a.subType === "sp_hadi_intercompany"
+        )
+      : companyAccounts.filter((a) => a.subType !== "sp_stock" && a.subType !== "sp_cost_clearing")
+  ).filter((a) => !parties.customerLedgerIds.has(a.id));
   // Perpetual inventory (wave 8.5): from the cut-over the ledger carries the stock.
   const ledgerStock = !isSupplierPartner && (await ledgerCarriesStock(companyId, toDate));
   const classified = classifyNetPositionAccounts(accountsForClassify, accountBalances, {
@@ -236,18 +179,25 @@ export async function calculateNetPositionAsOf(
     side: "onUs",
   }));
 
-  if (supplierPartnerCustomerPosition) {
-    for (const customer of supplierPartnerCustomerPosition.items) {
-      const value = round2(Math.abs(customer.signedBalance));
-      if (customer.signedBalance > 0) {
-        forUsTotal = round2(forUsTotal + value);
-        forUsLines.push({ label: customer.name, value, category: "Asset", side: "forUs" });
-      } else {
-        onUsTotal = round2(onUsTotal + value);
-        onUsLines.push({ label: customer.name, value, category: "Liability", side: "onUs" });
-      }
-    }
+  // ── Customers, suppliers and employees (balance engine) ──────────────
+  for (const line of parties.forUs) {
+    const label = line.partyKind === "supplier" ? `Supplier Credit: ${line.name}` : line.name;
+    const category = line.partyKind === "supplier" ? "Supplier Credits" : line.category;
+    forUsLines.push({ label, value: line.value, category, side: "forUs" });
   }
+  let supplierTotal = 0;
+  for (const line of parties.onUs) {
+    if (line.partyKind === "supplier") {
+      supplierTotal = round2(supplierTotal + line.value);
+      continue;
+    }
+    onUsLines.push({ label: line.name, value: line.value, category: line.category, side: "onUs" });
+  }
+  if (supplierTotal > 0) {
+    onUsLines.push({ label: "Supplier Payables", value: supplierTotal, category: "Payables", side: "onUs" });
+  }
+  forUsTotal += parties.forUsTotal;
+  onUsTotal += parties.onUsTotal;
 
   // ── Stock on floor ────────────────────────────────────────────────────
   const activeLocationsData = await db
@@ -281,104 +231,6 @@ export async function calculateNetPositionAsOf(
       category: "Inventory",
       side: "forUs",
     });
-  }
-
-  // ── Employee advances / liabilities ──────────────────────────────────
-  const companyEmployees = await db
-    .select({
-      id: employees.id,
-      employeeType: employees.employeeType,
-      openingBalance: employees.openingBalance,
-      openingBalanceSide: sql<string>`COALESCE(opening_balance_side, 'Cr')`,
-    })
-    .from(employees)
-    .where(and(eq(employees.companyId, companyId), isNull(employees.deletedAt)))
-    .execute();
-
-  // Inactive people can still carry receivables/payables, so deactivation
-  // must not erase an accounting position. Keep ERP Employees and Workers
-  // separated exactly like the live dashboard.
-  const managedSalaryAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, toDate);
-  const payrollPosition = computeEmployeeWorkerNetPosition(companyEmployees, employeeBalances, managedSalaryAdvances);
-  const employeePosition = payrollPosition.employees;
-  const payrollWorkerIds = new Set(
-    companyEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
-  );
-
-  // Historical exports do not have a historical employees.currentBalance snapshot,
-  // so reconstruct Employee payroll from the dated subledger and net it into one
-  // control account. Worker advances stay table-driven, matching the live dashboard.
-  const payrollSigned = round2(employeePosition.liabilities - employeePosition.advances);
-  const payrollPayable = Math.max(0, payrollSigned);
-  const payrollOverpayment = Math.max(0, -payrollSigned);
-  const workerAdvances = round2(
-    managedSalaryAdvances
-      .filter((advance) => payrollWorkerIds.has(advance.employeeId))
-      .reduce((sum, advance) => sum + advance.remainingBalance, 0)
-  );
-
-  forUsTotal += payrollOverpayment + workerAdvances;
-  onUsTotal += payrollPayable;
-
-  if (payrollOverpayment > 0) {
-    forUsLines.push({
-      label: "Payroll Overpayment",
-      value: payrollOverpayment,
-      category: "Payroll",
-      side: "forUs",
-    });
-  }
-  if (workerAdvances > 0) {
-    forUsLines.push({
-      label: "Worker Advances (Prepaid)",
-      value: workerAdvances,
-      category: "Worker Advances",
-      side: "forUs",
-    });
-  }
-  if (payrollPayable > 0) {
-    onUsLines.push({
-      label: "Payroll Payable",
-      value: payrollPayable,
-      category: "Payroll",
-      side: "onUs",
-    });
-  }
-
-  // ── Supplier balances ─────────────────────────────────────────────────
-  if (shouldIncludeSuppliers) {
-    const allSuppliers = await db
-      .select()
-      .from(companyScopedSuppliers)
-      .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
-      .execute();
-    const supplierOpeningSides = await loadPartyOpeningSides(
-      "suppliers",
-      allSuppliers.map((sup) => sup.id)
-    );
-    let supplierTotal = 0;
-    for (const sup of allSuppliers) {
-      const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-      // Cr positive; the opening follows suppliers.opening_balance_side (null → Cr).
-      const openingAmount = toMoney(sup.openingBalance);
-      const opening = supplierOpeningSides.get(sup.id) === "Dr" ? openingAmount.negated() : openingAmount;
-      const netBalance = opening.plus(balance.credit).minus(balance.debit).toNumber();
-      if (netBalance > 0) {
-        onUsTotal += netBalance;
-        supplierTotal += netBalance;
-      } else if (netBalance < 0) {
-        forUsTotal += Math.abs(netBalance);
-        forUsLines.push({
-          label: `Supplier Credit: ${sup.legalName}`,
-          value: round2(Math.abs(netBalance)),
-          category: "Supplier Credits",
-          side: "forUs",
-        });
-      }
-    }
-    if (supplierTotal > 0) {
-      onUsLines.push({ label: "Supplier Payables", value: round2(supplierTotal), category: "Payables", side: "onUs" });
-    }
   }
 
   // ── Stock OTW ─────────────────────────────────────────────────────────
@@ -421,5 +273,6 @@ export async function calculateNetPositionAsOf(
     netPositionLabel: netPosition >= 0 ? "We Have More" : "We Owe More",
     forUsLines,
     onUsLines,
+    notInLedger: parties.notInLedger,
   };
 }

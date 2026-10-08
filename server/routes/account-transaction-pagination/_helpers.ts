@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { getClientDate } from "../../lib/dateUtils";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
+import type { NotInLedgerSection } from "../../services/accounting/balances/customerLedgerStatement";
 
 export const DEFAULT_PAGE_SIZE = 100;
 export const MAX_PAGE_SIZE = 250;
@@ -47,15 +48,6 @@ export type CustomerCursor = {
   meta: ContinuousStatementMeta;
 };
 
-export type FactoryCustomerCursor = {
-  sortDate: string;
-  voucherNumber: string;
-  sourceRank: number;
-  sourceId: number;
-  net: number;
-  meta: ContinuousStatementMeta;
-};
-
 export type StatementSummary = {
   total?: unknown;
   debitTotal?: unknown;
@@ -87,6 +79,8 @@ export interface StatementPage {
   chunkOpeningNet?: number;
   hasMore?: boolean;
   nextCursor?: string | null;
+  /** Customer statements: amounts not yet in the ledger, never part of the rows or totals. */
+  notInLedger?: NotInLedgerSection;
 }
 
 export function wantsContinuous(req: Request): boolean {
@@ -296,20 +290,6 @@ export function isCustomerCursor(value: unknown): value is CustomerCursor {
     typeof cursor.sortDate === "string" &&
     ISO_DATE.test(cursor.sortDate) &&
     Number.isInteger(cursor.sortId) &&
-    Number.isFinite(cursor.net) &&
-    isContinuousStatementMeta(cursor.meta)
-  );
-}
-
-export function isFactoryCustomerCursor(value: unknown): value is FactoryCustomerCursor {
-  if (!value || typeof value !== "object") return false;
-  const cursor = value as Partial<FactoryCustomerCursor>;
-  return (
-    typeof cursor.sortDate === "string" &&
-    ISO_DATE.test(cursor.sortDate) &&
-    typeof cursor.voucherNumber === "string" &&
-    Number.isInteger(cursor.sourceRank) &&
-    Number.isInteger(cursor.sourceId) &&
     Number.isFinite(cursor.net) &&
     isContinuousStatementMeta(cursor.meta)
   );

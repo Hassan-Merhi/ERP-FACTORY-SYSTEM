@@ -31,14 +31,12 @@ describe("tracking continuous-list cleanup", () => {
     const route = [
       "server/routes/account-transaction-pagination/voucherEntryStatement.ts",
       "server/routes/account-transaction-pagination/customerBalanceStatement.ts",
-      "server/routes/account-transaction-pagination/factoryCustomerLedgerStatement.ts",
     ]
       .map((modulePath) => source(modulePath))
       .join("\n");
 
     expect(route).toContain("account-statement-cursor-row-invalid");
     expect(route).toContain("customer-statement-cursor-row-invalid");
-    expect(route).toContain("factory-customer-cursor-row-invalid");
     expect(route).not.toContain("Unable to build account statement cursor");
   });
 

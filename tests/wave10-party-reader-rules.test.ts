@@ -396,18 +396,23 @@ describe("customer ledger readers", () => {
     const byId = new Map(rows.map((row) => [row.id, row]));
     // 100 opening + 300 invoice − 50 receipt; not the optional 1000, deleted 70 or stray 20.
     expect(byId.get(custLinked)).toMatchObject({ balance: 350, balanceSide: "Dr" });
-    // Unlinked: every customer-tagged line, on any ledger: 80 − 30.
-    expect(byId.get(custUnlinked)).toMatchObject({ balance: 50, balanceSide: "Dr" });
+    // Unlinked: the balance engine's rule (wave 10 part 2) — a customer owns its
+    // customer-tagged lines that name no other target. The 80 charged on the
+    // STRAY ledger is that ledger's line (counted once, under STRAY), so the
+    // customer is −30: the 30 receipt. (Part 1 counted the 80 for the
+    // customer as well, i.e. twice across the trial balance.)
+    expect(byId.get(custUnlinked)).toMatchObject({ balance: 30, balanceSide: "Cr" });
     expect(byId.get(custCrOpening)).toMatchObject({ balance: 40, balanceSide: "Cr" });
   });
 
   it("includes voucher receipts in the readers that used the customer_balances cache", async () => {
-    // The cache alone says 80.
-    expect(await getCustomerBalance(custUnlinked, erpCompanyId)).toBe(50);
+    // The cache alone says 80; the ledger (engine) says −30 (see above).
+    expect(await getCustomerBalance(custUnlinked, erpCompanyId)).toBe(-30);
 
+    // In credit, so no overdue reminder; the linked customer (350 Dr) has none
+    // either (no payment terms).
     const overdue = (await loadOverdueCustomerBalances()).find((row) => row.id === custUnlinked);
-    expect(overdue).toMatchObject({ company_id: erpCompanyId, net_balance: "50.00" });
-    expect(overdue?.earliest_invoice_date).toBeTruthy();
+    expect(overdue).toBeUndefined();
 
     const page = await runCustomerBalanceStatement({
       customerId: custUnlinked,
@@ -417,7 +422,9 @@ describe("customer ledger readers", () => {
     });
     expect(page.transactions).toHaveLength(1);
     expect(page.transactions[0]).toMatchObject({ creditAmount: "30.00" });
-    expect(page).toMatchObject({ preNetBalance: 80, closingNetBalance: 50 });
+    expect(page).toMatchObject({ preNetBalance: 0, closingNetBalance: -30 });
+    // The CONTAINER_SALE cache row was posted as a voucher: not a memo line.
+    expect(page.notInLedger?.rows).toEqual([]);
   });
 });
 
@@ -489,10 +496,11 @@ describe("pre-period balance", () => {
   it("honours employee and customer opening sides", async () => {
     // Dr positive: an employee who owes us 25 is +25 (it was −25 before).
     expect((await preBalance("employee", employeeDrOpening)).body).toEqual({ balance: 25 });
+    // Customers also report what is not yet in the ledger before endDate (wave 10).
     // A Cr customer opening is −40 (it was +40).
-    expect((await preBalance("customer", custCrOpening)).body).toEqual({ balance: -40 });
+    expect((await preBalance("customer", custCrOpening)).body).toEqual({ balance: -40, notInLedgerBefore: "0.00" });
     // The linked customer's own lines: 100 + 300 − 50 (stray line excluded).
-    expect((await preBalance("customer", custLinked)).body).toEqual({ balance: 350 });
+    expect((await preBalance("customer", custLinked)).body).toEqual({ balance: 350, notInLedgerBefore: "0.00" });
   });
 
   it("refuses accounts of another company", async () => {

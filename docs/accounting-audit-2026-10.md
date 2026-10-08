@@ -374,6 +374,40 @@ Fixes CRITICAL items 1–4 from the re-audit (section 7). Item 5 (inventory path
   - the reset page still offers any company and shows to Admins; the server refuses both.
 - Tests: `voucher-balance-guard`, `balance-sheet-from-trial-balance`, `wave9-ledger-safety-routes`, `wave9-admin-history-safety`.
 
+### Wave 10 — One balance engine (HIGH) — parts 1 and 2 complete in code
+
+Owner decisions (binding): a customer's opening is owned by the customer record and counted once; a voucher counts from `COALESCE(effective_date, voucher_date)`; balances come from the ledger only, and amounts that never reached it are separate, labelled "not yet in the ledger" memo lines; each voucher line belongs to its voucher's company.
+
+- **Part 1:** one account classification (`accountClassification.ts`); the trial balance's row source became the party engine (`balances/ledgerBalanceEngine.ts`, `getPartyBalances`).
+- **One line, one party (part 2).** The two customer rule sets are reconciled on the double-entry rule, defined once in `balances/partyLineRules.ts` and used by the engine's attribution and by every statement's line filter. A line goes to exactly one row by priority ledger > bank > fixed asset > supplier > employee > factory supplier > customer. A customer owns the lines on its linked ledger (the lowest customer id owns a ledger linked to several) and its customer-tagged lines that name no other target. The part-1 reader rule, where an unlinked customer owned every tagged line and a customer owned its tagged bank lines, counted those lines twice across the trial balance and is retired. `storage/accounting/customer-ledger-balance.ts`, the factory composite `buildFactoryCustomerLedgerEntries` and `factoryCustomerLedgerStatement.ts` are deleted. On the engine now:
+  - `/api/customers/stats`, the voucher sidebar, POS customers, `getCustomerBalance` and the overdue reminder;
+  - customer transactions, plain and paginated, and their pre-period figure (the engine's carried-forward movement);
+  - the account pre-period balance and the account statement PDF/Excel for a customer or a customer-owned ledger;
+  - `/api/accounts/all`, `/api/accounts/ledger/:id/balance` and ledger transactions for a customer-owned ledger, for every company type.
+- **Memo lines** (`balances/unpostedMemo.ts`, `getPartyBalances({ memo: true })` → `memoLines`, `memoTotal`; never part of `closing`):
+  - customers: FINALIZED factory invoices with no live `INV-GL-{company}-{order}` journal, at grand total less the charges that have their own live CHARGE- voucher; factory POS credit sales and deposits; other `customer_balances` rows with no ledger counterpart. Excluded: INVOICE/SALE cache rows (the order is the source), `voucher` rows with a live voucher, CONTAINER_SALE rows;
+  - factory suppliers: container goods with no FACTORY-IMPORT journal, supplier-paid freight with no FACTORY-FREIGHT journal, and commission with no FACTORY-COMM journal. Amounts are converted at the container's confirmed rate; with no rate, `amount` is null and the line is listed but not totalled.
+  - Customer transactions return them as `notInLedger.rows` (`notInLedger: true`), outside the rows, the pre-period figure and the totals. The Accounts page shows them in a separate section.
+- **Factory customer pages:**
+  - `GET /api/factory/customers` and the statement (page, Excel, PDF) keep `balance` / `currentBalance` / `runningBalance` as the combined figure the page always showed, now computed as engine closing + memo total and labelled `balanceBasis: "ledger+notInLedger"`;
+  - they add `ledgerBalance`, `ledgerBalanceSide`, `notInLedgerTotal`, `ledgerRunningBalance` and per-row `notInLedger` flags;
+  - statement ledger rows now include the CHARGE- and INV-GL journals; an INV-GL row is shown as its invoice;
+  - `/api/accounts/all`, `/api/accounts/ledger/:id/balance` and the pre-period balance report the ledger figure alone, with `notInLedgerTotal` / `notInLedgerBefore` beside it. **Meaning change:** for a factory customer's ledger on the Accounts page, `balance` is now the ledger balance; it used to be the combined figure.
+- **Net position** (`balances/netPositionParties.ts`). The live net position, the net-position Excel, `calculateNetPositionAsOf` and the factory net position take customers, ERP suppliers, factory suppliers and employees from the engine:
+  - historical-base closing, effective-date basis, master opening with its side;
+  - the ERP payroll from the employee subledger, no longer from `employees.current_balance`.
+  - Customer-owned ledgers are left out of the ledger classification everywhere, so a customer is never counted twice. The ledger-account aggregates moved to the effective-date basis.
+  - A separate `notInLedger` section (`{ label, total, lines }`) lists what is not in the ledger, and is never in What We Have / What We Owe: the memo lines above; the factory's unfinalized PENDING/VERIFIED/LOADING orders at selling price; the salary-advance and factory-worker-advance tables' excess over the ledger; and `employees.current_balance` over the ledger.
+  - The factory net position no longer strips the "Factory Worker Advances" ledger account. The client no longer overrides supplier figures with the Suppliers-page formula.
+  - Stock, OTW containers and rent stay as they were (documented valuation lines; perpetual gating unchanged).
+  - The supplier-partner customer helper is removed: its clause could never admit a ledger, so supplier-partner companies still exclude customers. Golden Coast keeps its customer-like account exclusion.
+- **New customers:** `customerService.create` and the POS customer create give the new CUST ledger a zero opening and no longer copy later opening edits onto it. The factory paths already created it at zero.
+- **Bank-linked ledgers:** not a double count in the engine. A bank and its linked ledger are separate master rows, each opening is counted once, and a line naming both goes to the ledger. Other readers differ, so a linked bank is shown in different places:
+  - `cashBankRevaluationService` drops a linked bank's own row;
+  - `/api/accounts/ledger/:id/balance` merges it into the ledger;
+  - net position reads no bank accounts at all (an existing gap, reported).
+- Tests: `wave10-engine-consolidation`, `wave10-net-position-engine`; updated `wave10-party-reader-rules`, `phase33d-employee-net-position`, `stats-net-position-excel-behavior`, `account-statement-*`, `perpetual-inventory-factory`, `report-endpoint-characterization` (pins regenerated).
+
 ## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
 
 Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**

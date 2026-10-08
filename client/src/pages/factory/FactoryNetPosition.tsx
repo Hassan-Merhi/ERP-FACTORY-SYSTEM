@@ -1,5 +1,5 @@
 import { visibleTabInterval } from "@/lib/queryPolicies";
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,16 +21,11 @@ import {
 } from "lucide-react";
 
 import type { NetPositionData } from "./factorynetposition/types";
-import { fmt, formatDateLabel, r2, shiftDate, todayStr } from "./factorynetposition/utils";
+import { fmt, formatDateLabel, shiftDate, todayStr } from "./factorynetposition/utils";
+import { NotInLedgerCard } from "@/components/netposition/NotInLedgerCard";
 import { Side } from "./factorynetposition/components/Side";
 import { OrderGroup } from "./factorynetposition/components/OrderGroup";
 import { CustomNetPositionView } from "./factorynetposition/components/CustomNetPositionView";
-interface SupplierWithBalance {
-  id: number;
-  name: string;
-  parentId: number | null;
-  totalValue: string;
-}
 
 export default function FactoryNetPosition() {
   const [asOf, setAsOf] = useState<string>(todayStr);
@@ -56,113 +51,10 @@ export default function FactoryNetPosition() {
     refetchInterval: isToday ? visibleTabInterval(120_000) : false,
   });
 
-  // Authoritative supplier balances — only used for today (live override).
-  // For historical dates we rely solely on the date-filtered net-position endpoint.
-  const { data: supplierWithBalances = [] } = useQuery<SupplierWithBalance[]>({
-    queryKey: ["/api/factory/suppliers/with-balances", "net-position-merge"],
-    queryFn: async () => {
-      const res = await fetch("/api/factory/suppliers/with-balances?includeOtw=true", { credentials: "include" });
-      if (!res.ok) throw new Error(await res.text());
-      return res.json();
-    },
-    staleTime: 30_000,
-    refetchInterval: visibleTabInterval(120_000),
-    enabled: !!rawData && isToday,
-  });
-
-  // Merge: override supplier balances with the authoritative with-balances data,
-  // then recompute all affected totals so the page is fully consistent.
-  const data = useMemo((): NetPositionData | undefined => {
-    if (!rawData) return undefined;
-    if (!supplierWithBalances.length) return rawData;
-
-    // Each entry has id, name, totalValue (USD balance as string).
-    // Skip broker children (parentId set) — their balances are already rolled into the
-    // broker parent's grand total via buildBrokerStatement, so including them separately
-    // would double-count their EUR/AUD exposure.
-    const correctedItems = supplierWithBalances
-      .filter((s) => !s.parentId)
-      .map((s) => ({ id: s.id, name: s.name, balanceUsd: parseFloat(s.totalValue || "0") }))
-      .filter((s) => Math.abs(s.balanceUsd) > 0.01);
-
-    const correctedLiabilities = r2(
-      correctedItems.filter((s) => s.balanceUsd > 0).reduce((sum, s) => sum + s.balanceUsd, 0)
-    );
-    const correctedOverpayments = r2(
-      correctedItems.filter((s) => s.balanceUsd < 0).reduce((sum, s) => sum + Math.abs(s.balanceUsd), 0)
-    );
-
-    const liabilityDelta = correctedLiabilities - rawData.supplierLiabilities;
-    const overpaymentDelta = correctedOverpayments - (rawData.supplierOverpayments ?? 0);
-
-    const correctedOnUsTotal = r2(rawData.onUs.total + liabilityDelta);
-    const correctedForUsTotal = r2(rawData.forUs.total + overpaymentDelta);
-    const correctedNetPosition = r2(correctedForUsTotal - correctedOnUsTotal);
-
-    // Replace SUPPLIER accounts in onUs with corrected items
-    const nonSupplierOnUs = rawData.onUs.accounts.filter((a) => a.code !== "SUPPLIER");
-    const correctedOnUsAccounts = [
-      ...correctedItems
-        .filter((s) => s.balanceUsd > 0)
-        .sort((a, b) => b.balanceUsd - a.balanceUsd)
-        .map((s) => ({ id: s.id, name: s.name, code: "SUPPLIER", value: r2(s.balanceUsd), category: "Supplier" })),
-      ...nonSupplierOnUs,
-    ];
-
-    // Replace SUPPLIER_OVERPAID accounts in forUs with corrected items
-    const nonSupplierForUs = rawData.forUs.accounts.filter((a) => a.code !== "SUPPLIER_OVERPAID");
-    const correctedForUsAccounts = [
-      ...nonSupplierForUs,
-      ...correctedItems
-        .filter((s) => s.balanceUsd < 0)
-        .sort((a, b) => a.balanceUsd - b.balanceUsd)
-        .map((s) => ({
-          id: s.id,
-          name: s.name,
-          code: "SUPPLIER_OVERPAID",
-          value: r2(Math.abs(s.balanceUsd)),
-          category: "Supplier Overpayments",
-        })),
-    ];
-
-    // Update onUs breakdown — replace or add "Suppliers" line
-    let correctedOnUsBreakdown = rawData.onUs.breakdown.map((b) =>
-      b.name === "Suppliers" ? { ...b, value: correctedLiabilities } : b
-    );
-    if (correctedLiabilities > 0 && !correctedOnUsBreakdown.some((b) => b.name === "Suppliers")) {
-      correctedOnUsBreakdown = [{ name: "Suppliers", value: correctedLiabilities }, ...correctedOnUsBreakdown];
-    }
-    // Remove "Suppliers" line if no liabilities
-    if (correctedLiabilities === 0) {
-      correctedOnUsBreakdown = correctedOnUsBreakdown.filter((b) => b.name !== "Suppliers");
-    }
-
-    const correctedForUsBreakdown = rawData.forUs.breakdown.map((b) =>
-      b.name === "Supplier Overpayments" ? { ...b, value: correctedOverpayments } : b
-    );
-
-    return {
-      ...rawData,
-      netPosition: correctedNetPosition,
-      netPositionLabel: correctedNetPosition >= 0 ? "We have more than we owe" : "We owe more than we have",
-      forUsTotal: correctedForUsTotal,
-      onUsTotal: correctedOnUsTotal,
-      supplierLiabilities: correctedLiabilities,
-      supplierOverpayments: correctedOverpayments,
-      forUs: {
-        ...rawData.forUs,
-        total: correctedForUsTotal,
-        accounts: correctedForUsAccounts,
-        breakdown: correctedForUsBreakdown,
-      },
-      onUs: {
-        ...rawData.onUs,
-        total: correctedOnUsTotal,
-        accounts: correctedOnUsAccounts,
-        breakdown: correctedOnUsBreakdown,
-      },
-    };
-  }, [rawData, supplierWithBalances]);
+  // Supplier, customer and employee figures come from the server's balance
+  // engine; the page no longer swaps in the Suppliers-page formula for today
+  // (that re-mixed operational container amounts into the totals).
+  const data = rawData;
 
   const isPositive = (data?.netPosition ?? 0) >= 0;
   const hasPendingVerified =
@@ -362,6 +254,9 @@ export default function FactoryNetPosition() {
         </div>
       )}
 
+      {/* Amounts not yet in the ledger — shown separately, never in the totals */}
+      {!isLoading && <NotInLedgerCard section={data?.notInLedger} formatAmount={fmt} />}
+
       {/* Custom Net Position View — view-only, user-configurable account visibility */}
       {!isLoading && data && <CustomNetPositionView data={data} />}
 
@@ -461,8 +356,8 @@ export default function FactoryNetPosition() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Pending and Verified orders are included in "What We Have." Loading orders update live as bales are
-              scanned.
+              Unfinalized orders are not receivables yet: they are listed under "Not yet in the ledger" and are not
+              included in "What We Have." Loading orders update live as bales are scanned.
             </p>
           </CardHeader>
           <CardContent className="space-y-3">

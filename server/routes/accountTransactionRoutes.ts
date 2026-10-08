@@ -7,29 +7,19 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { logger } from "../lib/logger";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
 import { getClientDate } from "../lib/dateUtils";
-import { buildFactoryCustomerLedgerEntries, getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
+import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
+import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
 import {
-  bankAccounts,
-  customers,
-  employees,
-  fixedAssets,
-  ledgerAccounts,
-  voucherEntries,
-  vouchers,
-} from "@shared/schema";
-import {
-  customerVoucherLineFilter,
-  postedVoucherInCompany,
-  voucherBalanceDateSql,
-} from "../storage/accounting/customer-ledger-balance";
-import { toMoney } from "../lib/money";
+  customerLedgerNetBefore,
+  loadCustomerLedgerLines,
+  loadCustomerNotInLedger,
+} from "../services/accounting/balances/customerLedgerStatement";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
 
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
@@ -72,27 +62,30 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      // 2. If this ledger is linked to a factory customer, return the unified
-      //    factory-customer ledger view (plain array — frontend handles both shapes).
-      try {
-        const linkedCust = await getCustomerByLedgerId(ledgerAccountId);
-        if (linkedCust) {
-          const company = await storage.getCompanyById(linkedCust.companyId);
-          if (company?.companyType === "factory") {
-            const entries = await buildFactoryCustomerLedgerEntries(
-              linkedCust.id,
-              ledgerAccountId,
-              linkedCust.companyId,
-              rawStart,
-              effectiveEndDate
-            );
-            return res.json(entries);
-          }
-        }
-      } catch (e) {
-        // If the factory-customer lookup fails for any reason, fall back to
-        // the regular ledger entries so the page never breaks.
-        logger.error("[ledger transactions] factory-customer lookup failed:", { error: e });
+      // 2. A ledger account linked to a customer has no balance of its own: the
+      //    balance engine rolls its lines into the customer it belongs to (the
+      //    lowest customer id linking it), whatever the company type. Return the
+      //    customer's ledger statement, with amounts not yet in the ledger in a
+      //    separate `notInLedger` section (the factory composite used to mix
+      //    finalized orders and the customer_balances cache into the rows).
+      const owner = await getCustomerByLedgerId(ledgerAccountId);
+      if (owner && owner.companyId === companyId) {
+        const window = { companyId, customerId: owner.id, from: rawStart ?? null, to: effectiveEndDate };
+        const [lines, preNetBalance, notInLedger] = await Promise.all([
+          loadCustomerLedgerLines(db, window),
+          customerLedgerNetBefore(db, companyId, owner.id, rawStart),
+          loadCustomerNotInLedger(db, window),
+        ]);
+        return res.json(
+          statementResponse(lines, {
+            preNetBalance,
+            asOfDate,
+            startDate: rawStart ?? null,
+            endDate: effectiveEndDate,
+            customerId: owner.id,
+            notInLedger,
+          })
+        );
       }
 
       // 3. Main query: period transactions capped at today
@@ -424,57 +417,18 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      // Posted voucher lines owned by the customer under the shared ledger rules
-      // (storage/accounting/customer-ledger-balance.ts), so opening + these rows
-      // is the balance /api/customers/stats and the voucher sidebar report. The
-      // customer_balances cache this used to list misses voucher receipts.
-      const lineFilter = customerVoucherLineFilter(customer);
-      const posted = postedVoucherInCompany(companyId);
-      const periodConditions = [
-        ...(rawStart ? [sql`${voucherBalanceDateSql} >= ${rawStart}`] : []),
-        sql`${voucherBalanceDateSql} <= ${effectiveEndDate}`,
-      ];
-      const lines = await db
-        .select({
-          id: voucherEntries.id,
-          voucherId: voucherEntries.voucherId,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          voucherDate: sql<string>`${voucherBalanceDateSql}::text`,
-          voucherDescription: vouchers.description,
-          narration: voucherEntries.narration,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          transactionCurrency: voucherEntries.transactionCurrency,
-          transactionDebitAmount: voucherEntries.transactionDebitAmount,
-          transactionCreditAmount: voucherEntries.transactionCreditAmount,
-          baseDebitAmount: voucherEntries.baseDebitAmount,
-          baseCreditAmount: voucherEntries.baseCreditAmount,
-          historicalExchangeRate: voucherEntries.historicalExchangeRate,
-          rateConvention: voucherEntries.rateConvention,
-          currency: vouchers.currency,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(posted, lineFilter, ...periodConditions))
-        .orderBy(voucherBalanceDateSql, voucherEntries.id);
-      const mapped = lines.map((line) => ({
-        ...line,
-        voucherDescription: line.voucherDescription || "",
-        narration: line.narration || line.voucherDescription || "",
-      }));
-
-      let preNetBalance = 0;
-      if (rawStart) {
-        const [pre] = await db
-          .select({
-            net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(posted, lineFilter, sql`${voucherBalanceDateSql} < ${rawStart}`));
-        preNetBalance = toMoney(pre?.net).toNumber();
-      }
+      // The customer's ledger lines under the balance engine's rules, so
+      // opening + preNetBalance + these rows is the engine closing (the
+      // trial balance's customer row, /api/customers/stats, the voucher
+      // sidebar). Amounts not yet in the ledger (factory POS credit sales,
+      // unposted factory invoices, cache-only rows) are listed separately in
+      // `notInLedger` and never added to the rows or preNetBalance.
+      const window = { companyId, customerId, from: rawStart ?? null, to: effectiveEndDate };
+      const [mapped, preNetBalance, notInLedger] = await Promise.all([
+        loadCustomerLedgerLines(db, window),
+        customerLedgerNetBefore(db, companyId, customerId, rawStart),
+        loadCustomerNotInLedger(db, window),
+      ]);
 
       return res.json(
         statementResponse(mapped, {
@@ -482,6 +436,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           asOfDate,
           startDate: rawStart ?? null,
           endDate: effectiveEndDate,
+          notInLedger,
         })
       );
     } catch (error: unknown) {
