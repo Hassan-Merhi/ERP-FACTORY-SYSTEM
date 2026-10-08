@@ -15,7 +15,7 @@ import {
   getEstimatedPrice,
   getOverloadedBales,
   getRemainingBales,
-  getRemainingBalesColorClass,
+  getLoadedBalesColorClass,
   groupOrdersByCustomer,
   statusFilterCounts,
 } from "./invoiceCalculations";
@@ -60,19 +60,20 @@ describe("getRemainingBales / getOverloadedBales", () => {
   });
 });
 
-describe("getRemainingBalesColorClass", () => {
-  it("uses red for values below 450, light green from 450 to 499, and dark green at 500+", () => {
-    expect(getRemainingBalesColorClass(449)).toContain("text-red-600");
-    expect(getRemainingBalesColorClass(450)).toContain("bg-lime-100");
-    expect(getRemainingBalesColorClass(499)).toContain("bg-lime-100");
-    expect(getRemainingBalesColorClass(500)).toContain("bg-emerald-700");
-    expect(getRemainingBalesColorClass(618)).toContain("bg-emerald-700");
+describe("getLoadedBalesColorClass", () => {
+  it("does not highlight counts below 450, uses light green at 450–499, and dark green at 500+", () => {
+    expect(getLoadedBalesColorClass(0)).toBe("");
+    expect(getLoadedBalesColorClass(449)).toBe("");
+    expect(getLoadedBalesColorClass(450)).toContain("bg-lime-100");
+    expect(getLoadedBalesColorClass(499)).toContain("bg-lime-100");
+    expect(getLoadedBalesColorClass(500)).toContain("bg-emerald-700");
+    expect(getLoadedBalesColorClass(618)).toContain("bg-emerald-700");
   });
 
-  it("provides theme-aware text colors for both green tiers", () => {
-    expect(getRemainingBalesColorClass(450)).toContain("dark:text-lime-200");
-    expect(getRemainingBalesColorClass(500)).toContain("text-white");
-    expect(getRemainingBalesColorClass(500)).toContain("dark:bg-emerald-700");
+  it("keeps both highlight levels readable in light and dark themes", () => {
+    expect(getLoadedBalesColorClass(450)).toContain("dark:text-lime-200");
+    expect(getLoadedBalesColorClass(500)).toContain("text-white");
+    expect(getLoadedBalesColorClass(500)).toContain("dark:bg-emerald-700");
   });
 });
 
