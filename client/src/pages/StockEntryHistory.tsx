@@ -18,7 +18,12 @@ import { DetailedHistoryTable } from "./stockentryhistory/DetailedHistoryTable";
 import { StockEntryHistoryEditableDateCell } from "./stockentryhistory/EditableDateCell";
 import { createStockEntryHistoryGroupBaleHelpers, groupKey } from "./stockentryhistory/groupBaleHelpers";
 import { useStockEntryHistoryMutations } from "./stockentryhistory/useStockEntryHistoryMutations";
-import { STATUS_COLORS, fetchAllStockEntryHistoryPages, formatDailyNum, formatHistoryTime } from "./stockentryhistory/utils";
+import {
+  STATUS_COLORS,
+  fetchAllStockEntryHistoryPages,
+  formatDailyNum,
+  formatHistoryTime,
+} from "./stockentryhistory/utils";
 
 export default function StockEntryHistory({ onActiveDateChange }: StockEntryHistoryProps = {}) {
   const { formatDisplayDate } = useDateFormat();
@@ -389,7 +394,11 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                       {workerExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </td>
                     <td className="px-3 py-2 text-right text-muted-foreground">
-                      {targetInfo && workerCount > 0 ? workerCount : <span className="text-xs text-muted-foreground">—</span>}
+                      {targetInfo && workerCount > 0 ? (
+                        workerCount
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2 font-semibold">
                       {workerGroup.workerName || <span className="italic text-muted-foreground">Unassigned</span>}
@@ -495,7 +504,10 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
                                         bulkAssignMutation.mutate({ baleIds, workerId });
                                       }}
                                     >
-                                      <SelectTrigger className="h-6 w-36 text-xs" data-testid={`select-assign-worker-${key}`}>
+                                      <SelectTrigger
+                                        className="h-6 w-36 text-xs"
+                                        data-testid={`select-assign-worker-${key}`}
+                                      >
                                         <SelectValue placeholder="Reassign…" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -578,12 +590,8 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
           editingDateKey={editingDateKey}
           setEditingDateKey={setEditingDateKey}
           formatDisplayDate={formatDisplayDate}
-          onUpdateDate={(baleId, stockEntryDate) =>
-            updateDateMutation.mutate({ ids: [baleId], stockEntryDate })
-          }
-          onAssignWorker={(baleId, workerId) =>
-            bulkAssignMutation.mutate({ baleIds: [baleId], workerId })
-          }
+          onUpdateDate={(baleId, stockEntryDate) => updateDateMutation.mutate({ ids: [baleId], stockEntryDate })}
+          onAssignWorker={(baleId, workerId) => bulkAssignMutation.mutate({ baleIds: [baleId], workerId })}
         />
       )}
     </div>

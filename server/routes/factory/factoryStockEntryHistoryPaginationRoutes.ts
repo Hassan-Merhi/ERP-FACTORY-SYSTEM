@@ -93,10 +93,7 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
         };
 
         const companyParam = bind(companyId);
-        const conditions = [
-          `fb.company_id = ${companyParam}`,
-          `fb.stock_entry_date IS NOT NULL`,
-        ];
+        const conditions = [`fb.company_id = ${companyParam}`, `fb.stock_entry_date IS NOT NULL`];
         // Exact/reference searches are global across production dates. A selected
         // day must not make a valid bale disappear from Stock Entry History.
         if (!search) {

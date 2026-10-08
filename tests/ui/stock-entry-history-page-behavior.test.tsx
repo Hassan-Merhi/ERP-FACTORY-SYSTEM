@@ -203,7 +203,7 @@ describe("stock entry history page behavior", () => {
 
     const row = screen.getByTestId("row-bale-101");
     expect(within(row).getByText("REF-101")).toBeInTheDocument();
-    expect(within(row).getByText("Alice")).toBeInTheDocument();
+    expect(within(screen.getByTestId("select-assign-worker-bale-101")).getByText("Alice")).toBeInTheDocument();
     expect(within(row).getByText("Shirts")).toBeInTheDocument();
     expect(within(row).getByText("SH-1")).toBeInTheDocument();
     expect(within(row).getByText("25")).toBeInTheDocument();

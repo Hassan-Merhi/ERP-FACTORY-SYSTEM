@@ -94,16 +94,19 @@ export function DetailedHistoryTable({
                     <SelectValue placeholder={bale.workerName || "Unassigned"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {bale.workerId != null && !workers.some((worker) => worker.id === bale.workerId && worker.active) && (
-                      <SelectItem value={String(bale.workerId)} disabled>
-                        {bale.workerName || "Inactive worker"}
-                      </SelectItem>
-                    )}
-                    {workers.filter((worker) => worker.active).map((worker) => (
-                      <SelectItem key={worker.id} value={String(worker.id)}>
-                        {worker.fullName || worker.full_name || worker.name}
-                      </SelectItem>
-                    ))}
+                    {bale.workerId != null &&
+                      !workers.some((worker) => worker.id === bale.workerId && worker.active) && (
+                        <SelectItem value={String(bale.workerId)} disabled>
+                          {bale.workerName || "Inactive worker"}
+                        </SelectItem>
+                      )}
+                    {workers
+                      .filter((worker) => worker.active)
+                      .map((worker) => (
+                        <SelectItem key={worker.id} value={String(worker.id)}>
+                          {worker.fullName || worker.full_name || worker.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </td>
@@ -117,9 +120,7 @@ export function DetailedHistoryTable({
                   {bale.status}
                 </span>
               </td>
-              <td className="px-3 py-1.5 text-muted-foreground text-xs">
-                {formatHistoryDateTime(bale.finalizedAt)}
-              </td>
+              <td className="px-3 py-1.5 text-muted-foreground text-xs">{formatHistoryDateTime(bale.finalizedAt)}</td>
             </tr>
           ))}
         </tbody>
