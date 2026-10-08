@@ -319,14 +319,13 @@ describe("POST /api/factory/customer-orders/:id/assign-container", () => {
   it("records the container details on the order", async () => {
     const orderId = await createOrder("LOADING");
 
-    const response = await agent
-      .post(`/api/factory/customer-orders/${orderId}/assign-container`)
-      .send({
-        containerNumber: "MSKU7654321",
-        shippingCompany: "Maersk",
-        destination: "Tripoli",
-        bookingInfo: "Quotation $2,450 / BK123",
-      });
+    const bookingPayload = {
+      containerNumber: "MSKU7654321",
+      shippingCompany: "Maersk",
+      destination: "Tripoli",
+      bookingInfo: "Quotation $2,450 / BK123",
+    };
+    const response = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send(bookingPayload);
 
     expect(response.status).toBe(200);
     expect((await orderRow(orderId))?.container_number).toBe("MSKU7654321");
