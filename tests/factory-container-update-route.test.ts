@@ -501,6 +501,23 @@ describe("container goods value is exact", () => {
     return entry.rows[0]?.amount_currency;
   }
 
+  it("answers promptly for a rate with an out-of-range exponent", async () => {
+    // Formatting "1e-500000000" with toFixed() wrote out hundreds of millions of
+    // zeros and hung the process; the bounded parse reads it as 0.
+    seq += 1;
+    const started = Date.now();
+    const response = await agent.post("/api/factory/containers").send({
+      containerNumber: `${TEST_PREFIX}-EXP${seq}`,
+      supplierId,
+      currencyCode: "USD",
+      totalKg: "1000",
+      ratePerKg: "1e-500000000",
+      arrivalDate: "2026-06-08",
+    });
+    expect(response.status).toBeGreaterThanOrEqual(200);
+    expect(Date.now() - started).toBeLessThan(10000);
+  }, 20000);
+
   it("posts the import voucher and daybook entry at the exact cents on create", async () => {
     seq += 1;
     const response = await agent.post("/api/factory/containers").send({
