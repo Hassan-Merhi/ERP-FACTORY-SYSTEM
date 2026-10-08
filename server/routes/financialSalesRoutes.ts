@@ -14,6 +14,7 @@ import { FiscalPeriodCloseError } from "../storage/accounting/fiscal-periods";
 import { logAudit } from "./_helpers";
 import { requireAuth, requireNonPOS, checkPOSLocation } from "../auth";
 import { ledgerAccounts, locations, salesItems, stockItems, voucherEntries, vouchers } from "@shared/schema";
+import { sumMoney, toMoney } from "../lib/money";
 
 export function registerFinancialSalesRoutes(app: Express) {
   app.post("/api/fiscal-period/close", requireAuth, async (req, res) => {
@@ -210,16 +211,17 @@ export function registerFinancialSalesRoutes(app: Express) {
       >();
 
       for (const row of rows) {
-        const qty = parseFloat(row.totalQuantity);
-        const amount = parseFloat(row.totalSales);
+        const qty = toMoney(row.totalQuantity).toNumber();
+        const amount = toMoney(row.totalSales).toNumber();
         const txns = parseInt(row.totalTransactions as string);
 
         if (row.isCreditSale) {
           const existing = salesByLocation.get(CREDIT_SALES_ID);
           if (existing) {
-            existing.totalSales += amount;
+            // Exact per-location totals: float += left residue on the sales report.
+            existing.totalSales = toMoney(existing.totalSales).plus(amount).toNumber();
             existing.totalTransactions += txns;
-            existing.totalQuantity += qty;
+            existing.totalQuantity = toMoney(existing.totalQuantity).plus(qty).toNumber();
           } else {
             salesByLocation.set(CREDIT_SALES_ID, {
               locationId: CREDIT_SALES_ID,
@@ -235,9 +237,10 @@ export function registerFinancialSalesRoutes(app: Express) {
           if (!row.locationId) continue;
           const existing = salesByLocation.get(row.locationId);
           if (existing) {
-            existing.totalSales += amount;
+            // Exact per-location totals: float += left residue on the sales report.
+            existing.totalSales = toMoney(existing.totalSales).plus(amount).toNumber();
             existing.totalTransactions += txns;
-            existing.totalQuantity += qty;
+            existing.totalQuantity = toMoney(existing.totalQuantity).plus(qty).toNumber();
           } else {
             salesByLocation.set(row.locationId, {
               locationId: row.locationId,
@@ -295,19 +298,10 @@ export function registerFinancialSalesRoutes(app: Express) {
         .from(vouchers)
         .where(and(...conditions));
 
-      // Get all voucher entries and inventory changes
-      // We need to sum up quantities sold across all sales
-      let totalQuantity = 0;
-      let totalAmount = 0;
-
-      for (const voucher of salesVouchers) {
-        totalAmount += parseFloat(voucher.totalAmount || "0");
-
-        // Get inventory items sold in this voucher
-        // This requires getting stock items from inventory updates
-        // For now, we'll just count transactions as the quantity metric
-        totalQuantity += 1; // Each voucher is one transaction
-      }
+      // Quantity counts transactions (one per voucher); items sold per voucher
+      // would need the inventory updates behind it.
+      const totalQuantity = salesVouchers.length;
+      const totalAmount = sumMoney(salesVouchers.map((voucher) => voucher.totalAmount)).toNumber();
 
       res.json({
         locationId,
@@ -425,8 +419,8 @@ export function registerFinancialSalesRoutes(app: Express) {
 
         const transactions = salesVouchers.map((voucher) => {
           const items = itemsByVoucher.get(voucher.id) || [];
-          const totalQty = items.reduce((sum, item) => sum + parseFloat(item.quantity), 0);
-          const totalAmt = parseFloat(voucher.totalAmount || "0");
+          const totalQty = sumMoney(items.map((item) => item.quantity)).toNumber();
+          const totalAmt = toMoney(voucher.totalAmount).toNumber();
 
           return {
             id: voucher.id,
