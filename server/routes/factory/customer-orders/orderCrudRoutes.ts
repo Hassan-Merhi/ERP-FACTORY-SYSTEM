@@ -47,9 +47,8 @@ export function registerOrderCrudRoutes(app: Express) {
         force: req.query.profile === "summary",
       });
 
-      const canSeeBookingInfo = ["admin", "owner", "developer"].includes(
-        (req.session.currentRole || req.session.role || "").toLowerCase()
-      );
+      const viewerRole = (req.session.currentRole || req.session.role || "").toLowerCase();
+      const canSeeBookingInfo = ["admin", "owner", "developer"].includes(viewerRole);
       const ordersQuery = db
         .select({
           id: customerOrders.id,
