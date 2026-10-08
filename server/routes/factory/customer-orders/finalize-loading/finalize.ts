@@ -30,6 +30,7 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderFinalizeRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/finalize", requireAuth, async (req: Request, res: Response) => {
@@ -137,7 +138,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
           })
           .where(eq(customerOrders.id, orderId));
 
-        const grandTotal = parseFloat(recalcOrder.grandTotal || "0");
+        const grandTotal = toMoney(recalcOrder.grandTotal).toFixed();
         // Use the client's current date (finalization date) as the statement date,
         // not the orderDate (which is the loading/shipment date).
         const today = getClientDate(req);
@@ -147,9 +148,9 @@ export function registerOrderFinalizeRoutes(app: Express) {
           customerId: order.customerId,
           transactionDate: today,
           transactionType: "SALE",
-          debitAmount: String(grandTotal),
+          debitAmount: grandTotal,
           creditAmount: "0",
-          balance: String(grandTotal),
+          balance: grandTotal,
           referenceType: "INVOICE",
           referenceId: order.id,
           description: `Invoice ${invoiceNumber}`,
@@ -171,8 +172,9 @@ export function registerOrderFinalizeRoutes(app: Express) {
           const [customer] = await tx.select().from(customers).where(eq(customers.id, order.customerId));
           if (customer?.ledgerAccountId) {
             for (const charge of chargesForJournal) {
-              const chargeAmount = parseFloat(charge.amount || "0");
-              if (chargeAmount <= 0) continue;
+              const chargeAmountDecimal = toMoney(charge.amount);
+              if (chargeAmountDecimal.lte(0)) continue;
+              const chargeAmount = chargeAmountDecimal.toFixed();
 
               const invoiceVoucherNumber = `CHARGE-${invoiceNumber}-${charge.id}-${Date.now()}`;
               const chargeDesc = order.containerNumber
@@ -212,7 +214,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
                     voucherNumber: invoiceVoucherNumber,
                     voucherDate: today,
                     description: chargeDesc,
-                    totalAmount: String(chargeAmount),
+                    totalAmount: chargeAmount,
                     sourceModule: "FACTORY",
                   })
                   .returning();
@@ -221,7 +223,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
                   voucherId: chargeVoucher.id,
                   ledgerAccountId: customer.ledgerAccountId,
                   customerId: order.customerId,
-                  debitAmount: String(chargeAmount),
+                  debitAmount: chargeAmount,
                   creditAmount: "0",
                   narration: chargeDesc,
                 });
@@ -230,7 +232,7 @@ export function registerOrderFinalizeRoutes(app: Express) {
                   voucherId: chargeVoucher.id,
                   ledgerAccountId: charge.ledgerAccountId!,
                   debitAmount: "0",
-                  creditAmount: String(chargeAmount),
+                  creditAmount: chargeAmount,
                   narration: chargeDesc,
                 });
                 // Phase 6: stamp FK
@@ -311,8 +313,8 @@ export function registerOrderFinalizeRoutes(app: Express) {
         referenceId: invoiceRefId,
         referenceTable: "customer_orders",
         description: `Invoice ${result.invoiceNumber} – ${result.customerName || "Customer"}`,
-        amountCurrency: parseFloat(result.grandTotal || "0"),
-        amountUsd: parseFloat(result.grandTotal || "0"),
+        amountCurrency: toMoney(result.grandTotal).toNumber(),
+        amountUsd: toMoney(result.grandTotal).toNumber(),
       });
 
       dispatchNotification({

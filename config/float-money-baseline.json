@@ -1,6 +1,6 @@
 {
   "description": "Per-file count of parseFloat( calls in server/ and shared/ source (tests excluded). parseFloat turns numeric(...) money strings into binary floats, and sums of those drift by fractions of a cent; new code uses server/lib/money.ts instead. tests/float-money-ratchet.test.ts fails when a file's count rises or a new file starts using parseFloat, and when a count falls without this baseline being lowered to match, so the total can only go down.",
-  "total": 1045,
+  "total": 1033,
   "files": {
     "server/aiAgentTools.ts": 4,
     "server/aiTools.ts": 33,
@@ -62,7 +62,6 @@
     "server/routes/debug/inventoryDebugRoutes.ts": 4,
     "server/routes/debug/orphanedChargeVoucherRoutes.ts": 2,
     "server/routes/employeeRoutes.ts": 7,
-    "server/routes/erp-payroll/runs-lifecycle.ts": 4,
     "server/routes/erp-payroll/runs-migration.ts": 6,
     "server/routes/erp-payroll/summaries.ts": 2,
     "server/routes/factory-intelligence/alerts.ts": 2,
@@ -91,7 +90,7 @@
     "server/routes/factory/customer-orders/bale-scanning/remove.ts": 2,
     "server/routes/factory/customer-orders/bale-scanning/scan.ts": 2,
     "server/routes/factory/customer-orders/bale-scanning/swap.ts": 2,
-    "server/routes/factory/customer-orders/finalize-loading/finalize.ts": 5,
+    "server/routes/factory/customer-orders/finalize-loading/finalize.ts": 1,
     "server/routes/factory/customer-orders/finalize-loading/loading.ts": 2,
     "server/routes/factory/customer-orders/orderCrudRoutes.ts": 3,
     "server/routes/factory/customer-orders/pdf-export/pending.ts": 1,
@@ -150,7 +149,6 @@
     "server/routes/git/gitListingProfiles.ts": 2,
     "server/routes/globalTransactionRoutes.ts": 4,
     "server/routes/helpers/auditHelpers.ts": 6,
-    "server/routes/helpers/supplierBalanceHelpers.ts": 4,
     "server/routes/inventory-movement/location-imports.ts": 5,
     "server/routes/inventory-movement/movement.ts": 6,
     "server/routes/inventory-movement/reconcile.ts": 6,
