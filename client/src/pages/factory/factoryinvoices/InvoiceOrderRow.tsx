@@ -51,6 +51,7 @@ export function fmtKg(val: string | number | null | undefined) {
 /** Page-level callbacks shared by every order row (and the group rows). */
 export interface InvoiceOrderRowContext {
   hideProformaCol: boolean;
+  showBookingInfo: boolean;
   hideTotalsUsd: boolean;
   formatDisplayDate: (date: string) => string;
   getStatusBadge: (status: string) => ReactNode;
@@ -84,6 +85,7 @@ export function InvoiceOrderRow({
   onDrop,
   onDragEnd,
   hideProformaCol,
+  showBookingInfo,
   hideTotalsUsd,
   formatDisplayDate,
   getStatusBadge,
@@ -133,6 +135,11 @@ export function InvoiceOrderRow({
       <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
         {order.containerNumber || <span className="text-muted-foreground/50">—</span>}
       </TableCell>
+      {showBookingInfo && (
+        <TableCell className="text-sm max-w-[180px] truncate" title={order.bookingInfo ?? undefined} data-testid={`text-booking-info-${order.id}`}>
+          {order.bookingInfo || <span className="text-muted-foreground/50">—</span>}
+        </TableCell>
+      )}
       <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
         {order.destination || <span className="text-muted-foreground/50">—</span>}
       </TableCell>
