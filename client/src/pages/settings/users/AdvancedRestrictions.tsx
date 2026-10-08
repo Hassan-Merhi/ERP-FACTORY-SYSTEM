@@ -16,6 +16,12 @@ import {
   ERP_COST_FIELDS,
 } from "./UserManagementConstants";
 import type { SettingsUserRow } from "../settingsTypes";
+import {
+  FACTORY_TAB_GRANT_KEYS,
+  isFactoryTabVisibleInProfile,
+  setFactoryTabVisibleInProfile,
+  type FactoryTabDefinition,
+} from "@shared/factoryPermissionCatalog";
 
 interface AdvancedRestrictionsProps {
   user: SettingsUserRow;
@@ -70,11 +76,10 @@ export function AdvancedRestrictions({
     setHiddenCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
-  const setFactoryTabVisible = (key: string, visible: boolean) => {
-    setHiddenCostFields((prev) => {
-      if (visible) return prev.filter((item) => item !== key);
-      return prev.includes(key) ? prev : [...prev, key];
-    });
+  const setFactoryTabsVisible = (tabs: readonly FactoryTabDefinition[], visible: boolean) => {
+    setHiddenCostFields((prev) =>
+      tabs.reduce((fields, tab) => setFactoryTabVisibleInProfile(fields, tab, visible), prev)
+    );
   };
 
   const toggleErpCostField = (key: string) => {
@@ -83,7 +88,7 @@ export function AdvancedRestrictions({
 
   const restrictionCount =
     (isPrivileged ? 0 : pageAccess.size) +
-    (isPrivileged ? 0 : hiddenCostFields.length) +
+    (isPrivileged ? 0 : hiddenCostFields.filter((key) => !FACTORY_TAB_GRANT_KEYS.has(key)).length) +
     (isPrivileged ? 0 : hiddenErpCostFields.length);
 
   return (
@@ -109,8 +114,13 @@ export function AdvancedRestrictions({
               (() => {
                 const pageCount = isPrivileged ? 0 : pageAccess.size;
                 const factoryTabKeys = new Set(FACTORY_TABS.map((tab) => tab.key));
-                const tabCount = isPrivileged ? 0 : hiddenCostFields.filter((key) => factoryTabKeys.has(key)).length;
-                const fieldCount = isPrivileged ? 0 : hiddenCostFields.filter((key) => !factoryTabKeys.has(key)).length;
+                const tabCount = isPrivileged
+                  ? 0
+                  : FACTORY_TABS.filter((tab) => !isFactoryTabVisibleInProfile(tab, hiddenCostFields)).length;
+                const fieldCount = isPrivileged
+                  ? 0
+                  : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key))
+                      .length;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
                 const parts: string[] = [];
                 if (pageCount > 0) parts.push(`${pageCount} page${pageCount !== 1 ? "s" : ""} explicitly allowed`);
@@ -176,8 +186,9 @@ export function AdvancedRestrictions({
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Checked pages are <strong>available</strong> to this user. If any Factory page is checked, only the
-                      checked Factory pages are available. Clear all Factory page checks for unrestricted Factory page access.
+                      Checked pages are <strong>available</strong> to this user. If any Factory page is checked, only
+                      the checked Factory pages are available. Clear all Factory page checks for unrestricted Factory
+                      page access.
                     </p>
                     <div className="space-y-3 border rounded-md p-3 max-h-48 overflow-y-auto">
                       {FACTORY_PAGE_GROUPS.map((group) => {
@@ -308,10 +319,7 @@ export function AdvancedRestrictions({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            const allKeys = new Set(FACTORY_TABS.map((t) => t.key));
-                            setHiddenCostFields((prev) => prev.filter((k) => !allKeys.has(k)));
-                          }}
+                          onClick={() => setFactoryTabsVisible(FACTORY_TABS, true)}
                           data-testid="button-factory-tabs-show-all"
                         >
                           <Check className="h-3 w-3 mr-1" />
@@ -320,10 +328,7 @@ export function AdvancedRestrictions({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => {
-                            const allKeys = FACTORY_TABS.map((t) => t.key);
-                            setHiddenCostFields((prev) => Array.from(new Set([...prev, ...allKeys])));
-                          }}
+                          onClick={() => setFactoryTabsVisible(FACTORY_TABS, false)}
                           data-testid="button-factory-tabs-hide-all"
                         >
                           <X className="h-3 w-3 mr-1" />
@@ -332,12 +337,15 @@ export function AdvancedRestrictions({
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Checked tabs are <strong>shown</strong> to this user. Uncheck a tab to hide it.
+                      Checked tabs are <strong>shown</strong> to this user. Uncheck a tab to hide it. Customer Loading
+                      is off by default and must be checked to grant access.
                     </p>
                     <div className="space-y-1">
                       {FACTORY_TAB_GROUPS.map((group) => {
                         const groupTabs = FACTORY_TABS.filter((t) => t.group === group);
-                        const visibleCount = groupTabs.filter((t) => !hiddenCostFields.includes(t.key)).length;
+                        const visibleCount = groupTabs.filter((t) =>
+                          isFactoryTabVisibleInProfile(t, hiddenCostFields)
+                        ).length;
                         const isOpen = openTabGroups.has(group);
                         return (
                           <Collapsible key={group} open={isOpen} onOpenChange={() => toggleTabGroup(group)}>
@@ -362,11 +370,7 @@ export function AdvancedRestrictions({
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 text-xs px-2"
-                                    onClick={() =>
-                                      setHiddenCostFields((prev) =>
-                                        Array.from(new Set([...prev, ...groupTabs.map((t) => t.key)]))
-                                      )
-                                    }
+                                    onClick={() => setFactoryTabsVisible(groupTabs, false)}
                                     data-testid={`button-tabs-hide-all-${group}`}
                                   >
                                     Hide all
@@ -375,10 +379,7 @@ export function AdvancedRestrictions({
                                     variant="ghost"
                                     size="sm"
                                     className="h-6 text-xs px-2"
-                                    onClick={() => {
-                                      const keys = new Set(groupTabs.map((t) => t.key));
-                                      setHiddenCostFields((prev) => prev.filter((k) => !keys.has(k)));
-                                    }}
+                                    onClick={() => setFactoryTabsVisible(groupTabs, true)}
                                     data-testid={`button-tabs-show-all-${group}`}
                                   >
                                     Show all
@@ -391,8 +392,8 @@ export function AdvancedRestrictions({
                                 {groupTabs.map((tab) => (
                                   <div key={tab.key} className="flex items-center gap-2">
                                     <Checkbox
-                                      checked={!hiddenCostFields.includes(tab.key)}
-                                      onCheckedChange={(checked) => setFactoryTabVisible(tab.key, checked === true)}
+                                      checked={isFactoryTabVisibleInProfile(tab, hiddenCostFields)}
+                                      onCheckedChange={(checked) => setFactoryTabsVisible([tab], checked === true)}
                                       data-testid={`checkbox-tab-${tab.key}`}
                                     />
                                     <span className="text-sm">{tab.label}</span>
@@ -411,7 +412,9 @@ export function AdvancedRestrictions({
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                     Factory Financial & Cost Fields
                   </p>
-                  <p className="text-xs text-muted-foreground">Checked fields and financial columns will be hidden from this user.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Checked fields and financial columns will be hidden from this user.
+                  </p>
                   <div className="space-y-1.5 border rounded-md p-3">
                     {FACTORY_COST_FIELDS.map((field) => (
                       <div key={field.key} className="flex items-center gap-2">
