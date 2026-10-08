@@ -7,12 +7,15 @@ const harness = vi.hoisted(() => ({
   toast: vi.fn(),
   invalidateQueries: vi.fn(),
   fetchQuery: vi.fn(),
+  pickerEnabled: vi.fn(),
+  accessValue: undefined as any,
 }));
 
 const bale = {
   id: 101,
   stockEntryDate: "2026-08-12",
   locationName: "Main",
+  workerId: 1,
   workerName: "Alice",
   productName: "Shirts",
   articleCode: "SH-1",
@@ -44,12 +47,14 @@ vi.mock("@tanstack/react-query", () => ({
     fetchQuery: harness.fetchQuery,
   }),
   useQueries: () => [],
-  useQuery: ({ queryKey }: any) => {
+  useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
+    if (root === "/api/factory/my-access") return { data: harness.accessValue };
     if (root === "/api/factory/bales/stock-entry-history") {
       return { data: { items: [group], total: 1, totalBales: 3, totalWeight: 75 }, isLoading: false };
     }
     if (root === "/api/factory/workers?profile=picker") {
+      harness.pickerEnabled(enabled);
       return {
         data: [
           { id: 1, fullName: "Alice", active: true },
@@ -178,6 +183,7 @@ import StockEntryHistory from "@/pages/StockEntryHistory";
 describe("stock entry history page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.accessValue = undefined;
     harness.fetchQuery.mockResolvedValue([group]);
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
   });
@@ -197,11 +203,42 @@ describe("stock entry history page behavior", () => {
 
     const row = screen.getByTestId("row-bale-101");
     expect(within(row).getByText("REF-101")).toBeInTheDocument();
-    expect(within(row).getByText("Alice")).toBeInTheDocument();
+    expect(within(screen.getByTestId("select-assign-worker-bale-101")).getByText("Alice")).toBeInTheDocument();
     expect(within(row).getByText("Shirts")).toBeInTheDocument();
     expect(within(row).getByText("SH-1")).toBeInTheDocument();
     expect(within(row).getByText("25")).toBeInTheDocument();
     expect(within(row).getByText("IN_STOCK")).toBeInTheDocument();
+  });
+
+  it("loads worker choices for a history-only user without Payroll Hub access", () => {
+    harness.accessValue = {
+      fullAccess: false,
+      hasFactoryAccess: true,
+      pageKeys: ["factory/stock-entry"],
+      hiddenCostFields: ["hide_tab_stockentry_entry", "hide_tab_stockentry_production_targets"],
+    };
+    render(<StockEntryHistory />);
+    expect(harness.pickerEnabled).toHaveBeenCalledWith(true);
+  });
+
+  it("reassigns only the selected bale from detailed view", async () => {
+    render(<StockEntryHistory />);
+    fireEvent.click(screen.getByTestId("button-view-detailed"));
+
+    const row = screen.getByTestId("row-bale-101");
+    expect(within(row).getByTestId("select-assign-worker-bale-101")).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Bob" }));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PATCH", "/api/factory/bales/bulk-assign-worker", {
+        baleIds: [101],
+        workerId: 2,
+      })
+    );
+    expect(harness.toast).toHaveBeenCalledWith({
+      title: "Worker assigned",
+      description: "Worker updated for 1 bale(s).",
+    });
   });
 
   it("reports the active date and clears it when the date filter is cleared", async () => {
