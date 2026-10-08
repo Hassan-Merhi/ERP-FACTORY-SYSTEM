@@ -106,7 +106,9 @@ export default function FactoryInvoices() {
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const isAdmin = myAccess?.fullAccess === true;
   const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
-  const showBookingInfo = ["admin", "owner", "developer"].includes(String(authUser?.currentRole || authUser?.role || "").toLowerCase());
+  const showBookingInfo = ["admin", "owner", "developer"].includes(
+    String(authUser?.currentRole || authUser?.role || "").toLowerCase()
+  );
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
@@ -395,7 +397,9 @@ export default function FactoryInvoices() {
                     Container
                   </TableHead>
                   {showBookingInfo && (
-                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Booking Info</TableHead>
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Booking Info
+                    </TableHead>
                   )}
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Destination
