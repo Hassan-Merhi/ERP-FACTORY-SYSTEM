@@ -85,6 +85,7 @@ export function registerOrderCrudRoutes(app: Express) {
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
           containerNotes: customerOrders.containerNotes,
+          bookingInfo: sql<string | null>`CASE WHEN ${["admin", "owner", "developer"].includes((req.session.currentRole || req.session.role || "").toLowerCase())} THEN ${customerOrders.bookingInfo} ELSE NULL END`,
           destination: customerOrders.destination,
           locationId: customerOrders.locationId,
           loadingStartedAt: customerOrders.loadingStartedAt,
