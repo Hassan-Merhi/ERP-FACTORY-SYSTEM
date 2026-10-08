@@ -88,7 +88,7 @@ export function registerOrderCrudRoutes(app: Express) {
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
           containerNotes: customerOrders.containerNotes,
-          bookingInfo: sql<string | null>`CASE WHEN ${canSeeBookingInfo} THEN ${customerOrders.bookingInfo} ELSE NULL END`,
+          bookingInfo: canSeeBookingInfo ? customerOrders.bookingInfo : sql<string | null>`NULL`,
           destination: customerOrders.destination,
           locationId: customerOrders.locationId,
           loadingStartedAt: customerOrders.loadingStartedAt,
