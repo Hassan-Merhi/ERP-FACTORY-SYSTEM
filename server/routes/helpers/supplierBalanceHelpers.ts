@@ -7,6 +7,7 @@
 // unlinked company behave like a child company.
 
 import Decimal from "decimal.js";
+import { toMoney } from "../../lib/money";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { getVoucherEntriesBySupplierBatched } from "../performance/supplierVoucherEntryBatcher";
@@ -184,30 +185,34 @@ export async function getSupplierBalanceForContext(
   }, openingBalanceD);
   const balance = balanceD.toNumber();
 
-  const balancesByCurrency: Record<string, { debit: number; credit: number; net: number }> = {};
+  // Sum each currency and the historical base balance exactly, converting once:
+  // a float running total over many entries drifted (0.1 + 0.2 = 0.30000000000000004).
+  const sumsByCurrency: Record<string, { debit: Decimal; credit: Decimal }> = {};
   for (const entry of entries) {
     const ccy: string = (entry.transactionCurrency as string | null) || "USD";
-    const txDr = parseFloat(
-      (entry.transactionDebitAmount as string | null) ?? (entry.debitAmount as string | null) ?? "0"
-    );
-    const txCr = parseFloat(
-      (entry.transactionCreditAmount as string | null) ?? (entry.creditAmount as string | null) ?? "0"
-    );
-    if (!balancesByCurrency[ccy]) balancesByCurrency[ccy] = { debit: 0, credit: 0, net: 0 };
-    balancesByCurrency[ccy].debit += txDr;
-    balancesByCurrency[ccy].credit += txCr;
-    balancesByCurrency[ccy].net = balancesByCurrency[ccy].credit - balancesByCurrency[ccy].debit;
+    const txDr = toMoney((entry.transactionDebitAmount as string | null) ?? (entry.debitAmount as string | null));
+    const txCr = toMoney((entry.transactionCreditAmount as string | null) ?? (entry.creditAmount as string | null));
+    const sums = (sumsByCurrency[ccy] ??= { debit: new Decimal(0), credit: new Decimal(0) });
+    sums.debit = sums.debit.plus(txDr);
+    sums.credit = sums.credit.plus(txCr);
+  }
+  const balancesByCurrency: Record<string, { debit: number; credit: number; net: number }> = {};
+  for (const [ccy, sums] of Object.entries(sumsByCurrency)) {
+    balancesByCurrency[ccy] = {
+      debit: sums.debit.toNumber(),
+      credit: sums.credit.toNumber(),
+      net: sums.credit.minus(sums.debit).toNumber(),
+    };
   }
 
-  let historicalBaseBalance = openingBalanceD.toNumber();
+  let historicalBaseBalanceD = openingBalanceD;
   for (const entry of entries) {
-    const baseDr = parseFloat((entry.baseDebitAmount as string | null) ?? (entry.debitAmount as string | null) ?? "0");
-    const baseCr = parseFloat(
-      (entry.baseCreditAmount as string | null) ?? (entry.creditAmount as string | null) ?? "0"
-    );
-    if (baseCr > 0 && baseDr === 0) historicalBaseBalance += baseCr;
-    if (baseDr > 0 && baseCr === 0) historicalBaseBalance -= baseDr;
+    const baseDr = toMoney((entry.baseDebitAmount as string | null) ?? (entry.debitAmount as string | null));
+    const baseCr = toMoney((entry.baseCreditAmount as string | null) ?? (entry.creditAmount as string | null));
+    if (baseCr.gt(0) && baseDr.eq(0)) historicalBaseBalanceD = historicalBaseBalanceD.plus(baseCr);
+    if (baseDr.gt(0) && baseCr.eq(0)) historicalBaseBalanceD = historicalBaseBalanceD.minus(baseDr);
   }
+  const historicalBaseBalance = historicalBaseBalanceD.toNumber();
 
   return {
     balance,

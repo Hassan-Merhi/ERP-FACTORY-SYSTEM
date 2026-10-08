@@ -17,6 +17,7 @@ import fs from "fs";
 import { factoryWorkers, factoryPayrolls, factoryWorkerAdvances, companies, companySettings } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 export function registerWorkerStatementReadRoutes(app: Express) {
   app.get("/api/factory/workers/:id/statement", requireAuth, async (req: Request, res: Response) => {
@@ -108,10 +109,11 @@ export function registerWorkerStatementReadRoutes(app: Express) {
 
       entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-      let runningBalance = 0;
+      // Exact running balance: a float total drifted on long statements.
+      let runningBalance = new MoneyDecimal(0);
       for (const entry of entries) {
-        runningBalance += parseFloat(entry.debitAmount || "0") - parseFloat(entry.creditAmount || "0");
-        entry.runningBalance = runningBalance;
+        runningBalance = runningBalance.plus(toMoney(entry.debitAmount)).minus(toMoney(entry.creditAmount));
+        entry.runningBalance = runningBalance.toNumber();
       }
 
       res.json(entries);
@@ -140,10 +142,7 @@ export function registerWorkerStatementReadRoutes(app: Express) {
       const workerName = worker.fullName || `Worker #${workerId}`;
 
       // Advances
-      const advConds = [
-        eq(factoryWorkerAdvances.workerId, workerId),
-        eq(factoryWorkerAdvances.companyId, companyId),
-      ];
+      const advConds = [eq(factoryWorkerAdvances.workerId, workerId), eq(factoryWorkerAdvances.companyId, companyId)];
       if (startDate) advConds.push(sql`${factoryWorkerAdvances.advanceDate} >= ${startDate}`);
       if (endDate) advConds.push(sql`${factoryWorkerAdvances.advanceDate} <= ${endDate}`);
       const advances = await db
@@ -180,7 +179,7 @@ export function registerWorkerStatementReadRoutes(app: Express) {
           date: adv.advanceDate,
           type: "Advance",
           description: adv.notes || "Advance payment",
-          debit: parseFloat(adv.amount || "0"),
+          debit: toMoney(adv.amount).toNumber(),
           credit: 0,
         });
       }
@@ -191,15 +190,15 @@ export function registerWorkerStatementReadRoutes(app: Express) {
           type: "Payroll",
           description: `Payroll ${pr.periodStart} to ${pr.periodEnd}`,
           debit: 0,
-          credit: parseFloat(pr.netSalary || "0"),
+          credit: toMoney(pr.netSalary).toNumber(),
         });
       }
       entries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-      let running = 0;
+      let running = new MoneyDecimal(0);
       const rowsWithBalance = entries.map((e) => {
-        running += e.debit - e.credit;
-        return { ...e, runningBalance: running };
+        running = running.plus(e.debit).minus(e.credit);
+        return { ...e, runningBalance: running.toNumber() };
       });
 
       // Company info
