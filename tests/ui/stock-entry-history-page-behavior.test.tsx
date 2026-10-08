@@ -13,6 +13,7 @@ const bale = {
   id: 101,
   stockEntryDate: "2026-08-12",
   locationName: "Main",
+  workerId: 1,
   workerName: "Alice",
   productName: "Shirts",
   articleCode: "SH-1",
@@ -202,6 +203,26 @@ describe("stock entry history page behavior", () => {
     expect(within(row).getByText("SH-1")).toBeInTheDocument();
     expect(within(row).getByText("25")).toBeInTheDocument();
     expect(within(row).getByText("IN_STOCK")).toBeInTheDocument();
+  });
+
+  it("reassigns only the selected bale from detailed view", async () => {
+    render(<StockEntryHistory />);
+    fireEvent.click(screen.getByTestId("button-view-detailed"));
+
+    const row = screen.getByTestId("row-bale-101");
+    expect(within(row).getByTestId("select-assign-worker-bale-101")).toBeInTheDocument();
+    fireEvent.click(within(row).getByRole("button", { name: "Bob" }));
+
+    await waitFor(() =>
+      expect(harness.apiRequest).toHaveBeenCalledWith("PATCH", "/api/factory/bales/bulk-assign-worker", {
+        baleIds: [101],
+        workerId: 2,
+      })
+    );
+    expect(harness.toast).toHaveBeenCalledWith({
+      title: "Worker assigned",
+      description: "Worker updated for 1 bale(s).",
+    });
   });
 
   it("reports the active date and clears it when the date filter is cleared", async () => {
