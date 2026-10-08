@@ -15,6 +15,7 @@ import {
   getEstimatedPrice,
   getOverloadedBales,
   getRemainingBales,
+  getRemainingBalesColorClass,
   groupOrdersByCustomer,
   statusFilterCounts,
 } from "./invoiceCalculations";
@@ -56,6 +57,22 @@ describe("getRemainingBales / getOverloadedBales", () => {
     expect(getOverloadedBales({ proformaExpectedBales: "20", totalQtyBales: 25 })).toBe(5);
     expect(getOverloadedBales({ proformaExpectedBales: "40", totalQtyBales: 25 })).toBe(0);
     expect(getOverloadedBales({ totalQtyBales: 25 })).toBe(0);
+  });
+});
+
+describe("getRemainingBalesColorClass", () => {
+  it("uses red for values below 450, light green from 450 to 499, and dark green at 500+", () => {
+    expect(getRemainingBalesColorClass(449)).toContain("text-red-600");
+    expect(getRemainingBalesColorClass(450)).toContain("bg-lime-100");
+    expect(getRemainingBalesColorClass(499)).toContain("bg-lime-100");
+    expect(getRemainingBalesColorClass(500)).toContain("bg-emerald-700");
+    expect(getRemainingBalesColorClass(618)).toContain("bg-emerald-700");
+  });
+
+  it("provides theme-aware text colors for both green tiers", () => {
+    expect(getRemainingBalesColorClass(450)).toContain("dark:text-lime-200");
+    expect(getRemainingBalesColorClass(500)).toContain("text-white");
+    expect(getRemainingBalesColorClass(500)).toContain("dark:bg-emerald-700");
   });
 });
 
