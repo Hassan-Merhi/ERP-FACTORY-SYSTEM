@@ -523,3 +523,74 @@ HIGH:
   - fix the factory bale cost basis.
   - Then re-run the reconciliation on production data before setting `PERPETUAL_INVENTORY_POSTING_READY = true`.
 - **Wave 12, audit trail:** write audit in the posting transaction, and use reversal entries instead of in-place edits for posted vouchers.
+
+## 8. Re-audit (2026-10-08, branch at `ac33c40`, after waves 9–11)
+
+Method: four independent read-only reviews. Three reviewed the code at `ac33c40` against the wave log rather than taking it as given (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). The fourth measured production read-only, one company scope per query (the database accepted scoped queries again). **Production runs `b99706a`, deployed by hand on 2026-10-08 from a branch that is not on `main`; nothing on this branch is deployed. `PERPETUAL_INVENTORY_POSTING_READY` is still false, so no company is on perpetual inventory and the general ledger is still a periodic book.**
+
+### Score
+
+| Category | Before (2026-10-06) | Re-audit 1 (2026-10-07) | Now (branch code) |
+|---|---|---|---|
+| Chart of Accounts | 20 | 40 | 45 |
+| Double Entry | 35 | 35 | 46 |
+| General Ledger | 25 | 40 | 45 |
+| Posting Engine | 40 | 40 | 45 |
+| AR/AP | 30 | 25 | 40 |
+| Inventory | 15 | 36 | 50 |
+| Factory Accounting | 15 | 30 | 42 |
+| Multi-Currency | 40 | 28 | 35 |
+| Multi-Company | 55 | 45 | 48 |
+| Reporting | 10 | 22 | 33 |
+| Data Integrity | 30 | 45 | 48 |
+| Audit Trail | 40 | 28 | 32 |
+
+**ACCOUNTING SCORE — branch code: 42/100** (35 at re-audit 1). **Production as deployed: about 28/100, unchanged** — production has none of the branch's guards (see below).
+
+Gains verified in code: one balance engine behind the trial balance, balance sheet, customer pages and every engine-based net position; one account classifier; banks in net position; automatic FX revaluation removed; balance guard for every company; destructive admin routes transactional and audited; stock valued by `total_value` with a sound negative-stock model and value-exact reversals; factory bales costed at USD material cost with the variance split. Inventory and factory scores are for the code: with the switch off, waves 8 and 11 do not yet change the books.
+
+### Production measurements (2026-10-08)
+
+- **No guard is installed.** The two balance-guard triggers, `gl_inventory_cutovers` and `voucher_balance_guard_since` are absent. `voucher_entries` has no foreign key to `ledger_account_id` or `bank_account_id` and no CHECK constraints. Present: closed-period guards, currency normalization trigger, company-sync triggers.
+- **The plug writer is still live.** `equity_adjustment_*` was rewritten on 10-07/10-08 for companies 1 (−6.55M), 8 (−575,647), 10 (−73,901) and 9 (+5,143); 12 (−26.8M) and 13 (+1.54M) are unchanged since the summer. The plugs come from the import-cycle formula and do not equal any ledger difference.
+- **Trial balance.** No unbalanced non-stock voucher exists. All 177 unbalanced active vouchers are Mixed, Production or Consumption (26 created in the last 30 days, 2 on 10-08). Company 1's Mixed vouchers have two lines and still do not balance, so they are errors, not one-sided stock entries. The large differences are master opening balances: −8.08M (1), +6.03M (13), −505k (10), +113k (8), −43k (17). Customer openings are duplicated on their linked ledger accounts in companies 1, 8, 9 and 10 (546k in 1 and 8). 532 vouchers have no lines.
+- **Automatic FX revaluation still posts** in company 9 (9 `FX-REVAL-*` vouchers, about 3,493, latest 10-05).
+- **References.** 8 lines from company 1 into company 13 accounts (Dr 1.66M) and 4 lines from company 8 onto company 1 suppliers; 17 lines to hard-deleted accounts, 149 to soft-deleted accounts (company 10), 14 with no target.
+- **Inventory.** 21.4M of stock value sits at 66 locations that no longer exist (87% of company 1's stock value; company 8 holds 1.29M there). 871 rows hold value at zero quantity. `total_value` runs about 800k above qty × rate in company 1.
+- **Factory.** All 39,479 bales lack a mix or pressing batch link; 36,251 are costed at the catalogue price (about 40× material cost). Company 12 stock of 49.5M has no ledger counterpart. The wave 6 legacy FX repair has not run: 462 EUR/AUD lines (713k EUR, 327k AUD per side) still carry native amounts in the USD columns, and 240 of them have no usable rate. 2 factory vouchers are dated in the future.
+- **Account types.** Mis-cased types remain (`EXPENSE`, `LIABILITY`, `EQUITY`); no equity or retained-earnings account in companies 7, 8, 9, 13 and 17. No live account is typed Government Taxes or carries an Indirect Income balance.
+
+### Wave-log claims corrected by this re-audit
+
+- Wave 8.5 "every voucher writer posts in one transaction": false — salary advances (`employees/salaryAdvanceRoutes.ts`) and the rental auto-transfer (`rental/shared/auto-transfer.ts`) autocommit; purchase update, factory container create and waste dispatch commit the voucher apart from its side effects.
+- Wave 9 "every active voucher created after the install must balance": overstated — the exemption follows the voucher type label, which the client sets; "created after" relies on `created_at`, which the company import can backdate; single-currency vouchers are checked in the transaction currency only.
+- Wave 9 balance sheet "every account type": Government Taxes is treated as a liability and Profit as current earnings, against the classifier and the P&L.
+- Wave 5 fiscal close: an income or expense account with an opening balance is closed twice (the closing line includes the opening and the opening is also zeroed).
+- Wave 10 "the part-1 customer rule is retired" and "the classifier is used everywhere": the Customers-page and POS-customer statements still use the old rule; the dashboard, ratios, net-profit statement and chat phase 2/3 still match types by exact name; the net-profit Excel still has its own net position (dividing cash by the CFA rate).
+- Wave 11 "every reader values by total_value", "reconciles as of any date" and "transfers conserve value": the closing-stock summary still uses qty × rate; the as-of replay misses movements that leave no document line; transfer revision approvals, the transfer import and the missing-source transfer do not conserve value; the bale-mirror refusal was not done.
+
+### Remaining defects that matter most
+
+CRITICAL:
+1. Exempt stock types are chosen by the client: a "Production" voucher with one line Dr Cash 1,000,000 passes the application and the database (`voucher-entries/write.ts`, `voucherBalanceGuard.ts`). Production's two-line unbalanced Mixed vouchers are the same hole.
+2. Company delete (`storage/auth.ts`, `DELETE /api/companies/:id`): no transaction, removes fiscal closures first, hard-deletes every voucher, deletes `audit_log`, writes no audit.
+3. Factory POS posts in the sale currency at rate 1, and a credit sale's revenue is only its deposit while cost of sales is the full sale (`pos-financial/sale-write.ts`).
+4. Balance sheet classification contradicts the P&L (`financialReportsService.ts`).
+5. Before the switch: stock movements on containers offloaded before a cut-over (reverse, replace, suspend/restore, charge re-pricing) and restored stock documents move the sub-ledger with no ledger counterpart.
+
+HIGH:
+- Fiscal close double-counts P&L openings; opening balances stay editable after a close and `POST /api/ledger-accounts/zero-balances` is unaudited.
+- About 70 writer files still insert vouchers directly; most audit is written after commit; posted lines are rewritten in place; `audit_log` is not append-only.
+- Orphaned-POS permanent delete is open to any non-POS user, unaudited; employee/customer permanent delete clears the party on posted lines.
+- ERP supplier pages and factory supplier pages are still separate payable engines; two customer statements and two chat/alert receivable readers too; the AI context lists other companies' suppliers.
+- Engine defaults a sideless ledger opening to Dr regardless of type; reports disagree on the date basis (`voucher_date` vs effective date) and on supplier inclusion; group elimination is by name and unpaired.
+- Currency normalization trigger still has no installer; the factory FX lookup ignores the transaction date; `POST /api/exchange-rates` is open to any signed-in user and unaudited.
+- Factory daily journal credits expense accounts for commission and legacy containers that were never journalled; stock-entry bales without a mix raise finished goods with no material leaving.
+
+### Proposed next waves
+
+- **Wave 12, ledger integrity and audit trail:** stock exemption only for one-sided vouchers written by the stock-document writers (application and database), history marked by an immutable flag, base columns always checked; safe company delete; fiscal-close fix and openings under the period lock; append-only audit written in the posting transaction; reversal instead of in-place edits; guard installers fatal and listed in the diagnostic.
+- **Wave 13, reports and payables on the engine:** balance sheet on the classifier; one date basis for P&L, income statement, fiscal close, dashboard, ratios and chat; net-profit Excel on `calculateNetPositionAsOf`; ERP and factory supplier pages on the engine with memo lines; paired group elimination.
+- **Wave 14, factory and currency completeness:** factory POS at a confirmed rate with full credit-sale revenue; commission and legacy container payables journalled; date-aware factory FX; normalization trigger installer; exchange-rate route restricted and audited; reviewed run of the wave 6 FX repair.
+- **Wave 15, perpetual readiness:** close the before-cut-over container and voucher-restore gaps, conserve value on every transfer path, bale-mirror refusals, complete the as-of replay; on production, decide the orphaned-location stock (21.4M) and zero-quantity values, run the reviewed bale re-cost, then the opening plan and reconciliation — only then consider setting `PERPETUAL_INVENTORY_POSTING_READY = true`.
+- **Deployment, independent of the waves:** none of waves 1–11 run in production. The live plug writer and automatic FX revaluation stop only when this branch (or its wave 1 and wave 9 parts) is merged and deployed.
