@@ -36,8 +36,8 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
         });
       }
 
-      const paymentAmount = parseFloat(amount);
-      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      const paymentAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!paymentAmount || paymentAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
 

@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
+import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import type { RentalModule } from "../../routes/rental/shared";
 import { normalizeVoucherEntryAmounts } from "../accounting/currencyAmounts";
 import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
@@ -391,9 +392,9 @@ async function postGroupCore(
     const payYear = pd.getUTCFullYear();
     const payMonth = pd.getUTCMonth() + 1;
     const futureAllocs = allocs.filter((a) => a.forYear > payYear || (a.forYear === payYear && a.forMonth > payMonth));
-    const deferredChunk = futureAllocs.reduce((s, a) => s + Number(a.chunk), 0);
-    const totalAmountNum = parseFloat(totalAmountStr);
-    const earnedChunk = totalAmountNum - deferredChunk;
+    // Exact: the earned and deferred credits add up to the cash debit to the cent.
+    const deferredChunk = sumMoney(futureAllocs.map((a) => a.chunk));
+    const earnedChunk = toMoney(totalAmountStr).minus(deferredChunk);
 
     const voucherNum = `RENT-${paymentDate.replace(/-/g, "")}-${groupId.slice(-6)}`;
     const { voucher: v } = await insertInfrastructureVoucherTx(
@@ -420,7 +421,7 @@ async function postGroupCore(
         narration,
       },
     ];
-    if (earnedChunk > 0.005) {
+    if (earnedChunk.gt("0.005")) {
       lEntries.push({
         voucherId: v.id,
         ledgerAccountId: incomeAccountId,
@@ -428,7 +429,7 @@ async function postGroupCore(
         narration,
       });
     }
-    if (deferredChunk > 0.005) {
+    if (deferredChunk.gt("0.005")) {
       const deferredId = await findOrCreateLedgerAccount(
         tx,
         companyId,
@@ -485,8 +486,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
   }
 
   const billingDay = getRentalBillingDay(contract.startDate as string);
-  const totalAmountNum = parseFloat(amount);
-  const rentalAmountNum = parseFloat(contract.rentalAmount as string);
+  // A non-numeric amount allocates nothing (the caller refuses an empty allocation).
+  const totalAmountExact = parseMoneyInput(amount) ?? 0;
 
   const { year: startY, month: startM } = await findEarliestOutstandingMonth(contract.id, billingDay, paymentDate);
 
@@ -494,8 +495,8 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     contract.id,
     startY,
     startM,
-    totalAmountNum,
-    rentalAmountNum,
+    totalAmountExact,
+    contract.rentalAmount as string,
     billingDay,
     paymentDate
   );
@@ -698,8 +699,7 @@ async function postScheduledGroup(
 
     if (groupRows.length === 0) return;
 
-    const totalAmount = groupRows.reduce((s, r) => s + parseFloat(r.amount as string), 0);
-    const totalAmountStr = new Decimal(totalAmount).toFixed(2);
+    const totalAmountStr = sumMoney(groupRows.map((r) => r.amount as string)).toFixed(2);
 
     const allocs = groupRows.map((r) => ({
       forYear: r.forYear,
@@ -763,12 +763,11 @@ async function postScheduledGroup(
     const firstRow = groupRows[0];
     if (firstRow.cashAccountId && unit) {
       const unitLabel = `${unit.locationGroup}/${unit.unitNumber}`;
-      const totalAmount = groupRows.reduce((s, r) => s + parseFloat(r.amount as string), 0);
       await maybeRunAutoTransfer(
         companyId,
         module,
         firstRow.cashAccountId,
-        new Decimal(totalAmount).toFixed(2),
+        sumMoney(groupRows.map((r) => r.amount as string)).toFixed(2),
         paymentDate,
         unitLabel,
         firstRow.id,
