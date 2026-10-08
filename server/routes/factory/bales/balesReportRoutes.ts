@@ -224,7 +224,8 @@ export function registerBalesReportRoutes(app: Express) {
               'finalizedAt', fb.finalized_at,
               'stockEntryDate', fb.stock_entry_date::text,
               'locationName', COALESCE(l.name, 'Unknown'),
-              'workerName', fw.full_name,
+              'workerId', fb.finalized_by,
+               'workerName', fw.full_name,
               'productName', fbp.name,
               'articleCode', fbp.article_code
             ) ORDER BY fb.finalized_at ASC) AS "bales"
