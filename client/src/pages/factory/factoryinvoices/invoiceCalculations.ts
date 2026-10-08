@@ -21,6 +21,17 @@ export function getRemainingBales(order: OrderLike): number {
   return Math.max(0, expected - (order.totalQtyBales || 0));
 }
 
+/** Shared positive-remaining styles for loading rows and grouped totals. */
+export function getRemainingBalesColorClass(remaining: number): string {
+  if (remaining >= 500) {
+    return "inline-block rounded-md bg-emerald-700 px-2 py-0.5 text-white dark:bg-emerald-700";
+  }
+  if (remaining >= 450) {
+    return "inline-block rounded-md bg-lime-100 px-2 py-0.5 text-lime-900 dark:bg-lime-900/60 dark:text-lime-200";
+  }
+  return "text-red-600 dark:text-red-400";
+}
+
 /** Bales loaded beyond the proforma target (0 when no target or under target). */
 export function getOverloadedBales(order: OrderLike): number {
   const expected = parseFloat(order.proformaExpectedBales || "0");
