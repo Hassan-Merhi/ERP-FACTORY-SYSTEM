@@ -5,6 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express, Request, Response } from "express";
+import { toMoney } from "../../../lib/money";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
@@ -159,12 +160,18 @@ export function registerBalesImportRoutes(app: Express) {
             await db.update(factoryContainers).set({ supplierId }).where(eq(factoryContainers.id, container.id));
           }
 
+          // The import carries no currency: the cost is in the container's
+          // currency, so it is the USD cost only for a USD container. Any other
+          // currency stays without a USD cost (not valued) until its rate is
+          // confirmed (wave 11: never a native-currency cost as USD).
+          const containerIsUsd = (container.currencyCode || "USD").toUpperCase() === "USD";
           await db.insert(factoryRawStock).values({
             companyId,
             containerId: container.id,
             receivedKg: item.receivedKg,
             usedKg: item.usedKg || "0",
             costPerKg: item.costPerKg,
+            costPerKgUsd: containerIsUsd ? String(item.costPerKg) : null,
           });
           imported++;
         } catch (err: unknown) {
@@ -229,10 +236,10 @@ export function registerBalesImportRoutes(app: Express) {
           nextRef++;
 
           const status = bale.status || "IN_STOCK";
+          // An imported bale's cost per kg is read as USD (the bale cost basis).
           const costPerKg = bale.costPerKg || "0";
           const weight = parseFloat(bale.weightKg);
-          const cost = parseFloat(costPerKg);
-          const totalCost = (weight * cost).toFixed(2);
+          const totalCost = toMoney(bale.weightKg).times(toMoney(costPerKg)).toDecimalPlaces(7).toFixed(7);
 
           await db.insert(factoryBales).values({
             companyId,

@@ -8,6 +8,7 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { writeDaybookEntry } from "../_helpers";
+import { recordFactoryStockValueEventTx, valuedBalesCostTx } from "../../../services/factory/factoryStockValueEvents";
 import {
   factoryCategories,
   factoryBaleProducts,
@@ -641,7 +642,8 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
                 .from(stockItems)
                 .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, bale.articleCode)));
               if (existing) {
-                const adjustment = await adjustInventory(tx, bale.erpLocationId, existing.id, 1, companyId);
+                // The ERP bale mirror is quantity only (wave 11): rate 0.
+                await adjustInventory(tx, bale.erpLocationId, existing.id, 1, companyId, 0);
                 await postStockMovementTx(
                   tx,
                   {
@@ -649,7 +651,7 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
                     stockItemId: existing.id,
                     kind: "adjustment",
                     quantity: "1",
-                    unitCost: String(Math.max(adjustment.averageRate || 0, 0)),
+                    unitCost: "0",
                     toLocationId: bale.erpLocationId,
                     occurredAt: now.toISOString(),
                     source: {
@@ -668,6 +670,20 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
               }
             }
           }
+
+          // Perpetual inventory: the restored bales are factory stock again at
+          // their cost, reversing the write-off (wave 11).
+          await recordFactoryStockValueEventTx(tx, {
+            companyId,
+            kind: "WASTE",
+            amount: await valuedBalesCostTx(
+              tx,
+              companyId,
+              bales.map((bale) => Number(bale.id))
+            ),
+            sourceType: "factory-waste-dispatch-restore",
+            sourceId: dispatchId,
+          });
 
           // 3. Delete the daybook entry for this dispatch
           await tx
@@ -737,6 +753,22 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             throw new Error(`Bale ${bale.referenceNumber} is not available (status: ${bale.status})`);
           }
         }
+
+        // Perpetual inventory: the bales' cost is a write-off in the daily
+        // factory stock journal (wave 11).
+        await recordFactoryStockValueEventTx(tx, {
+          companyId,
+          kind: "WASTE",
+          amount: (
+            await valuedBalesCostTx(
+              tx,
+              companyId,
+              balesToDispose.map((bale) => bale.id)
+            )
+          ).negated(),
+          sourceType: "factory-waste-dispatch",
+          sourceId: dispatchNumber,
+        });
 
         const totalWeightKg = sumMoney(balesToDispose.map((bale) => bale.weightKg as string)).toNumber();
         const totalCostWrittenOff = sumMoney(balesToDispose.map((bale) => bale.totalCost as string)).toNumber();

@@ -12,6 +12,7 @@ import { requireAuth } from "../../../../auth";
 import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
+import { releasePosSaleBalesTx } from "../../../../services/factory/factoryPosSaleBales";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
@@ -30,8 +31,13 @@ export function registerPosSaleDeleteRoutes(app: Express) {
       await db.transaction(async (tx) => {
         // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
         await removeFactoryPosCogsTx(tx, companyId, saleId);
-        // Restore bales to IN_STOCK by finding bales that were sold around the sale date/product
-        const items = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
+        // Wave 11: put back exactly the bales the sale recorded. A sale written
+        // before that record falls back to re-opening the most recent SOLD bales
+        // of each product at its location.
+        const released = await releasePosSaleBalesTx(tx, companyId, saleId);
+        const items = released.legacy
+          ? await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId))
+          : [];
         for (const item of items) {
           if (item.productId && sale.locationId) {
             // Re-open the most recently SOLD bales for that product at that location

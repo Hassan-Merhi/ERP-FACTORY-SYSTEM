@@ -36,6 +36,11 @@ const STOCK_BALANCE_HELPER = /\b(?:adjustInventory|reverseInventoryByExactValue|
 const STOCK_BALANCE_HELPER_MODULES = new Set([
   "server/inventoryHelper.ts",
   "server/services/inventory/exactValueInventory.ts",
+  // Wave 11 value-exact wrappers over the helpers above: like them they move a
+  // balance only, and every caller posts the canonical movement journal.
+  "server/services/inventory/valueExactReversal.ts",
+  "server/services/inventory/conservedStockTransfer.ts",
+  "server/services/inventory/creditNoteInventory.ts",
 ]);
 
 function mutatesStock(file, source) {

@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import { logger } from "../../lib/logger";
-import { db, pool } from "../../db";
+import { db, pool, type DbTransaction } from "../../db";
+import { MoneyDecimal } from "../../lib/money";
 import * as schema from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
@@ -31,12 +32,44 @@ export async function createLocation(location: schema.InsertLocation & { code: s
   return created;
 }
 
+export const LOCATION_HOLDS_STOCK_MESSAGE =
+  "This location still has stock. Move or remove all stock before deleting the location.";
+
+/**
+ * Wave 11: a location that holds stock (any quantity or value) cannot be
+ * deactivated or deleted, before or after the perpetual-inventory cut-over:
+ * its stock would drop out of the valuation readers while the sub-ledger (and,
+ * after the cut-over, the ledger) still carries it.
+ */
+export class LocationHoldsStockError extends Error {
+  readonly status = 409;
+  constructor() {
+    super(LOCATION_HOLDS_STOCK_MESSAGE);
+    this.name = "LocationHoldsStockError";
+  }
+}
+
+export async function locationHoldsStock(locationId: number): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT EXISTS (
+       SELECT 1 FROM inventory
+        WHERE location_id = $1
+          AND company_id = (SELECT company_id FROM locations WHERE id = $1)
+          AND (ABS(COALESCE(quantity, 0)) > 0 OR ABS(COALESCE(total_value, 0)) > 0)
+     ) AS holds`,
+    [locationId]
+  );
+  return rows[0]?.holds === true;
+}
+
 export async function updateLocation(id: number, updates: Partial<schema.InsertLocation>): Promise<schema.Location> {
+  if (updates.active === false && (await locationHoldsStock(id))) throw new LocationHoldsStockError();
   const [updated] = await db.update(schema.locations).set(updates).where(eq(schema.locations.id, id)).returning();
   return updated;
 }
 
 export async function deleteLocation(id: number): Promise<void> {
+  if (await locationHoldsStock(id)) throw new LocationHoldsStockError();
   await db.update(schema.locations).set({ deletedAt: new Date() }).where(eq(schema.locations.id, id));
 }
 
@@ -239,8 +272,27 @@ export async function updateInventory(
     resolvedCompanyId = loc?.companyId ?? 0;
   }
 
+  await db.transaction((tx) =>
+    updateInventoryTx(tx, locationId, stockItemId, quantity, averageRate, totalValue, resolvedCompanyId)
+  );
+}
+
+/**
+ * Sets a location's stock row, in the caller's transaction, and returns the
+ * signed change of its stored total_value (wave 11: what a linked inventory
+ * movement journal posts).
+ */
+export async function updateInventoryTx(
+  tx: DbTransaction,
+  locationId: number,
+  stockItemId: number,
+  quantity: string,
+  averageRate: string,
+  totalValue: string,
+  resolvedCompanyId: number
+): Promise<{ valueDelta: string; previousQuantity: string; previousTotalValue: string }> {
   const operationId = randomUUID();
-  await db.transaction(async (tx) => {
+  {
     const [existing] = await tx
       .select({
         id: schema.inventory.id,
@@ -250,7 +302,8 @@ export async function updateInventory(
       })
       .from(schema.inventory)
       .where(and(eq(schema.inventory.locationId, locationId), eq(schema.inventory.stockItemId, stockItemId)))
-      .limit(1);
+      .limit(1)
+      .for("update");
     const previousQuantity = existing ? Number.parseFloat(existing.quantity || "0") : 0;
     const nextQuantity = Number.parseFloat(quantity || "0");
     const delta = nextQuantity - previousQuantity;
@@ -266,7 +319,7 @@ export async function updateInventory(
     // The journal below can only record the quantity change; a direct set also
     // overwrites the valuation, so record the exact before and after state.
     await recordInventoryValuationOverride(tx, {
-      companyId: resolvedCompanyId!,
+      companyId: resolvedCompanyId,
       locationId,
       stockItemId,
       inventoryId: existing?.id ?? null,
@@ -283,7 +336,7 @@ export async function updateInventory(
       await postStockMovementTx(
         tx,
         {
-          companyId: resolvedCompanyId!,
+          companyId: resolvedCompanyId,
           stockItemId,
           kind: "adjustment",
           quantity: String(Math.abs(delta)),
@@ -301,7 +354,13 @@ export async function updateInventory(
         canonicalStockMovementAdapter
       );
     }
-  });
+    const previousTotalValue = existing?.totalValue ?? "0";
+    return {
+      valueDelta: new MoneyDecimal(totalValue || "0").toDecimalPlaces(2).minus(previousTotalValue).toFixed(2),
+      previousQuantity: existing?.quantity ?? "0",
+      previousTotalValue,
+    };
+  }
 }
 
 export async function getTotalInventoryValue(companyId: number): Promise<number> {

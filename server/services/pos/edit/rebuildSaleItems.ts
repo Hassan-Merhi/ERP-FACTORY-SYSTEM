@@ -102,18 +102,6 @@ export async function rebuildSaleItems(
       .limit(1);
     const configuredPrice = toInventoryDecimal(editLocPrice?.sellingPrice);
 
-    await tx.insert(salesItems).values({
-      voucherId,
-      stockItemId,
-      quantity: inventoryQuantity(sellQty),
-      sellingPrice: inventoryMoney(effectiveSellingPrice),
-      costPrice: inventoryUnitCost(costPrice),
-      totalSales: inventoryMoney(totalSales),
-      totalCost: inventoryMoney(totalCost),
-      profit: inventoryMoney(profit),
-      configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
-    });
-
     const issued = await adjustInventory(
       tx,
       targetLocationId,
@@ -124,6 +112,20 @@ export async function rebuildSaleItems(
       "pos-sale",
       voucherId
     );
+    await tx.insert(salesItems).values({
+      voucherId,
+      stockItemId,
+      quantity: inventoryQuantity(sellQty),
+      sellingPrice: inventoryMoney(effectiveSellingPrice),
+      costPrice: inventoryUnitCost(costPrice),
+      totalSales: inventoryMoney(totalSales),
+      totalCost: inventoryMoney(totalCost),
+      profit: inventoryMoney(profit),
+      configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
+      // Wave 11: the exact value the issue relieved, what a reversal restores.
+      valueMoved: inventoryMoney(relievedValue(issued)),
+    });
+
     relieved = relieved.plus(relievedValue(issued));
 
     if (canonicalRevision !== undefined && !sellQty.isZero()) {

@@ -296,6 +296,11 @@ export async function createPosSale(
           totalCost: inventoryMoney(totalCost),
           profit: inventoryMoney(profit),
           configuredPrice: inventoryUnitCost(configuredPrice),
+          // Wave 11: the exact value the issue relieved (the COGS journal's
+          // amount), what a reversal restores. cost_price / total_cost stay the
+          // sale's costing at the pre-sale average rate, a display and profit
+          // figure; the sub-ledger and the ledger move by value_moved.
+          valueMoved: inventoryMoney(relieved),
         });
 
         const profitPerUnit = subtractInventoryValues(sellingPrice, configuredPrice);

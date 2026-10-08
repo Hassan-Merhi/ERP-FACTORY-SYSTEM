@@ -291,6 +291,13 @@ export function registerPosImportRoutes(app: Express) {
             .limit(1);
           const configuredPrice = toInventoryDecimal(locationPrice?.sellingPrice || stockItem.sellingPrice);
 
+          const issued = await adjustInventory(
+            tx,
+            locationId,
+            stockItem.id,
+            quantity.negated().toNumber(),
+            req.session.currentCompanyId!
+          );
           const [saleItem] = await tx
             .insert(salesItems)
             .values({
@@ -303,16 +310,11 @@ export function registerPosImportRoutes(app: Express) {
               totalCost: inventoryMoney(itemCost),
               profit: inventoryMoney(profit),
               configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
+              // Wave 11: the exact value the issue relieved, what a reversal restores.
+              valueMoved: inventoryMoney(relievedValue(issued)),
             })
             .returning({ id: salesItems.id });
 
-          const issued = await adjustInventory(
-            tx,
-            locationId,
-            stockItem.id,
-            quantity.negated().toNumber(),
-            req.session.currentCompanyId!
-          );
           relieved = relieved.plus(relievedValue(issued));
           await postStockMovementTx(
             tx,

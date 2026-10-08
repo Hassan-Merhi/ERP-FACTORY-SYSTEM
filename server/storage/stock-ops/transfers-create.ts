@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import { eq, and, inArray, isNull } from "drizzle-orm";
 import { db } from "../../db";
 import {
@@ -6,9 +7,7 @@ import {
   inventoryQuantity,
   inventoryUnitCost,
   multiplyInventoryValues,
-  subtractInventoryValues,
   toInventoryDecimal,
-  weightedAverageInventoryCost,
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
@@ -19,6 +18,12 @@ import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
+import {
+  moveTransferLegConservedTx,
+  postTransferResidualTx,
+  recordTransferValueMovedTx,
+  transferVoucherDateTx,
+} from "../../services/inventory/conservedStockTransfer";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -210,26 +215,31 @@ export async function applyStockTransferInventoryTx(
     }
   }
 
+  // Wave 11: the destination receives exactly the value the source relieved,
+  // and each line records it as value_moved (see conservedStockTransfer).
+  const relievedByGroup = new Map<string, Decimal>();
+  const deltas: Decimal[] = [];
   for (const item of movementItems) {
     const quantity = toInventoryDecimal(item.quantity);
     const rate = toInventoryDecimal(item.rate);
 
     const sourceWasMissing = !lockedRows.get(`${item.sourceLocationId}:${item.stockItemId}`);
 
-    // Passing the historical transfer rate creates the negative layer with the
-    // correct valuation basis. adjustInventory intentionally seeds a first-touch
-    // negative inventory row at a zero average rate, so for transfers only we
-    // restore the transfer's historical rate as the row's cost memory as well.
-    await adjustInventory(
-      tx,
-      item.sourceLocationId,
-      item.stockItemId,
-      quantity.negated().toNumber(),
-      input.companyId,
-      rate.toNumber(),
-      "Stock Transfer",
-      input.sourceVoucherId
-    );
+    // The transfer's historical rate is only the cost memory of a source that
+    // has no row (the negative layer's provisional rate); the destination is
+    // valued at what the source relieved.
+    const moved = await moveTransferLegConservedTx(tx, {
+      companyId: input.companyId,
+      sourceLocationId: item.sourceLocationId,
+      destinationLocationId: input.destinationLocationId,
+      stockItemId: item.stockItemId,
+      quantity,
+      fallbackRate: rate,
+      sourceVoucherType: "Stock Transfer",
+      sourceVoucherId: input.sourceVoucherId,
+    });
+    relievedByGroup.set(`${item.sourceLocationId}:${item.stockItemId}`, moved.relieved);
+    deltas.push(moved.sourceDelta, moved.destinationDelta);
     if (sourceWasMissing) {
       await tx
         .update(schema.inventory)
@@ -247,17 +257,6 @@ export async function applyStockTransferInventoryTx(
         );
     }
 
-    await adjustInventory(
-      tx,
-      input.destinationLocationId,
-      item.stockItemId,
-      quantity.toNumber(),
-      input.companyId,
-      rate.toNumber(),
-      "Stock Transfer",
-      input.sourceVoucherId
-    );
-
     await postStockMovementTx(
       tx,
       {
@@ -265,7 +264,7 @@ export async function applyStockTransferInventoryTx(
         stockItemId: item.stockItemId,
         kind: "transfer",
         quantity: inventoryQuantity(quantity),
-        unitCost: inventoryUnitCost(rate),
+        unitCost: inventoryUnitCost(sourceWasMissing ? rate : moved.rate),
         fromLocationId: item.sourceLocationId,
         toLocationId: input.destinationLocationId,
         occurredAt: new Date().toISOString(),
@@ -279,6 +278,14 @@ export async function applyStockTransferInventoryTx(
       canonicalStockMovementAdapter
     );
   }
+  await recordTransferValueMovedTx(tx, input.transferId, relievedByGroup);
+  await postTransferResidualTx(tx, {
+    companyId: input.companyId,
+    transferId: input.transferId,
+    date: await transferVoucherDateTx(tx, input.companyId, input.sourceVoucherId),
+    reference: `Transfer ${input.transferId}`,
+    deltas,
+  });
 }
 
 export async function createStockTransfer(
@@ -518,71 +525,48 @@ export async function createStockAdjustment(
       let actualRate = rate;
       let actualTotalAmount = multiplyInventoryValues(absoluteQuantity, rate);
 
+      let valueMoved: Decimal | null = null;
       if (!isOptional) {
+        // Wave 11: every line moves stock through adjustInventory, so value is
+        // inventory.total_value (never rebuilt from the rounded rate), a short
+        // row holds no value and keeps a negative layer, and the line records
+        // the exact value it moved.
         const currentInventory = await lockInventoryRow(tx, locationId, item.stockItemId);
-
-        if (currentInventory) {
-          const currentQty = toInventoryDecimal(currentInventory.quantity);
-          const currentRate = toInventoryDecimal(currentInventory.average_rate);
-          let newQty;
-          let newValue;
-          let newRate;
-
-          if (isProduction) {
-            newQty = addInventoryValues(currentQty, absoluteQuantity);
-            newRate = weightedAverageInventoryCost(currentQty, currentRate, absoluteQuantity, rate);
-            newValue = multiplyInventoryValues(newQty, newRate);
-            totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
+        let incomingRate: number | undefined = isProduction ? rate.toNumber() : undefined;
+        if (!isProduction) {
+          if (currentInventory) {
+            actualRate = Decimal.max(toInventoryDecimal(currentInventory.average_rate), 0);
           } else {
-            newQty = subtractInventoryValues(currentQty, absoluteQuantity);
-            newValue = newQty.isPositive() ? multiplyInventoryValues(newQty, currentRate) : toInventoryDecimal(0);
-            newRate = currentRate;
-            actualRate = currentRate;
-            actualTotalAmount = multiplyInventoryValues(absoluteQuantity, currentRate);
-            totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
+            const [stockItem] = await tx
+              .select()
+              .from(schema.stockItems)
+              .where(eq(schema.stockItems.id, item.stockItemId));
+            if (!stockItem) throw new Error(`Stock item ${item.stockItemId} not found.`);
+            const fallbackRate = toInventoryDecimal(stockItem.openingRate);
+            if (!fallbackRate.isPositive()) throw new Error(`Stock item "${stockItem.name}" has no opening rate set.`);
+            // The opening rate is the provisional cost of the shortage.
+            actualRate = fallbackRate;
+            incomingRate = fallbackRate.toNumber();
           }
-
-          await tx
-            .update(schema.inventory)
-            .set({
-              quantity: inventoryQuantity(newQty),
-              averageRate: inventoryUnitCost(newRate),
-              totalValue: inventoryMoney(newValue),
-              lastUpdated: new Date(),
-            })
-            .where(eq(schema.inventory.id, currentInventory.id));
-        } else if (isProduction) {
-          await tx.insert(schema.inventory).values({
-            companyId: location.companyId,
-            locationId,
-            stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(absoluteQuantity),
-            averageRate: inventoryUnitCost(rate),
-            totalValue: inventoryMoney(actualTotalAmount),
-            lastUpdated: new Date(),
-          });
-          totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
-        } else {
-          const [stockItem] = await tx
-            .select()
-            .from(schema.stockItems)
-            .where(eq(schema.stockItems.id, item.stockItemId));
-          if (!stockItem) throw new Error(`Stock item ${item.stockItemId} not found.`);
-          const fallbackRate = toInventoryDecimal(stockItem.openingRate);
-          if (!fallbackRate.isPositive()) throw new Error(`Stock item "${stockItem.name}" has no opening rate set.`);
-          actualRate = fallbackRate;
-          actualTotalAmount = multiplyInventoryValues(absoluteQuantity, fallbackRate);
-          totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
-          await tx.insert(schema.inventory).values({
-            companyId: location.companyId,
-            locationId,
-            stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(absoluteQuantity.negated()),
-            averageRate: inventoryUnitCost(fallbackRate),
-            totalValue: inventoryMoney(actualTotalAmount.negated()),
-            lastUpdated: new Date(),
-          });
+          actualTotalAmount = multiplyInventoryValues(absoluteQuantity, actualRate);
         }
+        const moved = await adjustInventory(
+          tx,
+          locationId,
+          item.stockItemId,
+          isProduction ? absoluteQuantity.toNumber() : absoluteQuantity.negated().toNumber(),
+          location.companyId,
+          incomingRate,
+          "Stock Adjustment",
+          voucherId
+        );
+        const delta = toInventoryDecimal(moved.valueDelta);
+        valueMoved = delta.abs();
+        // The voucher's STOCK_ADJUSTMENT lines keep the document value
+        // (quantity × rate); syncStockAdjustmentInventoryTx posts Inventory at
+        // the recorded value_moved and any difference to INVENTORY_ADJUSTMENT.
+        if (isProduction) totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
+        else totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
       }
 
       // Canonical evidence for the applied adjustment, on the same transaction
@@ -627,6 +611,7 @@ export async function createStockAdjustment(
           quantity: inventoryQuantity(quantity),
           rate: inventoryUnitCost(actualRate),
           totalAmount: inventoryMoney(actualTotalAmount),
+          valueMoved: valueMoved === null ? null : inventoryMoney(valueMoved),
         })
         .returning();
       adjustmentItems.push(adjustmentItem);

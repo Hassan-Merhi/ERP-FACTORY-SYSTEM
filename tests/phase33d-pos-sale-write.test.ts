@@ -84,6 +84,13 @@ vi.mock("../server/services/accounting/perpetualInventory/factoryPosCogs", () =>
   factoryBalesCostTx: async () => ({ toDecimalPlaces: () => ({ gt: () => false }) }),
   postFactoryPosCogsTx: async () => null,
 }));
+// Wave 11: the sale records its bales (factory_pos_sale_bales); covered with a
+// database by tests/wave11-factory-cost-basis.test.ts. This harness has no SQL executor.
+vi.mock("../server/services/factory/factoryPosSaleBales", () => ({
+  recordPosSaleBalesTx: async () => undefined,
+  releasePosSaleBalesTx: async () => ({ legacy: true, restored: [] }),
+  posSaleBalesCostTx: async () => ({ toDecimalPlaces: () => ({ gt: () => false }) }),
+}));
 vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any) => next() }));
 vi.mock("../server/routes/factory/_helpers", () => ({ getOrCreateLedgerAccount: harness.getOrCreateLedgerAccount }));
 vi.mock("../server/services/accounting/durableFinancialOperation", () => ({

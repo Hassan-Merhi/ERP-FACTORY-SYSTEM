@@ -1,28 +1,44 @@
 /**
- * Perpetual-inventory reconciliation (wave 8.5).
+ * Perpetual-inventory reconciliation (wave 8.5, wave 11).
  *
  * Once a company's cut-over is applied, the ledger carries its stock. This
- * report compares, account by account, what the ledger holds today with what
- * the stock sub-ledgers say it should hold:
+ * report compares, account by account, what the ledger holds as of a date with
+ * what the stock sub-ledgers say it should hold:
  *
- *   Inventory                  ERP stock in hand (inventory rows of active
- *                              locations), leaving out the bale mirror
- *   Goods in Transit           what the vouchers of POs whose container is not
- *                              offloaded debited to Purchases
+ *   Inventory                  the ERP stock sub-ledger: SUM(inventory.total_value)
+ *                              over the company's non-deleted locations, bale
+ *                              mirror left out (stockValuation.subLedgerTotal),
+ *                              signed: the provisional value of negative stock
+ *                              is included, because the short issue already
+ *                              credited Inventory with it. As of a past date
+ *                              the sub-ledger is replayed backwards from the
+ *                              stored values (companyStockValuationAsOf).
+ *   Goods in Transit           what the vouchers of POs dated on or before the
+ *                              date, whose container was not offloaded by then,
+ *                              debited to Purchases
  *   Factory Raw Material,      the factory costing (factoryStockValuation),
- *   WIP, Finished Goods        which the daily factory journal posts to
+ *   WIP, Finished Goods        which the daily factory journal posts to. The
+ *                              factory costing has no history, so a past date
+ *                              compares the ledger then with the costing now
+ *                              (the basis says so).
  *
- * and lists factory invoices that carry no ledger journal. It is read-only: a
- * difference is shown, never posted.
+ * The ledger side books each voucher on its effective date when it has one
+ * (ledgerBalancesByCode). The report lists factory invoices that carry no
+ * ledger journal. It is read-only: a difference is shown, never posted.
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import {
+  companyStockValuation,
+  companyStockValuationAsOf,
+  type CompanyStockValuation,
+} from "../../inventory/stockValuation";
 import { getInventoryCutover } from "./cutover";
 import { listUnpostedFactoryInvoices, type UnpostedFactoryInvoice } from "./factoryInvoice";
-import { factoryBaleMirrorStockItemIds, factoryStockValuation } from "./factoryValuation";
+import { factoryStockValuation } from "./factoryValuation";
 import { isSupplierPartnerCompany, ledgerBalancesByCode } from "./linkedJournal";
 
 export interface ReconciliationLine {
@@ -48,24 +64,29 @@ async function rows<T>(executor: DatabaseOrTransaction, query: ReturnType<typeof
   return (await executor.execute(query)).rows as unknown as T[];
 }
 
-async function erpStockNow(executor: DatabaseOrTransaction, companyId: number): Promise<Decimal> {
-  const mirror = await factoryBaleMirrorStockItemIds(executor, companyId);
-  const stock = await rows<{ stock_item_id: number; value: string }>(
-    executor,
-    sql`
-      SELECT i.stock_item_id, SUM(i.quantity * i.average_rate)::text AS value
-        FROM inventory i JOIN locations l ON l.id = i.location_id
-       WHERE l.company_id = ${companyId} AND l.active = true AND l.deleted_at IS NULL
-       GROUP BY i.stock_item_id
-    `
-  );
-  return stock
-    .filter((row) => !mirror.has(row.stock_item_id))
-    .reduce((sum, row) => sum.plus(toMoney(row.value)), new MoneyDecimal(0))
-    .toDecimalPlaces(2);
+/** The ERP stock sub-ledger as of a date: live for today or later, else replayed. */
+async function erpStockSubLedger(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  asOf: string,
+  today: string
+): Promise<CompanyStockValuation> {
+  return asOf >= today
+    ? companyStockValuation(executor, companyId)
+    : companyStockValuationAsOf(executor, companyId, asOf);
 }
 
-async function goodsInTransitNow(executor: DatabaseOrTransaction, companyId: number): Promise<Decimal> {
+function inventoryBasis(valuation: CompanyStockValuation): string {
+  const parts = [`ERP stock sub-ledger (total_value): stock in hand ${valuation.total}`];
+  if (!toMoney(valuation.excluded.shortageValue).isZero()) {
+    parts.push(`provisional value of negative stock ${valuation.excluded.shortageValue}`);
+  }
+  const anomalies = toMoney(valuation.excluded.shortRowValue).plus(toMoney(valuation.excluded.negativeValue));
+  if (!anomalies.isZero()) parts.push(`values on rows outside the policy ${anomalies.toFixed(2)}`);
+  return parts.join("; ");
+}
+
+async function goodsInTransitAsOf(executor: DatabaseOrTransaction, companyId: number, asOf: string): Promise<Decimal> {
   const [row] = await rows<{ purchases: string }>(
     executor,
     sql`
@@ -74,9 +95,10 @@ async function goodsInTransitNow(executor: DatabaseOrTransaction, companyId: num
         JOIN containers c ON c.id = po.container_id AND c.company_id = po.company_id
         JOIN vouchers v ON v.id = po.voucher_id AND v.company_id = po.company_id AND v.deleted_at IS NULL
                        AND COALESCE(v.optional, false) = false
+                       AND COALESCE(v.effective_date, v.voucher_date) <= ${asOf}
         JOIN voucher_entries ve ON ve.voucher_id = v.id
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.code = 'PURCHASES'
-       WHERE po.company_id = ${companyId} AND c.offload_date IS NULL
+       WHERE po.company_id = ${companyId} AND (c.offload_date IS NULL OR c.offload_date > ${asOf})
     `
   );
   return toMoney(row?.purchases ?? 0).toDecimalPlaces(2);
@@ -89,21 +111,28 @@ export async function reconcilePerpetualInventory(
 ): Promise<PerpetualInventoryReconciliation> {
   const cutover = await getInventoryCutover(executor, companyId);
   const supplierPartner = await isSupplierPartnerCompany(executor, companyId);
+  const today = new Date().toISOString().slice(0, 10);
   const factory = await factoryStockValuation(executor, companyId);
+  const factoryBasis = asOf >= today ? "factory costing" : "factory costing now (the costing has no history)";
+  const erpStock = supplierPartner ? null : await erpStockSubLedger(executor, companyId, asOf, today);
   const expected: Array<{ accountCode: string; value: Decimal; basis: string }> = [
-    ...(supplierPartner
+    ...(erpStock === null
       ? []
       : [
-          { accountCode: "INVENTORY", value: await erpStockNow(executor, companyId), basis: "ERP stock in hand" },
+          {
+            accountCode: "INVENTORY",
+            value: toMoney(erpStock.subLedgerTotal),
+            basis: inventoryBasis(erpStock),
+          },
           {
             accountCode: "GOODS_IN_TRANSIT",
-            value: await goodsInTransitNow(executor, companyId),
+            value: await goodsInTransitAsOf(executor, companyId, asOf),
             basis: "purchase cost of POs not yet offloaded",
           },
         ]),
-    { accountCode: "FACTORY_RAW_MATERIAL_STOCK", value: factory.raw, basis: "factory costing: raw material" },
-    { accountCode: "FACTORY_WIP", value: factory.wip, basis: "factory costing: work in progress" },
-    { accountCode: "FACTORY_FINISHED_GOODS", value: factory.finished, basis: "factory costing: finished goods" },
+    { accountCode: "FACTORY_RAW_MATERIAL_STOCK", value: factory.raw, basis: `${factoryBasis}: raw material` },
+    { accountCode: "FACTORY_WIP", value: factory.wip, basis: `${factoryBasis}: work in progress` },
+    { accountCode: "FACTORY_FINISHED_GOODS", value: factory.finished, basis: `${factoryBasis}: finished goods` },
   ];
   const ledger = await ledgerBalancesByCode(
     executor,

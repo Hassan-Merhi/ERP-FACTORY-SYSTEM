@@ -19,9 +19,15 @@
  *                                     receipts, USD value), spread over what
  *                                     the container's FACTORY- vouchers
  *                                     expensed, or Factory Import Cost
+ *      Dr/Cr Factory Waste and Write-off       the value changes writers tagged
+ *      Dr/Cr Factory Stock Revaluation         by source since the previous
+ *      Dr/Cr Factory Material Price Variance   journal (wave 11,
+ *                                     services/factory/factoryStockValueEvents.ts):
+ *                                     waste and removals, cost cascades and
+ *                                     container cost recalculations, a mix's
+ *                                     supplier rate against the landed cost
  *      Dr/Cr Production Variance      whatever is left: pressing and mixing
- *                                     differences, write-offs, waste, removals,
- *                                     revaluations
+ *                                     yields and anything no writer tagged
  *
  * The valuation is the factory's state now, so the journal is posted for today
  * only, replaced whole when it is run again the same day, and never recomputed
@@ -37,6 +43,11 @@ import { logger } from "../../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
 import { factoryStockValuation } from "./factoryValuation";
+import {
+  claimFactoryStockEventsTx,
+  FACTORY_STOCK_EVENT_ACCOUNT,
+  FACTORY_STOCK_EVENT_KINDS,
+} from "../../factory/factoryStockValueEvents";
 import {
   isSupplierPartnerCompany,
   ledgerBalancesByCode,
@@ -54,6 +65,12 @@ const STOCK_ACCOUNTS = [
   { code: "FACTORY_FINISHED_GOODS", valuation: "finished" },
 ] as const;
 
+const EXPLAINED_NARRATION: Record<string, string> = {
+  FACTORY_WASTE_WRITE_OFF: "Factory stock written off: waste, removed and deleted bales",
+  FACTORY_REVALUATION: "Factory stock revalued: container cost recalculations and cost cascades",
+  FACTORY_MATERIAL_PRICE_VARIANCE: "Material price variance: mixes at the supplier rate against the landed cost",
+};
+
 export interface FactoryStockJournalResult {
   companyId: number;
   date: string;
@@ -62,7 +79,10 @@ export interface FactoryStockJournalResult {
   skipped?: "not-active" | "supplier-partner" | "nothing-to-post";
   accounts: Array<{ accountCode: string; target: string; ledgerBalance: string; amount: string }>;
   received: string;
+  /** What is left for Production Variance, once the tagged changes have their own lines. */
   variance: string;
+  /** The tagged value changes posted to their own accounts (debit positive), by account code. */
+  explained: Record<string, string>;
   unvalued: number;
 }
 
@@ -155,7 +175,7 @@ export async function syncFactoryStockJournalTx(
   companyId: number,
   date: string = todayUtc()
 ): Promise<FactoryStockJournalResult> {
-  const empty = { accounts: [], received: "0.00", variance: "0.00", unvalued: 0 };
+  const empty = { accounts: [], received: "0.00", variance: "0.00", explained: {}, unvalued: 0 };
   // One run per company at a time.
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('gl_factory_stock_journal'), ${companyId})`);
   const number = factoryStockJournalNumber(companyId, date);
@@ -177,6 +197,7 @@ export async function syncFactoryStockJournalTx(
   const accountIds = await systemAccountIdsTx(tx, companyId, [
     ...STOCK_ACCOUNTS.map((account) => account.code),
     "PRODUCTION_VARIANCE",
+    ...FACTORY_STOCK_EVENT_KINDS.map((kind) => FACTORY_STOCK_EVENT_ACCOUNT[kind]),
   ]);
   const zero = new MoneyDecimal(0);
   const accounts = STOCK_ACCOUNTS.map((account) => {
@@ -198,9 +219,17 @@ export async function syncFactoryStockJournalTx(
   const receiptLines = await receiptCreditsTx(tx, companyId, after, date);
   const received = receiptLines.reduce((sum, line) => sum.plus(line.credit), new MoneyDecimal(0));
 
-  // Debits less credits must be zero: the variance closes the journal.
+  // Debits less credits must be zero: the variance closes the journal. A
+  // tagged change of the stock value (a write-off is negative) is the opposite
+  // entry on its own account: a write-off of 100 debits Waste and Write-off 100.
   const moved = accounts.reduce((sum, account) => sum.plus(account.amount), new MoneyDecimal(0));
-  const variance = received.minus(moved);
+  const events = await claimFactoryStockEventsTx(tx, companyId, date);
+  const explainedLines = FACTORY_STOCK_EVENT_KINDS.map((kind) => ({
+    code: FACTORY_STOCK_EVENT_ACCOUNT[kind],
+    amount: (events.get(kind) ?? zero).negated().toDecimalPlaces(2),
+  }));
+  const explained = explainedLines.reduce((sum, line) => sum.plus(line.amount), new MoneyDecimal(0));
+  const variance = received.minus(moved).minus(explained);
 
   const lines: LinkedJournalLine[] = [
     ...accounts.map((account) => ({
@@ -210,11 +239,17 @@ export async function syncFactoryStockJournalTx(
       narration: "Factory stock at its costing value",
     })),
     ...receiptLines,
+    ...explainedLines.map((line) => ({
+      ledgerAccountId: accountIds.get(line.code)!,
+      debit: line.amount.isPositive() ? line.amount : zero,
+      credit: line.amount.isNegative() ? line.amount.negated() : zero,
+      narration: EXPLAINED_NARRATION[line.code],
+    })),
     {
       ledgerAccountId: accountIds.get("PRODUCTION_VARIANCE")!,
       debit: variance.isPositive() ? variance : zero,
       credit: variance.isNegative() ? variance.negated() : zero,
-      narration: "Production variance: mixing, pressing, write-offs and revaluations",
+      narration: "Production variance: mixing and pressing differences not explained by a tagged change",
     },
   ];
   const voucherId = await postLinkedJournalTx(tx, {
@@ -238,6 +273,7 @@ export async function syncFactoryStockJournalTx(
     })),
     received: received.toFixed(2),
     variance: variance.toFixed(2),
+    explained: Object.fromEntries(explainedLines.map((line) => [line.code, line.amount.toFixed(2)])),
     unvalued: valuation.unvalued.length,
   };
 }

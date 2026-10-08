@@ -265,9 +265,13 @@ describe("stock valuation", () => {
 describe("adjustInventory value delta", () => {
   it("reports the signed change of the stored total_value", async () => {
     const result = await db.transaction((tx) => adjustInventory(tx, activeLocation, itemA, -1, companyId));
-    // 8 units holding 60.00 at a stored rate of 3.33: one issue relieves 3.33.
-    expect(result.valueDelta).toBe("-3.33");
-    expect(result.newTotalValue - result.previousTotalValue).toBeCloseTo(-3.33, 6);
+    // 8 units holding 60.00 at a stored rate of 3.33 (the fixture added 5 units
+    // worth 50.00 without touching the rate): the stored rate no longer
+    // reproduces the stored value, so the issue relieves at total_value / qty
+    // = 7.50 (wave 11, agent A). Relieving the stale 3.33 left the row 4.17
+    // over-valued per unit issued.
+    expect(result.valueDelta).toBe("-7.50");
+    expect(result.newTotalValue - result.previousTotalValue).toBeCloseTo(-7.5, 6);
     const received = await db.transaction((tx) => adjustInventory(tx, activeLocation, itemA, 2, companyId, 1.005));
     expect(received.valueDelta).toBe("2.01");
   });

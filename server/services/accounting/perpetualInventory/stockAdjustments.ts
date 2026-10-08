@@ -10,6 +10,20 @@
  * control account for the net of its other lines, so the voucher balances
  * (production Dr Inventory, consumption Cr Inventory).
  *
+ * Wave 11: the inventory line carries exactly what the stock sub-ledger moved,
+ * the sum of the voucher's stock_adjustment_items.value_moved (each line's
+ * AdjustInventoryResult.valueDelta, stored as an amount: the direction is the
+ * line's, received on a Production, issued on a Consumption, and by the sign of
+ * the quantity on a Mixed voucher, as the adjustment writer moves the stock). The voucher's other lines value
+ * the document at quantity × the document rate; where that differs from what
+ * the sub-ledger moved (a consumption issues stock at its average cost, not at
+ * the rate typed on the voucher; a production into negative stock takes back
+ * the shortage's provisional value) the difference is posted on a second
+ * marked line to INVENTORY_ADJUSTMENT, so the voucher still balances and the
+ * INVENTORY account moves with the sub-ledger. A voucher with a line written
+ * before wave 11 (value_moved NULL) keeps the old rule: one inventory line for
+ * the net of its other lines.
+ *
  * The inventory line is derived from the voucher's current lines and replaced
  * whole by syncStockAdjustmentInventoryTx, which the create, edit, date-change,
  * line-replacement, optional and restore paths call. It is marked by its
@@ -25,7 +39,7 @@ import type { DbTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getOrCreateInventoryControlAccount } from "../inventoryControlAccount";
 import { isPerpetualInventoryActive } from "./cutover";
-import { isSupplierPartnerCompany } from "./linkedJournal";
+import { isSupplierPartnerCompany, systemAccountIdsTx } from "./linkedJournal";
 
 /** The voucher types the stock adjustment writers create. */
 export const STOCK_ADJUSTMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set([
@@ -36,11 +50,13 @@ export const STOCK_ADJUSTMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 export const STOCK_ADJUSTMENT_INVENTORY_NARRATION = "Inventory - stock adjustment";
+export const STOCK_ADJUSTMENT_VALUATION_NARRATION = "Inventory - stock adjustment valuation difference";
 
 /**
- * Replaces the inventory line of a stock adjustment voucher. Returns the net
- * amount posted to inventory (positive = debit), or null when the voucher
- * carries no inventory line. A voucher of another type is left untouched.
+ * Replaces the inventory line (and valuation-difference line) of a stock
+ * adjustment voucher. Returns the amount posted to inventory (positive =
+ * debit), or null when the voucher carries no inventory line. A voucher of
+ * another type is left untouched.
  */
 export async function syncStockAdjustmentInventoryTx(
   tx: DbTransaction,
@@ -60,8 +76,9 @@ export async function syncStockAdjustmentInventoryTx(
     DELETE FROM voucher_entries ve
      USING ledger_accounts la, vouchers v
      WHERE ve.voucher_id = ${voucherId} AND v.id = ve.voucher_id AND v.company_id = ${companyId}
-       AND la.id = ve.ledger_account_id AND la.company_id = ${companyId} AND la.code = 'INVENTORY'
-       AND ve.narration = ${STOCK_ADJUSTMENT_INVENTORY_NARRATION}
+       AND la.id = ve.ledger_account_id AND la.company_id = ${companyId}
+       AND ((la.code = 'INVENTORY' AND ve.narration = ${STOCK_ADJUSTMENT_INVENTORY_NARRATION})
+         OR (la.code = 'INVENTORY_ADJUSTMENT' AND ve.narration = ${STOCK_ADJUSTMENT_VALUATION_NARRATION}))
   `);
 
   if (voucher.optional === true || voucher.deleted_at !== null) return null;
@@ -79,16 +96,53 @@ export async function syncStockAdjustmentInventoryTx(
   const net = toMoney(totals?.credit ?? 0)
     .minus(toMoney(totals?.debit ?? 0))
     .toDecimalPlaces(2);
-  if (net.isZero()) return null;
+
+  // What the sub-ledger moved, when every line recorded it.
+  const [moved] = (
+    await tx.execute(sql`
+      SELECT COUNT(sai.id)::int AS lines,
+             COUNT(sai.value_moved)::int AS recorded,
+             COALESCE(SUM(CASE
+               WHEN sav.adjustment_type = 'Production' THEN ABS(sai.value_moved)
+               WHEN sav.adjustment_type = 'Consumption' THEN -ABS(sai.value_moved)
+               WHEN sai.quantity < 0 THEN -ABS(sai.value_moved)
+               ELSE ABS(sai.value_moved)
+             END), 0)::text AS value
+        FROM stock_adjustment_vouchers sav
+        JOIN stock_adjustment_items sai ON sai.adjustment_id = sav.id
+        JOIN vouchers v ON v.id = sav.voucher_id AND v.company_id = ${companyId}
+       WHERE sav.voucher_id = ${voucherId}
+    `)
+  ).rows as { lines: number; recorded: number; value: string }[];
+  const exact = moved !== undefined && moved.lines > 0 && moved.recorded === moved.lines;
+  const inventory = exact ? toMoney(moved.value).toDecimalPlaces(2) : net;
+  const difference = net.minus(inventory);
+  if (inventory.isZero() && difference.isZero()) return null;
 
   const { id: inventoryAccountId } = await getOrCreateInventoryControlAccount(tx, companyId);
   const zero = new MoneyDecimal(0);
-  await tx.insert(voucherEntries).values({
-    voucherId,
-    ledgerAccountId: inventoryAccountId,
-    debitAmount: (net.isPositive() ? net : zero).toFixed(2),
-    creditAmount: (net.isNegative() ? net.negated() : zero).toFixed(2),
-    narration: STOCK_ADJUSTMENT_INVENTORY_NARRATION,
-  });
-  return net.toFixed(2);
+  const entries: Array<typeof voucherEntries.$inferInsert> = [];
+  if (!inventory.isZero()) {
+    entries.push({
+      voucherId,
+      ledgerAccountId: inventoryAccountId,
+      debitAmount: (inventory.isPositive() ? inventory : zero).toFixed(2),
+      creditAmount: (inventory.isNegative() ? inventory.negated() : zero).toFixed(2),
+      narration: STOCK_ADJUSTMENT_INVENTORY_NARRATION,
+    });
+  }
+  if (!difference.isZero()) {
+    const adjustmentAccountId = (await systemAccountIdsTx(tx, companyId, ["INVENTORY_ADJUSTMENT"])).get(
+      "INVENTORY_ADJUSTMENT"
+    )!;
+    entries.push({
+      voucherId,
+      ledgerAccountId: adjustmentAccountId,
+      debitAmount: (difference.isPositive() ? difference : zero).toFixed(2),
+      creditAmount: (difference.isNegative() ? difference.negated() : zero).toFixed(2),
+      narration: STOCK_ADJUSTMENT_VALUATION_NARRATION,
+    });
+  }
+  await tx.insert(voucherEntries).values(entries);
+  return inventory.toFixed(2);
 }

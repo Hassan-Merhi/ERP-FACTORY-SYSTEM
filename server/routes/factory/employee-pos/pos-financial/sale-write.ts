@@ -30,10 +30,12 @@ import {
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import { postFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 import {
-  factoryBalesCostTx,
-  postFactoryPosCogsTx,
-} from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
+  posSaleBalesCostTx,
+  recordPosSaleBalesTx,
+  releasePosSaleBalesTx,
+} from "../../../../services/factory/factoryPosSaleBales";
 import { allLedgerAccountsOwned, isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
@@ -380,12 +382,14 @@ export function registerPosSaleWriteRoutes(app: Express) {
             });
           }
 
-          // Perpetual inventory (wave 8.4): the sale posts the cost of the bales it took.
+          // Wave 11: the sale records the bales it took, so a void or an edit puts
+          // back exactly those; its cost of sales is their cost (wave 8.4 journal).
+          await recordPosSaleBalesTx(tx, companyId, sale.id, soldBaleIds);
           await postFactoryPosCogsTx(tx, {
             companyId,
             saleId: sale.id,
             voucherDate: String(sale.txDate),
-            cost: await factoryBalesCostTx(tx, companyId, soldBaleIds),
+            cost: await posSaleBalesCostTx(tx, companyId, sale.id),
           });
 
           return { value: sale, resultReference: sale.id };
@@ -438,9 +442,12 @@ export function registerPosSaleWriteRoutes(app: Express) {
       if (refused) return res.status(400).json({ message: refused });
 
       const result = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
-        // Step 1: Restore bales for old items
+        // Step 1: Restore the bales the sale took (wave 11: exactly those it
+        // recorded; a sale from before the record falls back to the most recent
+        // SOLD bales of each product at its location).
+        const released = await releasePosSaleBalesTx(tx, companyId, saleId);
         const oldItems = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
-        for (const oldItem of oldItems) {
+        for (const oldItem of released.legacy ? oldItems : []) {
           if (oldItem.productId && existingSale.locationId) {
             const soldBales = await tx
               .select({ id: factoryBales.id })
@@ -693,12 +700,14 @@ export function registerPosSaleWriteRoutes(app: Express) {
           }
         }
 
-        // Perpetual inventory (wave 8.4): the edited sale posts the cost of the bales it now takes.
+        // The edited sale records the bales it now takes; its cost of sales is
+        // their cost (perpetual inventory, wave 8.4).
+        await recordPosSaleBalesTx(tx, companyId, saleId, soldBaleIds);
         await postFactoryPosCogsTx(tx, {
           companyId,
           saleId,
           voucherDate: String(updatedSale.txDate),
-          cost: await factoryBalesCostTx(tx, companyId, soldBaleIds),
+          cost: await posSaleBalesCostTx(tx, companyId, saleId),
         });
 
         return updatedSale;

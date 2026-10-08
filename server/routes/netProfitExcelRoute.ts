@@ -6,16 +6,7 @@ import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { logAudit } from "./_helpers";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../helpers/salaryAdvanceNetPosition";
-import {
-  inventory,
-  containers,
-  vouchers,
-  voucherEntries,
-  salesItems,
-  locations,
-  employees,
-  exchangeRates,
-} from "@shared/schema";
+import { containers, vouchers, voucherEntries, salesItems, employees, exchangeRates } from "@shared/schema";
 import { eq, and, desc, inArray, sql, isNull, gte, lte } from "drizzle-orm";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import {
@@ -30,6 +21,7 @@ import {
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
+import { companyStockValue } from "../services/inventory/stockValuation";
 import { PERPETUAL_STOCK_ACCOUNT_CODES } from "../netPositionHelper";
 import {
   classifyAccountType,
@@ -237,28 +229,29 @@ export function registerNetProfitExcelRoute(app: Express) {
         }
       }
 
-      // Opening Stock
-      const allStockItems = await storage.getAllStockItems(companyId);
-      const openingStockValue = ledgerStock ? 0 : sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
-
-      // Closing Stock (current inventory)
-      const activeLocData = await db
-        .select({ id: locations.id })
-        .from(locations)
-        .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-      const activeLocIds = activeLocData.map((l) => l.id);
-      let closingStockExact = ZERO;
-      if (activeLocIds.length > 0) {
-        const invData = await db
-          .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-          .from(inventory)
-          .where(inArray(inventory.locationId, activeLocIds))
-          .execute();
-        for (const inv of invData)
-          closingStockExact = closingStockExact.plus(toMoney(inv.quantity).times(toMoney(inv.averageRate)));
+      // Opening and closing stock (wave 11): the one stock valuation
+      // (stockValuation.ts, SUM(total_value), negative stock not subtracting).
+      // With a period start the opening stock is the valuation as of the day
+      // before it (replayed from the stored values), not the stock items'
+      // opening master data, which is the opening of all time and says nothing
+      // about a later period. Without one (all time) the master data is the
+      // only opening there is. The closing stock is the valuation as of the
+      // period end (live when the period runs to today or later).
+      const isoDate = (date: Date) => date.toISOString().split("T")[0];
+      const today = isoDate(new Date());
+      let openingStockValue = 0;
+      if (!ledgerStock) {
+        if (startDate) {
+          const eve = new Date(startDate.getTime());
+          eve.setUTCDate(eve.getUTCDate() - 1);
+          openingStockValue = Number(await companyStockValue(db, companyId, isoDate(eve)));
+        } else {
+          const allStockItems = await storage.getAllStockItems(companyId);
+          openingStockValue = sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
+        }
       }
-      if (ledgerStock) closingStockExact = ZERO;
+      const closingAsOf = endDate && isoDate(endDate) < today ? isoDate(endDate) : null;
+      const closingStockExact = ledgerStock ? ZERO : toMoney(await companyStockValue(db, companyId, closingAsOf));
       const closingStockValue = closingStockExact.toNumber();
 
       // Net Position - same calculation as dashboard (/api/stats/net-profit)

@@ -1,3 +1,4 @@
+import Decimal from "decimal.js";
 import type { DbTransaction } from "../../../db";
 import { and, eq, sql } from "drizzle-orm";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
@@ -6,7 +7,9 @@ import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../accountin
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
 
-import { amount, buildItemMap } from "./types";
+import { toMoney } from "../../../lib/money";
+
+import { buildItemMap } from "./types";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -32,19 +35,32 @@ export async function reverseExistingOffload(
     .where(eq(schema.containerOffloadItems.offloadId, existingOffload.id));
   const occurredAt = new Date().toISOString();
 
+  // The stock comes back out at exactly the value the offload moved into the
+  // sub-ledger (value_moved; the line value on a legacy line), so the
+  // sub-ledger and the stock-in journal (removed with the offload) agree.
+  // The company is passed so a reversal that takes the row short records its
+  // negative layer.
   if (storedItems.length > 0) {
     for (const item of storedItems) {
-      const quantity = amount(item.quantity);
-      const totalValue = amount(item.totalValue);
-      await reverseInventoryByExactValue(tx, existingOffload.locationId, item.stockItemId, quantity, totalValue);
+      const quantity = toMoney(item.quantity);
+      const totalValue = toMoney(item.valueMoved ?? item.totalValue);
+      await reverseInventoryByExactValue(
+        tx,
+        existingOffload.locationId,
+        item.stockItemId,
+        quantity.toNumber(),
+        totalValue.toFixed(2),
+        container.companyId,
+        `container-offload-reverse:${existingOffload.id}`
+      );
       await postStockMovementTx(
         tx,
         {
           companyId: container.companyId,
           stockItemId: item.stockItemId,
           kind: "adjustment",
-          quantity: String(quantity),
-          unitCost: String(quantity > 0 ? Math.max(totalValue / quantity, 0) : 0),
+          quantity: quantity.toString(),
+          unitCost: quantity.gt(0) ? Decimal.max(totalValue.dividedBy(quantity), 0).toDecimalPlaces(6).toString() : "0",
           fromLocationId: existingOffload.locationId,
           occurredAt,
           source: {
@@ -58,16 +74,20 @@ export async function reverseExistingOffload(
       );
     }
   } else {
-    const legacyAdditionalCost = amount(existingOffload.additionalCostPerBale);
+    const legacyAdditionalCost = toMoney(existingOffload.additionalCostPerBale);
     const legacyItems = buildItemMap(lineItems);
     for (const [stockItemId, item] of legacyItems) {
-      const estimatedValue = item.weightedRateSum + item.totalQuantity * legacyAdditionalCost;
+      const estimatedValue = item.weightedRateSum
+        .plus(item.totalQuantity.times(legacyAdditionalCost))
+        .toDecimalPlaces(2);
       await reverseInventoryByExactValue(
         tx,
         existingOffload.locationId,
         stockItemId,
-        item.totalQuantity,
-        estimatedValue
+        item.totalQuantity.toNumber(),
+        estimatedValue.toFixed(2),
+        container.companyId,
+        `container-offload-reverse:${existingOffload.id}`
       );
       await postStockMovementTx(
         tx,
@@ -75,8 +95,10 @@ export async function reverseExistingOffload(
           companyId: container.companyId,
           stockItemId,
           kind: "adjustment",
-          quantity: String(item.totalQuantity),
-          unitCost: String(item.totalQuantity > 0 ? Math.max(estimatedValue / item.totalQuantity, 0) : 0),
+          quantity: item.totalQuantity.toString(),
+          unitCost: item.totalQuantity.gt(0)
+            ? Decimal.max(estimatedValue.dividedBy(item.totalQuantity), 0).toDecimalPlaces(6).toString()
+            : "0",
           fromLocationId: existingOffload.locationId,
           occurredAt,
           source: {

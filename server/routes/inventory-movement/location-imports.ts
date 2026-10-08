@@ -16,6 +16,11 @@ import {
   privilegedRequestBudget,
 } from "../../middleware/privilegedEndpointSecurity";
 import { stockItemCodeAliases } from "@shared/schema";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import { applyPostedLocationImport, planLocationImport, type PostedImportRow } from "./locationImportJournal";
 
 const locationImportBudget = privilegedRequestBudget({
   maxBodyBytes: 1024 * 1024,
@@ -60,9 +65,13 @@ export function registerLocationImportRoutes(app: Express) {
           return res.status(400).json({ message: "Updates must be an array" });
         }
 
+        // Wave 11: the import overwrites stock values with no journal, so it is
+        // refused once the company's perpetual-inventory cut-over is applied.
+        await assertNoInventoryCutoverTx(db, req.session.currentCompanyId, "cost-price-import");
         const result = await storage.updateCostPricesByBarcode(locationId, req.session.currentCompanyId, updates);
         res.json(result);
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         logger.error("Error updating cost prices:", { error: error });
         res.status(500).json({ message: getErrorMessage(error) });
       }
@@ -104,6 +113,16 @@ export function registerLocationImportRoutes(app: Express) {
         if (!Array.isArray(items)) {
           return res.status(400).json({ message: "Items must be an array" });
         }
+
+        // Wave 11: after the perpetual-inventory cut-over the import is posted,
+        // so it must be labelled (see locationImportJournal).
+        const importPlan = await planLocationImport(db, {
+          companyId: req.session.currentCompanyId,
+          importKind: req.body.importKind,
+          role: req.user?.role,
+        });
+        if ("refusal" in importPlan) return res.status(importPlan.refusal.status).json(importPlan.refusal.body);
+        const postedRows: PostedImportRow[] = [];
 
         // Get all stock items and stock groups for code matching
         const allStockItems = await storage.getAllStockItems(req.session.currentCompanyId);
@@ -219,6 +238,12 @@ export function registerLocationImportRoutes(app: Express) {
             const rate = parseFloat(item.rate || "0");
             const value = parseFloat(item.value || (quantity * rate).toString());
 
+            if (importPlan.posted) {
+              // Applied below in one transaction with its journal.
+              postedRows.push({ code: item.Item_barcode, stockItem, quantity, rate, value });
+              continue;
+            }
+
             // Check if inventory already exists for this item at this location
             const existingInventory = await storage.getLocationInventory(req.session.currentCompanyId!, locationId);
             const existing = existingInventory.find((inv) => inv.stockItemId === stockItem.id);
@@ -267,11 +292,24 @@ export function registerLocationImportRoutes(app: Express) {
           }
         }
 
+        if (importPlan.posted && postedRows.length > 0) {
+          const applied = await applyPostedLocationImport({
+            companyId: req.session.currentCompanyId,
+            locationId,
+            plan: importPlan,
+            rows: postedRows,
+            actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
+          });
+          results.created.push(...applied.created);
+          results.updated.push(...applied.updated);
+        }
+
         res.json({
           message: `Import completed: ${results.created.length} created, ${results.updated.length} updated, ${results.skipped.length} skipped, ${results.errors.length} errors`,
           results,
         });
       } catch (error: unknown) {
+        if (sendInventoryCutoverRefusal(res, error)) return;
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }

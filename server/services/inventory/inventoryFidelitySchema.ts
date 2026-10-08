@@ -11,6 +11,11 @@
  *     the exact sub-ledger value each line moved, so a reversal restores that
  *     value. NULL marks a legacy line written before wave 11 (readers fall back
  *     to the COGS journal pro rata or the line's total).
+ *     container_offload_items carries it too, with `cogs_variance numeric(20,2)`:
+ *     the part of the line's landed value the receipt charged to COGS instead
+ *     of inventory (a covered shortage's settlement variance, the sold share of
+ *     a charge re-pricing), so the stock-in journal debits Inventory with
+ *     exactly what the sub-ledger received.
  *   - `inventory.average_rate` widened from numeric(20,2) to numeric(20,7). The
  *     rate is display precision and cost memory; stock value stays
  *     `inventory.total_value` numeric(20,2). Widening only adds scale, so no
@@ -39,6 +44,7 @@ export const VALUE_MOVED_TABLES = [
   "credit_note_items",
   "stock_adjustment_items",
   "stock_transfer_items",
+  "container_offload_items",
 ] as const;
 
 export const INVENTORY_AVERAGE_RATE_SCALE = 7;
@@ -56,6 +62,12 @@ BEGIN
       EXECUTE format('ALTER TABLE %I ADD COLUMN value_moved numeric(20,2)', target);
     END IF;
   END LOOP;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+     WHERE table_schema = current_schema() AND table_name = 'container_offload_items' AND column_name = 'cogs_variance'
+  ) THEN
+    ALTER TABLE container_offload_items ADD COLUMN cogs_variance numeric(20,2);
+  END IF;
 END
 $wave11$`;
 

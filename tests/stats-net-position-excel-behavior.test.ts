@@ -97,6 +97,7 @@ const harness = vi.hoisted(() => {
     classifyNetPositionAccounts: vi.fn(),
     classifyEquityAccounts: vi.fn(),
     calculateHistoricalLocationInventory: vi.fn(),
+    companyStockValue: vi.fn(),
     logAudit: vi.fn(),
     loadNetPositionParties: vi.fn(),
   };
@@ -112,6 +113,10 @@ vi.mock("../server/services/accounting/perpetualInventory/reportBasis", () => ({
   ledgerCarriesStock: async () => false,
 }));
 vi.mock("../server/db", () => ({ db: harness.db, pool: harness.pool }));
+// Wave 11: the stock in hand is the one stock valuation (stockValuation.ts,
+// SUM(total_value), live or as of the date), no longer quantity × average_rate
+// over the inventory rows of the active locations.
+vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: harness.companyStockValue }));
 vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: any, _res: any, next: any) => next(),
@@ -256,14 +261,8 @@ describe("net position Excel behavior", () => {
     // from the balance engine (mocked above). The factory_worker_advances table
     // is no longer read by the ERP export.
     harness.poolResults.push([{ ledger_account_id: "1", debit_amount: "120", credit_amount: "20" }]);
-    harness.selectResults.push(
-      [{ id: 11 }],
-      [
-        { quantity: "5", averageRate: "4" },
-        { quantity: "2", averageRate: "10" },
-      ],
-      [{ id: 90, grandTotal: "25", itemsTotal: "20", status: "OTW" }]
-    );
+    harness.companyStockValue.mockResolvedValue("40.00");
+    harness.selectResults.push([{ id: 90, grandTotal: "25", itemsTotal: "20", status: "OTW" }]);
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1", username: "admin" }, query: {} }, res);
@@ -289,18 +288,15 @@ describe("net position Excel behavior", () => {
     expect(harness.loadNetPositionParties).toHaveBeenCalledWith(4, expect.objectContaining({ customers: true }));
   });
 
-  it("uses historical inventory snapshots for an as-of export date", async () => {
+  it("uses the historical stock valuation for an as-of export date", async () => {
     harness.poolResults.push([]);
-    harness.selectResults.push([{ id: 11 }], []);
-    harness.calculateHistoricalLocationInventory.mockResolvedValue([
-      { quantity: "3", averageRate: "7" },
-      { quantity: "1", averageRate: "9" },
-    ]);
+    harness.selectResults.push([]);
+    harness.companyStockValue.mockResolvedValue("30.00");
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1" }, query: { toDate: "2026-07-31" } }, res);
 
-    expect(harness.calculateHistoricalLocationInventory).toHaveBeenCalledWith(11, 4, "2026-07-31");
+    expect(harness.companyStockValue).toHaveBeenCalledWith(harness.db, 4, "2026-07-31");
     expect(res.body).toEqual(Buffer.from("net-position-xlsx"));
   });
 
@@ -309,7 +305,8 @@ describe("net position Excel behavior", () => {
       { ledger_account_id: "1", debit_amount: "0.1", credit_amount: "0" },
       { ledger_account_id: "1", debit_amount: "0.2", credit_amount: "0" },
     ]);
-    harness.selectResults.push([{ id: 11 }], [{ quantity: "1.3", averageRate: "0.35" }], []);
+    harness.companyStockValue.mockResolvedValue("0.46");
+    harness.selectResults.push([]);
 
     const res = responseHarness();
     await route()({ session: { currentCompanyId: 4, userId: "admin-1" }, query: {} }, res);
@@ -318,7 +315,7 @@ describe("net position Excel behavior", () => {
     expect(balances.get(1)).toEqual({ debit: 0.3, credit: 0 });
     const assets = harness.workbooks[0].sheets.find((sheet) => sheet.name.includes("Assets"));
     const values = assets?.rows.map((row) => row.getCell("value").value) ?? [];
-    // Stock 1.3 × 0.35 exactly (supplier sums are the balance engine's now).
+    // The stock valuation's figure (supplier sums are the balance engine's now).
     expect(values).toContain(0.46);
   });
 

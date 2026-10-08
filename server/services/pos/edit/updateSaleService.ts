@@ -32,6 +32,7 @@ import {
   validateNewLocationBelongsToCompany,
 } from "./validateEditSaleRequest";
 import { reverseOriginalSaleInventory, clearOldSaleRecords } from "./reverseOriginalSaleInventory";
+import { postReversalResidualTx, saleCogsInventoryCreditTx } from "../../inventory/valueExactReversal";
 import { rebuildSaleItems } from "./rebuildSaleItems";
 import { nextCanonicalSourceRevision } from "../../inventory/canonicalSourceRevision";
 import { updateVoucherRecord } from "./updateSaleVoucher";
@@ -163,7 +164,9 @@ export async function applyPosSaleUpdateTx(
   }
 
   const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-  await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
+  // Wave 11: the old lines come back exactly; the ledger's COGS is compared below.
+  const cogsBefore = await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId);
+  const restoredDelta = await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
   await clearOldSaleRecords(tx, voucherId);
 
   const rebuildResult = await rebuildSaleItems(tx, {
@@ -248,6 +251,19 @@ export async function applyPosSaleUpdateTx(
       locationId: targetLocationId,
       relieved: rebuildResult.relieved,
       optional: lockedVoucher.optional === true,
+    });
+    // What the restore of the old lines moved beyond the COGS journal it
+    // replaced (stock sold since, a legacy line) keeps the ledger with the
+    // sub-ledger.
+    await postReversalResidualTx(tx, {
+      companyId: lockedVoucher.companyId,
+      sourceType: "pos-edit",
+      sourceId: `${voucherId}:${Date.now().toString(36)}`,
+      reference: lockedVoucher.voucherNumber,
+      subLedgerDelta: restoredDelta.minus(rebuildResult.relieved),
+      ledgerDelta: cogsBefore.minus(await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId)),
+      actor: { userId, username },
+      locationId: targetLocationId,
     });
   }
 

@@ -371,6 +371,9 @@ export function registerOrderCrudRoutes(app: Express) {
         totalMarginPct: hideCostData ? null : totalMarginPct,
         partialCostData: !totalCostKnown,
         costHidden: hideCostData,
+        // Wave 11: "cost" here is the catalogue production price per bale (a
+        // production/selling value), not the bales' recorded cost.
+        costBasis: "catalogue-production-price-per-bale",
       });
     } catch (error: unknown) {
       logger.error("Error fetching order profitability:", { error: error });

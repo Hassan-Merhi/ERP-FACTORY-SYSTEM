@@ -488,11 +488,14 @@ describe("adjustInventory Helper Tests", () => {
     expect(result.averageRate).toBe(0);
   });
 
-  // qty <= 0 carries no value. The average rate is deliberately kept as "cost
-  // memory" (inventoryHelper.ts): it prices the negative-stock layer and the next
-  // receipt, so zeroing it would re-cost the shortage at 0. This used to be a
-  // skipped test asserting rate = 0, which contradicts that design.
-  it("should zero total_value and keep the last cost as memory when a deduction goes negative", async () => {
+  // Wave 11 (owner decision: negative stock is allowed and costed
+  // provisionally): the shortage is relieved at the cost memory, so the row
+  // holds the provisional value as a negative total_value and the sale's COGS
+  // is posted at that cost. The average rate is kept as cost memory: it priced
+  // the shortage and prices the negative-stock layer. (This test asserted the
+  // pre-wave-11 rule that a short row holds no value, which silently dropped
+  // the shortage's cost from the sub-ledger.)
+  it("should relieve the shortage at the cost memory and keep the last cost as memory when a deduction goes negative", async () => {
     const { adjustInventory } = await import("../server/inventoryHelper");
     const layerQty = async () => {
       const result = await db.execute(sql`
@@ -507,12 +510,13 @@ describe("adjustInventory Helper Tests", () => {
     const result = await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], -150, ctx.companyId);
 
     expect(result.newQuantity).toBe(-50);
-    expect(result.newTotalValue).toBe(0);
+    expect(result.newTotalValue).toBe(-500);
+    expect(result.valueDelta).toBe("-1500.00");
     expect(result.averageRate).toBe(10);
 
     const record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     expect(parseFloat(record!.quantity)).toBe(-50);
-    expect(parseFloat(record!.totalValue!)).toBe(0);
+    expect(parseFloat(record!.totalValue!)).toBe(-500);
     expect(parseFloat(record!.averageRate)).toBe(10);
 
     // Only the new 50-unit shortage is recorded as a negative layer.
@@ -546,7 +550,15 @@ describe("reverseInventoryByExactValue Tests", () => {
     await resetInventory();
   });
 
-  it("should subtract exact value, zero the value below zero and keep cost memory", async () => {
+  // Wave 11: an exact reversal subtracts exactly, with no clamp, because the
+  // ledger reversal it pairs with removes exactly that value. Here the stock
+  // reversed (500.00) is worth less than what the row held (1056.40), so the
+  // short row is left holding the remaining 556.40; stockValuation reports such a
+  // row as an anomaly (excluded.shortRowValue), and the receipt that settles the
+  // shortage writes it off to COGS through its settlement variance. (This test
+  // asserted the old normalisation to zero, which dropped 556.40 from the
+  // sub-ledger while the ledger kept it.)
+  it("should subtract exact value below zero and keep cost memory", async () => {
     const { reverseInventoryByExactValue } = await import("../server/inventoryHelper");
 
     await db
@@ -568,7 +580,7 @@ describe("reverseInventoryByExactValue Tests", () => {
     const rate = parseFloat(record!.averageRate);
 
     expect(qty).toBeCloseTo(-10, 1);
-    expect(value).toBe(0);
+    expect(value).toBeCloseTo(556.4, 2);
     expect(rate).toBeCloseTo(5.56, 2);
   });
 
@@ -645,14 +657,28 @@ describe("reverseInventoryByExactValue Tests", () => {
     const offloadRate = 1.0;
     const offloadValue = offloadQty * offloadRate;
 
-    await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, ctx.companyId, offloadRate);
+    // Wave 11: the receipt settles the 10 short at no restored value (the legacy
+    // short row held none) and reports their cost as settlement variance; the
+    // sub-ledger receives 190.00, which is what the offload records as moved and
+    // what its reversal takes back (offloadValue is the document value, 200.00).
+    const received = await adjustInventory(
+      db as any,
+      ctx.locationId,
+      ctx.stockItemIds[0],
+      offloadQty,
+      ctx.companyId,
+      offloadRate
+    );
+    expect(received.valueDelta).toBe("190.00");
+    expect(received.shortageSettlementVariance).toBe("10.00");
+    expect(Number(received.receiptValue)).toBe(offloadValue);
 
     const afterOffload = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     expect(parseFloat(afterOffload!.quantity)).toBeCloseTo(190, 1);
     expect(parseFloat(afterOffload!.averageRate)).toBeGreaterThanOrEqual(0);
     expect(parseFloat(afterOffload!.totalValue!)).toBeGreaterThanOrEqual(0);
 
-    await reverseInventoryByExactValue(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, offloadValue);
+    await reverseInventoryByExactValue(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, received.valueDelta);
 
     const afterReverse = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     const reverseQty = parseFloat(afterReverse!.quantity);
@@ -675,6 +701,9 @@ describe("reverseInventoryByExactValue Tests", () => {
   it("should enforce all four invariants after every operation", async () => {
     const { adjustInventory, reverseInventoryByExactValue } = await import("../server/inventoryHelper");
 
+    // Wave 11 invariants: a short row holds at most zero value (its
+    // provisional shortage value, negative), a row with stock never a negative
+    // value. (The first one used to be "a short row holds exactly zero".)
     function assertInvariants(record: any, label: string) {
       const qty = parseFloat(record.quantity);
       const value = parseFloat(record.totalValue || "0");
@@ -683,7 +712,7 @@ describe("reverseInventoryByExactValue Tests", () => {
       expect(rate).toBeGreaterThanOrEqual(0);
 
       if (qty <= 0) {
-        expect(value).toBe(0);
+        expect(value).toBeLessThanOrEqual(0);
       }
 
       if (qty > 0) {
@@ -707,14 +736,21 @@ describe("reverseInventoryByExactValue Tests", () => {
       );
 
     const offloadQty = 200;
-    const offloadValue = 200;
 
-    await adjustInventory(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, ctx.companyId, 1.0);
+    // The reversal takes back what the receipt moved into the sub-ledger.
+    const received = await adjustInventory(
+      db as any,
+      ctx.locationId,
+      ctx.stockItemIds[0],
+      offloadQty,
+      ctx.companyId,
+      1.0
+    );
 
     let record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     assertInvariants(record, "after offload");
 
-    await reverseInventoryByExactValue(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, offloadValue);
+    await reverseInventoryByExactValue(db as any, ctx.locationId, ctx.stockItemIds[0], offloadQty, received.valueDelta);
 
     record = await getInventoryRecord(ctx.locationId, ctx.stockItemIds[0]);
     assertInvariants(record, "after reverse");

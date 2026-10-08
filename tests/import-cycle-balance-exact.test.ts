@@ -15,6 +15,11 @@ vi.mock("../server/routes/import-cycle/_helpers", () => ({ _getCached: () => nul
 vi.mock("../server/storage", () => ({
   storage: { getAllLedgerAccounts: async () => [], getParentCompanyId: async () => 7 },
 }));
+// Wave 11: the stock on the floor is the one stock valuation (stockValuation.ts,
+// SUM(total_value)), no longer quantity × average_rate from the inventory rows.
+// It is mocked at 0.555 (1.5 units worth 0.37 each) to keep exercising the
+// single rounding of the exact total.
+vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: async () => "0.555" }));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
   const chain = (value: unknown) => {

@@ -15,8 +15,7 @@ import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { applyEmployeeBalanceDeltasTx } from "../../services/accounting/employeeBalancePosting";
 import { removeFactoryDaybookMirrorTx } from "../../services/accounting/factoryDaybookMirrorRemoval";
-import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
 import {
   getCompanyRequestRuntimeContext,
   runWithCompanyRequestRuntimeContext,
@@ -25,11 +24,9 @@ import {
   createTenantDatabaseScope,
   runWithDatabaseScopeRuntimeContext,
 } from "../../services/security/databaseScopeRuntimeContext";
-import { adjustInventory } from "../../inventoryHelper";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
 
 const GOLDEN_COAST_POS_SETTLEMENT_SOURCE_TYPE = "golden-coast-pos-settlement";
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 type SettlementRole = "payable_reclass" | "gc_cash_transfer" | "hadi_cash_receipt";
 type SettlementPhase = "posting" | "reversal";
@@ -343,48 +340,27 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
         const requestedEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
 
         if (sourcePosDelete) {
-          const sourceItems = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucherId));
-          const targetLocationId = lockedRequestedVoucher.locationId;
-
-          if (targetLocationId) {
-            for (const item of sourceItems) {
-              const quantity = Number.parseFloat(item.quantity);
-              const costPrice = Number.parseFloat(item.costPrice || "0");
-              const inventoryResult = await adjustInventory(
-                tx,
-                targetLocationId,
-                item.stockItemId,
-                quantity,
-                companyId,
-                costPrice
-              );
-              await postStockMovementTx(
-                tx,
-                {
-                  companyId,
-                  stockItemId: item.stockItemId,
-                  kind: "adjustment",
-                  quantity: String(quantity),
-                  unitCost: String(Math.max(costPrice || inventoryResult.averageRate || 0, 0)),
-                  toLocationId: targetLocationId,
-                  occurredAt: new Date().toISOString(),
-                  source: {
-                    sourceType: "voucher_delete_pos_sale",
-                    sourceId: String(voucherId),
-                    idempotencyKey: `voucher-delete:pos:${companyId}:${voucherId}:${item.id}`,
-                  },
-                  actor: {
-                    userId: req.session.userId,
-                    username: req.session.username,
-                    reason: `Delete voucher ${lockedRequestedVoucher.voucherNumber}`,
-                  },
-                },
-                canonicalStockMovementAdapter
-              );
-            }
-          } else {
-            logger.warn(`[POS Delete] Voucher ${voucherId}: Cannot reverse inventory - no locationId on voucher`);
-          }
+          // Wave 11: the sold stock comes back with exactly the value it
+          // relieved, and the sale's COGS journal (if the company is not a
+          // supplier partner, the only case that posts one) leaves with it.
+          await reverseVoucherStockTx(tx, {
+            companyId,
+            voucher: {
+              id: voucherId,
+              voucherType: "Sales",
+              voucherNumber: lockedRequestedVoucher.voucherNumber,
+              optional: lockedRequestedVoucher.optional,
+              locationId: lockedRequestedVoucher.locationId,
+            },
+            occurredAt: new Date().toISOString(),
+            actor: {
+              userId: req.session.userId,
+              username: req.session.username,
+              reason: `Delete voucher ${lockedRequestedVoucher.voucherNumber}`,
+            },
+            sourcePrefix: "voucher_delete",
+            keyPrefix: "voucher-delete",
+          });
 
           await tx.delete(salesItems).where(eq(salesItems.voucherId, voucherId));
           await applyEmployeeBalanceDeltasTx({

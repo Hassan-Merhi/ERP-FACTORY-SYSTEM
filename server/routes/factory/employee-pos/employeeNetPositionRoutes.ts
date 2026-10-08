@@ -26,8 +26,12 @@ import {
 import { eq, and, desc, sql, inArray, isNull, lte } from "drizzle-orm";
 import { computeNetPositionInventory } from "./netPositionInventory";
 import { computeNetPositionSupplierBalances } from "./netPositionSupplierBalances";
-import { factoryOrderMemoLines, workerAdvanceMemoLines } from "./netPositionNotInLedger";
-import { loadNetPositionParties, notInLedgerSection } from "../../../services/accounting/balances/netPositionParties";
+import {
+  factoryOrderMemoLines,
+  notInLedgerSectionWithInformational,
+  workerAdvanceMemoLines,
+} from "./netPositionNotInLedger";
+import { loadNetPositionParties } from "../../../services/accounting/balances/netPositionParties";
 import { resultRows } from "../../../lib/queryResult";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
@@ -228,6 +232,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         rawMaterialStockValue: computedRawMaterialStockValue,
         stockOtwValue,
         balanceOnTableValue: computedBalanceOnTableValue,
+        reservedBaleCount,
+        reservedBaleCost,
       } = await computeNetPositionInventory({
         companyId,
         asOf,
@@ -248,8 +254,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // ── 4. Pending, Verified & Loading orders ─────────────────────────────────
       // Unfinalized orders at selling price are not receivables (no invoice,
       // nothing in the ledger): they are listed and totalled as before, and
-      // shown under `notInLedger`, never in "What We Have". Their bales are
-      // RESERVED_FOR_ORDER, so the computed IN_STOCK bale value excludes them.
+      // shown under `notInLedger`, never in "What We Have". Owner decision
+      // (wave 11): their bales are stock at cost in Stock In Hand (finished
+      // goods after the cut-over), so the order lines are informational and
+      // left out of the notInLedger total: the same bales are never counted
+      // twice. `reservedBales` reports what Stock In Hand holds for them.
       const pendingVerifiedRows = await db
         .select({
           id: customerOrders.id,
@@ -462,7 +471,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // invoices, POS credit sales, unjournalled container amounts, payroll and
       // salary-advance differences), unfinalized orders and the worker-advance
       // table's excess over the ledger. Never part of the totals below.
-      const notInLedger = notInLedgerSection([
+      const notInLedger = notInLedgerSectionWithInformational([
         ...parties.notInLedger.lines,
         ...factoryOrderMemoLines({
           pendingOrders,
@@ -622,6 +631,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         pendingTotal,
         verifiedTotal,
         loadingTotal,
+        // Bales of unfinalized orders, at cost, inside Stock In Hand (before the
+        // cut-over; after it they are in the ledger's finished goods).
+        reservedBales: { count: ledgerStock ? 0 : reservedBaleCount, cost: ledgerStock ? 0 : reservedBaleCost },
+        inventoryValueBasis: valuationMode === "selling" ? "selling-price-per-bale" : "bale-cost",
         ledgerLiabilities: round2(ledgerOnUsTotal),
         bankAssets: totalBankAssets,
         bankOverdrafts: totalBankOverdrafts,

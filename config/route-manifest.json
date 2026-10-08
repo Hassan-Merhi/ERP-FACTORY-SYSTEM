@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2061,
+  "routeCount": 2063,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -276,6 +276,8 @@
     "POST /api/factory/raw-stock/recalc-opening [requireAuth > <anonymous>]",
     "POST /api/factory/import/opening-raw-stock [requireAuth > <anonymous>]",
     "GET /api/factory/import/template/:type [requireAuth > <anonymous>]",
+    "GET /api/factory/bale-cost/recost-preview [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/factory/bale-cost/recost-apply [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/daybook [requireAuth > <anonymous>]",
     "GET /api/factory/customers [requireAuth > <anonymous>]",
     "POST /api/factory/customers [requireAuth > <anonymous>]",

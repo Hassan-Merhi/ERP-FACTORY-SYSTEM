@@ -8,10 +8,10 @@
 
 import { db, type RawQueryRow } from "../db";
 import { storage } from "../storage";
-import { locations, containers } from "@shared/schema";
+import { containers } from "@shared/schema";
 import { eq, and, or, isNull, lte, sql } from "drizzle-orm";
 import { classifyEquityAccounts, classifyNetPositionAccounts, round2 } from "../netPositionHelper";
-import { calculateHistoricalLocationInventory } from "../routes/_helpers";
+import { companyStockValue } from "../services/inventory/stockValuation";
 import { loadNetPositionParties, type NotInLedgerSection } from "../services/accounting/balances/netPositionParties";
 import { toFiniteNumber, toPositiveInteger } from "@shared/typeGuards";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
@@ -201,27 +201,13 @@ export async function calculateNetPositionAsOf(
   onUsTotal += parties.onUsTotal;
 
   // ── Stock on floor ────────────────────────────────────────────────────
-  const activeLocationsData = await db
-    .select({ id: locations.id })
-    .from(locations)
-    .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-    .execute();
-  const activeLocationIds = activeLocationsData.map((l) => l.id);
-
+  // Wave 11: the one stock valuation (stockValuation): SUM(total_value) as of
+  // the date over the company's non-deleted locations, active or inactive,
+  // bale mirror left out. Negative stock does not subtract (owner decision);
+  // its provisional value is reported by the valuation, not netted here.
   let stockFloorTotal = 0;
-  if (activeLocationIds.length > 0 && !ledgerStock) {
-    const allHistorical = await Promise.all(
-      activeLocationIds.map((locId) => calculateHistoricalLocationInventory(locId, companyId, toDate))
-    );
-    for (const items of allHistorical) {
-      for (const inv of items) {
-        const qty = parseFloat(inv.quantity || "0");
-        const rate = parseFloat(inv.averageRate || "0");
-        // Signed valuation must match the live inventory table. Negative stock
-        // is a real position and must reduce Stock In Hand rather than disappear.
-        if (qty !== 0) stockFloorTotal += qty * rate;
-      }
-    }
+  if (!ledgerStock) {
+    stockFloorTotal = Number(await companyStockValue(db, companyId, toDate));
   }
   stockFloorTotal = round2(stockFloorTotal);
   if (stockFloorTotal !== 0) {

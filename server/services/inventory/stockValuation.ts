@@ -14,10 +14,18 @@
  *     dropped. Stock left at a soft-deleted location is not counted and is
  *     reported in `excluded.deletedLocationValue`.
  *   - Row value: `total_value` of a row with a positive quantity, never below
- *     zero. A short (zero or negative quantity) row holds no value: negative
- *     stock does not subtract. A row that breaks this (value on a short row,
- *     or a negative value) is not counted and is reported in `excluded`, so
- *     nothing silently drops.
+ *     zero. Negative stock does not subtract from the stock value (`total`).
+ *     Under the negative-stock policy (inventoryHelper.ts) a short row holds
+ *     the provisional value its shortage was issued at, as a negative
+ *     total_value; that is reported as `excluded.shortageValue`. A row that
+ *     breaks the policy (value on a zero row, a positive value on a short row,
+ *     or a negative value on a row with stock) is not counted and is reported
+ *     in `excluded` too, so nothing silently drops.
+ *   - `subLedgerTotal` is the signed sum of every in-scope row's total_value
+ *     (`total` + shortage + anomalies): what the perpetual INVENTORY account
+ *     holds when the ledger moves with every sub-ledger movement. The
+ *     perpetual reconciliation and the opening journal use it; reports of the
+ *     stock value use `total`.
  *   - ERP bale-mirror stock items (UOM BALE whose code is a factory bale
  *     product's code or article code) are left out, as the perpetual INVENTORY
  *     account leaves them out: the factory values those bales. Their value is
@@ -53,11 +61,17 @@ export interface StockValuationExclusions {
   baleMirrorValue: string;
   /** Value left on soft-deleted locations of the company. */
   deletedLocationValue: string;
-  /** Value stored on rows whose quantity is zero or negative (not counted). */
+  /**
+   * Provisional value of negative stock (negative): the value short issues
+   * relieved at the cost memory, held on short rows until a receipt settles
+   * them. Policy, not an anomaly; not counted in `total`.
+   */
+  shortageValue: string;
+  /** Value stored on zero rows, or a positive value on a short row (not counted). */
   shortRowValue: string;
   /** Negative values stored on rows with a positive quantity (not counted). */
   negativeValue: string;
-  /** Number of rows behind shortRowValue and negativeValue. */
+  /** Number of rows behind shortRowValue and negativeValue (shortage rows are not anomalous). */
   anomalousRows: number;
 }
 
@@ -66,8 +80,13 @@ export interface CompanyStockValuation {
   /** null for the live valuation, else the YYYY-MM-DD date it is as of. */
   asOf: string | null;
   scope: typeof STOCK_VALUATION_LOCATION_SCOPE;
-  /** What the perpetual INVENTORY account should hold: active + inactive locations. */
+  /** The stock value: active + inactive locations, negative stock not subtracting. */
   total: string;
+  /**
+   * Signed sub-ledger value (total + shortage + anomalies, deleted locations
+   * and the bale mirror left out): what the perpetual INVENTORY account holds.
+   */
+  subLedgerTotal: string;
   activeLocationValue: string;
   inactiveLocationValue: string;
   /** Non-deleted locations, ordered by id. */
@@ -81,6 +100,7 @@ type Accumulator = {
   inactive: Decimal;
   mirror: Decimal;
   deleted: Decimal;
+  shortage: Decimal;
   shortRow: Decimal;
   negative: Decimal;
   anomalousRows: number;
@@ -94,6 +114,7 @@ function emptyAccumulator(): Accumulator {
     inactive: zero,
     mirror: zero,
     deleted: zero,
+    shortage: zero,
     shortRow: zero,
     negative: zero,
     anomalousRows: 0,
@@ -113,12 +134,14 @@ function finish(
     asOf,
     scope: STOCK_VALUATION_LOCATION_SCOPE,
     total: money(acc.total),
+    subLedgerTotal: money(acc.total.plus(acc.shortage).plus(acc.shortRow).plus(acc.negative)),
     activeLocationValue: money(acc.active),
     inactiveLocationValue: money(acc.inactive),
     locations,
     excluded: {
       baleMirrorValue: money(acc.mirror),
       deletedLocationValue: money(acc.deleted),
+      shortageValue: money(acc.shortage),
       shortRowValue: money(acc.shortRow),
       negativeValue: money(acc.negative),
       anomalousRows: acc.anomalousRows,
@@ -130,11 +153,25 @@ function finish(
 function classifyRow(
   quantity: Decimal,
   totalValue: Decimal
-): { counted: Decimal; shortRow: Decimal; negative: Decimal } {
+): { counted: Decimal; shortage: Decimal; shortRow: Decimal; negative: Decimal } {
   const zero = new MoneyDecimal(0);
-  if (!quantity.gt(0)) return { counted: zero, shortRow: totalValue, negative: zero };
-  if (totalValue.isNegative()) return { counted: zero, shortRow: zero, negative: totalValue };
-  return { counted: totalValue, shortRow: zero, negative: zero };
+  const none = { counted: zero, shortage: zero, shortRow: zero, negative: zero };
+  if (quantity.isNegative() && totalValue.isNegative()) return { ...none, shortage: totalValue };
+  if (!quantity.gt(0)) return { ...none, shortRow: totalValue };
+  if (totalValue.isNegative()) return { ...none, negative: totalValue };
+  return { ...none, counted: totalValue };
+}
+
+/**
+ * The value one inventory row counts for in a stock-value report (the policy
+ * above): its total_value when it holds stock and a non-negative value, else
+ * zero. Per-item reports use it so their totals add up to `total`.
+ */
+export function countedStockRowValue(
+  quantity: string | number | null | undefined,
+  totalValue: string | number | null | undefined
+): Decimal {
+  return classifyRow(toMoney(quantity), toMoney(totalValue)).counted;
 }
 
 type LiveRow = {
@@ -144,6 +181,7 @@ type LiveRow = {
   deleted: boolean;
   mirror: boolean;
   counted: string;
+  shortage: string;
   short_row: string;
   negative: string;
   anomalous_rows: number;
@@ -159,9 +197,11 @@ async function liveRows(
     SELECT l.id AS location_id, l.name AS location_name, l.active, (l.deleted_at IS NOT NULL) AS deleted,
            COALESCE(m.mirror, false) AS mirror,
            COALESCE(SUM(i.total_value) FILTER (WHERE i.quantity > 0 AND i.total_value > 0), 0)::text AS counted,
-           COALESCE(SUM(i.total_value) FILTER (WHERE i.quantity <= 0), 0)::text AS short_row,
+           COALESCE(SUM(i.total_value) FILTER (WHERE i.quantity < 0 AND i.total_value < 0), 0)::text AS shortage,
+           COALESCE(SUM(i.total_value) FILTER (WHERE i.quantity <= 0 AND NOT (i.quantity < 0 AND i.total_value < 0)), 0)::text
+             AS short_row,
            COALESCE(SUM(i.total_value) FILTER (WHERE i.quantity > 0 AND i.total_value < 0), 0)::text AS negative,
-           (COUNT(i.id) FILTER (WHERE (i.quantity <= 0 AND i.total_value <> 0)
+           (COUNT(i.id) FILTER (WHERE (i.quantity <= 0 AND i.total_value <> 0 AND NOT (i.quantity < 0 AND i.total_value < 0))
                                    OR (i.quantity > 0 AND i.total_value < 0)))::int AS anomalous_rows
       FROM locations l
       LEFT JOIN inventory i ON i.location_id = l.id
@@ -199,6 +239,7 @@ function accumulateLive(rows: LiveRow[]): { acc: Accumulator; locations: Locatio
       continue;
     }
     entry.value = entry.value.plus(counted);
+    acc.shortage = acc.shortage.plus(toMoney(row.shortage));
     acc.shortRow = acc.shortRow.plus(toMoney(row.short_row));
     acc.negative = acc.negative.plus(toMoney(row.negative));
     acc.anomalousRows += Number(row.anomalous_rows);
@@ -243,8 +284,9 @@ export async function locationStockValuation(
 
 /**
  * The company's ERP stock value at the end of `asOf` (YYYY-MM-DD), replayed
- * backwards from the stored total_value. Runs on the shared pool (the replay
- * reads outside any transaction). Locations deleted now are not replayed.
+ * backwards from the stored total_value, on the given executor (a
+ * transaction gets one consistent snapshot). Locations deleted now are not
+ * replayed.
  */
 export async function companyStockValuationAsOf(
   executor: DatabaseOrTransaction,
@@ -264,13 +306,14 @@ export async function companyStockValuationAsOf(
   for (const location of locationRows) {
     if (location.deleted) continue;
     let value: Decimal = new MoneyDecimal(0);
-    for (const item of await calculateHistoricalLocationInventory(location.id, companyId, asOf)) {
+    for (const item of await calculateHistoricalLocationInventory(location.id, companyId, asOf, executor)) {
       const row = classifyRow(toMoney(item.quantity), toMoney(item.totalValue));
       if (mirror.has(item.stockItemId)) {
         acc.mirror = acc.mirror.plus(row.counted);
         continue;
       }
       value = value.plus(row.counted);
+      acc.shortage = acc.shortage.plus(row.shortage);
       if (!row.shortRow.isZero() || !row.negative.isZero()) acc.anomalousRows += 1;
       acc.shortRow = acc.shortRow.plus(row.shortRow);
       acc.negative = acc.negative.plus(row.negative);
@@ -286,4 +329,20 @@ export async function companyStockValuationAsOf(
     });
   }
   return finish(companyId, asOf, acc, locations);
+}
+
+/**
+ * The company's stock value (`total`, negative stock not subtracting): live
+ * when `asOf` is empty, else at the end of `asOf` (YYYY-MM-DD). The one figure
+ * every stock-value report reads (wave 11).
+ */
+export async function companyStockValue(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  asOf?: string | null
+): Promise<string> {
+  const valuation = asOf
+    ? await companyStockValuationAsOf(executor, companyId, asOf)
+    : await companyStockValuation(executor, companyId);
+  return valuation.total;
 }

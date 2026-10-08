@@ -155,8 +155,8 @@ import { startupMigrations } from "../server/startup-schema";
  * guarded convergence of a legacy log and seven legacy index drops, replacing
  * the fss_log_color block), 1405 to 1413. Nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1413;
-const EXPECTED_CONTENT_HASH = "5b5b8b71a7bb6f71d880fc13537ea63115b2cbd94c9558b537d37e2a4ef3e607";
+const EXPECTED_STATEMENT_COUNT = 1421;
+const EXPECTED_CONTENT_HASH = "725a023405ec3076585a044c91037c4f6b63de8f7e84e8273077877fe56ab92c";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -222,6 +222,15 @@ const EXPECTED_CONTENT_HASH = "5b5b8b71a7bb6f71d880fc13537ea63115b2cbd94c9558b53
  * hard-deleted ledger accounts on every boot). main had 1415 statements against
  * a stale pin of 1413; with the two removed the array is 1413, and nothing else
  * moved.
+ *
+ * Re-pinned again (2026-10 accounting audit, wave 11): the orphan repair stage
+ * (005) copies rows into its archive tables by column name, not by position,
+ * and adds any source column an archive lacks (one statement per archived
+ * table, eight in all), because wave 11 added value_moved to
+ * stock_transfer_items and an archive created on an earlier boot would no
+ * longer line up. 010's inventory company backfill was made a no-op when
+ * nothing is mismatched and no longer moves a cut-over company's stock. The
+ * count goes from 1413 to 1421.
  */
 
 function contentHash(statements: string[]): string {

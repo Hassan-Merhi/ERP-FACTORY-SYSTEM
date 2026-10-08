@@ -5,9 +5,16 @@
  *   Raw material     remaining kg × landed USD cost per kg (factory_raw_stock)
  *   Work in progress open mix-batch kg × mix cost per kg, plus bales awaiting
  *                    pressing at their recorded cost
- *   Finished goods   bales held at their recorded cost, including bales already
- *                    marked sold on orders that are not invoiced yet (their
- *                    cost of sales is posted with the invoice)
+ *   Finished goods   bales held at their recorded cost, including bales reserved
+ *                    for unfinalized orders and bales already marked sold on
+ *                    orders that are not invoiced yet (their cost of sales is
+ *                    posted with the invoice). A bale still marked IN_STOCK on a
+ *                    finalized, dispatched or sold order is not stock: its
+ *                    invoice took its cost (wave 11).
+ *
+ * Bale cost is USD material cost (wave 11, services/factory/baleCostBasis.ts).
+ * An open mix recorded unvalued (a source with no USD rate before the
+ * cut-over: cost 0) is listed with the rows that carry no cost.
  *
  * The opening journal and the daily factory stock journal both value the
  * factory with this function. Rows that carry no cost are listed, never valued
@@ -32,6 +39,11 @@ export interface FactoryStockValuation {
   unvalued: UnvaluedRow[];
   /** Bales marked sold on orders that are not invoiced yet; included in finished goods. */
   soldNotInvoiced: { bales: number; cost: string };
+  /**
+   * Bales on unfinalized orders (pending verification, verified, loading),
+   * whatever their status; included in finished goods at cost (wave 11).
+   */
+  reservedForOrders: { bales: number; cost: string };
 }
 
 async function rows<T>(executor: DatabaseOrTransaction, query: ReturnType<typeof sql>): Promise<T[]> {
@@ -61,17 +73,20 @@ export async function factoryStockValuation(
     rawValue = rawValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
   }
 
-  const mixes = await rows<{ remaining: string; cost: string }>(
+  const mixes = await rows<{ id: number; remaining: string; cost: string }>(
     executor,
     sql`
-      SELECT (total_weight_kg - used_kg)::text AS remaining, cost_per_kg::text AS cost
+      SELECT id, (total_weight_kg - used_kg)::text AS remaining, cost_per_kg::text AS cost
         FROM factory_mix_batches
        WHERE company_id = ${companyId} AND deleted_at IS NULL AND status <> 'CLOSED'
          AND total_weight_kg - used_kg > 0
     `
   );
   let wipValue: Decimal = new MoneyDecimal(0);
-  for (const row of mixes) wipValue = wipValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
+  for (const row of mixes) {
+    if (!toMoney(row.cost).gt(0)) unvalued.push({ source: "factory_mix_batches", id: row.id, reason: "no USD cost" });
+    wipValue = wipValue.plus(toMoney(row.remaining).times(toMoney(row.cost)));
+  }
 
   const bales = await rows<{ status: string; cost: string; zero_cost: number[] }>(
     executor,
@@ -81,6 +96,12 @@ export async function factoryStockValuation(
         FROM factory_bales
        WHERE company_id = ${companyId} AND deleted_at IS NULL
          AND status IN ('PENDING_PRESSING', 'IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH')
+         AND NOT (status = 'IN_STOCK' AND EXISTS (
+           SELECT 1 FROM customer_order_bales cob
+             JOIN customer_orders co ON co.id = cob.order_id
+            WHERE cob.bale_id = factory_bales.id AND co.company_id = ${companyId} AND co.deleted_at IS NULL
+              AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
+         ))
        GROUP BY status
     `
   );
@@ -108,12 +129,30 @@ export async function factoryStockValuation(
   const soldCost = toMoney(sold?.cost ?? 0);
   finishedValue = finishedValue.plus(soldCost);
 
+  // Information: the bales of unfinalized orders, already counted above.
+  const [reserved] = await rows<{ count: number; cost: string }>(
+    executor,
+    sql`
+      SELECT COUNT(*)::int AS count, COALESCE(SUM(b.total_cost), 0)::text AS cost
+        FROM factory_bales b
+       WHERE b.company_id = ${companyId} AND b.deleted_at IS NULL
+         AND b.status IN ('IN_STOCK', 'RESERVED_FOR_ORDER', 'RESERVED_FOR_DISPATCH', 'SOLD')
+         AND EXISTS (
+           SELECT 1 FROM customer_order_bales cob
+             JOIN customer_orders co ON co.id = cob.order_id
+            WHERE cob.bale_id = b.id AND co.company_id = ${companyId} AND co.deleted_at IS NULL
+              AND co.status IN ('PENDING_VERIFICATION', 'VERIFIED', 'LOADING')
+         )
+    `
+  );
+
   return {
     raw: rawValue.toDecimalPlaces(2),
     wip: wipValue.toDecimalPlaces(2),
     finished: finishedValue.toDecimalPlaces(2),
     unvalued,
     soldNotInvoiced: { bales: sold?.count ?? 0, cost: soldCost.toFixed(2) },
+    reservedForOrders: { bales: reserved?.count ?? 0, cost: toMoney(reserved?.cost ?? 0).toFixed(2) },
   };
 }
 

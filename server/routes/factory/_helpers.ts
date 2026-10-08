@@ -28,6 +28,8 @@ import type Decimal from "decimal.js";
 import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
 import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { withFactoryValuationEventTx } from "../../services/factory/factoryStockValueEvents";
+import { resolveMixSourcePricingBasis } from "../../services/factory/mixSourcePricingBasis";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
   try {
@@ -346,9 +348,29 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
  * Call this inside a db.transaction() after mutating any single cost component
  * (freight, duty, commission, otherCharges, ratePerKg, or an additional charge).
  *
+ * Wave 11: mix sources and batches are held in USD. A source priced from this
+ * container alone (CONTAINER_DIRECT) takes the container's USD cost per kg; a
+ * source priced at its supplier's locked rate keeps it. The change this makes
+ * to the factory valuation is recorded as a REVALUATION event for the daily
+ * factory stock journal.
+ *
  * Returns the new { totalCost, inclusiveCostPerKg, costPerKgUsd, rawStockId }.
  */
 export async function recalculateContainerCosts(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number
+): Promise<{ totalCost: number; inclusiveCostPerKg: number; costPerKgUsd: number; rawStockId: number | null }> {
+  return withFactoryValuationEventTx(
+    tx,
+    companyId,
+    "REVALUATION",
+    { sourceType: "factory-container-cost-recalculation", sourceId: containerId },
+    () => recalculateContainerCostsInner(tx, companyId, containerId)
+  );
+}
+
+async function recalculateContainerCostsInner(
   tx: DbTransaction,
   companyId: number,
   containerId: number
@@ -484,10 +506,13 @@ export async function recalculateContainerCosts(
 
   if (mixSources.length > 0) {
     for (const src of mixSources) {
-      const newSrcCost = toMoney(src.weightKg).times(costPerKgExact);
+      // Only a source priced from this container alone follows its cost; a
+      // supplier-priced source keeps the supplier's locked rate (USD).
+      if (resolveMixSourcePricingBasis(src) !== "CONTAINER_DIRECT") continue;
+      const newSrcCost = toMoney(src.weightKg).times(costPerKgUsdExact);
       await tx
         .update(factoryMixBatchSources)
-        .set({ costPerKg: costPerKgExact.toFixed(7), totalCost: newSrcCost.toFixed(2) })
+        .set({ costPerKg: costPerKgUsdExact.toFixed(7), totalCost: newSrcCost.toFixed(7) })
         .where(eq(factoryMixBatchSources.id, src.id));
     }
 
@@ -508,8 +533,8 @@ export async function recalculateContainerCosts(
       await tx
         .update(factoryMixBatches)
         .set({
-          costPerKg: batchCostPerKg.toFixed(4),
-          totalCost: batchTotalCost.toFixed(2),
+          costPerKg: batchCostPerKg.toFixed(7),
+          totalCost: batchTotalCost.toFixed(7),
           updatedAt: new Date(),
         })
         .where(eq(factoryMixBatches.id, batchId));

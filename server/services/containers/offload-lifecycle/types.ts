@@ -1,4 +1,7 @@
+import type Decimal from "decimal.js";
 import * as schema from "@shared/schema";
+
+import { toMoney } from "../../../lib/money";
 
 export type ContainerOffloadLifecycleMode = "create-or-replace" | "replace-only";
 
@@ -63,25 +66,34 @@ export function positiveIds(values: unknown[]): number[] {
   );
 }
 
+/** One stock item's purchase-order quantity and value on a container, exact. */
+export interface OffloadItemTotals {
+  stockItemId: number;
+  totalQuantity: Decimal;
+  /** Sum of quantity × rate over the item's PO lines (the purchase value). */
+  weightedRateSum: Decimal;
+}
+
+/**
+ * The container's PO lines grouped by stock item, in decimal arithmetic (the
+ * offload costs the received stock from these totals; floats lost the last
+ * cent of large containers).
+ */
 export function buildItemMap(
   lineItems: Array<{ stockItemId: number; quantity: string; rate: string }>
-): Map<number, { stockItemId: number; totalQuantity: number; weightedRateSum: number }> {
-  const items = new Map<number, { stockItemId: number; totalQuantity: number; weightedRateSum: number }>();
+): Map<number, OffloadItemTotals> {
+  const items = new Map<number, OffloadItemTotals>();
   for (const line of lineItems) {
     const stockItemId = Number(line.stockItemId);
     if (!Number.isInteger(stockItemId) || stockItemId <= 0) continue;
-    const quantity = amount(line.quantity);
-    const rate = amount(line.rate);
-    if (items.has(stockItemId)) {
-      const current = items.get(stockItemId)!;
-      current.totalQuantity += quantity;
-      current.weightedRateSum += quantity * rate;
+    const quantity = toMoney(line.quantity);
+    const value = quantity.times(toMoney(line.rate));
+    const current = items.get(stockItemId);
+    if (current) {
+      current.totalQuantity = current.totalQuantity.plus(quantity);
+      current.weightedRateSum = current.weightedRateSum.plus(value);
     } else {
-      items.set(stockItemId, {
-        stockItemId,
-        totalQuantity: quantity,
-        weightedRateSum: quantity * rate,
-      });
+      items.set(stockItemId, { stockItemId, totalQuantity: quantity, weightedRateSum: value });
     }
   }
   return items;

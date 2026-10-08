@@ -21,8 +21,9 @@ import {
   locations,
   companies,
 } from "@shared/schema";
-import { eq, and, inArray, sql, isNotNull } from "drizzle-orm";
+import { eq, and, inArray, sql, isNotNull, isNull } from "drizzle-orm";
 import { _getCached, _setCached } from "../../services/shared/ttlCache";
+import { countedStockRowValue } from "../../services/inventory/stockValuation";
 
 const numberValue = (value: unknown) =>
   toInventoryDecimal(value as unknown as Parameters<typeof toInventoryDecimal>[0]).toNumber();
@@ -106,7 +107,9 @@ export function registerStatsReportsRoutes(app: Express) {
       const stockItemsToReport = stockGroupId
         ? allStockItems.filter((item) => item.stockGroupId === parseInt(stockGroupId as string))
         : allStockItems;
-      const inventoryConditions = [eq(locations.companyId, companyId)];
+      // Wave 11: the stock valuation policy (stockValuation.ts): non-deleted
+      // locations, each row valued at its stored total_value.
+      const inventoryConditions = [eq(locations.companyId, companyId), isNull(locations.deletedAt)];
       if (locationId) inventoryConditions.push(eq(inventory.locationId, parseInt(locationId as string)));
       const inventoryRecords = await db
         .select({
@@ -115,6 +118,7 @@ export function registerStatsReportsRoutes(app: Express) {
           locationName: locations.name,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .innerJoin(locations, eq(inventory.locationId, locations.id))
@@ -133,7 +137,7 @@ export function registerStatsReportsRoutes(app: Express) {
           const itemInventory = inventoryByItem.get(item.id) || [];
           const totalQuantity = addInventoryValues(...itemInventory.map((record) => record.quantity));
           const totalValue = addInventoryValues(
-            ...itemInventory.map((record) => multiplyInventoryValues(record.quantity, record.averageRate))
+            ...itemInventory.map((record) => countedStockRowValue(record.quantity, record.totalValue))
           );
           return {
             stockItemId: item.id,
@@ -144,7 +148,7 @@ export function registerStatsReportsRoutes(app: Express) {
               locationName: record.locationName,
               quantity: numberValue(record.quantity),
               averageRate: numberValue(record.averageRate),
-              totalValue: multiplyInventoryValues(record.quantity, record.averageRate).toNumber(),
+              totalValue: countedStockRowValue(record.quantity, record.totalValue).toNumber(),
             })),
             totalQuantity: totalQuantity.toNumber(),
             totalValue: totalValue.toNumber(),
@@ -349,6 +353,7 @@ export function registerStatsReportsRoutes(app: Express) {
           stockItemId: inventory.stockItemId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
           locationId: inventory.locationId,
           locationName: locations.name,
         })
@@ -357,7 +362,8 @@ export function registerStatsReportsRoutes(app: Express) {
         .where(
           and(
             eq(inventory.companyId, companyId),
-            eq(locations.active, true),
+            // Wave 11: the stock valuation policy (non-deleted locations, active or not).
+            isNull(locations.deletedAt),
             ...(locationId && locationId !== "all" ? [eq(inventory.locationId, parseInt(locationId as string))] : [])
           )
         )
@@ -372,7 +378,7 @@ export function registerStatsReportsRoutes(app: Express) {
         existing.quantity = addInventoryValues(existing.quantity, record.quantity);
         existing.totalValue = addInventoryValues(
           existing.totalValue,
-          multiplyInventoryValues(record.quantity, record.averageRate)
+          countedStockRowValue(record.quantity, record.totalValue)
         );
         inventoryByItem.set(record.stockItemId, existing);
       }
@@ -442,12 +448,13 @@ export function registerStatsReportsRoutes(app: Express) {
         .where(and(eq(stockItems.companyId, companyId), eq(stockItems.stockGroupId, parseInt(stockGroupId))))
         .execute();
       const itemIds = groupItems.map((item) => item.id);
-      let inventoryData: Array<{ stockItemId: number; quantity: string; averageRate: string }> = [];
+      let inventoryData: Array<{ stockItemId: number; quantity: string; averageRate: string; totalValue: string }> = [];
       if (itemIds.length > 0) {
         const conditions = [
           eq(inventory.companyId, companyId),
           inArray(inventory.stockItemId, itemIds),
-          eq(locations.active, true),
+          // Wave 11: the stock valuation policy (non-deleted locations, active or not).
+          isNull(locations.deletedAt),
         ];
         if (locationId && locationId !== "all")
           conditions.push(eq(inventory.locationId, parseInt(locationId as string)));
@@ -456,6 +463,7 @@ export function registerStatsReportsRoutes(app: Express) {
             stockItemId: inventory.stockItemId,
             quantity: inventory.quantity,
             averageRate: inventory.averageRate,
+            totalValue: inventory.totalValue,
           })
           .from(inventory)
           .innerJoin(locations, eq(inventory.locationId, locations.id))
@@ -471,7 +479,7 @@ export function registerStatsReportsRoutes(app: Express) {
         existing.quantity = addInventoryValues(existing.quantity, record.quantity);
         existing.totalValue = addInventoryValues(
           existing.totalValue,
-          multiplyInventoryValues(record.quantity, record.averageRate)
+          countedStockRowValue(record.quantity, record.totalValue)
         );
         inventoryByItem.set(record.stockItemId, existing);
       }

@@ -13,8 +13,14 @@
  *     Purchases.
  *
  *   STOCK-IN-{containerId}, dated with the offload:
- *     Dr Inventory          the value the stock sub-ledger received
- *                           (container_offload_items of active offloads)
+ *     Dr Inventory          exactly the value the stock sub-ledger received
+ *                           (container_offload_items.value_moved of active
+ *                           offloads; the line value on a legacy line)
+ *     Dr/Cr COGS            the rest of the landed value (cogs_variance): the
+ *                           settlement variance of shortages the receipt
+ *                           covered (receipt rate − provisional rate) × settled
+ *                           bales, and the sold share of a later charge
+ *                           re-pricing. Landed value = Inventory + COGS.
  *     Cr Goods in Transit   the container's POs that are in transit: a PO with
  *                           a GIT-PO journal, or one dated before the cut-over
  *                           (the opening journal carried it as in transit)
@@ -46,6 +52,9 @@ export const purchaseOrderGitVoucherNumber = (purchaseOrderId: number) => `GIT-P
 export const containerStockInVoucherNumber = (containerId: number) => `STOCK-IN-${containerId}`;
 
 const zero = () => new MoneyDecimal(0);
+
+/** A literal for a POSIX regular expression. */
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 async function rows<T>(tx: DbTransaction, query: ReturnType<typeof sql>): Promise<T[]> {
   return (await tx.execute(query)).rows as unknown as T[];
@@ -140,10 +149,11 @@ export async function syncContainerStockInTx(
   const number = containerStockInVoucherNumber(containerId);
   await removeLinkedJournalTx(tx, companyId, number);
 
-  const [container] = await rows<{ offload_date: string | null; location_id: number | null }>(
+  const [container] = await rows<{ offload_date: string | null; location_id: number | null; container_number: string }>(
     tx,
     sql`
-      SELECT COALESCE(c.offload_date::text, (
+      SELECT c.container_number,
+             COALESCE(c.offload_date::text, (
                SELECT max(co.offloaded_at)::date::text FROM container_offloads co WHERE co.container_id = c.id
              )) AS offload_date,
              (SELECT co.location_id FROM container_offloads co
@@ -156,10 +166,12 @@ export async function syncContainerStockInTx(
   if (!(await isPerpetualInventoryActive(tx, companyId, container.offload_date))) return null;
   if (await isSupplierPartnerCompany(tx, companyId)) return null;
 
-  const [received] = await rows<{ value: string }>(
+  const [received] = await rows<{ value: string; inventory: string; cogs: string }>(
     tx,
     sql`
-      SELECT COALESCE(SUM(coi.total_value), 0)::text AS value
+      SELECT COALESCE(SUM(coi.total_value), 0)::text AS value,
+             COALESCE(SUM(COALESCE(coi.value_moved, coi.total_value)), 0)::text AS inventory,
+             COALESCE(SUM(COALESCE(coi.cogs_variance, 0)), 0)::text AS cogs
         FROM container_offload_items coi
         JOIN container_offloads co ON co.id = coi.offload_id
         JOIN containers c ON c.id = co.container_id
@@ -168,6 +180,9 @@ export async function syncContainerStockInTx(
   );
   const value = toMoney(received?.value ?? 0).toDecimalPlaces(2);
   if (!value.gt(0)) return null;
+  // What the sub-ledger received, and the landed value it did not (COGS).
+  const inventoryValue = toMoney(received?.inventory ?? 0).toDecimalPlaces(2);
+  const cogsValue = value.minus(inventoryValue);
 
   // In transit: POs with their own GIT journal, and POs dated before the
   // cut-over, which the opening journal carried as goods in transit.
@@ -186,16 +201,27 @@ export async function syncContainerStockInTx(
   }
 
   // Charges booked by the offload: whatever account each charge voucher debited.
+  // A charge voucher is the offload's by its posting identity, or by the number
+  // the offload gave it (<DUTY|OFFICE|TRANS|XFER|CHG>-<container>-<n>): editing
+  // a charge voucher from the voucher screen retires its posting identity, and
+  // the re-priced stock-in journal must still credit the charge (wave 11).
+  const chargeNumber = `^(DUTY|OFFICE|TRANS|XFER|CHG)-${escapeRegExp(container.container_number)}-[0-9]+$`;
   const charges = await rows<{ ledger_account_id: number; amount: string }>(
     tx,
     sql`
       SELECT ve.ledger_account_id, SUM(ve.debit_amount)::text AS amount
-        FROM accounting_posting_requests apr
-        JOIN vouchers v ON v.id = apr.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
-                           AND COALESCE(v.optional, false) = false
+        FROM vouchers v
         JOIN voucher_entries ve ON ve.voucher_id = v.id
-       WHERE apr.company_id = ${companyId} AND apr.source_type = 'container-offload-charge'
-         AND apr.source_id LIKE ${`${companyId}:${containerId}:%`}
+       WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL AND COALESCE(v.optional, false) = false
+         AND (
+           EXISTS (
+             SELECT 1 FROM accounting_posting_requests apr
+              WHERE apr.voucher_id = v.id AND apr.company_id = ${companyId}
+                AND apr.source_type = 'container-offload-charge'
+                AND apr.source_id LIKE ${`${companyId}:${containerId}:%`}
+           )
+           OR v.voucher_number ~ ${chargeNumber}
+         )
          AND ve.debit_amount > 0 AND ve.ledger_account_id IS NOT NULL
        GROUP BY ve.ledger_account_id
     `
@@ -203,10 +229,21 @@ export async function syncContainerStockInTx(
   const chargeTotal = charges.reduce((sum, row) => sum.plus(toMoney(row.amount)), zero());
   const residual = value.minus(inTransit).minus(chargeTotal);
 
-  const accounts = await systemAccountIdsTx(tx, companyId, ["GOODS_IN_TRANSIT", "PURCHASES"]);
+  const accounts = await systemAccountIdsTx(tx, companyId, ["GOODS_IN_TRANSIT", "PURCHASES", "COGS"]);
   const { id: inventoryAccountId } = await getOrCreateInventoryControlAccount(tx, companyId);
   const lines: LinkedJournalLine[] = [
-    { ledgerAccountId: inventoryAccountId, debit: value, credit: zero(), narration: "Stock received at landed cost" },
+    {
+      ledgerAccountId: inventoryAccountId,
+      debit: inventoryValue.isNegative() ? zero() : inventoryValue,
+      credit: inventoryValue.isNegative() ? inventoryValue.negated() : zero(),
+      narration: "Stock received at landed cost",
+    },
+    {
+      ledgerAccountId: accounts.get("COGS")!,
+      debit: cogsValue.isNegative() ? zero() : cogsValue,
+      credit: cogsValue.isNegative() ? cogsValue.negated() : zero(),
+      narration: "Landed cost of stock already sold (shortage settled, charge re-priced)",
+    },
     {
       ledgerAccountId: accounts.get("GOODS_IN_TRANSIT")!,
       debit: zero(),

@@ -216,10 +216,34 @@ export async function purgeOldSoftDeletes(): Promise<void> {
 
     // ── Stock Items (must clear FK children first) ──────────────────────────
     await runIsolatedPurgeUnit(client, "stock_items", async () => {
+      // Wave 11: a deleted item that still holds stock (any quantity or value at
+      // any location) is kept: purging it would drop that stock value from the
+      // sub-ledger with no journal. It is reported for review instead.
       const oldStockItems = await client.query<{ id: number }>(
-        `SELECT id FROM stock_items WHERE deleted_at IS NOT NULL AND deleted_at < $1`,
+        `SELECT si.id FROM stock_items si
+          WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
+            AND NOT EXISTS (
+              SELECT 1 FROM inventory inv
+               WHERE inv.stock_item_id = si.id
+                 AND (ABS(COALESCE(inv.quantity, 0)) > 0 OR ABS(COALESCE(inv.total_value, 0)) > 0)
+            )`,
         [cutoff]
       );
+      const retained = await client.query<{ count: number }>(
+        `SELECT COUNT(*)::int AS count FROM stock_items si
+          WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
+            AND EXISTS (
+              SELECT 1 FROM inventory inv
+               WHERE inv.stock_item_id = si.id
+                 AND (ABS(COALESCE(inv.quantity, 0)) > 0 OR ABS(COALESCE(inv.total_value, 0)) > 0)
+            )`,
+        [cutoff]
+      );
+      if (Number(retained.rows[0]?.count ?? 0) > 0) {
+        logger.warn("[Purge] Deleted stock items that still hold stock were retained.", {
+          retained: Number(retained.rows[0]?.count ?? 0),
+        });
+      }
       if (oldStockItems.rows.length === 0) return;
 
       const ids = oldStockItems.rows.map((r) => r.id);

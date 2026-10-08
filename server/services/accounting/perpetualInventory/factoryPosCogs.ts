@@ -5,9 +5,12 @@
  * Cr Factory Bale Sales Income); it never posted their cost. Once the
  * company's cut-over applies, the sale also posts a linked journal
  * FPOS-COGS-{saleId}: Dr Cost of Goods Sold / Cr Factory Finished Goods for
- * the recorded cost of the bales the sale marked sold. A sale does not record
- * which bales it took, so the cost is the one of the bales each write marks
- * sold; an edit replaces the journal and a delete removes it.
+ * the recorded cost of the bales the sale marked sold. Since wave 11 a sale
+ * records the bales it took (factory_pos_sale_bales,
+ * services/factory/factoryPosSaleBales.ts): the cost is the SUM of those
+ * bales' total_cost, a void puts back exactly those bales, and an edit
+ * releases them and records the ones it takes. An edit replaces the journal
+ * and a delete removes it.
  */
 import type Decimal from "decimal.js";
 import { and, eq, inArray, sql } from "drizzle-orm";

@@ -8,6 +8,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { db, type RawQueryRow } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { MoneyDecimal, moneyString, sumMoney, toMoney } from "../../lib/money";
 
 /**
@@ -26,8 +27,6 @@ interface AccountBalanceAggregateRow {
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import {
-  locations,
-  inventory,
   ledgerAccounts,
   employees,
   stockAdjustmentVouchers,
@@ -296,19 +295,8 @@ export function registerAccountingBalanceInitRoutes(app: Express) {
           .toNumber();
 
         // 11. Stock on Floor
-        // Calculate from quantity * averageRate to ensure accuracy (totalValue can get out of sync)
-        const inventoryItems = await db
-          .select({
-            quantity: inventory.quantity,
-            averageRate: inventory.averageRate,
-          })
-          .from(inventory)
-          .innerJoin(locations, eq(inventory.locationId, locations.id))
-          .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
-
-        const stockOnFloorValue = inventoryItems
-          .reduce((sum, item) => sum.plus(toMoney(item.quantity).times(toMoney(item.averageRate))), new MoneyDecimal(0))
-          .toNumber();
+        // Wave 11: the one stock valuation (stockValuation.ts, SUM(total_value)).
+        const stockOnFloorValue = Number(await companyStockValue(db, companyId));
 
         // 12. COGS
         const cogsData = await db

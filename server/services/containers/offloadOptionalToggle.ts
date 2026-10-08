@@ -38,12 +38,14 @@
  * the recorded response and the canonical stock journal sees one movement key.
  */
 import { randomUUID } from "node:crypto";
+import Decimal from "decimal.js";
 import { and, eq, inArray, like, or, sql } from "drizzle-orm";
 
 import { containerOffloadItems, containerOffloads, containers, vouchers } from "@shared/schema";
 import type { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { adjustInventory, reverseInventoryByExactValue } from "../../inventoryHelper";
+import { adjustInventory, receiveInventoryAtValue, reverseInventoryByExactValue } from "../../inventoryHelper";
+import { toMoney } from "../../lib/money";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
 import { syncContainerStockInTx } from "../accounting/perpetualInventory/stockReceipts";
@@ -219,26 +221,65 @@ export async function applyOffloadOptionalToggleTx(
   const occurredAt = new Date().toISOString();
 
   for (const item of offloadItems) {
-    const qty = parseFloat(item.quantity);
-    const value = parseFloat(item.totalValue);
-    const rate = parseFloat(item.rate);
+    const qty = toMoney(item.quantity);
+    const lineValue = toMoney(item.totalValue);
+    // What the sub-ledger holds of this line: value_moved (the line value on a
+    // legacy line written before wave 11).
+    const moved = toMoney(item.valueMoved ?? item.totalValue);
 
     if (targetOptional) {
-      // Suspending: remove the stock that was added at offload.
-      await reverseInventoryByExactValue(tx, lockedOffload.locationId, item.stockItemId, qty, value, companyId);
+      // Suspending: remove exactly the value the offload put into the
+      // sub-ledger; the stock-in journal (which only counts active offloads)
+      // takes the same value out of Inventory.
+      await reverseInventoryByExactValue(
+        tx,
+        lockedOffload.locationId,
+        item.stockItemId,
+        qty.toNumber(),
+        moved.toFixed(2),
+        companyId,
+        `offload-optional-suspend:${offloadId}`
+      );
     } else {
-      // Unsuspending: add the stock back at the original rate.
-      await adjustInventory(tx, lockedOffload.locationId, item.stockItemId, qty, companyId, rate);
+      // Restoring: receive the line again at its stored value (not its 2dp
+      // rate). Into negative stock the receipt settles the shortage first, so
+      // what the sub-ledger takes and the COGS variance are recorded again
+      // for the stock-in journal.
+      const received = qty.gt(0)
+        ? await receiveInventoryAtValue(tx, {
+            locationId: lockedOffload.locationId,
+            stockItemId: item.stockItemId,
+            quantity: qty,
+            value: lineValue,
+            companyId,
+            // Not a voucher id: the layer's source_voucher_id references vouchers.
+            sourceVoucherType: `offload-optional-restore:${offloadId}`,
+          })
+        : await adjustInventory(
+            tx,
+            lockedOffload.locationId,
+            item.stockItemId,
+            qty.toNumber(),
+            companyId,
+            undefined,
+            `offload-optional-restore:${offloadId}`
+          );
+      const valueMoved = toMoney(received.valueDelta);
+      await tx
+        .update(containerOffloadItems)
+        .set({ valueMoved: valueMoved.toFixed(2), cogsVariance: lineValue.minus(valueMoved).toFixed(2) })
+        .where(eq(containerOffloadItems.id, item.id));
     }
 
+    const unitCost = qty.isZero() ? toMoney(item.rate) : (targetOptional ? moved : lineValue).dividedBy(qty);
     await postStockMovementTx(
       tx,
       {
         companyId,
         stockItemId: item.stockItemId,
         kind: "adjustment",
-        quantity: String(Math.abs(qty)),
-        unitCost: String(Math.max(rate || (qty !== 0 ? value / qty : 0), 0)),
+        quantity: qty.abs().toString(),
+        unitCost: Decimal.max(unitCost, 0).toDecimalPlaces(6).toString(),
         fromLocationId: targetOptional ? lockedOffload.locationId : undefined,
         toLocationId: targetOptional ? undefined : lockedOffload.locationId,
         occurredAt,

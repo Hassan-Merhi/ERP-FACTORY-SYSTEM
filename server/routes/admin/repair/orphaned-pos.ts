@@ -9,6 +9,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import {
+  assertNoInventoryCutoverTx,
+  sendInventoryCutoverRefusal,
+} from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import { inventory, vouchers, voucherEntries, salesItems, locations } from "@shared/schema";
 import { eq, and, or, inArray, sql, isNull, isNotNull } from "drizzle-orm";
 
@@ -246,6 +250,9 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
+      // Wave 11: hard-deleting sales (and their COGS journals) would move the
+      // ledger's Inventory with no stock movement: refused after the cut-over.
+      await assertNoInventoryCutoverTx(db, companyId, "delete-orphaned-pos-sales");
 
       // Find all vouchers with locationId pointing to deleted or non-existent locations
       const orphanedVouchers = await db
@@ -294,6 +301,7 @@ export function registerAdminOrphanedPosRoutes(app: Express) {
         voucherNumbers: orphanedVouchers.map((v) => v.voucherNumber),
       });
     } catch (error: unknown) {
+      if (sendInventoryCutoverRefusal(res, error)) return;
       logger.error("Delete orphaned POS sales error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

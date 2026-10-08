@@ -13,6 +13,7 @@ import { registerBalesReimportRoutes } from "./balesReimportRoutes";
 import { registerBalesCrudRoutes } from "./balesCrudRoutes";
 import { registerBalesReportRoutes } from "./balesReportRoutes";
 import { registerBalesImportRoutes } from "./balesImportRoutes";
+import { registerBaleRecostRoutes } from "./baleRecostRoutes";
 
 export function registerFactoryBalesRoutes(app: Express) {
   registerBalesPressingRoutes(app);
@@ -22,4 +23,5 @@ export function registerFactoryBalesRoutes(app: Express) {
   registerBalesCrudRoutes(app);
   registerBalesReportRoutes(app);
   registerBalesImportRoutes(app);
+  registerBaleRecostRoutes(app);
 }

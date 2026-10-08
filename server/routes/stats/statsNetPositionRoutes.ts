@@ -5,11 +5,11 @@ import { logger } from "../../lib/logger";
 import { db, pool } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
+import { logAudit } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { sumMoney, toMoney } from "../../lib/money";
-import { inventory, containers, locations } from "@shared/schema";
-import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
+import { containers } from "@shared/schema";
+import { eq, and, or, sql, lte } from "drizzle-orm";
 import {
   classifyEquityAccounts,
   classifyNetPositionAccounts,
@@ -18,6 +18,7 @@ import {
 } from "../../netPositionHelper";
 import { loadNetPositionParties } from "../../services/accounting/balances/netPositionParties";
 import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 
 export function registerStatsNetPositionRoutes(app: Express) {
   app.get("/api/stats/net-position-excel", requireAuth, requireNonPOS, async (req, res) => {
@@ -128,37 +129,11 @@ export function registerStatsNetPositionRoutes(app: Express) {
       const forUsAccounts = [...classified.forUsAccounts];
       const onUsAccounts = [...classified.onUsAccounts];
 
-      // ── 3. Stock In Hand — historical as of toDate ────────────────────────
-      const activeLocsData = await db
-        .select({ id: locations.id })
-        .from(locations)
-        .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
-        .execute();
-      const activeLocIds = activeLocsData.map((l) => l.id);
-      const stockLines: Array<{ quantity: string | null; averageRate: string | null }> = [];
-      if (activeLocIds.length > 0 && !ledgerStock) {
-        if (toDate) {
-          // Parallelize across locations — each location is independent
-          const allHistorical = await Promise.all(
-            activeLocIds.map((locId: number) => calculateHistoricalLocationInventory(locId, companyId, toDate))
-          );
-          for (const items of allHistorical) {
-            for (const inv of items) {
-              if (toMoney(inv.quantity).gt(0)) stockLines.push(inv);
-            }
-          }
-        } else {
-          const invData = await db
-            .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-            .from(inventory)
-            .where(inArray(inventory.locationId, activeLocIds))
-            .execute();
-          stockLines.push(...invData);
-        }
-      }
-      const stockOnFloor = sumMoney(
-        stockLines.map((inv) => toMoney(inv.quantity).times(toMoney(inv.averageRate)))
-      ).toNumber();
+      // ── 3. Stock In Hand — as of toDate (live without one) ───────────────
+      // Wave 11: the one stock valuation (stockValuation), SUM(total_value)
+      // over the company's non-deleted locations, bale mirror left out;
+      // negative stock does not subtract.
+      const stockOnFloor = ledgerStock ? 0 : Number(await companyStockValue(db, companyId, toDate));
       if (stockOnFloor > 0) {
         forUsTotal += stockOnFloor;
         forUsAccounts.push({

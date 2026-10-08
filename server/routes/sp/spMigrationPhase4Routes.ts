@@ -2,6 +2,7 @@ import type { Express, NextFunction, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import { sqlArray } from "../../lib/sqlArray";
 import { db } from "../../db";
+import { inventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { logger } from "../../lib/logger";
 import { requireAuth, requireRole } from "../../auth";
 import { validateMigrationPair, pn } from "./spMigrationPhase2Common";
@@ -412,6 +413,12 @@ async function prepareCutover(req: Request, res: Response): Promise<Response | v
 async function finalizeCutover(req: Request, res: Response): Promise<Response | void> {
   const pair = await validateMigrationPair(req, res, false);
   if (!pair) return;
+  // Wave 11: the migration rewrites stock with no journal: refused once either
+  // company has its perpetual-inventory cut-over applied.
+  const inventoryRefusal =
+    (await inventoryCutoverRefusal(db, pair.targetId, "sp-migration-cutover")) ??
+    (await inventoryCutoverRefusal(db, pair.sourceId, "sp-migration-cutover"));
+  if (inventoryRefusal) return res.status(inventoryRefusal.status).json(inventoryRefusal.body);
   const error = exactCutoverConfirmation(
     req.body?.confirmation,
     "FINALIZE CUTOVER",

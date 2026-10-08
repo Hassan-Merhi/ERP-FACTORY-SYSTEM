@@ -13,11 +13,12 @@ import { firstRow, resultRows } from "../../../lib/queryResult";
 import { inventoryQuantity, inventoryUnitCost, toInventoryDecimal } from "../../../lib/inventoryMath";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
+import { saleLineValuesTx } from "../../inventory/valueExactReversal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 const ZERO = new Decimal(0);
 const QTY_DP = 3;
-const RATE_DP = 2;
+const RATE_DP = 7;
 const VALUE_DP = 2;
 const QTY_EPSILON = new Decimal("0.0005");
 
@@ -119,6 +120,13 @@ export async function restorePosSaleInventoryForReversal(
     stockItemId: number;
     quantity: number;
     voucherId: number;
+    /**
+     * Wave 11: the value the sale relieved (value_moved, or the legacy
+     * fallback). Omitted: the stock comes back at the current stored cost.
+     */
+    value?: Decimal;
+    /** False for a legacy estimate: a crossing restore values only the newly positive quantity. */
+    exact?: boolean;
   }
 ): Promise<PosSaleInventoryRestoreResult> {
   const { companyId, locationId, stockItemId, quantity, voucherId } = params;
@@ -151,8 +159,23 @@ export async function restorePosSaleInventoryForReversal(
   let newValue = ZERO;
   let newRate = currentRate;
 
-  if (newQty.gt(ZERO)) {
-    if (currentQty.gt(ZERO)) {
+  if (params.value !== undefined && params.exact !== false) {
+    // Wave 11: the stock comes back with exactly the value the sale relieved,
+    // whatever the row's state (a short row's negative value moves up by it,
+    // as the negative-stock policy carries it), because the sale's COGS
+    // journal leaves the ledger with exactly that value.
+    const storedValue = decimal(existing.total_value).toDecimalPlaces(VALUE_DP);
+    newValue = storedValue.plus(Decimal.max(params.value, ZERO)).toDecimalPlaces(VALUE_DP);
+    if (newQty.gt(ZERO) && newValue.gt(ZERO)) newRate = newValue.dividedBy(newQty);
+    else if (newQty.isNegative() && newValue.isNegative()) newRate = newValue.dividedBy(newQty);
+  } else if (newQty.gt(ZERO)) {
+    if (params.value !== undefined) {
+      // A legacy estimate (no value_moved): value only what the row can hold.
+      const value = Decimal.max(params.value, ZERO);
+      newValue = currentQty.gt(ZERO)
+        ? currentValue.plus(value)
+        : newQty.times(restoreQty.gt(ZERO) ? value.dividedBy(restoreQty) : currentRate);
+    } else if (currentQty.gt(ZERO)) {
       // Add back at the current stored cost. Re-issuing the same quantity then
       // subtracts the same amount, so an unchanged edit is valuation-neutral.
       newValue = currentValue.plus(restoreQty.times(currentRate));
@@ -161,6 +184,7 @@ export async function restorePosSaleInventoryForReversal(
       // positive, value only the newly positive quantity at cost-memory rate.
       newValue = newQty.times(currentRate);
     }
+    newValue = newValue.toDecimalPlaces(VALUE_DP);
     newRate = newValue.dividedBy(newQty);
   }
 
@@ -168,7 +192,7 @@ export async function restorePosSaleInventoryForReversal(
     UPDATE inventory
     SET quantity = ${newQty.toFixed(QTY_DP)},
         average_rate = ${Decimal.max(newRate, ZERO).toFixed(RATE_DP)},
-        total_value = ${Decimal.max(newValue, ZERO).toFixed(VALUE_DP)},
+        total_value = ${(params.value !== undefined && params.exact !== false ? newValue : Decimal.max(newValue, ZERO)).toFixed(VALUE_DP)},
         last_updated = NOW()
     WHERE id = ${existing.id}
   `);
@@ -176,7 +200,7 @@ export async function restorePosSaleInventoryForReversal(
   return {
     previousQuantity: currentQty.toNumber(),
     newQuantity: newQty.toNumber(),
-    previousTotalValue: currentValue.toNumber(),
+    previousTotalValue: decimal(existing.total_value).toNumber(),
     newTotalValue: newValue.toNumber(),
     averageRate: Decimal.max(newRate, ZERO).toNumber(),
   };
@@ -191,19 +215,32 @@ export async function restorePosSaleInventoryForReversal(
  */
 export async function reverseOriginalSaleInventory(
   tx: DbTransaction,
-  existingVoucher: VoucherRow,
-  oldSalesItems: SalesItemRow[],
+  existingVoucher: Pick<VoucherRow, "id" | "companyId" | "locationId">,
+  oldSalesItems: Array<
+    Pick<SalesItemRow, "id" | "stockItemId" | "quantity" | "costPrice"> &
+      Partial<Pick<SalesItemRow, "totalCost" | "valueMoved">>
+  >,
   canonicalRevision?: number
-): Promise<void> {
+): Promise<Decimal> {
+  // Wave 11: each line comes back with the value it relieved (value_moved;
+  // legacy lines: the COGS journal pro rata, else total_cost / qty × cost_price).
+  const values = await saleLineValuesTx(tx, existingVoucher.companyId, existingVoucher.id, oldSalesItems);
+  let subLedgerDelta = ZERO;
   for (const oldItem of oldSalesItems) {
     const oldQuantity = toInventoryDecimal(oldItem.quantity);
-    await restorePosSaleInventoryForReversal(tx, {
+    const entry = values.get(oldItem.id);
+    const restored = await restorePosSaleInventoryForReversal(tx, {
       companyId: existingVoucher.companyId,
       locationId: existingVoucher.locationId!,
       stockItemId: oldItem.stockItemId,
       quantity: oldQuantity.toNumber(),
       voucherId: existingVoucher.id,
+      value: entry?.value,
+      exact: entry?.exact,
     });
+    subLedgerDelta = subLedgerDelta.plus(
+      new Decimal(restored.newTotalValue.toFixed(VALUE_DP)).minus(restored.previousTotalValue.toFixed(VALUE_DP))
+    );
 
     // Include the sales_item id in the canonical identity. A valid sale can
     // contain more than one row for the same stock item, and each row must post
@@ -230,6 +267,7 @@ export async function reverseOriginalSaleInventory(
       );
     }
   }
+  return subLedgerDelta;
 }
 
 export async function clearOldSaleRecords(tx: DbTransaction, voucherId: number): Promise<void> {

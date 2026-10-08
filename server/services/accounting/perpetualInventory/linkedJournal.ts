@@ -151,7 +151,9 @@ export async function ledgerAccountByCodeTx(
 
 /**
  * What the ledger holds on the company's accounts with the given codes as of a
- * date (debit positive): their opening balances and every active posting.
+ * date (debit positive): their opening balances and every active posting
+ * booked on or before it (the voucher's effective date when it has one, as
+ * the balance engine books it, else its voucher date).
  */
 export async function ledgerBalancesByCode(
   executor: DatabaseOrTransaction,
@@ -170,7 +172,8 @@ export async function ledgerBalancesByCode(
         SELECT SUM(ve.debit_amount - ve.credit_amount) AS balance
           FROM voucher_entries ve
           JOIN vouchers v ON v.id = ve.voucher_id AND v.company_id = ${companyId} AND v.deleted_at IS NULL
-                         AND COALESCE(v.optional, false) = false AND v.voucher_date <= ${asOf}
+                         AND COALESCE(v.optional, false) = false
+                         AND COALESCE(v.effective_date, v.voucher_date) <= ${asOf}
          WHERE ve.ledger_account_id = la.id
       ) posted ON true
      WHERE la.company_id = ${companyId} AND la.deleted_at IS NULL AND la.code IN (${sql.join(

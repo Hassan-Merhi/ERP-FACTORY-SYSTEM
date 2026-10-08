@@ -14,6 +14,7 @@ import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { writeDaybookEntry, verifySupervisorPassword } from "../_helpers";
+import { recordFactoryStockValueEventTx, valuedBalesCostTx } from "../../../services/factory/factoryStockValueEvents";
 import { factoryBaleProducts, factoryBales, inventory, stockItems, users, userCompanyRoles } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 
@@ -59,6 +60,22 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
           .select()
           .from(factoryBales)
           .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+
+        // Perpetual inventory: the cost of the stock removed is a write-off in
+        // the daily factory stock journal (wave 11).
+        await recordFactoryStockValueEventTx(tx, {
+          companyId,
+          kind: "WASTE",
+          amount: (
+            await valuedBalesCostTx(
+              tx,
+              companyId,
+              balesToRemove.map((bale) => bale.id)
+            )
+          ).negated(),
+          sourceType: "factory-bale-removal",
+          sourceId: balesToRemove.map((bale) => bale.id).join(","),
+        });
 
         const removedBales = [];
         const now = new Date();
@@ -230,6 +247,20 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
         if (balesToRemove.length === 0) {
           throw new Error("No in-stock bales found for this product at this location");
         }
+
+        await recordFactoryStockValueEventTx(tx, {
+          companyId,
+          kind: "WASTE",
+          amount: (
+            await valuedBalesCostTx(
+              tx,
+              companyId,
+              balesToRemove.map((bale) => bale.id)
+            )
+          ).negated(),
+          sourceType: "factory-bale-removal",
+          sourceId: balesToRemove.map((bale) => bale.id).join(","),
+        });
 
         const removedBales = [];
         const now = new Date();

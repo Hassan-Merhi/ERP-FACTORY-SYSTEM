@@ -10,12 +10,12 @@
     "GET /api/reports/net-profit-excel": {
       "status": 200,
       "shape": "workbook:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "hash": "8100eae894c541251fcce6ce21a360e4fede5ae9dd7ab71e0ca2eb628e38147a"
+      "hash": "cd5324ab11354eaaf9e4794d8d245ff5a798527e0421f3a8b4f062cce9ace413"
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,bankAssets,bankOverdrafts,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,notInLedger,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
-      "hash": "7591f4aa54582c35d1b611c58ffd8aff8f63322181ef9da64cb9bac893ab0b38"
+      "shape": "{asOf,balanceOnTableValue,bankAssets,bankOverdrafts,forUs,forUsTotal,inventoryValue,inventoryValueBasis,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,notInLedger,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,reservedBales,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
+      "hash": "a144e92efe9fad207b962be70c3b67285ac171d0534e15606e4abe7a73651d65"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,

@@ -167,7 +167,7 @@ export async function buildSupplierProfitRows({
     `
     SELECT i.stock_item_id,
       SUM(i.quantity::numeric) AS current_stock,
-      SUM(i.quantity::numeric * i.average_rate::numeric) / NULLIF(SUM(i.quantity::numeric), 0) AS avg_cost,
+      SUM(i.total_value::numeric) / NULLIF(SUM(i.quantity::numeric), 0) AS avg_cost,
       MAX(i.average_rate::numeric) AS max_avg_rate
     FROM inventory i
     WHERE i.company_id = $1

@@ -10,6 +10,7 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
+import { toMoney } from "../../../lib/money";
 import {
   inventory,
   stockItems,
@@ -63,11 +64,13 @@ export function registerLocationSummaryRoutes(app: Express) {
           stockItemId: inventory.stockItemId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .where(and(eq(inventory.companyId, companyId), inArray(inventory.locationId, locationIds)));
 
-      // Create lookup maps for inventory data - calculate value dynamically as qty * rate
+      // Lookup maps for inventory data; the value is the stored total_value
+      // (wave 11), never quantity × the rounded average rate.
       const inventoryMap = new Map<string, { quantity: number; rate: number; value: number }>();
       for (const inv of inventoryData) {
         const key = `${inv.locationId}-${inv.stockItemId}`;
@@ -76,7 +79,7 @@ export function registerLocationSummaryRoutes(app: Express) {
         inventoryMap.set(key, {
           quantity: qty,
           rate: rate,
-          value: qty * rate,
+          value: toMoney(inv.totalValue).toNumber(),
         });
       }
 

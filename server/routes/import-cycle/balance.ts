@@ -7,10 +7,10 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db, pool } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import {
-  inventory,
   stockItems,
   stockAdjustmentVouchers,
   stockAdjustmentItems,
@@ -21,7 +21,6 @@ import {
   salesItems,
   suppliers,
   employees,
-  locations,
   salaryAdvances,
 } from "@shared/schema";
 import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
@@ -237,22 +236,16 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       );
 
       // 11. Stock Value on Floor (inventory in locations)
-      // Only include inventory at valid, non-deleted locations (excludes orphaned inventory)
-      // Calculate from quantity * averageRate to ensure accuracy (totalValue can get out of sync)
+      // Wave 11: the one stock valuation (stockValuation.ts): SUM(total_value) over
+      // the company's non-deleted locations, bale mirror left out, negative stock
+      // not subtracting. quantity × average_rate drifted from the stored value.
       // NOTE: Exclude the value impact of Mixed vouchers since their production/consumption net to 0
       // The remaining component reads are independent and individually short.
       // Run them as one bounded batch (six leases against a 15-connection app
       // pool) to remove the long sequential tail without recreating pool pressure.
-      const [inventoryItems, cogsData, adjustmentData, advancesData, employeesData, stockItemsWithOpening] =
+      const [stockValue, cogsData, adjustmentData, advancesData, employeesData, stockItemsWithOpening] =
         await Promise.all([
-          db
-            .select({
-              quantity: inventory.quantity,
-              averageRate: inventory.averageRate,
-            })
-            .from(inventory)
-            .innerJoin(locations, eq(inventory.locationId, locations.id))
-            .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt))),
+          companyStockValue(db, companyId),
           db
             .select({
               totalCost: salesItems.totalCost,
@@ -298,9 +291,7 @@ export function registerImportCycleBalanceRoutes(app: Express) {
             .where(and(eq(stockItems.companyId, companyId), isNull(stockItems.deletedAt))),
         ]);
 
-      const stockOnFloorValue = sumMoney(
-        inventoryItems.map((item) => toMoney(item.quantity).times(toMoney(item.averageRate)))
-      );
+      const stockOnFloorValue = toMoney(stockValue);
 
       // 12. Cost of Goods Sold (calculated from salesItems for non-optional, non-deleted sales vouchers)
       // This represents inventory that was sold and is now an expense

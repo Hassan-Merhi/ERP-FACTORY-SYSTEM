@@ -29,6 +29,13 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
+import {
+  baleCostFromMix,
+  FACTORY_COST_SCALE,
+  mixCostForPressing,
+  sendFactoryCostBasisRefusal,
+  stockEntryBaleCost,
+} from "../../../services/factory/baleCostBasis";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -67,6 +74,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           if (!mb) throw new Error("Mix batch not found");
           mixBatch = mb;
         }
+        // Wave 11: bales from a mix cost weight × its USD cost per kg (refused
+        // under perpetual inventory when the mix has none); bales with no mix
+        // cost their product's production price per bale.
+        const mixCostPerKg = mixBatch ? await mixCostForPressing(tx, companyId, effectiveDateStr, mixBatch) : null;
 
         const totalExpected = items.reduce((sum: number, item) => sum + parseInt(item.quantity || item.qty || "1"), 0);
 
@@ -152,11 +163,12 @@ export function registerFactoryStockEntryRoutes(app: Express) {
             ? categoryMap.get(product.categoryId)?.name || null
             : null;
           const attribution = productionAttributions[itemIndex];
-          const isGarbage = product.articleCode?.startsWith("HMD16");
-          const productionCostPerKg = toMoney(product.productionPrice);
-          const effectiveCostPerKg = isGarbage ? new MoneyDecimal(0) : productionCostPerKg;
-          // Exact product; the column rounds it half away from zero, where the float product could fall short.
-          const baleTotalCost = weight.times(effectiveCostPerKg);
+          // production_price is per bale (as the production value report, the
+          // daybook and order profit read it), not per kg.
+          const baleCost =
+            mixCostPerKg !== null
+              ? baleCostFromMix(weight, mixCostPerKg)
+              : stockEntryBaleCost(product.productionPrice, weight, product.articleCode);
 
           for (let i = 0; i < qty; i++) {
             const refNum = `REF${String(nextNumber + baleIndex).padStart(6, "0")}`;
@@ -171,8 +183,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
               productName: product.name,
               category: categoryName,
               weightKg: weight.toString(),
-              costPerKg: effectiveCostPerKg.toString(),
-              totalCost: baleTotalCost.toString(),
+              costPerKg: baleCost.costPerKg.toFixed(FACTORY_COST_SCALE),
+              totalCost: baleCost.totalCost.toFixed(FACTORY_COST_SCALE),
               status: "IN_STOCK",
               // Entry date controls production attribution/history; finalizedAt is the actual action time.
               finalizedAt: now,
@@ -236,8 +248,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
         const stockGroupCache = new Map<string, number>();
         const stockItemCache = new Map<string, number>();
-        // Accumulate inventory adjustments per stockItemId instead of per bale
-        const inventoryAdjMap = new Map<number, { qty: number; totalCost: Decimal }>();
+        // Accumulate inventory adjustments per stockItemId instead of per bale.
+        // The ERP mirror of factory bales is quantity only (wave 11): the factory
+        // values its bales, so the mirror receives at rate 0.
+        const inventoryAdjMap = new Map<number, { qty: number }>();
 
         for (const bale of bales) {
           const factoryProduct = productMap.get(bale.productId as number);
@@ -323,9 +337,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           }
 
           // Accumulate instead of calling adjustInventory per bale
-          const baleRate = toMoney(bale.weightKg).times(toMoney(bale.costPerKg));
-          const prev = inventoryAdjMap.get(erpStockItemId!) ?? { qty: 0, totalCost: new MoneyDecimal(0) };
-          inventoryAdjMap.set(erpStockItemId!, { qty: prev.qty + 1, totalCost: prev.totalCost.plus(baleRate) });
+          const prev = inventoryAdjMap.get(erpStockItemId!) ?? { qty: 0 };
+          inventoryAdjMap.set(erpStockItemId!, { qty: prev.qty + 1 });
         }
 
         // A stock entry has no header row of its own — it writes a batch of
@@ -338,14 +351,11 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           : null;
 
         // ── One adjustInventory call per unique stock item ──
-        for (const [stockItemId, { qty, totalCost }] of inventoryAdjMap) {
-          const avgRatePerBale = qty > 0 ? totalCost.div(qty) : new MoneyDecimal(0);
-          await adjustInventory(tx, erpLocationId, stockItemId, qty, companyId, avgRatePerBale.toNumber());
+        for (const [stockItemId, { qty }] of inventoryAdjMap) {
+          await adjustInventory(tx, erpLocationId, stockItemId, qty, companyId, 0);
 
           // Canonical evidence for the stock this entry received, on the same
-          // transaction that applied it. The unit cost is the batch's average
-          // cost per bale for this item, which is the rate the inventory was
-          // updated with.
+          // transaction that applied it, at the rate the mirror received (0).
           if (canonicalBatchKey && qty > 0) {
             await postStockMovementTx(
               tx,
@@ -354,7 +364,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
                 stockItemId,
                 kind: "receipt",
                 quantity: String(qty),
-                unitCost: avgRatePerBale.toFixed(6),
+                unitCost: "0",
                 toLocationId: erpLocationId,
                 occurredAt: new Date().toISOString(),
                 source: {
@@ -383,8 +393,11 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
       const descParts = Array.from(productGroups.keys());
       const stockEntryDesc = `${result.bales.length} bale${result.bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
+      // The daybook shows the entry's selling value: the catalogue production
+      // price per bale (not the bales' cost, which is in factory_bales.total_cost).
       const totalBaleValue = sumMoney(result.bales.map((b) => b._product?.productionPrice)).toNumber();
       const baleMetaJson = JSON.stringify({
+        valueBasis: "selling value (production price per bale)",
         bales: result.bales.map((b) => ({
           id: b.id,
           ref: b.referenceNumber,
@@ -409,6 +422,7 @@ export function registerFactoryStockEntryRoutes(app: Express) {
 
       res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber() });
     } catch (error: unknown) {
+      if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error in stock entry:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
     }

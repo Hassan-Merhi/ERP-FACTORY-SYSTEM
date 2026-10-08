@@ -13,7 +13,6 @@ import { db } from "../../../db";
 import { buildBrokerStatement } from "../suppliers/broker";
 import { isSupplierPaidFreight } from "../suppliers/_supplierStatementHelpers";
 import { resolveStoredFxRate } from "../../../services/factory/currencyConversion";
-import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import {
@@ -73,13 +72,15 @@ export async function computeNetPositionSupplierBalances(
   // Authoritative locked rate (USD) per supplier — same map rawStockReceiptRoutes.ts
   // builds, so "Factory Raw Material Stock" here can never disagree with the Raw
   // Materials page's "Stock Value". Never recompute a rate from receipt history.
+  // Wave 11: only a persisted locked rate. The legacy receipt-weighted fallback
+  // (getLockedSupplierRate) can carry a native-currency cost and wrote the rate
+  // from this read; a supplier with no locked rate is valued per container at
+  // its landed USD cost (./netPositionInventory).
   const supplierLockedRateMapNp = new Map<number, number>();
   for (const s of suppliersList) {
     const persisted = s.currentRawMaterialCostPerKgUsd;
     if (persisted !== null && persisted !== undefined) {
       supplierLockedRateMapNp.set(s.id, toMoney(persisted as string).toNumber());
-    } else {
-      supplierLockedRateMapNp.set(s.id, await getLockedSupplierRate(db, ctx.companyId, s.id));
     }
   }
 

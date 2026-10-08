@@ -354,6 +354,13 @@ export function registerCreditSalesImportRoutes(app: Express) {
               importCreditLocPrice?.sellingPrice || stockItem.sellingPrice || "0"
             );
 
+            const issued = await adjustInventory(
+              tx,
+              locationId,
+              stockItem.id,
+              -quantity.toNumber(),
+              req.session.currentCompanyId!
+            );
             const [saleItem] = await tx
               .insert(salesItems)
               .values({
@@ -366,16 +373,11 @@ export function registerCreditSalesImportRoutes(app: Express) {
                 totalCost: itemCost,
                 profit,
                 configuredPrice: importCreditConfiguredPrice.gt(0) ? importCreditConfiguredPrice.toFixed(6) : null,
+                // Wave 11: the exact value the issue relieved, what a reversal restores.
+                valueMoved: relievedValue(issued).toFixed(2),
               })
               .returning({ id: salesItems.id });
 
-            const issued = await adjustInventory(
-              tx,
-              locationId,
-              stockItem.id,
-              -quantity.toNumber(),
-              req.session.currentCompanyId!
-            );
             relieved = relieved.plus(relievedValue(issued));
             await postStockMovementTx(
               tx,

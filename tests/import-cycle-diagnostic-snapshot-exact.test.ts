@@ -10,6 +10,11 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/storage", () => ({ storage: { getAllSuppliers: async () => [] } }));
 vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({ isParentCompanyContext: async () => false }));
+// Wave 11: the stock on the floor is the one stock valuation (stockValuation.ts,
+// SUM(total_value)), no longer quantity × average_rate from the inventory rows.
+// It is mocked at 0.555 (1.5 units worth 0.37 each) to keep exercising the
+// single rounding of the exact total.
+vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: async () => "0.555" }));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
   const rowsFor = (table: never, fields?: Record<string, unknown>) => {

@@ -7,6 +7,7 @@
 import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { db } from "../../db";
+import { inventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { requireAuth, requireRole } from "../../auth";
 import {
   privilegedConcurrencyLimit,
@@ -135,6 +136,9 @@ export function registerSpMigrationRunRoutes(app: Express) {
 
         const targetId = pn(runRow.target_company_id);
         const sourceId = pn(runRow.source_company_id);
+        // Wave 11: deleting the run's stock rows is refused after the target's cut-over.
+        const inventoryRefusal = await inventoryCutoverRefusal(db, targetId, "sp-migration-rollback");
+        if (inventoryRefusal) return res.status(inventoryRefusal.status).json(inventoryRefusal.body);
 
         // Safety: never touch source company
         if (!targetId || targetId === sourceId) {

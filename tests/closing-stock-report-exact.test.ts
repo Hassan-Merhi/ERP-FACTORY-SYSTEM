@@ -14,6 +14,12 @@ const state = vi.hoisted(() => ({
 
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined, requireRole: () => () => undefined }));
 vi.mock("../server/inventoryHelper", () => ({ adjustInventory: async () => undefined }));
+// Wave 11: the carry-forward asks whether the company's perpetual-inventory
+// cut-over is applied (it is refused then); this company has none.
+vi.mock("../server/services/accounting/perpetualInventory/cutoverRefusal", () => ({
+  assertNoInventoryCutoverTx: async () => undefined,
+  sendInventoryCutoverRefusal: () => false,
+}));
 vi.mock("../server/storage", () => ({
   storage: {
     getAllStockGroups: async () => [{ id: 1, code: "G1", name: "Group" }],

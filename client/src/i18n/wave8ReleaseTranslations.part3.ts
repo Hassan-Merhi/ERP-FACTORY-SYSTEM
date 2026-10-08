@@ -295,4 +295,76 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "يجب أن يكون الطرف المقابل لحركة المخزون حسابًا نظاميًا غير حساب المخزون",
     fr: "La contrepartie d’un mouvement de stock doit être un compte système autre que Stock",
   },
+  // Wave 11: factory bale cost basis (server/services/factory/baleCostBasis.ts, baleRecost.ts)
+  // and the informational order lines of the factory net position.
+  {
+    en: "A mix source has no USD cost rate. Confirm the container's exchange rate or the supplier's rate before mixing or pressing under perpetual inventory.",
+    ar: "أحد مصادر الخلطة ليس له سعر تكلفة بالدولار. أكّد سعر صرف الحاوية أو سعر المورد قبل الخلط أو الكبس في ظل الجرد المستمر.",
+    fr: "Une source du mélange n’a pas de coût en USD. Confirmez le taux de change du conteneur ou le taux du fournisseur avant de mélanger ou de presser en inventaire permanent.",
+  },
+  {
+    en: "Bale costs are now changed only through the reviewed re-cost: preview the plan, then an Owner confirms it.",
+    ar: "لا تُغيَّر تكاليف البالات الآن إلا عبر إعادة التكلفة المراجَعة: اعرض الخطة، ثم يؤكدها المالك.",
+    fr: "Le coût des balles ne change plus que par la revalorisation revue : prévisualisez le plan, puis un propriétaire le confirme.",
+  },
+  {
+    en: "The re-cost plan changed since it was reviewed. Preview it again and confirm the new plan.",
+    ar: "تغيّرت خطة إعادة التكلفة منذ مراجعتها. اعرضها مجددًا وأكّد الخطة الجديدة.",
+    fr: "Le plan de revalorisation a changé depuis sa revue. Prévisualisez-le à nouveau et confirmez le nouveau plan.",
+  },
+  {
+    en: "There is nothing to re-cost.",
+    ar: "لا يوجد ما يُعاد تكليفه.",
+    fr: "Il n’y a rien à revaloriser.",
+  },
+  {
+    en: "The reviewed plan hash is required",
+    ar: "رمز الخطة المراجَعة مطلوب",
+    fr: "L’empreinte du plan revu est requise",
+  },
+  {
+    en: "Pending orders at selling price (not invoiced; for information, their bales are in stock at cost)",
+    ar: "طلبات معلّقة بسعر البيع (غير مفوترة؛ للعلم فقط، بالاتها ضمن المخزون بالتكلفة)",
+    fr: "Commandes en attente au prix de vente (non facturées ; pour information, leurs balles sont en stock au coût)",
+  },
+  {
+    en: "Verified orders at selling price (not invoiced; for information, their bales are in stock at cost)",
+    ar: "طلبات مُتحقَّق منها بسعر البيع (غير مفوترة؛ للعلم فقط، بالاتها ضمن المخزون بالتكلفة)",
+    fr: "Commandes vérifiées au prix de vente (non facturées ; pour information, leurs balles sont en stock au coût)",
+  },
+  {
+    en: "Loading orders at selling price (not invoiced; for information, their bales are in stock at cost)",
+    ar: "طلبات قيد التحميل بسعر البيع (غير مفوترة؛ للعلم فقط، بالاتها ضمن المخزون بالتكلفة)",
+    fr: "Commandes en chargement au prix de vente (non facturées ; pour information, leurs balles sont en stock au coût)",
+  },
+  {
+    en: "After the perpetual inventory cut-over a stock import must say what it is: an opening balance or a stock count.",
+    ar: "بعد التحول إلى الجرد المستمر يجب أن يحدد استيراد المخزون نوعه: رصيد افتتاحي أو جرد فعلي.",
+    fr: "Après le passage à l’inventaire permanent, un import de stock doit indiquer sa nature : solde d’ouverture ou inventaire physique.",
+  },
+  {
+    en: "Only an Owner can import opening stock after the perpetual inventory cut-over.",
+    ar: "يمكن للمالك فقط استيراد مخزون افتتاحي بعد التحول إلى الجرد المستمر.",
+    fr: "Seul un propriétaire peut importer un stock d’ouverture après le passage à l’inventaire permanent.",
+  },
+  {
+    en: "This line belongs to a posted stock document. Edit the document itself so its stock and journal move with the change.",
+    ar: "هذا السطر ينتمي إلى مستند مخزون مُرحَّل. عدّل المستند نفسه لكي يتحرك مخزونه وقيده مع التعديل.",
+    fr: "Cette ligne appartient à un document de stock comptabilisé. Modifiez le document lui-même pour que son stock et son écriture suivent la modification.",
+  },
+  {
+    en: "This item has no stock cost at this location: enter its inventory cost before taking it back.",
+    ar: "لا توجد تكلفة مخزون لهذا الصنف في هذا الموقع: أدخل تكلفة المخزون قبل استرجاعه.",
+    fr: "Cet article n’a pas de coût de stock à cet emplacement : saisissez son coût d’inventaire avant de le reprendre.",
+  },
+  {
+    en: "Transferring closing stock to another company has been retired: it moved stock value with no journal in either company. Use stock documents or the opening inventory journal instead.",
+    ar: "تم إيقاف نقل مخزون آخر المدة إلى شركة أخرى: كان ينقل قيمة المخزون دون قيد في أي من الشركتين. استخدم مستندات المخزون أو قيد المخزون الافتتاحي بدلاً من ذلك.",
+    fr: "Le transfert du stock de clôture vers une autre société a été retiré : il déplaçait la valeur du stock sans écriture dans aucune des deux sociétés. Utilisez plutôt les documents de stock ou l’écriture d’inventaire d’ouverture.",
+  },
+  {
+    en: "This stock transfer cannot be reversed: its source or destination location is missing.",
+    ar: "لا يمكن عكس تحويل المخزون هذا: موقع المصدر أو الوجهة مفقود.",
+    fr: "Ce transfert de stock ne peut pas être annulé : son emplacement source ou de destination est manquant.",
+  },
 ];

@@ -1,18 +1,17 @@
 import { getErrorMessage } from "../../lib/httpHandlers";
 import type { Express } from "express";
 import { db } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { logAudit } from "../_helpers";
 import {
-  inventory,
   stockItems,
   containers,
   bankAccounts,
   vouchers,
   voucherEntries,
   salesItems,
-  locations,
   employees,
   ledgerAccounts,
   userCompanyRoles,
@@ -165,12 +164,8 @@ export async function computeRawBalance(companyId: number): Promise<number> {
   const indirectExpenseBalance = await getBalance("Indirect Expense", false);
   const incomeBalance = await getBalance("Income", true);
 
-  const invRows = await db
-    .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-    .from(inventory)
-    .innerJoin(locations, eq(inventory.locationId, locations.id))
-    .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
-  const stockOnFloorValue = sumMoney(invRows.map((i) => toMoney(i.quantity).times(toMoney(i.averageRate))));
+  // Wave 11: the one stock valuation (stockValuation.ts, SUM(total_value)).
+  const stockOnFloorValue = toMoney(await companyStockValue(db, companyId));
 
   const cogsRows = await db
     .select({ totalCost: salesItems.totalCost })
