@@ -4,7 +4,7 @@
  * gives NaN, so routes keep their input contract while computing exactly.
  */
 import { describe, expect, it } from "vitest";
-import { parseMoneyInput } from "../server/lib/money";
+import { parseMoneyInput, toMoney } from "../server/lib/money";
 
 describe("parseMoneyInput", () => {
   it.each([
@@ -50,5 +50,23 @@ describe("parseMoneyInput", () => {
 
   it("keeps the exact decimal a float cannot hold", () => {
     expect(parseMoneyInput("100.5")!.times("0.35").toFixed(2)).toBe("35.18");
+  });
+});
+
+describe("toMoney exponent bound", () => {
+  it.each([
+    ["1e-500000000", "0"],
+    ["1e1000000000", "0"],
+    ["1e400", "0"],
+    ["1e-300", "1e-300"],
+    ["12.345", "12.345"],
+  ])("reads %j as %s", (input, expected) => {
+    expect(toMoney(input).toString()).toBe(expected);
+  });
+
+  it("formats an out-of-range exponent without writing out its digits", () => {
+    expect(toMoney("1e-500000000").toFixed()).toBe("0");
+    expect(parseMoneyInput("1e-500000000")!.toFixed()).toBe("0");
+    expect(toMoney("1e1000000000").toFixed()).toBe("0");
   });
 });
