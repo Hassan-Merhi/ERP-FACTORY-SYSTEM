@@ -38,7 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getOverloadedBales, getRemainingBales, getRemainingBalesColorClass } from "./invoiceCalculations";
+import { getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
 
 /** Weight cell formatting shared by the order row and the customer group row. */
@@ -158,24 +158,21 @@ export function InvoiceOrderRow({
         {order.orderDate ? formatDisplayDate(order.orderDate) : "-"}
       </TableCell>
       <TableCell>{getStatusBadge(order.status)}</TableCell>
-      <TableCell className="text-right font-mono" data-testid={`text-total-bales-${order.id}`}>
-        {order.totalQtyBales ?? "-"}
+      <TableCell className="text-right font-mono text-lg font-bold tabular-nums" data-testid={`text-total-bales-${order.id}`}>
+        <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
       </TableCell>
       <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
         {fmtKg(order.totalWeightKg)}
       </TableCell>
-      <TableCell
-        className="text-right font-mono text-lg font-bold tabular-nums"
-        data-testid={`text-remaining-${order.id}`}
-      >
+      <TableCell className="text-right font-mono" data-testid={`text-remaining-${order.id}`}>
         {expected <= 0 ? (
           <span className="text-muted-foreground/40">—</span>
         ) : remaining > 0 ? (
-          <span className={getRemainingBalesColorClass(remaining)}>{remaining}</span>
+          <span className="text-red-600 dark:text-red-400 font-medium">{remaining}</span>
         ) : overloaded > 0 ? (
-          <span className="text-amber-600 dark:text-amber-400">+{overloaded}</span>
+          <span className="text-amber-600 dark:text-amber-400 font-medium">+{overloaded}</span>
         ) : (
-          <span className="text-green-600 dark:text-green-400">Done</span>
+          <span className="text-green-600 dark:text-green-400 font-medium">Done</span>
         )}
       </TableCell>
       <TableCell className="text-right font-mono text-sm" data-testid={`text-extras-${order.id}`}>
