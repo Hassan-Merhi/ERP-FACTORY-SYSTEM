@@ -63,6 +63,8 @@ export default function FactoryPendingInvoiceVerify() {
     setShippingCompany,
     containerNotes,
     setContainerNotes,
+    bookingInfo,
+    setBookingInfo,
     destination,
     setDestination,
     chargeName,
@@ -478,6 +480,10 @@ export default function FactoryPendingInvoiceVerify() {
             </div>
           </div>
           <div>
+            <label className="text-sm font-medium mb-1 block">Booking Info</label>
+            <Input type="text" value={bookingInfo} onChange={(e) => setBookingInfo(e.target.value)} placeholder="Quotation price or booking details..." data-testid="input-booking-info" />
+          </div>
+          <div>
             <label className="text-sm font-medium mb-1 block">Container Notes</label>
             <Textarea
               value={containerNotes}
@@ -489,7 +495,7 @@ export default function FactoryPendingInvoiceVerify() {
           <Button
             variant="outline"
             onClick={() =>
-              assignContainerMutation.mutate({ containerNumber, shippingCompany, containerNotes, destination })
+              assignContainerMutation.mutate({ containerNumber, shippingCompany, containerNotes, bookingInfo, destination })
             }
             disabled={assignContainerMutation.isPending}
             data-testid="button-save-container"
