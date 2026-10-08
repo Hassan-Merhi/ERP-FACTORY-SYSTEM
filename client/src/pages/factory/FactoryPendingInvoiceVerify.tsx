@@ -481,7 +481,13 @@ export default function FactoryPendingInvoiceVerify() {
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Booking Info</label>
-            <Input type="text" value={bookingInfo} onChange={(e) => setBookingInfo(e.target.value)} placeholder="Quotation price or booking details..." data-testid="input-booking-info" />
+            <Input
+              type="text"
+              value={bookingInfo}
+              onChange={(e) => setBookingInfo(e.target.value)}
+              placeholder="Quotation price or booking details..."
+              data-testid="input-booking-info"
+            />
           </div>
           <div>
             <label className="text-sm font-medium mb-1 block">Container Notes</label>
