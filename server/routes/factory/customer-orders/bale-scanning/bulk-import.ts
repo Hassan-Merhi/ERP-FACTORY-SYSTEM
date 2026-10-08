@@ -26,6 +26,7 @@ import {
 import { eq, and, or, sql, inArray } from "drizzle-orm";
 import { resultRows, firstRow } from "../../../../lib/queryResult";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleBulkImportRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales/bulk-import", requireAuth, async (req: Request, res: Response) => {
@@ -191,10 +192,10 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 );
               if (pl) {
                 const pMode = pl.pricingMode ?? "per_bale";
-                const pkgRate = parseFloat(String(pl.pricePerKg ?? "0"));
-                if (pMode === "per_kg" && pkgRate > 0) {
-                  const baleWt = parseFloat(String(bale.weightKg || "0"));
-                  priceUsed = (!isNaN(baleWt) ? baleWt * pkgRate : 0).toFixed(2);
+                const pkgRate = toMoney(pl.pricePerKg);
+                if (pMode === "per_kg" && pkgRate.gt(0)) {
+                  // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
+                  priceUsed = toMoney(bale.weightKg).times(pkgRate).toFixed(2);
                 } else {
                   priceUsed = pl.pricePerBale;
                 }
@@ -403,10 +404,10 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
                 );
               if (pl) {
                 const pMode = pl.pricingMode ?? "per_bale";
-                const pkgRate = parseFloat(String(pl.pricePerKg ?? "0"));
-                if (pMode === "per_kg" && pkgRate > 0) {
-                  const baleWt = parseFloat(String(bale.weightKg || "0"));
-                  priceUsed = (!isNaN(baleWt) ? baleWt * pkgRate : 0).toFixed(2);
+                const pkgRate = toMoney(pl.pricePerKg);
+                if (pMode === "per_kg" && pkgRate.gt(0)) {
+                  // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
+                  priceUsed = toMoney(bale.weightKg).times(pkgRate).toFixed(2);
                 } else {
                   priceUsed = pl.pricePerBale;
                 }

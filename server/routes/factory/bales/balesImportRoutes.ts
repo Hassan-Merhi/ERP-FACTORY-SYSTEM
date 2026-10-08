@@ -22,6 +22,7 @@ import {
   factoryBaleImportBatches,
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, inArray, ilike } from "drizzle-orm";
+import { MoneyDecimal, parseMoneyInput } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -454,22 +455,22 @@ export function registerBalesImportRoutes(app: Express) {
         const item = items[i];
         try {
           const supplierStr = String(item.supplier || "").trim();
-          const kgVal = parseFloat(item.kg);
-          const rateVal = parseFloat(item.costPerKg);
+          const kgVal = parseMoneyInput(item.kg);
+          const rateVal = parseMoneyInput(item.costPerKg);
           const currency = String(item.currency || "USD").trim();
           // Never silently default a non-USD row's missing rate to 1 — require it explicitly.
-          const fxRate = currency === "USD" ? 1 : parseFloat(item.fxRateToUsd ?? "");
+          const fxRate = currency === "USD" ? new MoneyDecimal(1) : parseMoneyInput(item.fxRateToUsd ?? "");
           const openingDate = String(item.openingDate || "").trim();
 
           if (!supplierStr) {
             errors.push(`Row ${i + 1}: supplier is required`);
             continue;
           }
-          if (isNaN(kgVal) || kgVal <= 0) {
+          if (!kgVal || kgVal.lte(0)) {
             errors.push(`Row ${i + 1}: kg must be > 0`);
             continue;
           }
-          if (isNaN(rateVal) || rateVal < 0) {
+          if (!rateVal || rateVal.lt(0)) {
             errors.push(`Row ${i + 1}: costPerKg must be >= 0`);
             continue;
           }
@@ -477,7 +478,7 @@ export function registerBalesImportRoutes(app: Express) {
             errors.push(`Row ${i + 1}: currency is required`);
             continue;
           }
-          if (isNaN(fxRate) || fxRate <= 0) {
+          if (!fxRate || fxRate.lte(0)) {
             errors.push(`Row ${i + 1}: fxRateToUsd must be > 0`);
             continue;
           }
@@ -496,7 +497,8 @@ export function registerBalesImportRoutes(app: Express) {
             continue;
           }
 
-          const costPerKgUsd = currency === "USD" ? rateVal : rateVal * fxRate;
+          // Exact products: a float kg x rate was written whole and rounded by Postgres.
+          const costPerKgUsd = currency === "USD" ? rateVal : rateVal.times(fxRate);
           const containerNumber = `OB-${String(nextNum).padStart(4, "0")}`;
           nextNum++;
 
@@ -511,13 +513,13 @@ export function registerBalesImportRoutes(app: Express) {
               ratePerKg: String(rateVal),
               declaredKg: String(kgVal),
               actualReceivedKg: String(kgVal),
-              finalPayableAmount: String(kgVal * rateVal),
+              finalPayableAmount: kgVal.times(rateVal).toFixed(),
               differenceKg: "0",
               currencyCode: currency,
               fxRateToUsd: String(fxRate),
               fxRateConfirmed: true,
               ratePerKgUsd: String(costPerKgUsd),
-              finalPayableAmountUsd: String(kgVal * costPerKgUsd),
+              finalPayableAmountUsd: kgVal.times(costPerKgUsd).toFixed(),
               notes: String(item.notes || "Opening stock import"),
               status: "OPENING_BALANCE",
             })
