@@ -24,6 +24,13 @@ import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
+import { loadPartyOpeningSides } from "./helpers/partyOpeningSide";
+import {
+  customerVoucherLineFilter,
+  postedVoucherInCompany,
+  voucherBalanceDateSql,
+  type CustomerLedgerIdentity,
+} from "../storage/accounting/customer-ledger-balance";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
   bankAccounts,
@@ -124,15 +131,18 @@ export function registerAccountStatementRoutes(app: Express) {
 
       let rawOB = new MoneyDecimal(0);
       let obSide = "Dr";
+      let customerIdentity: CustomerLedgerIdentity | null = null;
       if (accountType === "ledger") {
         const [acct] = await db
           .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
           .from(ledgerAccounts)
-          .where(eq(ledgerAccounts.id, accountId));
+          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
+        // The customer record owns the opening of its linked ledger (counted once).
         const [linkedCust] = await db
           .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
           .from(customers)
-          .where(eq(customers.ledgerAccountId, accountId))
+          .where(and(eq(customers.ledgerAccountId, accountId), eq(customers.companyId, companyId)))
           .limit(1);
         rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
         obSide = linkedCust?.side ?? acct?.side ?? "Dr";
@@ -141,7 +151,7 @@ export function registerAccountStatementRoutes(app: Express) {
           const currentCompany = await storage.getCompanyById(companyId);
           if (currentCompany?.companyType === "factory") {
             const custId = linkedCust.id;
-            const dateFilter = endDate ? sql`${vouchers.voucherDate} < ${endDate}` : sql`1=1`;
+            const dateFilter = endDate ? sql`${voucherBalanceDateSql} < ${endDate}` : sql`1=1`;
             const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
             const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
 
@@ -179,6 +189,7 @@ export function registerAccountStatementRoutes(app: Express) {
                 .where(
                   and(
                     eq(voucherEntries.ledgerAccountId, accountId),
+                    eq(vouchers.companyId, companyId),
                     eq(vouchers.optional, false),
                     isNull(vouchers.deletedAt),
                     sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
@@ -195,6 +206,7 @@ export function registerAccountStatementRoutes(app: Express) {
                   and(
                     eq(voucherEntries.customerId, custId),
                     isNull(voucherEntries.ledgerAccountId),
+                    eq(vouchers.companyId, companyId),
                     eq(vouchers.optional, false),
                     isNull(vouchers.deletedAt),
                     sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%' AND ${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
@@ -215,8 +227,9 @@ export function registerAccountStatementRoutes(app: Express) {
         const [acct] = await db
           .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
           .from(bankAccounts)
-          .where(eq(bankAccounts.id, accountId));
-        rawOB = toMoney(acct?.ob);
+          .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
+        rawOB = toMoney(acct.ob);
         obSide = acct?.side ?? "Dr";
       } else if (accountType === "supplier") {
         const isParentForSupplier = await isParentCompanyContext(companyId);
@@ -229,48 +242,67 @@ export function registerAccountStatementRoutes(app: Express) {
         } else {
           rawOB = new MoneyDecimal(0);
         }
-        obSide = "Cr";
+        // suppliers.opening_balance_side, null → Cr.
+        obSide = (await loadPartyOpeningSides("suppliers", [accountId])).get(accountId) ?? "Cr";
       } else if (accountType === "employee") {
         const [acct] = await db
           .select({ ob: employees.openingBalance })
           .from(employees)
-          .where(eq(employees.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Cr";
+          .where(and(eq(employees.id, accountId), eq(employees.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
+        rawOB = toMoney(acct.ob);
+        // employees.opening_balance_side, null → Cr.
+        obSide = (await loadPartyOpeningSides("employees", [accountId])).get(accountId) ?? "Cr";
       } else if (accountType === "customer") {
         const [acct] = await db
-          .select({ ob: customers.openingBalance })
+          .select({
+            id: customers.id,
+            ledgerAccountId: customers.ledgerAccountId,
+            ob: customers.openingBalance,
+            side: customers.openingBalanceSide,
+          })
           .from(customers)
-          .where(eq(customers.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Dr";
+          .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
+        customerIdentity = { id: acct.id, ledgerAccountId: acct.ledgerAccountId };
+        rawOB = toMoney(acct.ob);
+        obSide = acct.side === "Cr" ? "Cr" : "Dr";
       } else if (accountType === "fixed-asset") {
         const [acct] = await db
           .select({ ob: fixedAssets.openingBalance })
           .from(fixedAssets)
-          .where(eq(fixedAssets.id, accountId));
-        rawOB = toMoney(acct?.ob);
+          .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Account not found" });
+        rawOB = toMoney(acct.ob);
         obSide = "Dr";
       }
 
       const isSupplier = accountType === "supplier";
-      let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
+      // Supplier balances are Cr positive, every other family Dr positive.
+      let balance = isSupplier
+        ? obSide === "Dr"
+          ? rawOB.negated()
+          : rawOB
+        : obSide === "Cr"
+          ? rawOB.negated()
+          : rawOB;
 
       if (endDate) {
+        // Same rules as the statement list: posted vouchers of this company,
+        // dated COALESCE(effective_date, voucher_date); a customer owns the
+        // lines on its linked ledger plus its customer-tagged lines with no ledger.
         const conditions = [
-          eq(entryColumn, accountId),
-          eq(vouchers.optional, false),
-          isNull(vouchers.deletedAt),
-          sql`${vouchers.voucherDate} < ${endDate}`,
+          customerIdentity ? customerVoucherLineFilter(customerIdentity) : eq(entryColumn, accountId),
+          postedVoucherInCompany(companyId),
+          sql`${voucherBalanceDateSql} < ${endDate}`,
         ];
-        if (isSupplier) conditions.push(eq(vouchers.companyId, companyId));
         const [totals] = await db
           .select({
             totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}), 0)`,
             totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}), 0)`,
           })
           .from(voucherEntries)
-          .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .where(and(...conditions));
 
         const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));

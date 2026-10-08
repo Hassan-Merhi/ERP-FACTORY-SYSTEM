@@ -37,7 +37,8 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).toContain("excludedLedgerVoucherIds");
     expect(source).toContain("eq(voucherEntries.companyId, companyId)");
     expect(source).toContain("notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)");
-    expect(source).toContain("supplierPureCredits");
+    // Wave 10: ERP supplier lines net credit − debit in one aggregate column.
+    expect(source).toContain("supplierNet");
     expect(source).toContain("factorySupplierVoucherPaidUsd");
     expect(source).toContain(".groupBy(");
     expect(source).not.toContain("const factoryPayVoucherIds");
@@ -62,12 +63,16 @@ describe("Phase 4 hot-path performance regressions", () => {
   });
 
   it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {
-    const source = read("server/routes/customers/customerBalanceQuery.ts");
+    // Wave 10: the aggregate moved to the shared customer ledger-balance module
+    // that getCustomersWithBalances and the other customer readers call.
+    const wrapper = read("server/routes/customers/customerBalanceQuery.ts");
+    expect(wrapper).toContain("computeCustomerLedgerBalances");
+    const source = read("server/storage/accounting/customer-ledger-balance.ts");
 
-    expect(source).toContain("netBalanceSql");
-    expect(source).toContain("historicalBaseBalanceSql");
-    expect(source).toContain(".groupBy(voucherEntries.ledgerAccountId)");
-    expect(source).toContain(".groupBy(voucherEntries.customerId)");
+    expect(source).toContain("netSql");
+    expect(source).toContain("baseNetSql");
+    expect(source).toContain(".groupBy(ve.ledgerAccountId)");
+    expect(source).toContain(".groupBy(ve.customerId)");
     expect(source).not.toContain("for (const entry of ledgerEntries)");
     expect(source).not.toContain("for (const entry of customerEntries)");
   });

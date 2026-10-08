@@ -22,7 +22,7 @@ import {
   factorySupplierPayments,
   factorySupplierFxTransfers,
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { isSupplierPaidFreight } from "./_helpers";
 import { entryStoredUsdAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
 
@@ -76,6 +76,11 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         .where(
           and(
             inArray(voucherEntries.factorySupplierId, supplierIds),
+            // A voucher line belongs to its voucher's company; deleted and optional
+            // vouchers never reach a balance (soft delete keeps the lines).
+            eq(vouchers.companyId, companyId),
+            eq(vouchers.optional, false),
+            isNull(vouchers.deletedAt),
             sql`${voucherEntries.debitAmount}::numeric > 0`,
             sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
           )

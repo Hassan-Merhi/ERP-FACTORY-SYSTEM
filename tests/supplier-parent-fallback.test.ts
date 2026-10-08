@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({
+  loadPartyOpeningSides: async () => new Map(),
+}));
 vi.mock("../server/routes/_helpers", () => ({
   logAudit: vi.fn(),
 }));
@@ -60,6 +63,8 @@ describe("supplier parent fallback scope", () => {
     vi.mocked(getSupplierBalanceForContext).mockResolvedValue({
       balance: 0,
       openingBalance: 0,
+      openingBalanceSide: "Cr",
+      periodOpeningBalance: 0,
       hasActivity: false,
       entries: [],
       balancesByCurrency: {},
@@ -72,7 +77,11 @@ describe("supplier parent fallback scope", () => {
     expect(result[0].id).toBe(statsSupplier.id);
     expect(supplierRepository.listAll).toHaveBeenNthCalledWith(1, activeCompanyId);
     expect(supplierRepository.listAll).toHaveBeenNthCalledWith(2, parentCompanyId);
-    expect(getSupplierBalanceForContext).toHaveBeenCalledWith(statsSupplier, activeCompanyId);
+    // Wave 10: stats preloads suppliers.opening_balance_side (null → Cr) and passes it along.
+    expect(getSupplierBalanceForContext).toHaveBeenCalledWith(
+      { ...statsSupplier, openingBalanceSide: "Cr" },
+      activeCompanyId
+    );
   });
 
   it("keeps the normal supplier list empty when the active company has no suppliers", async () => {

@@ -286,9 +286,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
                   and(
                     eq(voucherEntries.voucherId, vouchers.id),
                     eq(vouchers.companyId, companyId),
+                    eq(vouchers.optional, false),
+                    isNull(vouchers.deletedAt),
                     sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
                     sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-                    lte(vouchers.voucherDate, asOf)
+                    sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
                   )
                 )
                 .where(inArray(voucherEntries.ledgerAccountId, custLedgerIds))
@@ -297,6 +299,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         const cLedgerVoucherMap = new Map(cLedgerVoucherRows.map((r) => [r.ledgerAccountId, toMoney(r.net)]));
 
         // 4. Voucher entries directly linked via customerId — EXCLUDE CHARGE-* AND INV-* (matches Customers page).
+        //    Only lines with no ledger: a customer-tagged line on a ledger account is
+        //    already in that account's balance in the ledger classification above.
         const cVoucherRows = await db
           .select({
             customerId: voucherEntries.customerId,
@@ -308,9 +312,11 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             and(
               eq(voucherEntries.voucherId, vouchers.id),
               eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
               sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
               sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              lte(vouchers.voucherDate, asOf)
+              sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${asOf}`
             )
           )
           .where(and(inArray(voucherEntries.customerId, cIds), isNull(voucherEntries.ledgerAccountId)))

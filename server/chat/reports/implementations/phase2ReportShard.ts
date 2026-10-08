@@ -1,4 +1,4 @@
-import { db, sql } from "./reportShardSupport";
+import { db, sql, nonPartyAccountTypesSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 
 export const phase2QueryTypes = [
@@ -238,7 +238,7 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
         WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND la.account_type NOT IN ('Cash','Bank','Income','Expense','Direct Expense','Indirect Expense','Equity','Profit','Government Taxes','Accounts Payable','Loans')
+          AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql(["Accounts Payable", "Loans"])})
         GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
         HAVING (
           COALESCE(CASE WHEN la.opening_balance_side = 'Cr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)

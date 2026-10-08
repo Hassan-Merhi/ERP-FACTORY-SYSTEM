@@ -33,34 +33,59 @@ export async function runCustomerBalanceStatement(options: {
   continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
   const { customerId, companyId, pagination, dates, continuous } = options;
+  // The statement lists the customer's posted voucher lines under the shared
+  // ledger rules (storage/accounting/customer-ledger-balance.ts), so opening +
+  // these rows equals the balance /api/customers/stats and the voucher sidebar
+  // report. It used to list the customer_balances cache only, which misses
+  // voucher receipts and double-reads nothing the ledger already carries.
+  const customerResult = await pool.query<{ ledger_account_id: number | null }>(
+    `SELECT ledger_account_id FROM customers WHERE id = $1 AND company_id = $2`,
+    [customerId, companyId]
+  );
+  const ledgerAccountId = customerResult.rows[0]?.ledger_account_id ?? null;
+
   const values: unknown[] = [customerId, companyId];
-  const conditions = ["cb.customer_id = $1", "cb.company_id = $2"];
+  const bindBase = (value: unknown): string => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const lineFilter =
+    ledgerAccountId !== null
+      ? `(ve.ledger_account_id = ${bindBase(ledgerAccountId)} OR (ve.customer_id = $1 AND ve.ledger_account_id IS NULL))`
+      : "ve.customer_id = $1";
+  const postedConditions = [lineFilter, "v.company_id = $2", "v.optional = false", "v.deleted_at IS NULL"];
+  const lineValues = [...values];
+  const conditions = [...postedConditions];
   if (dates.rawStart) {
-    values.push(dates.rawStart);
-    conditions.push(`cb.transaction_date >= $${values.length}::date`);
+    conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bindBase(dates.rawStart)}::date`);
   }
-  values.push(dates.effectiveEndDate);
-  conditions.push(`cb.transaction_date <= $${values.length}::date`);
+  conditions.push(
+    `COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bindBase(dates.effectiveEndDate)}::date`
+  );
 
   const cte = `filtered AS (
     SELECT
-      cb.id AS "entryId",
-      COALESCE(cb.reference_id, cb.id) AS "voucherId",
-      CASE
-        WHEN cb.reference_type IS NOT NULL
-          THEN cb.reference_type || '-' || COALESCE(cb.reference_id, cb.id)::text
-        ELSE 'CB-' || cb.id::text
-      END AS "voucherNumber",
-      cb.transaction_type AS "voucherType",
-      cb.transaction_date::text AS "voucherDate",
-      COALESCE(cb.description, '') AS "voucherDescription",
-      COALESCE(cb.description, '') AS narration,
-      cb.debit_amount AS "debitAmount",
-      cb.credit_amount AS "creditAmount",
-      cb.currency AS currency,
-      cb.transaction_date AS sort_date,
-      cb.id AS sort_id
-    FROM customer_balances cb
+      ve.id AS "entryId",
+      ve.voucher_id AS "voucherId",
+      v.voucher_number AS "voucherNumber",
+      v.voucher_type AS "voucherType",
+      COALESCE(v.effective_date::date, v.voucher_date::date)::text AS "voucherDate",
+      COALESCE(v.description, '') AS "voucherDescription",
+      COALESCE(ve.narration, v.description, '') AS narration,
+      ve.debit_amount AS "debitAmount",
+      ve.credit_amount AS "creditAmount",
+      ve.transaction_currency AS "transactionCurrency",
+      ve.transaction_debit_amount AS "transactionDebitAmount",
+      ve.transaction_credit_amount AS "transactionCreditAmount",
+      ve.base_debit_amount AS "baseDebitAmount",
+      ve.base_credit_amount AS "baseCreditAmount",
+      ve.historical_exchange_rate AS "historicalExchangeRate",
+      ve.rate_convention AS "rateConvention",
+      v.currency AS currency,
+      COALESCE(v.effective_date::date, v.voucher_date::date) AS sort_date,
+      ve.id AS sort_id
+    FROM voucher_entries ve
+    JOIN vouchers v ON v.id = ve.voucher_id
     WHERE ${conditions.join(" AND ")}
   )`;
   const baseCount = values.length;
@@ -73,18 +98,19 @@ export async function runCustomerBalanceStatement(options: {
 
   const loadPrePeriodNet = async (): Promise<number> => {
     if (!dates.rawStart) return 0;
+    const preValues = [...lineValues, dates.rawStart];
     const preResult = await pool.query(
       `SELECT COALESCE(
-         SUM(cb.debit_amount::numeric - cb.credit_amount::numeric),
+         SUM(ve.debit_amount::numeric - ve.credit_amount::numeric),
          0
        )::text AS net
-       FROM customer_balances cb
-       WHERE cb.customer_id = $1
-         AND cb.company_id = $2
-         AND cb.transaction_date < $3::date`,
-      [customerId, companyId, dates.rawStart]
+       FROM voucher_entries ve
+       JOIN vouchers v ON v.id = ve.voucher_id
+       WHERE ${postedConditions.join(" AND ")}
+         AND COALESCE(v.effective_date::date, v.voucher_date::date) < $${preValues.length}::date`,
+      preValues
     );
-    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
+    return Number(preResult.rows[0]?.net || "0") || 0;
   };
 
   if (continuous) {

@@ -6,7 +6,9 @@
 // active company context is available; it must never make an explicitly
 // unlinked company behave like a child company.
 
-import Decimal from "decimal.js";
+import type Decimal from "decimal.js";
+import { toMoney } from "../../lib/money";
+import { loadPartyOpeningSides, partyOpeningSide, type OpeningSide } from "./partyOpeningSide";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { getVoucherEntriesBySupplierBatched } from "../performance/supplierVoucherEntryBatcher";
@@ -103,8 +105,17 @@ export function isSupplierVisibleToCompany(
 }
 
 export interface SupplierBalanceContextResult {
+  /** Signed balance, Cr positive (we owe the supplier): opening + Σ(credit − debit). */
   balance: number;
+  /** Owned opening amount (unsigned); its side is openingBalanceSide. */
   openingBalance: number;
+  /** suppliers.opening_balance_side, null → Cr. */
+  openingBalanceSide: OpeningSide;
+  /**
+   * Cr-positive balance carried into the period: the opening plus every line
+   * before options.startDate. Equals the signed opening without a start date.
+   */
+  periodOpeningBalance: number;
   hasActivity: boolean;
   entries: Array<{
     creditAmount?: string | null;
@@ -117,7 +128,7 @@ export interface SupplierBalanceContextResult {
   }>;
   /** Net balance in each transaction currency: { currency: { debit, credit, net } }. */
   balancesByCurrency: Record<string, { debit: number; credit: number; net: number }>;
-  /** Sum of base debits minus base credits, including the owned opening balance. */
+  /** Sum of base credits minus base debits, including the owned opening balance. */
   historicalBaseBalance: number;
 }
 
@@ -129,17 +140,35 @@ export interface SupplierBalanceContextOptions {
    * making unrelated ledger accounts fail to load.
    */
   allowUnconfiguredLegacyScope?: boolean;
+  /** Count only vouchers dated (COALESCE(effective_date, voucher_date)) on or before this day. */
+  endDate?: string;
+  /** Lines before this day are carried into periodOpeningBalance. */
+  startDate?: string;
 }
 
 function emptySupplierBalance(): SupplierBalanceContextResult {
   return {
     balance: 0,
     openingBalance: 0,
+    openingBalanceSide: "Cr",
+    periodOpeningBalance: 0,
     hasActivity: false,
     entries: [],
     balancesByCurrency: {},
     historicalBaseBalance: 0,
   };
+}
+
+/** YYYY-MM-DD of a pg DATE value (node-postgres parses DATE as local midnight). */
+function isoDay(value: unknown): string | null {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${value.getFullYear()}-${month}-${day}`;
+  }
+  if (typeof value === "string" && value.length >= 10) return value.slice(0, 10);
+  return null;
 }
 
 /**
@@ -148,9 +177,18 @@ function emptySupplierBalance(): SupplierBalanceContextResult {
  * When suppliers.company_id is present, a mismatched company receives an empty
  * result even if historical cross-company voucher references still exist. This
  * prevents legacy references from making a foreign supplier visible.
+ *
+ * Every posted line counts as credit − debit: a line carrying both a debit and
+ * a credit is netted, not dropped. The opening follows
+ * suppliers.opening_balance_side (null → Cr).
  */
 export async function getSupplierBalanceForContext(
-  supplier: { id: number; companyId?: number | null; openingBalance?: string | null },
+  supplier: {
+    id: number;
+    companyId?: number | null;
+    openingBalance?: string | null;
+    openingBalanceSide?: string | null;
+  },
   companyId?: number | null,
   options: SupplierBalanceContextOptions = {}
 ): Promise<SupplierBalanceContextResult> {
@@ -171,51 +209,66 @@ export async function getSupplierBalanceForContext(
       ownsOpeningBalance = false;
     }
   }
-  const openingBalanceD = ownsOpeningBalance ? new Decimal(supplier.openingBalance || "0") : new Decimal(0);
-  const openingBalance = openingBalanceD.toNumber();
-  const entries = await getVoucherEntriesBySupplierBatched(supplier.id, companyId || undefined);
+  const openingAmount = ownsOpeningBalance ? toMoney(supplier.openingBalance) : toMoney(0);
+  let openingBalanceSide: OpeningSide = "Cr";
+  if (supplier.openingBalanceSide !== undefined) {
+    openingBalanceSide = partyOpeningSide(supplier.openingBalanceSide);
+  } else if (!openingAmount.isZero()) {
+    openingBalanceSide = (await loadPartyOpeningSides("suppliers", [supplier.id])).get(supplier.id) ?? "Cr";
+  }
+  // Cr positive: a Dr opening (the supplier owes us) is negative.
+  const signedOpening = openingBalanceSide === "Dr" ? openingAmount.negated() : openingAmount;
 
-  const balanceD = entries.reduce((sum: Decimal, entry) => {
-    const credit = new Decimal(entry.creditAmount || "0");
-    const debit = new Decimal(entry.debitAmount || "0");
-    if (credit.gt(0) && debit.eq(0)) return sum.plus(credit);
-    if (debit.gt(0) && credit.eq(0)) return sum.minus(debit);
-    return sum;
-  }, openingBalanceD);
-  const balance = balanceD.toNumber();
+  const allEntries = await getVoucherEntriesBySupplierBatched(supplier.id, companyId || undefined);
+  const entries = options.endDate
+    ? allEntries.filter((entry) => {
+        const day = isoDay(entry.voucherDate);
+        return day === null || day <= options.endDate!;
+      })
+    : allEntries;
+
+  let balanceD = signedOpening;
+  let periodOpeningD = signedOpening;
+  let historicalBaseD = signedOpening;
+  const byCurrency: Record<string, { debit: Decimal; credit: Decimal }> = {};
+  for (const entry of entries) {
+    const net = toMoney(entry.creditAmount).minus(toMoney(entry.debitAmount));
+    balanceD = balanceD.plus(net);
+    if (options.startDate) {
+      const day = isoDay(entry.voucherDate);
+      if (day !== null && day < options.startDate) periodOpeningD = periodOpeningD.plus(net);
+    }
+    historicalBaseD = historicalBaseD
+      .plus(toMoney(entry.baseCreditAmount ?? entry.creditAmount))
+      .minus(toMoney(entry.baseDebitAmount ?? entry.debitAmount));
+
+    const ccy: string = (entry.transactionCurrency as string | null) || "USD";
+    const bucket = byCurrency[ccy] ?? { debit: toMoney(0), credit: toMoney(0) };
+    byCurrency[ccy] = {
+      debit: bucket.debit.plus(toMoney(entry.transactionDebitAmount ?? entry.debitAmount)),
+      credit: bucket.credit.plus(toMoney(entry.transactionCreditAmount ?? entry.creditAmount)),
+    };
+  }
 
   const balancesByCurrency: Record<string, { debit: number; credit: number; net: number }> = {};
-  for (const entry of entries) {
-    const ccy: string = (entry.transactionCurrency as string | null) || "USD";
-    const txDr = parseFloat(
-      (entry.transactionDebitAmount as string | null) ?? (entry.debitAmount as string | null) ?? "0"
-    );
-    const txCr = parseFloat(
-      (entry.transactionCreditAmount as string | null) ?? (entry.creditAmount as string | null) ?? "0"
-    );
-    if (!balancesByCurrency[ccy]) balancesByCurrency[ccy] = { debit: 0, credit: 0, net: 0 };
-    balancesByCurrency[ccy].debit += txDr;
-    balancesByCurrency[ccy].credit += txCr;
-    balancesByCurrency[ccy].net = balancesByCurrency[ccy].credit - balancesByCurrency[ccy].debit;
+  for (const [ccy, { debit, credit }] of Object.entries(byCurrency)) {
+    balancesByCurrency[ccy] = {
+      debit: debit.toNumber(),
+      credit: credit.toNumber(),
+      net: credit.minus(debit).toNumber(),
+    };
   }
 
-  let historicalBaseBalance = openingBalanceD.toNumber();
-  for (const entry of entries) {
-    const baseDr = parseFloat((entry.baseDebitAmount as string | null) ?? (entry.debitAmount as string | null) ?? "0");
-    const baseCr = parseFloat(
-      (entry.baseCreditAmount as string | null) ?? (entry.creditAmount as string | null) ?? "0"
-    );
-    if (baseCr > 0 && baseDr === 0) historicalBaseBalance += baseCr;
-    if (baseDr > 0 && baseCr === 0) historicalBaseBalance -= baseDr;
-  }
-
+  const openingBalance = openingAmount.toNumber();
   return {
-    balance,
+    balance: balanceD.toNumber(),
     openingBalance,
+    openingBalanceSide,
+    periodOpeningBalance: periodOpeningD.toNumber(),
     hasActivity: entries.length > 0 || openingBalance !== 0,
     entries,
     balancesByCurrency,
-    historicalBaseBalance,
+    historicalBaseBalance: historicalBaseD.toNumber(),
   };
 }
 

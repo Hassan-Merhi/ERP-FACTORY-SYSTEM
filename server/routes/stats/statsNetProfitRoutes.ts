@@ -24,6 +24,11 @@ import { getSupplierPartnerPosProfit } from "./realizedProfit";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../helpers/salaryAdvanceNetPosition";
 import { isInventoryValuationOnlyAccount } from "../../lib/inventoryPnlAccounts";
 import { ledgerCarriesStock } from "../../services/accounting/perpetualInventory/reportBasis";
+import {
+  classifyAccountType,
+  expenseCategory,
+  isIndirectIncome,
+} from "../../services/accounting/accountClassification";
 
 export function registerStatsNetProfitRoutes(app: Express) {
   app.get("/api/stats/net-profit", requireAuth, requireNonPOS, async (req, res) => {
@@ -211,8 +216,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // exposes null/provisional values when the native history is unresolved.
 
       // 2. Process income and expense accounts for the P&L breakdown (ERP-specific)
-      //    The helper skips expense/income types; we handle them here.
-      const expenseTypesArr = ["Expense", "Direct Expense", "Indirect Expense"];
+      //    The helper skips expense/income types; we handle them here, classified
+      //    by the shared classifier (Indirect Income in either storage form,
+      //    Revenue and mis-cased types are income; Government Taxes is an expense).
       let expensesTotal = 0;
       let incomeTotal = 0;
       const expensesAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
@@ -223,39 +229,37 @@ export function registerStatsNetProfitRoutes(app: Express) {
         // Expense accounts are stored in two legacy-compatible forms:
         //   accountType = "Indirect Expense" / "Direct Expense"
         //   accountType = "Expense" + subType = "Indirect Expense" / "Direct Expense"
-        // Normalize both forms so every report classifies the same account the same way.
-        const normalizedExpenseType =
-          acc.accountType === "Expense" && ["Direct Expense", "Indirect Expense"].includes(acc.subType || "")
-            ? acc.subType
-            : acc.accountType;
-        const isAnyExpenseType = expenseTypesArr.includes(normalizedExpenseType || "");
-        const isIncomeAccount = acc.accountType === "Income";
+        // expenseCategory normalizes both forms so every report classifies the same account the same way.
+        const normalizedExpenseType = expenseCategory(acc.accountType, acc.subType);
+        const isIncomeAccount = classifyAccountType(acc.accountType, acc.subType) === "income";
 
         if (isIncomeAccount) {
+          const indirect = isIndirectIncome(acc.accountType, acc.subType);
+          const incomeKey = indirect ? "income_Indirect Income" : "income_Sales/Revenue";
+          const incomeCategory = indirect ? "Indirect Income" : "Income";
           if (netBalance < 0) {
             incomeTotal += Math.abs(netBalance);
-            categoryTotals["income_Sales/Revenue"] =
-              (categoryTotals["income_Sales/Revenue"] || 0) + Math.abs(netBalance);
+            categoryTotals[incomeKey] = (categoryTotals[incomeKey] || 0) + Math.abs(netBalance);
             incomeAccounts.push({
               id: acc.id,
               name: acc.name,
               code: acc.code || "",
               value: Math.abs(netBalance),
-              category: "Income",
+              category: incomeCategory,
             });
           } else if (netBalance > 0) {
             incomeTotal -= netBalance;
-            categoryTotals["income_Sales/Revenue"] = (categoryTotals["income_Sales/Revenue"] || 0) - netBalance;
+            categoryTotals[incomeKey] = (categoryTotals[incomeKey] || 0) - netBalance;
             incomeAccounts.push({
               id: acc.id,
               name: acc.name,
               code: acc.code || "",
               value: -netBalance,
-              category: "Income (Refund)",
+              category: `${incomeCategory} (Refund)`,
             });
           }
-        } else if (isAnyExpenseType && !excludedFromExpenses.has(acc.id)) {
-          const category = normalizedExpenseType || "Expense";
+        } else if (normalizedExpenseType && !excludedFromExpenses.has(acc.id)) {
+          const category = normalizedExpenseType;
           if (netBalance > 0) {
             expensesTotal += netBalance;
             categoryTotals[`exp_${category}`] = (categoryTotals[`exp_${category}`] || 0) + netBalance;

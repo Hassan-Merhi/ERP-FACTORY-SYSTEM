@@ -34,6 +34,7 @@ vi.mock("../server/auth", () => ({ requireAuth: (_req: any, _res: any, next: any
 vi.mock("../server/routes/helpers/supplierBalanceHelpers", () => ({
   isParentCompanyContext: harness.isParentCompanyContext,
 }));
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/lib/accountStatementPdfGenerator", () => ({
   generateAccountStatementPdf: harness.generateAccountStatementPdf,
 }));
@@ -47,6 +48,8 @@ vi.mock("drizzle-orm", () => ({
   desc: (column: unknown) => ({ type: "desc", column }),
   isNull: (column: unknown) => ({ type: "isNull", column }),
   isNotNull: (column: unknown) => ({ type: "isNotNull", column }),
+  or: (...conditions: unknown[]) => ({ type: "or", conditions }),
+  inArray: (column: unknown, values: unknown) => ({ type: "inArray", column, values }),
   sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
 }));
 vi.mock("@shared/schema", () => ({

@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("../server/auth", () => ({ requireAuth: () => undefined }));
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({ loadPartyOpeningSides: async () => new Map() }));
 vi.mock("../server/storage", () => ({
   storage: {
     getCompanyById: async () => ({ id: 7, companyType: "erp" }),

@@ -20,7 +20,7 @@ import {
   factorySupplierPayments,
   factorySupplierFxTransfers,
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { MoneyDecimal, toMoney } from "../../../../lib/money";
 import type Decimal from "decimal.js";
 import {
@@ -147,7 +147,9 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
               inArray(voucherEntries.factorySupplierId, allSupplierIds),
               sql`${voucherEntries.debitAmount}::numeric > 0`,
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
-              eq(vouchers.optional, false)
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt)
             )
           )
           .$dynamic();

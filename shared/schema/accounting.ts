@@ -74,6 +74,12 @@ export const insertLedgerAccountSchema = createInsertSchema(ledgerAccounts)
       "Transporter Agent",
       "Accounts Payable",
       "Profit",
+      // Stored by bulk payroll (deduction recoveries) and read as income by
+      // every report (accountClassification.ts). "Intercompany" is left out on
+      // purpose: those accounts are created only by the Golden Coast / SP setup,
+      // which resolves them by subType and refuses a duplicate, so letting the
+      // generic ledger route create one would break those postings.
+      "Indirect Income",
     ]),
     subType: z.string().nullable().optional(),
     openingBalance: z.string().optional(),

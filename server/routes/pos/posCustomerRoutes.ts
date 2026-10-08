@@ -3,6 +3,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
+import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
 import { userCompanyRoles, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
@@ -37,55 +38,11 @@ export function registerPosCustomerRoutes(app: Express): void {
         return res.status(403).json({ message: "Access denied: You do not have permission to access customers" });
       }
 
-      const customers = await storage.getAllCustomers(req.session.currentCompanyId);
-
-      const customersWithBalances = await Promise.all(
-        customers.map(async (customer) => {
-          if (customer.ledgerAccountId) {
-            const entries = await storage.getVoucherEntriesByLedger(
-              customer.ledgerAccountId,
-              undefined,
-              undefined,
-              req.session.currentCompanyId
-            );
-            const openingBalance = parseFloat(customer.openingBalance || "0");
-            const openingSide = customer.openingBalanceSide || "Dr";
-
-            const balance = entries.reduce(
-              (sum, entry) => {
-                const debit = parseFloat(entry.debitAmount || "0");
-                const credit = parseFloat(entry.creditAmount || "0");
-
-                if (debit > 0 && credit === 0) {
-                  return sum + debit;
-                } else if (credit > 0 && debit === 0) {
-                  return sum - credit;
-                }
-                return sum;
-              },
-              openingSide === "Dr" ? openingBalance : -openingBalance
-            );
-
-            return {
-              ...customer,
-              balance: Math.abs(balance),
-              balanceSide: balance >= 0 ? "Dr" : "Cr",
-            };
-          }
-
-          const customerBalance = await storage.getCustomerBalance(customer.id, req.session.currentCompanyId!);
-          const openingBalance = parseFloat(customer.openingBalance || "0");
-          const openingSide = customer.openingBalanceSide || "Dr";
-
-          const totalBalance = (openingSide === "Dr" ? openingBalance : -openingBalance) + customerBalance;
-
-          return {
-            ...customer,
-            balance: Math.abs(totalBalance),
-            balanceSide: totalBalance >= 0 ? "Dr" : "Cr",
-          };
-        })
-      );
+      // Same ledger rules as /api/customers/stats and the voucher sidebar. The
+      // linked-customer path used to group lines by voucher and then keep only
+      // pure-side rows, so a voucher both debiting and crediting the customer
+      // vanished; unlinked customers read the customer_balances cache only.
+      const customersWithBalances = await getCustomersWithBalances(req.session.currentCompanyId);
 
       res.json(customersWithBalances);
     } catch (error: unknown) {

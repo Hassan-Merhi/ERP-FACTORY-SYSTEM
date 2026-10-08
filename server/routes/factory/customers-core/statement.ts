@@ -9,6 +9,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import {
+  customerVoucherLineFilter,
+  postedVoucherInCompany,
+  voucherBalanceDateSql,
+} from "../../../storage/accounting/customer-ledger-balance";
 import { customerOrders, customerBalances, customers, voucherEntries, vouchers } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 
@@ -108,11 +113,12 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
       // Also pull voucher entries for this customer (by ledgerAccountId or direct customerId link)
       // to include manual accounting vouchers that don't flow through customerBalances.
       // Exclude CHARGE-* vouchers (those are already included via invoices).
+      // Lines on the linked ledger plus customer-tagged lines with no other
+      // ledger — a customer-tagged line posted to another account belongs to
+      // that account (storage/accounting/customer-ledger-balance.ts). Only
+      // posted vouchers of this company count, dated by effective date.
       const voucherRows = [];
-      const ledgerAccountId = customer.ledgerAccountId;
-      const voucherConditions = ledgerAccountId
-        ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountId} OR ${voucherEntries.customerId} = ${customerId})`
-        : sql`${voucherEntries.customerId} = ${customerId}`;
+      const voucherConditions = customerVoucherLineFilter(customer);
 
       const rawVoucherRows = await db
         .select({
@@ -120,7 +126,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
           voucherId: voucherEntries.voucherId,
           voucherNumber: vouchers.voucherNumber,
           voucherType: vouchers.voucherType,
-          voucherDate: vouchers.voucherDate,
+          voucherDate: sql<string>`${voucherBalanceDateSql}::text`,
           description: vouchers.description,
           debitAmount: voucherEntries.debitAmount,
           creditAmount: voucherEntries.creditAmount,
@@ -132,13 +138,13 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
           vouchers,
           and(
             eq(voucherEntries.voucherId, vouchers.id),
-            eq(vouchers.companyId, companyId),
+            postedVoucherInCompany(companyId),
             sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
             sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
           )
         )
         .where(voucherConditions)
-        .orderBy(vouchers.voucherDate, voucherEntries.id);
+        .orderBy(voucherBalanceDateSql, voucherEntries.id);
 
       // Convert to unified row format matching customerBalances shape
       for (const ve of rawVoucherRows) {

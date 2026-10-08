@@ -282,7 +282,9 @@ export function registerSupplierStatementRoutes(app: Express) {
           and(
             eq(voucherEntries.factorySupplierId, supplierId),
             sql`${voucherEntries.debitAmount}::numeric > 0`,
-            sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
+            sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
+            eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt)
           )
         )
         .orderBy(desc(vouchers.voucherDate));

@@ -8,7 +8,7 @@ import { db, type DbTransaction } from "../../db";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import * as schema from "@shared/schema";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
-import { PROFIT_AND_LOSS_ACCOUNT_TYPES } from "../../services/accounting/accountClassification";
+import { accountTypeNamesOf, classifyAccountType } from "../../services/accounting/accountClassification";
 
 export class FiscalPeriodCloseError extends Error {
   constructor(
@@ -30,6 +30,18 @@ function signedOpening(openingBalance: string | null, side: string | null): Deci
   const amount = new Decimal(openingBalance || "0");
   return (side || "Dr") === "Cr" ? amount.negated() : amount;
 }
+
+/**
+ * Every income-statement account type the shared classifier knows (income and
+ * expense: Income, Indirect Income, Revenue, Expense, Direct/Indirect Expense,
+ * Government Taxes, ...), matched case-insensitively so a mis-cased type
+ * ('EXPENSE') or the legacy "Revenue" is closed too.
+ */
+const profitAndLossTypesSql = () =>
+  sql.join(
+    accountTypeNamesOf("income", "expense").map((type) => sql`${type}`),
+    sql`, `
+  );
 
 interface IncomeExpenseBalanceRow {
   id: number;
@@ -61,10 +73,7 @@ async function incomeExpenseActivityTx(
            ), 0)::text AS activity
     FROM ledger_accounts la
     WHERE la.company_id = ${companyId}
-      AND la.account_type IN (${sql.join(
-        PROFIT_AND_LOSS_ACCOUNT_TYPES.map((type) => sql`${type}`),
-        sql`, `
-      )})
+      AND LOWER(TRIM(la.account_type)) IN (${profitAndLossTypesSql()})
     ORDER BY la.id
   `);
   return result.rows as unknown as IncomeExpenseBalanceRow[];
@@ -121,10 +130,7 @@ export async function closeFiscalPeriod(
           AND v.optional = false
           AND v.deleted_at IS NULL
           AND v.voucher_date < ${periodStartDate}
-          AND la.account_type IN (${sql.join(
-            PROFIT_AND_LOSS_ACCOUNT_TYPES.map((type) => sql`${type}`),
-            sql`, `
-          )})
+          AND LOWER(TRIM(la.account_type)) IN (${profitAndLossTypesSql()})
       `);
       const earliest = (earlier.rows[0] as { earliest: string | null } | undefined)?.earliest;
       if (earliest) {
@@ -151,8 +157,7 @@ export async function closeFiscalPeriod(
     for (const account of accounts) {
       // Debit-positive balance; the closing line posts its opposite.
       const balance = signedOpening(account.opening_balance, account.opening_balance_side).plus(account.activity);
-      if (account.account_type === "Income" || account.account_type === "Indirect Income")
-        totalIncome = totalIncome.minus(balance);
+      if (classifyAccountType(account.account_type) === "income") totalIncome = totalIncome.minus(balance);
       else totalExpense = totalExpense.plus(balance);
       netDebitBalance = netDebitBalance.plus(balance);
       if (balance.isZero()) continue;

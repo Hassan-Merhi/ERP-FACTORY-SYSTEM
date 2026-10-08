@@ -31,6 +31,10 @@
       "reason": "Account and voucher ownership is validated before the pagination query executes."
     },
     {
+      "path": "server/routes/account-transaction-pagination/customerBalanceStatement.ts",
+      "reason": "The route authorizes the customer's company (authorizeCompanyIdParam) before the query runs, and every query filters vouchers by that company_id."
+    },
+    {
       "path": "server/routes/accountTransactionRoutes.ts",
       "reason": "Account and voucher ownership is validated before the transaction query executes."
     },

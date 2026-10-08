@@ -18,7 +18,10 @@ import {
   voucherEntries,
   vouchers,
 } from "@shared/schema";
-import { eq, and, asc, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, asc, desc, sql, inArray, isNull, or } from "drizzle-orm";
+import { postedVoucherInCompany } from "../../../storage/accounting/customer-ledger-balance";
+import type Decimal from "decimal.js";
+import { signedOpeningBalance, toMoney } from "../../../lib/money";
 import { registerFactoryDaybookRoutes } from "../factoryDaybookRoutes";
 
 export function registerFactoryCustomerCrudRoutes(app: Express) {
@@ -87,7 +90,7 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
       const ledgerAccountIds = allCustomers.filter((c) => c.ledgerAccountId).map((c) => c.ledgerAccountId!);
 
       // net = debit - credit in Dr-positive convention (customer is an asset / receivable)
-      const voucherNetByLedger = new Map<number, number>();
+      const voucherNetByLedger = new Map<number, Decimal>();
       if (ledgerAccountIds.length > 0) {
         const voucherNetRows = await db
           .select({
@@ -99,10 +102,9 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
             vouchers,
             and(
               eq(voucherEntries.voucherId, vouchers.id),
-              eq(vouchers.companyId, companyId),
+              postedVoucherInCompany(companyId),
               sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              sql`${vouchers.optional} IS NOT TRUE`
+              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
             )
           )
           .where(inArray(voucherEntries.ledgerAccountId, ledgerAccountIds))
@@ -110,13 +112,17 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
 
         for (const row of voucherNetRows) {
           if (row.ledgerAccountId) {
-            voucherNetByLedger.set(row.ledgerAccountId, parseFloat(row.net || "0"));
+            voucherNetByLedger.set(row.ledgerAccountId, toMoney(row.net));
           }
         }
       }
 
-      // Net from entries linked directly via customerId (receipts posted without going through ledger)
-      const voucherNetByCustomerId = new Map<number, number>();
+      // Net from entries tagged with the customer: with no ledger for any
+      // customer, and on any ledger for a customer with no linked ledger (the
+      // shared rule in storage/accounting/customer-ledger-balance.ts, which the
+      // statement endpoint applies too).
+      const unlinkedCustomerIds = allCustomers.filter((c) => !c.ledgerAccountId).map((c) => c.id);
+      const voucherNetByCustomerId = new Map<number, Decimal>();
       if (customerIds.length > 0) {
         const directRows = await db
           .select({
@@ -128,35 +134,43 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
             vouchers,
             and(
               eq(voucherEntries.voucherId, vouchers.id),
-              eq(vouchers.companyId, companyId),
+              postedVoucherInCompany(companyId),
               sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`,
-              sql`${vouchers.optional} IS NOT TRUE`
+              sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
             )
           )
-          .where(and(inArray(voucherEntries.customerId, customerIds), sql`${voucherEntries.ledgerAccountId} IS NULL`))
+          .where(
+            and(
+              inArray(voucherEntries.customerId, customerIds),
+              unlinkedCustomerIds.length > 0
+                ? or(isNull(voucherEntries.ledgerAccountId), inArray(voucherEntries.customerId, unlinkedCustomerIds))
+                : isNull(voucherEntries.ledgerAccountId)
+            )
+          )
           .groupBy(voucherEntries.customerId);
 
         for (const row of directRows) {
           if (row.customerId) {
-            voucherNetByCustomerId.set(row.customerId, parseFloat(row.net || "0"));
+            voucherNetByCustomerId.set(row.customerId, toMoney(row.net));
           }
         }
       }
 
-      const cbNetMap = new Map(cbNetRows.map((r) => [r.customerId, parseFloat(r.net || "0")]));
-      const invCorrMap = new Map(invCorrRows.map((r) => [r.customerId, parseFloat(r.correction || "0")]));
+      const cbNetMap = new Map(cbNetRows.map((r) => [r.customerId, toMoney(r.net)]));
+      const invCorrMap = new Map(invCorrRows.map((r) => [r.customerId, toMoney(r.correction)]));
 
       const customersWithBalances = allCustomers.map((customer) => {
-        const cbNet = cbNetMap.get(customer.id) ?? 0;
-        const invCorr = invCorrMap.get(customer.id) ?? 0;
-        const voucherNet =
-          (customer.ledgerAccountId ? (voucherNetByLedger.get(customer.ledgerAccountId) ?? 0) : 0) +
-          (voucherNetByCustomerId.get(customer.id) ?? 0);
-        const openingBalance = parseFloat(customer.openingBalance || "0");
-        const openingSide = customer.openingBalanceSide || "Dr";
-        const totalBalance = (openingSide === "Dr" ? openingBalance : -openingBalance) + cbNet + invCorr + voucherNet;
-        return { ...customer, balance: Math.abs(totalBalance), balanceSide: totalBalance >= 0 ? "Dr" : "Cr" };
+        const ledgerNet = customer.ledgerAccountId ? voucherNetByLedger.get(customer.ledgerAccountId) : undefined;
+        const totalBalance = signedOpeningBalance(customer.openingBalance, customer.openingBalanceSide || "Dr")
+          .plus(cbNetMap.get(customer.id) ?? 0)
+          .plus(invCorrMap.get(customer.id) ?? 0)
+          .plus(ledgerNet ?? 0)
+          .plus(voucherNetByCustomerId.get(customer.id) ?? 0);
+        return {
+          ...customer,
+          balance: totalBalance.abs().toNumber(),
+          balanceSide: totalBalance.isNegative() && !totalBalance.isZero() ? "Cr" : "Dr",
+        };
       });
 
       res.json(customersWithBalances);

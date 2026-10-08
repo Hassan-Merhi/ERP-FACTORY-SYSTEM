@@ -65,9 +65,9 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   // Three queries replace the original two:
   //   1. groupedLedgerRows   — SUM per ledger_account_id, scoped by ACCOUNT's companyId
   //      Preserves migrated-account attribution (rule 1+2).
-  //   2. groupedSupplierRows — SUM per supplier_id with SQL CASE for pure-side filtering,
-  //      scoped by VOUCHER's companyId.  Mixed debit+credit FX settlement rows
-  //      contribute 0 to both sides (rules 3+4+5).
+  //   2. groupedSupplierRows — SUM per supplier_id, scoped by VOUCHER's companyId.
+  //      Mixed debit+credit lines net (debit − credit) like every other line
+  //      (wave 10; they used to contribute 0 to both sides).
   //   3. groupedEmployeeRows — SUM per employee_id, scoped by VOUCHER's companyId (rule 3).
   //
   // pool.query is used (not db.select) to avoid the Drizzle ::cast-in-sql-template
@@ -204,16 +204,13 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
           _entryParams
         )
       ),
-    // 2. Supplier balances — voucher-company scoped, pure-side only (excludes mixed FX rows)
+    // 2. Supplier balances — voucher-company scoped; every line counts, so a line
+    //    carrying both a debit and a credit nets (debit − credit) instead of vanishing.
     pool
       .query<{ supplier_id: string; total_debit: string; total_credit: string }>(
         `SELECT ve.supplier_id,
-            SUM(CASE WHEN COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric  > 0
-                          AND COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric = 0
-                     THEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric ELSE 0 END) AS total_debit,
-            SUM(CASE WHEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric > 0
-                          AND COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric  = 0
-                     THEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric ELSE 0 END) AS total_credit
+            SUM(COALESCE(ve.base_debit_amount,  ve.debit_amount)::numeric)  AS total_debit,
+            SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
      WHERE v.company_id    = $1
@@ -227,10 +224,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
       .catch(() =>
         pool.query<{ supplier_id: string; total_debit: string; total_credit: string }>(
           `SELECT ve.supplier_id,
-              SUM(CASE WHEN ve.debit_amount::numeric  > 0 AND ve.credit_amount::numeric = 0
-                       THEN ve.debit_amount::numeric ELSE 0 END) AS total_debit,
-              SUM(CASE WHEN ve.credit_amount::numeric > 0 AND ve.debit_amount::numeric  = 0
-                       THEN ve.credit_amount::numeric ELSE 0 END) AS total_credit
+              SUM(ve.debit_amount::numeric)  AS total_debit,
+              SUM(ve.credit_amount::numeric) AS total_credit
        FROM voucher_entries ve
        JOIN vouchers v ON ve.voucher_id = v.id
        WHERE v.company_id    = $1
@@ -307,10 +302,8 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
     }
   }
 
-  // Build supplierBalances from grouped SQL result.
-  // Pure-side filtering is performed in SQL (CASE expressions above) so mixed
-  // debit+credit FX settlement rows contribute 0 to both sides — matching the
-  // /api/suppliers/stats logic and the original per-row application filter.
+  // Build supplierBalances from grouped SQL result. Mixed debit+credit lines
+  // contribute both sides, so their net is kept — matching /api/suppliers/stats.
   const supplierBalances = new Map<number, { debit: number; credit: number }>();
   for (const row of groupedSupplierRows.rows) {
     if (row.supplier_id) {

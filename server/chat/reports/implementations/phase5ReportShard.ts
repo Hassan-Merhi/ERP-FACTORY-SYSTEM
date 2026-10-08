@@ -1,4 +1,5 @@
 import { db, sql } from "./reportShardSupport";
+import { toMoney } from "../../../lib/money";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 
 export const phase5QueryTypes = [
@@ -31,10 +32,17 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_dr,
           COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_cr
         FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-          AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        -- Only lines of live, non-optional vouchers of this company dated in the
+        -- range are summed. The voucher filters used to sit on a second LEFT
+        -- JOIN, which kept every entry (deleted, optional and out-of-range
+        -- vouchers included) and only dropped the voucher row.
+        LEFT JOIN (
+          voucher_entries ve
+          JOIN vouchers v ON v.id = ve.voucher_id
+            AND v.company_id = ${companyId}
+            AND v.deleted_at IS NULL AND v.optional = false
+            AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        ) ON ve.ledger_account_id = la.id
         WHERE la.company_id = ${companyId}
           AND la.deleted_at IS NULL
           AND la.is_hidden = false
@@ -43,14 +51,16 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           OR COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) > 0
         ORDER BY la.account_type, la.name
       `);
-      let grandDr = 0,
-        grandCr = 0;
+      let grandDrExact = toMoney(0),
+        grandCrExact = toMoney(0);
       const tableRows5 = rows.rows.map((r) => {
-        const dr = parseFloat(r.total_dr || "0");
-        const cr = parseFloat(r.total_cr || "0");
-        const net = dr - cr;
-        grandDr += dr;
-        grandCr += cr;
+        const drExact = toMoney(r.total_dr);
+        const crExact = toMoney(r.total_cr);
+        grandDrExact = grandDrExact.plus(drExact);
+        grandCrExact = grandCrExact.plus(crExact);
+        const dr = drExact.toNumber();
+        const cr = crExact.toNumber();
+        const net = drExact.minus(crExact).toNumber();
         return [
           r.code || "—",
           r.name,
@@ -61,6 +71,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           net < 0 ? fmt(Math.abs(net)) : "—",
         ];
       });
+      const grandDr = grandDrExact.toNumber();
+      const grandCr = grandCrExact.toNumber();
       tableRows5.push([
         "",
         "GRAND TOTAL",

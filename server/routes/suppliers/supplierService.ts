@@ -1,5 +1,6 @@
 import { logAudit } from "../_helpers";
 import { getSupplierBalanceForContext, resolveParentCompanyId } from "../helpers/supplierBalanceHelpers";
+import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { SupplierRouteError } from "./supplierErrors";
 import type { SupplierAuditActor } from "./supplierRequestContext";
 import { supplierRepository } from "./supplierRepository";
@@ -84,11 +85,18 @@ export const supplierService = {
       }
     }
 
+    const openingSides = await loadPartyOpeningSides(
+      "suppliers",
+      suppliers.map((supplier) => supplier.id)
+    );
     return Promise.all(
       suppliers.map(async (supplier) => {
         const [containerCount, balanceResult, purchaseOrders] = await Promise.all([
           supplierRepository.getContainerCount(supplier.id, companyId),
-          getSupplierBalanceForContext(supplier, companyId),
+          getSupplierBalanceForContext(
+            { ...supplier, openingBalanceSide: openingSides.get(supplier.id) ?? "Cr" },
+            companyId
+          ),
           supplierRepository.getPurchaseOrders(supplier.id, companyId),
         ]);
 

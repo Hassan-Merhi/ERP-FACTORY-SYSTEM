@@ -8,6 +8,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
 import { sumMoney, toMoney } from "../../lib/money";
+import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { inventory, containers, vouchers, locations, factoryWorkerAdvances } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
@@ -262,11 +263,18 @@ export function registerStatsNetPositionRoutes(app: Express) {
         .from(companyScopedSuppliers)
         .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
         .execute();
+      const supplierOpeningSides = await loadPartyOpeningSides(
+        "suppliers",
+        allSuppliers.map((sup) => sup.id)
+      );
       let supplierLiabilities = 0;
       let supplierAssets = 0;
       for (const sup of allSuppliers) {
         const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-        const netBalance = toMoney(sup.openingBalance).plus(balance.credit).minus(balance.debit).toNumber();
+        // Cr positive; the opening follows suppliers.opening_balance_side (null → Cr).
+        const openingAmount = toMoney(sup.openingBalance);
+        const opening = supplierOpeningSides.get(sup.id) === "Dr" ? openingAmount.negated() : openingAmount;
+        const netBalance = opening.plus(balance.credit).minus(balance.debit).toNumber();
         if (netBalance > 0) {
           supplierLiabilities += netBalance;
           onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: netBalance, category: "Supplier" });

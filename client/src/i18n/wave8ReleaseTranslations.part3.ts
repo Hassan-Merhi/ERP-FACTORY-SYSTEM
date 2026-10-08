@@ -167,4 +167,9 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "لا يمكن تغيير قيد متوازن إلى نوع قيد معفى من شرط التوازن",
     fr: "Une pièce équilibrée ne peut pas être changée en un type de pièce exempté de l'équilibre",
   },
+  {
+    en: "Period start is after its end",
+    ar: "بداية الفترة بعد نهايتها",
+    fr: "Le début de la période est après sa fin",
+  },
 ];

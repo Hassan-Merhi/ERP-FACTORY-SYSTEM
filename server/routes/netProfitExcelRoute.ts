@@ -31,6 +31,11 @@ import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
 import { PERPETUAL_STOCK_ACCOUNT_CODES } from "../netPositionHelper";
+import {
+  classifyAccountType,
+  defaultOpeningSide,
+  isIndirectIncome,
+} from "../services/accounting/accountClassification";
 
 export function registerNetProfitExcelRoute(app: Express) {
   app.get("/api/reports/net-profit-excel", requireAuth, async (req, res) => {
@@ -133,9 +138,10 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       // ERP voucher-based income: income accounts excluded from directIncomes/indirectIncomes
       // (SALES-named accounts and uncategorized income) that appear in non-POS vouchers.
+      // Indirect Income (either storage form) is left out here, as before.
       const xlsxMissedIncomeAccounts = companyAccounts.filter((acc) => {
-        if (acc.accountType !== "Income") return false;
-        if (acc.subType === "Indirect Income") return false;
+        if (classifyAccountType(acc.accountType, acc.subType) !== "income") return false;
+        if (isIndirectIncome(acc.accountType, acc.subType)) return false;
         if (
           acc.subType === "Direct Income" &&
           !acc.code?.includes("SALES") &&
@@ -277,11 +283,10 @@ export function registerNetProfitExcelRoute(app: Express) {
         }
       }
 
-      // Account exclusion rules matching dashboard
-      const npExcludedTypes = ["Income", "Profit", "Equity", "EQUITY", "Fixed Asset"];
-      const npExpenseTypes = ["Expense", "Direct Expense", "Indirect Expense"];
-      const _npLiabilityTypes = ["Liability", "Duty Agent", "Transporter Agent", "Loan"];
-      const npAssetTypes = ["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash"];
+      // Account exclusion rules matching dashboard, by the shared classifier:
+      // income and expense accounts (Indirect Income in either form, Revenue,
+      // Government Taxes, mis-cased types) are earnings, and equity (Equity,
+      // Profit) is not an asset or a liability; Fixed Asset stays excluded.
       const npStockPatterns = [
         "closing stock",
         "opening stock",
@@ -331,11 +336,13 @@ export function registerNetProfitExcelRoute(app: Express) {
         openingBalanceBaseAmount: string | null;
         isHidden: boolean;
       }) => {
-        if (npExcludedTypes.includes(acc.accountType || "")) return true;
+        const accountClass = classifyAccountType(acc.accountType, acc.subType);
+        if (accountClass === "income" || accountClass === "expense" || accountClass === "equity") return true;
+        if ((acc.accountType || "").trim().toLowerCase() === "fixed asset") return true;
         if (acc.code === "PRODUCTION_ADJUSTMENT" || acc.code === "CONSUMPTION_EXPENSE") return true;
         const nameLower = (acc.name || "").toLowerCase();
         const codeLower = (acc.code || "").toLowerCase();
-        if (npAssetTypes.includes(acc.accountType || "")) {
+        if (accountClass === "asset") {
           if (ledgerStock && PERPETUAL_STOCK_ACCOUNT_CODES.has((acc.code || "").trim().toUpperCase())) return false;
           if (npStockPatterns.some((p: string) => nameLower.includes(p))) return true;
           if (
@@ -367,11 +374,15 @@ export function registerNetProfitExcelRoute(app: Express) {
       let npForUs = ZERO,
         npOnUs = ZERO;
       for (const acc of companyAccounts) {
-        if (npExpenseTypes.includes(acc.accountType || "")) continue;
-        if (acc.accountType === "Income") continue;
         if (isExcludedFromNp(acc)) continue;
         const opening = toMoney(acc.openingBalance);
-        const openingSigned = acc.openingBalanceSide === "Dr" ? opening : opening.negated();
+        // An opening with no recorded side is on the classifier's default side
+        // (Dr for assets and customers, Cr otherwise), as in netPositionHelper.
+        const openingSide =
+          acc.openingBalanceSide === "Dr" || acc.openingBalanceSide === "Cr"
+            ? acc.openingBalanceSide
+            : (defaultOpeningSide(acc.accountType, acc.subType) ?? "Cr");
+        const openingSigned = openingSide === "Dr" ? opening : opening.negated();
         const bal = allTimeBalsXlsx.get(acc.id) ?? NO_BALANCE;
         let net = openingSigned.plus(bal.debit).minus(bal.credit);
         // Revalue Cash accounts: amounts are in CFA, divide by current rate to get USD

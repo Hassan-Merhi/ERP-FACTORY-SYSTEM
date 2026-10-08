@@ -18,6 +18,7 @@ import {
 import { vouchers, voucherEntries, customerBalances, customerOrders } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { getClientDate } from "../../lib/dateUtils";
+import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { resultRows } from "../../lib/queryResult";
 import { isSystemOnlyLedgerAccount } from "../../lib/systemOnlyLedgerAccounts";
 import type Decimal from "decimal.js";
@@ -51,6 +52,17 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       isFactoryCompany || isPropertiesCompany
         ? []
         : allSuppliers.filter((supplier) => isSupplierVisibleToCompany(supplier, companyId));
+
+    const [employeeOpeningSides, supplierOpeningSides] = await Promise.all([
+      loadPartyOpeningSides(
+        "employees",
+        employees.map((employee) => employee.id)
+      ),
+      loadPartyOpeningSides(
+        "suppliers",
+        suppliers.map((supplier) => supplier.id)
+      ),
+    ]);
 
     const customerObMap = new Map<number, { openingBalance: string; openingBalanceSide: string | null }>();
     for (const cust of companyCustomers) {
@@ -196,13 +208,21 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
     const effectiveEndDate = rawEndDate && rawEndDate < asOfDate ? rawEndDate : asOfDate;
 
+    // Every posted voucher up to the end date counts. With a start date the
+    // lines before it are carried into the opening (opening + movements before
+    // startDate) instead of being dropped, so the balance is still the balance
+    // at the end date.
+    const voucherDay = sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate})`;
     const voucherDateConditions = [
       eq(vouchers.companyId, companyId),
       eq(vouchers.optional, false),
       isNull(vouchers.deletedAt),
-      ...(balStartDate ? [sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) >= ${balStartDate}`] : []),
-      sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${effectiveEndDate}`,
+      sql`${voucherDay} <= ${effectiveEndDate}`,
     ];
+    const prePeriodCase = (column: typeof voucherEntries.debitAmount | typeof voucherEntries.creditAmount) =>
+      balStartDate
+        ? sql<string>`COALESCE(SUM(CASE WHEN ${voucherDay} < ${balStartDate} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`
+        : sql<string>`0`;
 
     const ledgerIds = ledgers.map((a) => a.id);
     const ledgerIdSet = new Set(ledgerIds);
@@ -219,6 +239,8 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         employeeId: voucherEntries.employeeId,
         debits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric)), 0)`,
         credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
+        preDebits: prePeriodCase(voucherEntries.debitAmount),
+        preCredits: prePeriodCase(voucherEntries.creditAmount),
       })
       .from(voucherEntries)
       .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
@@ -230,49 +252,53 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         voucherEntries.employeeId
       );
 
-    type Movement = { debits: Decimal; credits: Decimal };
-    const NO_MOVEMENT: Movement = { debits: new MoneyDecimal(0), credits: new MoneyDecimal(0) };
+    type Movement = { debits: Decimal; credits: Decimal; preDebits: Decimal; preCredits: Decimal };
+    const ZERO = new MoneyDecimal(0);
+    const NO_MOVEMENT: Movement = { debits: ZERO, credits: ZERO, preDebits: ZERO, preCredits: ZERO };
     const ledgerBalances = new Map<number, Movement>();
     const bankBalances = new Map<number, Movement>();
     const assetBalances = new Map<number, Movement>();
     const employeeBalances = new Map<number, Movement>();
 
-    const addMovement = (
-      target: Map<number, Movement>,
-      id: number | null | undefined,
-      debits: Decimal,
-      credits: Decimal
-    ) => {
+    const addMovement = (target: Map<number, Movement>, id: number | null | undefined, movement: Movement) => {
       if (!id) return;
       const existing = target.get(id) || NO_MOVEMENT;
       target.set(id, {
-        debits: existing.debits.plus(debits),
-        credits: existing.credits.plus(credits),
+        debits: existing.debits.plus(movement.debits),
+        credits: existing.credits.plus(movement.credits),
+        preDebits: existing.preDebits.plus(movement.preDebits),
+        preCredits: existing.preCredits.plus(movement.preCredits),
       });
     };
 
     for (const row of movementRows) {
-      const debits = toMoney(row.debits);
-      const credits = toMoney(row.credits);
+      const movement: Movement = {
+        debits: toMoney(row.debits),
+        credits: toMoney(row.credits),
+        preDebits: toMoney(row.preDebits),
+        preCredits: toMoney(row.preCredits),
+      };
       if (row.ledgerAccountId && ledgerIdSet.has(row.ledgerAccountId)) {
-        addMovement(ledgerBalances, row.ledgerAccountId, debits, credits);
+        addMovement(ledgerBalances, row.ledgerAccountId, movement);
       }
-      addMovement(bankBalances, row.bankAccountId, debits, credits);
-      addMovement(assetBalances, row.fixedAssetId, debits, credits);
-      addMovement(employeeBalances, row.employeeId, debits, credits);
+      addMovement(bankBalances, row.bankAccountId, movement);
+      addMovement(assetBalances, row.fixedAssetId, movement);
+      addMovement(employeeBalances, row.employeeId, movement);
     }
 
-    const calculateBalance = (
-      openingBalance: string,
-      openingBalanceSide: string | null,
-      debits: Decimal,
-      credits: Decimal
-    ) => {
-      let balance = toMoney(openingBalance);
-      if (openingBalanceSide === "Cr") balance = balance.negated();
-      balance = balance.plus(debits).minus(credits);
-      const balanceSide = balance.greaterThanOrEqualTo(0) ? "Dr" : "Cr";
-      return { balance: balance.abs(), balanceSide };
+    // Dr-positive balance at the end date, and the opening carried into the
+    // period (the stored opening when no start date is given).
+    const calculateBalance = (openingBalance: string, openingBalanceSide: string | null, movement: Movement) => {
+      let opening = toMoney(openingBalance);
+      if (openingBalanceSide === "Cr") opening = opening.negated();
+      const balance = opening.plus(movement.debits).minus(movement.credits);
+      const carried = opening.plus(movement.preDebits).minus(movement.preCredits);
+      return {
+        balance: balance.abs(),
+        balanceSide: balance.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
+        carriedOpening: carried.abs().toNumber(),
+        carriedOpeningSide: carried.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
+      };
     };
 
     const accounts = [
@@ -301,11 +327,10 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           };
         }
 
-        const { balance, balanceSide } = calculateBalance(
+        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
           effectiveOB,
           effectiveOBSide,
-          movements.debits,
-          movements.credits
+          movements
         );
         return {
           id: `ledger-${account.id}`,
@@ -317,19 +342,18 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           subType: account.subType,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: toMoney(effectiveOB).toNumber(),
-          openingBalanceSide: effectiveOBSide || "Dr",
+          openingBalance: balStartDate ? carriedOpening : toMoney(effectiveOB).toNumber(),
+          openingBalanceSide: balStartDate ? carriedOpeningSide : effectiveOBSide || "Dr",
           active: account.active,
           parentId: account.parentId,
         };
       }),
       ...banks.map((account) => {
         const movements = bankBalances.get(account.id) || NO_MOVEMENT;
-        const { balance, balanceSide } = calculateBalance(
+        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
           account.openingBalance || "0",
           account.openingBalanceSide,
-          movements.debits,
-          movements.credits
+          movements
         );
         return {
           id: `bank-${account.id}`,
@@ -339,19 +363,18 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           name: `${account.name} (${account.bankName})`,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: toMoney(account.openingBalance).toNumber(),
-          openingBalanceSide: account.openingBalanceSide || "Dr",
+          openingBalance: balStartDate ? carriedOpening : toMoney(account.openingBalance).toNumber(),
+          openingBalanceSide: balStartDate ? carriedOpeningSide : account.openingBalanceSide || "Dr",
           active: account.active,
           parentId: null,
         };
       }),
       ...assets.map((asset) => {
         const movements = assetBalances.get(asset.id) || NO_MOVEMENT;
-        const { balance, balanceSide } = calculateBalance(
+        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
           asset.openingBalance || "0",
           "Dr",
-          movements.debits,
-          movements.credits
+          movements
         );
         return {
           id: `asset-${asset.id}`,
@@ -361,18 +384,24 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           name: asset.name,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: toMoney(asset.openingBalance).toNumber(),
-          openingBalanceSide: "Dr",
+          openingBalance: balStartDate ? carriedOpening : toMoney(asset.openingBalance).toNumber(),
+          openingBalanceSide: balStartDate ? carriedOpeningSide : "Dr",
           active: asset.active,
           parentId: null,
         };
       }),
       ...employees.map((employee) => {
         const movements = employeeBalances.get(employee.id) || NO_MOVEMENT;
-        const openingBalanceExact = toMoney(employee.openingBalance);
-        const openingBalance = openingBalanceExact.toNumber();
-        const netBalance = openingBalanceExact.plus(movements.credits).minus(movements.debits);
+        // Employees are credit-normal (Cr positive); the opening follows
+        // employees.opening_balance_side (null → Cr).
+        const storedSide = employeeOpeningSides.get(employee.id) ?? "Cr";
+        const openingAmount = toMoney(employee.openingBalance);
+        const openingSigned = storedSide === "Dr" ? openingAmount.negated() : openingAmount;
+        const netBalance = openingSigned.plus(movements.credits).minus(movements.debits);
         const balanceSide = netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr";
+        const carried = openingSigned.plus(movements.preCredits).minus(movements.preDebits);
+        const openingBalance = balStartDate ? carried.abs().toNumber() : openingAmount.toNumber();
+        const openingBalanceSide = balStartDate ? (carried.greaterThanOrEqualTo(0) ? "Cr" : "Dr") : storedSide;
         return {
           id: `employee-${employee.id}`,
           accountId: employee.id,
@@ -382,7 +411,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           balance: netBalance.abs().toFixed(2),
           balanceSide,
           openingBalance,
-          openingBalanceSide: "Cr",
+          openingBalanceSide,
           active: employee.active,
           parentId: null,
         };
@@ -407,16 +436,29 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             return (
               await Promise.all(
                 suppliers.map(async (supplier) => {
+                  // Same period as the other families: lines up to the end
+                  // date count, and lines before the start date are carried
+                  // into the opening.
                   const {
                     balance: calculatedBalance,
-                    openingBalance,
+                    openingBalance: storedOpening,
+                    openingBalanceSide: storedOpeningSide,
+                    periodOpeningBalance,
                     hasActivity,
-                  } = await getSupplierBalanceForContext(supplier, companyId, {
-                    allowUnconfiguredLegacyScope: true,
-                  });
+                  } = await getSupplierBalanceForContext(
+                    { ...supplier, openingBalanceSide: supplierOpeningSides.get(supplier.id) ?? "Cr" },
+                    companyId,
+                    { allowUnconfiguredLegacyScope: true, endDate: effectiveEndDate, startDate: balStartDate }
+                  );
 
                   if (isChildCompany && !hasActivity) return null;
                   const balanceSide = calculatedBalance >= 0 ? "Cr" : "Dr";
+                  const openingBalance = balStartDate ? Math.abs(periodOpeningBalance) : storedOpening;
+                  const openingBalanceSide = balStartDate
+                    ? periodOpeningBalance >= 0
+                      ? "Cr"
+                      : "Dr"
+                    : storedOpeningSide;
 
                   return {
                     id: `supplier-${supplier.id}`,
@@ -427,7 +469,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
                     balance: calculatedBalance.toFixed(2),
                     balanceSide,
                     openingBalance,
-                    openingBalanceSide: "Cr",
+                    openingBalanceSide,
                     active: supplier.active,
                     parentId: null,
                   };

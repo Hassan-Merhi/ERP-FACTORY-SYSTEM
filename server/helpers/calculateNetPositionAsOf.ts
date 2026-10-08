@@ -18,6 +18,8 @@ import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { computeEmployeeWorkerNetPosition } from "./employeeNetPosition";
 import { loadSalaryAdvanceNetPositionAdjustments } from "./salaryAdvanceNetPosition";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
+import { toMoney } from "../lib/money";
+import { loadPartyOpeningSides } from "../routes/helpers/partyOpeningSide";
 
 /**
  * The two grouped balance projections read below.
@@ -114,42 +116,23 @@ export async function calculateNetPositionAsOf(
     }
   };
 
+  // Supplier and employee lines: every line nets debit − credit (a supplier
+  // line carrying both a debit and a credit is netted, not dropped), counted
+  // from COALESCE(effective_date, voucher_date).
   const loadPartyBalances = async () => {
     try {
       return await db.execute<RawQueryRow<PartyBalanceRow>>(sql`
         SELECT
           ve.supplier_id,
           ve.employee_id,
-          SUM(
-            CASE
-              WHEN ve.supplier_id IS NOT NULL THEN
-                CASE
-                  WHEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric > 0
-                   AND COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric = 0
-                  THEN COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric
-                  ELSE 0
-                END
-              ELSE COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric
-            END
-          ) AS total_debit,
-          SUM(
-            CASE
-              WHEN ve.supplier_id IS NOT NULL THEN
-                CASE
-                  WHEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric > 0
-                   AND COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric = 0
-                  THEN COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric
-                  ELSE 0
-                END
-              ELSE COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric
-            END
-          ) AS total_credit
+          SUM(COALESCE(ve.base_debit_amount, ve.debit_amount)::numeric) AS total_debit,
+          SUM(COALESCE(ve.base_credit_amount, ve.credit_amount)::numeric) AS total_credit
         FROM voucher_entries ve
         INNER JOIN vouchers v ON ve.voucher_id = v.id
         WHERE v.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
-          AND v.voucher_date <= ${toDate}
+          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
           AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
         GROUP BY ve.supplier_id, ve.employee_id
       `);
@@ -158,34 +141,14 @@ export async function calculateNetPositionAsOf(
         SELECT
           ve.supplier_id,
           ve.employee_id,
-          SUM(
-            CASE
-              WHEN ve.supplier_id IS NOT NULL THEN
-                CASE
-                  WHEN ve.debit_amount::numeric > 0 AND ve.credit_amount::numeric = 0
-                  THEN ve.debit_amount::numeric
-                  ELSE 0
-                END
-              ELSE ve.debit_amount::numeric
-            END
-          ) AS total_debit,
-          SUM(
-            CASE
-              WHEN ve.supplier_id IS NOT NULL THEN
-                CASE
-                  WHEN ve.credit_amount::numeric > 0 AND ve.debit_amount::numeric = 0
-                  THEN ve.credit_amount::numeric
-                  ELSE 0
-                END
-              ELSE ve.credit_amount::numeric
-            END
-          ) AS total_credit
+          SUM(ve.debit_amount::numeric) AS total_debit,
+          SUM(ve.credit_amount::numeric) AS total_credit
         FROM voucher_entries ve
         INNER JOIN vouchers v ON ve.voucher_id = v.id
         WHERE v.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
-          AND v.voucher_date <= ${toDate}
+          AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
           AND (ve.supplier_id IS NOT NULL OR ve.employee_id IS NOT NULL)
         GROUP BY ve.supplier_id, ve.employee_id
       `);
@@ -389,11 +352,17 @@ export async function calculateNetPositionAsOf(
       .from(companyScopedSuppliers)
       .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
       .execute();
+    const supplierOpeningSides = await loadPartyOpeningSides(
+      "suppliers",
+      allSuppliers.map((sup) => sup.id)
+    );
     let supplierTotal = 0;
     for (const sup of allSuppliers) {
       const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-      const opening = parseFloat(sup.openingBalance || "0");
-      const netBalance = opening + balance.credit - balance.debit;
+      // Cr positive; the opening follows suppliers.opening_balance_side (null → Cr).
+      const openingAmount = toMoney(sup.openingBalance);
+      const opening = supplierOpeningSides.get(sup.id) === "Dr" ? openingAmount.negated() : openingAmount;
+      const netBalance = opening.plus(balance.credit).minus(balance.debit).toNumber();
       if (netBalance > 0) {
         onUsTotal += netBalance;
         supplierTotal += netBalance;

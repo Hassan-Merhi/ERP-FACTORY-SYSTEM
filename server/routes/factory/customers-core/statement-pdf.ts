@@ -12,6 +12,11 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import {
+  customerVoucherLineFilter,
+  postedVoucherInCompany,
+  voucherBalanceDateSql,
+} from "../../../storage/accounting/customer-ledger-balance";
+import {
   customerOrders,
   customerBalances,
   customers,
@@ -63,17 +68,16 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
 
       // Pull voucher entries (same logic as statement endpoint)
       const voucherRowsPdf: StatementVoucherRow[] = [];
-      const ledgerAccountIdPdf = customer.ledgerAccountId;
-      const voucherCondPdf = ledgerAccountIdPdf
-        ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountIdPdf} OR ${voucherEntries.customerId} = ${customerId})`
-        : sql`${voucherEntries.customerId} = ${customerId}`;
+      // Lines on the linked ledger plus customer-tagged lines with no other
+      // ledger (a customer-tagged line on another account is that account's).
+      const voucherCondPdf = customerVoucherLineFilter(customer);
       const rawVePdf = await db
         .select({
           id: voucherEntries.id,
           voucherId: voucherEntries.voucherId,
           voucherNumber: vouchers.voucherNumber,
           voucherType: vouchers.voucherType,
-          voucherDate: vouchers.voucherDate,
+          voucherDate: sql<string>`${voucherBalanceDateSql}::text`,
           description: vouchers.description,
           debitAmount: voucherEntries.debitAmount,
           creditAmount: voucherEntries.creditAmount,
@@ -85,13 +89,13 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
           vouchers,
           and(
             eq(voucherEntries.voucherId, vouchers.id),
-            eq(vouchers.companyId, companyId),
+            postedVoucherInCompany(companyId),
             sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
             sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
           )
         )
         .where(voucherCondPdf)
-        .orderBy(vouchers.voucherDate, voucherEntries.id);
+        .orderBy(voucherBalanceDateSql, voucherEntries.id);
       for (const ve of rawVePdf) {
         if (ve.optional) continue; // optional vouchers don't affect the balance
         voucherRowsPdf.push({

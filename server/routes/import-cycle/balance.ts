@@ -27,6 +27,7 @@ import {
 import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { getAccountNetBalanceExact } from "../../netPositionHelper";
+import { classifyAccountType } from "../../services/accounting/accountClassification";
 import { MoneyDecimal, debitMinusCredit, sumMoney, toMoney } from "../../lib/money";
 
 import { _getCached, _setCached } from "./_helpers";
@@ -226,8 +227,14 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       // 9. Indirect Expense
       const indirectExpenseBalance = atLeastZero(sumNB(["Indirect Expense"]));
 
-      // 10. Income (credit balance = liability / revenue received)
-      const incomeBalance = atLeastZero(sumNB(["Income"]).negated());
+      // 10. Income (credit balance = liability / revenue received). Every income
+      // account by the shared classifier: Income, Revenue and Indirect Income in
+      // either storage form (an "Indirect Income"-typed account used to be left out).
+      const incomeBalance = atLeastZero(
+        sumMoney(
+          companyAccounts.filter((a) => classifyAccountType(a.accountType, a.subType) === "income").map(nb)
+        ).negated()
+      );
 
       // 11. Stock Value on Floor (inventory in locations)
       // Only include inventory at valid, non-deleted locations (excludes orphaned inventory)

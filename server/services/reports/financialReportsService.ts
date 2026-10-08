@@ -14,7 +14,11 @@ import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, inArray, isNotNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { buildTrialBalance } from "../accounting/integrity/trialBalance";
-import { canonicalAccountType, PROFIT_AND_LOSS_ACCOUNT_TYPES } from "../accounting/accountClassification";
+import {
+  canonicalAccountType,
+  classifyAccountType,
+  PROFIT_AND_LOSS_ACCOUNT_TYPES,
+} from "../accounting/accountClassification";
 
 // ---------------------------------------------------------------------------
 // getProfitLoss — /api/reports/profit-loss
@@ -36,10 +40,14 @@ export async function getProfitLoss(
   // Get all ledger accounts for this company
   const companyAccounts = await storage.getAllLedgerAccounts(companyId, true); // Include hidden accounts for financial calculations
 
-  const incomeAccounts = companyAccounts.filter((acc) => acc.accountType === "Income");
+  // Classified by the shared classifier: Indirect Income (either storage form),
+  // Revenue and mis-cased types are income; Government Taxes is an expense;
+  // Profit is equity, not income.
+  const incomeAccounts = companyAccounts.filter(
+    (acc) => classifyAccountType(acc.accountType, acc.subType) === "income"
+  );
   const expenseAccounts = companyAccounts.filter(
-    (acc) =>
-      acc.accountType === "Expense" || acc.accountType === "Indirect Expense" || acc.accountType === "Direct Expense"
+    (acc) => classifyAccountType(acc.accountType, acc.subType) === "expense"
   );
 
   const incomeAccountIds = incomeAccounts.map((acc) => acc.id);
@@ -141,7 +149,11 @@ export async function getProfitLoss(
 //   - bank accounts and fixed assets are assets;
 //   - customers, suppliers, employees and factory suppliers count on the side
 //     their balance falls (a supplier in debit is an asset, a customer in
-//     credit a liability);
+//     credit a liability). Since wave 10 a customer's row also carries the
+//     lines of its linked ledger account (CUST-*), which has no row of its own,
+//     and its opening is the customer's, so a customer's advance is a
+//     liability instead of netting into an asset account;
+//   - vouchers count from COALESCE(effective_date, voucher_date);
 //   - lines on missing accounts or on no account are listed as unclassified;
 //   - `difference` is assets − (liabilities + equity + current earnings +
 //     unclassified), which is the trial balance's unexplained difference

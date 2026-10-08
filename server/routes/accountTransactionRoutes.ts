@@ -8,14 +8,28 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
 import { getClientDate } from "../lib/dateUtils";
 import { buildFactoryCustomerLedgerEntries, getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
-import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
+import {
+  bankAccounts,
+  customers,
+  employees,
+  fixedAssets,
+  ledgerAccounts,
+  voucherEntries,
+  vouchers,
+} from "@shared/schema";
+import {
+  customerVoucherLineFilter,
+  postedVoucherInCompany,
+  voucherBalanceDateSql,
+} from "../storage/accounting/customer-ledger-balance";
+import { toMoney } from "../lib/money";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
 
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
@@ -410,39 +424,56 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      const statement = await storage.getCustomerStatement(customerId, companyId, rawStart, effectiveEndDate);
-      // Map CustomerBalance rows to the same shape the Accounts page expects for transactions
-      const mapped = statement.map((row) => ({
-        id: row.id,
-        voucherId: row.referenceId ?? row.id,
-        voucherNumber: row.referenceType ? `${row.referenceType}-${row.referenceId}` : `CB-${row.id}`,
-        voucherType: row.transactionType,
-        voucherDate: row.transactionDate,
-        voucherDescription: row.description || "",
-        narration: row.description || "",
-        debitAmount: row.debitAmount,
-        creditAmount: row.creditAmount,
-        transactionCurrency: row.currency,
-        transactionDebitAmount: row.debitAmount,
-        transactionCreditAmount: row.creditAmount,
-        baseDebitAmount: row.currency === "USD" ? row.debitAmount : null,
-        baseCreditAmount: row.currency === "USD" ? row.creditAmount : null,
-        historicalExchangeRate: row.currency === "USD" ? "1.0000000000" : null,
-        rateConvention: row.currency === "USD" ? "IDENTITY" : null,
-        currency: row.currency,
+      // Posted voucher lines owned by the customer under the shared ledger rules
+      // (storage/accounting/customer-ledger-balance.ts), so opening + these rows
+      // is the balance /api/customers/stats and the voucher sidebar report. The
+      // customer_balances cache this used to list misses voucher receipts.
+      const lineFilter = customerVoucherLineFilter(customer);
+      const posted = postedVoucherInCompany(companyId);
+      const periodConditions = [
+        ...(rawStart ? [sql`${voucherBalanceDateSql} >= ${rawStart}`] : []),
+        sql`${voucherBalanceDateSql} <= ${effectiveEndDate}`,
+      ];
+      const lines = await db
+        .select({
+          id: voucherEntries.id,
+          voucherId: voucherEntries.voucherId,
+          voucherNumber: vouchers.voucherNumber,
+          voucherType: vouchers.voucherType,
+          voucherDate: sql<string>`${voucherBalanceDateSql}::text`,
+          voucherDescription: vouchers.description,
+          narration: voucherEntries.narration,
+          debitAmount: voucherEntries.debitAmount,
+          creditAmount: voucherEntries.creditAmount,
+          transactionCurrency: voucherEntries.transactionCurrency,
+          transactionDebitAmount: voucherEntries.transactionDebitAmount,
+          transactionCreditAmount: voucherEntries.transactionCreditAmount,
+          baseDebitAmount: voucherEntries.baseDebitAmount,
+          baseCreditAmount: voucherEntries.baseCreditAmount,
+          historicalExchangeRate: voucherEntries.historicalExchangeRate,
+          rateConvention: voucherEntries.rateConvention,
+          currency: vouchers.currency,
+        })
+        .from(voucherEntries)
+        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+        .where(and(posted, lineFilter, ...periodConditions))
+        .orderBy(voucherBalanceDateSql, voucherEntries.id);
+      const mapped = lines.map((line) => ({
+        ...line,
+        voucherDescription: line.voucherDescription || "",
+        narration: line.narration || line.voucherDescription || "",
       }));
 
       let preNetBalance = 0;
       if (rawStart) {
-        const bfResult = await pool.query(
-          `SELECT COALESCE(SUM(cb.debit_amount::numeric - cb.credit_amount::numeric), 0) AS net
-           FROM customer_balances cb
-           WHERE cb.customer_id = $1
-             AND cb.company_id = $2
-             AND cb.transaction_date < $3::date`,
-          [customerId, companyId, rawStart]
-        );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
+        const [pre] = await db
+          .select({
+            net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
+          })
+          .from(voucherEntries)
+          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+          .where(and(posted, lineFilter, sql`${voucherBalanceDateSql} < ${rawStart}`));
+        preNetBalance = toMoney(pre?.net).toNumber();
       }
 
       return res.json(

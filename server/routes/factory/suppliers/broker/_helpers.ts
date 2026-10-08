@@ -104,6 +104,11 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               inArray(voucherEntries.factorySupplierId, allSupplierIds),
+              // A voucher line belongs to its voucher's company; deleted and optional
+              // vouchers never reach a balance (soft delete keeps the lines).
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
               sql`${voucherEntries.debitAmount}::numeric > 0`,
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
             )
