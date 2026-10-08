@@ -236,23 +236,30 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(String(noProformaResponse.body.message)).toContain("proforma");
   });
 
-  it("lets non-admin users choose colors but reserves queue positions for Admin and Developer", async () => {
+  it("lets non-admin users choose colors but reserves queue positions for Admin, Developer and Owner", async () => {
     const adminLoading = await createLoading();
-    const ownerLoading = await createLoading();
+    const memberLoading = await createLoading();
 
     const adminConfig = await agent
       .put(`/api/factory/customer-orders/${adminLoading}/loading-list/priority-scan-config`)
       .send({ color: "#2563eb", priority: 1, enabled: true });
     expect(adminConfig.status).toBe(200);
 
-    const beforeOwner = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-configs");
-    expect(beforeOwner.status).toBe(200);
-    const activeCount = beforeOwner.body.filter((row: { enabled: boolean }) => row.enabled).length;
+    const beforeMember = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-configs");
+    expect(beforeMember.status).toBe(200);
+    const activeCount = beforeMember.body.filter((row: { enabled: boolean }) => row.enabled).length;
 
-    await setRole("Owner");
+    // Non-admin roles only reach factory writes through an admin override, so
+    // grant one while this user is still Admin before dropping to Manager.
+    const override = await agent
+      .post("/api/factory/admin-verify")
+      .send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
+    expect(override.status).toBe(200);
+
+    await setRole("Manager");
     try {
       const colorOnly = await agent
-        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .put(`/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`)
         .send({ color: "#16a34a", enabled: true });
 
       expect(colorOnly.status).toBe(200);
@@ -260,14 +267,14 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       expect(colorOnly.body.priority).toBe(activeCount + 1);
 
       const blockedPriority = await agent
-        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .put(`/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`)
         .send({ color: "#dc2626", priority: 1, enabled: true });
 
       expect(blockedPriority.status).toBe(403);
       expect(blockedPriority.body.code).toBe("PRIORITY_POSITION_ADMIN_ONLY");
 
       const colorEdit = await agent
-        .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)
+        .put(`/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`)
         .send({ color: "#dc2626", enabled: true });
 
       expect(colorEdit.status).toBe(200);
@@ -275,10 +282,23 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
       expect(colorEdit.body.priority).toBe(activeCount + 1);
 
       const blockedRemoval = await agent.delete(
-        `/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`
+        `/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`
       );
       expect(blockedRemoval.status).toBe(403);
       expect(blockedRemoval.body.code).toBe("PRIORITY_POSITION_ADMIN_ONLY");
+
+      await setRole("Owner");
+      const ownerPriority = await agent
+        .put(`/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`)
+        .send({ color: "#dc2626", priority: 1, enabled: true });
+      expect(ownerPriority.status).toBe(200);
+      expect(ownerPriority.body.priority).toBe(1);
+
+      const ownerRemoval = await agent.delete(
+        `/api/factory/customer-orders/${memberLoading}/loading-list/priority-scan-config`
+      );
+      expect(ownerRemoval.status).toBe(200);
+      expect(ownerRemoval.body.cleared).toBe(true);
     } finally {
       await setRole("Admin");
     }
