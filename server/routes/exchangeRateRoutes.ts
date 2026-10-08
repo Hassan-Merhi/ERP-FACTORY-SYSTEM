@@ -14,6 +14,8 @@ import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
 import { exchangeRates, insertExchangeRateSchema, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, debitMinusCredit, signedOpeningBalance, toMoney } from "../lib/money";
 
 export function registerExchangeRateRoutes(app: Express) {
   // Check if today's exchange rate exists
@@ -125,7 +127,7 @@ export function registerExchangeRateRoutes(app: Express) {
       try {
         await (async () => {
           const { fromCurrency, toCurrency } = validationResult.data;
-          const newRate = parseFloat(validationResult.data.rate);
+          const newRate = toMoney(validationResult.data.rate);
 
           // Get the previous rate (second most-recent for this currency pair)
           const [prevRateRow] = await db
@@ -143,8 +145,8 @@ export function registerExchangeRateRoutes(app: Express) {
             .limit(1);
 
           if (!prevRateRow) return; // First-ever rate — nothing to revalue
-          const oldRate = parseFloat(prevRateRow.rate);
-          if (Math.abs(oldRate - newRate) < 0.0001) return; // No meaningful change
+          const oldRate = toMoney(prevRateRow.rate);
+          if (oldRate.minus(newRate).abs().lt("0.0001") || newRate.lte(0)) return; // No meaningful change
 
           // Find all Cash-type ledger accounts for this company
           const cashAccounts = await db
@@ -161,8 +163,10 @@ export function registerExchangeRateRoutes(app: Express) {
           if (cashAccounts.length === 0) return;
 
           // Compute balance per account and calculate revaluation adjustment
-          const adjustments: Array<{ accountId: number; diff: number }> = [];
-          let totalAbsDiff = 0;
+          // Exact decimals, each adjustment at cents: the voucher total is the sum
+          // of the cents actually posted, so header and lines always agree.
+          const adjustments: Array<{ accountId: number; diff: Decimal }> = [];
+          let totalAbsDiff: Decimal = new MoneyDecimal(0);
 
           for (const account of cashAccounts) {
             // Get all non-deleted, non-optional voucher entries for this account
@@ -183,33 +187,30 @@ export function registerExchangeRateRoutes(app: Express) {
               );
 
             // Opening balance (Asset/Cash: Dr = positive)
-            const openingRaw = parseFloat(account.openingBalance || "0");
-            const openingSide = account.openingBalanceSide || "Dr";
-            const signedOpening = openingSide === "Dr" ? openingRaw : -openingRaw;
+            const signedOpening = signedOpeningBalance(account.openingBalance, account.openingBalanceSide);
 
             // Sum debit - credit for asset accounts
-            const voucherBalance = entries.reduce((sum, e) => {
-              return sum + parseFloat(e.debitAmount || "0") - parseFloat(e.creditAmount || "0");
-            }, 0);
+            const voucherBalance = debitMinusCredit(entries);
 
-            const usdBalance = signedOpening + voucherBalance;
+            const usdBalance = signedOpening.plus(voucherBalance);
 
-            if (Math.abs(usdBalance) < 0.01) continue; // Skip zero-balance accounts
+            if (usdBalance.abs().lt("0.01")) continue; // Skip zero-balance accounts
 
             // Reconstruct approximate CFA amount and compute new USD value
             // cfaAmount = usdBalance * oldRate  (how many CFA we hold)
             // newUsd     = cfaAmount / newRate   (what those CFA are worth now)
-            const cfaAmount = usdBalance * oldRate;
-            const newUsd = cfaAmount / newRate;
-            const diff = newUsd - usdBalance; // positive = FX gain, negative = FX loss
+            const cfaAmount = usdBalance.times(oldRate);
+            const newUsd = cfaAmount.div(newRate);
+            // positive = FX gain, negative = FX loss
+            const diff = newUsd.minus(usdBalance).toDecimalPlaces(2);
 
-            if (Math.abs(diff) < 0.01) continue;
+            if (diff.abs().lt("0.01")) continue;
 
             adjustments.push({ accountId: account.id, diff });
-            totalAbsDiff += Math.abs(diff);
+            totalAbsDiff = totalAbsDiff.plus(diff.abs());
           }
 
-          if (adjustments.length === 0 || totalAbsDiff < 0.01) return;
+          if (adjustments.length === 0 || totalAbsDiff.lt("0.01")) return;
 
           // Find or create the FX Revaluation ledger account
           let [fxAccount] = await db
@@ -240,10 +241,9 @@ export function registerExchangeRateRoutes(app: Express) {
           // Create a revaluation Journal voucher
           const voucherNumber = `FX-REVAL-${Date.now()}`;
           const voucherDate = validationResult.data.effectiveDate;
-          const rateChangeDesc =
-            newRate > oldRate
-              ? `Rate ↑ ${oldRate.toLocaleString()} → ${newRate.toLocaleString()} ${toCurrency} (FX loss)`
-              : `Rate ↓ ${oldRate.toLocaleString()} → ${newRate.toLocaleString()} ${toCurrency} (FX gain)`;
+          const rateChangeDesc = newRate.gt(oldRate)
+            ? `Rate ↑ ${oldRate.toNumber().toLocaleString()} → ${newRate.toNumber().toLocaleString()} ${toCurrency} (FX loss)`
+            : `Rate ↓ ${oldRate.toNumber().toLocaleString()} → ${newRate.toNumber().toLocaleString()} ${toCurrency} (FX gain)`;
 
           const [revalVoucher] = await db
             .insert(vouchers)
@@ -263,19 +263,19 @@ export function registerExchangeRateRoutes(app: Express) {
           // Build voucher entries for every adjusted cash account
           const entryRows = [];
           for (const { accountId, diff } of adjustments) {
-            if (diff < 0) {
+            if (diff.lt(0)) {
               // FX loss: Credit cash, Debit FX expense
               entryRows.push({
                 voucherId: revalVoucher.id,
                 ledgerAccountId: accountId,
                 debitAmount: "0",
-                creditAmount: Math.abs(diff).toFixed(2),
+                creditAmount: diff.abs().toFixed(2),
                 narration: "FX revaluation adjustment",
               });
               entryRows.push({
                 voucherId: revalVoucher.id,
                 ledgerAccountId: fxAccount.id,
-                debitAmount: Math.abs(diff).toFixed(2),
+                debitAmount: diff.abs().toFixed(2),
                 creditAmount: "0",
                 narration: "FX revaluation adjustment",
               });
