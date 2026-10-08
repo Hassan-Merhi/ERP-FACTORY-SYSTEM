@@ -337,9 +337,9 @@ describe("POST /api/factory/customer-orders/:id/assign-container", () => {
       .post(`/api/factory/customer-orders/${orderId}/assign-container`)
       .send({ containerNotes: "Updated after booking" });
     expect(update.status).toBe(200);
-    expect((await agent.get(`/api/factory/customer-orders/${orderId}`)).body.bookingInfo).toBe(
-      "Quotation $2,450 / BK123"
-    );
+    const refreshedOrder = await agent.get(`/api/factory/customer-orders/${orderId}`);
+    expect(refreshedOrder.status).toBe(200);
+    expect(refreshedOrder.body.bookingInfo).toBe("Quotation $2,450 / BK123");
   });
 
   it("returns 404 for an order in another company", async () => {
