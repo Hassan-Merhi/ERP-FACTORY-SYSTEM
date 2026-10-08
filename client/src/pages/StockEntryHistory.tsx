@@ -28,9 +28,9 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
     queryKey: ["/api/factory/my-access"],
     staleTime: 5 * 60_000,
   });
-  const canReadWorkerPicker = canUseFactorySurface(myAccess, "factory/payroll-hub", [
-    "hide_tab_payrollhub_workers",
-  ]);
+  const canReadWorkerPicker =
+    canUseFactorySurface(myAccess, "factory/stock-entry", ["hide_tab_stockentry_history"]) ||
+    canUseFactorySurface(myAccess, "factory/payroll-hub", ["hide_tab_payrollhub_workers"]);
   const canReadProductionTargets = canUseFactorySurface(myAccess, "factory/stock-entry", [
     "hide_tab_stockentry_production_targets",
   ]);
