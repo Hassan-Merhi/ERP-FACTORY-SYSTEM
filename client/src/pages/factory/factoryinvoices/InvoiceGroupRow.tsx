@@ -77,6 +77,7 @@ export function InvoiceGroupRow({
         <TableCell className="text-muted-foreground text-sm">—</TableCell>
         {!orderRowContext.hideProformaCol && <TableCell />}
         <TableCell />
+        {orderRowContext.showBookingInfo && <TableCell />}
         <TableCell />
         <TableCell />
         <TableCell />
