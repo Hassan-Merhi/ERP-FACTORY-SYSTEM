@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ne, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
+import { toMoney } from "../../../../lib/money";
 
 export function registerRawStockRecalculateUsedRoutes(app: Express) {
   // Recalculate usedKg for all factory_raw_stock records based on ACTIVE (non-deleted) mix batch sources.
@@ -273,8 +274,8 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
       }[] = [];
 
       for (const batch of allBatches) {
-        const batchCost = parseFloat(batch.costPerKg || "0");
-        if (batchCost <= 0) continue;
+        const batchCost = toMoney(batch.costPerKg);
+        if (batchCost.lte(0)) continue;
 
         const bales = await db
           .select({
@@ -293,9 +294,10 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
           );
 
         for (const bale of bales) {
-          const baleWt = parseFloat(bale.weightKg as string) || 0;
+          // Exact: 3 kg x 1.115 is 3.345, which the float product (3.3449...) rounded to 3.34.
+          const baleWt = toMoney(bale.weightKg as string);
           const newCostPerKg = batchCost.toFixed(4);
-          const newTotalCost = (baleWt * batchCost).toFixed(2);
+          const newTotalCost = baleWt.times(batchCost).toFixed(2);
           if (String(bale.costPerKg) === newCostPerKg && String(bale.totalCost) === newTotalCost) continue;
           changes.push({
             baleId: bale.id,
