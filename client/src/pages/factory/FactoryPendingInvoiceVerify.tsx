@@ -501,7 +501,13 @@ export default function FactoryPendingInvoiceVerify() {
           <Button
             variant="outline"
             onClick={() =>
-              assignContainerMutation.mutate({ containerNumber, shippingCompany, containerNotes, bookingInfo, destination })
+              assignContainerMutation.mutate({
+                containerNumber,
+                shippingCompany,
+                containerNotes,
+                bookingInfo,
+                destination,
+              })
             }
             disabled={assignContainerMutation.isPending}
             data-testid="button-save-container"
