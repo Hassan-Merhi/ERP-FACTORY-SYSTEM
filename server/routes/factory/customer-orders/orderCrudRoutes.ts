@@ -157,6 +157,7 @@ export function registerOrderCrudRoutes(app: Express) {
         containerNumber: r.container_number ?? null,
         shippingCompany: r.shipping_company ?? null,
         containerNotes: r.container_notes ?? null,
+        bookingInfo: r.booking_info ?? null,
         destination: r.destination ?? null,
         verifiedByUserId: r.verified_by_user_id ?? null,
         verifiedAt: r.verified_at ?? null,
