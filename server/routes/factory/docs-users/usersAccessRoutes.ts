@@ -22,6 +22,7 @@ import {
   normalizeAssignableFactoryPageKeys,
   normalizeFactoryHiddenFields,
   normalizePersistedFactoryPageKeysFailClosed,
+  resolveFactoryEffectiveHiddenFields,
 } from "@shared/factoryPermissionCatalog";
 
 function requesterIsDeveloper(currentRole: unknown, requestRole: unknown): boolean {
@@ -465,7 +466,9 @@ export function registerFactoryUsersAccessRoutes(app: Express) {
         "bales_list_cost_per_kg",
         "hide_proforma_price",
       ];
-      const profileHiddenFields = normalizeFactoryHiddenFields(profile?.hiddenCostFields);
+      const profileHiddenFields = resolveFactoryEffectiveHiddenFields(
+        normalizeFactoryHiddenFields(profile?.hiddenCostFields)
+      );
       const hiddenCostFields = hideAllCosts
         ? Array.from(new Set([...profileHiddenFields, ...ALL_COST_KEYS]))
         : profileHiddenFields;
