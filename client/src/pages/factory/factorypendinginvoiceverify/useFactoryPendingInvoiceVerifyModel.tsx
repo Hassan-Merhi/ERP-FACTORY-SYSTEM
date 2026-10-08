@@ -25,6 +25,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
   const [containerNumber, setContainerNumber] = useState("");
   const [shippingCompany, setShippingCompany] = useState("");
   const [containerNotes, setContainerNotes] = useState("");
+  const [bookingInfo, setBookingInfo] = useState("");
   const [destination, setDestination] = useState("");
   const [containerInitialized, setContainerInitialized] = useState(false);
 
@@ -136,6 +137,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
       setContainerNumber(orderDetail.containerNumber || "");
       setShippingCompany(orderDetail.shippingCompany || "");
       setContainerNotes(orderDetail.containerNotes || "");
+      setBookingInfo(orderDetail.bookingInfo || "");
       setDestination(orderDetail.destination || "");
       setContainerInitialized(true);
     }
@@ -175,6 +177,7 @@ export function useFactoryPendingInvoiceVerifyModel() {
       containerNumber: string;
       shippingCompany: string;
       containerNotes: string;
+      bookingInfo: string;
       destination: string;
     }) => {
       await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/assign-container`, data);
@@ -596,6 +599,8 @@ export function useFactoryPendingInvoiceVerifyModel() {
     setShippingCompany,
     containerNotes,
     setContainerNotes,
+    bookingInfo,
+    setBookingInfo,
     destination,
     setDestination,
     chargeName,
