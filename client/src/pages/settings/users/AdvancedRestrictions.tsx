@@ -86,9 +86,18 @@ export function AdvancedRestrictions({
     setHiddenErpCostFields((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]));
   };
 
+  // Opt-in tabs are hidden without a stored key, so count tabs by visibility.
+  const factoryTabKeys = new Set(FACTORY_TABS.map((tab) => tab.key));
+  const hiddenTabCount = isPrivileged
+    ? 0
+    : FACTORY_TABS.filter((tab) => !isFactoryTabVisibleInProfile(tab, hiddenCostFields)).length;
+  const hiddenFieldCount = isPrivileged
+    ? 0
+    : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key)).length;
   const restrictionCount =
     (isPrivileged ? 0 : pageAccess.size) +
-    (isPrivileged ? 0 : hiddenCostFields.filter((key) => !FACTORY_TAB_GRANT_KEYS.has(key)).length) +
+    hiddenTabCount +
+    hiddenFieldCount +
     (isPrivileged ? 0 : hiddenErpCostFields.length);
 
   return (
@@ -113,14 +122,8 @@ export function AdvancedRestrictions({
             {!advancedOpen &&
               (() => {
                 const pageCount = isPrivileged ? 0 : pageAccess.size;
-                const factoryTabKeys = new Set(FACTORY_TABS.map((tab) => tab.key));
-                const tabCount = isPrivileged
-                  ? 0
-                  : FACTORY_TABS.filter((tab) => !isFactoryTabVisibleInProfile(tab, hiddenCostFields)).length;
-                const fieldCount = isPrivileged
-                  ? 0
-                  : hiddenCostFields.filter((key) => !factoryTabKeys.has(key) && !FACTORY_TAB_GRANT_KEYS.has(key))
-                      .length;
+                const tabCount = hiddenTabCount;
+                const fieldCount = hiddenFieldCount;
                 const erpCount = isPrivileged ? 0 : hiddenErpCostFields.length;
                 const parts: string[] = [];
                 if (pageCount > 0) parts.push(`${pageCount} page${pageCount !== 1 ? "s" : ""} explicitly allowed`);
