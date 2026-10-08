@@ -158,7 +158,10 @@ export function InvoiceOrderRow({
         {order.orderDate ? formatDisplayDate(order.orderDate) : "-"}
       </TableCell>
       <TableCell>{getStatusBadge(order.status)}</TableCell>
-      <TableCell className="text-right font-mono text-lg font-bold tabular-nums" data-testid={`text-total-bales-${order.id}`}>
+      <TableCell
+        className="text-right font-mono text-lg font-bold tabular-nums"
+        data-testid={`text-total-bales-${order.id}`}
+      >
         <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
       </TableCell>
       <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
