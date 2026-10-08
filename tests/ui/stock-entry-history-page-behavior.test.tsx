@@ -7,6 +7,8 @@ const harness = vi.hoisted(() => ({
   toast: vi.fn(),
   invalidateQueries: vi.fn(),
   fetchQuery: vi.fn(),
+  pickerEnabled: vi.fn(),
+  accessValue: undefined as any,
 }));
 
 const bale = {
@@ -45,12 +47,14 @@ vi.mock("@tanstack/react-query", () => ({
     fetchQuery: harness.fetchQuery,
   }),
   useQueries: () => [],
-  useQuery: ({ queryKey }: any) => {
+  useQuery: ({ queryKey, enabled }: any) => {
     const root = queryKey?.[0];
+    if (root === "/api/factory/my-access") return { data: harness.accessValue };
     if (root === "/api/factory/bales/stock-entry-history") {
       return { data: { items: [group], total: 1, totalBales: 3, totalWeight: 75 }, isLoading: false };
     }
     if (root === "/api/factory/workers?profile=picker") {
+      harness.pickerEnabled(enabled);
       return {
         data: [
           { id: 1, fullName: "Alice", active: true },
@@ -179,6 +183,7 @@ import StockEntryHistory from "@/pages/StockEntryHistory";
 describe("stock entry history page behavior", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    harness.accessValue = undefined;
     harness.fetchQuery.mockResolvedValue([group]);
     harness.apiRequest.mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
   });
@@ -203,6 +208,17 @@ describe("stock entry history page behavior", () => {
     expect(within(row).getByText("SH-1")).toBeInTheDocument();
     expect(within(row).getByText("25")).toBeInTheDocument();
     expect(within(row).getByText("IN_STOCK")).toBeInTheDocument();
+  });
+
+  it("loads worker choices for a history-only user without Payroll Hub access", () => {
+    harness.accessValue = {
+      fullAccess: false,
+      hasFactoryAccess: true,
+      pageKeys: ["factory/stock-entry"],
+      hiddenCostFields: ["hide_tab_stockentry_entry", "hide_tab_stockentry_production_targets"],
+    };
+    render(<StockEntryHistory />);
+    expect(harness.pickerEnabled).toHaveBeenCalledWith(true);
   });
 
   it("reassigns only the selected bale from detailed view", async () => {
