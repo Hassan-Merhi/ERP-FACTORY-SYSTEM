@@ -236,7 +236,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(String(noProformaResponse.body.message)).toContain("proforma");
   });
 
-  it("lets non-admin users choose colors but reserves queue positions for Admin and Developer", async () => {
+  it("lets non-admin users choose colors but reserves queue positions for Admin, Developer and Owner", async () => {
     const adminLoading = await createLoading();
     const ownerLoading = await createLoading();
 
@@ -249,7 +249,7 @@ describe("Priority Scan Wave 1 configuration foundation", () => {
     expect(beforeOwner.status).toBe(200);
     const activeCount = beforeOwner.body.filter((row: { enabled: boolean }) => row.enabled).length;
 
-    await setRole("Owner");
+    await setRole("Manager");
     try {
       const colorOnly = await agent
         .put(`/api/factory/customer-orders/${ownerLoading}/loading-list/priority-scan-config`)

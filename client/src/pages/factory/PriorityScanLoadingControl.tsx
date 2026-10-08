@@ -116,7 +116,7 @@ export function PriorityScanLoadingControl({ load }: PriorityScanLoadingControlP
     queryKey: ["/api/auth/me"],
   });
   const effectiveRole = currentUser?.currentRole ?? currentUser?.role ?? "";
-  const canManagePriority = effectiveRole === "Admin" || effectiveRole === "Developer";
+  const canManagePriority = effectiveRole === "Admin" || effectiveRole === "Developer" || effectiveRole === "Owner";
 
   const colorPresets = useMemo(
     () => resolveColorPresets(factorySettings?.priorityScanColorPresets),

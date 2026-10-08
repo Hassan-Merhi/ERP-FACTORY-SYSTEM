@@ -40,7 +40,7 @@ function parsePriority(raw: unknown): number | null {
 
 function canManagePriorityPosition(req: Request): boolean {
   const role = String(req.session.currentRole || req.session.role || req.user?.role || "").toLocaleLowerCase("en-US");
-  return role === "admin" || role === "developer";
+  return role === "admin" || role === "developer" || role === "owner";
 }
 
 function uniqueConstraint(error: unknown): string | null {
