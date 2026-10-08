@@ -164,7 +164,10 @@ export function InvoiceOrderRow({
       <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
         {fmtKg(order.totalWeightKg)}
       </TableCell>
-      <TableCell className="text-right font-mono text-lg font-bold tabular-nums" data-testid={`text-remaining-${order.id}`}>
+      <TableCell
+        className="text-right font-mono text-lg font-bold tabular-nums"
+        data-testid={`text-remaining-${order.id}`}
+      >
         {expected <= 0 ? (
           <span className="text-muted-foreground/40">—</span>
         ) : remaining > 0 ? (
