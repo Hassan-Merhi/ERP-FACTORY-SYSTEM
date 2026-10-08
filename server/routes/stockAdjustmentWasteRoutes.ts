@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
 import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
+import { parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 
 export function registerStockAdjustmentWasteRoutes(app: Express) {
   // Stock Adjustments - GET endpoint
@@ -196,7 +197,7 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
 
       // Validate items
       for (const item of items) {
-        if (!item.stockItemId || !item.quantity || parseFloat(item.quantity) <= 0) {
+        if (!item.stockItemId || !item.quantity || !(parseMoneyInput(item.quantity)?.gt(0) ?? false)) {
           return res.status(400).json({ message: "Each item must have stockItemId and positive quantity" });
         }
       }
@@ -228,7 +229,7 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       // Calculate total (will be updated after createStockAdjustment to use actual rates)
       const itemsForAdj = items.map((item) => ({
         stockItemId: parseInt(item.stockItemId),
-        quantity: (-Math.abs(parseFloat(item.quantity))).toFixed(3), // negative = consumption
+        quantity: toMoney(item.quantity).abs().negated().toFixed(3), // negative = consumption
         rate: "0", // rate will be determined from inventory by createStockAdjustment
       }));
 
@@ -258,10 +259,7 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
       );
 
       // Calculate total from actual rates used
-      const totalAmount = adjResult.items.reduce(
-        (sum: number, item: { totalAmount: string }) => sum + parseFloat(item.totalAmount),
-        0
-      );
+      const totalAmount = sumMoney(adjResult.items.map((item: { totalAmount: string }) => item.totalAmount));
 
       // Create waste dispatch record
       const [dispatch] = await db
@@ -283,7 +281,7 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
         await db.insert(wasteDispatchItems).values({
           dispatchId: dispatch.id,
           stockItemId: adjItem.stockItemId,
-          quantity: Math.abs(parseFloat(adjItem.quantity)).toFixed(3),
+          quantity: toMoney(adjItem.quantity).abs().toFixed(3),
           rate: adjItem.rate,
           totalAmount: adjItem.totalAmount,
         });
