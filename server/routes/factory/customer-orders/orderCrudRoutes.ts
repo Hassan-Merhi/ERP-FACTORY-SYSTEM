@@ -47,6 +47,9 @@ export function registerOrderCrudRoutes(app: Express) {
         force: req.query.profile === "summary",
       });
 
+      const canSeeBookingInfo = ["admin", "owner", "developer"].includes(
+        (req.session.currentRole || req.session.role || "").toLowerCase()
+      );
       const ordersQuery = db
         .select({
           id: customerOrders.id,
@@ -85,7 +88,7 @@ export function registerOrderCrudRoutes(app: Express) {
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
           containerNotes: customerOrders.containerNotes,
-          bookingInfo: sql<string | null>`CASE WHEN ${["admin", "owner", "developer"].includes((req.session.currentRole || req.session.role || "").toLowerCase())} THEN ${customerOrders.bookingInfo} ELSE NULL END`,
+          bookingInfo: sql<string | null>`CASE WHEN ${canSeeBookingInfo} THEN ${customerOrders.bookingInfo} ELSE NULL END`,
           destination: customerOrders.destination,
           locationId: customerOrders.locationId,
           loadingStartedAt: customerOrders.loadingStartedAt,
@@ -783,7 +786,9 @@ export function registerOrderCrudRoutes(app: Express) {
       if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
       if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
       if (bookingInfo !== undefined) {
-        if (typeof bookingInfo !== "string" || bookingInfo.length > 2000) return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
+        if (typeof bookingInfo !== "string" || bookingInfo.length > 2000) {
+          return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
+        }
         updateData.bookingInfo = bookingInfo;
       }
       if (destination !== undefined) updateData.destination = destination || null;
