@@ -9,7 +9,7 @@ import { useCompany } from "@/contexts/CompanyContext";
 import { useLocation, useParams } from "wouter";
 import { useEscapeToParent } from "@/hooks/use-escape-to-parent";
 import { CheckCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { ComparisonItem, FinalizePreview, OrderDetail, VerificationSummary } from "./types";
 
 export function useFactoryPendingInvoiceVerifyModel() {
@@ -27,7 +27,8 @@ export function useFactoryPendingInvoiceVerifyModel() {
   const [containerNotes, setContainerNotes] = useState("");
   const [bookingInfo, setBookingInfo] = useState("");
   const [destination, setDestination] = useState("");
-  const [containerInitialized, setContainerInitialized] = useState(false);
+  const initializedOrderId = useRef<number | null>(null);
+  const lastFetchedBookingInfo = useRef("");
 
   const [chargeName, setChargeName] = useState("");
   const [chargeAmount, setChargeAmount] = useState("");
@@ -133,15 +134,24 @@ export function useFactoryPendingInvoiceVerifyModel() {
   });
 
   useEffect(() => {
-    if (orderDetail && !containerInitialized) {
+    if (!orderDetail) return;
+
+    const savedBookingInfo = orderDetail.bookingInfo ?? "";
+    if (initializedOrderId.current !== orderDetail.id) {
+      // The router can reuse this component for a different order.
       setContainerNumber(orderDetail.containerNumber || "");
       setShippingCompany(orderDetail.shippingCompany || "");
       setContainerNotes(orderDetail.containerNotes || "");
-      setBookingInfo(orderDetail.bookingInfo || "");
+      setBookingInfo(savedBookingInfo);
       setDestination(orderDetail.destination || "");
-      setContainerInitialized(true);
+      initializedOrderId.current = orderDetail.id;
+    } else if (savedBookingInfo !== lastFetchedBookingInfo.current) {
+      // Refresh stale detail data without replacing unsaved local edits.
+      const previousSaved = lastFetchedBookingInfo.current;
+      setBookingInfo((current) => (current === previousSaved ? savedBookingInfo : current));
     }
-  }, [orderDetail, containerInitialized]);
+    lastFetchedBookingInfo.current = savedBookingInfo;
+  }, [orderDetail]);
 
   const verifyMutation = useMutation({
     mutationFn: async (data: { approved: boolean; notes?: string }) => {
@@ -180,10 +190,15 @@ export function useFactoryPendingInvoiceVerifyModel() {
       bookingInfo: string;
       destination: string;
     }) => {
-      await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/assign-container`, data);
+      const response = await modeApiRequest("POST", `/api/factory/customer-orders/${orderId}/assign-container`, data);
+      return (await response.json()) as { bookingInfo: string | null };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders", orderId] });
+    onSuccess: (saved) => {
+      // Keep this form's query in sync immediately instead of displaying a stale blank value.
+      queryClient.setQueryData<OrderDetail>(["/api/factory/customer-orders", orderId], (previous) =>
+        previous ? { ...previous, bookingInfo: saved.bookingInfo } : previous
+      );
+      queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
       toast({ title: "Container info saved" });
     },
     onError: (error: Error) => {
