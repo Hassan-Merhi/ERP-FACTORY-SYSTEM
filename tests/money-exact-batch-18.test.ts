@@ -5,6 +5,9 @@
  * moving from 600 to 650 the lines carried 7.69 + 2.56 = 10.25 while the
  * header said 10.26. The adjustments are now exact and the total is the sum
  * of the cents actually posted.
+ *
+ * Bulk worker advances read each amount as a float: 1.005 is 1.00499… and
+ * was stored as 1.00.
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -19,6 +22,7 @@ let agent: request.SuperAgentTest;
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
+  await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
     username: `${TEST_PREFIX}_testuser`,
@@ -36,6 +40,8 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  await pool.query(`DELETE FROM factory_worker_advances WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM factory_workers WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM exchange_rates WHERE company_id = $1`, [ctx.companyId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
@@ -68,5 +74,24 @@ describe("FX revaluation on a rate change", () => {
       { code: "MX18-C2", credit: "2.56" },
     ]);
     expect(voucher.rows[0].total_amount).toBe("10.25");
+  });
+});
+
+describe("bulk worker advances", () => {
+  it("stores an advance of 1.005 as 1.01, not the float's 1.00", async () => {
+    const worker = await pool.query<{ id: number }>(
+      `INSERT INTO factory_workers (company_id, full_name) VALUES ($1, $2) RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX} Worker`]
+    );
+    const response = await agent
+      .post("/api/factory/advances/bulk")
+      .send({ advanceDate: "2026-10-01", items: [{ workerId: worker.rows[0].id, amount: "1.005" }] });
+    expect(response.status).toBe(200);
+
+    const advance = await pool.query<{ amount: string; remaining_balance: string }>(
+      `SELECT amount, remaining_balance FROM factory_worker_advances WHERE worker_id = $1`,
+      [worker.rows[0].id]
+    );
+    expect(advance.rows).toEqual([{ amount: "1.01", remaining_balance: "1.01" }]);
   });
 });
