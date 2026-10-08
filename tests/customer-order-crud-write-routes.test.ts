@@ -321,16 +321,25 @@ describe("POST /api/factory/customer-orders/:id/assign-container", () => {
 
     const response = await agent
       .post(`/api/factory/customer-orders/${orderId}/assign-container`)
-      .send({ containerNumber: "MSKU7654321", shippingCompany: "Maersk", destination: "Tripoli", bookingInfo: "Quotation $2,450 / BK123" });
+      .send({
+        containerNumber: "MSKU7654321",
+        shippingCompany: "Maersk",
+        destination: "Tripoli",
+        bookingInfo: "Quotation $2,450 / BK123",
+      });
 
     expect(response.status).toBe(200);
     expect((await orderRow(orderId))?.container_number).toBe("MSKU7654321");
     const detail = await agent.get(`/api/factory/customer-orders/${orderId}`);
     expect(detail.status).toBe(200);
     expect(detail.body.bookingInfo).toBe("Quotation $2,450 / BK123");
-    const update = await agent.post(`/api/factory/customer-orders/${orderId}/assign-container`).send({ containerNotes: "Updated after booking" });
+    const update = await agent
+      .post(`/api/factory/customer-orders/${orderId}/assign-container`)
+      .send({ containerNotes: "Updated after booking" });
     expect(update.status).toBe(200);
-    expect((await agent.get(`/api/factory/customer-orders/${orderId}`)).body.bookingInfo).toBe("Quotation $2,450 / BK123");
+    expect((await agent.get(`/api/factory/customer-orders/${orderId}`)).body.bookingInfo).toBe(
+      "Quotation $2,450 / BK123"
+    );
   });
 
   it("returns 404 for an order in another company", async () => {
