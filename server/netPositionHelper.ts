@@ -36,6 +36,8 @@ export interface AccountBalance {
 
 export interface NetPositionAccount {
   id?: number;
+  /** A bank account line (bank_accounts id); `id` is only ever a ledger account id. */
+  bankAccountId?: number;
   name: string;
   code: string;
   value: number;

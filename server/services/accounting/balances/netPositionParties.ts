@@ -18,7 +18,18 @@
  *     the ledger accounts), so a party line equals the engine figure exactly;
  *   - ledger accounts a customer owns are returned in `customerLedgerIds` so
  *     the ledger classification leaves them out (the engine rolls them into the
- *     customer: they are never counted twice).
+ *     customer: they are never counted twice);
+ *   - bank accounts (bank_accounts master rows, wave 10 part 3) are the
+ *     engine's "bank" rows: the bank's own opening with its side plus the lines
+ *     that name the bank and no ledger account, presented like a Cash/Bank
+ *     ledger account (category "Bank": an asset, or a liability when
+ *     overdrawn), labelled by the bank account's name and carrying
+ *     `bankAccountId`. A line that names both a ledger account and a bank
+ *     belongs to the ledger account (engine priority), which the ledger
+ *     classification already counts, so a bank linked to a ledger
+ *     (bank_accounts.linked_ledger_id) is never counted twice: its opening and
+ *     its bank-only lines are on the bank line, the ledger's opening and every
+ *     line naming the ledger on the ledger account's line.
  *
  * Amounts that are not in the ledger — unposted factory invoices, factory POS
  * credit sales, cache-only customer rows, unjournalled factory container
@@ -44,6 +55,8 @@ export interface NetPositionPartyLine {
   category: string;
   partyKind: PartyBalanceKind;
   partyId: number | null;
+  /** Bank lines only: the bank_accounts id (never in `id`, which is a ledger account id). */
+  bankAccountId?: number;
 }
 
 /** One "not yet in the ledger" line. `value` is signed: + would add to What We Have, − to What We Owe. */
@@ -82,6 +95,8 @@ export interface NetPositionPartyOptions {
   codes: "erp" | "factory";
   /** Report the payroll page's employees.current_balance over the ledger as a memo line. */
   payrollCurrentBalanceMemo?: boolean;
+  /** Bank accounts (bank_accounts master rows) as cash/bank lines. */
+  banks?: boolean;
 }
 
 export interface NetPositionParties {
@@ -160,11 +175,12 @@ export async function loadNetPositionParties(
   const query = (kind: PartyBalanceKind, withMemo = false) =>
     getPartyBalances(db, { companyId, kind, asOf, memo: withMemo });
 
-  const [customerResult, supplierResult, factorySupplierResult, employeeResult] = await Promise.all([
+  const [customerResult, supplierResult, factorySupplierResult, employeeResult, bankResult] = await Promise.all([
     query("customer", options.customers),
     options.suppliers ? query("supplier") : null,
     options.factorySuppliers ? query("factorySupplier", true) : null,
     options.employees ? query("employee") : null,
+    options.banks ? query("bank") : null,
   ]);
 
   // Customer-owned ledgers are always left out of the ledger classification:
@@ -191,6 +207,25 @@ export async function loadNetPositionParties(
       else onUs.push({ ...base, code: codes === "factory" ? "CUSTOMER_CR" : (party.code ?? ""), value: -value });
     }
     memo.push(...groupMemo(memoLines));
+  }
+
+  if (bankResult) {
+    // Presented like a Cash/Bank ledger account in classifyNetPositionAccounts:
+    // a debit balance is an asset, a credit (overdrawn) balance a liability.
+    for (const party of bankResult.parties) {
+      const value = round2(netPositionPartyValue(party));
+      if (Math.abs(value) < 0.01 || party.id === null) continue;
+      const base = {
+        name: party.name,
+        code: party.code ?? "",
+        category: "Bank",
+        partyKind: "bank" as const,
+        partyId: party.id,
+        bankAccountId: party.id,
+      };
+      if (value > 0) forUs.push({ ...base, value });
+      else onUs.push({ ...base, value: -value });
+    }
   }
 
   if (supplierResult) {

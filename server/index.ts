@@ -37,6 +37,7 @@ import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
 import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { ensureLedgerIntegrityGuard } from "./services/accounting/ledgerIntegrityGuard";
 import { ensureInventoryCutoverSchema } from "./services/accounting/perpetualInventory/cutover";
+import { ensureInventoryFidelitySchema } from "./services/inventory/inventoryFidelitySchema";
 import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
@@ -262,6 +263,9 @@ let migrationsDone = false;
       await ensureClosedPeriodGuard(pool);
       await ensureLedgerIntegrityGuard(pool);
       await ensureInventoryCutoverSchema(pool);
+      // Wave 11 columns read by full-row selects of sales and stock lines (fatal on failure);
+      // the average_rate widening is retried on the next boot if it cannot get its lock.
+      await ensureInventoryFidelitySchema(pool);
       // Needs gl_inventory_cutovers and the ledger guard's bypass function.
       await ensureVoucherBalanceGuard(pool);
       await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {

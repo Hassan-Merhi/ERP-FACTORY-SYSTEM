@@ -98,6 +98,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         employees: "erp",
         codes: "erp",
         payrollCurrentBalanceMemo: true,
+        banks: true,
       });
       const accountsForClassify = (
         isSupplierPartner
@@ -168,7 +169,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         });
       }
 
-      // ── 4–5. Customers, suppliers, payroll and workers (balance engine) ─────
+      // ── 4–5. Customers, suppliers, payroll, workers and bank accounts (balance engine) ─
       // The factory_worker_advances table this export used to add (and the
       // ledger account it replaced) belong to the factory net position; the
       // ERP export now matches the live ERP net position.

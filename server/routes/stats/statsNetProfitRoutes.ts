@@ -110,6 +110,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         employees: "erp",
         codes: "erp",
         payrollCurrentBalanceMemo: true,
+        banks: true,
       });
       // Ledger accounts a customer owns are left out: the engine rolls them
       // into the customer line added below.
@@ -332,7 +333,8 @@ export function registerStatsNetProfitRoutes(app: Express) {
       stripPayrollEntries(forUsAccounts, "asset");
       stripPayrollEntries(onUsAccounts, "liability");
 
-      // Customers, suppliers, payroll (Employees, netted) and workers from the
+      // Customers, suppliers, payroll (Employees, netted), workers and bank
+      // accounts (category "Bank", like a Bank ledger account) from the
       // balance engine. The salary-advance table and employees.current_balance
       // are no longer the figures: what they add over the ledger is reported in
       // `notInLedger` (the advance-named ledger accounts the table used to
@@ -351,6 +353,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
           categoryTotals[key] = round2((categoryTotals[key] || 0) + line.value);
           (side === "asset" ? forUsAccounts : onUsAccounts).push({
             ...(line.id !== undefined ? { id: line.id } : {}),
+            ...(line.bankAccountId !== undefined ? { bankAccountId: line.bankAccountId } : {}),
             name: line.name,
             code: line.code,
             value: line.value,

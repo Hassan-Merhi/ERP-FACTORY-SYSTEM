@@ -111,6 +111,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         employees: "factory",
         codes: "factory",
         payrollCurrentBalanceMemo: true,
+        banks: true,
       });
       const supplierOnUs = parties.onUs.filter((line) => line.partyKind === "factorySupplier");
       const supplierForUs = parties.forUs.filter((line) => line.partyKind === "factorySupplier");
@@ -340,6 +341,15 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           ledgerOnUs.filter(isWorkerAdvanceLedger).reduce((sum, a) => sum + a.value, 0)
       );
 
+      // ── Bank accounts (balance engine): like a Bank ledger account, an asset,
+      // or a liability when overdrawn. A bank linked to a ledger account keeps
+      // its own opening and bank-only lines here; lines naming the ledger are
+      // in the ledger account's line above (engine priority), never in both.
+      const bankForUs = parties.forUs.filter((line) => line.partyKind === "bank");
+      const bankOnUs = parties.onUs.filter((line) => line.partyKind === "bank");
+      const totalBankAssets = round2(bankForUs.reduce((s, line) => s + line.value, 0));
+      const totalBankOverdrafts = round2(bankOnUs.reduce((s, line) => s + line.value, 0));
+
       // ── Customers (balance engine): DR is an asset, CR a liability ──────────
       const customerDrItems = parties.forUs.filter((line) => line.partyKind === "customer");
       const customerCrItems = parties.onUs.filter((line) => line.partyKind === "customer");
@@ -467,7 +477,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // forUsTotal: ledger assets + inventory + raw material + balance on table + stock OTW
       //             + customer receivables (DR) + overpaid suppliers + prepaidRent
-      //             + employee receivables. Unfinalized orders and the other
+      //             + employee receivables + bank accounts in debit. Unfinalized orders and the other
       //             operational amounts are under `notInLedger`, not here.
       const totalSupplierOverpaymentsRounded = round2(totalSupplierOverpayments);
       const forUsTotal = round2(
@@ -479,12 +489,19 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           totalCustomerDr +
           totalSupplierOverpaymentsRounded +
           prepaidRent +
-          employeeReceivablesTotal
+          employeeReceivablesTotal +
+          totalBankAssets
       );
 
-      // onUsTotal: ledger liabilities + supplier balances + customer credit balances (CR) + employee salaries + rent payable
+      // onUsTotal: ledger liabilities + supplier balances + customer credit balances (CR) + employee salaries
+      //            + rent payable + overdrawn bank accounts
       const onUsTotal = round2(
-        ledgerOnUsTotal + totalSupplierLiabilities + totalCustomerCr + employeeSalariesPayable + rentPayable
+        ledgerOnUsTotal +
+          totalSupplierLiabilities +
+          totalCustomerCr +
+          employeeSalariesPayable +
+          rentPayable +
+          totalBankOverdrafts
       );
       const netPosition = round2(forUsTotal - onUsTotal);
 
@@ -521,6 +538,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         ...(selectedBalanceOnTableValue > 0 ? [factoryBalanceOnTableEntry] : []),
         ...(stockOtwValue > 0 ? [factoryStockOtwEntry] : []),
         ...cleanLedgerForUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
+        ...bankForUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         ...customerDrItems.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         // Overpaid suppliers: they owe us the excess back — show as an asset
         ...supplierForUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
@@ -533,7 +551,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // Group ledger on-us by category
       const ledgerOnUsGrouped: Record<string, number> = {};
-      for (const a of ledgerOnUs) {
+      for (const a of [...ledgerOnUs, ...bankOnUs]) {
         ledgerOnUsGrouped[a.category] = (ledgerOnUsGrouped[a.category] || 0) + a.value;
       }
 
@@ -546,6 +564,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       }[] = [
         ...supplierOnUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         ...ledgerOnUs.sort((a, b) => b.value - a.value).map((a) => ({ ...a, value: round2(a.value) })),
+        ...bankOnUs.map(({ partyKind: _kind, partyId: _id, ...line }) => line),
         {
           name: "Payroll Payable",
           code: "EMPLOYEE_PAYROLL_PAYABLE",
@@ -604,6 +623,8 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         verifiedTotal,
         loadingTotal,
         ledgerLiabilities: round2(ledgerOnUsTotal),
+        bankAssets: totalBankAssets,
+        bankOverdrafts: totalBankOverdrafts,
         payrollPayable: employeeSalariesPayable,
         notInLedger,
       });

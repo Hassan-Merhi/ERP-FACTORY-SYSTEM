@@ -5,7 +5,7 @@
     "GET /api/stats/net-profit": {
       "status": 200,
       "shape": "{currency,currencyRevaluation,equity,expenses,expensesTotal,forUs,forUsTotal,income,incomeTotal,netPosition,netPositionBreakdown,netPositionLabel,netProfit,netWorth,notInLedger,onUs,onUsTotal,ownersCapital,spPosProfit,totalExpenses,totalIncome}",
-      "hash": "2c6fe9075cfa8c0bc7cd09a7c84ff60174f5040eb38aa02aa0e1d4d4f9620cd3"
+      "hash": "f8f6baf6da5f94f513ba6935c0a96de070ec9315d4fb69dc31b352f358ae23ec"
     },
     "GET /api/reports/net-profit-excel": {
       "status": 200,
@@ -14,8 +14,8 @@
     },
     "GET /api/factory/net-position": {
       "status": 200,
-      "shape": "{asOf,balanceOnTableValue,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,notInLedger,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
-      "hash": "f2cec204f2f1931ac493bcdfb051fef1b5cf1c9fe6157492c8de7dfce15f537e"
+      "shape": "{asOf,balanceOnTableValue,bankAssets,bankOverdrafts,forUs,forUsTotal,inventoryValue,ledgerAssets,ledgerLiabilities,loadingOrders,loadingTotal,netPosition,netPositionLabel,notInLedger,onUs,onUsTotal,payrollPayable,pendingOrders,pendingTotal,rawMaterialValue,supplierLiabilities,supplierOverpayments,valuationMode,verifiedOrders,verifiedTotal}",
+      "hash": "7591f4aa54582c35d1b611c58ffd8aff8f63322181ef9da64cb9bac893ab0b38"
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,

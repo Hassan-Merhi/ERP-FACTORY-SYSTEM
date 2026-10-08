@@ -36,6 +36,16 @@ export interface AdjustInventoryResult {
   newTotalValue: number;
   averageRate: number;
   created: boolean;
+  /**
+   * Wave 11: the signed change of the row's stored `total_value`, as written
+   * (2dp text, e.g. "-12.34"): new stored value minus previous stored value.
+   * This is the sub-ledger value the movement moved, and what
+   * postInventoryMovementJournalTx posts to the INVENTORY account. Added to
+   * the result only; the costing behaviour is unchanged. On the rare
+   * concurrent-insert path (ON CONFLICT DO UPDATE) it reports the value this
+   * call computed, like the other fields.
+   */
+  valueDelta: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -298,6 +308,7 @@ export async function adjustInventory(
       newTotalValue: newTotalValue.toNumber(),
       averageRate: newRate.toNumber(),
       created: false,
+      valueDelta: new Decimal(newTotalValue.toFixed(VALUE_DP)).minus(prevTotalValue).toFixed(VALUE_DP),
     };
   } else {
     // ── No existing row: INSERT ───────────────────────────────────────────────
@@ -358,6 +369,7 @@ export async function adjustInventory(
       newTotalValue: totalValue.toNumber(),
       averageRate: safeRate.toNumber(),
       created: true,
+      valueDelta: totalValueText,
     };
   }
 }

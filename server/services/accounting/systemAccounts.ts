@@ -112,12 +112,54 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     required: false,
     purpose: "Difference between the raw-material cost consumed and the recorded cost of the bales produced.",
   },
+  // Wave 11: the factory variance split by source. PRODUCTION_VARIANCE stays
+  // for the remainder no source explains.
+  {
+    code: "FACTORY_WASTE_WRITE_OFF",
+    name: "Factory Waste and Write-off",
+    accountType: "Direct Expense",
+    required: false,
+    purpose: "Factory stock written off: waste, damaged or removed bales and raw material (perpetual inventory).",
+  },
+  {
+    code: "FACTORY_REVALUATION",
+    name: "Factory Stock Revaluation",
+    accountType: "Direct Expense",
+    required: false,
+    purpose: "Re-costing of factory stock on hand: reviewed bale and mix re-costs (perpetual inventory).",
+  },
+  {
+    code: "FACTORY_MATERIAL_PRICE_VARIANCE",
+    name: "Factory Material Price Variance",
+    accountType: "Direct Expense",
+    required: false,
+    purpose:
+      "Difference between the material price (and currency rate) used and the landed cost (perpetual inventory).",
+  },
   {
     code: "STOCK_ADJUSTMENT",
     name: "Stock Adjustment (Production/Consumption)",
     accountType: "Indirect Expense",
     required: false,
     purpose: "Profit-and-loss side of stock production and consumption.",
+  },
+  // Wave 11: stock movements outside the document flows, posted by
+  // postInventoryMovementJournalTx under perpetual inventory.
+  {
+    code: "INVENTORY_ADJUSTMENT",
+    name: "Inventory Adjustment Gain/Loss",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose:
+      "Profit-and-loss side of stock count gains and losses, quick adjustments, silent movements and archives (perpetual inventory). A credit balance is a gain.",
+  },
+  {
+    code: "INVENTORY_REVALUATION",
+    name: "Inventory Revaluation",
+    accountType: "Indirect Expense",
+    required: false,
+    purpose:
+      "Profit-and-loss side of cost corrections and re-pricing of stock on hand (perpetual inventory). A credit balance is a gain.",
   },
   {
     code: "FACTORY_BALE_SALES_INCOME",

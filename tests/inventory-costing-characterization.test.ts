@@ -284,7 +284,8 @@ describe("adjustInventory costing — characterization", () => {
   });
 
   it("a rate carrying more precision than the column keeps", async () => {
-    // average_rate stores 2dp and provisional_rate 4dp. These rates round at
+    // adjustInventory writes average_rate at 2dp (the column keeps 7dp since
+    // wave 11) and provisional_rate at 4dp. These rates round at
     // both boundaries, including a .005 case that depends on rounding mode.
     expect(
       await runScenario(itemFor(8), [
@@ -311,7 +312,8 @@ describe("adjustInventory costing — characterization", () => {
 
     expect(records[0].stored).toEqual({
       quantity: "1.000",
-      averageRate: "1.01",
+      // The column keeps 7dp since wave 11; the engine still writes 2dp.
+      averageRate: "1.0100000",
       totalValue: "1.01",
     });
   });

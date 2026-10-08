@@ -117,6 +117,7 @@ export async function calculateNetPositionAsOf(
       factorySuppliers: false,
       employees: "erp",
       codes: "erp",
+      banks: true,
     }),
   ]);
 
@@ -179,7 +180,7 @@ export async function calculateNetPositionAsOf(
     side: "onUs",
   }));
 
-  // ── Customers, suppliers and employees (balance engine) ──────────────
+  // ── Customers, suppliers, employees and bank accounts (balance engine) ──
   for (const line of parties.forUs) {
     const label = line.partyKind === "supplier" ? `Supplier Credit: ${line.name}` : line.name;
     const category = line.partyKind === "supplier" ? "Supplier Credits" : line.category;

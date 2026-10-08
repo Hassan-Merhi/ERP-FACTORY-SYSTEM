@@ -277,4 +277,22 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "مبلغ حاوية غير مُرحَّل بعد، بعملة بلا سعر صرف مؤكد",
     fr: "Montant de conteneur pas encore au grand livre, dans une devise sans taux confirmé",
   },
+  // Wave 11: admin stock tools refuse after the perpetual-inventory cut-over
+  // (server/services/accounting/perpetualInventory/cutoverRefusal.ts).
+  {
+    en: "This stock tool is not available after the company's perpetual inventory cut-over: it would change stock values without a matching journal.",
+    ar: "أداة المخزون هذه غير متاحة بعد تحويل الشركة إلى الجرد المستمر: فهي ستغيّر قيم المخزون دون قيد مقابل.",
+    fr: "Cet outil de stock n’est plus disponible après le passage de la société à l’inventaire permanent : il modifierait la valeur du stock sans écriture correspondante.",
+  },
+  // Wave 11: inventory movement journal refusals (perpetualInventory/inventoryMovementJournal.ts).
+  {
+    en: "The inventory movement has an invalid company or source",
+    ar: "حركة المخزون تحتوي على شركة أو مصدر غير صالح",
+    fr: "Le mouvement de stock a une société ou une source invalide",
+  },
+  {
+    en: "The offset of an inventory movement must be a registry account other than Inventory",
+    ar: "يجب أن يكون الطرف المقابل لحركة المخزون حسابًا نظاميًا غير حساب المخزون",
+    fr: "La contrepartie d’un mouvement de stock doit être un compte système autre que Stock",
+  },
 ];

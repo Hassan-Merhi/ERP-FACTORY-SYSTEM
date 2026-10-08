@@ -173,7 +173,8 @@ export const inventory = pgTable(
       .notNull()
       .references(() => stockItems.id, { onDelete: "restrict" }),
     quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull().default("0"),
-    averageRate: decimal("average_rate", { precision: 20, scale: 2 }).notNull().default("0"),
+    // Display precision and cost memory (wave 11); stock value is totalValue.
+    averageRate: decimal("average_rate", { precision: 20, scale: 7 }).notNull().default("0"),
     totalValue: decimal("total_value", { precision: 20, scale: 2 }).notNull().default("0"),
     lastUpdated: timestamp("last_updated").notNull().defaultNow(),
   },

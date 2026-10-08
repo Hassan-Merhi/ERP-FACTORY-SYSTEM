@@ -57,6 +57,8 @@ export const stockTransferItems = pgTable("stock_transfer_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   rate: decimal("rate", { precision: 15, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  // Wave 11: the exact sub-ledger value the line moved; null on legacy lines.
+  valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -114,6 +116,8 @@ export const stockAdjustmentItems = pgTable("stock_adjustment_items", {
   quantity: decimal("quantity", { precision: 15, scale: 3 }).notNull(),
   rate: decimal("rate", { precision: 15, scale: 2 }).notNull(),
   totalAmount: decimal("total_amount", { precision: 15, scale: 2 }).notNull(),
+  // Wave 11: the exact sub-ledger value the line moved; null on legacy lines.
+  valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -233,6 +237,8 @@ export const salesItems = pgTable(
     totalCost: decimal("total_cost", { precision: 15, scale: 2 }).notNull(),
     profit: decimal("profit", { precision: 15, scale: 2 }).notNull(),
     configuredPrice: decimal("configured_price", { precision: 15, scale: 6 }),
+    // Wave 11: the exact sub-ledger value the line moved; null on legacy lines.
+    valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => ({
