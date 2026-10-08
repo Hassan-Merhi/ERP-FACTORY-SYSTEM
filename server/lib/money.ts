@@ -21,12 +21,28 @@ export const MONEY_DECIMAL_PLACES = 2;
  */
 export const MoneyDecimal = Decimal.clone({ precision: 40, rounding: Decimal.ROUND_HALF_UP });
 
-/** A finite Decimal for any money input; empty, invalid or non-finite input is zero. */
+/**
+ * The Decimal for a value, with its exponent bounded the way a float bounds it,
+ * or null for a value a float cannot hold. A Decimal alone has no such bound:
+ * "1e1000000000" and "1e-500000000" are both finite, and toFixed() on either
+ * writes out hundreds of millions of digits. A value that underflows a float
+ * (parseFloat reads it as 0) is exactly 0; one that overflows it is null.
+ */
+function boundedDecimal(decimal: Decimal): Decimal | null {
+  if (!decimal.isFinite()) return null;
+  const asFloat = decimal.toNumber();
+  if (!Number.isFinite(asFloat)) return null;
+  return asFloat === 0 ? new MoneyDecimal(0) : decimal;
+}
+
+/**
+ * A finite Decimal for any money input; empty, invalid, non-finite or
+ * out-of-range input is zero, and a value too small for a float is zero too.
+ */
 export function toMoney(value: MoneyInput): Decimal {
   if (value === null || value === undefined || value === "") return new MoneyDecimal(0);
   try {
-    const decimal = new MoneyDecimal(value);
-    return decimal.isFinite() ? decimal : new MoneyDecimal(0);
+    return boundedDecimal(new MoneyDecimal(value)) ?? new MoneyDecimal(0);
   } catch {
     return new MoneyDecimal(0);
   }
@@ -82,17 +98,14 @@ const LEADING_NUMBER = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
 /**
  * Request input as an exact Decimal, read the way parseFloat reads it (the
  * leading number, so "5kg" is 5), or null where parseFloat gives NaN or
- * Infinity. Lets a route keep accepting exactly the input it accepted before
- * while computing with the decimal value instead of a binary float.
- *
- * Overflow is refused because a Decimal has no such bound: "1e1000000000" is a
- * finite Decimal, and formatting it with toFixed would build a billion digits.
+ * Infinity, and exactly 0 where parseFloat gives 0. Lets a route keep accepting
+ * exactly the input it accepted before while computing with the decimal value
+ * instead of a binary float.
  */
 export function parseMoneyInput(value: unknown): Decimal | null {
   if (typeof value === "number") return Number.isFinite(value) ? new MoneyDecimal(value) : null;
   if (typeof value !== "string") return null;
   const match = LEADING_NUMBER.exec(value);
   if (!match) return null;
-  const text = match[0].trim();
-  return Number.isFinite(Number(text)) ? new MoneyDecimal(text) : null;
+  return boundedDecimal(new MoneyDecimal(match[0].trim()));
 }
