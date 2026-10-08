@@ -574,11 +574,15 @@ export default function StockEntryHistory({ onActiveDateChange }: StockEntryHist
         <DetailedHistoryTable
           isLoading={isLoading}
           allBales={allBales}
+          workers={workers}
           editingDateKey={editingDateKey}
           setEditingDateKey={setEditingDateKey}
           formatDisplayDate={formatDisplayDate}
           onUpdateDate={(baleId, stockEntryDate) =>
             updateDateMutation.mutate({ ids: [baleId], stockEntryDate })
+          }
+          onAssignWorker={(baleId, workerId) =>
+            bulkAssignMutation.mutate({ baleIds: [baleId], workerId })
           }
         />
       )}
