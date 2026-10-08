@@ -16,7 +16,7 @@ import {
   isSupplierVisibleToCompany,
 } from "../helpers/supplierBalanceHelpers";
 import { vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull, lt } from "drizzle-orm";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
@@ -127,7 +127,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     ];
     const prePeriodCase = (column: typeof voucherEntries.debitAmount | typeof voucherEntries.creditAmount) =>
       balStartDate
-        ? sql<string>`COALESCE(SUM(CASE WHEN ${balStartDate} > ${voucherDay} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`
+        ? sql<string>`COALESCE(SUM(CASE WHEN ${lt(voucherDay, balStartDate)} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`
         : sql<string>`0`;
 
     const ledgerIds = ledgers.map((a) => a.id);
