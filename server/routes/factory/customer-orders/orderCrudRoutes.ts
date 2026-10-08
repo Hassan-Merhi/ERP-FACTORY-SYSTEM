@@ -787,7 +787,9 @@ export function registerOrderCrudRoutes(app: Express) {
       if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
       if (bookingInfo !== undefined) {
         if (typeof bookingInfo !== "string" || bookingInfo.length > 2000) {
-          return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
+          return res.status(400).json({
+            message: "Booking info must be text up to 2000 characters",
+          });
         }
         updateData.bookingInfo = bookingInfo;
       }
