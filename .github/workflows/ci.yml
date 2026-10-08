@@ -368,7 +368,9 @@ jobs:
     needs: changes
     if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 50
+    # The suite with coverage already took ~48 of 50 minutes on main (2026-10-08);
+    # each new DB-backed test file adds its setup time, so leave headroom.
+    timeout-minutes: 65
     services:
       postgres:
         image: postgres:18
