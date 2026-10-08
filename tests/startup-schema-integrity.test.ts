@@ -160,9 +160,13 @@ import { startupMigrations } from "../server/startup-schema";
  * CREATE plus its ADD COLUMN) and factory_shipping_availability.details
  * (fe59923), taking the count from 1413 to 1415. Both ADD COLUMN statements sit
  * beside their table's other ADD COLUMNs; nothing else moved.
+ *
+ * Re-pinned when 004-post-deploy-tables gained customer_orders.booking_info
+ * (#2109), taking the count from 1415 to 1416. The ADD COLUMN sits beside the
+ * table's other ADD COLUMNs; nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1415;
-const EXPECTED_CONTENT_HASH = "aceeb76db89f985c506573989f8e26304c5b51c38376c5212b6d9144b2c63b4c";
+const EXPECTED_STATEMENT_COUNT = 1416;
+const EXPECTED_CONTENT_HASH = "775c3016a10f034df0d087daf46fa48f381462718632c9f1628c41c60204892b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

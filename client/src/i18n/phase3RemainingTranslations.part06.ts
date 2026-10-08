@@ -1,6 +1,17 @@
 import type { Phase3SharedUiEntry } from "./sharedUiPhase3TranslationTypes";
 
 export const phase3RemainingTranslationsPart06: readonly Phase3SharedUiEntry[] = [
+  { en: "Booking Info", ar: "معلومات الحجز", fr: "Informations de réservation" },
+  {
+    en: "Quotation price or booking details...",
+    ar: "سعر عرض السعر أو تفاصيل الحجز...",
+    fr: "Prix du devis ou détails de réservation...",
+  },
+  {
+    en: "Booking info must be text up to 2000 characters",
+    ar: "يجب أن تكون معلومات الحجز نصاً لا يتجاوز 2000 حرف",
+    fr: "Les informations de réservation doivent être un texte de 2 000 caractères maximum",
+  },
   {
     en: "Configure the payroll period and settings, then preview before generating.",
     ar: "نؤمن بفترة كشوف المرتبات والإطارات، ثم استعراض مسبق قبل التوليد.",
