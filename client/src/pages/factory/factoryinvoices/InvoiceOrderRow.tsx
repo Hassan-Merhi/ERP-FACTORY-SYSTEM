@@ -136,7 +136,11 @@ export function InvoiceOrderRow({
         {order.containerNumber || <span className="text-muted-foreground/50">—</span>}
       </TableCell>
       {showBookingInfo && (
-        <TableCell className="text-sm max-w-[180px] truncate" title={order.bookingInfo ?? undefined} data-testid={`text-booking-info-${order.id}`}>
+        <TableCell
+          className="text-sm max-w-[180px] truncate"
+          title={order.bookingInfo ?? undefined}
+          data-testid={`text-booking-info-${order.id}`}
+        >
           {order.bookingInfo || <span className="text-muted-foreground/50">—</span>}
         </TableCell>
       )}
