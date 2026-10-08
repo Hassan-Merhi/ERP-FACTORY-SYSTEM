@@ -16,6 +16,7 @@ import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
 import { factoryContainers, voucherEntries, factoryContainerOtherCharges, vouchers } from "@shared/schema";
 import { eq, and, inArray, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
 
 type OtherChargeInput = {
   description: string;
@@ -106,13 +107,13 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
         }
 
         const chargeCcy = rawCharge.currencyCode || container.currencyCode || "USD";
-        const chargeAmt = parseFloat(rawCharge.amount || "0");
-        if (!Number.isFinite(chargeAmt)) {
+        const chargeAmt = parseMoneyInput(rawCharge.amount || "0");
+        if (!chargeAmt) {
           return res.status(400).json({ message: `Invalid amount for ${description}` });
         }
 
         let fxRate: string | null = null;
-        if (chargeAmt > 0 && ledgerAccountId) {
+        if (chargeAmt.gt(0) && ledgerAccountId) {
           if (chargeCcy === "USD") {
             fxRate = "1";
           } else if (chargeCcy === (container.currencyCode || "USD")) {
@@ -141,9 +142,9 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
         });
       }
 
-      const total = preparedCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || "0"), 0);
+      const total = sumMoney(preparedCharges.map((charge) => charge.amount));
       const hasPostableCharge = preparedCharges.some(
-        (charge) => parseFloat(charge.amount || "0") > 0 && !!charge.ledgerAccountId
+        (charge) => toMoney(charge.amount).gt(0) && !!charge.ledgerAccountId
       );
       const payableAccId = hasPostableCharge
         ? await getOrCreateLedgerAccount(companyId, "FACTORY_CHARGES_PAYABLE", "Factory Charges Payable")
@@ -190,8 +191,8 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
         for (let index = 0; index < newCharges.length; index += 1) {
           const charge = newCharges[index];
           const prepared = preparedCharges[index];
-          const chargeAmt = parseFloat(charge.amount || "0");
-          if (chargeAmt <= 0 || !charge.ledgerAccountId || !prepared.fxRate || !payableAccId) continue;
+          const chargeAmt = toMoney(charge.amount);
+          if (chargeAmt.lte(0) || !charge.ledgerAccountId || !prepared.fxRate || !payableAccId) continue;
 
           const chargeCcy = charge.currencyCode || "USD";
           const ocVoucherNum = `FACTORY-OC-${containerId}-${charge.id}-${Date.now()}-${index}`;
@@ -203,7 +204,7 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
               voucherNumber: ocVoucherNum,
               voucherDate,
               description: `${charge.description} - container ${container.containerNumber}`,
-              totalAmount: String(chargeAmt),
+              totalAmount: chargeAmt.toFixed(),
               currency: chargeCcy,
               exchangeRate: prepared.fxRate,
               sourceModule: "FACTORY",
@@ -214,13 +215,13 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
             {
               voucherId: ocVoucher.id,
               ledgerAccountId: payableAccId,
-              ...normFactoryEntry(chargeCcy, String(chargeAmt), "0", prepared.fxRate),
+              ...normFactoryEntry(chargeCcy, chargeAmt.toFixed(), "0", prepared.fxRate),
               narration: `${charge.description} payable - container ${container.containerNumber}`,
             },
             {
               voucherId: ocVoucher.id,
               ledgerAccountId: charge.ledgerAccountId,
-              ...normFactoryEntry(chargeCcy, "0", String(chargeAmt), prepared.fxRate),
+              ...normFactoryEntry(chargeCcy, "0", chargeAmt.toFixed(), prepared.fxRate),
               narration: `${charge.description} - container ${container.containerNumber}`,
             },
           ]);

@@ -81,13 +81,18 @@ const LEADING_NUMBER = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
 
 /**
  * Request input as an exact Decimal, read the way parseFloat reads it (the
- * leading number, so "5kg" is 5), or null where parseFloat gives NaN. Lets a
- * route keep accepting exactly the input it accepted before while computing
- * with the decimal value instead of a binary float.
+ * leading number, so "5kg" is 5), or null where parseFloat gives NaN or
+ * Infinity. Lets a route keep accepting exactly the input it accepted before
+ * while computing with the decimal value instead of a binary float.
+ *
+ * Overflow is refused because a Decimal has no such bound: "1e1000000000" is a
+ * finite Decimal, and formatting it with toFixed would build a billion digits.
  */
 export function parseMoneyInput(value: unknown): Decimal | null {
   if (typeof value === "number") return Number.isFinite(value) ? new MoneyDecimal(value) : null;
   if (typeof value !== "string") return null;
   const match = LEADING_NUMBER.exec(value);
-  return match ? new MoneyDecimal(match[0].trim()) : null;
+  if (!match) return null;
+  const text = match[0].trim();
+  return Number.isFinite(Number(text)) ? new MoneyDecimal(text) : null;
 }

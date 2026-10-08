@@ -553,7 +553,7 @@ export const phase3RemainingTranslationsPart07: readonly Phase3SharedUiEntry[] =
   { en: "Draft not found", ar: "لم يعثر على مشروع", fr: "Projet non trouvé" },
   { en: "Draft order created", ar: "مشروع النظام المنشأ", fr: "Projet d'ordre créé" },
   {
-    en: 'Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${parseFloat(existing.netSalary || "0").toFixed(2)})',
+    en: "Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${toMoney(existing.netSalary).toFixed(2)})",
     ar: "مشروع كشوف المرتبات{{0}}حُذفت{{1}}الفترة{{2}}–{{3}}صافيه{{4}})",
     fr: "Ébauche de la paie #{{0}}supprimé (travailleur #{{1}}, période{{2}}–{{3}}Montant net{{4}})",
   },

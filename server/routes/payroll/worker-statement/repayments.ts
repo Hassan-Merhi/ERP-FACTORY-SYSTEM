@@ -15,6 +15,7 @@ import { eq, and } from "drizzle-orm";
 import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 export function registerWorkerRepaymentDeleteRoutes(app: Express) {
   app.delete("/api/factory/advance-repayments/:id", requireAuth, async (req: Request, res: Response) => {
@@ -39,9 +40,8 @@ export function registerWorkerRepaymentDeleteRoutes(app: Express) {
         .from(factoryWorkerAdvances)
         .where(eq(factoryWorkerAdvances.id, repayment.advanceId));
 
-      const repayAmt = parseFloat(repayment.amount || "0");
-      const currentBal = parseFloat(advance?.remainingBalance || "0");
-      const restoredBal = currentBal + repayAmt;
+      const repayAmt = toMoney(repayment.amount);
+      const restoredBal = toMoney(advance?.remainingBalance).plus(repayAmt);
 
       await db.transaction(async (tx) => {
         await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.id, repaymentId));
@@ -69,9 +69,9 @@ export function registerWorkerRepaymentDeleteRoutes(app: Express) {
         referenceId: repaymentId,
         referenceTable: "factory_advance_repayments",
         description: `Repayment deleted for ${worker?.fullName || "Worker"}: $${repayAmt.toFixed(2)} (advance #${repayment.advanceId})`,
-        amountCurrency: repayAmt,
+        amountCurrency: repayAmt.toNumber(),
         currencyCode: "USD",
-        amountUsd: repayAmt,
+        amountUsd: repayAmt.toNumber(),
         createdBy: req.session.userId ?? undefined,
       });
 
