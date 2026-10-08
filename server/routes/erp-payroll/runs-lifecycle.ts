@@ -10,7 +10,15 @@ import { eq, and, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { erpPayrollRunItems, erpPayrollRuns, factoryWorkerDeductions, salaryAdvanceDeductions, salaryAdvances, vouchers } from "@shared/schema";
+import {
+  erpPayrollRunItems,
+  erpPayrollRuns,
+  factoryWorkerDeductions,
+  salaryAdvanceDeductions,
+  salaryAdvances,
+  vouchers,
+} from "@shared/schema";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 
 export function registerPayrollRunLifecycleRoutes(app: Express) {
   // Delete a DRAFT payroll run
@@ -67,8 +75,8 @@ export function registerPayrollRunLifecycleRoutes(app: Express) {
         const payMonth = run.date.substring(0, 7);
 
         for (const item of runItems) {
-          const deductAmt = parseFloat(item.deduction || "0");
-          if (deductAmt <= 0 || !item.employeeId) continue;
+          const deductAmt = toMoney(item.deduction);
+          if (deductAmt.lte(0) || !item.employeeId) continue;
 
           // Find advance deductions recorded for this payroll month for this employee's advances
           const empAdvances = await tx
@@ -89,12 +97,12 @@ export function registerPayrollRunLifecycleRoutes(app: Express) {
             );
 
           for (const ded of deductions) {
-            const dedAmt = parseFloat(ded.deductionAmount || "0");
+            const dedAmt = toMoney(ded.deductionAmount);
             const [adv] = await tx.select().from(salaryAdvances).where(eq(salaryAdvances.id, ded.salaryAdvanceId));
             if (!adv) continue;
-            const restoredBal = parseFloat(adv.remainingBalance || "0") + dedAmt;
-            const originalAmt = parseFloat(adv.amount || "0");
-            const newBal = Math.min(restoredBal, originalAmt);
+            // Exact: the reversal puts back the cents the deduction took, capped at the advance.
+            const restoredBal = toMoney(adv.remainingBalance).plus(dedAmt);
+            const newBal = MoneyDecimal.min(restoredBal, toMoney(adv.amount));
             await tx
               .update(salaryAdvances)
               .set({ remainingBalance: newBal.toFixed(2), fullyPaid: false })
@@ -108,10 +116,7 @@ export function registerPayrollRunLifecycleRoutes(app: Express) {
           .update(factoryWorkerDeductions)
           .set({ applied: false, erpPayrollRunId: null })
           .where(
-            and(
-              eq(factoryWorkerDeductions.companyId, companyId),
-              eq(factoryWorkerDeductions.erpPayrollRunId, runId)
-            )
+            and(eq(factoryWorkerDeductions.companyId, companyId), eq(factoryWorkerDeductions.erpPayrollRunId, runId))
           );
 
         // 4. Reset run to DRAFT
