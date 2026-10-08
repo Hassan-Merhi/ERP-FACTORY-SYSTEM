@@ -4,6 +4,7 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import type Decimal from "decimal.js";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
@@ -20,6 +21,7 @@ import {
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, inArray } from "drizzle-orm";
 import { registerFactoryDaybookRoutes } from "../factoryDaybookRoutes";
+import { sumMoney, toMoney } from "../../../lib/money";
 
 export function registerFactoryCustomerCrudRoutes(app: Express) {
   registerFactoryDaybookRoutes(app);
@@ -87,7 +89,7 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
       const ledgerAccountIds = allCustomers.filter((c) => c.ledgerAccountId).map((c) => c.ledgerAccountId!);
 
       // net = debit - credit in Dr-positive convention (customer is an asset / receivable)
-      const voucherNetByLedger = new Map<number, number>();
+      const voucherNetByLedger = new Map<number, Decimal>();
       if (ledgerAccountIds.length > 0) {
         const voucherNetRows = await db
           .select({
@@ -110,13 +112,13 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
 
         for (const row of voucherNetRows) {
           if (row.ledgerAccountId) {
-            voucherNetByLedger.set(row.ledgerAccountId, parseFloat(row.net || "0"));
+            voucherNetByLedger.set(row.ledgerAccountId, toMoney(row.net));
           }
         }
       }
 
       // Net from entries linked directly via customerId (receipts posted without going through ledger)
-      const voucherNetByCustomerId = new Map<number, number>();
+      const voucherNetByCustomerId = new Map<number, Decimal>();
       if (customerIds.length > 0) {
         const directRows = await db
           .select({
@@ -139,24 +141,30 @@ export function registerFactoryCustomerCrudRoutes(app: Express) {
 
         for (const row of directRows) {
           if (row.customerId) {
-            voucherNetByCustomerId.set(row.customerId, parseFloat(row.net || "0"));
+            voucherNetByCustomerId.set(row.customerId, toMoney(row.net));
           }
         }
       }
 
-      const cbNetMap = new Map(cbNetRows.map((r) => [r.customerId, parseFloat(r.net || "0")]));
-      const invCorrMap = new Map(invCorrRows.map((r) => [r.customerId, parseFloat(r.correction || "0")]));
+      const cbNetMap = new Map(cbNetRows.map((r) => [r.customerId, toMoney(r.net)]));
+      const invCorrMap = new Map(invCorrRows.map((r) => [r.customerId, toMoney(r.correction)]));
 
       const customersWithBalances = allCustomers.map((customer) => {
-        const cbNet = cbNetMap.get(customer.id) ?? 0;
-        const invCorr = invCorrMap.get(customer.id) ?? 0;
-        const voucherNet =
-          (customer.ledgerAccountId ? (voucherNetByLedger.get(customer.ledgerAccountId) ?? 0) : 0) +
-          (voucherNetByCustomerId.get(customer.id) ?? 0);
-        const openingBalance = parseFloat(customer.openingBalance || "0");
+        // Exact: four float components summed to residue such as 0.30000000000000004.
+        const openingBalance = toMoney(customer.openingBalance);
         const openingSide = customer.openingBalanceSide || "Dr";
-        const totalBalance = (openingSide === "Dr" ? openingBalance : -openingBalance) + cbNet + invCorr + voucherNet;
-        return { ...customer, balance: Math.abs(totalBalance), balanceSide: totalBalance >= 0 ? "Dr" : "Cr" };
+        const totalBalance = sumMoney([
+          openingSide === "Dr" ? openingBalance : openingBalance.negated(),
+          cbNetMap.get(customer.id),
+          invCorrMap.get(customer.id),
+          customer.ledgerAccountId ? voucherNetByLedger.get(customer.ledgerAccountId) : undefined,
+          voucherNetByCustomerId.get(customer.id),
+        ]);
+        return {
+          ...customer,
+          balance: totalBalance.abs().toNumber(),
+          balanceSide: totalBalance.gte(0) ? "Dr" : "Cr",
+        };
       });
 
       res.json(customersWithBalances);
