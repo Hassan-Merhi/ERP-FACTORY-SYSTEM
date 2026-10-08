@@ -44,6 +44,10 @@ describe("parseMoneyInput", () => {
     expect(parseMoneyInput(input)).toBeNull();
   });
 
+  it("formats an underflowing exponent without writing out its zeros", () => {
+    expect(parseMoneyInput("1e-500000000")!.toFixed()).toBe("0");
+  });
+
   it("keeps the exact decimal a float cannot hold", () => {
     expect(parseMoneyInput("100.5")!.times("0.35").toFixed(2)).toBe("35.18");
   });
