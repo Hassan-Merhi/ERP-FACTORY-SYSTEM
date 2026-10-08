@@ -4,8 +4,6 @@ const harness = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => unknown>(),
   selectResults: [] as unknown[][],
   dbSelect: vi.fn(),
-  computeMonthlyPay: vi.fn(),
-  computeMonthlyPayFromAttendance: vi.fn(),
   getFactoryCompanyId: vi.fn(),
 }));
 
@@ -31,8 +29,6 @@ vi.mock("../server/db", () => ({
   },
 }));
 vi.mock("../server/routes/payroll/core/_helpers", () => ({
-  computeMonthlyPay: harness.computeMonthlyPay,
-  computeMonthlyPayFromAttendance: harness.computeMonthlyPayFromAttendance,
   getFactoryCompanyId: harness.getFactoryCompanyId,
 }));
 vi.mock("drizzle-orm", () => ({
@@ -74,8 +70,6 @@ describe("factory payroll preview route behavior", () => {
     harness.selectResults.splice(0);
     harness.dbSelect.mockImplementation(() => makeSelectBuilder(harness.selectResults.shift() ?? []));
     harness.getFactoryCompanyId.mockReturnValue(4);
-    harness.computeMonthlyPay.mockReturnValue(500);
-    harness.computeMonthlyPayFromAttendance.mockReturnValue(600);
 
     registerPayrollPreviewRoutes({
       post: (path: string, ...callbacks: Array<(...args: any[]) => unknown>) => {
@@ -176,26 +170,23 @@ describe("factory payroll preview route behavior", () => {
 
     await harness.handlers.get("/api/factory/payrolls/preview")!(req, res);
 
-    expect(harness.computeMonthlyPayFromAttendance).toHaveBeenCalledWith(
-      1000,
-      "2026-04-01",
-      expect.arrayContaining([expect.objectContaining({ status: "Present" })])
-    );
     expect(res.json).toHaveBeenCalledOnce();
     const [rows] = res.json.mock.calls[0];
 
     expect(rows[0]).toMatchObject({
       id: 1,
       employeeCode: "FAC-001",
-      base: 600,
+      // 1.5 attended days of 30 at 1000/month; transport 90 × 1.5 / 30.
+      base: 50,
       bonus: 50,
       transport: 4.5,
       transportMonthly: 90,
-      advanceDeduction: 200,
+      // The salary advance takes the whole gross, as generate-bulk does.
+      advanceDeduction: 104.5,
       totalAdvanceBalance: 200,
       pendingDeductions: 30,
       totalLoanBalance: 300,
-      net: 424.5,
+      net: -30,
       totalWorkingDays: 30,
       presentDays: 1.5,
       absentDays: 1.5,
@@ -228,7 +219,6 @@ describe("factory payroll preview route behavior", () => {
       [],
       []
     );
-    harness.computeMonthlyPay.mockReturnValue(450);
 
     const req = {
       body: {
@@ -243,18 +233,71 @@ describe("factory payroll preview route behavior", () => {
     await harness.handlers.get("/api/factory/payrolls/preview")!(req, res);
 
     expect(harness.getFactoryCompanyId).toHaveBeenCalledWith(req);
-    expect(harness.computeMonthlyPay).toHaveBeenCalledWith(900, "2026-05-01", "2026-05-15");
     expect(res.json).toHaveBeenCalledWith([
       expect.objectContaining({
         id: 9,
-        base: 450,
+        // 900 × 15 / 31 = 435.483… taken at cents.
+        base: 435.48,
         transport: 120,
-        net: 570,
+        net: 555.48,
         presentDays: 0,
         absentDays: 0,
         totalWorkingDays: 31,
       }),
     ]);
+  });
+
+  it("shows the amounts generate-bulk stores: weekly rates, cents, and exact sums", async () => {
+    harness.selectResults.push(
+      [
+        {
+          id: 5,
+          fullName: "Weekly Rate Worker",
+          baseSalary: "3000",
+          weeklySalary: "700",
+          payFrequency: "Weekly",
+          salaryType: "Monthly",
+          transportAllowance: "0",
+        },
+        {
+          id: 6,
+          fullName: "One Day Worker",
+          baseSalary: "1000",
+          payFrequency: "Monthly",
+          salaryType: "Monthly",
+          transportAllowance: "50",
+        },
+      ],
+      [{ workerId: 6, attendanceDate: "2026-04-01", status: "Present" }],
+      [],
+      []
+    );
+
+    const req = { body: { companyId: 4, periodStart: "2026-04-01", periodEnd: "2026-04-14", daysCount: "14" } };
+    const res = { status: vi.fn(), json: vi.fn() };
+    res.status.mockReturnValue(res);
+
+    await harness.handlers.get("/api/factory/payrolls/preview")!(req, res);
+
+    const [rows] = res.json.mock.calls[0];
+    // Weekly pay comes from weeklySalary (700 × 14 / 7), not the monthly base salary.
+    expect(rows[0]).toMatchObject({ id: 5, base: 1400, net: 1400 });
+    // 1000 / 30 = 33.333… → 33.33 and 50 / 30 = 1.666… → 1.67; the net is their exact sum.
+    expect(rows[1]).toMatchObject({ id: 6, base: 33.33, transport: 1.67, net: 35 });
+  });
+
+  it("rejects a bonus that is not a number", async () => {
+    const res = { status: vi.fn(), json: vi.fn() };
+    res.status.mockReturnValue(res);
+
+    await harness.handlers.get("/api/factory/payrolls/preview")!(
+      { body: { companyId: 4, periodStart: "2026-04-01", periodEnd: "2026-04-14", bonusPerWorker: "abc" } },
+      res
+    );
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ message: "Invalid amount" });
+    expect(harness.dbSelect).not.toHaveBeenCalled();
   });
 
   it("rejects missing company or period before reading payroll data", async () => {

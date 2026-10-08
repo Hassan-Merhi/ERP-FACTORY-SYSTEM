@@ -201,7 +201,10 @@ export function registerCreditNoteRoutes(app: Express) {
           const inventoryCostVal = toInventoryDecimal(itemInventoryCost);
           const inventoryValue = multiplyInventoryValues(qty, inventoryCostVal);
 
-          const [location] = await tx.select().from(locations).where(eq(locations.id, locationId));
+          const [location] = await tx
+            .select()
+            .from(locations)
+            .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId)));
           if (!location) throw new Error(`Location ${locationId} not found`);
 
           if (noteType === "Credit Note") {
@@ -563,7 +566,10 @@ export function registerCreditNoteRoutes(app: Express) {
           const inventoryCostVal = toInventoryDecimal(itemInventoryCost);
           const inventoryValue = multiplyInventoryValues(qty, inventoryCostVal);
 
-          const [location] = await tx.select().from(locations).where(eq(locations.id, locationId));
+          const [location] = await tx
+            .select()
+            .from(locations)
+            .where(and(eq(locations.id, locationId), eq(locations.companyId, companyId)));
           if (!location) throw new Error(`Location ${locationId} not found`);
 
           await adjustInventory(

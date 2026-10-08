@@ -25,6 +25,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql, inArray } from "drizzle-orm";
 import { resultRows, firstRow } from "../../../../lib/queryResult";
+import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 export function registerOrderBaleBulkImportRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales/bulk-import", requireAuth, async (req: Request, res: Response) => {
@@ -41,6 +42,9 @@ export function registerOrderBaleBulkImportRoutes(app: Express) {
       const hasItems = Array.isArray(items) && items.length > 0;
       if (!locationId || (!hasItems && !hasRefNumbers)) {
         return res.status(400).json({ message: "locationId and either items or refNumbers are required" });
+      }
+      if (!(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
       }
       const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
 

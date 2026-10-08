@@ -21,32 +21,11 @@ import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
+import { resolveTransferLocations } from "./helpers/transferLocations";
+import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferItem } from "./stockTransferImportTypes";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
-
-type SpreadsheetCell = string | number | null | undefined;
-type SpreadsheetRow = Record<string, SpreadsheetCell>;
-
-interface ParsedStockTransferItem {
-  rowNum: number;
-  barcode: string;
-  quantity: number;
-  sourceLocation?: string;
-}
-
-interface ValidatedStockTransferItem extends ParsedStockTransferItem {
-  sourceLocationId?: number;
-  stockItemId?: number;
-  stockItemName?: string;
-  stockItemUom?: string;
-  currentStock?: number;
-  remainingStock?: number;
-  averageRate?: string | null;
-  rate?: string | null;
-  error?: string;
-  warning?: string;
-}
 
 export function registerStockTransferImportRoutes(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
@@ -131,9 +110,13 @@ export function registerStockTransferImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedStockTransferItem[] = [];
 
-      // Validate locations exist
-      const sourceLocation = await storage.getLocationById(sourceLocationId);
-      const destLocation = await storage.getLocationById(destinationLocationId);
+      // Validate locations exist in this company (body ids are outside the path-based scope).
+      const { sourceLocation, destLocation, foreignItemSource } = await resolveTransferLocations(
+        req.session.currentCompanyId,
+        sourceLocationId,
+        destinationLocationId,
+        items
+      );
 
       if (!sourceLocation) {
         errors.push("Source location not found");
@@ -142,6 +125,11 @@ export function registerStockTransferImportRoutes(app: Express) {
 
       if (!destLocation) {
         errors.push("Destination location not found");
+        return res.json({ errors, warnings, validatedItems });
+      }
+
+      if (foreignItemSource) {
+        errors.push("Source location not found");
         return res.json({ errors, warnings, validatedItems });
       }
 
@@ -223,9 +211,16 @@ export function registerStockTransferImportRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
-      // Validate locations
-      const sourceLocation = await storage.getLocationById(sourceLocationId);
-      const destLocation = await storage.getLocationById(destinationLocationId);
+      // Validate locations in this company (body ids are outside the path-based scope).
+      const { sourceLocation, destLocation, foreignItemSource } = await resolveTransferLocations(
+        req.session.currentCompanyId,
+        sourceLocationId,
+        destinationLocationId,
+        items
+      );
+      if (foreignItemSource) {
+        return res.status(400).json({ message: "Source location not found" });
+      }
 
       if (!sourceLocation) {
         return res.status(400).json({ message: "Source location not found" });
@@ -550,9 +545,9 @@ export function registerStockTransferImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedStockTransferItem[] = [];
 
-      // Validate destination location exists
+      // Validate destination location exists in this company
       const destLocation = await storage.getLocationById(destinationLocationId);
-      if (!destLocation) {
+      if (!destLocation || destLocation.companyId !== req.session.currentCompanyId) {
         errors.push("Destination location not found");
         return res.json({ errors, warnings, validatedItems });
       }

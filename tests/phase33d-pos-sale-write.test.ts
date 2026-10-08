@@ -94,6 +94,12 @@ vi.mock("../server/services/accounting/financialOperationRequest", () => ({
   financialOperationRequestPayload: harness.financialOperationRequestPayload,
   resolveFinancialOperationKey: harness.resolveFinancialOperationKey,
 }));
+// Body-id ownership has database-backed coverage in tests/ledger-account-body-scope.test.ts;
+// here the company owns every location and account the sale names.
+vi.mock("../server/routes/helpers/companyOwnership", () => ({
+  allLedgerAccountsOwned: async () => true,
+  isFactorySessionLocation: async () => true,
+}));
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: () => "2026-09-17" }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));

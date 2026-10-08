@@ -26,14 +26,13 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import {
-  computeMonthlyPay,
-  computeMonthlyPayFromAttendance,
   findOrCreateLedger,
   getFactoryCompanyId,
   normUsd,
   settleAdvancesForPayroll,
   writeDaybookEntry,
 } from "./_helpers";
+import { computeWorkerPayAmounts } from "./workerPayAmounts";
 
 export function registerPayrollGenerateRoutes(app: Express) {
   // POST /api/factory/payrolls/generate-bulk - Generate draft payrolls for multiple workers
@@ -82,11 +81,6 @@ export function registerPayrollGenerateRoutes(app: Express) {
           .from(factoryWorkers)
           .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)));
       }
-
-      const daysInMonth = (d: string) => {
-        const dt = new Date(d);
-        return new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
-      };
 
       // Fetch all attendance records for the period (for monthly attendance-based calculation)
       const workerIdList = targetWorkers.map((w) => w.id);
@@ -175,63 +169,24 @@ export function registerPayrollGenerateRoutes(app: Express) {
         // Track the exact persisted two-decimal worker values used by accounting.
         const workerExpenses: { workerId: number; workerName: string; salAmt: string; bonAmt: string }[] = [];
         for (const worker of targetWorkers) {
-          const baseSalary = toMoney(worker.baseSalary);
-          const baseSal = baseSalary.toNumber();
-          const freq = worker.payFrequency || worker.salaryType || "Monthly";
-          let exactBase: Decimal;
-          if (freq === "Weekly")
-            exactBase = toMoney(worker.weeklySalary || baseSalary)
-              .times(days)
-              .div(7);
-          else if (freq === "Bi-Weekly")
-            exactBase = toMoney(worker.biWeeklySalary || baseSalary)
-              .times(days)
-              .div(14);
-          else if (freq === "Daily" || worker.salaryType === "Daily") exactBase = baseSalary.times(days);
-          else {
-            // Monthly: use attendance-based calculation if records exist
-            const workerAttRecords = attendanceByWorker.get(worker.id) || [];
-            if (workerAttRecords.length === 0) {
-              exactBase = toMoney(computeMonthlyPay(baseSal, periodStart, periodEnd));
-            } else {
-              exactBase = toMoney(computeMonthlyPayFromAttendance(baseSal, periodStart, workerAttRecords));
-            }
-          }
-          const base = exactBase.toDecimalPlaces(2);
-          // Transport allowance — prorated by: (presentDays / daysInMonth) * monthlyRate
-          // Using the full month days (not period days) as denominator so two
-          // half-month runs add up to exactly the monthly allowance.
-          const workerAttRecs2 = attendanceByWorker.get(worker.id) || [];
-          let presentDays2 = 0;
-          for (const att of workerAttRecs2) {
-            if (att.status === "Present" || att.status === "Late" || att.status === "Leave") presentDays2 += 1;
-            else if (att.status === "Half Day") presentDays2 += 0.5;
-          }
-
-          const monthDaysForTransport = daysInMonth(periodStart);
-          const transportMonthly2 = overrideFor(transportOverrides, worker.id) ?? toMoney(worker.transportAllowance);
-          let exactTransport: Decimal = new MoneyDecimal(0);
-          if (transportMonthly2.gt(0)) {
-            if (workerAttRecs2.length > 0 && monthDaysForTransport > 0) {
-              exactTransport = transportMonthly2.times(presentDays2).div(monthDaysForTransport);
-            } else {
-              exactTransport = transportMonthly2;
-            }
-          }
-          const transport = exactTransport.toDecimalPlaces(2);
-
-          const workerAdvanceBalance = advanceByWorker[worker.id] ?? new MoneyDecimal(0);
-          const gross = base.plus(bonus).plus(transport);
-          // Use user-approved override if provided, otherwise auto-deduct full balance
-          const overrideAmt = overrideFor(advanceOverrides, worker.id);
-          const advanceDeduction = (
-            overrideAmt
-              ? MoneyDecimal.min(overrideAmt, gross, workerAdvanceBalance)
-              : MoneyDecimal.min(workerAdvanceBalance, gross)
-          ).toDecimalPlaces(2);
-          // Include pending worker deductions
-          const workerPendingDeductions = (deductionAmtByWorker[worker.id] ?? new MoneyDecimal(0)).toDecimalPlaces(2);
-          const net = gross.minus(advanceDeduction).minus(workerPendingDeductions);
+          const {
+            base,
+            transport,
+            advanceDeduction,
+            pendingDeductions: workerPendingDeductions,
+            net,
+          } = computeWorkerPayAmounts({
+            worker,
+            days,
+            periodStart,
+            periodEnd,
+            attendance: attendanceByWorker.get(worker.id) || [],
+            bonus,
+            transportOverride: overrideFor(transportOverrides, worker.id),
+            advanceBalance: advanceByWorker[worker.id] ?? new MoneyDecimal(0),
+            advanceOverride: overrideFor(advanceOverrides, worker.id),
+            pendingDeductions: deductionAmtByWorker[worker.id] ?? new MoneyDecimal(0),
+          });
           const accounting = allocatePayrollAccountingAmounts({
             netSalary: net.toFixed(2),
             advances: advanceDeduction.toFixed(2),

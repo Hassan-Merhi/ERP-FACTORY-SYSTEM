@@ -138,7 +138,7 @@ export function registerPosImportRoutes(app: Express) {
       const warnings: string[] = [];
       const validatedItems: ValidatedPosImportItem[] = [];
       const location = await storage.getLocationById(locationId);
-      if (!location) {
+      if (!location || location.companyId !== req.session.currentCompanyId) {
         errors.push("Selected location not found");
         return res.json({ errors, warnings, validatedItems });
       }
@@ -207,7 +207,9 @@ export function registerPosImportRoutes(app: Express) {
       }
 
       const location = await storage.getLocationById(locationId);
-      if (!location) return res.status(400).json({ message: "Location not found" });
+      if (!location || location.companyId !== req.session.currentCompanyId) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       const cashAccount = await storage.getLedgerAccountById(cashAccountId);
       if (!cashAccount || cashAccount.companyId !== req.session.currentCompanyId) {

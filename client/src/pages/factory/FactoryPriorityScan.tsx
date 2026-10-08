@@ -11,11 +11,15 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import { useCompany } from "@/contexts/CompanyContext";
 import { translatePriorityScanText, type PriorityScanTranslationKey } from "@/i18n/priorityScanTranslations";
+import {
+  PRIORITY_SCAN_HISTORY_URL,
+  fetchPriorityScanHistory,
+  type PriorityScanHistoryResponse,
+} from "./priorityScanHistory";
 
 const PRIORITY_SCAN_CONFIGS_URL = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PENDING_LOADS_URL = "/api/factory/customer-orders?status=LOADING&profile=summary&pageSize=250";
 const PRIORITY_SCAN_ROUTE_URL = "/api/factory/customer-orders/loading-list/priority-scan-route";
-const PRIORITY_SCAN_HISTORY_URL = `${PRIORITY_SCAN_ROUTE_URL}?view=today-history`;
 const PRIORITY_SCAN_FLASH_MS = 2_000;
 
 interface PriorityScanConfig {
@@ -72,24 +76,6 @@ interface PriorityScanAllocation extends PriorityRouteResolution {
   advance: PriorityScanAdvanceResult | null;
 }
 
-interface SessionScan {
-  id: number;
-  referenceNumber: string;
-  productName: string | null;
-  articleCode: string | null;
-  orderId: number;
-  priority: number;
-  color: string;
-  scannedBy: string | null;
-  scannedAt: string;
-}
-
-interface PriorityScanHistoryResponse {
-  businessDate: string;
-  serverNow: string;
-  scans: SessionScan[];
-}
-
 interface ScanFeedback {
   type: "success" | "error" | "warn";
   referenceNumber: string;
@@ -127,6 +113,7 @@ export default function FactoryPriorityScan() {
 
   const { data: priorityHistory } = useQuery<PriorityScanHistoryResponse>({
     queryKey: [PRIORITY_SCAN_HISTORY_URL, selectedCompany?.id ?? null],
+    queryFn: ({ queryKey }) => fetchPriorityScanHistory(queryClient, queryKey),
     refetchInterval: visibleTabInterval(1_000),
     refetchIntervalInBackground: false,
   });

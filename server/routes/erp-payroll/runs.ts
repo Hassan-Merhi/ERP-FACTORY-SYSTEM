@@ -24,6 +24,7 @@ import {
 } from "@shared/schema";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { allLedgerAccountsOwned } from "../helpers/companyOwnership";
 
 type PayrollItemInput = {
   employeeId: number;
@@ -172,6 +173,10 @@ export function registerPayrollRunRoutes(app: Express) {
         // Mark as PAID + create ledger entries
         if (run.status === "PAID") return res.status(400).json({ message: "Already paid" });
         if (!paymentAccountId) return res.status(400).json({ message: "Payment account required" });
+        // The account is a body id the path-based company scope never sees.
+        if (!(await allLedgerAccountsOwned(companyId, [paymentAccountId]))) {
+          return res.status(404).json({ message: "Payment account not found" });
+        }
 
         const runItems = await db.select().from(erpPayrollRunItems).where(eq(erpPayrollRunItems.runId, runId));
         const totalAmount = sumMoney(runItems.map((i) => i.netPay));
