@@ -85,8 +85,10 @@ const LEADING_NUMBER = /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/;
  * Infinity. Lets a route keep accepting exactly the input it accepted before
  * while computing with the decimal value instead of a binary float.
  *
- * Overflow is refused because a Decimal has no such bound: "1e1000000000" is a
- * finite Decimal, and formatting it with toFixed would build a billion digits.
+ * The exponent is bounded the way a float bounds it, because a Decimal is not:
+ * "1e1000000000" (Infinity to parseFloat) is refused, and "1e-500000000" (0 to
+ * parseFloat) reads as 0. Either would otherwise make toFixed() write out
+ * hundreds of millions of digits.
  */
 export function parseMoneyInput(value: unknown): Decimal | null {
   if (typeof value === "number") return Number.isFinite(value) ? new MoneyDecimal(value) : null;
@@ -94,5 +96,7 @@ export function parseMoneyInput(value: unknown): Decimal | null {
   const match = LEADING_NUMBER.exec(value);
   if (!match) return null;
   const text = match[0].trim();
-  return Number.isFinite(Number(text)) ? new MoneyDecimal(text) : null;
+  const asFloat = Number(text);
+  if (!Number.isFinite(asFloat)) return null;
+  return asFloat === 0 ? new MoneyDecimal(0) : new MoneyDecimal(text);
 }

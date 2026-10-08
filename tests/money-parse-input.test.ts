@@ -18,7 +18,9 @@ describe("parseMoneyInput", () => {
     ["1e3", "1000"],
     ["1,5", "1"],
     ["1.005", "1.005"],
-    ["1e-1000000000", "1e-1000000000"],
+    ["1e-1000000000", "0"],
+    ["-1e-500", "0"],
+    ["1e-300", "1e-300"],
     [7.25, "7.25"],
   ])("reads %j as %s", (input, expected) => {
     expect(parseMoneyInput(input)?.toString()).toBe(expected);
@@ -40,6 +42,10 @@ describe("parseMoneyInput", () => {
     {},
   ])("returns null for %j", (input) => {
     expect(parseMoneyInput(input)).toBeNull();
+  });
+
+  it("formats an underflowing exponent without writing out its zeros", () => {
+    expect(parseMoneyInput("1e-500000000")!.toFixed()).toBe("0");
   });
 
   it("keeps the exact decimal a float cannot hold", () => {
