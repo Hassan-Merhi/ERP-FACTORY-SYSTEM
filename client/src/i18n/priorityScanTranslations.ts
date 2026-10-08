@@ -154,9 +154,9 @@ const priorityScanTranslations = {
     fr: "Choisissez la couleur et la position dans la file pour {customer}. Déplacer ce chargement vers une position occupée décale automatiquement les autres priorités.",
   },
   colorOnlyDialogDescription: {
-    en: "Choose the Priority Scan color for {customer}. Only Admin and Developer users can set the queue position.",
-    ar: "اختر لون المسح حسب الأولوية للعميل {customer}. يمكن فقط للمشرف والمطور تحديد موقع الأولوية.",
-    fr: "Choisissez la couleur du scan prioritaire pour {customer}. Seuls les utilisateurs Admin et Developer peuvent définir la position dans la file.",
+    en: "Choose the Priority Scan color for {customer}. Only Admin, Developer and Owner users can set the queue position.",
+    ar: "اختر لون المسح حسب الأولوية للعميل {customer}. يمكن فقط للمشرف والمطور والمالك تحديد موقع الأولوية.",
+    fr: "Choisissez la couleur du scan prioritaire pour {customer}. Seuls les utilisateurs Admin, Developer et Owner peuvent définir la position dans la file.",
   },
   linkProformaWarning: {
     en: "Link a proforma to this loading before enabling Priority Scan.",
