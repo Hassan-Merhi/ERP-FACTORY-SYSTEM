@@ -15,6 +15,7 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { getFactoryCompanyId, writeDaybookEntry } from "./helpers";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerWorkerAdvancesRoutes(app: Express) {
   app.get("/api/factory/advance-repayments", requireAuth, async (req: Request, res: Response) => {
@@ -130,8 +131,8 @@ export function registerWorkerAdvancesRoutes(app: Express) {
       const workerId = parseId(req.params.id);
       if (workerId === null) return res.status(400).json({ message: "Invalid id" });
 
-      const amount = parseFloat(req.body.amount);
-      if (!amount || amount <= 0) return res.status(400).json({ message: "Amount must be positive" });
+      const amount = parseMoneyInput(req.body.amount)?.toDecimalPlaces(2) ?? null;
+      if (!amount || amount.lte(0)) return res.status(400).json({ message: "Amount must be positive" });
 
       const [worker] = await db
         .select({ fullName: factoryWorkers.fullName })
@@ -239,8 +240,8 @@ export function registerWorkerAdvancesRoutes(app: Express) {
           referenceId: advance.id,
           referenceTable: "factory_worker_advances",
           description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
-          amountCurrency: amount,
-          amountUsd: amount,
+          amountCurrency: amount.toNumber(),
+          amountUsd: amount.toNumber(),
           createdBy: req.session.userId ?? undefined,
         });
 

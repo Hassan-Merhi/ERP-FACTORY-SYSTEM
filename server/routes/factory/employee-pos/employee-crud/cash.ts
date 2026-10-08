@@ -10,6 +10,7 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { parseMoneyInput, toMoney } from "../../../../lib/money";
 
 export function registerFactoryEmployeeCashRoutes(app: Express) {
   // POST /api/factory/employees/:id/deposit - single deposit
@@ -23,8 +24,9 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
       if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
 
       const { amount, date, notes, effectiveDate } = req.body;
-      const depositAmount = parseFloat(amount);
-      if (isNaN(depositAmount) || depositAmount <= 0) {
+      // At cents, so the voucher and the running balance move by the same amount.
+      const depositAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!depositAmount || depositAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
       if (!date) return res.status(400).json({ message: "Date is required" });
@@ -89,8 +91,8 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
         });
 
         // Update employee balance
-        const newBalance = parseFloat(emp.currentBalance || "0") + depositAmount;
-        const newDeposits = parseFloat(emp.totalDeposits || "0") + depositAmount;
+        const newBalance = toMoney(emp.currentBalance).plus(depositAmount);
+        const newDeposits = toMoney(emp.totalDeposits).plus(depositAmount);
         await tx
           .update(employees)
           .set({
@@ -120,8 +122,8 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
       if (isNaN(id)) return res.status(400).json({ message: "Invalid employee ID" });
 
       const { amount, date, notes, cashAccountId } = req.body;
-      const withdrawAmount = parseFloat(amount);
-      if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      const withdrawAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!withdrawAmount || withdrawAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
       if (!date) return res.status(400).json({ message: "Date is required" });
@@ -174,8 +176,8 @@ export function registerFactoryEmployeeCashRoutes(app: Express) {
         });
 
         // Update employee balance (can go negative)
-        const newBalance = parseFloat(emp.currentBalance || "0") - withdrawAmount;
-        const newWithdrawals = parseFloat(emp.totalWithdrawals || "0") + withdrawAmount;
+        const newBalance = toMoney(emp.currentBalance).minus(withdrawAmount);
+        const newWithdrawals = toMoney(emp.totalWithdrawals).plus(withdrawAmount);
         await tx
           .update(employees)
           .set({

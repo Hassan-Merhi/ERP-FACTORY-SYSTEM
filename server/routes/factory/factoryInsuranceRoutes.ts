@@ -30,6 +30,8 @@ import {
   parseInsuranceWorkbook,
   type InsuranceImportRow,
 } from "../../services/factory/insuranceWorkbookImport";
+import type Decimal from "decimal.js";
+import { sumMoney, toMoney } from "../../lib/money";
 
 const CLEAR_CONFIRMATION = "CLEAR ALL INSURANCE";
 
@@ -653,7 +655,7 @@ export function registerFactoryInsuranceRoutes(app: Express) {
       }
 
       const expenseAccount = await findOrCreateLedger(companyId, "Insurance Expense", "Expense");
-      const memberLedgers: { ledgerId: number; amount: number }[] = [];
+      const memberLedgers: { ledgerId: number; amount: Decimal }[] = [];
       for (const member of eligibleMembers) {
         let ledgerId = member.ledgerAccountId;
         if (!ledgerId) {
@@ -664,15 +666,19 @@ export function registerFactoryInsuranceRoutes(app: Express) {
             .set({ ledgerAccountId: ledgerId })
             .where(and(eq(insuranceMembers.id, member.id), eq(insuranceMembers.companyId, companyId)));
         }
-        let memberAmount = parseFloat(monthlyAmountByMember.get(member.id) ?? member.amount);
+        // At cents, so the expense credit is exactly the sum of the member debits.
+        let memberAmount = toMoney(monthlyAmountByMember.get(member.id) ?? member.amount).toDecimalPlaces(2);
         if (member.startDate > periodStart && member.startDate <= periodEnd) {
           const startDay = parseInt(member.startDate.split("-")[2]);
-          memberAmount = parseFloat(((memberAmount / lastDay) * (lastDay - startDay + 1)).toFixed(2));
+          memberAmount = memberAmount
+            .div(lastDay)
+            .times(lastDay - startDay + 1)
+            .toDecimalPlaces(2);
         }
         memberLedgers.push({ ledgerId, amount: memberAmount });
       }
 
-      const totalAmount = memberLedgers.reduce((sum, member) => sum + member.amount, 0);
+      const totalAmount = sumMoney(memberLedgers.map((member) => member.amount));
       const monthLabel = new Date(year, month - 1, 1).toLocaleString("en-US", {
         month: "long",
         year: "numeric",

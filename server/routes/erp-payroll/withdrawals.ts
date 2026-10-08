@@ -11,6 +11,7 @@ import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
 import { bankAccounts, employees, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerPayrollWithdrawalRoutes(app: Express) {
   // Payroll - Employee Withdrawal
@@ -32,8 +33,8 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
         });
       }
 
-      const withdrawalAmount = parseFloat(amount);
-      if (isNaN(withdrawalAmount) || withdrawalAmount <= 0) {
+      const withdrawalAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!withdrawalAmount || withdrawalAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
 
@@ -62,8 +63,6 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
           .where(and(eq(bankAccounts.id, Number(accountId)), eq(bankAccounts.companyId, req.session.currentCompanyId)));
         if (!bank) return res.status(404).json({ message: "Payment account not found" });
       }
-
-      const _currentBalance = parseFloat(employee.currentBalance);
 
       // Create voucher
       const voucherNumber = `SAL-WD-${Date.now()}`;

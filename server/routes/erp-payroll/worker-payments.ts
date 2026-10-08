@@ -60,7 +60,8 @@ export function registerPayrollWorkerPaymentRoutes(app: Express) {
         });
       }
 
-      const parsedAmount = parseMoneyInput(amount);
+      // At cents first (main #2113): an amount that rounds to 0.00 is refused rather than posted as zero.
+      const parsedAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
       if (!parsedAmount || parsedAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }

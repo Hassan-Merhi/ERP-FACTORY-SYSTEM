@@ -4,6 +4,12 @@ export interface FactoryTabDefinition {
   key: string;
   label: string;
   group: string;
+  /**
+   * Opt-in tabs are hidden for non-privileged users unless this grant key is
+   * stored in factory_user_profiles.hidden_cost_fields. Admin/Owner/Developer
+   * bypass tab restrictions entirely, so they always see these tabs.
+   */
+  grantKey?: string;
 }
 
 /**
@@ -31,7 +37,12 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
   { key: "hide_tab_bales_history", label: "Bales History", group: "Bales Hub" },
   { key: "hide_tab_bales_barcode", label: "Barcode Lookup", group: "Bales Hub" },
   { key: "hide_tab_bales_products", label: "Bale Products", group: "Bales Hub" },
-  { key: "hide_tab_bales_customer_loading", label: "Customer Loading", group: "Bales Hub" },
+  {
+    key: "hide_tab_bales_customer_loading",
+    label: "Customer Loading",
+    group: "Bales Hub",
+    grantKey: "show_tab_bales_customer_loading",
+  },
 
   { key: "hide_tab_stockentry_entry", label: "Stock Entry", group: "Stock Entry" },
   { key: "hide_tab_stockentry_history", label: "History", group: "Stock Entry" },
@@ -124,6 +135,39 @@ export const FACTORY_TAB_REGISTRY: readonly FactoryTabDefinition[] = [
 ] as const;
 
 export const FACTORY_TAB_KEYS = new Set(FACTORY_TAB_REGISTRY.map((tab) => tab.key));
+
+export const FACTORY_TAB_GRANT_KEYS = new Set(
+  FACTORY_TAB_REGISTRY.flatMap((tab) => (tab.grantKey ? [tab.grantKey] : []))
+);
+
+/** Whether a stored (non-privileged) profile can see a tab. */
+export function isFactoryTabVisibleInProfile(tab: FactoryTabDefinition, storedFields: readonly string[]): boolean {
+  if (storedFields.includes(tab.key)) return false;
+  return tab.grantKey ? storedFields.includes(tab.grantKey) : true;
+}
+
+/** Return stored profile fields with one tab shown or hidden. */
+export function setFactoryTabVisibleInProfile(
+  storedFields: readonly string[],
+  tab: FactoryTabDefinition,
+  visible: boolean
+): string[] {
+  const next = storedFields.filter((key) => key !== tab.key && key !== tab.grantKey);
+  if (visible) return tab.grantKey ? [...next, tab.grantKey] : next;
+  return [...next, tab.key];
+}
+
+/**
+ * Effective hidden tab/field list for a non-privileged user: stored hide keys
+ * plus every opt-in tab the user has not been explicitly granted.
+ */
+export function resolveFactoryEffectiveHiddenFields(storedFields: readonly string[]): string[] {
+  const out = new Set(storedFields);
+  for (const tab of FACTORY_TAB_REGISTRY) {
+    if (tab.grantKey && !out.has(tab.grantKey)) out.add(tab.key);
+  }
+  return [...out];
+}
 
 /** Old page-level hide flags that predate canonical page allow-lists. */
 export const DEPRECATED_FACTORY_HIDDEN_KEYS = new Set([

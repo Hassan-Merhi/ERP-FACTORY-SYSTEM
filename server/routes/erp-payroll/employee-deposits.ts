@@ -29,8 +29,8 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
         return res.status(400).json({ message: "Employee, amount, and date are required" });
       }
 
-      const depositAmount = parseFloat(amount);
-      if (isNaN(depositAmount) || depositAmount <= 0) {
+      const depositAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!depositAmount || depositAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
 

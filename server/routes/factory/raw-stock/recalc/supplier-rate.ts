@@ -17,6 +17,7 @@ import { eq, and } from "drizzle-orm";
 import { pool } from "../../../../db";
 
 import { ADMIN_ROLES } from "./_helpers";
+import { parseMoneyInput } from "../../../../lib/money";
 
 export function registerRawStockSupplierRateRoutes(app: Express) {
   // ──────────────────────────────────────────────────────────────────────────
@@ -275,8 +276,9 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
 
         for (const entry of restorations) {
           const sid = parseInt(entry.supplierId);
-          const rateNum = parseFloat(entry.rate);
-          if (isNaN(sid) || isNaN(rateNum) || rateNum <= 0) {
+          const rate = parseMoneyInput(entry.rate);
+          const rateNum = rate?.toNumber() ?? NaN;
+          if (isNaN(sid) || !rate || rate.lte(0)) {
             results.push({
               supplierId: sid || 0,
               supplierName: "",
@@ -313,7 +315,7 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
 
           await db
             .update(factorySuppliers)
-            .set({ currentRawMaterialCostPerKgUsd: String(rateNum), updatedAt: new Date() })
+            .set({ currentRawMaterialCostPerKgUsd: rate.toFixed(), updatedAt: new Date() })
             .where(and(eq(factorySuppliers.id, sid), eq(factorySuppliers.companyId, companyId)));
 
           await logAudit({

@@ -7,6 +7,7 @@ import { FACTORY_ACCESS_REGISTRY, factoryPageAllowsRole, hasFactoryPageKey } fro
 import {
   normalizeFactoryHiddenFields,
   normalizePersistedFactoryPageKeysFailClosed,
+  resolveFactoryEffectiveHiddenFields,
 } from "@shared/factoryPermissionCatalog";
 
 export const FACTORY_PRIVILEGED_ROLES = new Set(["Admin", "Owner", "Developer"]);
@@ -103,7 +104,7 @@ export async function getFactoryAccessState(req: Request): Promise<FactoryAccess
       hasErpAccess: profile?.hasErpAccess ?? true,
       hasFactoryAccess: profile?.hasFactoryAccess ?? true,
       pageKeys,
-      hiddenTabs: normalizeFactoryHiddenFields(profile?.hiddenCostFields),
+      hiddenTabs: resolveFactoryEffectiveHiddenFields(normalizeFactoryHiddenFields(profile?.hiddenCostFields)),
     };
   })();
 
