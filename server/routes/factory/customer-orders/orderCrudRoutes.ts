@@ -768,7 +768,7 @@ export function registerOrderCrudRoutes(app: Express) {
       const orderId = parseId(req.params.id);
 
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { containerNumber, shippingCompany, containerNotes, destination } = req.body;
+      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
 
       const [order] = await db
         .select()
@@ -780,6 +780,10 @@ export function registerOrderCrudRoutes(app: Express) {
       if (containerNumber !== undefined) updateData.containerNumber = containerNumber;
       if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
       if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
+      if (bookingInfo !== undefined) {
+        if (typeof bookingInfo !== "string" || bookingInfo.length > 2000) return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
+        updateData.bookingInfo = bookingInfo;
+      }
       if (destination !== undefined) updateData.destination = destination || null;
 
       const [updated] = await db
