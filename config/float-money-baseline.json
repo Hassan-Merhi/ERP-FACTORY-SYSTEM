@@ -1,6 +1,6 @@
 {
   "description": "Per-file count of parseFloat( calls in server/ and shared/ source (tests excluded). parseFloat turns numeric(...) money strings into binary floats, and sums of those drift by fractions of a cent; new code uses server/lib/money.ts instead. tests/float-money-ratchet.test.ts fails when a file's count rises or a new file starts using parseFloat, and when a count falls without this baseline being lowered to match, so the total can only go down.",
-  "total": 1130,
+  "total": 1100,
   "files": {
     "server/aiAgentTools.ts": 4,
     "server/aiTools.ts": 33,
@@ -185,10 +185,6 @@
     "server/routes/pos/posContainerTrackingRoutes.ts": 1,
     "server/routes/pos/posCustomerRoutes.ts": 4,
     "server/routes/pos/posWhatsAppRoutes.ts": 2,
-    "server/routes/rental/rentalPaymentsAccrualRoutes.ts": 5,
-    "server/routes/rental/shared/monthly-rows.ts": 4,
-    "server/routes/rental/units-contracts/contract-end.ts": 1,
-    "server/routes/rental/units-contracts/guarantees.ts": 2,
     "server/routes/rental/units-contracts/units-read.ts": 9,
     "server/routes/reportsContainerTrackingRoutes.ts": 7,
     "server/routes/reportsDashboardAccountRoutes.ts": 5,
@@ -216,7 +212,6 @@
     "server/routes/vouchers/goldenCoastPosSettlementDeleteRoute.ts": 2,
     "server/routes/vouchers/transfer/fix-sales-inventory.ts": 3,
     "server/routes/vouchers/transfer/salesLocationInventoryEvidence.ts": 2,
-    "server/routes/vouchers/transfer/transfer.ts": 6,
     "server/routes/vouchers/voucherCreateRoutes.ts": 2,
     "server/routes/vouchers/voucherDetailBatching.ts": 3,
     "server/routes/vouchers/voucherListPaging.ts": 4,
@@ -256,9 +251,6 @@
     "server/services/sp-sales-form-v2/styleHelpers.ts": 1,
     "server/services/sp-sales-form/layout.ts": 1,
     "server/services/stockTransferAnalysis.ts": 7,
-    "server/storage/factory/production.ts": 2,
-    "server/storage/inventory/locationInventoryStorage.ts": 3,
-    "server/storage/inventory/stockMovementStorage.ts": 6,
-    "server/storage/stock-ops/cost-prices.ts": 4
+    "server/storage/inventory/locationInventoryStorage.ts": 3
   }
 }
