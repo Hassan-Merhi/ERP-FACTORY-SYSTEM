@@ -187,7 +187,7 @@ export function registerFactoryStockEntryHistoryPaginationRoutes(app: Express): 
               'stockEntryDate', fb.stock_entry_date::text,
               'locationName', COALESCE(l.name, 'Unknown'),
               'workerId', fb.finalized_by,
-               'workerName', fw.full_name,
+              'workerName', fw.full_name,
               'productName', fbp.name,
               'articleCode', fbp.article_code
             ) ORDER BY ${effectiveFinalizedAtSql} ASC) AS bales`;
