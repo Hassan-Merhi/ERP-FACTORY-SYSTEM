@@ -91,13 +91,18 @@ export async function buildFactoryCustomerStatement(
       if (!invoiceCacheByOrder.has(row.referenceId)) invoiceCacheByOrder.set(row.referenceId, row);
     }
   }
-  const invoiceJournal = new RegExp(`^INV-GL-${companyId}-(\\d+)$`);
+  // INV-GL-{company}-{order}: the order id of this company's invoice journal.
+  const invoiceJournalPrefix = `INV-GL-${companyId}-`;
+  const invoiceOrderId = (voucherNumber: string | null): number | null => {
+    if (!voucherNumber?.startsWith(invoiceJournalPrefix)) return null;
+    const rest = voucherNumber.slice(invoiceJournalPrefix.length);
+    return /^\d+$/.test(rest) ? Number(rest) : null;
+  };
 
   const rows: FactoryStatementRow[] = [];
   for (const line of ledgerLines) {
     const effect = toMoney(line.debitAmount).minus(toMoney(line.creditAmount));
-    const orderMatch = invoiceJournal.exec(line.voucherNumber ?? "");
-    const orderId = orderMatch ? Number(orderMatch[1]) : null;
+    const orderId = invoiceOrderId(line.voucherNumber ?? null);
     const invoiceCache = orderId ? invoiceCacheByOrder.get(orderId) : undefined;
     rows.push({
       id: invoiceCache?.id ?? `ve-${line.id}`,

@@ -127,7 +127,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     ];
     const prePeriodCase = (column: typeof voucherEntries.debitAmount | typeof voucherEntries.creditAmount) =>
       balStartDate
-        ? sql<string>`COALESCE(SUM(CASE WHEN ${voucherDay} < ${balStartDate} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`
+        ? sql<string>`COALESCE(SUM(CASE WHEN ${balStartDate} > ${voucherDay} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`
         : sql<string>`0`;
 
     const ledgerIds = ledgers.map((a) => a.id);

@@ -350,7 +350,7 @@ export function registerFactoryMixBatchCreateRoutes(app: Express) {
           sourceId: mixBatch.id,
         });
 
-        return Object.assign(mixBatch, { unvalued: settled.unvalued });
+        return { ...mixBatch, unvalued: settled.unvalued };
       });
 
       const mbToday = getClientDate(req);
