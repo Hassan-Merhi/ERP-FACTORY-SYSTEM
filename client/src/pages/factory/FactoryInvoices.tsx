@@ -235,7 +235,7 @@ export default function FactoryInvoices() {
 
   // Column count for colspan calculations
   // +1 for the drag-handle column
-  const colCount = 15 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1);
+  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1);
 
   // Group orders by customer, preserving first-appearance order
   const customerGroups = groupOrdersByCustomer(filteredOrders);
