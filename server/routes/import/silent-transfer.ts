@@ -21,6 +21,10 @@ import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } fr
 import type Decimal from "decimal.js";
 import { postInventoryMovementJournalTx } from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
 import { moveTransferLegConservedTx } from "../../services/inventory/conservedStockTransfer";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { sumDecimals } from "../../services/inventory/valueExactReversal";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
@@ -210,6 +214,13 @@ export function registerSilentTransferRoutes(app: Express) {
       let applied = 0;
 
       await db.transaction(async (tx) => {
+        // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+        await assertNoBaleMirrorMovementTx(
+          tx,
+          companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId),
+          "silent-transfer"
+        );
         const deltas: Decimal[] = [];
         for (let index = 0; index < items.length; index++) {
           const item = items[index];
@@ -282,6 +293,7 @@ export function registerSilentTransferRoutes(app: Express) {
 
       res.json({ success: true, itemsTransferred: applied });
     } catch (err: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, err)) return;
       logger.error("Silent transfer apply error:", { error: err });
       res.status(500).json({ message: getErrorMessage(err) });
     }

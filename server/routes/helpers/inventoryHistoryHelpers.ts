@@ -276,7 +276,7 @@ export async function calculateHistoricalLocationInventory(
     // the exact stored line value in that direction so historical value is not
     // reconstructed from the rounded rate.
     const rawQty = toMoney(adj.quantity);
-    const adjustmentType = (adj.adjustmentType ?? "").toLowerCase();
+    const adjustmentType = (adj.adjustmentType ?? "").trim().toLowerCase();
     const inward = adjustmentType === "production" || (adjustmentType !== "consumption" && !rawQty.lessThan(0));
     const qty = inward ? rawQty.abs() : rawQty.abs().negated();
     const absoluteValue = exactMovementValue(adj.totalAmount, qty, toMoney(adj.rate), adj.valueMoved);
@@ -381,7 +381,11 @@ export async function calculateHistoricalLocationInventory(
 
   for (const offload of offloadsAfterDate) {
     const qty = toMoney(offload.quantity);
-    const value = exactMovementValue(offload.totalValue, qty, toMoney(offload.rate), offload.valueMoved);
+    // An offload line's direction is the sign of its quantity: a net-negative
+    // PO line returned stock (its value_moved is negative too), so it is
+    // replayed as an issue, not as a receipt of a negative amount.
+    const amount = exactMovementValue(offload.totalValue, qty, toMoney(offload.rate), offload.valueMoved);
+    const value = qty.isNegative() ? amount.negated() : amount;
     applyHistoricalMovement(inventoryMap, offload.stockItemId, qty.negated(), value.negated());
   }
 

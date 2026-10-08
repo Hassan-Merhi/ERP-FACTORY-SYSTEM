@@ -34,11 +34,12 @@ import {
   postTransferResidualTx,
   reverseTransferLegExactTx,
 } from "../../services/inventory/conservedStockTransfer";
+import { assertNoBaleMirrorMovementTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 function isProductionAdjustment(adjustmentType: string, quantity: Decimal): boolean {
-  const normalized = adjustmentType.toLowerCase();
+  const normalized = adjustmentType.trim().toLowerCase();
   return normalized === "production" || (normalized === "mixed" && quantity.isPositive());
 }
 
@@ -62,6 +63,15 @@ export async function updateStockTransfer(
     const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, existingTransfer.voucherId));
     if (!voucher) throw new Error(`Voucher ${existingTransfer.voucherId} not found`);
     const isOptional = voucher.optional;
+    // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+    if (!isOptional) {
+      await assertNoBaleMirrorMovementTx(
+        tx,
+        voucher.companyId,
+        items.map((item) => item.stockItemId),
+        "stock-transfer-edit"
+      );
+    }
 
     const existingItems = await tx
       .select()

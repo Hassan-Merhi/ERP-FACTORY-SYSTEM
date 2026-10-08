@@ -24,6 +24,7 @@ import type { Response } from "express";
 import type { DatabaseOrTransaction } from "../../../db";
 import { HttpError } from "../../../lib/httpHandlers";
 import { getInventoryCutover } from "./cutover";
+import { factoryBaleMirrorStockItemIds } from "./factoryValuation";
 
 export const PERPETUAL_INVENTORY_ACTIVE = "PERPETUAL_INVENTORY_ACTIVE" as const;
 
@@ -86,6 +87,90 @@ export async function assertNoInventoryCutoverTx(
 /** Sends the refusal when `error` is one; returns whether it did. */
 export function sendInventoryCutoverRefusal(response: Response, error: unknown): boolean {
   if (!(error instanceof InventoryCutoverRefusalError)) return false;
+  response.status(409).json(error.body);
+  return true;
+}
+
+// ── ERP sale or transfer of a factory bale-mirror item (wave 11) ────────────
+//
+// After the cut-over the ERP bale-mirror stock items (factoryBaleMirrorStockItemIds)
+// hold quantity only: the factory values those bales, and the perpetual
+// INVENTORY account leaves them out. An ERP sale would post COGS at zero and a
+// transfer would move no value, while the bale itself stays in factory stock,
+// so both are refused (409) once the company's cut-over is applied; the bale
+// is sold or moved in the factory. Before the cut-over they keep working.
+
+export const FACTORY_BALE_MIRROR_STOCK = "FACTORY_BALE_MIRROR_STOCK" as const;
+
+export const FACTORY_BALE_MIRROR_STOCK_MESSAGE =
+  "This item mirrors factory bale stock: after the company's perpetual inventory cut-over it is sold and moved in the factory, not in the ERP.";
+
+export interface BaleMirrorMovementRefusalBody {
+  code: typeof FACTORY_BALE_MIRROR_STOCK;
+  message: string;
+  /** The refused movement (sale, transfer, ...), for logs and support (not translated). */
+  action: string;
+  /** The company's cut-over date, YYYY-MM-DD. */
+  effectiveFrom: string;
+  /** The bale-mirror stock items the request named. */
+  stockItemIds: number[];
+}
+
+export class BaleMirrorMovementRefusalError extends HttpError {
+  readonly code = FACTORY_BALE_MIRROR_STOCK;
+  constructor(readonly body: BaleMirrorMovementRefusalBody) {
+    super(409, body.message);
+    this.name = "BaleMirrorMovementRefusalError";
+  }
+}
+
+/**
+ * The refusal for an ERP sale or transfer naming `stockItemIds`, or null when
+ * the company has no cut-over or none of the items is a factory bale-mirror item.
+ */
+export async function baleMirrorMovementRefusal(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  stockItemIds: Iterable<unknown>,
+  actionLabel: string
+): Promise<{ status: 409; body: BaleMirrorMovementRefusalBody } | null> {
+  const ids = [...new Set([...stockItemIds].map(Number))].filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) return null;
+  const cutover = await getInventoryCutover(executor, companyId);
+  if (!cutover) return null;
+  const mirror = await factoryBaleMirrorStockItemIds(executor, companyId);
+  const refused = ids.filter((id) => mirror.has(id)).sort((a, b) => a - b);
+  if (refused.length === 0) return null;
+  return {
+    status: 409,
+    body: {
+      code: FACTORY_BALE_MIRROR_STOCK,
+      message: FACTORY_BALE_MIRROR_STOCK_MESSAGE,
+      action: actionLabel,
+      effectiveFrom: cutover.effectiveFrom,
+      stockItemIds: refused,
+    },
+  };
+}
+
+/**
+ * Throws BaleMirrorMovementRefusalError when baleMirrorMovementRefusal refuses.
+ * Call it before the movement writes anything (inside its transaction when it
+ * has one).
+ */
+export async function assertNoBaleMirrorMovementTx(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  stockItemIds: Iterable<unknown>,
+  actionLabel: string
+): Promise<void> {
+  const refusal = await baleMirrorMovementRefusal(executor, companyId, stockItemIds, actionLabel);
+  if (refusal) throw new BaleMirrorMovementRefusalError(refusal.body);
+}
+
+/** Sends a bale-mirror refusal when `error` is one; returns whether it did. */
+export function sendBaleMirrorMovementRefusal(response: Response, error: unknown): boolean {
+  if (!(error instanceof BaleMirrorMovementRefusalError)) return false;
   response.status(409).json(error.body);
   return true;
 }

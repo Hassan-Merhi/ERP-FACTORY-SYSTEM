@@ -192,7 +192,7 @@ export async function reverseVoucherStockTx(
         .from(stockAdjustmentItems)
         .where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));
       // adjustment_type is stored in both casings (see bulk-delete history).
-      const type = (adjustment.adjustmentType || "").toLowerCase();
+      const type = (adjustment.adjustmentType || "").trim().toLowerCase();
       for (const line of lines) {
         const signed = toMoney(line.quantity);
         const quantity = signed.abs();

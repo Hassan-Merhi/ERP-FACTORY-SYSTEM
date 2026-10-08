@@ -43,6 +43,7 @@ import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
 import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
 import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
 import { MoneyDecimal } from "../../lib/money";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
@@ -177,6 +178,15 @@ export async function createPosSale(
 
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
+
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    db,
+    currentCompanyId,
+    items.map((item: { stockItemId?: unknown }) => item?.stockItemId),
+    "pos-sale"
+  );
+  if (mirrorRefusal) return err({ status: mirrorRefusal.status, body: { ...mirrorRefusal.body } });
 
   let inventoryValidation: Awaited<ReturnType<typeof validateInventoryAvailability>>;
   try {

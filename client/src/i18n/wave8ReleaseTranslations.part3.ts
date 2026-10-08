@@ -367,4 +367,24 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "لا يمكن عكس تحويل المخزون هذا: موقع المصدر أو الوجهة مفقود.",
     fr: "Ce transfert de stock ne peut pas être annulé : son emplacement source ou de destination est manquant.",
   },
+  // Factory daybook container cost edit narration (docs-users/daybookEditRoutes.ts),
+  // now with the supplier suffix.
+  {
+    en: "Offloaded container ${container.containerNumber}${supplierNarrationSuffix}: ${container.actualReceivedKg} kg at ${inclusiveCostPerKg.toFixed(4)}/kg (inclusive) [edited]",
+    ar: "حاوية مفرغة {{0}}{{1}}: {{2}} كغم بسعر {{3}}/كغم (شامل) [معدّل]",
+    fr: "Conteneur déchargé {{0}}{{1}} : {{2}} kg à {{3}}/kg (inclus) [modifié]",
+  },
+  // Wave 11 follow-ups: ERP sale/transfer of a factory bale-mirror item after the
+  // cut-over (cutoverRefusal.ts), and an offload of non-USD purchase orders under
+  // perpetual inventory (services/containers/offload-lifecycle/execute.ts).
+  {
+    en: "This item mirrors factory bale stock: after the company's perpetual inventory cut-over it is sold and moved in the factory, not in the ERP.",
+    ar: "هذا الصنف يعكس مخزون بالات المصنع: بعد تحويل الشركة إلى الجرد المستمر يُباع ويُنقل في المصنع، وليس في نظام ERP.",
+    fr: "Cet article reflète le stock de balles de l’usine : après le passage de la société à l’inventaire permanent, il se vend et se déplace dans l’usine, pas dans l’ERP.",
+  },
+  {
+    en: "This container's purchase orders are in a currency other than USD with no confirmed exchange rate: under perpetual inventory the stock cannot be valued, so the offload is refused. Record the purchase orders in USD first.",
+    ar: "أوامر الشراء لهذه الحاوية بعملة غير الدولار الأمريكي دون سعر صرف مؤكد: في ظل الجرد المستمر لا يمكن تقييم المخزون، لذلك تم رفض التفريغ. سجّل أوامر الشراء بالدولار الأمريكي أولاً.",
+    fr: "Les bons de commande de ce conteneur sont dans une devise autre que l’USD sans taux de change confirmé : en inventaire permanent le stock ne peut pas être valorisé, le déchargement est donc refusé. Enregistrez d’abord les bons de commande en USD.",
+  },
 ];

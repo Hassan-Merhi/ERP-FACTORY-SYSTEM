@@ -14,7 +14,9 @@
  * the sum of the voucher's stock_adjustment_items.value_moved (each line's
  * AdjustInventoryResult.valueDelta, stored as an amount: the direction is the
  * line's, received on a Production, issued on a Consumption, and by the sign of
- * the quantity on a Mixed voucher, as the adjustment writer moves the stock). The voucher's other lines value
+ * the quantity on a Mixed voucher, as the adjustment writer moves the stock;
+ * the type is compared trimmed and case-insensitively, so an imported
+ * 'consumption' line is an issue, not a receipt). The voucher's other lines value
  * the document at quantity × the document rate; where that differs from what
  * the sub-ledger moved (a consumption issues stock at its average cost, not at
  * the rate typed on the voucher; a production into negative stock takes back
@@ -103,8 +105,8 @@ export async function syncStockAdjustmentInventoryTx(
       SELECT COUNT(sai.id)::int AS lines,
              COUNT(sai.value_moved)::int AS recorded,
              COALESCE(SUM(CASE
-               WHEN sav.adjustment_type = 'Production' THEN ABS(sai.value_moved)
-               WHEN sav.adjustment_type = 'Consumption' THEN -ABS(sai.value_moved)
+               WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'production' THEN ABS(sai.value_moved)
+               WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'consumption' THEN -ABS(sai.value_moved)
                WHEN sai.quantity < 0 THEN -ABS(sai.value_moved)
                ELSE ABS(sai.value_moved)
              END), 0)::text AS value

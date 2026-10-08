@@ -1,4 +1,5 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { logger } from "../../lib/logger";
 import { z } from "zod";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -54,6 +55,7 @@ function errorStatus(error: unknown): number {
 }
 
 function sendError(res: Response, error: unknown, context: string) {
+  if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = errorStatus(error);
   if (status === 500) logger.error(`[StockTransferLifecycle ${context}]`, { error: error });
   const payload: Record<string, unknown> = {

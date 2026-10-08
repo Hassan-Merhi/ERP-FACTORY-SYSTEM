@@ -43,6 +43,7 @@ import {
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
 import { postSaleCogsTx } from "../../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../../accounting/perpetualInventory/cutoverRefusal";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -93,6 +94,15 @@ export async function applyPosSaleUpdateTx(
     return { error: { status: 400, body: { message: "At least one item is required" } } };
   }
   validateItemsPositive(items);
+
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    tx,
+    currentCompanyId,
+    items.map((item) => (item as { stockItemId?: unknown } | null)?.stockItemId),
+    "pos-sale-edit"
+  );
+  if (mirrorRefusal) return { error: { status: mirrorRefusal.status, body: { ...mirrorRefusal.body } } };
 
   const [lockedVoucher] = await tx
     .select()

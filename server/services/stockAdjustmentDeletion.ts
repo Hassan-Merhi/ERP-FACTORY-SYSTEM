@@ -38,7 +38,9 @@ export interface StockAdjustmentDeletionResult {
 }
 
 function isProduction(adjustmentType: string | null | undefined, quantity: number): boolean {
-  const normalized = String(adjustmentType ?? "").toLowerCase();
+  const normalized = String(adjustmentType ?? "")
+    .trim()
+    .toLowerCase();
   return normalized === "production" || (normalized === "mixed" && quantity > 0);
 }
 

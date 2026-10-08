@@ -1,6 +1,6 @@
 import type Decimal from "decimal.js";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import * as schema from "@shared/schema";
 
 import { postChargeVouchers } from "./charge-vouchers";
@@ -25,11 +25,49 @@ import {
   type InventoryMovementLine,
 } from "../../accounting/perpetualInventory/inventoryMovementJournal";
 import { syncContainerStockInTx } from "../../accounting/perpetualInventory/stockReceipts";
+import { isPerpetualInventoryActive } from "../../accounting/perpetualInventory/cutover";
+import { isSupplierPartnerCompany } from "../../accounting/perpetualInventory/linkedJournal";
 
 /** The inventory row an offload locks FOR UPDATE before rewriting its cost. */
 type InventoryLockRow = { id: number; quantity: string; total_value: string };
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+
+export const OFFLOAD_CURRENCY_UNCONFIRMED_CODE = "CONTAINER_OFFLOAD_CURRENCY_RATE_UNCONFIRMED" as const;
+export const OFFLOAD_CURRENCY_UNCONFIRMED_MESSAGE =
+  "This container's purchase orders are in a currency other than USD with no confirmed exchange rate: under perpetual inventory the stock cannot be valued, so the offload is refused. Record the purchase orders in USD first.";
+
+/**
+ * Under perpetual inventory (wave 11, owner decision) an offload values the
+ * stock it receives, and the INVENTORY account takes that value, in USD. An
+ * ERP purchase order's line rates are in the order's currency and the order
+ * carries no exchange rate, so a non-USD order has no confirmed rate to value
+ * its stock at: the offload (create, replace or edit) is refused rather than
+ * book native amounts as dollars. Before the company's cut-over (or for a
+ * supplier partner, which carries no perpetual INVENTORY) the offload keeps its
+ * behaviour.
+ */
+async function assertOffloadCurrencyValuedTx(
+  tx: DbTransaction,
+  companyId: number,
+  offloadDate: string,
+  purchaseOrders: ReadonlyArray<{ currency: string | null }>
+): Promise<void> {
+  const foreign = purchaseOrders.some((po) => {
+    const currency = String(po.currency ?? "")
+      .trim()
+      .toUpperCase();
+    return currency !== "" && currency !== "USD";
+  });
+  if (!foreign) return;
+  if (!(await isPerpetualInventoryActive(tx, companyId, offloadDate))) return;
+  if (await isSupplierPartnerCompany(tx, companyId)) return;
+  throw new ContainerOffloadLifecycleError(
+    OFFLOAD_CURRENCY_UNCONFIRMED_MESSAGE,
+    409,
+    OFFLOAD_CURRENCY_UNCONFIRMED_CODE
+  );
+}
 
 export async function executeContainerOffloadLifecycle(
   input: ContainerOffloadLifecycleInput
@@ -115,6 +153,8 @@ export async function executeContainerOffloadLifecycle(
         "CONTAINER_OFFLOAD_NO_PURCHASE_ORDERS"
       );
     }
+
+    await assertOffloadCurrencyValuedTx(tx, input.companyId, input.offloadDate, purchaseOrders);
 
     const poIds = purchaseOrders.map((po: typeof schema.purchaseOrders.$inferSelect) => po.id);
     const lineItems = await tx

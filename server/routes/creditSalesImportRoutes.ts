@@ -43,6 +43,10 @@ import {
   resolveFinancialOperationKey,
 } from "../services/accounting/financialOperationRequest";
 import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -323,6 +327,13 @@ export function registerCreditSalesImportRoutes(app: Express) {
             if (!stockItem) {
               throw new Error(`Stock item not found for barcode: ${item.barcode}`);
             }
+            // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+            await assertNoBaleMirrorMovementTx(
+              tx,
+              req.session.currentCompanyId!,
+              [stockItem.id],
+              "credit-sales-import"
+            );
 
             const [inventoryRecord] = await tx
               .select()
@@ -564,6 +575,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

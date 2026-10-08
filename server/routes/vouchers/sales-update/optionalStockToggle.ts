@@ -204,7 +204,7 @@ export async function toggleVoucherStockTx(tx: DbTransaction, context: ToggleCon
       .select()
       .from(stockAdjustmentItems)
       .where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));
-    const type = (adjustment.adjustmentType || "").toLowerCase();
+    const type = (adjustment.adjustmentType || "").trim().toLowerCase();
     for (const item of items) {
       const signed = toMoney(item.quantity);
       const quantity = signed.abs();

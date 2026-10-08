@@ -1,5 +1,6 @@
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
+import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { getClientDate } from "../../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
@@ -727,76 +728,87 @@ export function registerRawStockReceiptRoutes(app: Express) {
         }
       }
 
-      await db.transaction(async (tx) => {
-        // 1. Update actual rows
-        for (const u of updates) {
-          await tx
-            .update(factoryRawStock)
-            .set({ receivedKg: u.newReceived.toFixed(3) })
-            .where(eq(factoryRawStock.id, u.id));
-        }
+      // Wave 11: the kg taken off received stock leave the factory raw-material
+      // valuation; the daily factory stock journal posts that change as a
+      // write-off (WASTE), not as production variance.
+      await db.transaction((tx) =>
+        withFactoryValuationEventTx(
+          tx,
+          companyId,
+          "WASTE",
+          { sourceType: "factory-raw-deduct-received", sourceId: Number(supplierId) },
+          async () => {
+            // 1. Update actual rows
+            for (const u of updates) {
+              await tx
+                .update(factoryRawStock)
+                .set({ receivedKg: u.newReceived.toFixed(3) })
+                .where(eq(factoryRawStock.id, u.id));
+            }
 
-        // 1b. Record a DEDUCT history entry for the amount taken from container rows
-        // DEDUCT type is skipped in all balance calculations — it only exists for history visibility.
-        const rowDeductKg = deductKgExact.minus(adjDeductKg);
-        if (rowDeductKg.gt("0.001")) {
-          await tx.insert(factoryRawMaterialAdjustments).values({
-            companyId,
-            date: today,
-            type: "DEDUCT",
-            kg: rowDeductKg.toFixed(3),
-            costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
-            currencyCode: ccy,
-            supplierId: Number(supplierId),
-            notes: notes || null,
-            reference: reference || null,
-          });
-        }
+            // 1b. Record a DEDUCT history entry for the amount taken from container rows
+            // DEDUCT type is skipped in all balance calculations — it only exists for history visibility.
+            const rowDeductKg = deductKgExact.minus(adjDeductKg);
+            if (rowDeductKg.gt("0.001")) {
+              await tx.insert(factoryRawMaterialAdjustments).values({
+                companyId,
+                date: today,
+                type: "DEDUCT",
+                kg: rowDeductKg.toFixed(3),
+                costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
+                currencyCode: ccy,
+                supplierId: Number(supplierId),
+                notes: notes || null,
+                reference: reference || null,
+              });
+            }
 
-        // 2. REMOVE adjustment for any overflow (from adjustment-sourced free)
-        let _insertedAdj = null;
-        if (adjDeductKg.gt(0)) {
-          [_insertedAdj] = await tx
-            .insert(factoryRawMaterialAdjustments)
-            .values({
-              companyId,
-              date: today,
-              type: "REMOVE",
-              kg: adjDeductKg.toFixed(3),
-              costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
-              currencyCode: ccy,
-              supplierId: Number(supplierId),
-              notes: notes ? `${notes} (auto-adj)` : "Deduct from received (auto-adj)",
-              reference: reference || null,
-            })
-            .returning();
-        }
+            // 2. REMOVE adjustment for any overflow (from adjustment-sourced free)
+            let _insertedAdj = null;
+            if (adjDeductKg.gt(0)) {
+              [_insertedAdj] = await tx
+                .insert(factoryRawMaterialAdjustments)
+                .values({
+                  companyId,
+                  date: today,
+                  type: "REMOVE",
+                  kg: adjDeductKg.toFixed(3),
+                  costPerKg: costPerKgNum > 0 ? String(costPerKgNum) : "0",
+                  currencyCode: ccy,
+                  supplierId: Number(supplierId),
+                  notes: notes ? `${notes} (auto-adj)` : "Deduct from received (auto-adj)",
+                  reference: reference || null,
+                })
+                .returning();
+            }
 
-        // 3. Write daybook entry for the balance update (if costPerKg provided)
-        if (costPerKgExact.gt(0)) {
-          const totalValue = deductKgExact.times(costPerKgExact);
-          const totalValueUsd = totalValue.times(fxRate);
+            // 3. Write daybook entry for the balance update (if costPerKg provided)
+            if (costPerKgExact.gt(0)) {
+              const totalValue = deductKgExact.times(costPerKgExact);
+              const totalValueUsd = totalValue.times(fxRate);
 
-          const [sup] = await tx
-            .select({ name: factorySuppliers.name })
-            .from(factorySuppliers)
-            .where(and(eq(factorySuppliers.id, Number(supplierId)), eq(factorySuppliers.companyId, companyId)))
-            .limit(1);
-          const supplierName = sup?.name || `Supplier #${supplierId}`;
+              const [sup] = await tx
+                .select({ name: factorySuppliers.name })
+                .from(factorySuppliers)
+                .where(and(eq(factorySuppliers.id, Number(supplierId)), eq(factorySuppliers.companyId, companyId)))
+                .limit(1);
+              const supplierName = sup?.name || `Supplier #${supplierId}`;
 
-          await writeDaybookEntry(tx, {
-            companyId,
-            txDate: today,
-            txType: "RAW_DEDUCT_RECEIVED",
-            referenceId: Number(supplierId),
-            description: `Deduct from received: ${deductKg} kg @ ${costPerKgNum} ${ccy} — ${supplierName}${notes ? ` (${notes})` : ""}`,
-            currencyCode: ccy,
-            amountCurrency: totalValue.negated().toNumber(),
-            fxRateToUsd: fxRate,
-            amountUsd: totalValueUsd.negated().toNumber(),
-          });
-        }
-      });
+              await writeDaybookEntry(tx, {
+                companyId,
+                txDate: today,
+                txType: "RAW_DEDUCT_RECEIVED",
+                referenceId: Number(supplierId),
+                description: `Deduct from received: ${deductKg} kg @ ${costPerKgNum} ${ccy} — ${supplierName}${notes ? ` (${notes})` : ""}`,
+                currencyCode: ccy,
+                amountCurrency: totalValue.negated().toNumber(),
+                fxRateToUsd: fxRate,
+                amountUsd: totalValueUsd.negated().toNumber(),
+              });
+            }
+          }
+        )
+      );
 
       res.json({ deducted: deductKg, rowsUpdated: updates.length, adjCreated: adjDeductKg.gt(0) });
     } catch (error: unknown) {

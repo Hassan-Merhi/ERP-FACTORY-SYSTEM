@@ -37,6 +37,10 @@ import {
 } from "@shared/schema";
 import { MoneyDecimal } from "../lib/money";
 import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 /**
  * One POS-import line: what the parse endpoint emits, and what the validate and
@@ -264,6 +268,8 @@ export function registerPosImportRoutes(app: Express) {
           if (!stockItem) {
             throw new HttpError(400, `Stock item not found for barcode: ${item.barcode}`);
           }
+          // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+          await assertNoBaleMirrorMovementTx(tx, req.session.currentCompanyId!, [stockItem.id], "pos-import");
 
           const [inventoryRecord] = await tx
             .select()
@@ -445,6 +451,7 @@ export function registerPosImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof HttpError && error.statusCode === 400) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }

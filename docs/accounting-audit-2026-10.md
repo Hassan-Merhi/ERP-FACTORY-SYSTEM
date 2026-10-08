@@ -454,6 +454,30 @@ Owner decision 5 and the 2026-10-08 additions (binding): a bale's cost is USD ma
 - **Left for other wave-11 agents (their files):** refuse an ERP sale or transfer of a bale-mirror item after the cut-over (POS, transfers); refuse offload of non-USD raw stock with no confirmed rate under perpetual (offload lifecycle).
 - Test: `wave11-factory-cost-basis`; updated `bale-cost-backfill-exact`.
 
+#### Wave 11 follow-ups (2026-10-08)
+
+Changed:
+- **Closing-stock reports** (`reportsClosingStockRoutes.ts`): the summary, the group detail and the carry-forward value each row with `countedStockRowValue(quantity, total_value)` over every non-deleted location (inactive ones included), bale-mirror items at zero value, so the report total equals `companyStockValuation().total`. They used quantity × average_rate over active locations only.
+- **GC migration preview** (`sp-migration/_helpers.ts`): `total_value` is `inventory.total_value`, not ROUND(quantity × average_rate, 4).
+- **Settlement variance:** verified, nothing to add. Transfers (create, edit, lifecycle, delete, silent transfer) post the net of their legs (the variance) against COGS; credit notes post the gap to COGS; location imports and stock adjustments offload the whole sub-ledger change to their own counter-account (the adjustment's difference line goes to INVENTORY_ADJUSTMENT, not COGS — see remaining).
+- **value_moved convention** documented in `valueExactReversal.ts` (direction from the document; `container_offload_items.value_moved` is the one signed column). Fixed the as-of replay of an offload line that returned stock (negative quantity): it was replayed as a receipt of a negative amount.
+- **Stock-adjustment type** compared trimmed and case-insensitively in the inventory line (`stockAdjustments.ts`), the history replay and the reversal/edit/toggle paths: an imported ` consumption ` line is an issue.
+- **Charge voucher edits** keep their posting identity: `PUT /api/vouchers/:id/with-entries` never touches `accounting_posting_requests`. The missing marker seen in tests is the test harness (`tests/voucherRequestIdentityTestBridge.mjs` clears posting requests after every test). The stock-in journal's match by charge number stays for legacy charge vouchers without a marker.
+- **Bale-mirror items after the cut-over:** ERP POS create/edit, POS import, credit-sales import, stock transfers (both create routes, edit, lifecycle) and silent transfer refuse an item of `factoryBaleMirrorStockItemIds` with 409 `FACTORY_BALE_MIRROR_STOCK` (`assertNoBaleMirrorMovementTx`, translated message).
+- **Offload of non-USD purchase orders** (`offload-lifecycle/execute.ts`): under perpetual inventory (cut-over applies to the offload date, not a supplier partner) an offload, replace or edit of a container with a non-USD purchase order is refused with 409 `CONTAINER_OFFLOAD_CURRENCY_RATE_UNCONFIRMED` (translated); ERP purchase orders carry no exchange rate, so there is no confirmed rate to value the stock at. Before the cut-over unchanged.
+- **Factory access boundary:** `/bale-cost/*` (reviewed re-cost) requires Factory Settings like the other cost repairs; it had no owner and was denied for every user. The retired `/bales/backfill-costs` (410) left the Settings list.
+- **Factory value events:** raw-stock deduct-received and its restore (WASTE), mix finalize (WASTE, remaining kg), mix delete (MATERIAL_PRICE, the reverse of the create) are measured with `withFactoryValuationEventTx`. A carry-forward now moves the leftover kg at exactly the closed mix's cost per kg (decimal), so it adds no drift.
+- **`getStableSupplierCost`** never reads a native cost as USD: a row with no `cost_per_kg_usd` is listed in `unvaluedRowIds` and makes the fallback 0 (no rate); every reader (locked-rate back-fill, read-only and bulk reads, supplier-rate recalculation) treats 0 as no rate.
+- **Reconciliation:** the factory lines on a past date say they are today's costing (`asOfBasis: "current"`, explicit basis text). A historical factory valuation is not feasible from the data: raw kg, mix kg and bale/mix costs are rewritten in place (deductions, mix edits/deletes, recalculations, cascades) and bale status changes carry no dated history.
+- **Ratchets:** float-money baseline lowered (`mix-batches/consume.ts` 3 → 0); write-evidence re-pinned (`reportsClosingStockRoutes.ts` left the backlog, ceiling 17); the daybook container-cost narration is translated.
+- Tests: `wave11-followups`, `wave11-followups-factory`; updated `closing-stock-report-exact`.
+
+Remaining:
+- A stock-adjustment production into short stock posts its settlement variance to INVENTORY_ADJUSTMENT (the voucher's difference line), not COGS as owner decision 2 says; splitting needs the variance per line.
+- Raw-material ADD/REMOVE adjustments (`factory_raw_material_adjustments`) are not in `factoryStockValuation` at all, so they change no factory value and record no event; a manual purchase's Dr Factory Raw Material Stock is reversed by the daily factory journal into Production Variance. Consumption (daily usage) stays in Production Variance (it is production).
+- Raw-stock receipt edits/deletes (`PATCH/DELETE /api/factory/raw-stock/receipts/:id`) are not tagged.
+- Other ERP sale paths (sales voucher create, optional-sale toggle) do not check the bale mirror.
+
 ## 7. Re-audit (2026-10-07, branch `claude/erp-accounting-audit-27nl3e` at `d151801`)
 
 Method: three independent read-only reviews of the code on the branch (posting and integrity; inventory and factory; chart of accounts, AR/AP, currency, multi-company and reporting). They verified the wave log against the code rather than taking it as given, and ran the targeted tests. The production database could not be queried: its IP allowlist is empty, so the 2026-10-06 production figures are the latest. **Production runs `main` (`9f2e4ce`); nothing on this branch is deployed.**

@@ -3,12 +3,11 @@
   "description": "Ratchet on evidence, not on tests. audit-write-route-coverage.mjs asks whether a sensitive write route is tested and holds that at zero; this asks whether a write leaves the trail the rest of the system reconciles against. The stock movement backlog is now fully classified with zero confirmed active unjournalled writers. Neither list is a list of bugs: a company hard-delete that removes every inventory row, or a scheduler purging rows for a deleted stock item, has nothing to journal. The list is what a reviewer must look at when a file joins it. Both entries pin the set as well as the count, because a backlog that holds steady while a different file joins it is a new write path with no evidence wearing an old number. Re-pin downward with UPDATE_WRITE_EVIDENCE_BASELINE=1; the audit refuses upward.",
   "stockWritesWithoutJournalEvidence": {
     "rationale": "Files that alter inventory without going through postStockMovementTx are measured because postStockMovementTx is the canonical stock movement journal writer. Phase 2 completed every reviewed active document movement: transfers, imports, voucher edits/deletes/toggles, factory bale movements, Supplier Partner postings, and container offload create/edit/reverse flows now leave canonical evidence in the same transaction as the quantity mutation. The remaining files are deliberately classified non-movements (teardown, revaluation, reconstruction, migration opening balances, identity merge) or unreachable shadowed code and therefore are retained for review rather than falsely journalled.",
-    "ceiling": 18,
+    "ceiling": 17,
     "files": [
       "server/routes/admin/deleted-items/permanent-delete.ts",
       "server/routes/admin/repair/inventory-values.ts",
       "server/routes/admin/repair/rebuild-inventory.ts",
-      "server/routes/reportsClosingStockRoutes.ts",
       "server/routes/sp-migration/spMigrationRunRoutes.ts",
       "server/routes/sp-migration/spMigrationStockRoutes.ts",
       "server/routes/sp/spMigrationCutoverReadiness.ts",
@@ -26,7 +25,7 @@
     ],
     "reviewed": {
       "teardown": {
-        "reason": "The inventory row is removed because the thing it belongs to is being erased \u2014 a company hard delete, a stock item purged from the deleted-items screen, an orphan sweep after a stock item is gone. There is no movement to record, and a journal row would be evidence pointing at a stock item that no longer exists.",
+        "reason": "The inventory row is removed because the thing it belongs to is being erased — a company hard delete, a stock item purged from the deleted-items screen, an orphan sweep after a stock item is gone. There is no movement to record, and a journal row would be evidence pointing at a stock item that no longer exists.",
         "files": [
           "server/routes/admin/deleted-items/permanent-delete.ts",
           "server/services/scheduler/maintenance.ts",
@@ -52,7 +51,6 @@
       "migration": {
         "reason": "One-off cutover paths that establish opening balances in a target company from a source company's closing stock. Arguably an opening balance is a movement from nothing and should be journalled; that is a genuine design question, recorded here rather than assumed either way.",
         "files": [
-          "server/routes/reportsClosingStockRoutes.ts",
           "server/routes/sp-migration/spMigrationRunRoutes.ts",
           "server/routes/sp-migration/spMigrationStockRoutes.ts",
           "server/routes/sp/spMigrationCutoverReadiness.ts",
@@ -60,7 +58,7 @@
         ]
       },
       "identity-merge": {
-        "reason": "Collapses two stock-item identifiers into one, or undoes that: inventory rows are re-pointed at the kept item and their balances recombined. No stock physically moved, so there is no movement to journal \u2014 but the quantity attributed to an item does change, which is worth knowing when reading a convergence discrepancy against a merged item.",
+        "reason": "Collapses two stock-item identifiers into one, or undoes that: inventory rows are re-pointed at the kept item and their balances recombined. No stock physically moved, so there is no movement to journal — but the quantity attributed to an item does change, which is worth knowing when reading a convergence discrepancy against a merged item.",
         "files": [
           "server/routes/stock/merge/bulk-merge.ts",
           "server/routes/stock/merge/merge-logs.ts",

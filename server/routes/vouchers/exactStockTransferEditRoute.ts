@@ -1,4 +1,5 @@
 import type { Express, NextFunction, Request, Response } from "express";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -146,6 +147,7 @@ export function registerExactStockTransferEditRoute(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock transfer data", errors: error.issues });
         }
+        if (sendBaleMirrorMovementRefusal(res, error)) return;
         return res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
       }
     }

@@ -202,9 +202,11 @@ export async function syncContainerStockInTx(
 
   // Charges booked by the offload: whatever account each charge voucher debited.
   // A charge voucher is the offload's by its posting identity, or by the number
-  // the offload gave it (<DUTY|OFFICE|TRANS|XFER|CHG>-<container>-<n>): editing
-  // a charge voucher from the voucher screen retires its posting identity, and
-  // the re-priced stock-in journal must still credit the charge (wave 11).
+  // the offload gave it (<DUTY|OFFICE|TRANS|XFER|CHG>-<container>-<n>): a charge
+  // voucher written before posting identities existed (or whose marker was
+  // cleared) has no identity, and the re-priced stock-in journal must still
+  // credit the charge (wave 11). Editing a charge voucher
+  // (PUT /api/vouchers/:id/with-entries) keeps its voucher row and identity.
   const chargeNumber = `^(DUTY|OFFICE|TRANS|XFER|CHG)-${escapeRegExp(container.container_number)}-[0-9]+$`;
   const charges = await rows<{ ledger_account_id: number; amount: string }>(
     tx,

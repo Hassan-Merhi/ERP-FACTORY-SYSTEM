@@ -2,6 +2,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { db } from "../db";
 import { MoneyDecimal } from "../lib/money";
+import { assertNoBaleMirrorMovementTx } from "./accounting/perpetualInventory/cutoverRefusal";
 import {
   moveTransferLegConservedTx,
   postTransferResidualTx,
@@ -263,6 +264,13 @@ async function validateAndApplyItems(
   journal?: { transferId: number; revision: number }
 ): Promise<{ relievedByGroup: Map<string, Decimal>; deltas: Decimal[] }> {
   await assertCompanyScope(tx, companyId, destinationLocationId, items);
+  // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+  await assertNoBaleMirrorMovementTx(
+    tx,
+    companyId,
+    items.map((item) => item.stockItemId),
+    "stock-transfer"
+  );
 
   // Negative inventory is intentionally allowed for stock transfers. This keeps
   // operational transfers unblocked when physical stock is moved before the

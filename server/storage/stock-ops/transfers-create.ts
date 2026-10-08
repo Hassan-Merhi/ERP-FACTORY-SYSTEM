@@ -17,6 +17,7 @@ import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuar
 import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
+import { assertNoBaleMirrorMovementTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 import {
   moveTransferLegConservedTx,
@@ -180,6 +181,13 @@ export async function applyStockTransferInventoryTx(
 ): Promise<void> {
   const movementItems = groupTransferMovementItems(input.items);
   await assertTransferCompanyScopeTx(tx, input.companyId, input.destinationLocationId, movementItems);
+  // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+  await assertNoBaleMirrorMovementTx(
+    tx,
+    input.companyId,
+    movementItems.map((item) => item.stockItemId),
+    "stock-transfer"
+  );
 
   const lockKeys = new Map<string, { locationId: number; stockItemId: number }>();
   for (const item of movementItems) {

@@ -9,6 +9,20 @@
  * moves exactly that value back, not quantity × today's (or the line's 2dp)
  * rate.
  *
+ * Direction is never read from the sign of value_moved; it comes from the
+ * document (readers take the magnitude, lineValueMoved):
+ *   - stock adjustment: Production in, Consumption out, Mixed (and any other
+ *     type) by the sign of the line's quantity; the type is compared trimmed
+ *     and case-insensitively (both casings are stored);
+ *   - sale / POS / credit-sales import lines: out;
+ *   - stock transfer lines: out of the source, into the destination (abs);
+ *   - credit note: in; debit note: out (abs).
+ * The one signed column is container_offload_items.value_moved: it is the
+ * line's signed sub-ledger change (valueDelta), negative on a net-negative PO
+ * line that returned stock, so the stock-in journal can sum it and a reversal
+ * subtracts it with the line's signed quantity. A reader of an offload line
+ * takes its direction from the sign of the quantity.
+ *
  * Legacy lines (value_moved NULL, written before wave 11) fall back to:
  *   - sales lines: the sale's COGS journal (COGS-{voucherId}) spread over the
  *     legacy lines pro rata to their total_cost (by quantity when every cost is

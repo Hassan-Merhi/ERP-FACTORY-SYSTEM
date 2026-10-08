@@ -1,5 +1,6 @@
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { logger } from "../../../lib/logger";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
@@ -418,25 +419,35 @@ export function registerRawStockAdjRoutes(app: Express) {
           )
           .orderBy(desc(factoryRawStock.offloadedAt));
 
-        await db.transaction(async (tx) => {
-          let remaining = toMoney(adj.kg);
-          for (const row of stockRows) {
-            if (remaining.lte("0.001")) break;
-            const received = toMoney(row.receivedKg);
-            // Add back all remaining to this row (newest first)
-            await tx
-              .update(factoryRawStock)
-              .set({ receivedKg: received.plus(remaining).toFixed(3) })
-              .where(eq(factoryRawStock.id, row.id));
-            remaining = ZERO;
-          }
-          // Hard-delete the DEDUCT record
-          await tx
-            .delete(factoryRawMaterialAdjustments)
-            .where(
-              and(eq(factoryRawMaterialAdjustments.id, id), eq(factoryRawMaterialAdjustments.companyId, companyId))
-            );
-        });
+        // Wave 11: restoring a deduction reverses its write-off (WASTE) in the
+        // daily factory stock journal.
+        await db.transaction((tx) =>
+          withFactoryValuationEventTx(
+            tx,
+            companyId,
+            "WASTE",
+            { sourceType: "factory-raw-deduct-restore", sourceId: id },
+            async () => {
+              let remaining = toMoney(adj.kg);
+              for (const row of stockRows) {
+                if (remaining.lte("0.001")) break;
+                const received = toMoney(row.receivedKg);
+                // Add back all remaining to this row (newest first)
+                await tx
+                  .update(factoryRawStock)
+                  .set({ receivedKg: received.plus(remaining).toFixed(3) })
+                  .where(eq(factoryRawStock.id, row.id));
+                remaining = ZERO;
+              }
+              // Hard-delete the DEDUCT record
+              await tx
+                .delete(factoryRawMaterialAdjustments)
+                .where(
+                  and(eq(factoryRawMaterialAdjustments.id, id), eq(factoryRawMaterialAdjustments.companyId, companyId))
+                );
+            }
+          )
+        );
       } else {
         // For ADD / REMOVE: soft-delete + clean up linked daybook entries and vouchers
         await db.transaction(async (tx) => {

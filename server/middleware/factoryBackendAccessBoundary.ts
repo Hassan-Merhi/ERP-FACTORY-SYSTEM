@@ -163,7 +163,7 @@ function invoicingRequirement(path: string): FactoryApiAccessRequirement {
 export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApiAccessRequirement | null {
   // Normalize from originalUrl so ownership matching is stable whether Express
   // invokes this as mounted middleware or as a direct handler.
-  const requestPath = (req.originalUrl.split("?", 1)[0] || req.path);
+  const requestPath = req.originalUrl.split("?", 1)[0] || req.path;
   const path =
     requestPath === "/api/factory"
       ? "/"
@@ -275,7 +275,11 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
 
-  if (hasPrefix(path, "/invoice-container-tracking") || hasPrefix(path, "/shipping-container-rows") || hasPrefix(path, "/shipping-invoice-docs")) {
+  if (
+    hasPrefix(path, "/invoice-container-tracking") ||
+    hasPrefix(path, "/shipping-container-rows") ||
+    hasPrefix(path, "/shipping-invoice-docs")
+  ) {
     return requirement("factory/production-report", ["hide_tab_overview_shipping"]);
   }
 
@@ -296,7 +300,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     path === "/payroll/migrate-city-split" ||
     path === "/payroll/migrate-worker-names" ||
     path === "/payroll/migrate-salary-groups" ||
-    path === "/bales/backfill-costs" ||
+    // The reviewed bale/mix re-cost (preview and Owner apply, wave 11) is a cost
+    // repair like /repair-perkg-prices; the retired /bales/backfill-costs (410)
+    // now falls to the Bales parent below.
+    hasPrefix(path, "/bale-cost") ||
     path === "/bilingual-snapshots/backfill" ||
     path === "/bilingual-snapshots/diagnose" ||
     (hasPrefix(path, "/settings") && isWrite(req)) ||
@@ -325,11 +332,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     }
     return requirement("factory/production-report");
   }
-  if (
-    hasPrefix(path, "/bale-ledger") ||
-    hasPrefix(path, "/daily-report") ||
-    hasPrefix(path, "/weekly-report")
-  ) {
+  if (hasPrefix(path, "/bale-ledger") || hasPrefix(path, "/daily-report") || hasPrefix(path, "/weekly-report")) {
     return requirement("factory/production-report");
   }
 
@@ -441,11 +444,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     );
   }
   if (hasPrefix(path, "/workers")) return workerRequirement(req, path);
-  if (
-    hasPrefix(path, "/payroll") ||
-    hasPrefix(path, "/payrolls") ||
-    hasPrefix(path, "/cash-accounts")
-  ) {
+  if (hasPrefix(path, "/payroll") || hasPrefix(path, "/payrolls") || hasPrefix(path, "/cash-accounts")) {
     return requirement("factory/payroll-hub", [PAYROLL_WORKERS, WORKERS_PAYROLL, "hide_tab_payroll_records"]);
   }
   if (
@@ -573,11 +572,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   ) {
     return requirement("factory/raw-materials");
   }
-  if (
-    hasPrefix(path, "/containers") ||
-    hasPrefix(path, "/container-doc-types") ||
-    hasPrefix(path, "/freight")
-  ) {
+  if (hasPrefix(path, "/containers") || hasPrefix(path, "/container-doc-types") || hasPrefix(path, "/freight")) {
     if (isWrite(req)) return requirement("factory/containers-hub");
     return anyOf(
       requirement("factory/containers-hub"),
@@ -691,15 +686,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
       hasPrefix(path, "/rental/auto-transfer-config") ||
       hasPrefix(path, "/rental/reconciliation")
     ) {
-      return anyOf(
-        requirement("factory/rental/shops"),
-        requirement("factory/rental/payments")
-      );
+      return anyOf(requirement("factory/rental/shops"), requirement("factory/rental/payments"));
     }
-    return anyOf(
-      requirement("factory/rental/shops"),
-      requirement("factory/rental/warehouses")
-    );
+    return anyOf(requirement("factory/rental/shops"), requirement("factory/rental/warehouses"));
   }
 
   if (hasPrefix(path, "/uploads/workers")) {
@@ -775,7 +764,7 @@ export async function enforceFactoryBackendAccess(req: Request, res: Response, n
   try {
     const rule = resolveFactoryBackendAccessRequirement(req);
     if (!rule) {
-      const requestPath = (req.originalUrl.split("?", 1)[0] || req.path);
+      const requestPath = req.originalUrl.split("?", 1)[0] || req.path;
       const path =
         requestPath === "/api/factory"
           ? "/"

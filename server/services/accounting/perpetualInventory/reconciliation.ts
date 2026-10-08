@@ -19,8 +19,19 @@
  *   Factory Raw Material,      the factory costing (factoryStockValuation),
  *   WIP, Finished Goods        which the daily factory journal posts to. The
  *                              factory costing has no history, so a past date
- *                              compares the ledger then with the costing now
- *                              (the basis says so).
+ *                              compares the ledger then with the costing now:
+ *                              the line's basis says so and `asOfBasis` is
+ *                              "current" (not "as-of"), so a reader does not
+ *                              take its difference for a ledger error.
+ *
+ * Why the factory side is not replayed (wave 11 follow-up): the costing is
+ * rewritten in place. Raw stock keeps only its current received/used kg
+ * (deductions, mix edits and deletes change them with no dated movement),
+ * container cost recalculations and the cost cascade overwrite raw, mix and
+ * bale costs, and a bale's status changes (pressed, reserved, sold, written
+ * off) carry no dated history. A past factory valuation would therefore be a
+ * guess; the dated record of what the costing was is the daily
+ * GL-FACTORY-STOCK journal itself.
  *
  * The ledger side books each voucher on its effective date when it has one
  * (ledgerBalancesByCode). The report lists factory invoices that carry no
@@ -47,6 +58,11 @@ export interface ReconciliationLine {
   subLedger: string;
   difference: string;
   basis: string;
+  /**
+   * "as-of": the sub-ledger side is valued as of the report date; "current":
+   * it is today's value (the factory costing on a past date, see above).
+   */
+  asOfBasis: "as-of" | "current";
 }
 
 export interface PerpetualInventoryReconciliation {
@@ -113,9 +129,12 @@ export async function reconcilePerpetualInventory(
   const supplierPartner = await isSupplierPartnerCompany(executor, companyId);
   const today = new Date().toISOString().slice(0, 10);
   const factory = await factoryStockValuation(executor, companyId);
-  const factoryBasis = asOf >= today ? "factory costing" : "factory costing now (the costing has no history)";
+  const factoryHistorical = asOf < today;
+  const factoryBasis = factoryHistorical
+    ? `factory costing today, not as of ${asOf} (the factory costing keeps no history; the difference includes every factory movement since)`
+    : "factory costing";
   const erpStock = supplierPartner ? null : await erpStockSubLedger(executor, companyId, asOf, today);
-  const expected: Array<{ accountCode: string; value: Decimal; basis: string }> = [
+  const expected: Array<{ accountCode: string; value: Decimal; basis: string; current?: boolean }> = [
     ...(erpStock === null
       ? []
       : [
@@ -130,9 +149,24 @@ export async function reconcilePerpetualInventory(
             basis: "purchase cost of POs not yet offloaded",
           },
         ]),
-    { accountCode: "FACTORY_RAW_MATERIAL_STOCK", value: factory.raw, basis: `${factoryBasis}: raw material` },
-    { accountCode: "FACTORY_WIP", value: factory.wip, basis: `${factoryBasis}: work in progress` },
-    { accountCode: "FACTORY_FINISHED_GOODS", value: factory.finished, basis: `${factoryBasis}: finished goods` },
+    {
+      accountCode: "FACTORY_RAW_MATERIAL_STOCK",
+      value: factory.raw,
+      basis: `${factoryBasis}: raw material`,
+      current: factoryHistorical,
+    },
+    {
+      accountCode: "FACTORY_WIP",
+      value: factory.wip,
+      basis: `${factoryBasis}: work in progress`,
+      current: factoryHistorical,
+    },
+    {
+      accountCode: "FACTORY_FINISHED_GOODS",
+      value: factory.finished,
+      basis: `${factoryBasis}: finished goods`,
+      current: factoryHistorical,
+    },
   ];
   const ledger = await ledgerBalancesByCode(
     executor,
@@ -148,6 +182,7 @@ export async function reconcilePerpetualInventory(
       subLedger: line.value.toFixed(2),
       difference: held.minus(line.value).toFixed(2),
       basis: line.basis,
+      asOfBasis: line.current ? ("current" as const) : ("as-of" as const),
     };
   });
   const unpostedFactoryInvoices = await listUnpostedFactoryInvoices(executor, companyId);
