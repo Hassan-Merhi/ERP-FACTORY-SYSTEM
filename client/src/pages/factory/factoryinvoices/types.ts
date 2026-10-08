@@ -31,6 +31,7 @@ export interface CustomerOrder {
   proformaName?: string | null;
   destination?: string | null;
   containerNotes?: string | null;
+  bookingInfo?: string | null;
   isHidden?: boolean;
 }
 
