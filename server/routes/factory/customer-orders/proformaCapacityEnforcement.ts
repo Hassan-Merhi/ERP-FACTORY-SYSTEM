@@ -75,6 +75,35 @@ function remainingTotalForScope(snapshot: ProformaCapacitySnapshot, scope: Profo
     .reduce((sum, article) => sum + Math.max(0, article.requestedQty - article.currentOrderLoadedQty), 0);
 }
 
+export interface LoadingProformaProgress {
+  requestedQty: number;
+  loadedQty: number;
+  remainingQty: number;
+  satisfied: boolean;
+}
+
+/**
+ * Completion and deletion-recovery must use THIS loading's consumption,
+ * not the aggregate quantity loaded by siblings that reuse its proforma.
+ * Quantity is evaluated article-by-article, so overloading one article does
+ * not hide missing bales of another article.
+ */
+export function getLoadingProformaProgress(snapshot: ProformaCapacitySnapshot): LoadingProformaProgress {
+  const onProforma = snapshot.articles.filter(article => article.isOnProforma);
+  const requestedQty = onProforma.reduce((sum, article) => sum + Math.max(0, article.requestedQty), 0);
+  const loadedQty = onProforma.reduce((sum, article) => sum + Math.max(0, article.currentOrderLoadedQty), 0);
+  const remainingQty = onProforma.reduce(
+    (sum, article) => sum + Math.max(0, article.requestedQty - article.currentOrderLoadedQty),
+    0
+  );
+  return {
+    requestedQty,
+    loadedQty,
+    remainingQty,
+    satisfied: requestedQty > 0 && remainingQty === 0,
+  };
+}
+
 /**
  * Evaluate one proposed quantity increase. Per-loading scope enforces only what
  * the current loading itself has consumed; sibling loadings are ignored. This
