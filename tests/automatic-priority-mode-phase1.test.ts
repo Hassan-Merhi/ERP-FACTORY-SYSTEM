@@ -83,6 +83,13 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
       [ctx.companyId]
     );
     expect(stored.rows[0]?.value).toBe("true");
+    // Creating the mode flag must not silently turn off the existing Factory
+    // intelligence features when the settings row did not yet exist.
+    const defaults = await pool.query<{ dashboardEnabled: boolean; rolesEnabled: boolean }>(
+      'SELECT dashboard_enabled AS "dashboardEnabled", roles_enabled AS "rolesEnabled" FROM factory_settings WHERE company_id = $1',
+      [ctx.companyId]
+    );
+    expect(defaults.rows[0]).toMatchObject({ dashboardEnabled: true, rolesEnabled: true });
     const audit = await pool.query<{ changes: Record<string, { old: boolean; new: boolean }> }>(
       `SELECT changes FROM audit_log WHERE company_id = $1 AND action = 'settings_change'
        AND record_identifier = 'automaticPriorityPrintingEnabled'`,
@@ -128,6 +135,19 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
     await setRole("Admin");
   });
 
+  it("allows Owner and Developer but still requires the active company session", async () => {
+    await setRole("Owner");
+    expect((await agent.get(ENDPOINT)).body.canEdit).toBe(true);
+    const owner = await agent.put(ENDPOINT).send({ enabled: true });
+    expect(owner.status).toBe(200);
+
+    await setRole("Developer");
+    expect((await agent.get(ENDPOINT)).body.canEdit).toBe(true);
+    const developer = await agent.put(ENDPOINT).send({ enabled: false });
+    expect(developer.status).toBe(200);
+    await setRole("Admin");
+  });
+
   it("keeps OFF until explicitly re-enabled and audits the state transition", async () => {
     const off = await agent.put(ENDPOINT).send({ enabled: false });
     expect(off.status).toBe(200);
@@ -145,6 +165,6 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
          AND record_identifier = 'automaticPriorityPrintingEnabled' ORDER BY id ASC`,
       [ctx.companyId]
     );
-    expect(audits.rows).toHaveLength(4);
+    expect(audits.rows).toHaveLength(6);
   });
 });
