@@ -7,6 +7,8 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
+import { firstRow } from "../../../lib/queryResult";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../../factory/customer-orders/priorityScanQueue";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import {
   factoryCategories,
@@ -184,13 +186,42 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             }
           });
           break;
-        case "factoryBale":
-          // Restore bale to IN_STOCK so it's usable again
-          await db
-            .update(factoryBales)
-            .set({ deletedAt: null, status: "IN_STOCK", updatedAt: new Date() })
-            .where(and(eq(factoryBales.id, itemId), eq(factoryBales.companyId, companyId)));
+        case "factoryBale": {
+          const result = await db.transaction(async tx => {
+            await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+            const [bale] = await tx.select({
+              id: factoryBales.id, deletedAt: factoryBales.deletedAt,
+            }).from(factoryBales)
+              .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, itemId))).limit(1);
+            if (!bale) return "missing";
+            if (!bale.deletedAt) return "already-active";
+
+            // Physical stock removals have already debited ERP inventory and
+            // appended canonical journal evidence. Simply clearing deletedAt
+            // would create a bale without inventory. It needs a controlled
+            // re-entry with a new receipt and audit workflow instead.
+            const removal = firstRow(await tx.execute(sql`
+              SELECT id FROM canonical_stock_movements
+               WHERE company_id = ${companyId}
+                 AND source_type = 'factory_bale_removal'
+                 AND source_id = ${String(itemId)}
+               LIMIT 1
+            `));
+            if (removal) return "requires-reentry";
+            await tx.update(factoryBales)
+              .set({ deletedAt: null, status: "IN_STOCK", updatedAt: new Date() })
+              .where(and(eq(factoryBales.id, itemId), eq(factoryBales.companyId, companyId)));
+            return "restored";
+          });
+          if (result === "missing") return res.status(404).json({ message: "Bale not found" });
+          if (result === "already-active") return res.status(409).json({ message: "Bale is not deleted" });
+          if (result === "requires-reentry") {
+            return res.status(409).json({
+              message: "This physical bale removal has an ERP inventory reversal. Use a controlled stock re-entry; restoring the status alone would create phantom inventory.",
+            });
+          }
           break;
+        }
         case "customerProforma":
           await db
             .update(customerProformas)
