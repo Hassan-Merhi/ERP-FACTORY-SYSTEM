@@ -374,6 +374,9 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     .label-top { display: flex; justify-content: space-between; align-items: center; }
     .logo-section { flex-shrink: 0; }
     .logo-img { height: 12mm; width: auto; object-fit: contain; display: block; }
+    .priority-small-logo { width: 20mm; min-height: 11mm; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .priority-hmd-letters { font: italic 900 20pt/1 Arial, Helvetica, sans-serif; letter-spacing: -2px; }
+    .priority-hmd-subtitle { color: #000 !important; font: 900 3.6pt/1.1 Arial, Helvetica, sans-serif; }
     .info-section { text-align: right; font-size: 7pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }
