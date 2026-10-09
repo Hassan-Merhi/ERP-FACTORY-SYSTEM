@@ -212,6 +212,34 @@ describe("boot backfill of old one-sided stock adjustment vouchers", () => {
     expect(await readEntries(production)).toHaveLength(2);
   });
 
+  it("does not double-post when two instances backfill at the same time", async () => {
+    const voucherId = await createLegacyOneSidedVoucher("production", "7.25");
+
+    await Promise.all([backfillStockAdjustmentInventorySide(pool), backfillStockAdjustmentInventorySide(pool)]);
+
+    const entries = await readEntries(voucherId);
+    expect(sideTotals(entries, "INVENTORY")).toEqual({ debit: 7.25, credit: 0 });
+    expectBalanced(entries);
+  });
+
+  it("rebuilds a stale Inventory side left by an older instance's edit", async () => {
+    const voucherId = await createLegacyOneSidedVoucher("production", "10.00");
+    const inventory = await ledgerAccount("INVENTORY");
+    if (!inventory) throw new Error("INVENTORY account missing");
+    // An earlier mirror of a line the edit has since replaced.
+    await db.execute(sql`
+      INSERT INTO voucher_entries (voucher_id, company_id, ledger_account_id, debit_amount, credit_amount, narration)
+      VALUES (${voucherId}, ${ctx.companyId}, ${inventory.id}, '4.00', '0', 'stale mirror')
+    `);
+
+    await backfillStockAdjustmentInventorySide(pool);
+
+    const entries = await readEntries(voucherId);
+    expect(sideTotals(entries, "INVENTORY")).toEqual({ debit: 10, credit: 0 });
+    expect(entries).toHaveLength(2);
+    expectBalanced(entries);
+  });
+
   it("turns an old credit-note INVENTORY expense row into the Inventory asset", async () => {
     await db.execute(sql`
       UPDATE ledger_accounts SET name = 'Credit Note - Customer Return', account_type = 'Indirect Expense', sub_type = ''

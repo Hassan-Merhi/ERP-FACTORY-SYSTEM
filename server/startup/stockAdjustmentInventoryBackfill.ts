@@ -14,13 +14,38 @@ import { getErrorMessage } from "../lib/httpHandlers";
  * account with debit and credit swapped, so the voucher balances.
  *
  * Only live, non-optional vouchers that carry a stock adjustment, consist of
- * adjustment lines alone and are out of balance are touched. Once balanced they
- * no longer match, so later boots find nothing to do. Each voucher is written
- * under its own savepoint: one the closed-period guard refuses is skipped and
- * logged, and boot carries on.
+ * adjustment and Inventory lines alone and are out of balance are touched. Their
+ * Inventory side is rebuilt from the adjustment lines, so a voucher an older
+ * instance edited after it was backfilled (leaving stale Inventory lines) is
+ * repaired too. Once balanced they no longer match, so later boots find nothing
+ * to do.
+ *
+ * Each voucher is locked FOR UPDATE and re-checked before it is written. Edits
+ * take the same lock, and a second instance booting at the same time waits,
+ * then finds the voucher balanced and leaves it. Each voucher is written under
+ * its own savepoint: one the closed-period guard refuses is skipped and logged,
+ * and boot carries on.
  */
 
 const ADJUSTMENT_CODES = ["STOCK_ADJUSTMENT", "PRODUCTION_ADJUSTMENT", "CONSUMPTION_EXPENSE"];
+const REBUILDABLE_CODES = [...ADJUSTMENT_CODES, "INVENTORY"];
+
+/** Live, non-optional adjustment vouchers made of adjustment and Inventory lines only, out of balance. */
+const UNBALANCED_ADJUSTMENT_VOUCHERS = `
+  SELECT v.id
+    FROM vouchers v
+    JOIN voucher_entries ve ON ve.voucher_id = v.id
+    LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+   WHERE v.company_id = $1
+     AND v.deleted_at IS NULL
+     AND v.optional = false
+     AND EXISTS (SELECT 1 FROM stock_adjustment_vouchers sav WHERE sav.voucher_id = v.id)
+     AND ($3::int IS NULL OR v.id = $3)
+   GROUP BY v.id
+  HAVING bool_and(COALESCE(la.code = ANY($2::text[]), false))
+     AND bool_or(la.code <> 'INVENTORY')
+     AND SUM(COALESCE(ve.debit_amount, 0)) <> SUM(COALESCE(ve.credit_amount, 0))
+   ORDER BY v.id`;
 
 export type StockAdjustmentBackfillResult = { balanced: number; skipped: number };
 
@@ -50,21 +75,11 @@ async function backfillCompany(client: PoolClient, companyId: number): Promise<S
   await client.query("BEGIN");
   try {
     await client.query("SELECT set_config('app.current_company_id', $1, true)", [String(companyId)]);
-    const { rows: candidates } = await client.query<{ id: number }>(
-      `SELECT v.id
-         FROM vouchers v
-         JOIN voucher_entries ve ON ve.voucher_id = v.id
-         LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-        WHERE v.company_id = $1
-          AND v.deleted_at IS NULL
-          AND v.optional = false
-          AND EXISTS (SELECT 1 FROM stock_adjustment_vouchers sav WHERE sav.voucher_id = v.id)
-        GROUP BY v.id
-       HAVING bool_and(COALESCE(la.code = ANY($2::text[]), false))
-          AND SUM(COALESCE(ve.debit_amount, 0)) <> SUM(COALESCE(ve.credit_amount, 0))
-        ORDER BY v.id`,
-      [companyId, ADJUSTMENT_CODES]
-    );
+    const { rows: candidates } = await client.query<{ id: number }>(UNBALANCED_ADJUSTMENT_VOUCHERS, [
+      companyId,
+      REBUILDABLE_CODES,
+      null,
+    ]);
     if (candidates.length === 0) {
       await client.query("COMMIT");
       return result;
@@ -74,6 +89,24 @@ async function backfillCompany(client: PoolClient, companyId: number): Promise<S
     for (const { id: voucherId } of candidates) {
       await client.query("SAVEPOINT stock_adjustment_backfill");
       try {
+        // Lock the voucher as edits do, then re-check it: another instance or an
+        // edit may have balanced or changed it since the candidate scan.
+        await client.query("SELECT id FROM vouchers WHERE id = $1 FOR UPDATE", [voucherId]);
+        const { rowCount: stillUnbalanced } = await client.query(UNBALANCED_ADJUSTMENT_VOUCHERS, [
+          companyId,
+          REBUILDABLE_CODES,
+          voucherId,
+        ]);
+        if (!stillUnbalanced) {
+          await client.query("RELEASE SAVEPOINT stock_adjustment_backfill");
+          continue;
+        }
+        await client.query(
+          `DELETE FROM voucher_entries ve
+             USING ledger_accounts la
+            WHERE la.id = ve.ledger_account_id AND ve.voucher_id = $1 AND la.code = 'INVENTORY'`,
+          [voucherId]
+        );
         await client.query(
           `INSERT INTO voucher_entries
              (voucher_id, company_id, ledger_account_id, debit_amount, credit_amount, narration,
