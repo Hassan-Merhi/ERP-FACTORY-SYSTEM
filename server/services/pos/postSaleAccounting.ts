@@ -31,6 +31,8 @@ import type {
 } from "./posSaleTypes";
 import { findLinkedCustomerId } from "./updateCustomerBalance";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
+import { sumMoney } from "../../lib/money";
+import { saleTotalCents, spDeductionAmount as spDeductionAmountFor, spPayableAfterDeduction } from "./spDeduction";
 
 /**
  * Get or create SALES revenue account (outside transaction for simplicity).
@@ -79,7 +81,7 @@ export async function fetchSupplierPartnerAccountingContext(
   const spPosDeductionPerQty = isSpCompany
     ? parseFloat(String(location.supplierPartnerPayableDeductionPerQty ?? "0")) || 0
     : 0;
-  const spPosTotalQtySold = isSpCompany ? inventoryValidation.reduce((sum, v) => sum + v.saleQty, 0) : 0;
+  const spPosTotalQtySold = isSpCompany ? sumMoney(inventoryValidation.map((v) => v.saleQty)).toNumber() : 0;
 
   if (!isSpCompany) {
     return {
@@ -334,15 +336,15 @@ export async function insertSaleAccountingEntries(
   //   Dr Cash                           = grandTotal  (debit entry already written above)
   //   Cr Supplier Cash Payable          = grandTotal − deductionAmount
   //   Cr Deduction Clearing (hidden)    = deductionAmount          (if deduction > 0)
-  const grandTotalRounded = Number(grandTotal.toFixed(2));
-  const spDeductionAmount = Number((spCtx.spPosTotalQtySold * spCtx.spPosDeductionPerQty).toFixed(2));
+  const grandTotalRounded = saleTotalCents(grandTotal);
+  const spDeductionAmount = spDeductionAmountFor(spCtx.spPosTotalQtySold, spCtx.spPosDeductionPerQty);
   if (spDeductionAmount > Math.abs(grandTotalRounded)) {
     throw new Error(
       `Supplier payable deduction (${spDeductionAmount}) exceeds the sale total (${grandTotalRounded}). ` +
         `Adjust the deduction per qty setting on this location.`
     );
   }
-  const spPayableAmount = Number((grandTotalRounded - spDeductionAmount).toFixed(2));
+  const spPayableAmount = spPayableAfterDeduction(grandTotalRounded, spDeductionAmount);
 
   if (grandTotalRounded > 0) {
     if (spPayableAmount > 0) {

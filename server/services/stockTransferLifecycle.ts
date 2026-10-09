@@ -5,6 +5,7 @@ import { locations, stockItems, stockTransferItems, stockTransferVouchers, vouch
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
 import type { DbTransaction } from "../db";
 import { firstRow } from "../lib/queryResult";
+import { MoneyDecimal, lineAmount, toMoney } from "../lib/money";
 
 /** A stock-transfer voucher row locked FOR UPDATE, joined to its voucher header. */
 type LockedTransferRow = Record<string, unknown> & {
@@ -77,10 +78,17 @@ function normalizeItems(
     const key = `${stockItemId}:${sourceLocationId}`;
     const existing = merged.get(key);
     if (existing) {
-      const totalQuantity = existing.quantity + quantity;
-      const weightedRate =
-        totalQuantity > 0 ? (existing.quantity * existing.rate + quantity * rate) / totalQuantity : rate;
-      merged.set(key, { stockItemId, sourceLocationId, quantity: totalQuantity, rate: weightedRate });
+      // Exact merge: the combined value over the combined quantity.
+      const totalQuantity = toMoney(existing.quantity).plus(quantity);
+      const weightedRate = totalQuantity.gt(0)
+        ? lineAmount(existing.quantity, existing.rate).plus(lineAmount(quantity, rate)).dividedBy(totalQuantity)
+        : toMoney(rate);
+      merged.set(key, {
+        stockItemId,
+        sourceLocationId,
+        quantity: totalQuantity.toNumber(),
+        rate: weightedRate.toNumber(),
+      });
     } else {
       merged.set(key, { stockItemId, sourceLocationId, quantity, rate });
     }
@@ -252,9 +260,9 @@ async function replaceTransferItems(
         transferId,
         stockItemId: item.stockItemId,
         sourceLocationId: item.sourceLocationId,
-        quantity: item.quantity.toFixed(3),
-        rate: item.rate.toFixed(2),
-        totalAmount: (item.quantity * item.rate).toFixed(2),
+        quantity: toMoney(item.quantity).toFixed(3),
+        rate: toMoney(item.rate).toFixed(2),
+        totalAmount: lineAmount(item.quantity, item.rate).toFixed(2),
       }))
     )
     .returning();
@@ -335,7 +343,10 @@ export async function saveStockTransferLifecycle(
       });
     }
 
-    const totalAmount = normalizedItems.reduce((sum, item) => sum + item.quantity * item.rate, 0);
+    const totalAmount = normalizedItems.reduce(
+      (sum, item) => sum.plus(lineAmount(item.quantity, item.rate)),
+      new MoneyDecimal(0)
+    );
     await tx
       .update(stockTransferVouchers)
       .set({
@@ -401,7 +412,9 @@ export async function finalizeOptionalStockTransfer(
       destinationLocationId
     );
     await assertCompanyScope(tx, companyId, destinationLocationId, items);
-    const totalAmount = items.reduce((sum, item) => sum + item.quantity * item.rate, 0).toFixed(2);
+    const totalAmount = items
+      .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
+      .toFixed(2);
 
     const inventoryApplied = Boolean(locked.inventory_applied);
     const optional = Boolean(locked.optional);

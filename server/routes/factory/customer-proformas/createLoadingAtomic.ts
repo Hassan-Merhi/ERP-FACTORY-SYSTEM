@@ -17,6 +17,7 @@ import {
   allocateRemainingProformaLines,
   evaluateProformaLoadingAvailability,
 } from "../customer-orders/proformaCapacityEnforcement";
+import { toMoney } from "../../../lib/money";
 
 export class CreateLoadingFromProformaError extends Error {
   constructor(
@@ -52,9 +53,7 @@ export async function createLoadingFromProformaAtomically(input: CreateLoadingFr
     const [proforma] = await tx
       .select()
       .from(customerProformas)
-      .where(
-        and(eq(customerProformas.id, input.proformaId), eq(customerProformas.companyId, input.companyId))
-      )
+      .where(and(eq(customerProformas.id, input.proformaId), eq(customerProformas.companyId, input.companyId)))
       .limit(1);
     if (!proforma) throw new CreateLoadingFromProformaError("Proforma not found", 404);
     if (!proforma.isActive) {
@@ -163,10 +162,11 @@ export async function createLoadingFromProformaAtomically(input: CreateLoadingFr
         const resolvedBaleName =
           proformaProductNameMap.get(bale.articleCode || "") || bale.productName || bale.articleCode || bale.baleCode;
         const linePricingMode = line.pricingMode ?? "per_bale";
-        const linePerKg = parseFloat(String(line.pricePerKg ?? "0"));
+        const linePerKg = toMoney(line.pricePerKg);
+        // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
         const resolvedPriceUsed =
-          linePricingMode === "per_kg" && linePerKg > 0
-            ? ((parseFloat(String(bale.weightKg || "0")) || 0) * linePerKg).toFixed(2)
+          linePricingMode === "per_kg" && linePerKg.gt(0)
+            ? toMoney(bale.weightKg).times(linePerKg).toFixed(2)
             : String(line.pricePerBale ?? "0");
 
         await tx.insert(customerOrderBales).values({
