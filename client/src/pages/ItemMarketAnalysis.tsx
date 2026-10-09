@@ -311,7 +311,6 @@ export default function ItemMarketAnalysis() {
       .sort((left, right) => left.name.localeCompare(right.name) || left.itemKey.localeCompare(right.itemKey));
   }, [rows]);
 
-
   const handleExportExcel = async () => {
     if (!data || isFetching || isExporting || search.trim() !== debouncedSearch) return;
     setIsExporting(true);
