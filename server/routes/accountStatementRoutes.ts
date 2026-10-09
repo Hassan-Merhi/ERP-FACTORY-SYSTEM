@@ -117,7 +117,7 @@ export function registerAccountStatementRoutes(app: Express) {
         const endDate = endDateRaw;
         const endDateValidation = validateStatementDateRange(undefined, endDate);
         if (!endDateValidation.ok) return res.status(400).json({ message: endDateValidation.message });
-  
+
         const typeToColumn: Record<string, PgColumn> = {
           ledger: voucherEntries.ledgerAccountId,
           bank: voucherEntries.bankAccountId,
@@ -128,7 +128,7 @@ export function registerAccountStatementRoutes(app: Express) {
         };
         const entryColumn = typeToColumn[accountType];
         if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
-  
+
         let rawOB = new MoneyDecimal(0);
         let obSide = "Dr";
         if (accountType === "ledger") {
@@ -143,7 +143,7 @@ export function registerAccountStatementRoutes(app: Express) {
             .limit(1);
           rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
           obSide = linkedCust?.side ?? acct?.side ?? "Dr";
-  
+
           if (linkedCust) {
             const currentCompany = await storage.getCompanyById(companyId);
             if (currentCompany?.companyType === "factory") {
@@ -151,7 +151,7 @@ export function registerAccountStatementRoutes(app: Express) {
               const dateFilter = endDate ? sql`${vouchers.voucherDate} < ${endDate}` : sql`1=1`;
               const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
               const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
-  
+
               const [salesRows, cbRows, lVRows, cVRows] = await Promise.all([
                 db
                   .select({ total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)` })
@@ -209,7 +209,7 @@ export function registerAccountStatementRoutes(app: Express) {
                     )
                   ),
               ]);
-  
+
               const ob = toMoney(linkedCust.ob);
               const side = linkedCust.side || "Dr";
               const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
@@ -259,10 +259,10 @@ export function registerAccountStatementRoutes(app: Express) {
           rawOB = toMoney(acct?.ob);
           obSide = "Dr";
         }
-  
+
         const isSupplier = accountType === "supplier";
         let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
-  
+
         if (endDate) {
           const conditions = [
             eq(entryColumn, accountId),
@@ -279,11 +279,11 @@ export function registerAccountStatementRoutes(app: Express) {
             .from(voucherEntries)
             .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
             .where(and(...conditions));
-  
+
           const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
           balance = balance.plus(isSupplier ? net.negated() : net);
         }
-  
+
         res.json({ balance: balance.toNumber() });
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
