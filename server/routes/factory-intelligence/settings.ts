@@ -10,6 +10,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { cache } from "../../lib/simpleCache";
 import { eq, sql } from "drizzle-orm";
+import { requireRole } from "../../auth";
+import { writeAuditEvent } from "../../services/audit";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../factory/customer-orders/priorityScanQueue";
 import { factorySettings } from "@shared/schema";
 
@@ -27,7 +29,9 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
         let [settings] = await db.select().from(factorySettings).where(eq(factorySettings.companyId, companyId));
 
         if (!settings) {
-          [settings] = await db
+          // Another request may create the settings row at the same time.
+          // Do not overwrite the operational flag if that happens.
+          const [created] = await db
             .insert(factorySettings)
             .values({
               companyId,
@@ -47,7 +51,10 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
               supplierReportEnabled: true,
               supplierStatementEnabled: true,
             })
+            .onConflictDoNothing()
             .returning();
+          settings = created ??
+            (await db.select().from(factorySettings).where(eq(factorySettings.companyId, companyId)))[0];
         }
 
         // Spread extraSettings so clients see all flags as top-level fields
@@ -62,42 +69,90 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
     }
   });
 
-  // Dedicated, company-scoped operational switch. Unlike ordinary UI visibility
-  // flags, changing this one affects allocation and must be serialized with
-  // Priority Scan writers. OFF never reverses allocations already recorded.
+  // Unlike UI visibility flags, this operational switch can assign physical
+  // bales to customer orders. It has a dedicated role-guarded write endpoint,
+  // is scoped ONLY to the active session company, and defaults to OFF.
   app.get("/api/factory/automatic-priority-mode", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    const [row] = await db.select({ extraSettings: factorySettings.extraSettings })
-      .from(factorySettings).where(eq(factorySettings.companyId, companyId));
-    const flags = (row?.extraSettings || {}) as Record<string, unknown>;
-    res.set("Cache-Control", "private, no-store");
-    return res.json({ enabled: flags.automaticPriorityPrintingEnabled === true });
-  });
-
-  app.put("/api/factory/automatic-priority-mode", requireAuth, async (req: Request, res: Response) => {
-    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No company selected" });
-    const role = String(req.session.currentRole || req.session.role || req.user?.role || "").toLowerCase();
-    if (!["admin", "owner", "developer"].includes(role)) return res.status(403).json({ message: "Access denied" });
-    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ message: "enabled must be boolean" });
     try {
-      await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-        const [row] = await tx.select({ extraSettings: factorySettings.extraSettings })
-          .from(factorySettings).where(eq(factorySettings.companyId, companyId)).for("update");
-        const extraSettings = { ...((row?.extraSettings || {}) as Record<string, unknown>),
-          automaticPriorityPrintingEnabled: req.body.enabled };
-        await tx.insert(factorySettings).values({ companyId, extraSettings, updatedAt: new Date() })
-          .onConflictDoUpdate({ target: factorySettings.companyId, set: { extraSettings, updatedAt: new Date() } });
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const [row] = await db.select({ extraSettings: factorySettings.extraSettings })
+        .from(factorySettings).where(eq(factorySettings.companyId, companyId)).limit(1);
+      const flags = (row?.extraSettings ?? {}) as Record<string, unknown>;
+      res.set("Cache-Control", "private, no-store");
+      return res.json({
+        enabled: flags.automaticPriorityPrintingEnabled === true,
+        canEdit: ["Admin", "Owner", "Developer"].includes(req.user?.role ?? ""),
       });
-      cache.del(`factory_settings:${companyId}`);
-      return res.json({ enabled: req.body.enabled });
     } catch (error) {
-      logger.error("Error updating automatic priority mode:", { error });
+      logger.error("Error reading automatic priority mode:", { error });
       return res.status(500).json({ message: getErrorMessage(error) });
     }
   });
+
+  app.put(
+    "/api/factory/automatic-priority-mode",
+    requireAuth,
+    requireRole("Admin", "Owner"), // Developer is privileged by the shared middleware.
+    async (req: Request, res: Response) => {
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const body = req.body as Record<string, unknown> | undefined;
+      if (!body || typeof body !== "object" || Array.isArray(body) ||
+          Object.keys(body).length !== 1 || typeof body.enabled !== "boolean") {
+        return res.status(400).json({ message: "Expected exactly one boolean field: enabled" });
+      }
+      const enabled = body.enabled;
+      try {
+        const { changed } = await db.transaction(async (tx) => {
+          // Serialize flag changes with Priority Scan allocations. Once disabled,
+          // no future transaction can start a new automatic allocation.
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+          const [current] = await tx.select({
+            extraSettings: factorySettings.extraSettings,
+          }).from(factorySettings).where(eq(factorySettings.companyId, companyId)).for("update");
+
+          const previouslyEnabled =
+            ((current?.extraSettings ?? {}) as Record<string, unknown>).automaticPriorityPrintingEnabled === true;
+          if (previouslyEnabled === enabled) return { changed: false };
+
+          const patch = { automaticPriorityPrintingEnabled: enabled };
+          const [saved] = await tx.insert(factorySettings)
+            .values({ companyId, extraSettings: patch, updatedAt: new Date() })
+            .onConflictDoUpdate({
+              target: factorySettings.companyId,
+              set: {
+                // Atomic JSONB update prevents concurrent unrelated settings
+                // changes from silently overwriting this flag.
+                extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+                updatedAt: new Date(),
+              },
+            })
+            .returning({ id: factorySettings.id });
+
+          await writeAuditEvent({
+            userId: String(req.session.userId),
+            username: String(req.session.username || req.session.userId),
+            companyId,
+            action: "settings_change",
+            tableName: "factory_settings",
+            recordId: saved.id,
+            recordIdentifier: "automaticPriorityPrintingEnabled",
+            changes: {
+              automaticPriorityPrintingEnabled: { old: previouslyEnabled, new: enabled },
+            },
+          }, tx);
+          return { changed: true };
+        });
+        cache.del(`factory_settings:${companyId}`);
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ enabled, changed });
+      } catch (error) {
+        logger.error("Error updating automatic priority mode:", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
   // Known DB columns — everything else goes into extraSettings JSONB
   const KNOWN_SETTINGS_COLUMNS = new Set([
@@ -179,17 +234,11 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
         (k) => !KNOWN_SETTINGS_COLUMNS.has(k) && k !== "id" && k !== "updatedAt" && k !== "extraSettings"
       );
       if (extraKeys.length > 0) {
-        // Fetch current extraSettings to merge
-        const [current] = await db
-          .select({ extraSettings: factorySettings.extraSettings })
-          .from(factorySettings)
-          .where(eq(factorySettings.companyId, companyId));
-        const currentExtra = (current?.extraSettings ?? {}) as Record<string, unknown>;
-        const newExtra: Record<string, unknown> = { ...currentExtra };
+        const patch: Record<string, unknown> = {};
         for (const key of extraKeys) {
-          if (req.body[key] !== undefined) newExtra[key] = req.body[key];
+          if (req.body[key] !== undefined) patch[key] = req.body[key];
         }
-        updateData.extraSettings = newExtra;
+        updateData.extraSettings = patch;
       }
 
       const [result] = await db
@@ -197,7 +246,14 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
         .values({ companyId, ...updateData })
         .onConflictDoUpdate({
           target: factorySettings.companyId,
-          set: updateData,
+          set: extraKeys.length > 0
+            ? {
+                ...updateData,
+                // Merge only supplied keys against the CURRENT DB row, not a
+                // stale prefetched copy. Keep the protected flag untouched.
+                extraSettings: sql`COALESCE(${factorySettings.extraSettings}, '{}'::jsonb) || ${JSON.stringify(updateData.extraSettings)}::jsonb`,
+              }
+            : updateData,
         })
         .returning();
 
