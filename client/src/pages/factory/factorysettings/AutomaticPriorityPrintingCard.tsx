@@ -101,7 +101,7 @@ export function AutomaticPriorityPrintingCard() {
           <p className="text-xs text-muted-foreground">Loading company setting…</p>
         ) : !canEdit ? (
           <p className="text-xs text-muted-foreground">
-            Only Admin, Owner, or Developer users can change this company-wide setting.
+            Only Admin or Developer users can change this company-wide setting.
           </p>
         ) : (
           <p className="text-xs text-muted-foreground" data-testid="automatic-priority-mode-status">
