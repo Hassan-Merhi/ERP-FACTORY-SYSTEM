@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCompany } from "@/contexts/CompanyContext";
 import { RetailNav } from "./RetailNav";
 import { RetailVariantReports } from "./RetailVariantReports";
+import { RetailFinancialPanel } from "./RetailFinancialPanel";
 
 interface Location {
   id: number;
@@ -497,6 +498,7 @@ export default function RetailDashboard() {
       ) : null}
 
       <RetailVariantReports companyKey={companyKey} />
+      <RetailFinancialPanel companyKey={companyKey} />
     </div>
   );
 }
