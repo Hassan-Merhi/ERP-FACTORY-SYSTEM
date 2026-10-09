@@ -82,4 +82,55 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "يجب أن يكون سعر صرف العمولة رقماً",
     fr: "Le taux de change de la commission doit être un nombre",
   },
+  // Full Item Market Analysis Excel export, including the error messages.
+  {
+    en: "Export Excel",
+    ar: "تصدير Excel",
+    fr: "Exporter vers Excel",
+  },
+  {
+    en: "Exporting...",
+    ar: "جارٍ التصدير...",
+    fr: "Exportation en cours...",
+  },
+  {
+    en: "Excel exported",
+    ar: "تم تصدير ملف Excel",
+    fr: "Fichier Excel exporté",
+  },
+  {
+    en: "Exported ${groupedRows.length} items and ${rows.length} company-item records with current filters.",
+    ar: "تم تصدير {{0}} صنفًا و{{1}} سجلًا للأصناف حسب الشركة باستخدام عوامل التصفية الحالية.",
+    fr: "{{0}} articles et {{1}} enregistrements d’articles par société exportés avec les filtres actuels.",
+  },
+  {
+    en: "Excel export failed",
+    ar: "فشل تصدير ملف Excel",
+    fr: "Échec de l’exportation Excel",
+  },
+  {
+    en: "Could not generate the workbook.",
+    ar: "تعذّر إنشاء مصنف Excel.",
+    fr: "Impossible de générer le classeur Excel.",
+  },
+  {
+    en: "Invalid sale-price export filters",
+    ar: "عوامل تصفية تصدير أسعار البيع غير صالحة",
+    fr: "Filtres d’exportation des prix de vente non valides",
+  },
+  {
+    en: "Invalid or repeated companies or too many item IDs",
+    ar: "شركات غير صالحة أو مكررة، أو عدد كبير جدًا من معرّفات الأصناف",
+    fr: "Sociétés invalides ou en double, ou trop d’identifiants d’articles",
+  },
+  {
+    en: "One or more companies could not be found",
+    ar: "تعذر العثور على شركة واحدة أو أكثر",
+    fr: "Une ou plusieurs sociétés sont introuvables",
+  },
+  {
+    en: "Failed to export item sale price breakdown",
+    ar: "فشل تصدير تفاصيل أسعار بيع الأصناف",
+    fr: "Échec de l’exportation du détail des prix de vente des articles",
+  },
 ];
