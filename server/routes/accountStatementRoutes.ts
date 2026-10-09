@@ -23,6 +23,7 @@ import { db } from "../db";
 import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
@@ -96,12 +97,14 @@ export function registerAccountStatementRoutes(app: Express) {
     }
   });
 
-  app.get("/api/accounts/:type/:id/pre-period-balance", requireAuth, async (req, res) => {
+  app.get(["/api/accounts/:type/:id/pre-period-balance", "/api/factory/agents/:type/:id/pre-period-balance"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
     try {
       const accountType = req.params.type;
       const accountId = parseInt(req.params.id);
       const endDateRaw = req.query.endDate;
-      const companyId = req.session.currentCompanyId;
+      const companyId = req.path.toLowerCase().startsWith("/api/factory/agents/")
+        ? (req.session.factoryCompanyId || req.session.currentCompanyId)
+        : req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
       if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
