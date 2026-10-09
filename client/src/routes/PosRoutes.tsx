@@ -1,4 +1,5 @@
 import { Switch, Route, Redirect } from "wouter";
+import { lazyRetry as lazy } from "@/lib/lazyRetry";
 import {
   POS,
   LocationInventory,
@@ -21,6 +22,8 @@ import {
 import type { AuthMe } from "@shared/apiTypes";
 import { useCompany } from "@/contexts/CompanyContext";
 
+const RetailStockCount = lazy(() => import("@/pages/retail/RetailStockCount"));
+
 interface PosRoutesProps {
   user: AuthMe;
   posImportEnabled?: boolean;
@@ -40,6 +43,7 @@ export function PosRoutes({ user, posImportEnabled }: PosRoutesProps) {
         <Route path="/">{() => <RetailPOS />}</Route>
         <Route path="/pos">{() => <RetailPOS />}</Route>
         <Route path="/retail/pos">{() => <RetailPOS />}</Route>
+        <Route path="/retail/stock-count">{() => <RetailStockCount />}</Route>
         <Route path="/my-settings" component={MySettings} />
         <Route>{() => <Redirect to="/" />}</Route>
       </Switch>
