@@ -131,6 +131,38 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(rows.rows[0].count).toBe("1");
   });
 
+  it("does not duplicate the active allocation or history on repeated ON-mode reprints", async () => {
+    const on = await agent.put("/api/factory/automatic-priority-mode").send({ enabled: true });
+    expect(on.status).toBe(200);
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const reprint = await agent.post(PRINT_PREFLIGHT).send({ referenceNumber });
+      expect(reprint.status).toBe(200);
+      expect(reprint.body.priorityAllocation).toMatchObject({
+        baleId, orderId, color: "#dc2626", priority: 1, existing: true,
+      });
+    }
+    const snapshot = await pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM factory_priority_auto_allocations WHERE company_id = $1 AND bale_id = $2 AND reversed_at IS NULL",
+      [ctx.companyId, baleId]
+    );
+    const timeline = await pool.query<{ count: string }>(
+      "SELECT count(*)::text AS count FROM factory_priority_scan_history WHERE company_id = $1 AND bale_id = $2",
+      [ctx.companyId, baleId]
+    );
+    expect(snapshot.rows[0].count).toBe("1");
+    expect(timeline.rows[0].count).toBe("1");
+
+    await expect(pool.query(
+      `INSERT INTO factory_priority_auto_allocations
+         (company_id, bale_id, order_id, reference_number, priority, color, allocation_source)
+       VALUES ($1, $2, $3, $4, 1, '#dc2626', 'reprint')`,
+      [ctx.companyId, baleId, orderId, referenceNumber]
+    )).rejects.toMatchObject({ code: "23505" });
+
+    const off = await agent.put("/api/factory/automatic-priority-mode").send({ enabled: false });
+    expect(off.status).toBe(200);
+  });
+
   it("rejects unbounded or malformed queries", async () => {
     for (const query of [
       {}, { baleId: "NaN" }, { orderId: -1 },
