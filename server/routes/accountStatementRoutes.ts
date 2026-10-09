@@ -103,7 +103,7 @@ export function registerAccountStatementRoutes(app: Express) {
       const accountId = parseInt(req.params.id);
       const endDateRaw = req.query.endDate;
       const companyId = req.path.toLowerCase().startsWith("/api/factory/agents/")
-        ? (req.session.factoryCompanyId || req.session.currentCompanyId)
+        ? req.session.factoryCompanyId || req.session.currentCompanyId
         : req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
