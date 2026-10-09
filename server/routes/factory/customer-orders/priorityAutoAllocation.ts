@@ -56,7 +56,7 @@ export async function allocateAutomaticPriorityBaleTx(
     .limit(1);
   if (!bale || bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
 
-  // Snapshot has an immutable company/bale unique key. Reprinting an existing
+  // An active snapshot has a company/bale uniqueness boundary. Reprinting an existing
   // allocation uses its original priority/color even after the queue changes.
   const existing = firstRow(await tx.execute(sql`
     SELECT order_id AS "orderId", priority, color, allocation_source AS "source",
@@ -204,7 +204,7 @@ export async function allocateAutomaticPriorityBaleTx(
 /** Caller holds the company queue lock. Keep historical evidence, remove only active links. */
 export async function reversePriorityAllocationForDeletedBaleTx(
   tx: PriorityScanTransaction,
-  args: { companyId: number; baleId: number; actor: string; reason: string }
+  args: { companyId: number; baleId: number; actor: string; reason: string; detachedOrderId?: number }
 ): Promise<number[]> {
   const { companyId, baleId, actor, reason } = args;
   const rows = await tx.select({ id: customerOrderBales.id, orderId: customerOrderBales.orderId,
@@ -217,7 +217,7 @@ export async function reversePriorityAllocationForDeletedBaleTx(
   if (rows.some((row) => !["DRAFT", "LOADING"].includes(row.status))) {
     throw new Error("Cannot delete a bale in a verified/finalized loading. Reverse the order financially first.");
   }
-  const affected = [...new Set(rows.map((r) => r.orderId))];
+  const affected = [...new Set([...rows.map((r) => r.orderId), ...(args.detachedOrderId ? [args.detachedOrderId] : [])])];
   // Respect the existing priority -> proforma lock order.
   for (const id of [...new Set(rows.map((r) => r.proformaIdUsed).filter((id): id is number => id != null))].sort((a,b)=>a-b)) {
     await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId: id });
