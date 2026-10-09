@@ -14,6 +14,8 @@ import {
   generateA5LabelsHtml,
   generateCombinedLabelsHtml,
   generateStickerLabelsHtml,
+  resolvePriorityLabelColor,
+  validatePriorityLabelColor,
   type LabelData,
 } from "./labelHtml";
 
@@ -136,7 +138,7 @@ describe("Automatic Priority Printing labels", () => {
       generateStickerLabelsHtml([bale]),
     ]) {
       expect(html).toContain("priority-hmd-letters");
-      expect(html).toContain("color:#dc2626 !important");
+      expect(html).toContain("color: #dc2626 !important");
       expect(html).toContain("INTERNATIONAL GROUP");
       expect(html).toContain("REF-001");
       expect(html).toContain("ART-100");
@@ -155,8 +157,75 @@ describe("Automatic Priority Printing labels", () => {
     expect(html).toContain('class="a4-page"');
   });
 
-  it("does not inject arbitrary CSS through a malformed priority color", () => {
-    const html = generateStickerLabelsHtml([label({ priorityColor: "red; position:absolute" })]);
-    expect(html).not.toContain("red; position:absolute");
+  it("rejects invalid colors instead of printing a misleading priority label", () => {
+    const malicious = label({ priorityColor: "red; position:absolute" });
+    expect(resolvePriorityLabelColor(malicious.priorityColor)).toBeNull();
+    for (const print of [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml]) {
+      expect(() => print([malicious])).toThrow(/Unrecognized Priority Scan label color/);
+    }
+  });
+
+  it("supports the exact hex and named priority colors configured in loading settings", () => {
+    expect(resolvePriorityLabelColor("#DC2626")).toBe("#dc2626");
+    expect(resolvePriorityLabelColor("#abc")).toBe("#aabbcc");
+    expect(resolvePriorityLabelColor("Red")).toBe("#dc2626");
+    expect(resolvePriorityLabelColor("Blue")).toBe("#2563eb");
+    expect(resolvePriorityLabelColor("Green")).toBe("#16a34a");
+    expect(resolvePriorityLabelColor("rgb(0,0,0);position:absolute")).toBeNull();
+    expect(validatePriorityLabelColor(label())).toBeNull();
+  });
+
+  it("keeps the priority artwork within the existing two A4 halves", () => {
+    const html = generateCombinedLabelsHtml([label({ priorityColor: "#dc2626" })]);
+    expect(html).toContain("class=\"priority-a4-half\"");
+    expect(html.match(/class="priority-a4-half"/g)).toHaveLength(2);
+    expect(html).toContain("height: 148.5mm");
+    expect(html).toContain("height: 90mm");
+    expect(html).toContain("height: 58.5mm");
+    expect(html.match(/class="priority-large-hmd"/g)).toHaveLength(2);
+    expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
+  });
+
+  it("uses two A5 pages, retaining the readable barcode and a single colored HMD wordmark", () => {
+    const html = generateA5LabelsHtml([label({ priorityColor: "Red" })]);
+    expect(html.match(/class="a5-page priority-print-a5"/g)).toHaveLength(2);
+    expect(html).toContain("color: #dc2626 !important");
+    expect(html).toContain("height: 145mm");
+    expect(html).toContain("/api/barcode/REF-001");
+    expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
+  });
+
+  it("keeps sticker dimensions, article and reference unchanged", () => {
+    const html = generateStickerLabelsHtml([label({ priorityColor: "Blue", priorityNumber: 2 })]);
+    expect(html).toContain("@page { size: 3in 1.97in");
+    expect(html).toContain("color: #2563eb !important");
+    expect(html).toContain('class="ref-barcode-img"');
+    expect(html).toContain("REF-001");
+    expect(html).toContain("ART-100");
+    expect(html).toContain("45.5 KGS");
+  });
+
+  it("handles mixed batches without applying a previous bale's priority color to ordinary labels", () => {
+    const items = [
+      label({ referenceNumber: "PRIORITY-01", priorityColor: "#dc2626" }),
+      label({ referenceNumber: "NORMAL-02" }),
+      label({ referenceNumber: "PRIORITY-03", priorityColor: "#2563eb" }),
+    ];
+    for (const print of [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml]) {
+      const html = print(items);
+      expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(2);
+      expect(html).toContain("PRIORITY-01");
+      expect(html).toContain("NORMAL-02");
+      expect(html).toContain("PRIORITY-03");
+      expect(html).toContain("color: #dc2626 !important");
+      expect(html).toContain("color: #2563eb !important");
+    }
+  });
+
+  it("renders the product text as escaped content in new priority artwork", () => {
+    const maliciousName = "PANT <img src=x onerror=alert(1)>";
+    const html = generateCombinedLabelsHtml([label({ priorityColor: "#dc2626", productName: maliciousName })]);
+    expect(html).not.toContain('class="priority-a4-main-product">PANT <img');
+    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
   });
 });
