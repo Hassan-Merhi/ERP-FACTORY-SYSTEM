@@ -19,7 +19,9 @@ export function valueMarketRow(row: MarketRow, includeOffloadingCost: boolean): 
     Number.isFinite(unitCost) &&
     unitCost >= 0;
 
-  if (!hasUsablePurchaseRate || row.soldQty <= 0) return row;
+  // Net-negative sold quantity represents returns exceeding sales within the period.
+  // Only a zero net quantity has no per-unit basis for revaluation.
+  if (!hasUsablePurchaseRate || row.soldQty === 0) return row;
 
   // Returns are already netted out of soldQty and revenue by the report API.
   const profit = row.revenue - row.soldQty * unitCost;
