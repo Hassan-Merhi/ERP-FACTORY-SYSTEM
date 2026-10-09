@@ -1,8 +1,12 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import type { SalePriceExportRow } from "./itemMarketAnalysisExport";
+import { getTopProfitCompanyByItem, groupMarketRows } from "./itemMarketAnalysisGrouping";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -19,18 +23,19 @@ import {
   StatusBadge,
   normalizeItemCode,
   matchesProfitDirection,
-  getMarketStatus,
   formatNativePurchase,
   MetricCard,
-  type MarketRow,
   type MarketResponse,
   type ProfitDirectionFilter,
   SalePriceBreakdown,
 } from "./itemMarketAnalysisParts";
+import { valueMarketRow } from "./itemMarketAnalysisValuation";
 
 export default function ItemMarketAnalysis() {
   const { selectedCompany, companies } = useCompany();
   const { formatAmount } = useCurrencyContext();
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
   const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -105,19 +110,21 @@ export default function ItemMarketAnalysis() {
     setVisibleRowCount(250);
     setExpandedItemCode(null);
     setExpandedSalePriceKey(null);
-  }, [queryUrl, profitDirection, multiCompany]);
+  }, [queryUrl, profitDirection, multiCompany, includeOffloadingCost]);
 
   const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const stockGroups = data?.stockGroups ?? [];
 
   const baseRows = useMemo(
     () =>
-      [...rawRows].sort(
-        (left, right) =>
-          normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
-          left.companyName.localeCompare(right.companyName)
-      ),
-    [rawRows]
+      rawRows
+        .map((row) => valueMarketRow(row, includeOffloadingCost))
+        .sort(
+          (left, right) =>
+            normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
+            left.companyName.localeCompare(right.companyName)
+        ),
+    [rawRows, includeOffloadingCost]
   );
 
   // In multi-company mode, filter by the combined profit for the item code so
@@ -195,116 +202,71 @@ export default function ItemMarketAnalysis() {
     [rows, selectedCompanyNames]
   );
 
-  const topProfitCompanyByItem = useMemo(() => {
-    const topByItem = new Map<
-      string,
-      { kind: "winner"; companyName: string; profit: number; marginPct: number } | { kind: "equal" } | { kind: "none" }
-    >();
-    const profitByCode = new Map<string, Map<number, { companyName: string; profit: number; revenue: number }>>();
+  const topProfitCompanyByItem = useMemo(() => getTopProfitCompanyByItem(rows), [rows]);
 
-    for (const row of rows) {
-      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-      const byCompany =
-        profitByCode.get(itemKey) ?? new Map<number, { companyName: string; profit: number; revenue: number }>();
-      const current = byCompany.get(row.companyId);
-      byCompany.set(row.companyId, {
-        companyName: row.companyName,
-        profit: (current?.profit ?? 0) + row.profit,
-        revenue: (current?.revenue ?? 0) + row.revenue,
-      });
-      profitByCode.set(itemKey, byCompany);
-    }
+  const groupedRows = useMemo(() => groupMarketRows(rows), [rows]);
 
-    for (const [itemKey, byCompany] of profitByCode) {
-      // "Top Profit Company" should only identify a market that actually made
-      // positive profit. A company with no sales (profit = 0) must never beat a
-      // company that sold the item at a loss, and if nobody made money we show None.
-      const profitableValues = [...byCompany.values()]
-        .filter((entry) => entry.revenue > 0 && entry.profit > 0)
-        .sort((left, right) => right.profit - left.profit);
-
-      if (profitableValues.length === 0) {
-        topByItem.set(itemKey, { kind: "none" });
-        continue;
+  const handleExportExcel = async () => {
+    if (!data || isFetching || isExporting || search.trim() !== debouncedSearch) return;
+    setIsExporting(true);
+    try {
+      // Export the COMPLETE filtered arrays, not visibleRows/visibleGroupedRows
+      // which are deliberately capped at 250 items for screen performance.
+      const itemIdsByCompany = new Map<number, Set<number>>();
+      for (const row of rows) {
+        const ids = itemIdsByCompany.get(row.companyId) ?? new Set<number>();
+        ids.add(row.stockItemId);
+        itemIdsByCompany.set(row.companyId, ids);
       }
 
-      const topProfit = profitableValues[0].profit;
-      const tied = profitableValues.filter((entry) => Math.abs(entry.profit - topProfit) < 0.005);
-
-      if (tied.length > 1) {
-        topByItem.set(itemKey, { kind: "equal" });
-        continue;
+      const salePriceRows: SalePriceExportRow[] = [];
+      // The backend permits up to 5,000 items per company/request. Request
+      // smaller batches so large datasets export in full instead of returning
+      // a validation error. A failed batch aborts the entire export.
+      const maxItemsPerBatch = 2500;
+      for (const [companyId, itemIds] of itemIdsByCompany) {
+        const ids = [...itemIds];
+        for (let offset = 0; offset < ids.length; offset += maxItemsPerBatch) {
+          const response = await apiRequest("POST", "/api/reports/item-market-analysis/export-sale-prices", {
+            startDate: period.fromDate || undefined,
+            endDate: period.toDate || undefined,
+            companyItems: [{ companyId, stockItemIds: ids.slice(offset, offset + maxItemsPerBatch) }],
+          });
+          const salePrices = (await response.json()) as { rows: SalePriceExportRow[] };
+          salePriceRows.push(...salePrices.rows);
+        }
       }
 
-      const best = profitableValues[0];
-      topByItem.set(itemKey, {
-        kind: "winner",
-        companyName: best.companyName,
-        profit: best.profit,
-        marginPct: best.revenue === 0 ? 0 : (best.profit / best.revenue) * 100,
+      const { exportItemMarketAnalysisExcel } = await import("./itemMarketAnalysisExport");
+      await exportItemMarketAnalysisExcel({
+        groups: groupedRows,
+        rows,
+        companySummaries,
+        summary,
+        salePriceRows,
+        startDate: period.fromDate,
+        endDate: period.toDate,
+        search: debouncedSearch,
+        stockGroups: selectedStockGroupNames,
+        companyNames: selectedCompanyNames.map((company) => company.name),
+        profitDirection,
+        includeOffloadingCost,
+        generatedAt: data.generatedAt,
       });
+      toast({
+        title: "Excel exported",
+        description: `Exported ${groupedRows.length} items and ${rows.length} company-item records with current filters.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Excel export failed",
+        description: error instanceof Error ? error.message : "Could not generate the workbook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
     }
-
-    return topByItem;
-  }, [rows]);
-
-  const groupedRows = useMemo(() => {
-    const grouped = new Map<string, MarketRow[]>();
-
-    for (const row of rows) {
-      const itemKey = normalizeItemCode(row.code) || `ID:${row.companyId}:${row.stockItemId}`;
-      grouped.set(itemKey, [...(grouped.get(itemKey) ?? []), row]);
-    }
-
-    return [...grouped.entries()]
-      .map(([itemKey, companyRows]) => {
-        const orderedRows = [...companyRows].sort((left, right) => left.companyName.localeCompare(right.companyName));
-        const firstRow = orderedRows[0]!;
-        const importCount = orderedRows.reduce((sum, row) => sum + row.importCount, 0);
-        const importedQty = orderedRows.reduce((sum, row) => sum + row.importedQty, 0);
-        const soldQty = orderedRows.reduce((sum, row) => sum + row.soldQty, 0);
-        const revenue = orderedRows.reduce((sum, row) => sum + row.revenue, 0);
-        const historicalCost = orderedRows.reduce((sum, row) => sum + row.historicalCost, 0);
-        const profit = orderedRows.reduce((sum, row) => sum + row.profit, 0);
-        const purchaseCurrencies = [...new Set(orderedRows.flatMap((row) => row.purchaseCurrencies))];
-        const purchaseValue =
-          purchaseCurrencies.length === 1 ? orderedRows.reduce((sum, row) => sum + (row.purchaseValue ?? 0), 0) : null;
-        const weightedPurchaseCost = purchaseValue != null && importedQty !== 0 ? purchaseValue / importedQty : null;
-        const purchaseValueWithOffloading =
-          purchaseCurrencies.length === 1
-            ? orderedRows.reduce((sum, row) => sum + (row.purchaseValueWithOffloading ?? 0), 0)
-            : null;
-        const weightedPurchaseCostWithOffloading =
-          purchaseValueWithOffloading != null && importedQty !== 0 ? purchaseValueWithOffloading / importedQty : null;
-        const avgSellingPrice = soldQty === 0 ? 0 : revenue / soldQty;
-        const profitPerUnit = soldQty === 0 ? 0 : profit / soldQty;
-        const marginPct = revenue === 0 ? 0 : (profit / revenue) * 100;
-
-        return {
-          itemKey,
-          code: firstRow.code,
-          name: firstRow.name,
-          stockGroupName: firstRow.stockGroupName,
-          companyRows: orderedRows,
-          importCount,
-          importedQty,
-          purchaseValue,
-          weightedPurchaseCost,
-          purchaseValueWithOffloading,
-          weightedPurchaseCostWithOffloading,
-          purchaseCurrencies,
-          soldQty,
-          revenue,
-          historicalCost,
-          profit,
-          avgSellingPrice,
-          profitPerUnit,
-          marginPct,
-          marketStatus: getMarketStatus(soldQty, profit, marginPct),
-        };
-      })
-      .sort((left, right) => left.name.localeCompare(right.name) || left.itemKey.localeCompare(right.itemKey));
-  }, [rows]);
+  };
 
   const visibleRows = rows.slice(0, visibleRowCount);
   const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
@@ -330,7 +292,7 @@ export default function ItemMarketAnalysis() {
         onBack={() => window.history.back()}
         meta={
           <span>
-            Imports, sales and historical profit by market
+            Imports, sales and modeled profit at the selected purchase cost
             {multiCompany
               ? ` · ${selectedCompanyIds.length} companies selected`
               : selectedCompanyNames[0]?.name
@@ -339,6 +301,16 @@ export default function ItemMarketAnalysis() {
           </span>
         }
       >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportExcel}
+          disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+          data-testid="button-item-market-export-excel"
+        >
+          <Download className="mr-2 h-4 w-4" />
+          {isExporting ? "Exporting..." : "Export Excel"}
+        </Button>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
@@ -351,7 +323,9 @@ export default function ItemMarketAnalysis() {
         <MetricCard label="Sold Qty" value={formatNumber(summary.soldQty)} />
         <MetricCard label="Revenue" value={formatAmount(summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Historical Profit</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+          </div>
           <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
           <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
         </div>
@@ -470,6 +444,10 @@ export default function ItemMarketAnalysis() {
           {includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Profit, margin, company totals and profit filters use the selected purchase cost. Where USD purchase rates are
+        unavailable, posted historical profit is retained. No accounting entries are changed.
+      </p>
 
       {multiCompany && companySummaries.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -515,11 +493,22 @@ export default function ItemMarketAnalysis() {
         <div className="flex items-center gap-2 border-b px-4 py-3">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <div className="font-medium">Item performance</div>
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="ml-auto hidden text-xs text-muted-foreground lg:block">
             {multiCompany
               ? "Items are matched by code · expand Companies to compare each company"
               : "Historical item performance for this company"}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0 lg:ml-0"
+            onClick={handleExportExcel}
+            disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+            data-testid="button-item-market-export-excel-table"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {isExporting ? "Exporting..." : "Export Excel"}
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <Table>
