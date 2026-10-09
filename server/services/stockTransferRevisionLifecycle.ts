@@ -12,6 +12,7 @@ import {
   stockTransferVouchers,
   vouchers,
 } from "@shared/schema";
+import { MoneyDecimal, lineAmount, toMoney } from "../lib/money";
 
 // First-row access to `.execute()` results (both the node-postgres
 // `{ rows: [...] }` shape and a bare row array) comes from the shared typed
@@ -256,9 +257,9 @@ export async function savePendingStockTransferRevision(
           stockItemName: item.stockItemName,
           sourceLocationId: item.sourceLocationId,
           sourceLocationName: item.sourceLocationName,
-          originalQuantity: item.originalQuantity.toFixed(3),
-          delta: item.delta.toFixed(3),
-          newQuantity: item.newQuantity.toFixed(3),
+          originalQuantity: toMoney(item.originalQuantity).toFixed(3),
+          delta: toMoney(item.delta).toFixed(3),
+          newQuantity: toMoney(item.newQuantity).toFixed(3),
         }))
       )
       .returning();
@@ -382,7 +383,7 @@ export async function approvePendingStockTransferRevision(
         .from(stockTransferItems)
         .where(eq(stockTransferItems.transferId, transferId));
       const totalAmount = currentItems
-        .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+        .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
         .toFixed(2);
       return {
         revisionId,
@@ -569,8 +570,8 @@ export async function approvePendingStockTransferRevision(
           await tx
             .update(stockTransferItems)
             .set({
-              quantity: change.newQuantity.toFixed(3),
-              totalAmount: (change.newQuantity * change.rate).toFixed(2),
+              quantity: toMoney(change.newQuantity).toFixed(3),
+              totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
             })
             .where(eq(stockTransferItems.id, change.existing.id));
         }
@@ -579,9 +580,9 @@ export async function approvePendingStockTransferRevision(
           transferId,
           stockItemId: change.stockItemId,
           sourceLocationId: change.sourceLocationId,
-          quantity: change.newQuantity.toFixed(3),
-          rate: change.rate.toFixed(2),
-          totalAmount: (change.newQuantity * change.rate).toFixed(2),
+          quantity: toMoney(change.newQuantity).toFixed(3),
+          rate: toMoney(change.rate).toFixed(2),
+          totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
         });
       }
 
@@ -593,7 +594,7 @@ export async function approvePendingStockTransferRevision(
 
     const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems
-      .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+      .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
       .toFixed(2);
     const uniqueSources = Array.from(
       new Set(finalItems.map((item) => item.sourceLocationId).filter((value): value is number => Boolean(value)))
