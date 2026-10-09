@@ -408,7 +408,11 @@ export function registerAccountTransactionRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.get("/api/accounts/employee/:id/transactions", requireAuth, (req, res) => readAgentEmployeeTransactions(req, res));
+  app.get(
+    "/api/accounts/employee/:id/transactions",
+    requireAuth,
+    (req, res) => readAgentEmployeeTransactions(req, res)
+  );
   app.get(
     "/api/factory/agents/employee/:id/transactions",
     requireAuth,
