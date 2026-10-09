@@ -559,6 +559,7 @@ export const factoryPriorityAutoAllocations = pgTable(
     allocatedAt: timestamp("allocated_at", { withTimezone: true }).defaultNow().notNull(),
     reversedAt: timestamp("reversed_at", { withTimezone: true }),
     reversedBy: text("reversed_by"),
+    reversedByUserId: text("reversed_by_user_id"),
     reversalReason: text("reversal_reason"),
   },
   (table) => [
