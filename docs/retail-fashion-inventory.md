@@ -93,6 +93,34 @@ by brand, style/barcode/SKU search, color, size and location; the stock report a
 filters in / low / out of stock and slow-moving. Add `format=csv` for a spreadsheet.
 Sales are net of returns and include cost of goods and profit.
 
+## Payments, cashier shifts and accounting
+
+Retail checkout records payment rows independently from stock movements. A sale can use
+cash, card, bank/transfer, mobile/other, or a split across several methods. Cash captures
+the amount tendered and change while the applied payment amount remains equal to the sale
+total. Payment inserts use the sale idempotency key, so a checkout retry cannot collect
+twice.
+
+Retail reuses the existing POS shift table. POS cashiers can open a shift only at an
+assigned location. Retail shift summaries combine opening cash, cash sales, cash refunds
+and audited cash-in/cash-out movements. Closing stores expected cash, actual closing cash
+and variance. Non-cash methods are reported separately and do not inflate drawer cash.
+
+Every new Retail sale posts one idempotent balanced journal through the central accounting
+engine:
+
+- debit the payment settlement account(s), credit Retail Sales Revenue;
+- debit Retail COGS, credit Retail Inventory Asset using the sale-line cost snapshot.
+
+Returns, exchanges and cancellations refund against the original payment methods and post
+the corresponding revenue/COGS/inventory reversals without rewriting the original journal.
+Sales created before Wave 1 remain refundable: the first refund materializes their
+historical sale total as a legacy cash payment, while reconciliation continues to flag
+missing historical accounting rather than fabricating a historical journal.
+
+`/retail/reports` includes company/location accounting mapping and a financial
+reconciliation panel. Location mappings inherit the company default until explicitly
+overridden.
 ## Permissions and company isolation
 
 All retail endpoints require a Retail company in the session and scope every query by
@@ -102,6 +130,9 @@ non-POS role.
 
 ## Deployment
 
-Apply the versioned migrations `migrations/20261003_001_retail_fashion_variants.sql` and
-`migrations/20261004_001_retail_fashion_barcodes_labels.sql` (both idempotent) with the
-explicit versioned-migration runner before deploying the application code.
+Apply the versioned migrations `migrations/20261003_001_retail_fashion_variants.sql`,
+`migrations/20261004_001_retail_fashion_barcodes_labels.sql`, and
+`migrations/20261005_001_retail_financial_core.sql` (all idempotent) with the explicit
+versioned-migration runner before deploying the application code. The always-on runtime
+schema guard also ensures the additive Retail financial tables because production can
+disable the bulk migration pass.

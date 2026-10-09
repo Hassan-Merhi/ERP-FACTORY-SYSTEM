@@ -189,9 +189,19 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       }),
     ]);
 
+    const openedShift = await agent.post("/api/pos/shifts/open").send({ locationId, openingCash: 5 });
+    expect(openedShift.status).toBe(200);
+    const shiftId = Number(openedShift.body.id);
+    expect(shiftId).toBeGreaterThan(0);
+
     const saleBody = {
       locationId,
+      shiftId,
       idempotencyKey: "retail-wave2-integration-sale-001",
+      payments: [
+        { method: "cash", amount: 8, tenderedAmount: 10 },
+        { method: "card", amount: 12, reference: "TEST-CARD" },
+      ],
       items: [{ variantId: scan.body.variantId, quantity: 2 }],
     };
 
@@ -209,6 +219,33 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       quantity: 2,
     });
     expect(await retailQuantity()).toBe(3);
+    expect(sale.body.sale.accountingVoucherId).toBeGreaterThan(0);
+    expect(sale.body.sale.payments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ method: "cash", paymentType: "payment", amount: 8, changeAmount: 2 }),
+        expect.objectContaining({ method: "card", paymentType: "payment", amount: 12, reference: "TEST-CARD" }),
+      ])
+    );
+    const [saleAccountingRequest] = await db
+      .select()
+      .from(schema.accountingPostingRequests)
+      .where(
+        and(
+          eq(schema.accountingPostingRequests.companyId, companyId),
+          eq(schema.accountingPostingRequests.sourceType, "retail-pos-sale"),
+          eq(schema.accountingPostingRequests.sourceId, String(sale.body.sale.id))
+        )
+      )
+      .limit(1);
+    expect(saleAccountingRequest?.voucherId).toBe(sale.body.sale.accountingVoucherId);
+    const openSummary = await agent.get(`/api/pos/retail/shifts/${shiftId}/summary`);
+    expect(openSummary.status).toBe(200);
+    expect(openSummary.body).toMatchObject({
+      salesCount: 1,
+      cashSales: 8,
+      cashRefunds: 0,
+      expectedCash: 13,
+    });
 
     const saleReplay = await agent.post("/api/pos/retail/sales").send(saleBody);
     expect(saleReplay.status).toBe(200);
@@ -220,6 +257,7 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     const returnBody = {
       locationId,
       idempotencyKey: "retail-wave2-integration-return-001",
+      shiftId,
       items: [{ saleItemId, quantity: 2 }],
     };
 
@@ -227,6 +265,39 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     expect(returned.status).toBe(201);
     expect(returned.body.replayed).toBe(false);
     expect(await retailQuantity()).toBe(5);
+    const refundPayments = returned.body.sale.payments.filter(
+      (payment: { paymentType: string }) => payment.paymentType === "refund"
+    );
+    expect(refundPayments.reduce((sum: number, payment: { amount: number }) => sum + payment.amount, 0)).toBe(20);
+    expect(refundPayments.map((payment: { method: string }) => payment.method).sort()).toEqual(["card", "cash"]);
+    const [returnAccountingRequest] = await db
+      .select()
+      .from(schema.accountingPostingRequests)
+      .where(
+        and(
+          eq(schema.accountingPostingRequests.companyId, companyId),
+          eq(schema.accountingPostingRequests.sourceType, "retail-pos-return"),
+          eq(schema.accountingPostingRequests.sourceId, String(returned.body.returnId))
+        )
+      )
+      .limit(1);
+    expect(returnAccountingRequest?.voucherId).toBeGreaterThan(0);
+
+    const cashIn = await agent.post(`/api/pos/retail/shifts/${shiftId}/cash-movements`).send({
+      movementType: "cash_in",
+      amount: 3,
+      reason: "Float top-up",
+      idempotencyKey: "retail-wave1-cash-in-001",
+    });
+    expect(cashIn.status).toBe(201);
+    expect(cashIn.body.summary.expectedCash).toBe(8);
+
+    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: 8 });
+    expect(closedShift.status).toBe(200);
+    expect(Number(closedShift.body.expectedCash)).toBe(8);
+    expect(Number(closedShift.body.variance)).toBe(0);
+    expect(closedShift.body.salesCount).toBe(1);
+    expect(Number(closedShift.body.salesTotal)).toBe(20);
 
     const returnReplay = await agent.post(`/api/pos/retail/sales/${sale.body.sale.id}/returns`).send(returnBody);
     expect(returnReplay.status).toBe(200);
@@ -256,5 +327,65 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
         expect.objectContaining({ type: "return", delta: "2.000000", before: "3.000000", after: "5.000000" }),
       ])
     );
+  }, 30_000);
+  it("keeps long-key split tenders distinct and leaves an unshifted refund off the closed shift", async () => {
+    const openedShift = await agent.post("/api/pos/shifts/open").send({ locationId, openingCash: 0 });
+    expect(openedShift.status).toBe(200);
+    const shiftId = Number(openedShift.body.id);
+
+    // 190 characters: the derived per-payment keys would collide if they were truncated to 191.
+    const longKey = `retail-wave1-long-key-${"x".repeat(168)}`;
+    expect(longKey).toHaveLength(190);
+    const sale = await agent.post("/api/pos/retail/sales").send({
+      locationId,
+      shiftId,
+      idempotencyKey: longKey,
+      payments: [
+        { method: "cash", amount: 4, tenderedAmount: 4 },
+        { method: "card", amount: 6, reference: "LONG-KEY-CARD" },
+      ],
+      items: [{ variantId, quantity: 1 }],
+    });
+    expect(sale.status).toBe(201);
+    const salePayments = sale.body.sale.payments.filter(
+      (payment: { paymentType: string }) => payment.paymentType === "payment"
+    );
+    expect(salePayments.map((payment: { method: string }) => payment.method).sort()).toEqual(["card", "cash"]);
+    expect(new Set(salePayments.map((payment: { id: number }) => payment.id)).size).toBe(2);
+
+    const closedShift = await agent.post(`/api/pos/shifts/${shiftId}/close`).send({ closingCash: 4 });
+    expect(closedShift.status).toBe(200);
+    expect(Number(closedShift.body.expectedCash)).toBe(4);
+
+    const lateMovement = await agent.post(`/api/pos/retail/shifts/${shiftId}/cash-movements`).send({
+      movementType: "cash_out",
+      amount: 1,
+      reason: "After close",
+      idempotencyKey: "retail-wave1-after-close-001",
+    });
+    expect(lateMovement.status).toBe(409);
+
+    const returned = await agent.post(`/api/pos/retail/sales/${sale.body.sale.id}/returns`).send({
+      locationId,
+      idempotencyKey: "retail-wave1-unshifted-return-001",
+      items: [{ saleItemId: Number(sale.body.sale.items[0].id), quantity: 1 }],
+    });
+    expect(returned.status).toBe(201);
+    const refunds = await db
+      .select({ shiftId: schema.retailPosPayments.shiftId })
+      .from(schema.retailPosPayments)
+      .where(
+        and(
+          eq(schema.retailPosPayments.companyId, companyId),
+          eq(schema.retailPosPayments.saleId, Number(sale.body.sale.id)),
+          eq(schema.retailPosPayments.paymentType, "refund")
+        )
+      );
+    expect(refunds.length).toBeGreaterThan(0);
+    expect(refunds.every((refund) => refund.shiftId === null)).toBe(true);
+
+    const summary = await agent.get(`/api/pos/retail/shifts/${shiftId}/summary`);
+    expect(summary.status).toBe(200);
+    expect(summary.body).toMatchObject({ cashSales: 4, cashRefunds: 0, expectedCash: 4 });
   }, 30_000);
 });

@@ -13,6 +13,8 @@ import { RetailNav } from "@/pages/retail/RetailNav";
 import { RetailCameraScanner } from "./RetailCameraScanner";
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailItemImage, RetailScanFeedback } from "./RetailScanFeedback";
+import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
 import {
   canSellIntoNegative,
@@ -23,6 +25,7 @@ import {
   scanBeep,
   type CartLine,
   type Location,
+  type RetailPaymentDraft,
   type RetailPosItem,
   type RetailSale,
   type ScanOutcome,
@@ -77,6 +80,8 @@ export default function RetailPOS() {
   const [transferVariantId, setTransferVariantId] = useState<number | "">("");
   const [transferToLocationId, setTransferToLocationId] = useState<number | "">("");
   const [transferQuantity, setTransferQuantity] = useState(1);
+  const [currentShift, setCurrentShift] = useState<RetailShift | null>(null);
+  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
   const scanInputRef = useRef<HTMLInputElement | null>(null);
   const saleAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
   const transferAttemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -153,6 +158,8 @@ export default function RetailPOS() {
       queryClient.invalidateQueries({ queryKey: ["retail-pos-sales"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-products"] }),
       queryClient.invalidateQueries({ queryKey: ["retail-product"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-shift-summary"] }),
+      queryClient.invalidateQueries({ queryKey: ["retail-current-shift"] }),
     ]);
   };
 
@@ -217,16 +224,34 @@ export default function RetailPOS() {
     mutationFn: async () => {
       if (!selectedLocation?.id || !cart.length) throw new Error("Select a location and add at least one item");
       const items = cart.map((line) => ({ variantId: line.variantId, quantity: line.cartQuantity }));
-      const fingerprint = `${selectedLocation.id}|${items
-        .map((item) => `${item.variantId}:${item.quantity}`)
-        .sort()
-        .join("|")}`;
+      const fingerprint = JSON.stringify({
+        locationId: selectedLocation.id,
+        shiftId: currentShift?.id ?? null,
+        items: items.slice().sort((a, b) => a.variantId - b.variantId),
+        payments,
+      });
       if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {
         saleAttemptRef.current = { fingerprint, key: makeKey("retail-sale") };
+      }
+      if (isPosRole && !currentShift) throw new Error("Open a cashier shift before completing a sale");
+      const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+      const cartTotal = cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0);
+      if (Math.abs(paymentTotal - cartTotal) > 0.005) throw new Error("Payments must equal the sale total");
+      if (
+        payments.some(
+          (payment) =>
+            payment.method === "cash" &&
+            payment.tenderedAmount != null &&
+            Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount)
+        )
+      ) {
+        throw new Error("Cash tendered cannot be less than the cash payment");
       }
       const response = await apiRequest("POST", "/api/pos/retail/sales", {
         locationId: selectedLocation.id,
         idempotencyKey: saleAttemptRef.current.key,
+        shiftId: currentShift?.id ?? undefined,
+        payments,
         items,
       });
       return (await response.json()) as { replayed: boolean; sale: RetailSale };
@@ -268,6 +293,7 @@ export default function RetailPOS() {
       const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/returns`, {
         locationId: selectedLocation.id,
         idempotencyKey: `retail-return-${saleId}-${saleItemId}-${returnedQuantity}`,
+        shiftId: currentShift?.id ?? undefined,
         items: [{ saleItemId, quantity: 1 }],
       });
       return response.json();
@@ -286,6 +312,7 @@ export default function RetailPOS() {
       const response = await apiRequest("POST", `/api/pos/retail/sales/${saleId}/cancel`, {
         locationId: selectedLocation.id,
         idempotencyKey: `retail-cancel-${saleId}`,
+        shiftId: currentShift?.id ?? undefined,
         reason: "POS sale cancellation",
       });
       return response.json();
@@ -329,6 +356,22 @@ export default function RetailPOS() {
   const total = useMemo(() => cart.reduce((sum, line) => sum + line.price * line.cartQuantity, 0), [cart]);
   const units = cart.reduce((sum, line) => sum + line.cartQuantity, 0);
 
+  useEffect(() => {
+    const amount = Number(total.toFixed(2));
+    setPayments([{ method: "cash", amount, tenderedAmount: amount }]);
+  }, [total]);
+
+  const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
+  const paymentsValid =
+    Math.abs(paymentTotal - total) <= 0.005 &&
+    payments.every(
+      (payment) =>
+        Number(payment.amount) > 0 &&
+        (payment.method !== "cash" ||
+          payment.tenderedAmount == null ||
+          Number(payment.tenderedAmount) + 0.000001 >= Number(payment.amount))
+    );
+
   if (selectedCompany?.companyType !== "retail") return null;
 
   return (
@@ -363,6 +406,8 @@ export default function RetailPOS() {
           </select>
         </div>
       </div>
+
+      <RetailShiftPanel locationId={selectedLocation?.id ?? null} onShiftChange={setCurrentShift} />
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,0.7fr)]">
         <Card>
@@ -521,10 +566,16 @@ export default function RetailPOS() {
               <span>Total</span>
               <span data-testid="cart-total">{money(total)}</span>
             </div>
+            {cart.length > 0 && <RetailPaymentPanel total={total} value={payments} onChange={setPayments} />}
+            {isPosRole && !currentShift && cart.length > 0 ? (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm">
+                Open a cashier shift before completing this sale.
+              </div>
+            ) : null}
             <Button
               className="h-12 w-full text-base"
               size="lg"
-              disabled={!cart.length || saleMutation.isPending}
+              disabled={!cart.length || saleMutation.isPending || !paymentsValid || (isPosRole && !currentShift)}
               onClick={() => saleMutation.mutate()}
             >
               {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
@@ -542,6 +593,16 @@ export default function RetailPOS() {
                     </div>
                   ))}
                 </div>
+                {lastSale.payments?.length ? (
+                  <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
+                    {lastSale.payments.map((payment) => (
+                      <div key={payment.id} className="flex justify-between">
+                        <span>{payment.paymentType === "refund" ? "Refund" : payment.method}</span>
+                        <span>{money(payment.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
                 <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => printReceipt(lastSale)}>
                   <Printer className="mr-2 h-4 w-4" /> Print receipt
                 </Button>
@@ -715,7 +776,7 @@ export default function RetailPOS() {
             </button>
             <Button
               className="h-12 px-6 text-base"
-              disabled={saleMutation.isPending}
+              disabled={saleMutation.isPending || !paymentsValid || (isPosRole && !currentShift)}
               onClick={() => saleMutation.mutate()}
             >
               {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
@@ -727,6 +788,7 @@ export default function RetailPOS() {
       <RetailExchangeDialog
         sale={exchangeSale}
         locationId={selectedLocation?.id ?? null}
+        shiftId={currentShift?.id ?? null}
         onOpenChange={(open) => {
           if (!open) {
             setExchangeSale(null);

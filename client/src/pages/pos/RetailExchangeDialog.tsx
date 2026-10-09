@@ -6,7 +6,15 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { RetailItemImage } from "./RetailScanFeedback";
-import { lookupRetailBarcode, makeKey, money, type RetailPosItem, type RetailSale } from "./retailPosTypes";
+import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import {
+  lookupRetailBarcode,
+  makeKey,
+  money,
+  type RetailPaymentDraft,
+  type RetailPosItem,
+  type RetailSale,
+} from "./retailPosTypes";
 
 interface ExchangeResult {
   replayed: boolean;
@@ -24,11 +32,13 @@ interface ExchangeResult {
 export function RetailExchangeDialog({
   sale,
   locationId,
+  shiftId,
   onOpenChange,
   onCompleted,
 }: {
   sale: RetailSale | null;
   locationId: number | null;
+  shiftId: number | null;
   onOpenChange: (open: boolean) => void;
   onCompleted: (sale: RetailSale) => void | Promise<void>;
 }) {
@@ -37,19 +47,27 @@ export function RetailExchangeDialog({
   const [newItems, setNewItems] = useState<Array<RetailPosItem & { exchangeQuantity: number }>>([]);
   const [scanText, setScanText] = useState("");
   const [busy, setBusy] = useState(false);
+  const [payments, setPayments] = useState<RetailPaymentDraft[]>([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
   const attemptRef = useRef<{ fingerprint: string; key: string } | null>(null);
 
   useEffect(() => {
     setReturnQty({});
     setNewItems([]);
     setScanText("");
+    setPayments([{ method: "cash", amount: 0, tenderedAmount: 0 }]);
     attemptRef.current = null;
   }, [sale?.id]);
+
+  const replacementTotal = newItems.reduce((sum, item) => sum + item.exchangeQuantity * item.price, 0);
+  useEffect(() => {
+    const amount = Number(replacementTotal.toFixed(2));
+    setPayments([{ method: "cash", amount, tenderedAmount: amount }]);
+  }, [replacementTotal]);
 
   if (!sale) return null;
 
   const refundValue = sale.items.reduce((sum, item) => sum + (returnQty[item.id] ?? 0) * item.unitPrice, 0);
-  const newTotal = newItems.reduce((sum, item) => sum + item.exchangeQuantity * item.price, 0);
+  const newTotal = replacementTotal;
   const balance = newTotal - refundValue;
 
   const scan = async () => {
@@ -89,7 +107,7 @@ export function RetailExchangeDialog({
       toast({ title: "Choose what is returned and what the customer takes", variant: "destructive" });
       return;
     }
-    const fingerprint = JSON.stringify({ sale: sale.id, returnItems, items });
+    const fingerprint = JSON.stringify({ sale: sale.id, shiftId, returnItems, items, payments });
     if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
       attemptRef.current = { fingerprint, key: makeKey("retail-exchange") };
     }
@@ -99,8 +117,10 @@ export function RetailExchangeDialog({
         idempotencyKey: attemptRef.current.key,
         saleId: sale.id,
         locationId,
+        shiftId: shiftId ?? undefined,
         returnItems,
         newItems: items,
+        payments,
       });
       const result = (await response.json()) as ExchangeResult;
       attemptRef.current = null;
@@ -216,6 +236,8 @@ export function RetailExchangeDialog({
               </div>
             ))}
           </section>
+
+          {newItems.length > 0 ? <RetailPaymentPanel total={newTotal} value={payments} onChange={setPayments} /> : null}
 
           <div className="space-y-1 rounded-md bg-muted/40 p-3 text-sm">
             <div className="flex justify-between">
