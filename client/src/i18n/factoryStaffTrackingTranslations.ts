@@ -133,7 +133,7 @@ const factoryStaffTrackingTranslations = {
     fr: "Chaque ouvrier reçoit un objectif fixe individuel à partir de cette date. Le total doit rester identique.",
   },
   unlinkSplitNoTarget: {
-    en: "No shared target is set. Both workers will keep a blank fixed target.",
+    en: "No shared target is set. Each worker will keep a blank fixed target.",
     ar: "لم يُحدّد هدف مشترك. سيبقى الهدف الثابت لكل عامل فارغاً.",
     fr: "Aucun objectif commun n’est défini. Les objectifs individuels resteront vides.",
   },
@@ -153,9 +153,9 @@ const factoryStaffTrackingTranslations = {
     fr: "Confirmer la dissociation",
   },
   unlinkSplitWholeBales: {
-    en: "Use whole bale counts. All worker targets must add up to the original target.",
-    ar: "استخدم أعداداً صحيحة للبالات. يجب أن يساوي مجموع أهداف العمال الهدف الأصلي.",
-    fr: "Utilisez des nombres entiers. La somme des objectifs doit égaler l’objectif initial.",
+    en: "Keep whole bales for whole targets (up to two decimals for fractional targets). All shares must total the original target.",
+    ar: "استخدم أعداداً صحيحة للأهداف الكاملة، وحتى منزلتين عشريتين للأهداف الكسرية. يجب أن يساوي مجموع الحصص الهدف الأصلي.",
+    fr: "Utilisez des balles entières pour un objectif entier (deux décimales maximum pour un objectif fractionnaire). La somme doit égaler l’objectif initial.",
   },
   workerLinkFailed: {
     en: "Could not update worker link",
