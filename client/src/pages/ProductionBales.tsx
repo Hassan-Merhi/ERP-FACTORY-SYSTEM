@@ -36,6 +36,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
+import { generateA5LabelsHtml, generateCombinedLabelsHtml, type LabelData } from "@/lib/labelHtml";
+import { getPaperFormat } from "@/components/LabelPrintSettings";
+import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 import type { Location, FactoryMixBatch } from "@shared/schema";
 import { useEscapeBack } from "@/hooks/use-escape-back";
 import { CreateMixBatchDialog } from "@/components/CreateMixBatchDialog";
@@ -291,6 +294,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
         if (labelResponse.ok) {
           const {
             labelPrints,
+            priorityAllocations = [],
           }: {
             labelPrints: {
               productionBaleId: number;
@@ -299,29 +303,48 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
               pieces?: number | null;
               approxWeightKg?: string | number | null;
             }[];
+            priorityAllocations?: PriorityPrintAssignment[];
           } = await labelResponse.json();
 
           const baleMap = new Map(finalizedBales.map((b) => [b.id, b]));
-          const labels = labelPrints.map((lp) => {
-            const bale = baleMap.get(lp.productionBaleId) || {};
-            return {
-              referenceNumber: String(lp.referenceNumber ?? ""),
-              articleCode: String(lp.articleCode ?? (bale as { articleCode?: unknown }).articleCode ?? ""),
-              pieces: lp.pieces || 1,
-              approxWeightKg: String(lp.approxWeightKg ?? (bale as { weightKg?: unknown }).weightKg ?? "0"),
-              productName: String((bale as { productName?: unknown }).productName ?? ""),
-              locationName: locName,
-            };
-          });
+          const labels: LabelData[] = withRecordedPriorityAllocations(
+            labelPrints.map((lp) => {
+              const bale = baleMap.get(lp.productionBaleId) || {};
+              return {
+                referenceNumber: String(lp.referenceNumber ?? ""),
+                articleCode: String(lp.articleCode ?? (bale as { articleCode?: unknown }).articleCode ?? ""),
+                pieces: lp.pieces || 1,
+                approxWeightKg: String(lp.approxWeightKg ?? (bale as { weightKg?: unknown }).weightKg ?? "0"),
+                productName: String((bale as { productName?: unknown }).productName ?? ""),
+                locationName: locName,
+              };
+            }),
+            labelPrints.map((lp) => lp.productionBaleId),
+            priorityAllocations
+          );
 
-          const printWindow = window.open("", "_blank");
-          if (printWindow) {
-            printWindow.document.write(generateFinalLabelHtml(labels));
-            printWindow.document.close();
-            printWindow.focus();
-            setTimeout(() => printWindow.print(), 500);
-          } else {
-            toast({ title: "Warning", description: "Please allow pop-ups to print labels", variant: "destructive" });
+          const prioritized = labels.filter(label => !!label.priorityColor);
+          const ordinary = labels.filter(label => !label.priorityColor);
+          const documents: string[] = [];
+          // Leave normal finalization labels byte-for-byte in their old format.
+          if (ordinary.length) documents.push(generateFinalLabelHtml(ordinary));
+          if (prioritized.length) {
+            documents.push(
+              getPaperFormat() === "A5"
+                ? generateA5LabelsHtml(prioritized)
+                : generateCombinedLabelsHtml(prioritized)
+            );
+          }
+          for (const [index, html] of documents.entries()) {
+            const printWindow = window.open("", "_blank");
+            if (printWindow) {
+              printWindow.document.write(html);
+              printWindow.document.close();
+              printWindow.focus();
+              setTimeout(() => printWindow.print(), 500 + index * 600);
+            } else {
+              toast({ title: "Warning", description: "Please allow pop-ups to print labels", variant: "destructive" });
+            }
           }
         } else {
           toast({
