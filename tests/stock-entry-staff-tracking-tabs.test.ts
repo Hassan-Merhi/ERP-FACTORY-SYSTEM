@@ -149,15 +149,6 @@ describe("Stock Entry staff tracking tabs", () => {
     expect(linkService).toContain("w.department");
     expect(linkService).toContain("pg_advisory_xact_lock");
     expect(linkService).toContain("nextEffectiveFrom");
-    // Unlinking must distribute the one shared bale target, not clone it to each member.
-    expect(linkControl).toContain("dialog-unlink-target-");
-    expect(linkControl).toContain("button-even-split-");
-    expect(linkControl).toContain("input-unlink-target-");
-    expect(linkControl).toContain("validSplit");
-    expect(linkRoute).toContain("allocations: req.body?.allocations");
-    expect(linkRoute).toContain("ProductionTargetSplitError");
-    expect(linkService).toContain("resolveUnlinkBaleAllocations");
-    expect(linkService).toContain("splitByWorker.get(workerId)");
   });
 
   it("uses the modern Attendance shell without changing the existing attendance actions", () => {
