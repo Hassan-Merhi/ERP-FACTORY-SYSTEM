@@ -1,9 +1,10 @@
 /**
- * factoryBalesRoutes: BalesReimport endpoints.
+ * factoryBalesRoutes: BalesReimport import endpoints.
  *
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import { lineAmount, MoneyDecimal } from "../../../lib/money";
 import type { Express, Request, Response } from "express";
 import { logAudit } from "../../helpers/auditHelpers";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -342,10 +343,8 @@ export function registerBalesReimportRoutes(app: Express) {
               stockItemCache.set(itemCode, erpStockItemId!);
             }
 
-            const costPerKg = parseFloat(bale.costPerKg || "0");
-            const weight = parseFloat(bale.weightKg || "0");
-            const baleCost = weight * costPerKg;
-            await adjustInventory(tx, locId, erpStockItemId!, 1, companyId, baleCost);
+            const baleCost = lineAmount(bale.weightKg, bale.costPerKg);
+            await adjustInventory(tx, locId, erpStockItemId!, 1, companyId, baleCost.toNumber());
             await postStockMovementTx(
               tx,
               {
@@ -353,7 +352,7 @@ export function registerBalesReimportRoutes(app: Express) {
                 stockItemId: erpStockItemId!,
                 kind: "receipt",
                 quantity: "1",
-                unitCost: String(Math.max(baleCost, 0)),
+                unitCost: MoneyDecimal.max(baleCost, 0).toFixed(),
                 toLocationId: locId,
                 occurredAt: (bale.finalizedAt instanceof Date ? bale.finalizedAt : new Date()).toISOString(),
                 source: {
