@@ -16,6 +16,10 @@ export type LabelData = {
   designColor?: A4DesignColor | null;
   customerLogoUrl?: string;
   barcodeDataUrl?: string;
+  /** Immutable assigned Priority Scan color; omitted for ordinary labels. */
+  priorityColor?: string | null;
+  priorityOrderId?: number | null;
+  priorityNumber?: number | null;
 };
 
 function _blobToBase64(blob: Blob): Promise<string> {
@@ -93,11 +97,26 @@ function isBrandUrl(src: string): boolean {
   return src.startsWith("/labels/");
 }
 
+/** Only accept real CSS hex colors from server-side allocation snapshots. */
+function renderSmallHmdLogo(label: LabelData, cssClass = "logo-img"): string {
+  const color = typeof label.priorityColor === "string" && /^#[0-9a-f]{6}$/i.test(label.priorityColor)
+    ? label.priorityColor : null;
+  if (!color) {
+    return `<img class="${cssClass}" src="${label.customerLogoUrl || HMD_LOGO_BASE64}" alt="HMD International Group" />`;
+  }
+  // Only the HMD lettering changes color. The subtitle remains black, while
+  // the large HMD globe artwork is unchanged.
+  return `<div class="priority-small-logo" aria-label="HMD International Group">
+    <div class="priority-hmd-letters" style="color:${color} !important">HMD</div>
+    <div class="priority-hmd-subtitle">INTERNATIONAL GROUP</div>
+  </div>`;
+}
+
 function buildDetailBlock(label: LabelData) {
   return `<div class="code-label">
     <div class="label-top">
       <div class="logo-section">
-        <img class="logo-img" src="${label.customerLogoUrl || HMD_LOGO_BASE64}" alt="Logo" />
+        ${renderSmallHmdLogo(label)}
       </div>
       <div class="info-section">
         <div class="info-row"><span class="info-key">PIECES:</span> <span class="info-val">${formatLabelNum(label.pieces)}</span></div>
@@ -117,7 +136,7 @@ function buildDetailBlockNoBanner(label: LabelData) {
   return `<div class="code-label">
     <div class="label-top">
       <div class="logo-section">
-        <img class="logo-img" src="${label.customerLogoUrl || HMD_LOGO_BASE64}" alt="Logo" />
+        ${renderSmallHmdLogo(label)}
       </div>
       <div class="info-section">
         <div class="info-row"><span class="info-key">PIECES:</span> <span class="info-val">${formatLabelNum(label.pieces)}</span></div>
@@ -140,6 +159,9 @@ const detailBlockCss = `
     .label-top { display: flex; justify-content: space-between; align-items: center; }
     .logo-section { flex-shrink: 0; }
     .logo-img { height: 14mm; width: auto; object-fit: contain; display: block; }
+    .priority-small-logo { display: flex; flex-direction: column; justify-content: center; align-items: center; width: 22mm; min-height: 11mm; white-space: nowrap; }
+    .priority-hmd-letters { font: italic 900 22pt/1 Arial, Helvetica, sans-serif; letter-spacing: -2px; }
+    .priority-hmd-subtitle { color: #000 !important; font: 900 4pt/1.3 Arial, Helvetica, sans-serif; letter-spacing: -.1px; }
     .info-section { text-align: right; font-size: 8pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }
@@ -223,6 +245,19 @@ function getDesignBannerUrl(design: string): string {
 export function generateCombinedLabelsHtml(labels: LabelData[], designColor?: A4DesignColor) {
   let labelsHtml = "";
   for (const label of labels) {
+    if (label.priorityColor) {
+      labelsHtml += `
+      <div class="a4-page priority-print-a4">
+        <div class="priority-globe-top"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+        <div class="priority-main-row">
+          <div class="priority-detail-wrap">${buildDetailBlock(label)}</div>
+          <div class="priority-side-product">${label.productName}</div>
+        </div>
+        <div class="priority-main-product">${label.productName}</div>
+        <div class="priority-globe-bottom"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+      </div>`;
+      continue;
+    }
     const effectiveColor = label.designColor || designColor;
     const bannerUrl = effectiveColor ? getDesignBannerUrl(effectiveColor) : getHeaderImage(label.articleCode);
     const hasBanner = effectiveColor || isBrandUrl(bannerUrl);
@@ -257,7 +292,16 @@ export function generateCombinedLabelsHtml(labels: LabelData[], designColor?: A4
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; }
 ${detailBlockCss}
 
-    .a4-page { width: 210mm; height: 297mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+    .priority-print-a4 { padding: 6mm 10mm; text-align: center; }
+    .priority-globe-top { height: 116mm; display: flex; align-items: center; justify-content: center; }
+    .priority-globe-top img { width: 116mm; max-height: 113mm; object-fit: contain; }
+    .priority-main-row { height: 58.5mm; display: flex; align-items: center; gap: 5mm; }
+    .priority-detail-wrap { border: .3mm solid #222; flex-shrink: 0; width: 76mm; height: 58.5mm; overflow: hidden; text-align: left; }
+    .priority-side-product { flex: 1; font-size: 22pt; line-height: 1.06; font-weight: 900; text-align: center; overflow-wrap: anywhere; }
+    .priority-main-product { min-height: 49mm; display: flex; align-items: center; justify-content: center; font-size: 35pt; line-height: 1.05; font-weight: 900; overflow-wrap: anywhere; text-transform: uppercase; }
+    .priority-globe-bottom { flex: 1; display: flex; align-items: center; justify-content: center; }
+    .priority-globe-bottom img { width: 78mm; height: 62mm; object-fit: contain; }
+        .a4-page { width: 210mm; height: 297mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
     .a4-page:last-child { page-break-after: auto; }
 
     .a4-top-half { height: 148.5mm; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -289,6 +333,19 @@ ${detailBlockCss}
 export function generateA5LabelsHtml(labels: LabelData[]) {
   let labelsHtml = "";
   for (const label of labels) {
+    if (label.priorityColor) {
+      labelsHtml += `
+        <div class="a5-page priority-print-a5">
+          <div class="priority-a5-globe"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+          <div class="priority-a5-detail">${buildDetailBlockNoBanner(label)}</div>
+          <div class="priority-a5-product">${label.productName}</div>
+        </div>
+        <div class="a5-page priority-print-a5">
+          <div class="priority-a5-product priority-a5-product-big">${label.productName}</div>
+          <div class="priority-a5-globe"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+        </div>`;
+      continue;
+    }
     labelsHtml += `
       <div class="a5-page a5-page1">
         <div class="a5-top-content">
@@ -324,7 +381,13 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     .barcode-img { width: 100%; height: 14mm; object-fit: fill; }
     .barcode-number { font-size: 11pt; font-weight: 900; font-family: Arial, Helvetica, sans-serif; margin-top: 0.5mm; letter-spacing: 1.5px; text-transform: uppercase; -webkit-text-stroke: 0.5px #000; }
     .barcode-subtext { font-size: 7pt; font-weight: 900; margin-top: 0.5mm; text-transform: uppercase; letter-spacing: 1px; line-height: 1.1; word-break: break-word; -webkit-text-stroke: 0.4px #000; }
-    .a5-page { width: 148mm; height: 210mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+    .priority-print-a5 { padding: 7mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7mm; }
+    .priority-a5-globe { height: 65mm; width: 100%; display: flex; align-items: center; justify-content: center; }
+    .priority-a5-globe img { max-height: 65mm; max-width: 95mm; object-fit: contain; }
+    .priority-a5-detail { border: .3mm solid #333; width: 65mm; min-height: 49mm; }
+    .priority-a5-product { text-align: center; font-size: 25pt; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
+    .priority-a5-product-big { font-size: 36pt; }
+        .a5-page { width: 148mm; height: 210mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
     .a5-page:last-child { page-break-after: auto; }
     .a5-page1 { padding-top: 80mm; }
     .a5-page2 { padding-top: 10mm; }
@@ -359,7 +422,7 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
         <div class="label">
           <div class="label-content">
             <div class="label-top">
-              <div class="logo-section"><img class="sticker-logo" src="${label.customerLogoUrl || HMD_LOGO_BASE64}" alt="Logo" /></div>
+              <div class="logo-section">${renderSmallHmdLogo(label, "sticker-logo")}</div>
               <div class="info-section">
                 <div><span class="info-label">PIECES:</span> <span class="info-value">${formatLabelNum(label.pieces)}</span></div>
                 <div><span class="info-label">ARTICLE:</span> <span class="info-value">${label.articleCode}</span></div>
@@ -388,6 +451,9 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
     .label-top { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
     .logo-section { flex-shrink: 0; }
     .sticker-logo { height: 10mm; width: auto; object-fit: contain; display: block; }
+    .priority-small-logo { width: 20mm; min-height: 9mm; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .priority-hmd-letters { font: italic 900 20pt/1 Arial, Helvetica, sans-serif; letter-spacing: -2px; }
+    .priority-hmd-subtitle { color: #000 !important; font: 900 3.6pt/1.1 Arial, Helvetica, sans-serif; }
     .info-section { text-align: right; font-size: 7.5pt; line-height: 1.3; }
     .info-label { font-weight: 900; }
     .info-value { font-weight: 900; }
