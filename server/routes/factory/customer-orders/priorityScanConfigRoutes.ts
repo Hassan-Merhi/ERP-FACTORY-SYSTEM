@@ -108,6 +108,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           FROM factory_priority_scan_history
           WHERE company_id = ${companyId}
             AND business_date = ${businessDate}
+            AND reversed_at IS NULL
         `);
         const [signatureRow] = resultRows(signatureResult) as Array<{ count: number; maxId: string }>;
         const signature = `${businessDate}:${signatureRow?.count ?? 0}:${signatureRow?.maxId ?? 0}`;
@@ -128,6 +129,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
           FROM factory_priority_scan_history
           WHERE company_id = ${companyId}
             AND business_date = ${businessDate}
+            AND reversed_at IS NULL
           ORDER BY scanned_at DESC, id DESC
         `);
         return res.json({
