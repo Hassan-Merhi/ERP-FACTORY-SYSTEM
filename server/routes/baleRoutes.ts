@@ -409,6 +409,14 @@ export function registerBaleRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { baleId } = req.body;
       if (!baleId) return res.status(400).json({ message: "baleId required" });
+      // Resolve before recording the print. Reprints of already assigned bales
+      // return their original snapshot; unassigned bales may enter Priority Scan.
+      const { runAutomaticPriorityReprint } = await import("./factory/customer-orders/priorityAutoAllocation");
+      const priorityAllocation = await runAutomaticPriorityReprint(
+        companyId, Number(baleId),
+        String(req.session.username || req.session.userId || "automatic"),
+        req.session.userId == null ? null : String(req.session.userId)
+      );
       const [existing] = await db
         .select()
         .from(baleLabelPrints)
@@ -419,7 +427,7 @@ export function registerBaleRoutes(app: Express) {
           .set({ printedAt: new Date(), printedByUserId: req.session.userId || null })
           .where(eq(baleLabelPrints.id, existing.id));
       } else {
-        const [bale] = await db.select().from(factoryBales).where(eq(factoryBales.id, baleId));
+        const [bale] = await db.select().from(factoryBales).where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId)));
         if (bale) {
           const product = bale.productId
             ? (await db.select().from(factoryBaleProducts).where(eq(factoryBaleProducts.id, bale.productId)))[0]
@@ -438,7 +446,7 @@ export function registerBaleRoutes(app: Express) {
           });
         }
       }
-      res.json({ success: true, printedAt: new Date().toISOString() });
+      res.json({ success: true, printedAt: new Date().toISOString(), priorityAllocation });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
