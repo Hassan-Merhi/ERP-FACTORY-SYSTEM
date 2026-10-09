@@ -231,7 +231,7 @@ export default function WipersReEntry() {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"], refetchType: "active" });
       toast({
         title: "Bales Removed",
-        description: `${data.removedCount || cleanupSelectedIds.size} bales removed from stock`,
+        description: `${data.removed} bales removed from stock`,
       });
     },
     onError: (err: Error) => {
