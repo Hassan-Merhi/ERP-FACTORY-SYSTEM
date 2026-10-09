@@ -95,7 +95,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
 
@@ -128,7 +128,7 @@ jobs:
 
       - name: Upload classified audit report
         if: always() && needs.changes.outputs.i18n == 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: classified-i18n-audit
           path: artifacts/i18n-audit
@@ -148,7 +148,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -240,7 +240,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -332,7 +332,7 @@ jobs:
 
       - name: Upload rendered UX evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ux-regression-browser
           path: |
