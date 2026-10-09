@@ -37,6 +37,7 @@ import {
 import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleScanRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
@@ -374,9 +375,8 @@ export function registerOrderBaleScanRoutes(app: Express) {
             const pricingMode = pricingLine.pricingMode ?? "per_bale";
             const perKgVal = pricingLine.pricePerKg;
             if (pricingMode === "per_kg" && perKgVal) {
-              const weightKg = parseFloat(String(bale.weightKg || "0"));
-              const pkgRate = parseFloat(String(perKgVal));
-              priceUsed = !isNaN(weightKg) && !isNaN(pkgRate) ? (weightKg * pkgRate).toFixed(2) : "0";
+              // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
+              priceUsed = toMoney(bale.weightKg).times(toMoney(perKgVal)).toFixed(2);
             } else {
               priceUsed = pricingLine.pricePerBale || "0";
             }
