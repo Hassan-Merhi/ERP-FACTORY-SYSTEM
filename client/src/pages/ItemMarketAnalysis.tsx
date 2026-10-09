@@ -355,8 +355,8 @@ export default function ItemMarketAnalysis() {
         <MetricCard label="Revenue" value={formatAmount(summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
-            </div>
+            Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+          </div>
           <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
           <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
         </div>
