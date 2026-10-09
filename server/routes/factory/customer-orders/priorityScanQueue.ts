@@ -225,11 +225,28 @@ const RECOVERY_COLOR_PRESETS = [
   "#0891b2", "#db2777", "#111827", "#eab308", "#64748b",
 ] as const;
 
+const RECOVERY_COLOR_ALIASES: Record<string, string> = {
+  red: "#dc2626", blue: "#2563eb", green: "#16a34a",
+  orange: "#f97316", yellow: "#eab308", purple: "#7c3aed",
+  pink: "#db2777", black: "#111827", white: "#ffffff",
+  gray: "#6b7280", grey: "#6b7280", navy: "#000080",
+  lime: "#00ff00", cyan: "#0891b2", gold: "#b8860b",
+};
+
+function canonicalPriorityColorKey(value: string): string {
+  const key = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(key)) {
+    const [,r,g,b] = key;
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return RECOVERY_COLOR_ALIASES[key] ?? key;
+}
+
 function recoveryColor(
   original: string, used: Set<string>, configId: number
 ): string {
-  if (!used.has(original.trim().toLowerCase())) return original;
-  const preset = RECOVERY_COLOR_PRESETS.find(color => !used.has(color.toLowerCase()));
+  if (!used.has(canonicalPriorityColorKey(original))) return original;
+  const preset = RECOVERY_COLOR_PRESETS.find(color => !used.has(canonicalPriorityColorKey(color)));
   if (preset) return preset;
   // In unusual queues where every standard color is already used, generate
   // a stable safe hex code instead of blocking an otherwise valid deletion.
@@ -311,11 +328,11 @@ export async function reactivateAutoCompletedPriorityLoadingsLockedTx(
   );
 
   const active = await loadActivePriorityRows(tx, companyId);
-  const usedColors = new Set(active.map(row => row.colorKey.toLowerCase()));
+  const usedColors = new Set(active.map(row => canonicalPriorityColorKey(row.color)));
   const reopened: PriorityReopenedLoading[] = [];
   for (const row of eligible) {
     const color = recoveryColor(row.color, usedColors, row.id);
-    usedColors.add(color.toLowerCase());
+    usedColors.add(canonicalPriorityColorKey(color));
     if (color !== row.color) {
       await tx.update(customerOrderPriorityScanConfigs).set({
         color, colorKey: color.toLowerCase(), updatedAt: sql`now()`,
