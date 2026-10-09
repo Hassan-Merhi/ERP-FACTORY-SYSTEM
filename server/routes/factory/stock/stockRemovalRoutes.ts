@@ -111,7 +111,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
             eq(factoryBales.status, "IN_STOCK"),
             isNull(factoryBales.deletedAt),
           )).orderBy(asc(factoryBales.id)).limit(qty);
-        if (selected.length === 0) throw new Error("No in-stock bales found for this product at this location");
+        if (selected.length !== qty) throw new Error(`Only ${selected.length} of ${qty} requested bales are available in stock at this location. Nothing was removed.`);
         return deletePhysicalFactoryBalesTx(tx, {
           companyId, baleIds: selected.map(row => row.id),
           actorId: String(supervisor.id), actorName: supervisorUsername,
