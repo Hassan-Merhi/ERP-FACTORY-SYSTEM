@@ -185,34 +185,29 @@ async function deleteActivePaymentReceipt(req: Request, res: Response, next: Nex
         .set({ deletedAt: new Date() })
         .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)));
 
-      return {
-        replayed: false,
-        voucher: lockedVoucher,
-        entries,
-      };
-    });
-
-    if (!deletion.replayed) {
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(deletion.entries);
-        await logAudit({
+      // Wave 16 (B): audited in the deleting transaction; an audit failure
+      // rolls the delete back.
+      const entrySnapshot = await snapshotVoucherEntries(entries, tx);
+      await logAudit(
+        {
           userId: userId!,
           username: req.session.username || "unknown",
           companyId,
           action: "delete",
           tableName: "vouchers",
           recordId: voucherId,
-          recordIdentifier: deletion.voucher.voucherNumber,
-          changes: buildVoucherChangesForDelete(deletion.voucher, entrySnapshot),
-        });
-      } catch (error: unknown) {
-        logger.error("Central Payment/Receipt delete audit failed (non-fatal)", {
-          companyId,
-          voucherId,
-          error,
-        });
-      }
-    }
+          recordIdentifier: lockedVoucher.voucherNumber,
+          changes: buildVoucherChangesForDelete(lockedVoucher, entrySnapshot),
+        },
+        tx
+      );
+
+      return {
+        replayed: false,
+        voucher: lockedVoucher,
+        entries,
+      };
+    });
 
     logger.info("central Payment/Receipt delete succeeded", {
       module: "vouchers",

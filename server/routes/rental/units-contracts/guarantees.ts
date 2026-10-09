@@ -30,6 +30,7 @@ import {
 } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, incomeAccountName, shopExpenseAccountName } = ctx;
@@ -602,14 +603,19 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
             .where(eq(interCompanyTransfers.sourcePaymentId, payment.id));
           for (const transfer of linkedTransfers) {
             await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-            if (transfer.fromVoucherId) {
-              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, transfer.fromVoucherId));
-              await tx.delete(vouchers).where(eq(vouchers.id, transfer.fromVoucherId));
-            }
-            if (transfer.toVoucherId) {
-              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, transfer.toVoucherId));
-              await tx.delete(vouchers).where(eq(vouchers.id, transfer.toVoucherId));
-            }
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId: transfer.fromCompanyId,
+              voucherIds: [transfer.fromVoucherId],
+              reason: "guarantee-as-rent-undo-transfer",
+              actor: sessionRetirementActor(req),
+            });
+            await retireVouchersTx(tx, {
+              companyId: transfer.toCompanyId,
+              voucherIds: [transfer.toVoucherId],
+              reason: "guarantee-as-rent-undo-transfer",
+              actor: sessionRetirementActor(req),
+            });
           }
 
           // 4. Delete the payment row

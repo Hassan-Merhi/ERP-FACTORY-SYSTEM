@@ -66,10 +66,11 @@ export async function calculateNetPositionAsOf(
   const companyRow = await storage.getCompanyById(companyId);
   const isSupplierPartner = companyRow?.companyType === "supplier_partner";
 
-  // Ledger accounts: filtered by the ACCOUNT's company_id so that ledger
-  // accounts migrated between companies show their full balance in the
-  // destination company even when their vouchers weren't moved (same rationale
-  // as the net-profit route). Vouchers count from
+  // Ledger accounts: this company's vouchers on its own accounts (engine rule
+  // 4, wave 17 A). They were filtered by the ACCOUNT's company_id, so another
+  // company's lines on these accounts counted here but not on this company's
+  // balance sheet; lines of this company's vouchers on another company's or a
+  // missing account are the engine's missingAccount lines. Vouchers count from
   // COALESCE(effective_date, voucher_date), as in the balance engine.
   const loadAccountBalances = async () => {
     try {
@@ -82,6 +83,7 @@ export async function calculateNetPositionAsOf(
         INNER JOIN vouchers v ON ve.voucher_id = v.id
         INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id
         WHERE la.company_id = ${companyId}
+          AND v.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
           AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
@@ -97,6 +99,7 @@ export async function calculateNetPositionAsOf(
         INNER JOIN vouchers v ON ve.voucher_id = v.id
         INNER JOIN ledger_accounts la ON ve.ledger_account_id = la.id
         WHERE la.company_id = ${companyId}
+          AND v.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
           AND COALESCE(v.effective_date, v.voucher_date) <= ${toDate}
@@ -118,6 +121,7 @@ export async function calculateNetPositionAsOf(
       employees: "erp",
       codes: "erp",
       banks: true,
+      missingAccounts: true,
     }),
   ]);
 

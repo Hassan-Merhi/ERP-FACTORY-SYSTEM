@@ -56,8 +56,52 @@ export class FactoryCostBasisRefusalError extends HttpError {
   }
 }
 
-/** Sends the 409 when `error` is the refusal; returns whether it did. */
+export const FACTORY_BALE_REQUIRES_COSTED_MIX = "FACTORY_BALE_REQUIRES_COSTED_MIX" as const;
+export const FACTORY_BALE_REQUIRES_COSTED_MIX_MESSAGE =
+  "Under perpetual inventory a bale must come from a costed mix. Choose the mix the bales were pressed from.";
+
+/**
+ * A stock-entry bale with no mix once the cut-over applies to its date (wave
+ * 17 B, owner decision 2): it would be costed at the catalogue production
+ * price, which is not a cost the factory incurred.
+ */
+export class FactoryBaleWithoutMixRefusalError extends HttpError {
+  readonly code = FACTORY_BALE_REQUIRES_COSTED_MIX;
+  constructor(readonly articleCodes: string[]) {
+    super(409, FACTORY_BALE_REQUIRES_COSTED_MIX_MESSAGE);
+    this.name = "FactoryBaleWithoutMixRefusalError";
+  }
+}
+
+/** Garbage bales (HMD16…) cost nothing by rule, so they need no mix. */
+export const isZeroCostArticle = (articleCode: string | null | undefined) => Boolean(articleCode?.startsWith("HMD16"));
+
+/**
+ * Refuses stock-entry bales with no mix once the company's cut-over applies to
+ * the entry date (decision 2). Before the cut-over they keep the catalogue
+ * price and are listed as unvalued by the readiness report
+ * (noMixCataloguePricedBales), and the cut-over apply refuses while any is
+ * stock.
+ */
+export async function assertStockEntryHasCostedMixTx(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  date: string,
+  articleCodes: ReadonlyArray<string | null | undefined>
+): Promise<void> {
+  const priced = [...new Set(articleCodes.filter((code) => !isZeroCostArticle(code)).map((code) => String(code)))];
+  if (priced.length === 0) return;
+  if (await isPerpetualInventoryActive(executor, companyId, date)) {
+    throw new FactoryBaleWithoutMixRefusalError(priced);
+  }
+}
+
+/** Sends the 409 when `error` is a cost-basis refusal; returns whether it did. */
 export function sendFactoryCostBasisRefusal(response: Response, error: unknown): boolean {
+  if (error instanceof FactoryBaleWithoutMixRefusalError) {
+    response.status(409).json({ code: error.code, message: error.message, articleCodes: error.articleCodes });
+    return true;
+  }
   if (!(error instanceof FactoryCostBasisRefusalError)) return false;
   response
     .status(409)
@@ -230,7 +274,8 @@ export function baleCostFromMix(weightKg: Decimal.Value, mixCostPerKg: Decimal.V
 
 /**
  * A stock-entry bale with no mix: the product's production price per bale
- * (garbage HMD16 bales cost nothing).
+ * (garbage HMD16 bales cost nothing). Only before the company's cut-over
+ * (assertStockEntryHasCostedMixTx refuses it after).
  */
 export function stockEntryBaleCost(
   productionPrice: Decimal.Value | null | undefined,
@@ -238,7 +283,7 @@ export function stockEntryBaleCost(
   articleCode?: string | null
 ): BaleCost {
   const zero = new MoneyDecimal(0);
-  if (articleCode?.startsWith("HMD16")) return { costPerKg: zero, totalCost: zero };
+  if (isZeroCostArticle(articleCode)) return { costPerKg: zero, totalCost: zero };
   const totalCost = toMoney(productionPrice ?? 0).toDecimalPlaces(FACTORY_COST_SCALE);
   const weight = toMoney(weightKg);
   const costPerKg = weight.gt(0) ? totalCost.dividedBy(weight).toDecimalPlaces(FACTORY_COST_SCALE) : zero;

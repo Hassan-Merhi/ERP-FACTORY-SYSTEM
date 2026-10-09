@@ -4,24 +4,24 @@
   "scope": "Active voucher creation sites detected by scripts/audit-write-evidence.mjs after excluding updates/deletes/restores/moves of existing voucher rows. Completed phases are retained separately as historical evidence and must not re-enter the active backlog.",
   "summary": {
     "initialReviewed": 81,
-    "activeReviewed": 14,
-    "explicitReplayGuard": 14,
+    "activeReviewed": 13,
+    "explicitReplayGuard": 13,
     "migrationImportRepair": 0,
     "operationalWithoutRequestIdentity": 0,
     "phase3InfrastructureCompleted": 11,
     "phase4OperationalCompleted": 22,
     "phase5OperationalCompleted": 22,
-    "phase6SpecialPurposeCompleted": 11,
+    "phase6SpecialPurposeCompleted": 10,
     "unreviewed": 0,
     "phase7PostReviewSafeWriters": 1,
-    "phase8RequestIdentityCompleted": 1
+    "phase8RequestIdentityCompleted": 1,
+    "wave16NoLongerCreates": 2
   },
   "reviewed": {
     "explicit-replay-guard": {
       "verdict": "documented compatibility exemption with an explicit replay/source guard",
       "reason": "These pre-existing creation sites are protected by an existing-voucher/source-row check, atomic state claim, conflict handling, or replace-in-transaction semantics. Phase 7 freezes this exact reviewed set: no new raw voucher creator may join it without an explicit review-file exemption, so direct voucher creation can no longer grow silently.",
       "files": [
-        "server/routes/balance-repair/undo.ts",
         "server/routes/containers/containerFreightWriteRoutes.ts",
         "server/routes/containers/containerHelpers.ts",
         "server/routes/factory/containers/other-charges-currency-admin.ts",
@@ -126,13 +126,12 @@
     },
     "phase-6-intrinsic-replay-safe-writers": {
       "verdict": "phase 6 completed by durable business-state replay proof",
-      "reason": "These writers already derive safety from persistent business state rather than a browser request: payroll migration rewrites only old-account vouchers, company import requires an empty target, payroll backfill excludes payroll IDs that already have vouchers, rental re-accrue only corrects still-detectable discrepancies, and deferred-rent reclassification uses a per-company advisory lock and journals only the current remaining balance.",
+      "reason": "These writers already derive safety from persistent business state rather than a browser request: payroll migration rewrites only old-account vouchers, company import requires an empty target, payroll backfill excludes payroll IDs that already have vouchers, and rental re-accrue only corrects still-detectable discrepancies. (The deferred-rent reclassification left this list in wave 16 A: it is an Owner preview/apply tool posting through the central engine.)",
       "files": [
         "server/routes/erp-payroll/runs-migration.ts",
         "server/routes/factory/docs-users/companyImportRoutes.ts",
         "server/routes/payroll/worker-statement/backfill.ts",
-        "server/routes/rental/rentalAccrualConfigRoutes.ts",
-        "server/services/rental/reclassifyDeferredRentService.ts"
+        "server/routes/rental/rentalAccrualConfigRoutes.ts"
       ]
     },
     "phase-7-post-review-safe-writers": {

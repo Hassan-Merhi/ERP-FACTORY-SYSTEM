@@ -76,7 +76,25 @@ export function registerStatsDataRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      res.json(await getExpenseBreakdown(companyId));
+      // Optional period (wave 17 A), inclusive, YYYY-MM-DD.
+      const range: { startDate?: string; endDate?: string } = {};
+      for (const key of ["startDate", "endDate"] as const) {
+        const raw = req.query[key];
+        if (raw === undefined) continue;
+        if (typeof raw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+          return res.status(400).json({
+            message:
+              key === "startDate"
+                ? "startDate must be a single YYYY-MM-DD value"
+                : "endDate must be a single YYYY-MM-DD value",
+          });
+        }
+        range[key] = raw;
+      }
+      if (range.startDate && range.endDate && range.startDate > range.endDate) {
+        return res.status(400).json({ message: "startDate must be on or before endDate" });
+      }
+      res.json(await getExpenseBreakdown(companyId, range));
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

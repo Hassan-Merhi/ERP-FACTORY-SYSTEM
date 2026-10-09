@@ -30,7 +30,10 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
-import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { toMoney } from "../../../../lib/money";
 
 export function registerOrderFinalizeRoutes(app: Express) {
@@ -333,6 +336,8 @@ export function registerOrderFinalizeRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed rate is refused (nothing committed).
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
       logger.error("Error finalizing order:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
     }

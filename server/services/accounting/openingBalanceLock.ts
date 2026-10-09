@@ -9,7 +9,7 @@ import { CLOSED_PERIOD_LOCK_NAMESPACE } from "./closedPeriodGuard";
  * Opening balances under the period lock (wave 12, re-audit section 8).
  *
  * Master opening balances (ledger accounts, customers, suppliers, bank
- * accounts, employees) are dated before the books start, so they sit inside
+ * accounts, employees; factory suppliers and fixed assets since wave 16 B) are dated before the books start, so they sit inside
  * the first closed period: changing one after a close changes balances the
  * closing journal already moved. Rule chosen: once a company has ANY closed
  * fiscal period, no opening on those tables may be created non-zero, changed,
@@ -32,9 +32,14 @@ export const OPENING_BALANCE_LOCK_TABLES = [
   "suppliers",
   "bank_accounts",
   "employees",
+  // Wave 16 (B): the engine counts both openings (a factory supplier's is Cr
+  // when it has no side, a fixed asset's always Dr). Neither table has an
+  // opening_balance_side column, so the trigger reads the row generically.
+  "factory_suppliers",
+  "fixed_assets",
 ] as const;
 
-export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v1";
+export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v2";
 
 export const openingBalanceLockTriggerName = (table: string) => `${table}_opening_balance_lock`;
 
@@ -58,46 +63,64 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
          HINT = 'Post an adjusting journal dated after the closed period, or reopen the period.';
      END IF;
    END $fn$`,
+  // The row is read through to_jsonb so one function serves tables with and
+  // without an opening_balance_side column (a missing side reads as NULL, the
+  // same on both rows, so only the amount and the company count there).
   `CREATE OR REPLACE FUNCTION erp_opening_balance_lock_guard() RETURNS trigger
    LANGUAGE plpgsql AS $fn$
    DECLARE
-     new_amount numeric := COALESCE(NEW.opening_balance, 0);
+     new_row jsonb := to_jsonb(NEW);
+     old_row jsonb;
+     new_amount numeric := COALESCE((to_jsonb(NEW)->>'opening_balance')::numeric, 0);
      old_amount numeric;
+     new_company integer := (to_jsonb(NEW)->>'company_id')::integer;
+     old_company integer;
    BEGIN
      IF TG_OP = 'INSERT' THEN
-       IF new_amount <> 0 THEN PERFORM erp_assert_opening_balance_open(NEW.company_id); END IF;
+       IF new_amount <> 0 THEN PERFORM erp_assert_opening_balance_open(new_company); END IF;
        RETURN NEW;
      END IF;
-     old_amount := COALESCE(OLD.opening_balance, 0);
+     old_row := to_jsonb(OLD);
+     old_amount := COALESCE((old_row->>'opening_balance')::numeric, 0);
+     old_company := (old_row->>'company_id')::integer;
      IF new_amount <> old_amount
-        OR (new_amount <> 0 AND COALESCE(NEW.opening_balance_side, 'Dr') IS DISTINCT FROM COALESCE(OLD.opening_balance_side, 'Dr'))
-        OR ((new_amount <> 0 OR old_amount <> 0) AND NEW.company_id IS DISTINCT FROM OLD.company_id) THEN
-       PERFORM erp_assert_opening_balance_open(OLD.company_id);
-       IF NEW.company_id IS DISTINCT FROM OLD.company_id THEN
-         PERFORM erp_assert_opening_balance_open(NEW.company_id);
+        OR (new_amount <> 0 AND COALESCE(new_row->>'opening_balance_side', 'Dr') IS DISTINCT FROM COALESCE(old_row->>'opening_balance_side', 'Dr'))
+        OR ((new_amount <> 0 OR old_amount <> 0) AND new_company IS DISTINCT FROM old_company) THEN
+       PERFORM erp_assert_opening_balance_open(old_company);
+       IF new_company IS DISTINCT FROM old_company THEN
+         PERFORM erp_assert_opening_balance_open(new_company);
        END IF;
      END IF;
      RETURN NEW;
    END $fn$`,
   // One trigger per table, installed only when the table has the columns the
-  // trigger reads. suppliers.company_id (and the opening side columns) come from
-  // the schema preload (server/schemaPreload.mjs), which `npm start` always
-  // runs; a bare `node dist/index.js` on a freshly pushed schema (CI's startup
-  // step) does not, so a missing column skips that table with a warning instead
-  // of refusing to start. The diagnostic's database_guards_installed lists any
+  // trigger needs (opening_balance and company_id; opening_balance_side joins
+  // the UPDATE OF list where the table has it). suppliers.company_id (and the
+  // opening side columns) come from the schema preload
+  // (server/schemaPreload.mjs), which `npm start` always runs; a bare
+  // `node dist/index.js` on a freshly pushed schema (CI's startup step) does
+  // not, so a missing column skips that table with a warning instead of
+  // refusing to start. The diagnostic's database_guards_installed lists any
   // trigger that is missing.
   ...OPENING_BALANCE_LOCK_TABLES.map(
     (table) => `DO $lock$
+   DECLARE
+     has_side boolean;
    BEGIN
      IF (SELECT COUNT(*) FROM information_schema.columns
           WHERE table_schema = current_schema() AND table_name = '${table}'
-            AND column_name IN ('opening_balance', 'opening_balance_side', 'company_id')) = 3 THEN
+            AND column_name IN ('opening_balance', 'company_id')) = 2 THEN
+       has_side := EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = '${table}' AND column_name = 'opening_balance_side');
        DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table};
-       CREATE TRIGGER ${openingBalanceLockTriggerName(table)}
-         BEFORE INSERT OR UPDATE OF opening_balance, opening_balance_side, company_id ON ${table}
-         FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard();
+       EXECUTE format(
+         'CREATE TRIGGER %I BEFORE INSERT OR UPDATE OF %s ON %I FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard()',
+         '${openingBalanceLockTriggerName(table)}',
+         CASE WHEN has_side THEN 'opening_balance, opening_balance_side, company_id' ELSE 'opening_balance, company_id' END,
+         '${table}'
+       );
      ELSE
-       RAISE WARNING 'Opening balance lock not installed on %: opening_balance, opening_balance_side or company_id is missing', '${table}';
+       RAISE WARNING 'Opening balance lock not installed on %: opening_balance or company_id is missing', '${table}';
      END IF;
    END $lock$`
   ),

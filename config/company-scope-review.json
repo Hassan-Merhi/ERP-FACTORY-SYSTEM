@@ -3,6 +3,10 @@
   "description": "Explicit Phase 4 review registry for legacy data queries that are safe because their caller, ownership join, transaction context, or controlled maintenance context provides the company boundary.",
   "reviews": [
     {
+      "path": "server/services/accounting/accountHistoryPolicy.ts",
+      "reason": "Wave 16 (B): counts the voucher lines naming one account, which the caller has already loaded in the active company; it deliberately counts every company's lines (an account with any line never moves company)."
+    },
+    {
       "path": "server/chat/reports/implementations/phase3ReportShard.ts",
       "reason": "Report shard receives the already-authorized company context from the chat report orchestrator."
     },

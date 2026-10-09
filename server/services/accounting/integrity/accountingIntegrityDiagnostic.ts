@@ -16,13 +16,17 @@ import { sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { CANONICAL_ACCOUNT_TYPES, classifyAccountType } from "../accountClassification";
-import { LEDGER_GUARD_CONSTRAINTS } from "../ledgerIntegrityGuard";
+import { LEDGER_GUARD_CONSTRAINTS, LEDGER_INTEGRITY_GUARD_VERSION } from "../ledgerIntegrityGuard";
 import {
   VOUCHER_BALANCE_GUARD_TRIGGERS,
   VOUCHER_BALANCE_GUARD_VERSION,
   VOUCHER_HISTORY_MARKER_COLUMN,
 } from "../voucherBalanceGuard";
-import { OPENING_BALANCE_LOCK_TABLES, openingBalanceLockTriggerName } from "../openingBalanceLock";
+import {
+  OPENING_BALANCE_LOCK_TABLES,
+  OPENING_BALANCE_LOCK_VERSION,
+  openingBalanceLockTriggerName,
+} from "../openingBalanceLock";
 import {
   CURRENCY_NORMALIZATION_FUNCTION,
   CURRENCY_NORMALIZATION_GUARD_VERSION,
@@ -32,6 +36,7 @@ import { SYSTEM_ACCOUNTS, diagnoseSystemAccounts } from "../systemAccounts";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
 import { payrollAdvancePostingChecks } from "./payrollAdvancePostingChecks";
+import { retailLedgerChecks } from "./retailLedgerChecks";
 import { getPartyBalances, liveVouchersOf } from "../balances/ledgerBalanceEngine";
 
 export type IntegrityStatus = "pass" | "warn" | "fail";
@@ -80,6 +85,8 @@ async function rows<T extends Row>(query: ReturnType<typeof sql>): Promise<T[]> 
 }
 
 const LIVE = sql`v.deleted_at IS NULL AND v.optional = false`;
+/** Tables whose runtime supplier-link columns the SP mismatch check needs (wave 16 A). */
+const SP_LINK_TABLES = ["sp_containers", "vouchers"] as const;
 
 /** Wave 12 (A): the balance guard v3 triggers and the opening-balance lock triggers. */
 const LEDGER_INTEGRITY_WAVE12_TRIGGERS: readonly string[] = [
@@ -244,6 +251,39 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       unnormalized.reduce((acc, row) => acc + row.lines, 0),
       "Lines of non-USD vouchers with no transaction currency: their debit/credit (meant to be USD) may hold the native amount.",
       unnormalized
+    )
+  );
+
+  // 4b. Who still writes them (wave 17 C). The currency trigger normalizes only
+  // USD and CFA; a line of another currency written without its transaction
+  // amounts keeps the native amount in the USD columns. Lines written in the
+  // last 90 days, by currency and voucher-number family, show a live writer
+  // (production, 2026-10-09: FACTORY-FREIGHT EUR/AUD from main). Since wave
+  // 17 D the factory writers refuse a document with no confirmed rate and the
+  // trigger (v2) refuses this shape for new lines; what is listed is history.
+  const recentUnnormalized = await rows<{
+    currency: string;
+    family: string;
+    lines: number;
+    last_written: string;
+  }>(sql`
+    SELECT UPPER(COALESCE(v.currency, 'USD')) AS currency,
+           COALESCE(substring(v.voucher_number from '^[A-Za-z_-]+'), '') AS family,
+           COUNT(*)::int AS lines, MAX(ve.created_at)::date::text AS last_written
+      FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+     WHERE v.company_id = ${companyId} AND ${LIVE}
+       AND UPPER(COALESCE(v.currency, 'USD')) NOT IN ('USD', 'CFA', 'XOF')
+       AND ve.transaction_debit_amount IS NULL AND ve.transaction_credit_amount IS NULL
+       AND ve.created_at >= now() - interval '90 days'
+     GROUP BY 1, 2 ORDER BY 1, 2
+  `);
+  checks.push(
+    check(
+      "foreign_currency_lines_written_recently_without_native_amount",
+      recentUnnormalized.length ? "warn" : "pass",
+      recentUnnormalized.reduce((acc, row) => acc + row.lines, 0),
+      "Lines of non-USD, non-CFA vouchers written in the last 90 days without transaction amounts, by currency and voucher family: a writer that still stores the native amount in the USD columns.",
+      recentUnnormalized
     )
   );
 
@@ -552,12 +592,24 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
   if (currencyGuard?.version !== CURRENCY_NORMALIZATION_GUARD_VERSION) {
     missingGuards.push(`${CURRENCY_NORMALIZATION_FUNCTION} ${CURRENCY_NORMALIZATION_GUARD_VERSION}`);
   }
+  // Wave 16 (B): the line-target guard (exactly one target) and the opening
+  // lock (factory suppliers and fixed assets) at their current versions.
+  const [ledgerGuardVersions] = await rows<{ target: string | null; opening: string | null }>(sql`
+    SELECT obj_description(to_regprocedure('erp_voucher_entry_target_guard()'), 'pg_proc') AS target,
+           obj_description(to_regprocedure('erp_opening_balance_lock_guard()'), 'pg_proc') AS opening
+  `);
+  if (ledgerGuardVersions?.target !== LEDGER_INTEGRITY_GUARD_VERSION) {
+    missingGuards.push(`erp_voucher_entry_target_guard ${LEDGER_INTEGRITY_GUARD_VERSION}`);
+  }
+  if (ledgerGuardVersions?.opening !== OPENING_BALANCE_LOCK_VERSION) {
+    missingGuards.push(`erp_opening_balance_lock_guard ${OPENING_BALANCE_LOCK_VERSION}`);
+  }
   checks.push(
     check(
       "database_guards_installed",
       missingGuards.length ? "fail" : "pass",
       missingGuards.length,
-      "Ledger integrity, closed-period, balance (current version, with its history marker), opening-balance lock and currency normalization (current version) guards that must exist on the ledger tables.",
+      "Ledger integrity (current version: one target per new line), closed-period, balance (current version, with its history marker), opening-balance lock (current version) and currency normalization (current version) guards that must exist on the ledger tables.",
       missingGuards.map((name) => ({ missing: name }))
     )
   );
@@ -682,8 +734,62 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     )
   );
 
+  // 13b. Wave 16 (A): SP Goods-OTW vouchers whose supplier differs from their
+  // container's. The container trigger no longer moves the supplier of posted
+  // lines and startup no longer repairs them; they are listed here and changed
+  // only through the Owner apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
+  // The supplier columns are added at runtime (spSupplierVoucherSync.ts); a
+  // catalog read, so it carries no company_id predicate.
+  const [spLinkColumns] = await rows<{ ready: boolean }>(sql`
+    SELECT COUNT(*) = 3 AS ready FROM information_schema.columns
+     WHERE table_schema = 'public'
+       AND column_name IN ('supplier_id', 'goods_otw_voucher_id')
+       AND table_name IN (${SP_LINK_TABLES[0]}, ${SP_LINK_TABLES[1]})
+       AND NOT (table_name = ${SP_LINK_TABLES[1]} AND column_name = 'goods_otw_voucher_id')
+  `);
+  const spLinkMismatches = spLinkColumns?.ready
+    ? await rows<{
+        container_id: number;
+        voucher_id: number;
+        voucher_number: string;
+        container_supplier_id: number | null;
+        voucher_supplier_id: number | null;
+        mismatched_lines: number;
+        amount: string;
+      }>(sql`
+        SELECT c.id AS container_id, v.id AS voucher_id, v.voucher_number,
+               c.supplier_id AS container_supplier_id, v.supplier_id AS voucher_supplier_id,
+               COUNT(ve.id)::int AS mismatched_lines,
+               COALESCE(SUM(ve.credit_amount - ve.debit_amount), 0)::text AS amount
+          FROM sp_containers c
+          JOIN vouchers v ON v.id = c.goods_otw_voucher_id AND v.company_id = c.company_id
+          LEFT JOIN voucher_entries ve ON ve.voucher_id = v.id
+           AND ve.supplier_id IS DISTINCT FROM c.supplier_id
+           AND EXISTS (SELECT 1 FROM ledger_accounts la
+                        WHERE la.id = ve.ledger_account_id AND la.company_id = c.company_id
+                          AND la.sub_type = 'sp_otw_clearing')
+         WHERE c.company_id = ${companyId} AND ${LIVE}
+         GROUP BY c.id, v.id, v.voucher_number, c.supplier_id, v.supplier_id
+        HAVING v.supplier_id IS DISTINCT FROM c.supplier_id OR COUNT(ve.id) > 0
+         ORDER BY v.id
+      `)
+    : [];
+  checks.push(
+    check(
+      "sp_supplier_voucher_link_mismatch",
+      spLinkMismatches.length ? "warn" : "pass",
+      spLinkMismatches.length,
+      "Supplier Partner Goods-OTW vouchers whose header or OTW-clearing lines name another supplier than their container. Listed, not repaired: the Owner preview/apply changes them, audited, outside closed periods.",
+      spLinkMismatches,
+      spLinkMismatches.reduce((acc, row) => acc.plus(toMoney(row.amount)), new MoneyDecimal(0)).toFixed(2)
+    )
+  );
+
   // 14. Payroll and advance postings missing from before wave 7 (listed, not back-filled).
   checks.push(...(await payrollAdvancePostingChecks(companyId)));
+
+  // 15. Retail cash movements before wave 17 D and RETAIL-INVENTORY against the stock sub-ledger.
+  checks.push(...(await retailLedgerChecks(companyId)));
 
   const status: IntegrityStatus = checks.some((c) => c.status === "fail")
     ? "fail"

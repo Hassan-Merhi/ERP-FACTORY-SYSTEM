@@ -30,6 +30,7 @@ import { eq, and, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
 import {
+  assertStockEntryHasCostedMixTx,
   baleCostFromMix,
   FACTORY_COST_SCALE,
   mixCostForPressing,
@@ -124,6 +125,16 @@ export function registerFactoryStockEntryRoutes(app: Express) {
             ? await tx.select().from(factoryBaleProducts).where(inArray(factoryBaleProducts.id, productIds))
             : [];
         const productMap = new Map(factoryProducts.map((p) => [p.id, p]));
+        // Wave 17 B (decision 2): with no mix, a bale would take the catalogue
+        // production price; refused once the cut-over applies to the entry date.
+        if (!mixBatch) {
+          await assertStockEntryHasCostedMixTx(
+            tx,
+            companyId,
+            effectiveDateStr,
+            items.map((item) => productMap.get(item.productId)?.articleCode ?? null)
+          );
+        }
 
         const categoryIdSet = new Set<number>();
         factoryProducts.forEach((p) => {

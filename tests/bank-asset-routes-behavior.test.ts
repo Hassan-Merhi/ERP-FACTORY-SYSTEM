@@ -16,7 +16,24 @@ const harness = vi.hoisted(() => {
     };
     return builder;
   };
+  const insertedValues: unknown[] = [];
+  const updatedValues: unknown[] = [];
+  const writeBuilder = (store: unknown[]) => (value: unknown) => {
+    store.push(value);
+    const result = returningResults.shift() ?? [];
+    const builder: any = {
+      where: vi.fn(() => builder),
+      returning: vi.fn(async () => result),
+      then: (resolve: (value: unknown[]) => unknown, reject: (reason: unknown) => unknown) =>
+        Promise.resolve(result).then(resolve, reject),
+    };
+    return builder;
+  };
   const db: any = {
+    // Wave 16 (B): bank and fixed-asset writes run in one transaction with their audit.
+    transaction: vi.fn(async (work: (tx: unknown) => unknown) => work(db)),
+    insert: vi.fn(() => ({ values: vi.fn(writeBuilder(insertedValues)) })),
+    update: vi.fn(() => ({ set: vi.fn(writeBuilder(updatedValues)) })),
     select: vi.fn(() => makeBuilder(selectResults.shift() ?? [])),
     execute: vi.fn(async () => executeResults.shift() ?? { rows: [] }),
     delete: vi.fn(() => {
@@ -31,6 +48,8 @@ const harness = vi.hoisted(() => {
     selectResults,
     executeResults,
     returningResults,
+    insertedValues,
+    updatedValues,
     storage: {
       getAllBankAccounts: vi.fn(),
       getBankAccountByCode: vi.fn(),
@@ -61,17 +80,25 @@ vi.mock("../server/routes/_helpers", () => ({
   logAudit: harness.logAudit,
 }));
 vi.mock("../server/excelHelper", () => ({ readExcel: vi.fn(), sheetToJson: vi.fn() }));
-vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
+vi.mock("../server/lib/httpHandlers", () => ({
+  getErrorMessage: (error: any) => error?.message || String(error),
+  errorStatus: (_error: unknown, fallback = 500) => fallback,
+}));
 vi.mock("../server/lib/logger", () => ({ logger: { error: vi.fn() } }));
 vi.mock("drizzle-orm", () => ({
   eq: (column: unknown, value: unknown) => ({ type: "eq", column, value }),
   and: (...conditions: unknown[]) => ({ type: "and", conditions }),
   or: (...conditions: unknown[]) => ({ type: "or", conditions }),
   desc: (column: unknown) => ({ type: "desc", column }),
-  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }),
+  sql: Object.assign((strings: TemplateStringsArray, ...values: unknown[]) => ({ strings, values }), {
+    raw: (text: string) => ({ raw: text }),
+    join: (parts: unknown[]) => ({ parts }),
+  }),
+  ne: (column: unknown, value: unknown) => ({ type: "ne", column, value }),
   isNull: (column: unknown) => ({ type: "isNull", column }),
 }));
 vi.mock("@shared/schema", () => ({
+  bankAccounts: { id: "bank.id", companyId: "bank.companyId", code: "bank.code" },
   fixedAssets: { id: "assets.id", companyId: "assets.companyId" },
   ledgerAccounts: {
     id: "ledger.id",
@@ -152,6 +179,8 @@ describe("bank and fixed-asset route behavior", () => {
     harness.selectResults.splice(0);
     harness.executeResults.splice(0);
     harness.returningResults.splice(0);
+    harness.insertedValues.splice(0);
+    harness.updatedValues.splice(0);
     harness.bankParse.mockImplementation((value: any) => value);
     harness.bankPartialParse.mockImplementation((value: any) => value);
     harness.assetParse.mockImplementation((value: any) => value);
@@ -175,7 +204,7 @@ describe("bank and fixed-asset route behavior", () => {
     await routes.get("POST /api/bank-accounts")!(req({ body }), res);
     expect(res.statusCode).toBe(400);
     expect(res.body).toEqual({ message });
-    expect(harness.storage.createBankAccount).not.toHaveBeenCalled();
+    expect(harness.db.insert).not.toHaveBeenCalled();
   });
 
   it("rejects duplicate bank codes and non-cash linked ledgers", async () => {
@@ -190,41 +219,59 @@ describe("bank and fixed-asset route behavior", () => {
     expect(linked.body).toEqual({ message: "Linked ledger must be Bank or Cash type. Found: Expense" });
   });
 
-  it("creates a validated bank account and writes audit evidence", async () => {
+  it("creates a validated bank account and writes audit evidence in its transaction", async () => {
     harness.storage.getBankAccountByCode.mockResolvedValue(null);
     harness.storage.getAllLedgerAccounts.mockResolvedValue([{ id: 12, accountType: "Cash" }]);
-    harness.storage.createBankAccount.mockResolvedValue({
-      id: 5,
-      name: "Main Cash",
-      code: "CASH1",
-      openingBalance: "100",
-      openingBalanceSide: "Dr",
-    });
+    harness.returningResults.push([
+      { id: 5, name: "Main Cash", code: "CASH1", openingBalance: "100", openingBalanceSide: "Dr" },
+    ]);
     const res = resHarness();
     await routes.get("POST /api/bank-accounts")!(
       req({
-        body: { name: "Main Cash", code: "CASH1", openingBalance: "100", openingBalanceSide: "Dr", linkedLedgerId: 12 },
+        body: {
+          companyId: 999,
+          name: "Main Cash",
+          code: "CASH1",
+          openingBalance: "100",
+          openingBalanceSide: "Dr",
+          linkedLedgerId: 12,
+        },
       }),
       res
     );
     expect(res.statusCode).toBe(201);
+    // The active company, never the body's.
+    expect(harness.insertedValues[0]).toEqual(expect.objectContaining({ companyId: 4 }));
     expect(harness.logAudit).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: 4, action: "create", recordId: 5 })
+      expect.objectContaining({ companyId: 4, action: "create", recordId: 5 }),
+      harness.db
     );
   });
 
-  it("updates and deletes bank accounts through company-scoped storage methods", async () => {
-    harness.storage.getBankAccountById.mockResolvedValue({ id: 5, name: "Old", code: "CASH1", openingBalance: "0" });
-    harness.storage.updateBankAccount.mockResolvedValue({ id: 5, name: "New", code: "CASH1", openingBalance: "0" });
+  it("updates and deletes bank accounts in the company, audited in the same transaction", async () => {
+    const existing = { id: 5, companyId: 4, name: "Old", code: "CASH1", openingBalance: "0", linkedLedgerId: null };
+    harness.selectResults.push([existing]);
+    harness.returningResults.push([{ ...existing, name: "New" }]);
     const update = resHarness();
     await routes.get("PUT /api/bank-accounts/:id")!(req({ params: { id: "5" }, body: { name: "New" } }), update);
-    expect(harness.storage.updateBankAccount).toHaveBeenCalledWith(5, { name: "New" }, 4);
-    expect(harness.logAudit).toHaveBeenCalledWith(expect.objectContaining({ action: "update", recordId: 5 }));
+    expect(update.statusCode).toBe(200);
+    expect(harness.updatedValues[0]).toEqual({ name: "New" });
+    expect(harness.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "update", recordId: 5, changes: { name: { old: "Old", new: "New" } } }),
+      harness.db
+    );
 
+    harness.selectResults.push([existing]);
+    // The row lock, then the line count (none).
+    harness.executeResults.push({ rows: [] }, { rows: [{ live: "0", any: "0" }] });
     const del = resHarness();
     await routes.get("DELETE /api/bank-accounts/:id")!(req({ params: { id: "5" } }), del);
-    expect(harness.storage.deleteBankAccount).toHaveBeenCalledWith(5, 4);
     expect(del.statusCode).toBe(204);
+    expect(harness.updatedValues[1]).toEqual(expect.objectContaining({ active: false }));
+    expect(harness.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "delete", recordId: 5 }),
+      harness.db
+    );
   });
 
   it("revalues mixed USD/CFA native balances at the latest CFA/USD rate without rewriting historical base", async () => {
@@ -306,14 +353,18 @@ describe("bank and fixed-asset route behavior", () => {
 
   it("creates a fixed asset in the active company, ignoring a companyId in the body", async () => {
     harness.storage.getFixedAssetByCode.mockResolvedValue(null);
-    harness.storage.createFixedAsset.mockResolvedValue({ id: 9 });
+    harness.returningResults.push([{ id: 9, name: "Van" }]);
     const res = resHarness();
     await routes.get("POST /api/fixed-assets")!(
       req({ body: { companyId: 999, code: "VAN", name: "Van", depreciationMethod: "None" } }),
       res
     );
     expect(res.statusCode).toBe(201);
-    expect(harness.storage.createFixedAsset).toHaveBeenCalledWith(expect.objectContaining({ companyId: 4 }));
+    expect(harness.insertedValues[0]).toEqual(expect.objectContaining({ companyId: 4 }));
+    expect(harness.logAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "create", recordId: 9 }),
+      harness.db
+    );
   });
 
   it("blocks fixed-asset deletion while voucher entries still reference it", async () => {

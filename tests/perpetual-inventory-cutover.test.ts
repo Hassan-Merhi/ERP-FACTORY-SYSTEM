@@ -169,6 +169,23 @@ describe("opening inventory journal", () => {
   });
 
   it("posts a balanced journal once and turns the gate on from the cut-over date", async () => {
+    // Wave 17 B (decision 6): refused while factory rows carry no cost and stock
+    // bales with no mix are costed at the catalogue price.
+    await expect(
+      asMaintenance(() =>
+        applyOpeningInventoryJournal(companyId, "2026-11-01", "test", { postingReady: true, today: "2026-11-01" })
+      )
+    ).rejects.toMatchObject({ code: "FACTORY_READINESS_BLOCKERS" });
+    // Resolved: the unvalued raw row and bale go, the costed bales come from the open mix.
+    await maintenance(async (q) => {
+      await q(`DELETE FROM factory_raw_stock WHERE company_id = $1 AND cost_per_kg_usd IS NULL`, [companyId]);
+      await q(`DELETE FROM factory_bales WHERE company_id = $1 AND total_cost = 0`, [companyId]);
+      await q(
+        `UPDATE factory_bales SET mix_batch_id = (SELECT id FROM factory_mix_batches WHERE batch_code = $2)
+          WHERE company_id = $1`,
+        [companyId, `${PREFIX}-M1`]
+      );
+    });
     const result = await asMaintenance(() =>
       applyOpeningInventoryJournal(companyId, "2026-11-01", "test", { postingReady: true, today: "2026-11-01" })
     );

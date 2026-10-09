@@ -3,7 +3,7 @@ import type { DbTransaction } from "../../../db";
 import { and, eq, sql } from "drizzle-orm";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
 import * as schema from "@shared/schema";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx } from "../../accounting/voucherRetirement";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
 
@@ -13,14 +13,11 @@ import { buildItemMap } from "./types";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
-async function deleteVoucherWithEntries(tx: DbTransaction, voucherId: number): Promise<void> {
-  // The voucher row and its durable posting identity must be retired together.
-  // Otherwise a later re-offload replays a marker that points at a deleted
-  // voucher and the accounting writer either blocks or rebuilds against stale
-  // state instead of creating the new duties/transport/etc. posting.
-  await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-  await tx.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, voucherId));
-  await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, voucherId));
+async function deleteVoucherWithEntries(tx: DbTransaction, companyId: number, voucherId: number): Promise<void> {
+  // Wave 16 (A): retired — soft-deleted with its lines, audited, its number and
+  // durable posting identity released together, so a later re-offload posts a
+  // new identity generation instead of replaying the old marker.
+  await retireVouchersTx(tx, { companyId, voucherIds: [voucherId], reason: "container-offload-reversed" });
 }
 
 /**
@@ -149,7 +146,7 @@ export async function reverseExistingOffload(
     );
 
   for (const voucher of localVouchers) {
-    await deleteVoucherWithEntries(tx, voucher.id);
+    await deleteVoucherWithEntries(tx, container.companyId, voucher.id);
   }
 
   const parentAgentVouchers = await tx
@@ -162,7 +159,7 @@ export async function reverseExistingOffload(
       )
     );
   for (const voucher of parentAgentVouchers) {
-    await deleteVoucherWithEntries(tx, voucher.id);
+    await deleteVoucherWithEntries(tx, 1, voucher.id);
   }
 
   await tx.delete(schema.containerOffloads).where(eq(schema.containerOffloads.id, existingOffload.id));

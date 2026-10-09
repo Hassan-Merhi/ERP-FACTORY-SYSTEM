@@ -124,10 +124,16 @@ async function makeSupplierVoucher(
         options.optional ?? false,
       ]
     );
+    // A non-USD/CFA voucher here models a legacy row (native amount in the USD
+    // columns): the currency trigger v2 (wave 17 D) refuses a new one, so it is
+    // written with the triggers off, as history left it.
+    if (!["USD", "CFA"].includes(options.currency ?? "USD")) {
+      await client.query("SET LOCAL session_replication_role = replica");
+    }
     await client.query(
-      `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
-       VALUES ($1, $2, NULL, $3, '0'), ($1, NULL, $4, '0', $3)`,
-      [voucher.rows[0].id, supplierId, options.amount, ctx.cashAccountId]
+      `INSERT INTO voucher_entries (voucher_id, company_id, factory_supplier_id, ledger_account_id, debit_amount, credit_amount)
+       VALUES ($1, $5, $2, NULL, $3, '0'), ($1, $5, NULL, $4, '0', $3)`,
+      [voucher.rows[0].id, supplierId, options.amount, ctx.cashAccountId, ctx.companyId]
     );
     return voucher.rows[0].id;
   });

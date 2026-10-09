@@ -1,8 +1,9 @@
 import Decimal from "decimal.js";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db, pool } from "../../db";
-import { bankAccounts, exchangeRates, ledgerAccounts } from "@shared/schema";
+import { bankAccounts, ledgerAccounts } from "@shared/schema";
 import { normalizeCurrencyCode } from "./currencyAmounts";
+import { getLatestCfaPerUsd } from "./latestCfaPerUsd";
 
 const DP_AMOUNT = 6;
 const DP_RATE = 10;
@@ -84,27 +85,6 @@ function normalizeStoredCurrency(value: string | null | undefined): string | nul
   }
 }
 
-async function getLatestCfaPerUsd(companyId: number): Promise<Decimal | null> {
-  const rows = await db
-    .select({ rate: exchangeRates.rate })
-    .from(exchangeRates)
-    .where(
-      and(
-        eq(exchangeRates.companyId, companyId),
-        or(
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "CFA")),
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "XOF"))
-        )
-      )
-    )
-    .orderBy(desc(exchangeRates.effectiveDate))
-    .limit(1);
-
-  if (!rows[0]?.rate) return null;
-  const rate = amount(rows[0].rate);
-  return rate.gt(0) ? rate : null;
-}
-
 /**
  * How bank lines are attributed.
  *
@@ -122,6 +102,8 @@ export type CashBankAttribution = "legacy" | "engine";
 
 export interface CashBankRevaluationOptions {
   attribution?: CashBankAttribution;
+  /** The date of the current CFA rate (default: the company's business date); a later rate is never used. */
+  asOf?: string;
 }
 
 async function loadAccounts(companyId: number, attribution: CashBankAttribution): Promise<AccountRow[]> {
@@ -307,7 +289,7 @@ export async function getCashBankRevaluation(
   const attribution = options.attribution ?? "legacy";
   const [accounts, currentCfaPerUsd] = await Promise.all([
     loadAccounts(companyId, attribution),
-    getLatestCfaPerUsd(companyId),
+    getLatestCfaPerUsd(companyId, options.asOf),
   ]);
 
   const ledgerIds = accounts.filter((row) => row.accountKind === "ledger").map((row) => row.id);

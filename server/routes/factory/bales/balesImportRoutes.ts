@@ -11,6 +11,8 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { requestRole } from "../../../services/accounting/accountHistoryPolicy";
+import { createFactorySupplierTx, updateFactorySupplierTx } from "../suppliers/crud/factorySupplierWrites";
 
 import {
   factorySuppliers,
@@ -57,27 +59,45 @@ export function registerBalesImportRoutes(app: Express) {
             .from(factorySuppliers)
             .where(and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, s.name.trim())));
 
+          // Wave 16 (B): each row is written and audited in its own
+          // transaction under the history rules (factorySupplierWrites.ts).
+          const actor = {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            role: requestRole(req),
+          };
           if (existing) {
-            await db
-              .update(factorySuppliers)
-              .set({
-                openingBalance: s.openingBalance || existing.openingBalance,
-                contactPerson: s.contactPerson !== undefined ? s.contactPerson : existing.contactPerson,
-                phone: s.phone !== undefined ? s.phone : existing.phone,
-                email: s.email !== undefined ? s.email : existing.email,
-                updatedAt: new Date(),
-              })
-              .where(eq(factorySuppliers.id, existing.id));
+            await db.transaction((tx) =>
+              updateFactorySupplierTx(
+                tx,
+                companyId,
+                existing.id,
+                {
+                  openingBalance: s.openingBalance || existing.openingBalance,
+                  contactPerson: s.contactPerson !== undefined ? s.contactPerson : existing.contactPerson,
+                  phone: s.phone !== undefined ? s.phone : existing.phone,
+                  email: s.email !== undefined ? s.email : existing.email,
+                },
+                actor,
+                "import"
+              )
+            );
             updated++;
           } else {
-            await db.insert(factorySuppliers).values({
-              companyId,
-              name: s.name.trim(),
-              openingBalance: s.openingBalance || "0",
-              contactPerson: s.contactPerson || null,
-              phone: s.phone || null,
-              email: s.email || null,
-            });
+            await db.transaction((tx) =>
+              createFactorySupplierTx(
+                tx,
+                companyId,
+                {
+                  name: s.name.trim(),
+                  openingBalance: s.openingBalance ? String(s.openingBalance) : "0",
+                  contactPerson: s.contactPerson || null,
+                  phone: s.phone || null,
+                  email: s.email || null,
+                },
+                actor
+              )
+            );
             imported++;
           }
         } catch (err: unknown) {

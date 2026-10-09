@@ -7,8 +7,10 @@
  * the lines every existing reader expects. Each journal is derived from the
  * current state of its source and replaced whole when that source changes:
  * remove, then post again. Posting goes through the idempotent infrastructure
- * voucher writer; removal also removes the posting identity so the journal can
- * be posted again.
+ * voucher writer. Removal retires the old journal (wave 16 A,
+ * voucherRetirement.ts): soft-deleted with its lines, audited, its number and
+ * posting identity given up, so the journal can be posted again and the old
+ * one stays in the history.
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -17,11 +19,8 @@ import { voucherEntries } from "@shared/schema";
 
 import type { DatabaseOrTransaction, DbTransaction } from "../../../db";
 import { MoneyDecimal } from "../../../lib/money";
-import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "../infrastructureVoucherIdentity";
+import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "../infrastructureVoucherIdentity";
+import { retireVouchersByNumberTx } from "../voucherRetirement";
 import { ensureSystemAccounts } from "../systemAccounts";
 
 export interface LinkedJournalLine {
@@ -57,20 +56,13 @@ export async function systemAccountIdsTx(
   return ids;
 }
 
-/** Removes a linked journal and its posting identity, if any. */
+/** Retires a linked journal (soft delete, audited, number and posting identity released), if any. */
 export async function removeLinkedJournalTx(
   tx: DbTransaction,
   companyId: number,
   voucherNumber: string
 ): Promise<void> {
-  const existing = await tx.execute<{ id: number } & Record<string, unknown>>(sql`
-    SELECT id FROM vouchers WHERE company_id = ${companyId} AND voucher_number = ${voucherNumber}
-  `);
-  for (const { id } of existing.rows as unknown as { id: number }[]) {
-    await deleteInfrastructurePostingIdentityForVoucherTx(tx, id);
-    await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${id}`);
-    await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id} AND company_id = ${companyId}`);
-  }
+  await retireVouchersByNumberTx(tx, { companyId, voucherNumbers: [voucherNumber], reason: "linked-journal-replaced" });
 }
 
 /**

@@ -20,14 +20,7 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { ownLocationIds } from "../../helpers/companyOwnership";
 import { requireAuth, requireRole } from "../../../auth";
-import {
-  containers,
-  containerOffloads,
-  containerOffloadItems,
-  offloadRequestSchema,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { containers, containerOffloads, containerOffloadItems, offloadRequestSchema, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -36,6 +29,7 @@ import { createDatabaseStockMovementAdapter } from "../../../services/inventory/
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { applyInventoryRateDeltaAndSync } from "../../../services/syncSalesItemCosts";
 import { syncContainerStockInTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -217,10 +211,13 @@ export function registerContainerOffloadUpdateRoutes(app: Express) {
               sql`${vouchers.description} LIKE '%Container ${container.containerNumber}%'`
             )
           );
-        for (const voucher of containerVouchers) {
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-          await tx.delete(vouchers).where(eq(vouchers.id, voucher.id));
-        }
+        // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+        await retireVouchersTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          voucherIds: containerVouchers.map((voucher) => voucher.id),
+          reason: "container-offload-update",
+          actor: sessionRetirementActor(req),
+        });
 
         // Perpetual inventory (wave 8.2): the stock-in journal follows the edited offload.
         await syncContainerStockInTx(tx, container.companyId, containerId);

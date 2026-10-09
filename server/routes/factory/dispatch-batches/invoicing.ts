@@ -22,7 +22,10 @@ import {
 import { getCompanyId } from "./_helpers";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
-import { syncFactoryInvoiceTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 type RawProformaLineRow = { article_code: string; quantity: number };
 
@@ -455,6 +458,8 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
       res.status(201).json({ ok: true, ...result });
     } catch (err: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed factory rate on or before its date is refused.
+      if (err instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(err.body);
       const msg = getErrorMessage(err) || "";
       const is400 =
         msg.includes("not found") ||

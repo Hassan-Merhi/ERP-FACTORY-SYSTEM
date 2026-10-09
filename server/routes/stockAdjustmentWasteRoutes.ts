@@ -317,7 +317,10 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
 
       // Delete voucher (reverses inventory changes automatically via deleteVoucher logic)
       if (dispatch.voucherId) {
-        await storage.deleteVoucher(dispatch.voucherId);
+        await storage.deleteVoucher(dispatch.voucherId, {
+          userId: req.session.userId ?? "unknown",
+          username: req.session.username || "unknown",
+        });
       }
 
       // Delete waste dispatch items and dispatch record

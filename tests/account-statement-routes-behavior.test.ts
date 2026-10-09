@@ -224,25 +224,44 @@ describe("account statement route behavior", () => {
     expect(harness.isParentCompanyContext).not.toHaveBeenCalled();
   });
 
-  it("applies Dr/Cr sign conventions to bank opening balances and prior vouchers", async () => {
-    harness.selectResults.push([{ ob: "50", side: "Cr" }], [{ totalDebit: "30", totalCredit: "10" }]);
+  // Wave 17 A: every family opens at the balance engine's period opening (the
+  // master's opening with its side, a sideless ledger opening by its type, and
+  // the lines the engine attributes to it before endDate — a line naming a
+  // ledger and a bank is the ledger's). It used to sum every line naming the
+  // bank on top of the opening, with a sideless opening read as Dr.
+  it("opens a bank at the balance engine's period opening", async () => {
+    harness.selectResults.push([{ id: 3 }]);
+    harness.getPartyBalance.mockResolvedValue({ opening: "-30.00" });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "bank", id: "3" }, query: { endDate: "2026-08-01" } }),
       res
     );
     expect(res.body).toEqual({ balance: -30 });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "bank",
+      id: 3,
+      from: "2026-08-01",
+    });
   });
 
-  it("sums the pre-period balance exactly", async () => {
-    // 0.1 opening + 0.2 prior debit is 0.3; the float path returned 0.30000000000000004.
-    harness.selectResults.push([{ ob: "0.1", side: "Dr" }], [{ totalDebit: "0.2", totalCredit: "0" }]);
+  it("returns the engine's exact opening and 404 for an account outside the company", async () => {
+    harness.selectResults.push([{ id: 3 }]);
+    harness.getPartyBalance.mockResolvedValue({ opening: "0.30" });
     const res = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "bank", id: "3" }, query: { endDate: "2026-08-01" } }),
       res
     );
     expect(res.body).toEqual({ balance: 0.3 });
+    harness.selectResults.push([]);
+    const missing = responseHarness();
+    await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
+      request({ params: { type: "bank", id: "99" }, query: { endDate: "2026-08-01" } }),
+      missing
+    );
+    expect(missing.statusCode).toBe(404);
   });
 
   it("opens a customer-owned ledger at the balance engine's customer opening before the period", async () => {

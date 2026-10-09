@@ -96,7 +96,9 @@ export interface GroupIntercompanyPair {
   companyIds: number[];
   companyNames: string[];
   accounts: Array<{ companyId: number; accountId: number; accountName: string; balance: number }>;
-  /** Sum of the receivable (debit) balances and of the payable (credit) balances. */
+  /** Each company's net balance with the other(s) of the pair, receivable positive (wave 17 A). */
+  byCompany: Array<{ companyId: number; companyName: string; net: number }>;
+  /** Sum of the companies' receivable (debit) nets and of their payable (credit) nets. */
   receivables: number;
   payables: number;
   eliminated: number;
@@ -471,9 +473,10 @@ export async function calculateGroupNetPosition(
       pairs,
       differences,
       note:
-        "Intercompany balances are eliminated in pairs (inter-company transfers, intercompany POS configuration, " +
-        "parent credit accounts and accounts typed Intercompany); any unmatched or mismatched amount is shown as " +
-        "an Intercompany difference line and included in the group totals.",
+        "Intercompany balances are eliminated per company pair (inter-company transfers, intercompany POS " +
+        "configuration, parent credit accounts and accounts typed Intercompany): each company's net balance with " +
+        "the other is eliminated against the other's net balance with it; any unmatched or mismatched amount is " +
+        "shown as an Intercompany difference line for that pair and included in the group totals.",
     },
   };
 }
@@ -484,11 +487,22 @@ interface IntercompanyValue extends IntercompanyAccount {
 }
 
 /**
- * Pairs the intercompany balances of the group companies (owner decision 1).
- * Companies linked by any intercompany account form one set (usually a pair);
- * within a set the receivables are eliminated against the payables, and the
- * rest is an "Intercompany difference" line. An account whose counterpart is
- * not a company of this report is unpaired: its whole balance is a difference.
+ * Pairs the intercompany balances of the group companies (owner decision 1),
+ * per company pair (wave 17 A). Each account is keyed by its company and the
+ * group companies its recorded links name: an account of A linked with B is in
+ * pair {A, B}. Within a pair, A's net balance with B (all of A's accounts in
+ * the pair, receivable positive) is eliminated against B's net balance with A:
+ * the matched part is min(|A|, |B|) when the two are on opposite sides, and
+ * the pair's difference A + B is an "Intercompany difference" line. Before,
+ * companies linked by any account formed one set whose receivables were
+ * eliminated against its payables, so in a chain A–B–C–D a receivable of B
+ * from C could be "matched" against a payable of D to A, and each pair's own
+ * mismatch was hidden in the set total.
+ *
+ * An account whose links name several group companies (one account used with
+ * B and C) cannot be split by pair: it forms its own set with all of them and
+ * is matched only against accounts with the same set. An account with no
+ * counterpart in this report is unpaired: its whole balance is a difference.
  */
 export function pairIntercompanyBalances(
   accounts: readonly IntercompanyValue[],
@@ -496,47 +510,36 @@ export function pairIntercompanyBalances(
 ): { pairs: GroupIntercompanyPair[]; differences: NetPositionLineItem[]; eliminated: number } {
   const inGroup = new Set(companies.map((company) => company.id));
   const nameOf = (id: number) => companies.find((company) => company.id === id)?.name ?? `Company ${id}`;
-  const parent = new Map<number, number>();
-  const find = (id: number): number => {
-    const up = parent.get(id) ?? id;
-    if (up === id) return id;
-    const root = find(up);
-    parent.set(id, root);
-    return root;
-  };
-  const union = (a: number, b: number) => {
-    const ra = find(a);
-    const rb = find(b);
-    if (ra !== rb) parent.set(Math.max(ra, rb), Math.min(ra, rb));
-  };
 
-  const paired: IntercompanyValue[] = [];
+  const sets = new Map<string, { companyIds: number[]; members: IntercompanyValue[] }>();
   const unpaired: IntercompanyValue[] = [];
   for (const account of accounts) {
-    const counterparts = account.counterpartyCompanyIds.filter((id) => inGroup.has(id));
+    const counterparts = account.counterpartyCompanyIds.filter((id) => inGroup.has(id) && id !== account.companyId);
     if (counterparts.length === 0) {
       unpaired.push(account);
       continue;
     }
-    for (const counterpart of counterparts) union(account.companyId, counterpart);
-    paired.push(account);
-  }
-
-  const sets = new Map<number, IntercompanyValue[]>();
-  for (const account of paired) {
-    const root = find(account.companyId);
-    sets.set(root, [...(sets.get(root) ?? []), account]);
+    const companyIds = [...new Set([account.companyId, ...counterparts])].sort((a, b) => a - b);
+    const key = companyIds.join(":");
+    const set = sets.get(key) ?? { companyIds, members: [] };
+    set.members.push(account);
+    sets.set(key, set);
   }
 
   const pairs: GroupIntercompanyPair[] = [];
   const differences: NetPositionLineItem[] = [];
   let eliminated = 0;
-  const summarize = (members: IntercompanyValue[], status: GroupIntercompanyPair["status"], label: string) => {
-    const receivables = round2(members.filter((m) => m.value > 0).reduce((sum, m) => sum + m.value, 0));
-    const payables = round2(members.filter((m) => m.value < 0).reduce((sum, m) => sum - m.value, 0));
-    const matched = status === "unpaired" ? 0 : Math.min(receivables, payables);
+  const summarize = (companyIds: number[], members: IntercompanyValue[], unpairedAccount: boolean, label: string) => {
+    // Each company's net balance with the others of the pair, receivable positive.
+    const byCompany = companyIds.map((companyId) => ({
+      companyId,
+      companyName: nameOf(companyId),
+      net: round2(members.filter((m) => m.companyId === companyId).reduce((sum, m) => sum + m.value, 0)),
+    }));
+    const receivables = round2(byCompany.filter((c) => c.net > 0).reduce((sum, c) => sum + c.net, 0));
+    const payables = round2(byCompany.filter((c) => c.net < 0).reduce((sum, c) => sum - c.net, 0));
+    const matched = unpairedAccount ? 0 : round2(Math.min(receivables, payables));
     const difference = round2(receivables - payables);
-    const companyIds = [...new Set(members.map((m) => m.companyId))].sort((a, b) => a - b);
     eliminated = round2(eliminated + matched);
     pairs.push({
       companyIds,
@@ -547,11 +550,12 @@ export function pairIntercompanyBalances(
         accountName: m.accountName,
         balance: m.value,
       })),
+      byCompany,
       receivables,
       payables,
-      eliminated: round2(matched),
+      eliminated: matched,
       difference,
-      status: status === "unpaired" ? status : Math.abs(difference) < 0.005 ? "matched" : "mismatched",
+      status: unpairedAccount ? "unpaired" : Math.abs(difference) < 0.005 ? "matched" : "mismatched",
     });
     if (Math.abs(difference) >= 0.005) {
       differences.push({
@@ -563,9 +567,8 @@ export function pairIntercompanyBalances(
     }
   };
 
-  for (const members of sets.values()) {
-    const names = [...new Set(members.map((m) => m.companyId))].sort((a, b) => a - b).map(nameOf);
-    summarize(members, "matched", `${INTERCOMPANY_DIFFERENCE_LABEL}: ${names.join(" ↔ ")}`);
+  for (const { companyIds, members } of sets.values()) {
+    summarize(companyIds, members, false, `${INTERCOMPANY_DIFFERENCE_LABEL}: ${companyIds.map(nameOf).join(" ↔ ")}`);
   }
   for (const account of unpaired) {
     const outside = account.counterpartyCompanyIds.filter((id) => !inGroup.has(id));
@@ -574,8 +577,9 @@ export function pairIntercompanyBalances(
         ? `counterpart company ${outside.join(", ")} is not in this report`
         : "no counterpart recorded in the group";
     summarize(
+      [account.companyId],
       [account],
-      "unpaired",
+      true,
       `${INTERCOMPANY_DIFFERENCE_LABEL}: ${nameOf(account.companyId)} — ${account.accountName} (${reason})`
     );
   }

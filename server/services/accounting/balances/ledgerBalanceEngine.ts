@@ -48,9 +48,12 @@ import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { defaultOpeningSide as defaultOpeningSideOfType } from "../accountClassification";
+import { defaultOpeningSide } from "./openingSide";
 import { customerLinksBody, intLiteral, noNonCustomerTarget } from "./partyLineRules";
 import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
+import { notFiscalClosingVoucher } from "./periodReportRules";
+
+export { openingSideOf, signedMasterOpening } from "./openingSide";
 
 export const PARTY_BALANCE_KINDS = [
   "ledger",
@@ -89,10 +92,20 @@ export interface BalanceScope {
   asOf?: string | null;
   /** Inclusive start of the period; movements before it are carried into the opening. */
   from?: string | null;
-  /** Restrict to one party kind. */
-  kind?: PartyBalanceKind;
+  /**
+   * Restrict to one row kind. `missingAccount` selects only the lines on
+   * ledger accounts that are missing or belong to another company (no master
+   * rows); `unassigned` the lines with no target.
+   */
+  kind?: BalanceRowKind;
   /** Restrict to these ids of `kind`. */
   ids?: readonly number[];
+  /**
+   * Leave the fiscal closing journals out (periodReportRules.ts): for period
+   * reports (P&L views) only. Balances keep them; that is what moves profit
+   * into retained earnings.
+   */
+  excludeFiscalClose?: boolean;
 }
 
 /** One row of the engine, in exact Decimals (debit positive). */
@@ -143,24 +156,6 @@ interface RawOpeningRow {
 
 const ZERO = new MoneyDecimal(0);
 
-/**
- * Default side for an opening stored without one. A ledger account takes the
- * usual side of its type (wave 13, C1: Dr for assets and expenses, Cr for
- * liabilities, equity and income — the rule the net-profit Excel and the
- * opening-balance resolution already used); before, every sideless ledger
- * opening was Dr, so a sideless liability or income opening counted on the
- * wrong side. Other masters keep their record type's side (suppliers,
- * employees and factory suppliers Cr; customers, banks and fixed assets Dr),
- * as does a ledger account whose type the classifier does not know.
- */
-function defaultOpeningSide(kind: BalanceRowKind, accountType: string | null): "Dr" | "Cr" {
-  if (kind === "ledger") {
-    const byType = defaultOpeningSideOfType(accountType);
-    if (byType) return byType;
-  }
-  return kind === "supplier" || kind === "employee" || kind === "factorySupplier" ? "Cr" : "Dr";
-}
-
 function scopeFilter(scope: BalanceScope, kindColumn: SQL, idColumn: SQL): SQL {
   if (!scope.kind) return sql`TRUE`;
   const ids = scope.ids
@@ -176,6 +171,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
   const { companyId, from } = scope;
   const beforeFrom = from ? sql`a.booked_on < ${from}::date` : sql`FALSE`;
   const inPeriod = from ? sql`a.booked_on >= ${from}::date` : sql`TRUE`;
+  const closingJournalFilter = scope.excludeFiscalClose ? sql` AND ${notFiscalClosingVoucher("v")}` : sql``;
   const result = await executor.execute<RawLineRow & Record<string, unknown>>(sql`
     WITH ${customerLinksCte(companyId)},
     posted AS (
@@ -187,7 +183,7 @@ async function loadLines(executor: DatabaseOrTransaction, scope: BalanceScope) {
              ${VOUCHER_BOOKED_ON} AS booked_on
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
-       WHERE ${liveVouchersOf(companyId, scope.asOf)}
+       WHERE ${liveVouchersOf(companyId, scope.asOf)}${closingJournalFilter}
     ), attributed AS (
       SELECT
         CASE

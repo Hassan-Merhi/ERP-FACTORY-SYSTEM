@@ -469,7 +469,11 @@ async function finalizeCutover(req: Request, res: Response): Promise<Response | 
     partialDeltaSummary.containerRepair = containerRepair;
     const stockDelta = await synchronizeExactCutoverStock(cutoverId, pair.sourceId, pair.targetId);
     partialDeltaSummary.stockDelta = stockDelta;
-    const supplierLinksRepaired = await repairSpSupplierVoucherLinks(pair.targetId);
+    // Wave 16 (A): the audited, company-scoped apply (closed periods left as they are).
+    const supplierLinksRepaired = await repairSpSupplierVoucherLinks(pair.targetId, {
+      userId: req.session.userId ?? "unknown",
+      username: req.session.username || "unknown",
+    });
     partialDeltaSummary.supplierLinksRepaired = supplierLinksRepaired;
 
     const repairBlockers = [...(salesRepair.blockers ?? []), ...(containerRepair.blockers ?? [])];

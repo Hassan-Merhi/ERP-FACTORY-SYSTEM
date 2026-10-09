@@ -10,6 +10,8 @@
  *     resolved through the readiness resolution);
  *   - factory raw stock, mixes and bales that carry no USD cost, and the open
  *     mixes among them (a mix source with no USD rate);
+ *   - stock bales from a stock entry with no mix, costed at the catalogue
+ *     production price (wave 17 B, owner decision 2), listed as unvalued;
  *   - finalized factory invoices on or after the cut-over with no ledger
  *     journal;
  *   - legacy factory foreign-currency lines the wave 6 repair has not
@@ -20,12 +22,16 @@
  *     once the cut-over is applied, the reconciliation.
  *
  * Every figure is read on one repeatable-read snapshot. Nothing is written.
+ * The cut-over apply refuses on the same factory figures
+ * (factoryCutoverBlockers.ts, wave 17 B).
  */
 import { db } from "../../../db";
+import { toMoney } from "../../../lib/money";
 import { planFactoryFxLegacyRepair } from "../../factory/factoryFxLegacyRepair";
 import { planReadinessResolutionTx } from "../../inventory/inventoryReadinessResolution";
 import { assertTransactionCompanyScope } from "../../security/transactionCompanyScope";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
+import { noMixCataloguePricedBales } from "./factoryCutoverBlockers";
 import { listUnpostedFactoryInvoices } from "./factoryInvoice";
 import { factoryStockValuation } from "./factoryValuation";
 import { isSupplierPartnerCompany } from "./linkedJournal";
@@ -35,6 +41,10 @@ import {
   type DocumentsOnOrAfterCutover,
 } from "./openingJournal";
 import { reconcilePerpetualInventory } from "./reconciliation";
+import {
+  retailInventoryReconciliationTx,
+  type RetailInventoryReconciliation,
+} from "../../retail/retailInventoryJournal";
 
 export type ReadinessBlockerCode =
   | "POSTING_NOT_READY"
@@ -42,11 +52,13 @@ export type ReadinessBlockerCode =
   | "ANOMALOUS_VALUES"
   | "UNVALUED_FACTORY_ROWS"
   | "OPEN_MIXES_WITHOUT_USD_RATE"
+  | "NO_MIX_BALES_AT_CATALOGUE_PRICE"
   | "UNPOSTED_FACTORY_INVOICES"
   | "LEGACY_FX_LINES_UNREPAIRED"
   | "LEGACY_FX_LINES_WITHOUT_DATED_RATE"
   | "DOCUMENTS_ON_OR_AFTER_CUTOVER"
-  | "RECONCILIATION_DIFFERENCE";
+  | "RECONCILIATION_DIFFERENCE"
+  | "RETAIL_INVENTORY_UNRECONCILED";
 
 export interface ReadinessBlocker {
   code: ReadinessBlockerCode;
@@ -68,11 +80,15 @@ export interface PerpetualReadinessReport {
   anomalousValues: { rows: number; value: string };
   unvaluedFactoryRows: { rawStock: number; mixes: number; bales: number };
   openMixesWithoutUsdRate: number;
+  /** Stock bales with no mix, costed at the catalogue production price (decision 2): unvalued. */
+  noMixCataloguePricedBales: { count: number; cost: string; baleIds: number[] };
   unpostedFactoryInvoices: number;
   legacyFxLines: { unrepaired: number; repairable: number; withoutDatedRate: number };
   documentsOnOrAfterCutover: DocumentsOnOrAfterCutover | null;
   openingPlan: { lines: number; total: string; unvalued: number } | null;
   reconciliation: { reconciled: boolean; differences: number } | null;
+  /** Wave 17 (D): RETAIL-INVENTORY against the Retail stock sub-ledger, for a company with Retail stock or accounts. */
+  retailInventory: RetailInventoryReconciliation | null;
   blockers: ReadinessBlocker[];
   ready: boolean;
 }
@@ -94,11 +110,14 @@ export async function perpetualReadinessReport(
       // Open mixes (not closed, weight left) recorded with no USD cost: a source
       // had no USD rate when it was mixed (factoryStockValuation lists them).
       const openMixesWithoutUsdRate = unvaluedBySource("factory_mix_batches");
+      const noMixBales = await noMixCataloguePricedBales(tx, companyId);
       const unposted = await listUnpostedFactoryInvoices(tx, companyId);
       const documents = cutover ? null : await documentsOnOrAfterCutover(tx, companyId, effectiveFrom);
       const opening = cutover ? null : await planOpeningInventoryJournal(companyId, effectiveFrom, tx);
       const reconciliation = cutover ? await reconcilePerpetualInventory(tx, companyId) : null;
+      const retail = await retailInventoryReconciliationTx(tx, companyId);
       return {
+        retailInventory: retail.applicable ? retail : null,
         cutover,
         effectiveFrom,
         supplierPartner,
@@ -106,6 +125,7 @@ export async function perpetualReadinessReport(
         factory,
         unvaluedBySource,
         openMixesWithoutUsdRate,
+        noMixBales,
         unposted,
         documents,
         opening,
@@ -156,6 +176,12 @@ export async function perpetualReadinessReport(
     `${report.openMixesWithoutUsdRate} open mixes are recorded without a USD rate`
   );
   add(
+    "NO_MIX_BALES_AT_CATALOGUE_PRICE",
+    report.noMixBales.count,
+    report.noMixBales.cost,
+    `${report.noMixBales.count} stock bales have no mix and are costed at the catalogue production price (unvalued)`
+  );
+  add(
     "UNPOSTED_FACTORY_INVOICES",
     report.unposted.length,
     null,
@@ -196,6 +222,18 @@ export async function perpetualReadinessReport(
     );
   }
 
+  if (report.retailInventory) {
+    const retail = report.retailInventory;
+    add(
+      "RETAIL_INVENTORY_UNRECONCILED",
+      retail.opening && toMoney(retail.difference).isZero() ? 0 : 1,
+      retail.difference,
+      retail.opening
+        ? `RETAIL-INVENTORY differs from the Retail stock sub-ledger by ${retail.difference}`
+        : "The Retail inventory opening has not been applied (RETAIL-INVENTORY is not connected to the Retail stock)"
+    );
+  }
+
   return {
     companyId,
     generatedAt: new Date().toISOString(),
@@ -213,6 +251,7 @@ export async function perpetualReadinessReport(
       bales: report.unvaluedBySource("factory_bales"),
     },
     openMixesWithoutUsdRate: report.openMixesWithoutUsdRate,
+    noMixCataloguePricedBales: report.noMixBales,
     unpostedFactoryInvoices: report.unposted.length,
     legacyFxLines: { unrepaired: fx.legacyLines, repairable: fx.repairableLines, withoutDatedRate },
     documentsOnOrAfterCutover: report.documents,
@@ -225,6 +264,7 @@ export async function perpetualReadinessReport(
           differences: report.reconciliation.lines.filter((line) => line.difference !== "0.00").length,
         }
       : null,
+    retailInventory: report.retailInventory,
     blockers,
     ready: blockers.length === 0,
   };

@@ -29,6 +29,8 @@ export interface SystemAccountDefinition {
   code: string;
   name: string;
   accountType: string;
+  /** Sub type a new account is created with (an existing account's is never changed). */
+  subType?: string;
   /** Created for every company; the others are created when their posting path first needs them. */
   required: boolean;
   purpose: string;
@@ -83,6 +85,15 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     accountType: "Asset",
     required: false,
     purpose: "Purchased stock between the purchase posting and its receipt (perpetual inventory).",
+  },
+  // Wave 17 B: factory containers expensed before the cut-over and received after it.
+  {
+    code: "FACTORY_GOODS_IN_TRANSIT",
+    name: "Factory Goods in Transit",
+    accountType: "Asset",
+    required: false,
+    purpose:
+      "Expensed cost of factory containers not yet received at the perpetual-inventory cut-over, cleared by their receipts.",
   },
   {
     code: "FACTORY_RAW_MATERIAL_STOCK",
@@ -218,6 +229,67 @@ export const SYSTEM_ACCOUNTS: readonly SystemAccountDefinition[] = [
     required: false,
     purpose: "Freight set at container creation.",
   },
+  // Retail POS accounting defaults (wave 17 C): created when a Retail company's
+  // accounting settings first need them; an existing account is never renamed,
+  // retyped or restored, and a conflicting one refuses the Retail settings.
+  ...(
+    [
+      ["RETAIL-CASH", "Retail Cash", "Cash", undefined, "Retail cash drawer."],
+      ["RETAIL-CARD", "Retail Card Clearing", "Asset", undefined, "Retail card payments to be settled."],
+      ["RETAIL-BANK", "Retail Bank Clearing", "Asset", undefined, "Retail bank-transfer payments to be settled."],
+      ["RETAIL-MOBILE", "Retail Mobile Clearing", "Asset", undefined, "Retail mobile-money payments to be settled."],
+      ["RETAIL-OTHER", "Retail Other Clearing", "Asset", undefined, "Retail payments by other methods."],
+      ["RETAIL-SALES", "Retail Sales Revenue", "Income", "Direct Income", "Retail POS sales."],
+      ["RETAIL-INVENTORY", "Retail Inventory Asset", "Asset", undefined, "Retail stock at cost."],
+      ["RETAIL-COGS", "Retail Cost of Goods Sold", "Direct Expense", undefined, "Cost of Retail POS sales."],
+      ["RETAIL-DISCOUNTS", "Retail Discounts", "Expense", undefined, "Retail discounts given."],
+      ["RETAIL-TAX", "Retail Tax Payable", "Liability", undefined, "Tax collected on Retail sales."],
+      ["RETAIL-STORE-CREDIT", "Retail Store Credit", "Liability", undefined, "Store credit owed to Retail customers."],
+      // Wave 17 (D): cash movement and shift-close journals, Retail stock journals.
+      [
+        "RETAIL-CASH-OVER-SHORT",
+        "Retail Cash Over and Short",
+        "Expense",
+        undefined,
+        "Counted less expected cash at a Retail shift close (short: debit; over: credit).",
+      ],
+      [
+        "RETAIL-CASH-EXPENSE",
+        "Retail Cash Expenses",
+        "Expense",
+        undefined,
+        "Expenses paid out of a Retail cash drawer.",
+      ],
+      [
+        "RETAIL-OWNER-FUNDS",
+        "Retail Owner Cash Funding",
+        "Equity",
+        undefined,
+        "Cash the owner puts into or takes out of a Retail drawer.",
+      ],
+      [
+        "RETAIL-GRNI",
+        "Retail Goods Received Not Invoiced",
+        "Liability",
+        undefined,
+        "Retail stock received at cost, until the supplier invoice.",
+      ],
+      [
+        "RETAIL-INVENTORY-ADJUSTMENT",
+        "Retail Inventory Adjustments",
+        "Expense",
+        undefined,
+        "Retail stock counted, written off, imported or re-costed.",
+      ],
+    ] as const
+  ).map(([code, name, accountType, subType, purpose]) => ({
+    code,
+    name,
+    accountType,
+    ...(subType ? { subType } : {}),
+    required: false,
+    purpose,
+  })),
 ];
 
 const BY_CODE = new Map(SYSTEM_ACCOUNTS.map((definition) => [definition.code, definition]));
@@ -309,8 +381,9 @@ export async function ensureSystemAccounts(
       continue;
     }
     const inserted = await executor.execute<{ id: number } & Record<string, unknown>>(sql`
-      INSERT INTO ledger_accounts (company_id, code, name, account_type, active, is_hidden)
-      VALUES (${companyId}, ${definition.code}, ${definition.name}, ${definition.accountType}, true, false)
+      INSERT INTO ledger_accounts (company_id, code, name, account_type, sub_type, active, is_hidden)
+      VALUES (${companyId}, ${definition.code}, ${definition.name}, ${definition.accountType},
+              ${definition.subType ?? null}, true, false)
       ON CONFLICT DO NOTHING
       RETURNING id
     `);

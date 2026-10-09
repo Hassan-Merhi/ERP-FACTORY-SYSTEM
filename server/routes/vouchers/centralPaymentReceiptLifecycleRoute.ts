@@ -211,11 +211,45 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         newTotal: updatedVoucher.totalAmount,
       });
 
+      // Wave 16 (B): the edit replaces the voucher's lines (delete and
+      // re-insert, the legacy edit contract). The before and after lines are
+      // audited in this transaction, so a failed audit rolls the edit back.
+      const oldSnapshot = await snapshotVoucherEntries(oldEntries, tx);
+      const newSnapshot = await snapshotVoucherEntries(createdEntries, tx);
+      await logAudit(
+        {
+          userId: userId!,
+          username: req.session.username || "unknown",
+          companyId,
+          action: "update",
+          tableName: "vouchers",
+          recordId: voucherId,
+          recordIdentifier: updatedVoucher.voucherNumber,
+          changes: buildVoucherChangesForUpdate(
+            {
+              voucherType: lockedVoucher.voucherType,
+              voucherDate: lockedVoucher.voucherDate,
+              totalAmount: lockedVoucher.totalAmount,
+              description: lockedVoucher.description,
+              optional: lockedVoucher.optional,
+            },
+            {
+              voucherType: updatedVoucher.voucherType,
+              voucherDate: updatedVoucher.voucherDate,
+              totalAmount: updatedVoucher.totalAmount,
+              description: updatedVoucher.description,
+              optional: updatedVoucher.optional,
+            },
+            oldSnapshot,
+            newSnapshot
+          ),
+        },
+        tx
+      );
+
       return {
         voucher: updatedVoucher,
         entries: createdEntries,
-        oldEntries,
-        existingVoucher: lockedVoucher,
       };
     });
 
@@ -239,40 +273,6 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         voucherId,
         error,
       });
-    }
-
-    try {
-      const oldSnapshot = await snapshotVoucherEntries(result.oldEntries);
-      const newSnapshot = await snapshotVoucherEntries(result.entries);
-      await logAudit({
-        userId: userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "update",
-        tableName: "vouchers",
-        recordId: voucherId,
-        recordIdentifier: result.voucher.voucherNumber,
-        changes: buildVoucherChangesForUpdate(
-          {
-            voucherType: result.existingVoucher.voucherType,
-            voucherDate: result.existingVoucher.voucherDate,
-            totalAmount: result.existingVoucher.totalAmount,
-            description: result.existingVoucher.description,
-            optional: result.existingVoucher.optional,
-          },
-          {
-            voucherType: result.voucher.voucherType,
-            voucherDate: result.voucher.voucherDate,
-            totalAmount: result.voucher.totalAmount,
-            description: result.voucher.description,
-            optional: result.voucher.optional,
-          },
-          oldSnapshot,
-          newSnapshot
-        ),
-      });
-    } catch {
-      // Voucher rows and employee effects are already transactionally consistent.
     }
 
     logger.info("central Payment/Receipt update succeeded", {

@@ -194,6 +194,8 @@ afterAll(async () => {
   await pool.query(`DELETE FROM gl_inventory_cutovers WHERE company_id = $1`, [id]);
   await pool.query(`DELETE FROM inventory_value_movements WHERE company_id = $1`, [id]);
   await pool.query(`DELETE FROM factory_container_receipts WHERE company_id = $1`, [id]);
+  await pool.query(`DELETE FROM factory_containers WHERE company_id = $1`, [id]);
+  await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [id]);
   await pool.query(`DELETE FROM inventory_negative_layers WHERE company_id = $1`, [id]);
   await pool.query(
     `DELETE FROM stock_group_location_archive_items WHERE archive_id IN (
@@ -416,10 +418,15 @@ describe("cut-over apply guards (decision 2, M3)", () => {
     });
 
     sequence += 1;
+    // factory_container_receipts.container_id references factory_containers.
+    const factorySupplier = await pool.query<{ id: number }>(
+      `INSERT INTO factory_suppliers (company_id, name) VALUES ($1, $2) RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX}-FS${sequence}`]
+    );
     const container = await pool.query<{ id: number }>(
-      `INSERT INTO containers (company_id, container_number, supplier_id, status, import_date, charges_total)
-       VALUES ($1, $2, $3, 'OTW', $4, '0') RETURNING id`,
-      [ctx.companyId, `${TEST_PREFIX}-R${sequence}`, supplierId, today]
+      `INSERT INTO factory_containers (company_id, supplier_id, container_number, total_kg, rate_per_kg, currency_code, status)
+       VALUES ($1, $2, $3, '10.000', '1.00', 'USD', 'PENDING') RETURNING id`,
+      [ctx.companyId, factorySupplier.rows[0].id, `${TEST_PREFIX}-R${sequence}`]
     );
     await pool.query(
       `INSERT INTO factory_container_receipts (company_id, container_id, receipt_date, received_kg, cumulative_received_kg)
@@ -506,7 +513,7 @@ describe("containers offloaded before the cut-over (C1)", () => {
     // Offloaded again on or after the cut-over: STOCK-IN takes it out of transit once.
     const again = await agent.post(`/api/containers/${reversed.containerId}/offload`).send(offloadBody(today));
     expect(again.status, JSON.stringify(again.body)).toBeLessThan(300);
-    const stockIn = await journals(`STOCK-IN-${reversed.containerId}`);
+    const stockIn = await journals(`STOCK-IN-${reversed.containerId}-%`);
     expect(stockIn).toContainEqual(["GOODS_IN_TRANSIT", "0.00", "130.00"]);
     expect(stockIn).toContainEqual(["INVENTORY", "160.00", "0.00"]);
 
@@ -525,13 +532,17 @@ describe("containers offloaded before the cut-over (C1)", () => {
       ["INVENTORY", "0.00", "160.00"],
       ["PURCHASES", "160.00", "0.00"],
     ]);
-    const editedStockIn = await journals(`STOCK-IN-${edited.containerId}`);
+    const editedStockIn = await journals(`STOCK-IN-${edited.containerId}-%`);
     expect(editedStockIn.find((line) => line[0] === "GOODS_IN_TRANSIT")).toBeUndefined();
     expect(editedStockIn).toContainEqual(["PURCHASES", "0.00", "130.00"]);
 
     // Listed by the opening as in transit: STOCK-IN credits Goods in Transit.
     const arrived = await agent.post(`/api/containers/${inTransit.containerId}/offload`).send(offloadBody(today));
     expect(arrived.status, JSON.stringify(arrived.body)).toBeLessThan(300);
-    expect(await journals(`STOCK-IN-${inTransit.containerId}`)).toContainEqual(["GOODS_IN_TRANSIT", "0.00", "130.00"]);
+    expect(await journals(`STOCK-IN-${inTransit.containerId}-%`)).toContainEqual([
+      "GOODS_IN_TRANSIT",
+      "0.00",
+      "130.00",
+    ]);
   }, 180_000);
 });

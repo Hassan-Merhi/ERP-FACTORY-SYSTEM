@@ -40,6 +40,7 @@ import { registerSpMigrationFinalVerificationRoutes } from "./spMigrationFinalVe
 import { registerSpMigrationPhase4Routes } from "./spMigrationPhase4Routes";
 import { ensureCutoverHardening, installExplicitCompanyWriteGuard } from "./spMigrationCutoverHardening";
 import { runSpSupplierVoucherStartup } from "./spSupplierVoucherStartup";
+import { registerSpSupplierVoucherLinkRepairRoutes } from "./spSupplierVoucherLinkRepairRoutes";
 
 export function registerSpRoutes(app: Express) {
   registerSpAccessControl(app);
@@ -61,19 +62,13 @@ export function registerSpRoutes(app: Express) {
     });
   });
 
-  void runSpSupplierVoucherStartup()
-    .then((repairedCount) => {
-      if (repairedCount > 0) {
-        logger.info("[SP] Repaired Goods-OTW voucher supplier links", {
-          repairedCount,
-        });
-      }
-    })
-    .catch((error) => {
-      logger.warn("[SP] Supplier voucher synchronization deferred until Setup", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+  // Wave 16 (A): installs the link trigger only; no voucher is rewritten at boot.
+  void runSpSupplierVoucherStartup().catch((error) => {
+    logger.warn("[SP] Supplier voucher link trigger deferred until Setup", {
+      error: error instanceof Error ? error.message : String(error),
     });
+  });
+  registerSpSupplierVoucherLinkRepairRoutes(app);
 
   registerSpSetupRoutes(app);
   registerSpGoldenCoastSetupRoutes(app);

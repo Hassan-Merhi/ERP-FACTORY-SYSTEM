@@ -43,6 +43,11 @@ import {
   STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE,
 } from "../../../services/inventory/voucherStockReversal";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import {
+  isRetiredVoucherNumber,
+  RETIRED_VOUCHER_NOT_RESTORABLE,
+  RETIRED_VOUCHER_NOT_RESTORABLE_MESSAGE,
+} from "../../../services/accounting/voucherRetirement";
 
 /**
  * Wave 9 (ledger safety): restoring a voucher puts it back into every balance,
@@ -122,6 +127,13 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId), isNotNull(vouchers.deletedAt)));
           if (!voucher) {
             return res.status(404).json({ message: `${type} not found in Deleted Items` });
+          }
+          // Wave 16 (A): a voucher the system retired when its source posted a
+          // replacement is not restorable: the replacement is live.
+          if (isRetiredVoucherNumber(voucher.voucherNumber)) {
+            return res
+              .status(409)
+              .json({ code: RETIRED_VOUCHER_NOT_RESTORABLE, message: RETIRED_VOUCHER_NOT_RESTORABLE_MESSAGE });
           }
           const blockedVoucherReason = voucherMutationBlockReason(voucher);
           if (blockedVoucherReason) {

@@ -9,6 +9,8 @@ import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete
 import * as schema from "@shared/schema";
 import { CLOSED_PERIOD_LOCK_NAMESPACE } from "../../services/accounting/closedPeriodGuard";
 import { accountTypeNamesOf, classifyAccountType } from "../../services/accounting/accountClassification";
+import { signedMasterOpening } from "../../services/accounting/balances/openingSide";
+import { writeAuditEvent } from "../../services/audit/auditService";
 
 export class FiscalPeriodCloseError extends Error {
   constructor(
@@ -26,9 +28,14 @@ function nextIsoDay(isoDate: string): string {
   return next.toISOString().slice(0, 10);
 }
 
-function signedOpening(openingBalance: string | null, side: string | null): Decimal {
-  const amount = new Decimal(openingBalance || "0");
-  return (side || "Dr") === "Cr" ? amount.negated() : amount;
+/**
+ * A P&L account's opening, debit positive, on the engine's one sideless-opening
+ * rule (wave 17 A): a sideless opening takes the usual side of the account
+ * type (Cr for income, Dr for expenses). It used to default to Dr, so a
+ * sideless income opening was closed on the wrong side.
+ */
+function signedOpening(accountType: string, openingBalance: string | null, side: string | null): Decimal {
+  return new Decimal(signedMasterOpening("ledger", accountType, openingBalance, side).toFixed(2));
 }
 
 /**
@@ -49,6 +56,7 @@ interface IncomeExpenseBalanceRow {
   account_type: string;
   opening_balance: string | null;
   opening_balance_side: string | null;
+  deleted: boolean;
   activity: string;
 }
 
@@ -70,6 +78,7 @@ async function incomeExpenseBalanceThroughTx(
 ): Promise<IncomeExpenseBalanceRow[]> {
   const result = await tx.execute(sql`
     SELECT la.id, la.name, la.account_type, la.opening_balance::text AS opening_balance, la.opening_balance_side,
+           (la.deleted_at IS NOT NULL) AS deleted,
            COALESCE((
              SELECT SUM(ve.debit_amount::numeric - ve.credit_amount::numeric)
              FROM voucher_entries ve
@@ -101,6 +110,7 @@ async function incomeExpenseActivityTx(
 ): Promise<IncomeExpenseBalanceRow[]> {
   const result = await tx.execute(sql`
     SELECT la.id, la.name, la.account_type, la.opening_balance::text AS opening_balance, la.opening_balance_side,
+           (la.deleted_at IS NOT NULL) AS deleted,
            COALESCE((
              SELECT SUM(ve.debit_amount::numeric - ve.credit_amount::numeric)
              FROM voucher_entries ve
@@ -133,6 +143,16 @@ async function incomeExpenseActivityTx(
  * day; the first close must start no later than the earliest posted
  * Income/Expense entry, or entries before it would be locked without ever
  * being closed. All amounts are exact decimals.
+ *
+ * Deleted Income/Expense accounts (wave 17 A): one with a zero balance at the
+ * period end is skipped (a closing line on it would be refused as
+ * LEDGER_ACCOUNT_DELETED); one that still carries a balance refuses the close
+ * (409, listing each account and its balance), since closing only the live
+ * accounts would leave that balance in a closed year. Restore the account (or
+ * move its balance with a journal in the open period) and close again.
+ *
+ * The close writes its audit row (fiscal_period_closures, action "create") in
+ * the same transaction, so a closure never exists without its audit.
  */
 export async function closeFiscalPeriod(
   companyId: number,
@@ -140,7 +160,8 @@ export async function closeFiscalPeriod(
   periodEndDate: string,
   retainedEarningsAccountId: number,
   closedByUserId: string,
-  notes?: string
+  notes?: string,
+  actor?: { username: string }
 ): Promise<schema.FiscalPeriodClosure> {
   return await db.transaction(async (tx) => {
     // Exclusive per-company lock: voucher writes hold the shared side (see
@@ -184,7 +205,24 @@ export async function closeFiscalPeriod(
       }
     }
 
-    const accounts = await incomeExpenseBalanceThroughTx(tx, companyId, periodEndDate);
+    const allAccounts = await incomeExpenseBalanceThroughTx(tx, companyId, periodEndDate);
+    const balanceOf = (account: IncomeExpenseBalanceRow) =>
+      signedOpening(account.account_type, account.opening_balance, account.opening_balance_side).plus(account.activity);
+    const deletedWithBalance = allAccounts.filter((account) => account.deleted && !balanceOf(account).isZero());
+    if (deletedWithBalance.length > 0) {
+      const list = deletedWithBalance
+        .map((account) => {
+          const balance = balanceOf(account);
+          return `${account.name} (#${account.id}): ${balance.abs().toFixed(2)} ${balance.isNegative() ? "Cr" : "Dr"}`;
+        })
+        .join("; ");
+      throw new FiscalPeriodCloseError(
+        `Deleted income or expense accounts still carry a balance at ${periodEndDate}: ${list}. Restore them or move their balance with a journal before closing.`,
+        409
+      );
+    }
+    // Deleted accounts with a zero balance need no closing line.
+    const accounts = allAccounts.filter((account) => !account.deleted);
     if (accounts.length === 0) throw new FiscalPeriodCloseError("No Income or Expense accounts found for this company");
 
     interface ClosingLine {
@@ -200,7 +238,7 @@ export async function closeFiscalPeriod(
 
     for (const account of accounts) {
       // Debit-positive balance; the closing line posts its opposite.
-      const balance = signedOpening(account.opening_balance, account.opening_balance_side).plus(account.activity);
+      const balance = balanceOf(account);
       if (classifyAccountType(account.account_type) === "income") totalIncome = totalIncome.minus(balance);
       else totalExpense = totalExpense.plus(balance);
       netDebitBalance = netDebitBalance.plus(balance);
@@ -292,6 +330,28 @@ export async function closeFiscalPeriod(
         openingBalanceSnapshot: openingSnapshot,
       })
       .returning();
+
+    await writeAuditEvent(
+      {
+        userId: closedByUserId,
+        username: actor?.username || "unknown",
+        companyId,
+        action: "create",
+        tableName: "fiscal_period_closures",
+        recordId: closure.id,
+        recordIdentifier: `${periodStartDate}..${periodEndDate}`,
+        changes: {
+          status: { old: null, new: "CLOSED" },
+          closingVoucherId: { old: null, new: closingVoucher.id },
+          voucherNumber: { old: null, new: voucherNumber },
+          retainedEarningsAccountId: { old: null, new: retainedEarningsAccountId },
+          totalIncome: { old: null, new: totalIncome.toFixed(2) },
+          totalExpense: { old: null, new: totalExpense.toFixed(2) },
+          netIncome: { old: null, new: netIncome.toFixed(2) },
+        },
+      },
+      tx
+    );
 
     return closure;
   });

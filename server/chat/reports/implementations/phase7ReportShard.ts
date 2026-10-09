@@ -1,5 +1,6 @@
 import { db, sql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 
 export const phase7QueryTypes = [
   "audit_trail",
@@ -422,6 +423,8 @@ async function runPhase7Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
           AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND v.company_id = ${companyId}
+          AND ${notFiscalClosingVoucher("v")}
         WHERE la.company_id = ${companyId}
           AND LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("income")})
           AND la.deleted_at IS NULL

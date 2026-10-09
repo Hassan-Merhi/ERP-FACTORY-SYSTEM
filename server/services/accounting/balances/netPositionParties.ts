@@ -44,7 +44,14 @@ import { employees } from "@shared/schema";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { loadSalaryAdvanceNetPositionAdjustments } from "../../../helpers/salaryAdvanceNetPosition";
-import { getPartyBalances, type PartyBalance, type PartyBalanceKind } from "./ledgerBalanceEngine";
+import {
+  getPartyBalances,
+  loadBalanceRows,
+  toPartyBalance,
+  type BalanceRowKind,
+  type PartyBalance,
+  type PartyBalanceKind,
+} from "./ledgerBalanceEngine";
 import { MEMO_SOURCE_LABELS, memoTotal, type MemoSource, type PartyBalanceMemoLine } from "./unpostedMemo";
 
 export interface NetPositionPartyLine {
@@ -53,7 +60,7 @@ export interface NetPositionPartyLine {
   code: string;
   value: number;
   category: string;
-  partyKind: PartyBalanceKind;
+  partyKind: BalanceRowKind;
   partyId: number | null;
   /** Bank lines only: the bank_accounts id (never in `id`, which is a ledger account id). */
   bankAccountId?: number;
@@ -108,7 +115,16 @@ export interface NetPositionPartyOptions {
   payrollCurrentBalanceMemo?: boolean;
   /** Bank accounts (bank_accounts master rows) as cash/bank lines. */
   banks?: boolean;
+  /**
+   * Lines of this company's vouchers on ledger accounts that are missing or
+   * belong to another company (engine rule 4, wave 17 A): one labelled line
+   * per account, category MISSING_ACCOUNT_CATEGORY, in the totals of the
+   * company that posted them (the other company never counts them).
+   */
+  missingAccounts?: boolean;
 }
+
+export const MISSING_ACCOUNT_CATEGORY = "Lines on a missing or other-company account";
 
 export interface NetPositionParties {
   forUs: NetPositionPartyLine[];
@@ -186,13 +202,30 @@ export async function loadNetPositionParties(
   const query = (kind: PartyBalanceKind, withMemo = false) =>
     getPartyBalances(db, { companyId, kind, asOf, memo: withMemo });
 
-  const [customerResult, supplierResult, factorySupplierResult, employeeResult, bankResult] = await Promise.all([
-    query("customer", options.customers),
-    options.suppliers ? query("supplier") : null,
-    options.factorySuppliers ? query("factorySupplier", true) : null,
-    options.employees ? query("employee") : null,
-    options.banks ? query("bank") : null,
-  ]);
+  const [customerResult, supplierResult, factorySupplierResult, employeeResult, bankResult, missingRows] =
+    await Promise.all([
+      query("customer", options.customers),
+      options.suppliers ? query("supplier") : null,
+      options.factorySuppliers ? query("factorySupplier", true) : null,
+      options.employees ? query("employee") : null,
+      options.banks ? query("bank") : null,
+      options.missingAccounts ? loadBalanceRows(db, { companyId, asOf, kind: "missingAccount" }) : null,
+    ]);
+
+  for (const row of missingRows ?? []) {
+    const party = toPartyBalance(row);
+    const value = round2(netPositionPartyValue(party));
+    if (Math.abs(value) < 0.01) continue;
+    const base = {
+      name: party.name,
+      code: `MISSING_ACCOUNT_${party.id ?? ""}`,
+      category: MISSING_ACCOUNT_CATEGORY,
+      partyKind: "missingAccount" as const,
+      partyId: party.id,
+    };
+    if (value > 0) forUs.push({ ...base, value });
+    else onUs.push({ ...base, value: -value });
+  }
 
   // Customer-owned ledgers are always left out of the ledger classification:
   // the engine rolls them into the customer (supplier-partner companies

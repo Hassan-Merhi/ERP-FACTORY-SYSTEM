@@ -92,7 +92,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/factory/suppliers/:id",
   "DELETE /api/factory/suppliers/:id/permanent",
   "DELETE /api/factory/transporters/:id/transactions/:txId",
-  "DELETE /api/factory/v3/loads/:id/bales/:baleId",
   "DELETE /api/factory/waste-dispatch/:id",
   "DELETE /api/factory/worker-bonuses/:id",
   "DELETE /api/factory/workers/:workerId/deductions/:id",
@@ -140,8 +139,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/factory/suppliers/:id/reactivate",
   "PATCH /api/factory/suppliers/:id/set-broker",
   "PATCH /api/factory/transporters/:id",
-  "PATCH /api/factory/v3/loads/:id/cancel",
-  "PATCH /api/factory/v3/loads/:id/start",
   "PATCH /api/insurance/members/:id",
   "PATCH /api/insurance/members/:id/toggle",
   "PATCH /api/ledger-accounts/bulk-assign-parent",
@@ -313,9 +310,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/transporters",
   "POST /api/factory/transporters/:id/charges",
   "POST /api/factory/transporters/:id/payments",
-  "POST /api/factory/v3/loads",
-  "POST /api/factory/v3/loads/:id/bales",
-  "POST /api/factory/v3/loads/:id/finalize",
   "POST /api/factory/waste-dispatch/submit",
   "POST /api/factory/worker-bonuses",
   "POST /api/factory/worker-bonuses/:id/pay",
@@ -328,7 +322,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/golden-coast/accounting/phase1/preview",
   "POST /api/golden-coast/accounting/phase1/setup-accounts",
   "POST /api/insurance/admin/clear-all",
-  "POST /api/insurance/admin/repair-reversed-journals",
+  "POST /api/insurance/admin/journal-direction/apply",
   "POST /api/insurance/generate",
   "POST /api/insurance/import/apply",
   "POST /api/insurance/import/preview",
@@ -337,6 +331,8 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/intercompany-requests/:id/approve",
   "POST /api/intercompany-requests/:id/dismiss",
   "POST /api/ledger-accounts",
+  // Wave 16 (B): retires each empty account in its own audited transaction (it went through storage before).
+  "POST /api/ledger-accounts/bulk-delete",
   // Wave 12 (A): zeroes openings in its own transaction (it went through storage before).
   "POST /api/ledger-accounts/zero-balances",
   "POST /api/lookup/reference/:referenceNumber/scan",
@@ -363,7 +359,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/pos-import/validate",
   "POST /api/properties/repair/reallocate-payments/:contractId",
   "POST /api/purchase-orders/:id/sync-parent-voucher",
-  "POST /api/reverse-po-credits",
   "POST /api/salary-advances",
   "POST /api/salary-advances/:id/deduction",
   "POST /api/salary-advances/reconcile",
@@ -469,8 +464,18 @@ afterAll(() => {
  * the payment voucher of a payroll marked PAID, and its removal on un-mark or
  * undo, moved to services/payroll/factoryPayrollPaymentVoucher.ts, so the route
  * file no longer names the voucher tables itself; the routes still post them.
+ *
+ * The factory V3 load routes joined them in wave 17 B: the load finalize (bales
+ * SOLD, the invoice and its journal) moved to services/factory/v3LoadInvoice.ts,
+ * so the route file no longer names the bale tables; the routes still write them.
  */
 const DELEGATED_WRITE_ROUTES = [
+  "DELETE /api/factory/v3/loads/:id/bales/:baleId",
+  "PATCH /api/factory/v3/loads/:id/cancel",
+  "PATCH /api/factory/v3/loads/:id/start",
+  "POST /api/factory/v3/loads",
+  "POST /api/factory/v3/loads/:id/bales",
+  "POST /api/factory/v3/loads/:id/finalize",
   "DELETE /api/factory/payroll/:id",
   "PATCH /api/factory/payroll/:id",
   "POST /api/factory/payroll/:id/undo",

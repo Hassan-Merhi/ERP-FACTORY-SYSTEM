@@ -62,6 +62,9 @@ async function voucher(
   date: string,
   lines: [target: "expense" | "cash" | "supplier", debit: string, credit: string][]
 ) {
+  // Legacy-shaped lines as history left them: the currency trigger v2 (wave 17 D)
+  // refuses a new non-USD line without native amounts, so triggers are off here.
+  await q("SET LOCAL session_replication_role = replica");
   const id = (
     await q(
       `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, currency, exchange_rate, source_module)
@@ -72,14 +75,15 @@ async function voucher(
   voucherIds[key] = id;
   for (const [target, debit, credit] of lines) {
     await q(
-      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, factory_supplier_id, debit_amount, credit_amount)
-       VALUES ($1, $2, $3, $4, $5)`,
+      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, factory_supplier_id, debit_amount, credit_amount, company_id)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
       [
         id,
         target === "expense" ? expenseId : target === "cash" ? cashId : null,
         target === "supplier" ? supplierId : null,
         debit,
         credit,
+        companyId,
       ]
     );
   }
@@ -247,7 +251,11 @@ describe("legacy factory foreign-currency repair", () => {
     if (!hadTrigger) await pool.query(TRIGGER_SQL);
     let applied;
     try {
-      applied = await asMaintenance(() => applyFactoryFxLegacyRepair(companyId));
+      // The reviewed plan's hash is required since wave 17 C.
+      const reviewed = await asMaintenance(() => planFactoryFxLegacyRepair(companyId));
+      applied = await asMaintenance(() =>
+        applyFactoryFxLegacyRepair(companyId, { expectedPlanHash: reviewed.planHash })
+      );
     } finally {
       if (!hadTrigger) {
         await pool.query(`DROP TRIGGER IF EXISTS voucher_entries_normalize_currency_before_write ON voucher_entries`);

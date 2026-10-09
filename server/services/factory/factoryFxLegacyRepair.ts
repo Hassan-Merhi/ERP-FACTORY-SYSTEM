@@ -17,16 +17,18 @@
  *     factory writers store it), never a current rate. A voucher whose own
  *     rate was never set is rated, per line, at the factory's confirmed rate
  *     for its currency ON OR BEFORE the voucher date (wave 14, owner decision
- *     1: findFactoryFxRateOnOrBefore, a manual rate first, else a recorded
- *     auto rate; never a rate dated after the voucher). Such a line is only
+ *     1; wave 17 C, owner decision 4, repairRateFor: a rate dated exactly on
+ *     the voucher date, manual or auto, first; else the latest manual rate on
+ *     or before it, else the latest recorded auto rate; never a rate dated
+ *     after the voucher). Such a line is only
  *     repaired when it holds the native amount (the voucher total): with an
  *     unset rate the writers stored native amounts on every leg. Each line
  *     shows its rate and the rate's source ("line", "dated-manual",
  *     "dated-auto"); a line with no rate at all stays listed and untouched;
  *   - the plan is read-only and carries a hash of what it would change;
- *     applying it requires an explicit confirmation (and, when the caller
- *     sends the reviewed hash, refuses a plan that no longer matches it, for
- *     example after a rate was added), re-derives the plan inside the
+ *     applying it requires an explicit confirmation and the reviewed hash
+ *     (wave 17 C: required, 400 without it), refuses a plan that no longer
+ *     matches it (for example after a rate was added), re-derives the plan inside the
  *     transaction, changes only lines that are still legacy, and writes its
  *     audit in that transaction. The voucher-entry currency trigger validates
  *     every converted line, and the closed-period guard is not bypassed.
@@ -44,7 +46,11 @@ import { sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { writeAuditEvent, type AuditActor } from "../audit";
-import { findFactoryFxRateOnOrBefore, type FactoryFxRateOnDate } from "./factoryFxRateOnDate";
+import {
+  findFactoryFxRateOnOrBefore,
+  storedFactoryFxRateOnOrBefore,
+  type FactoryFxRateOnDate,
+} from "./factoryFxRateOnDate";
 
 type Executor = typeof db | DbTransaction;
 
@@ -106,6 +112,14 @@ export class FactoryFxRepairPlanChangedError extends Error {
   }
 }
 
+/** The apply was called without the reviewed plan's hash. */
+export class FactoryFxRepairPlanHashRequiredError extends Error {
+  readonly code = "FACTORY_FX_REPAIR_PLAN_HASH_REQUIRED";
+  constructor() {
+    super("The reviewed plan's planHash is required to apply the repair");
+  }
+}
+
 interface LegacyRow {
   id: number;
   voucher_id: number;
@@ -134,7 +148,9 @@ async function loadLegacyRows(executor: Executor, companyId: number, lock: boole
            ve.debit_amount::text AS debit_amount, ve.credit_amount::text AS credit_amount,
            ve.ledger_account_id, ve.bank_account_id, ve.factory_supplier_id, ve.supplier_id,
            ve.employee_id, ve.customer_id, ve.fixed_asset_id,
-           COALESCE(v.voucher_date <= (
+           -- A voucher counts from its effective date (wave 10), so the closed
+           -- period check reads COALESCE(effective_date, voucher_date) (wave 17 C).
+           COALESCE(COALESCE(v.effective_date, v.voucher_date) <= (
              SELECT max(c.period_end_date) FROM fiscal_period_closures c
               WHERE c.company_id = v.company_id AND c.status = 'CLOSED'
            ), false) AS period_closed
@@ -226,6 +242,28 @@ function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null): LegacyLine
 }
 
 /**
+ * The rate the repair uses for a voucher with no usable rate of its own
+ * (wave 17 C, owner decision 4): a rate dated exactly on the voucher date,
+ * manual or recorded auto (manual first), beats an older manual rate, since it
+ * is the market rate of that day; otherwise the confirmed rate on or before
+ * the date as before (findFactoryFxRateOnOrBefore: the latest manual rate,
+ * else the latest recorded auto rate). A rate dated after the voucher is never
+ * used.
+ */
+async function repairRateFor(
+  executor: Executor,
+  companyId: number,
+  currency: string,
+  voucherDate: string
+): Promise<FactoryFxRateOnDate | null> {
+  for (const source of ["manual", "auto"] as const) {
+    const exact = await storedFactoryFxRateOnOrBefore(executor, companyId, currency, voucherDate, source);
+    if (exact && exact.effectiveDate === voucherDate) return exact;
+  }
+  return findFactoryFxRateOnOrBefore(executor, companyId, currency, voucherDate);
+}
+
+/**
  * The dated factory rate for every (currency, voucher date) whose voucher has
  * no usable rate of its own, read with the plan's executor.
  */
@@ -239,7 +277,7 @@ async function datedRatesFor(
     if (ownRate(row)) continue;
     const key = `${row.currency}|${row.voucher_date}`;
     if (rates.has(key)) continue;
-    rates.set(key, await findFactoryFxRateOnOrBefore(executor, companyId, row.currency, row.voucher_date));
+    rates.set(key, await repairRateFor(executor, companyId, row.currency, row.voucher_date));
   }
   return rates;
 }
@@ -311,8 +349,8 @@ export async function planFactoryFxLegacyRepair(companyId: number, executor: Exe
 export interface ApplyFactoryFxRepairOptions {
   /** Who applies it; the audit row is written in the apply transaction. */
   actor?: AuditActor & { userId: string | number };
-  /** The reviewed plan's hash: the apply refuses a plan that no longer matches it. */
-  expectedPlanHash?: string;
+  /** The reviewed plan's hash (required): the apply refuses a plan that no longer matches it. */
+  expectedPlanHash: string;
 }
 
 /**
@@ -321,11 +359,12 @@ export interface ApplyFactoryFxRepairOptions {
  */
 export async function applyFactoryFxLegacyRepair(
   companyId: number,
-  options: ApplyFactoryFxRepairOptions = {}
+  options: ApplyFactoryFxRepairOptions
 ): Promise<LegacyRepairPlan> {
+  if (!options?.expectedPlanHash) throw new FactoryFxRepairPlanHashRequiredError();
   return db.transaction(async (tx) => {
     const plan = await derivePlan(tx, companyId, true);
-    if (options.expectedPlanHash && options.expectedPlanHash !== plan.planHash) {
+    if (options.expectedPlanHash !== plan.planHash) {
       throw new FactoryFxRepairPlanChangedError();
     }
     const repaired = plan.lines.filter((line) => !line.skipReason && line.transactionAmount && line.baseAmount);
@@ -366,8 +405,10 @@ export async function applyFactoryFxLegacyRepair(
                 rateEffectiveDate: line.rateEffectiveDate,
               })),
             },
+            // writeAuditEvent keeps `metadata` only without `changes`, so these are change fields.
+            planHash: { new: plan.planHash },
+            usdChangeByTarget: { new: plan.usdChangeByTarget },
           },
-          metadata: { planHash: plan.planHash, usdChangeByTarget: plan.usdChangeByTarget },
         },
         tx
       );

@@ -14,6 +14,7 @@ import {
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { classifyAccountType, expenseCategory } from "../../../services/accounting/accountClassification";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 
 export const phase1QueryTypes = [
   "pl_summary",
@@ -46,8 +47,10 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_credit
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL
+          AND v.company_id = ${companyId}
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
         WHERE COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
+          AND ${notFiscalClosingVoucher("v")}
           AND LOWER(TRIM(la.account_type)) IN (${profitAndLossAccountTypesSql()})
         GROUP BY la.account_type, la.sub_type
       `);

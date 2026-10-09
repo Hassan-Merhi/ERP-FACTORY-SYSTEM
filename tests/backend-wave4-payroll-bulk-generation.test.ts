@@ -51,6 +51,7 @@ async function genVouchers() {
   const result = await pool.query<{ id: number; total_amount: string; description: string }>(
     `SELECT id, total_amount, description FROM vouchers
       WHERE company_id = $1 AND voucher_number LIKE 'PAYROLL-GEN-%' AND voucher_date = $2
+        AND deleted_at IS NULL -- wave 16 (A): a rebuild retires the old journal
       ORDER BY id`,
     [ctx.companyId, PERIOD_START]
   );

@@ -107,6 +107,14 @@ async function assertPersistedTransferScope(input: {
 export async function deleteStockTransferVoucher(input: {
   companyId: number;
   voucherId: number;
+  /**
+   * Wave 16 (B): writes the delete's audit row in the deleting transaction
+   * (not called on a replay); a failure rolls the delete back.
+   */
+  audit?: (
+    tx: DbTransaction,
+    deleted: { voucher: typeof vouchers.$inferSelect; entries: (typeof voucherEntries.$inferSelect)[] }
+  ) => Promise<void>;
 }): Promise<StockTransferDeletionResult> {
   const companyId = Number(input.companyId);
   const voucherId = Number(input.voucherId);
@@ -295,6 +303,8 @@ export async function deleteStockTransferVoucher(input: {
       .set({ deletedAt: new Date() })
       .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)))
       .returning();
+
+    await input.audit?.(tx, { voucher: deletedVoucher ?? lockedVoucher, entries });
 
     return {
       handled: true,

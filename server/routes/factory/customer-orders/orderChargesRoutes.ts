@@ -16,9 +16,10 @@ import {
   factoryDaybookEntries,
   vouchers,
 } from "@shared/schema";
-import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 import { syncFactoryInvoiceTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerOrderChargesRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/charges", requireAuth, async (req: Request, res: Response) => {
@@ -720,8 +721,15 @@ export function registerOrderChargesRoutes(app: Express) {
       }
 
       if (chargeVoucherIdsToDelete.length > 0) {
-        await db.delete(voucherEntries).where(inArray(voucherEntries.voucherId, chargeVoucherIdsToDelete));
-        await db.update(vouchers).set({ deletedAt: new Date() }).where(inArray(vouchers.id, chargeVoucherIdsToDelete));
+        // Wave 16 (A): retired with their lines (they used to be stripped), audited.
+        await db.transaction((tx) =>
+          retireVouchersTx(tx, {
+            companyId,
+            voucherIds: chargeVoucherIdsToDelete,
+            reason: "customer-order-charge-delete",
+            actor: sessionRetirementActor(req),
+          })
+        );
       }
 
       // Sync customerBalances ledger entry if the order is already finalized

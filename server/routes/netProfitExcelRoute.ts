@@ -23,6 +23,7 @@ import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { ledgerCarriesStock } from "../services/accounting/perpetualInventory/reportBasis";
 import { companyStockValue } from "../services/inventory/stockValuation";
 import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../services/accounting/balances/periodReportRules";
 
 export function registerNetProfitExcelRoute(app: Express) {
   app.get("/api/reports/net-profit-excel", requireAuth, async (req, res) => {
@@ -47,11 +48,13 @@ export function registerNetProfitExcelRoute(app: Express) {
 
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
 
-      // Fetch period vouchers WITH their dates for monthly grouping
+      // Fetch period vouchers WITH their dates for monthly grouping. The fiscal
+      // closing journal is not period profit (wave 17 A).
       const voucherConditions = [
         eq(vouchers.companyId, companyId),
         isNull(vouchers.deletedAt),
         eq(vouchers.optional, false),
+        notFiscalClosingVoucherSql,
       ];
       // One date basis with the engine (wave 13, R2): a voucher counts from
       // COALESCE(effective_date, voucher_date), for the period and its months.

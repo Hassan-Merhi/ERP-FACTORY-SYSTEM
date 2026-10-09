@@ -20,8 +20,17 @@ let assetId: number;
 
 // The voucher and its lines go in one transaction: the voucher balance guard
 // checks the voucher at COMMIT.
-async function voucher(type: string, number: string, lines: [number | null, string, string][], customerId?: number) {
+async function voucher(
+  type: string,
+  number: string,
+  lines: [number | null, string, string][],
+  customerId?: number,
+  legacy = false
+) {
   return withFixtureTransaction(async (client) => {
+    // Wave 16 (B): the line-target guard refuses a new line with no account; a
+    // legacy row (written before the guard) is modelled under its bypass.
+    if (legacy) await client.query(`SET LOCAL app.ledger_integrity_bypass = 'on'`);
     const created = await client.query<{ id: number }>(
       `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount)
        VALUES ($1, $2, $3, $4, 0) RETURNING id`,
@@ -61,10 +70,16 @@ beforeAll(async () => {
     [ctx.salesAccountId, "0", "250.00"],
   ]);
   await voucher("Consumption", "CONS", [[ctx.salesAccountId, "12.50", "0"]]);
-  await voucher("Journal", "NOACC", [
-    [assetId, "40.00", "0"],
-    [null, "0", "40.00"],
-  ]);
+  await voucher(
+    "Journal",
+    "NOACC",
+    [
+      [assetId, "40.00", "0"],
+      [null, "0", "40.00"],
+    ],
+    undefined,
+    true
+  );
   // A type the shared classifier does not know (wave 13: a mis-cased 'EXPENSE'
   // is classified as an expense and is no longer flagged).
   await pool.query(

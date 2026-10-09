@@ -2,12 +2,12 @@ import type { Express } from "express";
 import { pool } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
 import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
 import { authorizeCompanyIdParam, getSupplierBalanceForContext } from "../helpers/supplierBalanceHelpers";
+import { flagFutureDated, statementWindow } from "../helpers/statementWindow";
 
 /**
  * A row on a supplier statement: either a real voucher entry, or one of the
@@ -17,7 +17,6 @@ import { authorizeCompanyIdParam, getSupplierBalanceForContext } from "../helper
  */
 type SupplierTransactionRow = Awaited<ReturnType<typeof storage.getVoucherEntriesBySupplier>>[number];
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HISTORICAL_REFERENCE_TYPE = "Historical PO Reference";
 
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
@@ -67,12 +66,12 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // an explicit endDate cuts the statement; without one it lists
+      // everything posted, like the supplier's balance, and flags the lines
+      // dated after the server's business date. It used to stop at the
+      // client's today, so the statement did not foot to the balance.
+      const { rawStart, effectiveEndDate, asOfDate, businessDate } = statementWindow(req);
 
       const requestedCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
       const filterCompanyId = await authorizeCompanyIdParam(req, requestedCompanyId);
@@ -207,22 +206,25 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
       // period opening for the same window.
       const supplier = await storage.getSupplierById(supplierId);
       const engine =
-        supplier && !(rawStart && rawStart > effectiveEndDate)
+        supplier && !(rawStart && effectiveEndDate && rawStart > effectiveEndDate)
           ? await getSupplierBalanceForContext(supplier, filterCompanyId, {
               startDate: rawStart,
               endDate: effectiveEndDate,
             })
           : null;
 
+      const flagged = flagFutureDated(transactions, businessDate);
       return res.json(
-        statementResponse(transactions, {
+        statementResponse(flagged.rows, {
           openingBalance: engine?.openingBalance ?? 0,
           openingBalanceSide: engine?.openingBalanceSide ?? "Cr",
           periodOpeningBalance: engine?.periodOpeningBalance ?? 0,
           preNetBalance,
           asOfDate,
           startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
+          endDate: effectiveEndDate ?? null,
+          businessDate,
+          futureDatedCount: flagged.futureDatedCount,
         })
       );
     } catch (error: unknown) {

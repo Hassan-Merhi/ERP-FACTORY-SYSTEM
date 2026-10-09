@@ -52,9 +52,11 @@ export async function runCustomerBalanceStatement(options: {
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bindBase(dates.rawStart)}::date`);
   }
-  conditions.push(
-    `COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bindBase(dates.effectiveEndDate)}::date`
-  );
+  if (dates.effectiveEndDate) {
+    conditions.push(
+      `COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bindBase(dates.effectiveEndDate)}::date`
+    );
+  }
 
   const cte = `filtered AS (
     SELECT

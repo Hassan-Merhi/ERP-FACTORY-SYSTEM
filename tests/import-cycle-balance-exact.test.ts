@@ -19,9 +19,10 @@ vi.mock("../server/storage", () => ({
 // SUM(total_value)), no longer quantity × average_rate from the inventory rows.
 // It is mocked at 0.555 (1.5 units worth 0.37 each) to keep exercising the
 // single rounding of the exact total.
-// Wave 14: suppliers come from the balance engine (none here).
+// Wave 14: suppliers come from the balance engine (none here). Wave 17 A: every
+// ledger component is the engine's rows (loadBalanceRows), none here.
 vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
-  getPartyBalances: async () => ({ parties: [] }),
+  loadBalanceRows: async () => [],
 }));
 vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: async () => "0.555" }));
 vi.mock("../server/db", async () => {

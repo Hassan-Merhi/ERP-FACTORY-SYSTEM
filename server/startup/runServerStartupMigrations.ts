@@ -570,34 +570,11 @@ END $mig$`;
       logger.error("[InsuranceMemberBackfill] Error:", { error: getErrorMessage(e) });
     }
 
-    // ── Soft-delete orphaned Insurance ledger accounts ───────────────────────
-    // Insurance member deletion previously left the linked "Insurance - Name"
-    // ledger account alive. Clean up any that no longer have a member row.
-    // (Runs after the back-fill above so legitimate accounts are not removed.)
-    // Only accounts with no postings are removed: soft-deleting an account that
-    // carries history drops its balance from every report (2026-10 audit).
-    try {
-      const insuranceFix = await migrationClient.query(`
-          UPDATE ledger_accounts la
-          SET deleted_at = NOW()
-          WHERE la.deleted_at IS NULL
-            AND la.name LIKE 'Insurance - %'
-            AND NOT EXISTS (
-              SELECT 1 FROM insurance_members im
-              WHERE im.ledger_account_id = la.id
-            )
-            AND NOT EXISTS (
-              SELECT 1 FROM voucher_entries ve
-              WHERE ve.ledger_account_id = la.id
-            )
-          RETURNING id
-        `);
-      if (insuranceFix.rowCount && insuranceFix.rowCount > 0) {
-        logger.info(`[InsuranceFix] Soft-deleted ${insuranceFix.rowCount} orphaned Insurance ledger account(s)`);
-      }
-    } catch (e: unknown) {
-      logger.error("[InsuranceFix] Error:", { error: getErrorMessage(e) });
-    }
+    // Wave 16 (A): the InsuranceFix step that soft-deleted "Insurance - %"
+    // ledger accounts with no member row was retired. It ignored opening
+    // balances (an account with an opening and no postings lost it from every
+    // report) and changed accounts at boot with no audit. Such accounts stay;
+    // delete one deliberately from the chart of accounts if it is unwanted.
 
     // Auto-fix sequence desyncs (can happen after data restores / bulk imports with explicit IDs)
     const seqFixes: Array<[string, string]> = [

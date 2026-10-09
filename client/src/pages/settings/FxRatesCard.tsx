@@ -42,13 +42,32 @@ export function FxRatesCard() {
       toast({ title: "Failed to save rate", description: err.message, variant: "destructive" }),
   });
 
+  // Records today's external market rate (server-fetched, audited). Lookups only
+  // suggest a fetched rate; it is used as a confirmed rate once it is saved here.
+  const saveFetchedMutation = useMutation({
+    mutationFn: async (currencyCode: string) => {
+      const res = await apiRequest("POST", "/api/factory/fx-rates/fetched", { currencyCode });
+      return res.json() as Promise<{ created: boolean }>;
+    },
+    onSuccess: (data) => {
+      toast({ title: data.created ? "Market rate saved" : "A market rate is already saved for today" });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-rates"] });
+    },
+    onError: (err: ClientErrorLike) =>
+      toast({ title: "Failed to save market rate", description: err.message, variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (currency: string) => {
       const res = await apiRequest("DELETE", `/api/factory/fx-rates/${currency}`);
-      return res.json();
+      return res.json() as Promise<{ removed: number; kept: unknown[] }>;
     },
-    onSuccess: () => {
-      toast({ title: "Rate removed" });
+    onSuccess: (data) => {
+      // Rates a document used and recorded market rates are kept by the server.
+      toast({
+        title: data.removed > 0 ? "Rate removed" : "No rate removed",
+        description: data.kept?.length > 0 ? "Rates used by documents and recorded market rates were kept." : undefined,
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/fx-rates"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/suppliers/with-balances"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/net-position"] });
@@ -143,6 +162,20 @@ export function FxRatesCard() {
                 <Plus className="h-4 w-4 mr-2" />
               )}
               Add / Update Rate
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                const cc = newCurrency.trim().toUpperCase();
+                if (!/^[A-Z]{3}$/.test(cc))
+                  return toast({ title: "Enter a valid currency code (2–6 letters)", variant: "destructive" });
+                saveFetchedMutation.mutate(cc);
+              }}
+              disabled={saveFetchedMutation.isPending}
+              data-testid="button-save-fetched-fxrate"
+            >
+              {saveFetchedMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Save today's market rate
             </Button>
           </div>
         )}

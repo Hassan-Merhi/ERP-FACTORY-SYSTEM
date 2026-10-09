@@ -149,7 +149,7 @@ async function voucher(number: string) {
 
 const vouchersLike = async (pattern: string) =>
   all<{ voucher_number: string }>(
-    `SELECT voucher_number FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2 ORDER BY id`,
+    `SELECT voucher_number FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2 AND deleted_at IS NULL ORDER BY id`,
     [companyId, pattern]
   );
 

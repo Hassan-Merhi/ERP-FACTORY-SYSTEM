@@ -6,7 +6,16 @@
  */
 import type { Express, Request, Response } from "express";
 import { parseId } from "../../../../lib/parseId";
-import { getErrorMessage } from "../../../../lib/httpHandlers";
+import { errorStatus, getErrorMessage } from "../../../../lib/httpHandlers";
+import { ZodError } from "zod";
+import { accountHistoryErrorResponse, requestRole } from "../../../../services/accounting/accountHistoryPolicy";
+import {
+  FactorySupplierWriteError,
+  createFactorySupplierTx,
+  factorySupplierUpdateSchema,
+  parseFactorySupplierOpening,
+  updateFactorySupplierTx,
+} from "./factorySupplierWrites";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
@@ -16,7 +25,6 @@ import {
   factoryRawStock,
   factoryMixBatchSources,
   factoryContainerCommissions,
-  insertFactorySupplierSchema,
   factoryOffloadAdditionalCharges,
   factorySupplierScoreSnapshots,
   factorySupplierPayments,
@@ -24,6 +32,22 @@ import {
   factoryFxAllocations,
 } from "@shared/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
+
+function factorySupplierActor(req: Request) {
+  return {
+    userId: req.session.userId!,
+    username: req.session.username || "unknown",
+    role: requestRole(req),
+  };
+}
+
+function sendFactorySupplierWriteError(res: Response, error: unknown, fallback: number) {
+  const refused = accountHistoryErrorResponse(error);
+  if (refused) return res.status(refused.status).json(refused.body);
+  if (error instanceof FactorySupplierWriteError) return res.status(error.status).json({ message: error.message });
+  if (error instanceof ZodError) return res.status(400).json({ message: getErrorMessage(error) });
+  return res.status(errorStatus(error, fallback)).json({ message: getErrorMessage(error) });
+}
 
 export function registerFactorySupplierCrudRoutes(app: Express) {
   app.get("/api/factory/suppliers", requireAuth, async (req: Request, res: Response) => {
@@ -49,12 +73,13 @@ export function registerFactorySupplierCrudRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const parsed = insertFactorySupplierSchema.parse({ ...req.body, companyId });
-      const [supplier] = await db.insert(factorySuppliers).values(parsed).returning();
+      const supplier = await db.transaction((tx) =>
+        createFactorySupplierTx(tx, companyId, req.body, factorySupplierActor(req))
+      );
       res.json(supplier);
     } catch (error: unknown) {
       logger.error("Error creating factory supplier:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      sendFactorySupplierWriteError(res, error, 400);
     }
   });
 
@@ -66,17 +91,19 @@ export function registerFactorySupplierCrudRoutes(app: Express) {
       const id = parseId(req.params.id);
 
       if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const [updated] = await db
-        .update(factorySuppliers)
-        .set({ ...req.body, updatedAt: new Date() })
-        .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)))
-        .returning();
+      // Wave 16 (B): only the supplier's own editable fields, under the
+      // history rules, audited in the transaction (the raw body used to be
+      // written as is, any column included).
+      const updates = factorySupplierUpdateSchema.parse(req.body ?? {});
+      const updated = await db.transaction((tx) =>
+        updateFactorySupplierTx(tx, companyId, id, updates, factorySupplierActor(req))
+      );
 
       if (!updated) return res.status(404).json({ message: "Supplier not found" });
       res.json(updated);
     } catch (error: unknown) {
       logger.error("Error updating factory supplier:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      sendFactorySupplierWriteError(res, error, 400);
     }
   });
 
@@ -136,29 +163,22 @@ export function registerFactorySupplierCrudRoutes(app: Express) {
       if (openingBalance === undefined || openingBalance === null || openingBalance === "") {
         return res.status(400).json({ message: "openingBalance is required" });
       }
-      const val = parseFloat(openingBalance);
-      if (isNaN(val)) {
-        return res.status(400).json({ message: "openingBalance must be a valid number" });
-      }
 
-      const [supplier] = await db
-        .select()
-        .from(factorySuppliers)
-        .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)))
-        .limit(1);
-
-      if (!supplier) return res.status(404).json({ message: "Supplier not found" });
-
-      const [updated] = await db
-        .update(factorySuppliers)
-        .set({ openingBalance: String(val) })
-        .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)))
-        .returning();
+      const updated = await db.transaction((tx) =>
+        updateFactorySupplierTx(
+          tx,
+          companyId,
+          id,
+          { openingBalance: parseFactorySupplierOpening(openingBalance) },
+          factorySupplierActor(req)
+        )
+      );
+      if (!updated) return res.status(404).json({ message: "Supplier not found" });
 
       res.json(updated);
     } catch (error: unknown) {
       logger.error("Error updating supplier opening balance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      sendFactorySupplierWriteError(res, error, 500);
     }
   });
 

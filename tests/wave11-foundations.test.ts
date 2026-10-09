@@ -338,7 +338,8 @@ describe("inventory movement journal", () => {
     await asMaintenance(() => db.transaction((tx) => removeInventoryMovementJournalTx(tx, source())));
     expect(await journalLines(companyId, voucherNumber)).toEqual([]);
     const identity = await pool.query(
-      `SELECT COUNT(*)::int AS n FROM accounting_posting_requests WHERE company_id = $1 AND source_type = 'perpetual-inventory-movement:quick-adjust'`,
+      // Wave 16 (A): the retired journal keeps its marker, released ("#retired:").
+      `SELECT COUNT(*)::int AS n FROM accounting_posting_requests WHERE company_id = $1 AND source_type = 'perpetual-inventory-movement:quick-adjust' AND position('#retired:' in idempotency_key) = 0`,
       [companyId]
     );
     expect(identity.rows[0].n).toBe(0);

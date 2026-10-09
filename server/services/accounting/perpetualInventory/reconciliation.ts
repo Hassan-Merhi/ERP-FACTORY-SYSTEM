@@ -23,6 +23,10 @@
  *                              the line's basis says so and `asOfBasis` is
  *                              "current" (not "as-of"), so a reader does not
  *                              take its difference for a ledger error.
+ *   Factory Goods in Transit   what the opening carried for factory containers
+ *                              not yet received, less what the daily factory
+ *                              journals up to the date cleared with their
+ *                              receipts (wave 17 B)
  *
  * Why the factory side is not replayed (wave 11 follow-up): the costing is
  * rewritten in place. Raw stock keeps only its current received/used kg
@@ -49,8 +53,10 @@ import {
 } from "../../inventory/stockValuation";
 import { getInventoryCutover } from "./cutover";
 import { listUnpostedFactoryInvoices, type UnpostedFactoryInvoice } from "./factoryInvoice";
+import { factoryGoodsInTransitHeld } from "./factoryStockJournal";
 import { factoryStockValuation } from "./factoryValuation";
 import { isSupplierPartnerCompany, ledgerBalancesByCode } from "./linkedJournal";
+import { retailInventoryReconciliationTx } from "../../retail/retailInventoryJournal";
 
 export interface ReconciliationLine {
   accountCode: string;
@@ -167,6 +173,11 @@ export async function reconcilePerpetualInventory(
       basis: `${factoryBasis}: finished goods`,
       current: factoryHistorical,
     },
+    {
+      accountCode: "FACTORY_GOODS_IN_TRANSIT",
+      value: await factoryGoodsInTransitHeld(executor, companyId, asOf),
+      basis: "expensed cost of factory containers not received at the cut-over, less their receipts since",
+    },
   ];
   const ledger = await ledgerBalancesByCode(
     executor,
@@ -185,6 +196,18 @@ export async function reconcilePerpetualInventory(
       asOfBasis: line.current ? ("current" as const) : ("as-of" as const),
     };
   });
+  // Wave 17 (D): RETAIL-INVENTORY against the Retail stock sub-ledger (today's value; it keeps no history).
+  const retail = await retailInventoryReconciliationTx(executor, companyId, asOf);
+  if (retail.applicable) {
+    lines.push({
+      accountCode: "RETAIL-INVENTORY",
+      ledger: retail.ledger,
+      subLedger: retail.subLedger,
+      difference: retail.difference,
+      basis: `Retail stock sub-ledger (quantity × average cost)${retail.opening ? "" : "; the Retail inventory opening is not applied"}`,
+      asOfBasis: asOf < today ? "current" : "as-of",
+    });
+  }
   const unpostedFactoryInvoices = await listUnpostedFactoryInvoices(executor, companyId);
   return {
     companyId,

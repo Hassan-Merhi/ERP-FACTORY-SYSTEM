@@ -537,104 +537,10 @@ export function registerAdminPoFixRoutes(app: Express) {
     }
   });
 
-  // ==========================================
-  // Reverse Fix Old PO Inter-Company Credits
-  // ==========================================
-
-  app.post("/api/reverse-po-credits", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const { companyId, parentCompanyId } = req.body;
-
-      if (!companyId) {
-        return res.status(400).json({
-          message: "Please select a subsidiary company to reverse.",
-        });
-      }
-
-      if (!parentCompanyId) {
-        return res.status(400).json({
-          message: "Please select a parent company.",
-        });
-      }
-
-      const allCompanies = await storage.getAllCompanies();
-      const company = allCompanies.find((c) => c.id === companyId);
-      const parentCompany = allCompanies.find((c) => c.id === parentCompanyId);
-
-      if (!company) {
-        return res.status(400).json({ message: "Subsidiary company not found." });
-      }
-
-      if (!parentCompany) {
-        return res.status(400).json({
-          message: "Parent company not found.",
-        });
-      }
-
-      if (company.id === parentCompany.id) {
-        return res.status(400).json({
-          message: "Subsidiary and parent company cannot be the same.",
-        });
-      }
-
-      // Process only the selected subsidiary
-      const targetCompany = company;
-
-      let totalReversed = 0;
-      const details: Array<{ company: string; voucherNumber: string; amount: string }> = [];
-
-      // Delete INTERCO vouchers in this subsidiary company
-      const companyIntercoVouchers = await db
-        .select()
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, targetCompany.id), like(vouchers.voucherNumber, "INTERCO-%")));
-
-      for (const v of companyIntercoVouchers) {
-        // Delete voucher entries first
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-        // Delete voucher
-        await db.delete(vouchers).where(eq(vouchers.id, v.id));
-        totalReversed++;
-        details.push({ company: targetCompany.name, voucherNumber: v.voucherNumber, amount: v.totalAmount || "0" });
-      }
-
-      // Also delete corresponding INTERCO-PARENT vouchers in parent company for this subsidiary
-      const parentIntercoVouchers = await db
-        .select()
-        .from(vouchers)
-        .where(
-          and(
-            eq(vouchers.companyId, parentCompany.id),
-            or(
-              like(vouchers.voucherNumber, "INTERCO-PARENT-%"),
-              like(vouchers.voucherNumber, "INTERCO-LUB-%") // Also match old format
-            ),
-            like(vouchers.description, `%${targetCompany.name}%`)
-          )
-        );
-
-      for (const v of parentIntercoVouchers) {
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-        await db.delete(vouchers).where(eq(vouchers.id, v.id));
-        totalReversed++;
-        details.push({
-          company: `${parentCompany.name} (for ${targetCompany.name})`,
-          voucherNumber: v.voucherNumber,
-          amount: v.totalAmount || "0",
-        });
-      }
-
-      res.json({
-        message: `Reversed ${totalReversed} inter-company vouchers for ${company.name} (parent: ${parentCompany.name})`,
-        reversed: totalReversed,
-        details,
-        processedCompanies: 1,
-      });
-    } catch (error: unknown) {
-      logger.error("Reverse PO credits error:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // POST /api/reverse-po-credits was retired in wave 16 (A): it hard-deleted
+  // every INTERCO-% voucher of a company named in the body, and parent
+  // vouchers matched by description, statement by statement with no
+  // transaction and no audit. Correct intercompany history by reversal.
 
   // ==========================================
   // Reset Company Data (Admin only)

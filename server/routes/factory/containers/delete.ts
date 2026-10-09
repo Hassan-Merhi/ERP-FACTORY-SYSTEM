@@ -24,6 +24,7 @@ import {
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
 import { removeContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
@@ -175,8 +176,13 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
           );
         if (containerVouchers.length > 0) {
           const vIds = containerVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-container-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
       });
 

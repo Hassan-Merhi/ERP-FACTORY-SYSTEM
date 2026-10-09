@@ -58,10 +58,10 @@ import { voucherEntries } from "@shared/schema";
 import type { DatabaseOrTransaction, DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
 } from "../accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx } from "../accounting/voucherRetirement";
 import { systemAccountIdsTx } from "../accounting/perpetualInventory/linkedJournal";
 import { resolveStoredFxRate } from "./currencyConversion";
 import { normFactoryEntry } from "./factoryVoucherEntryAmounts";
@@ -167,11 +167,12 @@ export async function removeContainerCommissionJournalTx(
            AND (voucher_number = ${containerCommissionVoucherNumber(containerId)}
                 OR voucher_number LIKE ${`${containerCommissionVoucherNumber(containerId)}-%`})`
   );
-  for (const { id } of ids) {
-    await deleteInfrastructurePostingIdentityForVoucherTx(tx, id);
-    await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${id}`);
-    await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id} AND company_id = ${companyId}`);
-  }
+  // Wave 16 (A): retired (soft delete, audited, number and identity released), not hard-deleted.
+  await retireVouchersTx(tx, {
+    companyId,
+    voucherIds: ids.map(({ id }) => id),
+    reason: "container-commission-journal-replaced",
+  });
 }
 
 /** The ledger account the container's live FACTORY-IMPORT voucher debits, else Factory Import Cost. */

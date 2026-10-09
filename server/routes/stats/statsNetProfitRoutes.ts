@@ -66,6 +66,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         hasMigratedEntries: _hasMigratedEntries,
         companyBaseCurrency,
         accountBalances,
+        profitAndLossBalances,
       } = reportData;
 
       // ============ NET POSITION CALCULATION ============
@@ -110,6 +111,7 @@ export function registerStatsNetProfitRoutes(app: Express) {
         codes: "erp",
         payrollCurrentBalanceMemo: true,
         banks: true,
+        missingAccounts: true,
       });
       // Ledger accounts a customer owns are left out: the engine rolls them
       // into the customer line added below.
@@ -203,7 +205,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       const incomeAccounts: { id: number; name: string; code: string; value: number; category: string }[] = [];
 
       for (const acc of companyAccounts) {
-        const netBalance = getAccountNetBalance(acc, accountBalances);
+        // The P&L pass leaves the fiscal closing journals out (wave 17 A), so a
+        // closed year's income and expenses are still reported here.
+        const netBalance = getAccountNetBalance(acc, profitAndLossBalances);
         // Expense accounts are stored in two legacy-compatible forms:
         //   accountType = "Indirect Expense" / "Direct Expense"
         //   accountType = "Expense" + subType = "Indirect Expense" / "Direct Expense"

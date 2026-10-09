@@ -1,7 +1,7 @@
 import { parseId, parseOptionalId } from "../../lib/parseId";
 import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
 import { logAudit } from "../helpers/auditHelpers";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../services/accounting/infrastructureVoucherIdentity";
+import { retireVouchersForRequestTx } from "../../services/accounting/voucherRetirement";
 
 export const ADVANCE_HAS_REPAYMENTS_MESSAGE =
   "This advance has repayments. Reverse the repayments first, then delete the advance.";
@@ -10,7 +10,7 @@ import { getClientDate } from "../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
 import { db } from "../../db";
 import { requireAuth } from "../../auth";
-import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, isNull, inArray } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -25,51 +25,10 @@ import {
   vouchers,
   voucherEntries,
 } from "@shared/schema";
-import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
-
-/** Prefer the factory-pinned company ID so cross-tab ERP company switches don't corrupt factory writes. */
-function getFactoryCompanyId(req: import("express").Request): number | undefined {
-  return req.session.factoryCompanyId || req.session.currentCompanyId;
-}
-
-/** Write a single daybook entry (factory audit log). */
-async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+import { getFactoryCompanyId, writeDaybookEntry } from "./advanceRouteHelpers";
+import { registerUnvoucheredAdvancesRoute, registerWorkerAdvanceBalanceRoute } from "./advanceReadRoutes";
 
 /** Find or create a ledger account by name for a company. Returns the account row.
  *  Skips soft-deleted accounts and handles race-condition unique-constraint failures. */
@@ -337,9 +296,8 @@ export function registerAdvanceManagementRoutes(app: Express) {
           );
         if (advanceVouchers.length > 0) {
           const vIds = advanceVouchers.map((v) => v.id);
-          for (const voucherId of vIds) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersForRequestTx(tx, req, companyId, vIds, "advance-delete-or-reverse");
         }
 
         await tx
@@ -446,9 +404,8 @@ export function registerAdvanceManagementRoutes(app: Express) {
               );
             const receiptIds = receiptVouchers.map((v) => v.id);
             if (receiptIds.length === 0) continue;
-            for (const voucherId of receiptIds) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-            await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, receiptIds));
-            await tx.delete(vouchers).where(inArray(vouchers.id, receiptIds));
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersForRequestTx(tx, req, companyId, receiptIds, "advance-delete-or-reverse");
           }
           await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.advanceId, id));
         }
@@ -493,47 +450,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
     }
   });
 
-  app.get("/api/factory/advances/unvouchered", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.query.companyId ? parseOptionalId(req.query.companyId) : getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const allAdvances = await db
-        .select({
-          id: factoryWorkerAdvances.id,
-          workerId: factoryWorkerAdvances.workerId,
-          advanceDate: factoryWorkerAdvances.advanceDate,
-          amount: factoryWorkerAdvances.amount,
-          remainingBalance: factoryWorkerAdvances.remainingBalance,
-          cashAccountId: factoryWorkerAdvances.cashAccountId,
-          notes: factoryWorkerAdvances.notes,
-          repaymentType: factoryWorkerAdvances.repaymentType,
-          workerName: factoryWorkers.fullName,
-        })
-        .from(factoryWorkerAdvances)
-        .innerJoin(factoryWorkers, eq(factoryWorkerAdvances.workerId, factoryWorkers.id))
-        .where(eq(factoryWorkerAdvances.companyId, companyId))
-        .orderBy(desc(factoryWorkerAdvances.advanceDate));
-
-      const existingVoucherAdvanceIds = await db
-        .select({ voucherNumber: vouchers.voucherNumber })
-        .from(vouchers)
-        .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE 'PAYMENT-ADV-%'`));
-
-      const voucheredIds = new Set<number>();
-      for (const v of existingVoucherAdvanceIds) {
-        const match = v.voucherNumber.match(/^PAYMENT-ADV-(\d+)-/);
-        if (match) voucheredIds.add(parseInt(match[1]));
-      }
-
-      const unvouchered = allAdvances.filter((a) => !voucheredIds.has(a.id) || a.cashAccountId === null);
-
-      res.json(unvouchered);
-    } catch (error: unknown) {
-      logger.error("Error fetching unvouchered advances:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerUnvoucheredAdvancesRoute(app);
 
   app.post("/api/factory/advances/post-accounting", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -866,31 +783,5 @@ export function registerAdvanceManagementRoutes(app: Express) {
   });
 
   // GET /api/factory/workers/:id/advance-balance - Get total outstanding advance balance
-  app.get("/api/factory/workers/:id/advance-balance", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.query.companyId ? parseOptionalId(req.query.companyId) : getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const workerId = parseId(req.params.id);
-      if (workerId === null) return res.status(400).json({ message: "Invalid id" });
-
-      const outstanding = await db
-        .select()
-        .from(factoryWorkerAdvances)
-        .where(
-          and(
-            eq(factoryWorkerAdvances.companyId, companyId),
-            eq(factoryWorkerAdvances.workerId, workerId),
-            eq(factoryWorkerAdvances.fullyPaid, false)
-          )
-        );
-
-      const totalBalance = sumMoney(outstanding.map((a) => a.remainingBalance));
-      res.json({ totalBalance: totalBalance.toFixed(2), count: outstanding.length });
-    } catch (error: unknown) {
-      logger.error("Error fetching advance balance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  // POST /api/factory/advances/repay-by-month - Bulk repay all outstanding advances for a given month
+  registerWorkerAdvanceBalanceRoute(app);
 }

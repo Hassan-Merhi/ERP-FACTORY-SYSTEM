@@ -65,7 +65,7 @@ async function advanceLegs(advanceId: number) {
     `SELECT ve.ledger_account_id, ve.debit_amount, ve.credit_amount
      FROM voucher_entries ve
      JOIN vouchers v ON v.id = ve.voucher_id
-     WHERE v.company_id = $1 AND v.voucher_number LIKE $2
+     WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND v.deleted_at IS NULL
      ORDER BY ve.id`,
     [ctx.companyId, `PAYMENT-ADV-${advanceId}-%`]
   );
@@ -295,9 +295,10 @@ describe("DELETE /api/factory/advances/:id", () => {
     // The posting has to go with it. Entries left behind are a permanent
     // one-sided amount in the trial balance.
     expect(await advanceLegs(advance.id)).toHaveLength(0);
-    const orphanVouchers = await pool.query(`SELECT id FROM vouchers WHERE voucher_number LIKE $1`, [
-      `PAYMENT-ADV-${advance.id}-%`,
-    ]);
+    const orphanVouchers = await pool.query(
+      `SELECT id FROM vouchers WHERE voucher_number LIKE $1 AND deleted_at IS NULL`,
+      [`PAYMENT-ADV-${advance.id}-%`]
+    );
     expect(orphanVouchers.rowCount).toBe(0);
   });
 

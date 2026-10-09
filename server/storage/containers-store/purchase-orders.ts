@@ -1,8 +1,8 @@
 import {
-  deleteInfrastructurePostingIdentityForVoucher,
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
 } from "../../services/accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
 import { resolvePoImportCreditTarget } from "../../services/accounting/poImportAccounting";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
@@ -365,75 +365,74 @@ export async function updatePurchaseOrder(id: number, updates: Partial<InsertPur
   return updated;
 }
 
-export async function deletePurchaseOrder(id: number): Promise<void> {
-  const [po] = await db.select().from(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id)).limit(1);
-  if (!po) throw new Error("Purchase order not found");
+/**
+ * Deletes a PO (and its container when it was the last PO) in one transaction.
+ * Wave 16 (A): the PO voucher and the container's charge vouchers are retired
+ * (soft delete with their lines, audited in this transaction, number and
+ * posting identity released), not hard-deleted.
+ */
+export async function deletePurchaseOrder(id: number, actor?: VoucherRetirementActor | null): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [po] = await tx.select().from(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id)).limit(1);
+    if (!po) throw new Error("Purchase order not found");
 
-  const containerId = po.containerId;
-  const poItemsTotal = toMoney(po.itemsTotal);
-  const poCharges = poChargesOf(po);
+    const containerId = po.containerId;
+    const poItemsTotal = toMoney(po.itemsTotal);
+    const poCharges = poChargesOf(po);
 
-  const [container] = await db.select().from(schema.containers).where(eq(schema.containers.id, containerId)).limit(1);
+    const [container] = await tx.select().from(schema.containers).where(eq(schema.containers.id, containerId)).limit(1);
 
-  // Perpetual inventory (wave 8.2): a deleted PO takes its goods-in-transit journal with it.
-  if (po.companyId) {
-    const poCompanyId = po.companyId;
-    await db.transaction((tx) => removePurchaseOrderGitTx(tx, poCompanyId, id));
-  }
-  await db.delete(schema.poLineItems).where(eq(schema.poLineItems.poId, id));
-  await db.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id));
+    // Perpetual inventory (wave 8.2): a deleted PO takes its goods-in-transit journal with it.
+    if (po.companyId) await removePurchaseOrderGitTx(tx, po.companyId, id);
+    await tx.delete(schema.poLineItems).where(eq(schema.poLineItems.poId, id));
+    await tx.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, id));
 
-  if (po.voucherId) {
-    try {
-      await deleteInfrastructurePostingIdentityForVoucher(db, po.voucherId);
-      await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, po.voucherId));
-      await db.delete(schema.vouchers).where(eq(schema.vouchers.id, po.voucherId));
-    } catch (_hardDeleteErr) {
-      try {
-        await db
-          .update(schema.vouchers)
-          .set({ deletedAt: new Date() })
-          .where(and(eq(schema.vouchers.id, po.voucherId), isNull(schema.vouchers.deletedAt)));
-      } catch (_softDeleteErr) {
-        // Already gone or soft-deleted
-      }
+    if (po.voucherId) {
+      await retireVouchersTx(tx, {
+        companyId: po.companyId,
+        voucherIds: [po.voucherId],
+        reason: "purchase-order-delete",
+        actor,
+      });
     }
-  }
 
-  const remainingPOs = await db
-    .select()
-    .from(schema.purchaseOrders)
-    .where(eq(schema.purchaseOrders.containerId, containerId))
-    .limit(1);
-
-  if (remainingPOs.length === 0 && container) {
-    const chargeVouchers = await db
+    const remainingPOs = await tx
       .select()
-      .from(schema.vouchers)
-      .where(
-        and(
-          eq(schema.vouchers.companyId, po.companyId),
-          sql`${schema.vouchers.description} LIKE ${"% - Container " + container.containerNumber}`
-        )
-      );
-    for (const chargeVoucher of chargeVouchers) {
-      await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, chargeVoucher.id));
-      await db.delete(schema.vouchers).where(eq(schema.vouchers.id, chargeVoucher.id));
+      .from(schema.purchaseOrders)
+      .where(eq(schema.purchaseOrders.containerId, containerId))
+      .limit(1);
+
+    if (remainingPOs.length === 0 && container) {
+      const chargeVouchers = await tx
+        .select({ id: schema.vouchers.id })
+        .from(schema.vouchers)
+        .where(
+          and(
+            eq(schema.vouchers.companyId, po.companyId),
+            sql`${schema.vouchers.description} LIKE ${"% - Container " + container.containerNumber}`
+          )
+        );
+      await retireVouchersTx(tx, {
+        companyId: po.companyId,
+        voucherIds: chargeVouchers.map((voucher) => voucher.id),
+        reason: "container-charge-voucher-removed-with-po",
+        actor,
+      });
+      await tx.delete(schema.containerCharges).where(eq(schema.containerCharges.containerId, containerId));
+      await tx.delete(schema.importLogs).where(eq(schema.importLogs.containerId, containerId));
+      await tx.delete(schema.containers).where(eq(schema.containers.id, containerId));
+    } else if (container) {
+      const newItemsTotal = MoneyDecimal.max(0, toMoney(container.itemsTotal).minus(poItemsTotal));
+      const newChargesTotal = MoneyDecimal.max(0, toMoney(container.chargesTotal).minus(poCharges));
+      const newGrandTotal = newItemsTotal.plus(newChargesTotal);
+      await tx
+        .update(schema.containers)
+        .set({
+          itemsTotal: newItemsTotal.toFixed(2),
+          chargesTotal: newChargesTotal.toFixed(2),
+          grandTotal: newGrandTotal.toFixed(2),
+        })
+        .where(eq(schema.containers.id, containerId));
     }
-    await db.delete(schema.containerCharges).where(eq(schema.containerCharges.containerId, containerId));
-    await db.delete(schema.importLogs).where(eq(schema.importLogs.containerId, containerId));
-    await db.delete(schema.containers).where(eq(schema.containers.id, containerId));
-  } else if (container) {
-    const newItemsTotal = MoneyDecimal.max(0, toMoney(container.itemsTotal).minus(poItemsTotal));
-    const newChargesTotal = MoneyDecimal.max(0, toMoney(container.chargesTotal).minus(poCharges));
-    const newGrandTotal = newItemsTotal.plus(newChargesTotal);
-    await db
-      .update(schema.containers)
-      .set({
-        itemsTotal: newItemsTotal.toFixed(2),
-        chargesTotal: newChargesTotal.toFixed(2),
-        grandTotal: newGrandTotal.toFixed(2),
-      })
-      .where(eq(schema.containers.id, containerId));
-  }
+  });
 }

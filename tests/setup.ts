@@ -165,6 +165,14 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM retail_cash_movements WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM retail_pos_payments WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM retail_accounting_settings WHERE company_id = $1", [company.id]);
+    // Wave 17 (D): reason accounts restrict ledger/bank accounts. Tolerated when the
+    // table is not there yet (a database the boot schema guard has not run on).
+    await pool
+      .query("DELETE FROM retail_cash_reason_accounts WHERE company_id = $1", [company.id])
+      .catch(() => undefined);
+    await pool
+      .query("DELETE FROM retail_inventory_openings WHERE company_id = $1", [company.id])
+      .catch(() => undefined);
     await db.delete(schema.inventory).where(eq(schema.inventory.companyId, company.id));
     await db
       .delete(schema.salesItems)

@@ -50,11 +50,8 @@ import { HttpError } from "../../lib/httpHandlers";
 import { MoneyDecimal } from "../../lib/money";
 import { findFactoryFxRateOnOrBefore, normalizeFactoryCurrency } from "../factory/factoryFxRateOnDate";
 import { normFactoryEntry } from "../factory/factoryVoucherEntryAmounts";
-import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
-  infrastructurePostingIdentity,
-  insertInfrastructureVoucherTx,
-} from "./infrastructureVoucherIdentity";
+import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "./infrastructureVoucherIdentity";
+import { retireVouchersTx } from "./voucherRetirement";
 import { customerLedgerAccountTx } from "./perpetualInventory/factoryInvoice";
 import { ledgerAccountByCodeTx } from "./perpetualInventory/linkedJournal";
 
@@ -153,11 +150,8 @@ export async function removeFactoryPosReceiptTx(tx: DbTransaction, companyId: nu
            AND (voucher_number = ${factoryPosReceiptVoucherNumber(saleId)}
                 OR (source_module = 'FACTORY_POS' AND voucher_number LIKE ${`FPOS-${saleId}-%`}))`
   );
-  for (const id of ids) {
-    await deleteInfrastructurePostingIdentityForVoucherTx(tx, id);
-    await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${id}`);
-    await tx.execute(sql`DELETE FROM vouchers WHERE id = ${id} AND company_id = ${companyId}`);
-  }
+  // Wave 16 (A): retired (soft delete, audited, number and identity released), not hard-deleted.
+  await retireVouchersTx(tx, { companyId, voucherIds: ids, reason: "factory-pos-receipt-replaced" });
 }
 
 export interface FactoryPosReceiptInput extends FactoryPosSaleAmounts {

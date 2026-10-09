@@ -8,7 +8,6 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 import {
   allocatePayrollAccountingAmounts,
   moneyFromCents,
@@ -33,6 +32,7 @@ import {
   writeDaybookEntry,
 } from "./_helpers";
 import { computeWorkerPayAmounts } from "./workerPayAmounts";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerPayrollGenerateRoutes(app: Express) {
   // POST /api/factory/payrolls/generate-bulk - Generate draft payrolls for multiple workers
@@ -257,11 +257,13 @@ export function registerPayrollGenerateRoutes(app: Express) {
             // Rebuilt PAYROLL-GEN vouchers can have a durable accounting posting
             // identity that references the voucher with ON DELETE RESTRICT. Remove
             // that marker first so regeneration can safely replace old vouchers.
-            for (const voucherId of vIds) {
-              await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-            }
-            await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-            await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: vIds,
+              reason: "payroll-generation-rebuild",
+              actor: sessionRetirementActor(req),
+            });
           }
 
           const desc = `Payroll expense: ${count} worker${count !== 1 ? "s" : ""} (${periodStart} – ${periodEnd})`;

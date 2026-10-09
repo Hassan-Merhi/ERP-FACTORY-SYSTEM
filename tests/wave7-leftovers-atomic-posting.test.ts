@@ -76,13 +76,14 @@ async function fixtureVoucher(
   });
 }
 
+// Live vouchers only: wave 16 (A) retires a removed voucher (soft delete, lines kept).
 async function voucherSides(where: string, params: unknown[]) {
   const result = await pool.query<{ id: number; voucher_number: string; debit: string; credit: string; total: string }>(
     `SELECT v.id, v.voucher_number, v.total_amount::text AS total,
             COALESCE(SUM(ve.debit_amount), 0)::numeric(20,2)::text AS debit,
             COALESCE(SUM(ve.credit_amount), 0)::numeric(20,2)::text AS credit
        FROM vouchers v LEFT JOIN voucher_entries ve ON ve.voucher_id = v.id
-      WHERE v.company_id = $1 AND ${where}
+      WHERE v.company_id = $1 AND v.deleted_at IS NULL AND ${where}
       GROUP BY v.id ORDER BY v.id`,
     [ctx.companyId, ...params]
   );

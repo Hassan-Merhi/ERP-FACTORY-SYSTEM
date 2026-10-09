@@ -106,21 +106,26 @@ export function registerAccountingIntegrityRoutes(app: Express) {
       if (codes !== undefined && (!Array.isArray(codes) || codes.some((code) => !known.has(String(code))))) {
         return res.status(400).json({ message: "Unknown system account code" });
       }
-      const statuses = await db.transaction((tx) =>
-        ensureSystemAccounts(tx, companyId, codes === undefined ? undefined : (codes as string[]))
-      );
-      const created = statuses.filter((status) => status.state === "created");
-      if (created.length > 0) {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "ledger_accounts",
-          recordIdentifier: "system-accounts",
-          changes: { created: { new: created } },
-        });
-      }
+      // Wave 16 (B): the created accounts are audited in the creating transaction.
+      const statuses = await db.transaction(async (tx) => {
+        const result = await ensureSystemAccounts(tx, companyId, codes === undefined ? undefined : (codes as string[]));
+        const created = result.filter((status) => status.state === "created");
+        if (created.length > 0) {
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "create",
+              tableName: "ledger_accounts",
+              recordIdentifier: "system-accounts",
+              changes: { created: { new: created } },
+            },
+            tx
+          );
+        }
+        return result;
+      });
       res.json({ statuses });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -167,23 +172,27 @@ export function registerAccountingIntegrityRoutes(app: Express) {
               )
             );
         }
-      });
-      if (fixable.length > 0) {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "ledger_accounts",
-          recordIdentifier: "account-type-normalization",
-          changes: {
-            accountType: {
-              old: fixable.map((account) => ({ id: account.id, type: account.accountType })),
-              new: fixable.map((account) => ({ id: account.id, type: account.canonicalType })),
+        // Wave 16 (B): audited in the same transaction.
+        if (fixable.length > 0) {
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "update",
+              tableName: "ledger_accounts",
+              recordIdentifier: "account-type-normalization",
+              changes: {
+                accountType: {
+                  old: fixable.map((account) => ({ id: account.id, type: account.accountType })),
+                  new: fixable.map((account) => ({ id: account.id, type: account.canonicalType })),
+                },
+              },
             },
-          },
-        });
-      }
+            tx
+          );
+        }
+      });
       res.json({ normalized: fixable.length, accounts: fixable });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -204,13 +213,21 @@ export function registerAccountingIntegrityRoutes(app: Express) {
   });
 
   // The apply re-derives the plan in its transaction and audits it there (wave 14);
-  // with the reviewed `planHash` it refuses a plan that changed since (409).
+  // it needs the reviewed `planHash` (400 without it, wave 17 C) and refuses a
+  // plan that changed since (409).
   app.post("/api/accounting/factory-fx-repair/apply", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const expectedPlanHash = typeof req.body?.planHash === "string" ? req.body.planHash : undefined;
+      // The reviewed plan's hash is required (wave 17 C, owner decision 4).
+      const expectedPlanHash = typeof req.body?.planHash === "string" ? req.body.planHash.trim() : "";
+      if (!expectedPlanHash) {
+        return res.status(400).json({
+          message: "The reviewed plan's planHash is required to apply the repair",
+          code: "FACTORY_FX_REPAIR_PLAN_HASH_REQUIRED",
+        });
+      }
       const plan = await applyFactoryFxLegacyRepair(companyId, {
         actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
         expectedPlanHash,

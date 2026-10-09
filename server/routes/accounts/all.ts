@@ -12,7 +12,7 @@ import { requireAuth } from "../../auth";
 import { getSupplierBalanceForContext, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { eq, and, sql, isNull, lt, inArray } from "drizzle-orm";
+import { eq, and, sql, isNull, lt, lte, inArray } from "drizzle-orm";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
@@ -108,7 +108,10 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
     const rawEndDate =
       typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-    const effectiveEndDate = rawEndDate && rawEndDate < asOfDate ? rawEndDate : asOfDate;
+    // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+    // an explicit endDate cuts the balances; without one they are everything
+    // posted, as every other balance card (it used to stop at the client's today).
+    const effectiveEndDate = rawEndDate;
 
     // A ledger account a customer owns shows that customer's balance from the
     // one balance engine (customer-owned opening counted once, its linked
@@ -139,7 +142,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       eq(vouchers.companyId, companyId),
       eq(vouchers.optional, false),
       isNull(vouchers.deletedAt),
-      sql`${voucherDay} <= ${effectiveEndDate}`,
+      ...(effectiveEndDate ? [lte(voucherDay, effectiveEndDate)] : []),
     ];
     const prePeriodCase = (column: typeof voucherEntries.debitAmount | typeof voucherEntries.creditAmount) =>
       balStartDate
@@ -418,11 +421,17 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             balanceSide: account.balanceSide ?? null,
             parentId: account.parentId ?? null,
           })),
-        asOfDate: effectiveEndDate,
+        asOfDate: effectiveEndDate ?? asOfDate,
+        allPosted: !effectiveEndDate,
       });
     }
 
-    res.json({ accounts: [...accounts, ...supplierAccountsList], asOfDate: effectiveEndDate });
+    // asOfDate stays a date for display; allPosted marks a balance of everything posted.
+    res.json({
+      accounts: [...accounts, ...supplierAccountsList],
+      asOfDate: effectiveEndDate ?? asOfDate,
+      allPosted: !effectiveEndDate,
+    });
   } catch (error: unknown) {
     res.status(500).json({ message: getErrorMessage(error) });
   }

@@ -32,7 +32,9 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../../services/accounting/durableFinancialOperation";
-import { factoryEntryAmountsOrLegacy } from "../../../../services/factory/factoryVoucherEntryAmounts";
+import { normFactoryEntry } from "../../../../services/factory/factoryVoucherEntryAmounts";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../../services/factory/factoryDocumentFxRate";
+import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
 
 export function registerFactorySupplierPaymentRoutes(app: Express) {
   app.get("/api/factory/supplier-payments", requireAuth, async (req: Request, res: Response) => {
@@ -103,6 +105,13 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
         if (!ownAccount) return res.status(404).json({ message: "Payment account not found" });
       }
 
+      // Wave 17 (D): a non-USD payment needs a confirmed factory rate on or
+      // before its date (409 otherwise); it is posted normalized at its own
+      // entered rate. It used to post the legacy shape when the rate was 1.
+      const postingRate = await factoryDocumentRate(db, companyId, payCurrency, String(parsed.date).slice(0, 10), {
+        rate: parsed.fxRateToUsd,
+      });
+
       const operationKey = resolveFinancialOperationKey(req);
       const operation = await withDurableFinancialOperation(
         {
@@ -123,10 +132,10 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           // amount is stored at four places; the voucher takes it at cents, half up.
           const payAmtStr = toMoney(payment.amount).toFixed(2);
           const payVoucherNum = `FACTORY-PAY-${payment.id}-${Date.now()}`;
-          // Both legs normalized at the payment's own rate (wave 6): the cash or
-          // bank leg used to carry the native amount in the USD columns.
+          // Both legs normalized at the payment's rate (wave 6, wave 17 D): the
+          // cash or bank leg used to carry the native amount in the USD columns.
           const payAmounts = (debit: string, credit: string) =>
-            factoryEntryAmountsOrLegacy(payment.currencyCode, debit, credit, payment.fxRateToUsd as string | null);
+            normFactoryEntry(payment.currencyCode, debit, credit, postingRate.rate);
 
           const [payVoucher] = await tx
             .insert(vouchers)
@@ -138,7 +147,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
               description: `Supplier payment – see factory payment #${payment.id}`,
               totalAmount: payAmtStr,
               currency: payment.currencyCode || "USD",
-              exchangeRate: toMoney((payment.fxRateToUsd as string) || "1").toString(),
+              exchangeRate: toMoney(postingRate.rate).toString(),
               sourceModule: "FACTORY",
               effectiveDate: (req.body.effectiveDate as string) || null,
             })
@@ -185,6 +194,7 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
       );
       res.json(operation.value);
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("Error creating supplier payment:", { error: error });
       res.status(financialOperationErrorStatus(error) === 500 ? 400 : financialOperationErrorStatus(error)).json({
         message: getErrorMessage(error),
@@ -218,8 +228,13 @@ export function registerFactorySupplierPaymentRoutes(app: Express) {
           .where(and(eq(vouchers.companyId, companyId), sql`${vouchers.voucherNumber} LIKE ${payVoucherPattern}`));
         if (payVouchers.length > 0) {
           const vIds = payVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-supplier-payment-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
         // Remove the original SUPPLIER_PAYMENT daybook entry (including legacy rows
         // written before referenceTable was populated).

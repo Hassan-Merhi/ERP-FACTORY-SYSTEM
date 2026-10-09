@@ -11,17 +11,10 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import { toMoney } from "../../../lib/money";
-import {
-  inventory,
-  stockItems,
-  stockGroups,
-  containers,
-  purchaseOrders,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { inventory, stockItems, stockGroups, containers, purchaseOrders, vouchers } from "@shared/schema";
 import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { handleLocationSummaryBandwidthProfile } from "./location-summary-bandwidth";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerLocationSummaryRoutes(app: Express) {
   // Stock Item Monthly Summary - Get aggregated monthly data for a stock item
@@ -286,11 +279,20 @@ export function registerLocationSummaryRoutes(app: Express) {
   // Cleanup endpoint to remove orphaned charge vouchers - admin only (destructive)
   app.post("/api/cleanup/orphaned-charges", requireAuth, requireRole("Admin"), async (req, res) => {
     try {
-      // Find all CHARGE vouchers
+      // Wave 16 (A): the current company's live CHARGE vouchers only (it read
+      // every company's), retired rather than hard-deleted.
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
       const chargeVouchers = await db
         .select()
         .from(vouchers)
-        .where(sql`${vouchers.voucherNumber} LIKE 'CHARGE-%'`);
+        .where(
+          and(
+            eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt),
+            sql`${vouchers.voucherNumber} LIKE 'CHARGE-%'`
+          )
+        );
 
       let deletedCount = 0;
 
@@ -304,14 +306,20 @@ export function registerLocationSummaryRoutes(app: Express) {
           .select()
           .from(purchaseOrders)
           .leftJoin(containers, eq(purchaseOrders.containerId, containers.id))
-          .where(eq(containers.containerNumber, containerNumber))
+          .where(and(eq(containers.containerNumber, containerNumber), eq(containers.companyId, companyId)))
           .limit(1);
 
         // If no POs for this container, delete the charge voucher
         if (remainingPOs.length === 0) {
-          await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, chargeVoucher.id));
-          await db.delete(vouchers).where(eq(vouchers.id, chargeVoucher.id));
-          deletedCount++;
+          const retired = await db.transaction((tx) =>
+            retireVouchersTx(tx, {
+              companyId,
+              voucherIds: [chargeVoucher.id],
+              reason: "orphaned-charge-voucher-cleanup",
+              actor: sessionRetirementActor(req),
+            })
+          );
+          deletedCount += retired.length;
         }
       }
 

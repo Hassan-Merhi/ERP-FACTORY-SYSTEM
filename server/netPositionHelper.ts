@@ -157,8 +157,9 @@ export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 10
  * liabilities, equity, income, suppliers and intercompany). An unknown type
  * keeps the old default, Cr.
  */
+/** The engine's sideless-opening rule: the type's usual side, Dr for a type the classifier does not know (wave 17 A). */
 function defaultOpeningSideSign(acc: AccountLike): 1 | -1 {
-  return defaultOpeningSide(acc.accountType, acc.subType) === "Dr" ? 1 : -1;
+  return defaultOpeningSide(acc.accountType, acc.subType) === "Cr" ? -1 : 1;
 }
 
 /**

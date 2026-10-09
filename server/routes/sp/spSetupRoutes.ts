@@ -5,7 +5,7 @@ import { requireAuth, requireRole } from "../../auth";
 import { eq, and, isNull, asc } from "drizzle-orm";
 import { ledgerAccounts, locations, bankAccounts } from "@shared/schema";
 import { requireSpCompany, getSpAccount, SP_ACCOUNTS } from "./spHelpers";
-import { getSpSupplierVoucherLinkGapCount, repairSpSupplierVoucherLinks } from "./spSupplierVoucherSync";
+import { ensureSpSupplierVoucherSyncTrigger, getSpSupplierVoucherLinkGapCount } from "./spSupplierVoucherSync";
 import { loadGoldenCoastAccounts, loadGoldenCoastSettings, loadCompanyAccountNames } from "./spGoldenCoastSetupRoutes";
 import { summarizeGoldenCoastAccountSetup } from "../../services/accounting/goldenCoastPhase2Accounts";
 
@@ -77,19 +77,19 @@ export function registerSpSetupRoutes(app: Express) {
         created.push("Default location: Main Warehouse");
       }
 
-      // Repair historical SP Goods-OTW vouchers and ensure future container
-      // supplier edits remain synchronized with the voucher header.
-      const repairedSupplierVoucherLinks = await repairSpSupplierVoucherLinks(companyId);
+      // Wave 16 (A): setup installs the link trigger and reports supplier links
+      // that differ; it no longer rewrites posted vouchers. They are repaired
+      // through the Owner preview/apply (/api/sp/admin/supplier-voucher-links/plan and /apply).
+      await ensureSpSupplierVoucherSyncTrigger();
+      const supplierVoucherLinkGapCount = await getSpSupplierVoucherLinkGapCount(companyId);
 
       res.json({
         created,
         existing,
-        repairedSupplierVoucherLinks,
+        repairedSupplierVoucherLinks: 0,
+        supplierVoucherLinkGapCount,
         requiredAccountCount: SP_ACCOUNTS.length,
-        message:
-          created.length > 0 || repairedSupplierVoucherLinks > 0
-            ? "Setup and supplier-link repair complete"
-            : "Already configured",
+        message: created.length > 0 ? "Setup complete" : "Already configured",
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

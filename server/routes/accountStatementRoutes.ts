@@ -17,14 +17,12 @@ import {
 } from "../lib/accountStatementExportSafety";
 import path from "path";
 import fs from "fs";
-import { eq, and, desc, isNotNull, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNotNull, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
 import { MoneyDecimal, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
-import { loadPartyOpeningSides } from "./helpers/partyOpeningSide";
-import { liveVoucherInCompany, voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
 import {
   loadCustomerLedgerEntryRows,
@@ -162,79 +160,39 @@ export function registerAccountStatementRoutes(app: Express) {
         });
       }
 
-      let rawOB = new MoneyDecimal(0);
-      let obSide = "Dr";
-      if (accountType === "ledger") {
-        const [acct] = await db
-          .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
-          .from(ledgerAccounts)
-          .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        rawOB = toMoney(acct.ob);
-        obSide = acct.side ?? "Dr";
-      } else if (accountType === "bank") {
-        const [acct] = await db
-          .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
-          .from(bankAccounts)
-          .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        rawOB = toMoney(acct.ob);
-        obSide = acct?.side ?? "Dr";
-      } else if (accountType === "supplier") {
+      if (accountType === "supplier") {
         // The balance engine's period opening (wave 13): the supplier's opening
         // with its side, counted in the supplier's own company only, plus the
         // lines the engine attributes to it before endDate. Cr positive.
         const party = await getPartyBalance(db, { companyId, kind: "supplier", id: accountId, from: endDate ?? null });
         return res.json({ balance: toMoney(party?.opening).negated().toNumber() });
-      } else if (accountType === "employee") {
-        const [acct] = await db
-          .select({ ob: employees.openingBalance })
-          .from(employees)
-          .where(and(eq(employees.id, accountId), eq(employees.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        rawOB = toMoney(acct.ob);
-        // employees.opening_balance_side, null → Cr.
-        obSide = (await loadPartyOpeningSides("employees", [accountId])).get(accountId) ?? "Cr";
-      } else if (accountType === "fixed-asset") {
-        const [acct] = await db
-          .select({ ob: fixedAssets.openingBalance })
-          .from(fixedAssets)
-          .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
-        if (!acct) return res.status(404).json({ message: "Account not found" });
-        rawOB = toMoney(acct.ob);
-        obSide = "Dr";
       }
 
-      const isSupplier = accountType === "supplier";
-      // Supplier balances are Cr positive, every other family Dr positive.
-      let balance = isSupplier
-        ? obSide === "Dr"
-          ? rawOB.negated()
-          : rawOB
-        : obSide === "Cr"
-          ? rawOB.negated()
-          : rawOB;
-
-      if (endDate) {
-        // Same rules as the statement list: posted vouchers of this company,
-        // dated COALESCE(effective_date, voucher_date).
-        const conditions = [
-          eq(entryColumn, accountId),
-          liveVoucherInCompany(companyId),
-          sql`${voucherBookedOnSql} < ${endDate}`,
-        ];
-        const [totals] = await db
-          .select({
-            totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}), 0)`,
-            totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}), 0)`,
-          })
-          .from(voucherEntries)
-          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(...conditions));
-
-        const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
-        balance = balance.plus(isSupplier ? net.negated() : net);
-      }
+      // Every other family opens at the balance engine's period opening (wave
+      // 17 A), Dr positive: the master's opening with its side (a sideless
+      // ledger opening takes its type's usual side, it was Dr), plus the lines
+      // the engine attributes to it before endDate, in this company's vouchers,
+      // by COALESCE(effective_date, voucher_date). Line ownership is the
+      // engine's (ledger > bank > fixed asset > employee): a line naming both a
+      // ledger account and a bank is the ledger account's, so it is no longer
+      // counted on the bank as well.
+      const engineKind = (
+        { ledger: "ledger", bank: "bank", "fixed-asset": "fixedAsset", employee: "employee" } as const
+      )[accountType as "ledger" | "bank" | "fixed-asset" | "employee"];
+      if (!engineKind) return res.json({ balance: 0 });
+      const masterTable = {
+        ledger: { table: ledgerAccounts, id: ledgerAccounts.id, company: ledgerAccounts.companyId },
+        bank: { table: bankAccounts, id: bankAccounts.id, company: bankAccounts.companyId },
+        fixedAsset: { table: fixedAssets, id: fixedAssets.id, company: fixedAssets.companyId },
+        employee: { table: employees, id: employees.id, company: employees.companyId },
+      }[engineKind];
+      const [master] = await db
+        .select({ id: masterTable.id })
+        .from(masterTable.table)
+        .where(and(eq(masterTable.id, accountId), eq(masterTable.company, companyId)));
+      if (!master) return res.status(404).json({ message: "Account not found" });
+      const party = await getPartyBalance(db, { companyId, kind: engineKind, id: accountId, from: endDate ?? null });
+      const balance = toMoney(party?.opening);
 
       res.json({ balance: balance.toNumber() });
     } catch (error: unknown) {

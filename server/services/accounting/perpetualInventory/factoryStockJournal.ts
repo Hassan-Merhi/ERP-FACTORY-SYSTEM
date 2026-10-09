@@ -14,10 +14,14 @@
  *   Dr/Cr Factory Finished Goods      value now less what the ledger holds
  *                                     (invoices and factory POS sales already
  *                                     credited it with the bales they sold)
- *      Cr the container's expense accounts   the raw material received since
- *                                     the previous journal (factory container
- *                                     receipts, USD value), spread over what
- *                                     the container's FACTORY- vouchers
+ *      Cr Factory Goods in Transit   a receipt of a container the opening
+ *                                     carried in transit, up to that amount
+ *      Cr the container's expense accounts   the rest of the raw material
+ *                                     received and not yet credited (factory
+ *                                     container receipts, USD value; back-dated,
+ *                                     edited and deleted receipts on the day
+ *                                     of the change, wave 17 B), spread over
+ *                                     what the container's FACTORY- vouchers
  *                                     expensed, or Factory Import Cost
  *      Dr/Cr Factory Waste and Write-off       the value changes writers tagged
  *      Dr/Cr Factory Stock Revaluation         by source since the previous
@@ -41,7 +45,7 @@ import type { DatabaseOrTransaction, DbTransaction } from "../../../db";
 import { db } from "../../../db";
 import { logger } from "../../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
+import { isPerpetualInventoryActive } from "./cutover";
 import { factoryStockValuation } from "./factoryValuation";
 import {
   claimFactoryStockEventsTx,
@@ -90,43 +94,150 @@ async function rows<T>(executor: DatabaseOrTransaction, query: ReturnType<typeof
   return (await executor.execute(query)).rows as unknown as T[];
 }
 
-function dayBefore(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - 1);
-  return d.toISOString().slice(0, 10);
-}
-
 export function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-/**
- * Credits for the raw material received in (after, through]: per container,
- * the receipt value spread over the expense accounts its FACTORY- vouchers
- * debited (Factory Import Cost when they debited none).
- */
-async function receiptCreditsTx(
-  tx: DbTransaction,
+/** What the daily journals credited for a container's receipts (wave 17 B evidence rows). */
+export const FACTORY_RECEIPT_CREDIT_KIND = "RECEIPT";
+const FACTORY_RECEIPT_CREDIT_SOURCE = "factory-receipt-credit";
+
+/** The containers the applied opening plan carried as factory goods in transit, with the amount. */
+export async function openingFactoryGoodsInTransitTx(
+  executor: DatabaseOrTransaction,
+  companyId: number
+): Promise<Map<number, Decimal>> {
+  const [row] = await rows<{ carried: unknown }>(
+    executor,
+    sql`SELECT opening_plan -> 'factoryGoodsInTransit' AS carried FROM gl_inventory_cutovers
+         WHERE company_id = ${companyId}`
+  );
+  const carried = new Map<number, Decimal>();
+  if (!row || !Array.isArray(row.carried)) return carried;
+  for (const entry of row.carried as Array<{ containerId: number; amount: string }>) {
+    carried.set(Number(entry.containerId), toMoney(entry.amount));
+  }
+  return carried;
+}
+
+/** What the journals of days on or before `through` credited per container (debit negative). */
+async function creditedReceiptsTx(
+  executor: DatabaseOrTransaction,
   companyId: number,
-  after: string,
-  through: string
-): Promise<LinkedJournalLine[]> {
+  through: string,
+  inclusive: boolean
+): Promise<Map<number, Decimal>> {
+  const credited = await rows<{ container_id: string; amount: string }>(
+    executor,
+    sql`
+      SELECT source_id AS container_id, SUM(amount)::text AS amount FROM factory_stock_value_events
+       WHERE company_id = ${companyId} AND kind = ${FACTORY_RECEIPT_CREDIT_KIND}
+         AND ${inclusive ? sql`journal_date <= ${through}::date` : sql`journal_date < ${through}::date`}
+       GROUP BY source_id
+    `
+  );
+  return new Map(credited.map((row) => [Number(row.container_id), toMoney(row.amount)]));
+}
+
+const clamp = (value: Decimal, max: Decimal): Decimal =>
+  value.isNegative() ? new MoneyDecimal(0) : value.gt(max) ? max : value;
+
+/**
+ * What the ledger holds in Factory Goods in Transit for the containers the
+ * opening carried, as of a date: the carried amounts less what the journals
+ * up to that date cleared with their receipts (the reconciliation's expected
+ * value).
+ */
+export async function factoryGoodsInTransitHeld(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  asOf: string
+): Promise<Decimal> {
+  const carried = await openingFactoryGoodsInTransitTx(executor, companyId);
+  if (carried.size === 0) return new MoneyDecimal(0);
+  const credited = await creditedReceiptsTx(executor, companyId, asOf, true);
+  let held: Decimal = new MoneyDecimal(0);
+  for (const [containerId, amount] of carried) {
+    held = held.plus(amount.minus(clamp(credited.get(containerId) ?? new MoneyDecimal(0), amount)));
+  }
+  return held.toDecimalPlaces(2);
+}
+
+/**
+ * Credits for the raw material received (wave 17 B, re-audit item 8):
+ * per container, what its receipts are worth now to the books after the
+ * cut-over less what earlier days' journals already credited for it, so a
+ * receipt entered back-dated, edited or deleted after its day's journal is
+ * credited (or reversed) in today's journal, on the change date; a past day's
+ * journal is never touched. A receipt counts when it is live and dated on or
+ * before `through`, and either dated on or after the cut-over or recorded
+ * after the cut-over was applied (the opening valued the others as raw stock);
+ * a receipt the opening valued that is deleted after the apply counts
+ * negatively (its stock left the valuation). Before: receipts were credited
+ * by receipt_date in (previous journal, today], so a back-dated receipt was
+ * never credited and an edit or delete never reversed.
+ *
+ * The credit of a container the opening carried as factory goods in transit
+ * goes to Factory Goods in Transit up to what the opening carried (wave 17 B,
+ * item 5), the rest is spread over the expense accounts its FACTORY- vouchers
+ * debited (Factory Import Cost when they debited none). Each container's
+ * credit is recorded (factory_stock_value_events, kind RECEIPT, dated and
+ * claimed by this journal; replaced when the journal is run again the same
+ * day) as the evidence of what was credited.
+ */
+async function receiptCreditsTx(tx: DbTransaction, companyId: number, through: string): Promise<LinkedJournalLine[]> {
+  await tx.execute(sql`
+    DELETE FROM factory_stock_value_events
+     WHERE company_id = ${companyId} AND kind = ${FACTORY_RECEIPT_CREDIT_KIND} AND journal_date = ${through}::date
+  `);
   const receipts = await rows<{ container_id: number; value: string }>(
     tx,
     sql`
-      SELECT container_id, COALESCE(SUM(receipt_value_usd), 0)::text AS value
-        FROM factory_container_receipts
-       WHERE company_id = ${companyId} AND deleted_at IS NULL
-         AND receipt_date > ${after}::date AND receipt_date <= ${through}::date
-       GROUP BY container_id
-       ORDER BY container_id
+      SELECT r.container_id,
+             COALESCE(SUM(CASE
+               WHEN r.deleted_at IS NULL AND r.receipt_date <= ${through}::date
+                    AND (r.receipt_date >= cut.effective_from OR r.created_at > cut.applied_at)
+                 THEN r.receipt_value_usd
+               WHEN r.deleted_at IS NOT NULL AND r.deleted_at > cut.applied_at
+                    AND r.receipt_date < cut.effective_from AND r.created_at <= cut.applied_at
+                 THEN -r.receipt_value_usd
+               ELSE 0 END), 0)::text AS value
+        FROM factory_container_receipts r
+        JOIN gl_inventory_cutovers cut ON cut.company_id = r.company_id
+       WHERE r.company_id = ${companyId}
+       GROUP BY r.container_id
+       ORDER BY r.container_id
     `
   );
+  const credited = await creditedReceiptsTx(tx, companyId, through, false);
+  const carried = await openingFactoryGoodsInTransitTx(tx, companyId);
   const credits = new Map<number, Decimal>();
+  const add = (accountId: number, amount: Decimal) =>
+    credits.set(accountId, (credits.get(accountId) ?? new MoneyDecimal(0)).plus(amount));
   let importCostAccountId: number | null = null;
+  let transitAccountId: number | null = null;
   for (const receipt of receipts) {
-    const value = toMoney(receipt.value).toDecimalPlaces(2);
-    if (!value.gt(0)) continue;
+    const before = credited.get(receipt.container_id) ?? new MoneyDecimal(0);
+    const value = toMoney(receipt.value).toDecimalPlaces(2).minus(before);
+    if (value.isZero()) continue;
+    await tx.execute(sql`
+      INSERT INTO factory_stock_value_events (company_id, event_date, kind, amount, source_type, source_id, journal_date)
+      VALUES (${companyId}, ${through}::date, ${FACTORY_RECEIPT_CREDIT_KIND}, ${value.toFixed(2)},
+              ${FACTORY_RECEIPT_CREDIT_SOURCE}, ${String(receipt.container_id)}, ${through}::date)
+    `);
+    // Factory goods in transit the opening carried for the container, used in receipt order.
+    const carriedAmount = carried.get(receipt.container_id);
+    const transit = carriedAmount
+      ? clamp(before.plus(value), carriedAmount).minus(clamp(before, carriedAmount))
+      : new MoneyDecimal(0);
+    if (!transit.isZero()) {
+      transitAccountId ??= (await systemAccountIdsTx(tx, companyId, ["FACTORY_GOODS_IN_TRANSIT"])).get(
+        "FACTORY_GOODS_IN_TRANSIT"
+      )!;
+      add(transitAccountId, transit);
+    }
+    const rest = value.minus(transit);
+    if (rest.isZero()) continue;
     const expensed = await rows<{ ledger_account_id: number; amount: string }>(
       tx,
       sql`
@@ -146,7 +257,7 @@ async function receiptCreditsTx(
       importCostAccountId ??= (await systemAccountIdsTx(tx, companyId, ["FACTORY_IMPORT_COST"])).get(
         "FACTORY_IMPORT_COST"
       )!;
-      credits.set(importCostAccountId, (credits.get(importCostAccountId) ?? new MoneyDecimal(0)).plus(value));
+      add(importCostAccountId, rest);
       continue;
     }
     // Spread by share; the last account takes the rounding remainder.
@@ -154,19 +265,26 @@ async function receiptCreditsTx(
     expensed.forEach((row, index) => {
       const share =
         index === expensed.length - 1
-          ? value.minus(allocated)
-          : value.times(toMoney(row.amount)).dividedBy(total).toDecimalPlaces(2);
+          ? rest.minus(allocated)
+          : rest.times(toMoney(row.amount)).dividedBy(total).toDecimalPlaces(2);
       allocated = allocated.plus(share);
-      credits.set(row.ledger_account_id, (credits.get(row.ledger_account_id) ?? new MoneyDecimal(0)).plus(share));
+      add(row.ledger_account_id, share);
     });
   }
   const zero = new MoneyDecimal(0);
-  return [...credits.entries()].map(([ledgerAccountId, amount]) => ({
-    ledgerAccountId,
-    debit: zero,
-    credit: amount,
-    narration: "Raw material received, capitalised from its expensed cost",
-  }));
+  return [...credits.entries()]
+    .filter(([, amount]) => !amount.isZero())
+    .map(([ledgerAccountId, amount]) => ({
+      ledgerAccountId,
+      debit: amount.isNegative() ? amount.negated() : zero,
+      credit: amount.isNegative() ? zero : amount,
+      narration:
+        ledgerAccountId === transitAccountId
+          ? "Factory goods in transit at the cut-over, received"
+          : amount.isNegative()
+            ? "Raw material receipt reversed: its capitalised cost back to expense"
+            : "Raw material received, capitalised from its expensed cost",
+    }));
 }
 
 /** Posts (replacing today's earlier one) the factory stock journal of a company. */
@@ -206,18 +324,8 @@ export async function syncFactoryStockJournalTx(
     return { code: account.code, target, ledgerBalance, amount: target.minus(ledgerBalance).toDecimalPlaces(2) };
   });
 
-  const [previous] = await rows<{ date: string | null }>(
-    tx,
-    sql`
-      SELECT MAX(voucher_date)::text AS date FROM vouchers
-       WHERE company_id = ${companyId} AND voucher_number LIKE ${`GL-FACTORY-STOCK-${companyId}-%`}
-         AND voucher_date < ${date}::date AND deleted_at IS NULL
-    `
-  );
-  const cutover = await getInventoryCutover(tx, companyId);
-  const after = previous?.date ?? dayBefore(cutover!.effectiveFrom);
-  const receiptLines = await receiptCreditsTx(tx, companyId, after, date);
-  const received = receiptLines.reduce((sum, line) => sum.plus(line.credit), new MoneyDecimal(0));
+  const receiptLines = await receiptCreditsTx(tx, companyId, date);
+  const received = receiptLines.reduce((sum, line) => sum.plus(line.credit).minus(line.debit), new MoneyDecimal(0));
 
   // Debits less credits must be zero: the variance closes the journal. A
   // tagged change of the stock value (a write-off is negative) is the opposite

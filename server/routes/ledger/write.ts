@@ -12,6 +12,16 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit } from "../_helpers";
 import { ledgerAccounts, customers, insertLedgerAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
+import { buildAuditChanges } from "../../services/audit";
+import { defaultOpeningSide } from "../../services/accounting/accountClassification";
+import {
+  accountHistoryErrorResponse,
+  assertAccountChangeAllowed,
+  countAccountLines,
+  lockAccountRow,
+  requestRole,
+} from "../../services/accounting/accountHistoryPolicy";
 
 const VALID_LEDGER_SUBTYPES: Record<string, string[]> = {
   Expense: ["Direct Expense", "Indirect Expense"],
@@ -99,7 +109,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
       const hasSide = parsed.openingBalanceSide && (parsed.openingBalanceSide as string) !== "";
 
       if (hasBalance && !hasSide) {
@@ -117,28 +127,34 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
         }
       }
 
-      const account = await storage.createLedgerAccount(parsed);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: parsed.companyId,
-          action: "create",
-          tableName: "ledger_accounts",
-          recordId: account.id,
-          recordIdentifier: account.name,
-          changes: {
-            name: { new: account.name },
-            code: { new: account.code },
-            accountType: { new: account.accountType },
-            subType: { new: account.subType || null },
-            openingBalance: { new: account.openingBalance || "0" },
-            openingBalanceSide: { new: account.openingBalanceSide || null },
+      // Wave 16 (B): created and audited in one transaction.
+      const account = await db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(ledgerAccounts)
+          .values({ ...parsed, code: parsed.code || `LA-${Date.now()}` })
+          .returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: parsed.companyId,
+            action: "create",
+            tableName: "ledger_accounts",
+            recordId: created.id,
+            recordIdentifier: created.name,
+            changes: {
+              name: { new: created.name },
+              code: { new: created.code },
+              accountType: { new: created.accountType },
+              subType: { new: created.subType || null },
+              openingBalance: { new: created.openingBalance || "0" },
+              openingBalanceSide: { new: created.openingBalanceSide || null },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+        return created;
+      });
       res.status(201).json(account);
     } catch (error: unknown) {
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
@@ -181,7 +197,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
 
       // Validate opening balance amount and side must both be present or both absent
-      const hasBalance = parsed.openingBalance && parseFloat(parsed.openingBalance) !== 0;
+      const hasBalance = parsed.openingBalance && !toMoney(parsed.openingBalance).isZero();
       const hasSide = parsed.openingBalanceSide && (parsed.openingBalanceSide as string) !== "";
 
       if (hasBalance && !hasSide) {
@@ -203,19 +219,47 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
 
       // Atomic: ledger update + reverse-sync to linked customer must succeed
-      // together or both roll back. Otherwise a sync failure would leave
-      // ledger.openingBalance and customer.openingBalance permanently out of
-      // sync — exactly the bug Phase 5 was meant to prevent.
+      // together or both roll back. Wave 16 (B): the account is locked, the
+      // history rules applied (an account with posted lines changes its opening
+      // only by an Admin or Owner, keeps its type category and its company),
+      // and the audit row is written in the same transaction.
+      const updates: Partial<typeof parsed> = { ...parsed };
+      delete updates.id;
+      if (updates.companyId === existingAccount.companyId) delete updates.companyId;
       const updatedAccount = await db.transaction(async (tx) => {
+        await lockAccountRow(tx, "ledger_accounts", accountId);
+        const [before] = await tx.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, accountId));
+        if (!before) throw new Error("Account not found");
+        const after = { ...before, ...updates };
+        assertAccountChangeAllowed({
+          role: requestRole(req),
+          lines: await countAccountLines(tx, [["ledger_account_id", accountId]]),
+          opening: {
+            before: { amount: before.openingBalance, side: before.openingBalanceSide },
+            after: { amount: after.openingBalance, side: after.openingBalanceSide },
+            defaultSide: defaultOpeningSide(before.accountType) ?? "Dr",
+          },
+          type: {
+            before: { accountType: before.accountType, subType: before.subType },
+            after: { accountType: after.accountType, subType: after.subType },
+          },
+          company: { before: before.companyId, after: updates.companyId },
+        });
+
         const [updated] = await tx
           .update(ledgerAccounts)
-          .set(parsed)
+          .set(updates)
           .where(eq(ledgerAccounts.id, accountId))
           .returning();
 
         if (parsed.openingBalance !== undefined || parsed.openingBalanceSide !== undefined) {
           const [linkedCust] = await tx
-            .select({ id: customers.id })
+            .select({
+              id: customers.id,
+              legalName: customers.legalName,
+              openingBalance: customers.openingBalance,
+              openingBalanceSide: customers.openingBalanceSide,
+            })
             .from(customers)
             .where(eq(customers.ledgerAccountId, accountId))
             .limit(1);
@@ -228,44 +272,63 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
               update.openingBalanceSide = updated.openingBalanceSide ?? "Dr";
             }
             if (Object.keys(update).length > 0) {
+              const changes = buildAuditChanges(linkedCust, { ...linkedCust, ...update }, [
+                "openingBalance",
+                "openingBalanceSide",
+              ]);
               await tx.update(customers).set(update).where(eq(customers.id, linkedCust.id));
+              if (Object.keys(changes).length > 0) {
+                await logAudit(
+                  {
+                    userId: req.session.userId!,
+                    username: req.session.username || "unknown",
+                    companyId: req.session.currentCompanyId!,
+                    action: "update",
+                    tableName: "customers",
+                    recordId: linkedCust.id,
+                    recordIdentifier: linkedCust.legalName,
+                    changes,
+                  },
+                  tx
+                );
+              }
             }
           }
         }
 
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "update",
+            tableName: "ledger_accounts",
+            recordId: updated.id,
+            recordIdentifier: updated.name,
+            changes: buildAuditChanges(before, updated, [
+              "name",
+              "code",
+              "companyId",
+              "accountType",
+              "subType",
+              "parentId",
+              "openingBalance",
+              "openingBalanceSide",
+              "openingBalanceCurrency",
+              "openingBalanceHistoricalRate",
+              "openingBalanceBaseAmount",
+              "active",
+            ]),
+          },
+          tx
+        );
         return updated;
       });
 
-      try {
-        const _ledChanges: Record<string, { old?: unknown; new?: unknown }> = {};
-        for (const _f of [
-          "name",
-          "code",
-          "accountType",
-          "subType",
-          "openingBalance",
-          "openingBalanceSide",
-          "active",
-        ] as const) {
-          if (String(existingAccount[_f] ?? "") !== String(updatedAccount[_f] ?? "")) {
-            _ledChanges[_f] = { old: existingAccount[_f], new: updatedAccount[_f] };
-          }
-        }
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "ledger_accounts",
-          recordId: updatedAccount.id,
-          recordIdentifier: updatedAccount.name,
-          changes: _ledChanges,
-        });
-      } catch {
-        /* non-fatal */
-      }
       res.json(updatedAccount);
     } catch (error: unknown) {
+      const refused = accountHistoryErrorResponse(error);
+      if (refused) return res.status(refused.status).json(refused.body);
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });

@@ -1,5 +1,6 @@
 import { db, sql, nonPartyAccountTypesSql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
+import { notFiscalClosingVoucher } from "../../../services/accounting/balances/periodReportRules";
 
 export const phase2QueryTypes = [
   "inventory_check",
@@ -441,6 +442,8 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL AND v.optional = false
           JOIN ledger_accounts la ON la.id = ve.ledger_account_id
           WHERE la.company_id = ${companyId}
+            AND v.company_id = ${companyId}
+            AND ${notFiscalClosingVoucher("v")}
             AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${from} AND ${to}
         `);
         const row = r.rows[0];

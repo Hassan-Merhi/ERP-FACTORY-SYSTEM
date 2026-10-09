@@ -4,6 +4,7 @@ import { db } from "../../db";
 import * as schema from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { reverseVoucherStockTx } from "../../services/inventory/voucherStockReversal";
+import { retireVouchersTx, type VoucherRetirementActor } from "../../services/accounting/voucherRetirement";
 import type { VoucherEntry, InsertVoucherEntry } from "@shared/schema";
 
 export async function createVoucherEntry(entry: InsertVoucherEntry): Promise<VoucherEntry> {
@@ -24,7 +25,13 @@ export async function deleteVoucherEntry(id: number): Promise<void> {
   await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.id, id));
 }
 
-export async function deleteVoucher(id: number): Promise<void> {
+/**
+ * Deletes a voucher the storage way: its stock moves back, its linked POs and
+ * their container charge vouchers go. Wave 16 (A): the vouchers are retired
+ * (soft delete with their lines, audited in this transaction, number and
+ * posting identity released, voucherRetirement.ts), not hard-deleted.
+ */
+export async function deleteVoucher(id: number, actor?: VoucherRetirementActor | null): Promise<void> {
   await db.transaction(async (tx) => {
     const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, id));
 
@@ -79,10 +86,12 @@ export async function deleteVoucher(id: number): Promise<void> {
                 sql`left(${schema.vouchers.voucherNumber}, ${prefix.length}) = ${prefix}`
               )
             );
-          for (const chargeVoucher of chargeVouchers) {
-            await tx.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, chargeVoucher.id));
-            await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, chargeVoucher.id));
-          }
+          await retireVouchersTx(tx, {
+            companyId: container.companyId,
+            voucherIds: chargeVouchers.map((chargeVoucher) => chargeVoucher.id),
+            reason: "container-charge-voucher-removed-with-po",
+            actor,
+          });
           const newItemsTotal = MoneyDecimal.max(0, toMoney(container.itemsTotal).minus(totals.itemsTotal));
           const newChargesTotal = new MoneyDecimal(0);
           const newGrandTotal = newItemsTotal.plus(newChargesTotal);
@@ -108,11 +117,15 @@ export async function deleteVoucher(id: number): Promise<void> {
       }
     }
 
-    await tx.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, id));
     await tx.execute(
       sql`DELETE FROM factory_daybook_entries WHERE reference_table = 'vouchers' AND reference_id = ${id}`
     );
-    await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, id));
+    await retireVouchersTx(tx, {
+      companyId: voucher.companyId,
+      voucherIds: [id],
+      reason: "storage-voucher-delete",
+      actor,
+    });
   });
 }
 

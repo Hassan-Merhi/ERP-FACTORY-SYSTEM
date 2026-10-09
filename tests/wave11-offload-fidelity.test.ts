@@ -49,11 +49,13 @@ let itemB: number;
 let itemC: number;
 let sequence = 0;
 
+/** A journal's lines; STOCK-IN-{container} reads its per-offload journals (wave 17 B). */
 async function journalLines(voucherNumber: string) {
   const { rows } = await pool.query(
     `SELECT la.code, ve.debit_amount::text AS d, ve.credit_amount::text AS c
        FROM vouchers v JOIN voucher_entries ve ON ve.voucher_id = v.id JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-      WHERE v.company_id = $1 AND v.voucher_number = $2 AND v.deleted_at IS NULL ORDER BY la.code, ve.id`,
+      WHERE v.company_id = $1 AND v.deleted_at IS NULL
+        AND (v.voucher_number = $2 OR ($2 LIKE 'STOCK-IN-%' AND v.voucher_number LIKE $2 || '-%')) ORDER BY la.code, ve.id`,
     [ctx.companyId, voucherNumber]
   );
   return rows.map((row) => [row.code, row.d, row.c]);

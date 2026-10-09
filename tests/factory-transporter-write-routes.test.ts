@@ -243,8 +243,17 @@ describe("DELETE /api/factory/transporters/:id/transactions/:txId", () => {
     expect(
       (await pool.query(`SELECT id FROM factory_transporter_transactions WHERE id = $1`, [charge.body.id])).rowCount
     ).toBe(0);
-    expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [voucherId])).rowCount).toBe(0);
-    expect((await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [voucherId])).rowCount).toBe(0);
+    expect(
+      (await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [voucherId])).rowCount
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+          [voucherId]
+        )
+      ).rowCount
+    ).toBe(0);
   });
 
   it("returns 404 for a transaction in another company", async () => {

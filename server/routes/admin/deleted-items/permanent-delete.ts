@@ -59,7 +59,7 @@ import {
   propertyPayments,
   factoryTransporterTransactions,
 } from "@shared/schema";
-import { eq, and, inArray, sql, type SQL } from "drizzle-orm";
+import { eq, and, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { STOCK_ITEM_HAS_HISTORY_MESSAGE, stockItemHasHistory } from "../../../services/inventory/stockItemHistory";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
@@ -169,6 +169,9 @@ export const ORPHANED_POS_POSTED_MESSAGE =
  */
 export const EMPLOYEE_HAS_HISTORY_MESSAGE =
   "This employee is named on voucher lines, salary advances or payroll, so it cannot be permanently deleted. Keep it in Deleted Items.";
+/** Wave 16 (A): a location whose inventory rows hold a quantity or a value keeps its record. */
+export const LOCATION_HAS_STOCK_MESSAGE =
+  "This location still holds stock (a quantity or a value), so it cannot be permanently deleted. Move or write off the stock first, or keep it in Deleted Items.";
 export const CUSTOMER_HAS_HISTORY_MESSAGE =
   "This customer is named on voucher lines or sales, so it cannot be permanently deleted. Keep it in Deleted Items.";
 
@@ -213,7 +216,38 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
 
       switch (type) {
         case "location":
-          await db.delete(locations).where(and(eq(locations.id, itemId), eq(locations.companyId, companyId)));
+          // Wave 16 (A): refused while any inventory row of the location holds
+          // a quantity or a value; the stock (and the ledger's inventory)
+          // would lose its location. One transaction, audited.
+          await db.transaction(async (tx) => {
+            const [location] = await tx
+              .select()
+              .from(locations)
+              .where(and(eq(locations.id, itemId), eq(locations.companyId, companyId)))
+              .for("update");
+            const held = await tx
+              .select({ id: inventory.id })
+              .from(inventory)
+              .where(
+                and(eq(inventory.locationId, itemId), or(ne(inventory.quantity, "0"), ne(inventory.totalValue, "0")))
+              )
+              .limit(1);
+            if (held.length > 0) throw new PermanentDeleteRefused(LOCATION_HAS_STOCK_MESSAGE);
+            await tx.delete(locations).where(and(eq(locations.id, itemId), eq(locations.companyId, companyId)));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "locations",
+                recordId: itemId,
+                recordIdentifier: location?.code ?? null,
+                changes: { permanentDelete: { new: true }, location: { old: location ?? null } },
+              },
+              tx
+            );
+          });
           break;
         case "stockItem":
           // Wave 15 (M9): an item with stock history (document lines, stock

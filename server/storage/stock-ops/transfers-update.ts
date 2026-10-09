@@ -1,19 +1,14 @@
 import Decimal from "decimal.js";
-import { eq, and, isNull, sql, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db } from "../../db";
-import { firstRow } from "../../lib/queryResult";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-
-/** An inventory row locked FOR UPDATE while a transfer/adjustment is rewritten. */
-type InventoryLockRow = { id: number; quantity: string; average_rate: string; total_value: string };
 import {
   addInventoryValues,
   inventoryMoney,
   inventoryQuantity,
   inventoryUnitCost,
   multiplyInventoryValues,
-  subtractInventoryValues,
   toInventoryDecimal,
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
@@ -35,6 +30,8 @@ import {
   reverseTransferLegExactTx,
 } from "../../services/inventory/conservedStockTransfer";
 import { assertNoBaleMirrorMovementTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import { adjustInventory, receiveInventoryAtValue, reverseInventoryByExactValue } from "../../inventoryHelper";
+import { lockInventoryRow } from "../inventoryRowLock";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -521,96 +518,102 @@ export async function updateStockAdjustment(
       let valueMoved: Decimal | null = null;
 
       if (!isOptional) {
-        const currentInventoryRows = await tx.execute(
-          sql`SELECT id, quantity, average_rate, total_value
-              FROM inventory
-              WHERE company_id = ${newLocation.companyId}
-                AND location_id = ${locationId}
-                AND stock_item_id = ${item.stockItemId}
-              FOR UPDATE`
-        );
-        const currentInventory = firstRow<InventoryLockRow>(currentInventoryRows);
-
-        if (currentInventory) {
-          const currentQty = toInventoryDecimal(currentInventory.quantity);
-          const currentRate = toInventoryDecimal(currentInventory.average_rate);
-          const currentValue = toInventoryDecimal(currentInventory.total_value);
-          let newQty: Decimal;
-          let newValue: Decimal;
-          let newRate: Decimal;
-
-          if (isProduction) {
-            // If this is an unchanged production line, reapply the historical
-            // stored value byte-for-byte. Otherwise the requested rate defines
-            // the replacement production value. In both cases the live stored
-            // total_value — not qty × rounded average_rate — is the base.
-            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
-            const oldRate = historicalMatch ? toInventoryDecimal(historicalMatch.rate) : toInventoryDecimal(0);
-            if (historicalMatch && sameDecimal(oldQty, absoluteQuantity) && sameDecimal(oldRate, requestedRate)) {
-              actualTotalAmount = toInventoryDecimal(historicalMatch.totalAmount).abs();
-              actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : requestedRate;
-            }
-
-            newQty = addInventoryValues(currentQty, absoluteQuantity);
-            newValue = addInventoryValues(currentValue, actualTotalAmount);
-            newRate = newQty.isPositive() ? newValue.dividedBy(newQty) : actualRate;
-            totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
-          } else {
-            // Preserve the historical value for the overlap with the old issue;
-            // only additional quantity is costed from the live inventory that
-            // exists after the historical issue was reversed.
-            const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
-            const oldValue = historicalMatch
-              ? lineValueMoved({ valueMoved: historicalMatch.valueMoved, total: historicalMatch.totalAmount })
-              : toInventoryDecimal(0);
-            const overlapQty = historicalMatch ? Decimal.min(oldQty, absoluteQuantity) : toInventoryDecimal(0);
-            const preservedValue =
-              historicalMatch && oldQty.gt(0) ? oldValue.times(overlapQty).dividedBy(oldQty) : toInventoryDecimal(0);
-            const extraQty = absoluteQuantity.minus(overlapQty);
-
-            const qtyAfterPreserved = currentQty.minus(overlapQty);
-            const valueAfterPreserved = Decimal.max(currentValue.minus(preservedValue), toInventoryDecimal(0));
-            const liveExtraRate = qtyAfterPreserved.gt(0)
-              ? valueAfterPreserved.dividedBy(qtyAfterPreserved)
-              : currentRate;
-            const extraValue = multiplyInventoryValues(extraQty, liveExtraRate);
-
-            actualTotalAmount = addInventoryValues(preservedValue, extraValue);
-            actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : liveExtraRate;
-            newQty = subtractInventoryValues(currentQty, absoluteQuantity);
-            newValue = newQty.isPositive()
-              ? Decimal.max(currentValue.minus(actualTotalAmount), toInventoryDecimal(0))
-              : toInventoryDecimal(0);
-            newRate = newQty.isPositive() && newValue.gt(0) ? newValue.dividedBy(newQty) : actualRate;
-            totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
+        // Wave 17 B: reapplied through the value-exact path the create uses
+        // (adjustInventory / reverseInventoryByExactValue), on the negative-stock
+        // model: the line records the exact value it moved (value_moved), a
+        // consumption may take the row short (a negative layer at the cost
+        // memory, like the create), and nothing is clamped at zero. The hand
+        // arithmetic here used to clamp the value at 0, leave value on a
+        // zero-quantity row, and refuse a consumption with no stock row.
+        const currentInventory = await lockInventoryRow(tx, locationId, item.stockItemId);
+        if (isProduction) {
+          // An unchanged production line reapplies its historical stored value
+          // exactly; otherwise the requested rate defines the receipt value.
+          const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
+          const oldRate = historicalMatch ? toInventoryDecimal(historicalMatch.rate) : toInventoryDecimal(0);
+          if (historicalMatch && sameDecimal(oldQty, absoluteQuantity) && sameDecimal(oldRate, requestedRate)) {
+            actualTotalAmount = toInventoryDecimal(historicalMatch.totalAmount).abs();
+            actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : requestedRate;
           }
-
-          await tx
-            .update(schema.inventory)
-            .set({
-              quantity: inventoryQuantity(newQty),
-              averageRate: inventoryUnitCost(Decimal.max(newRate, toInventoryDecimal(0))),
-              totalValue: inventoryMoney(Decimal.max(newValue, toInventoryDecimal(0))),
-              lastUpdated: new Date(),
-            })
-            .where(eq(schema.inventory.id, currentInventory.id));
-          valueMoved = toInventoryDecimal(inventoryMoney(Decimal.max(newValue, toInventoryDecimal(0))))
-            .minus(toInventoryDecimal(inventoryMoney(currentValue)))
-            .abs();
-        } else if (isProduction) {
-          await tx.insert(schema.inventory).values({
-            companyId: newLocation.companyId,
+          const moved = await receiveInventoryAtValue(tx, {
             locationId,
             stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(absoluteQuantity),
-            averageRate: inventoryUnitCost(requestedRate),
-            totalValue: inventoryMoney(actualTotalAmount),
-            lastUpdated: new Date(),
+            quantity: absoluteQuantity,
+            value: inventoryMoney(actualTotalAmount),
+            companyId: newLocation.companyId,
+            sourceVoucherType: "Stock Adjustment",
+            sourceVoucherId: existingAdjustment.voucherId,
           });
-          valueMoved = toInventoryDecimal(inventoryMoney(actualTotalAmount));
+          valueMoved = toInventoryDecimal(moved.valueDelta).abs();
           totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
         } else {
-          throw new Error(`Insufficient inventory at location ${locationId} for stock item ${item.stockItemId}.`);
+          // The overlap with the old issue goes out at its historical value
+          // exactly; only additional quantity is costed from the live row, as
+          // the create costs it (its cost memory, else the item's opening rate
+          // as the provisional cost of a shortage).
+          const oldQty = historicalMatch ? toInventoryDecimal(historicalMatch.quantity).abs() : toInventoryDecimal(0);
+          const oldValue = historicalMatch
+            ? lineValueMoved({ valueMoved: historicalMatch.valueMoved, total: historicalMatch.totalAmount })
+            : toInventoryDecimal(0);
+          const overlapQty = historicalMatch ? Decimal.min(oldQty, absoluteQuantity) : toInventoryDecimal(0);
+          const preservedValue = toInventoryDecimal(
+            inventoryMoney(
+              historicalMatch && oldQty.gt(0) ? oldValue.times(overlapQty).dividedBy(oldQty) : toInventoryDecimal(0)
+            )
+          );
+          const extraQty = absoluteQuantity.minus(overlapQty);
+          let moved = toInventoryDecimal(0);
+          if (overlapQty.gt(0) && currentInventory) {
+            const preserved = await reverseInventoryByExactValue(
+              tx,
+              locationId,
+              item.stockItemId,
+              overlapQty.toNumber(),
+              preservedValue,
+              newLocation.companyId,
+              "Stock Adjustment",
+              existingAdjustment.voucherId
+            );
+            moved = moved.plus(toInventoryDecimal(preserved?.valueDelta ?? 0));
+          }
+          const issueQty = overlapQty.gt(0) && currentInventory ? extraQty : absoluteQuantity;
+          let extraValue = toInventoryDecimal(0);
+          if (issueQty.gt(0)) {
+            const row = currentInventory ? await lockInventoryRow(tx, locationId, item.stockItemId) : null;
+            let incomingRate: number | undefined;
+            let extraRate: Decimal;
+            if (row) {
+              extraRate = Decimal.max(toInventoryDecimal(row.average_rate), 0);
+            } else {
+              const [stockItem] = await tx
+                .select()
+                .from(schema.stockItems)
+                .where(eq(schema.stockItems.id, item.stockItemId));
+              if (!stockItem) throw new Error(`Stock item ${item.stockItemId} not found.`);
+              extraRate = toInventoryDecimal(stockItem.openingRate);
+              if (!extraRate.isPositive()) throw new Error(`Stock item "${stockItem.name}" has no opening rate set.`);
+              incomingRate = extraRate.toNumber();
+            }
+            const issued = await adjustInventory(
+              tx,
+              locationId,
+              item.stockItemId,
+              issueQty.negated().toNumber(),
+              newLocation.companyId,
+              incomingRate,
+              "Stock Adjustment",
+              existingAdjustment.voucherId
+            );
+            moved = moved.plus(toInventoryDecimal(issued.valueDelta));
+            extraValue = multiplyInventoryValues(issueQty, extraRate);
+          }
+          actualTotalAmount = addInventoryValues(
+            overlapQty.gt(0) && currentInventory ? preservedValue : toInventoryDecimal(0),
+            extraValue
+          );
+          actualRate = absoluteQuantity.gt(0) ? actualTotalAmount.dividedBy(absoluteQuantity) : requestedRate;
+          valueMoved = moved.abs();
+          totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
         }
       }
 

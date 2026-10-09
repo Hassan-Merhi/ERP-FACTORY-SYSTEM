@@ -582,7 +582,8 @@ describe("amounts not yet in the ledger", () => {
       session: { currentCompanyId: factory },
       params: { id: String(fCustLedger) },
     });
-    expect(ledgerBalance.body).toEqual({ balance: 240, customerId: fCustomer, notInLedgerTotal: 610 });
+    // Wave 17 A: the response carries the as-of date (null: everything posted).
+    expect(ledgerBalance.body).toEqual({ balance: 240, customerId: fCustomer, notInLedgerTotal: 610, asOf: null });
 
     let accounts: { accounts: Array<Record<string, unknown>> } = { accounts: [] };
     const res = {

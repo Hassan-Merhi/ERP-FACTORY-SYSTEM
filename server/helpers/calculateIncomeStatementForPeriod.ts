@@ -16,6 +16,7 @@ import { round2 } from "../netPositionHelper";
 import { MoneyDecimal, toMoney } from "../lib/money";
 import { classifyAccountType, expenseCategory } from "../services/accounting/accountClassification";
 import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../services/accounting/balances/periodReportRules";
 
 export interface IncomeLineItem {
   label: string;
@@ -67,6 +68,8 @@ export async function calculateIncomeStatementForPeriod(
         eq(vouchers.companyId, companyId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
+        // The fiscal closing journal is not period activity (wave 17 A).
+        notFiscalClosingVoucherSql,
         // One date basis with the engine (wave 13, R2).
         gte(voucherBookedOnSql, fromDate),
         lte(voucherBookedOnSql, toDate)

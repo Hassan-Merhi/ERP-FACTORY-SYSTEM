@@ -22,13 +22,14 @@ import {
   factoryContainerReceipts,
   factorySuppliers,
 } from "@shared/schema";
-import { eq, and, or, inArray, ilike } from "drizzle-orm";
+import { eq, and, or, ilike } from "drizzle-orm";
 import { registerRawStockReverseOffloadRoute } from "./rawStockReverseOffloadRoute";
 import { computeOffloadCosting } from "./offloadCosting";
 import { applySubsequentReceipt } from "./subsequentReceipt";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
 import { allLedgerAccountsOwned } from "../../helpers/companyOwnership";
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 /** A request amount as the number parseFloat read it (NaN when it does not parse). */
 function requestNumber(value: unknown): number {
@@ -571,8 +572,13 @@ export function registerRawStockOffloadRoutes(app: Express) {
           );
         if (existingPreOffloadVouchers.length > 0) {
           const vIds = existingPreOffloadVouchers.map((v) => v.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: vIds,
+            reason: "factory-raw-stock-offload-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
         await tx
           .delete(factoryDaybookEntries)

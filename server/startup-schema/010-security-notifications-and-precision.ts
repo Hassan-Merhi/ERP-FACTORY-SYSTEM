@@ -156,44 +156,12 @@ export const securityNotificationsAndPrecision: string[] = [
         DELETE FROM factory_daybook_entries
           WHERE tx_type = 'OFFLOAD_RAW_STOCK'
             AND reference_id IN (SELECT id FROM factory_raw_material_adjustments WHERE deleted_at IS NOT NULL);
-        -- Orphaned voucher_entries for soft-deleted adjustments (FACTORY-MANUAL-{id}-* pattern)
-        DELETE FROM voucher_entries
-          WHERE voucher_id IN (
-            SELECT v.id FROM vouchers v
-            JOIN factory_raw_material_adjustments a ON v.voucher_number LIKE 'FACTORY-MANUAL-' || a.id || '-%'
-            WHERE v.source_module = 'FACTORY' AND a.deleted_at IS NOT NULL
-          );
-        DELETE FROM vouchers
-          WHERE source_module = 'FACTORY'
-            AND id IN (
-              SELECT v.id FROM vouchers v
-              JOIN factory_raw_material_adjustments a ON v.voucher_number LIKE 'FACTORY-MANUAL-' || a.id || '-%'
-              WHERE a.deleted_at IS NOT NULL
-            );
+        -- Wave 16 (A): the vouchers of soft-deleted adjustments and containers are no
+        -- longer hard-deleted here (posted history, no audit); only the daybook mirror is.
         -- Orphaned factory daybook entries for soft-deleted containers
         DELETE FROM factory_daybook_entries
           WHERE tx_type IN ('FREIGHT','OTHER_CHARGE','DUTY','CONTAINER_IMPORT','PURCHASE')
             AND reference_id IN (SELECT id FROM factory_containers WHERE deleted_at IS NOT NULL);
-        -- Orphaned voucher_entries for soft-deleted containers
-        DELETE FROM voucher_entries
-          WHERE voucher_id IN (
-            SELECT v.id FROM vouchers v
-            JOIN factory_containers fc ON v.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-COMM-'   || fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-FREIGHT-'|| fc.id || '-%'
-                                       OR v.voucher_number LIKE 'FACTORY-OC-'     || fc.id || '-%'
-            WHERE v.source_module = 'FACTORY' AND fc.deleted_at IS NOT NULL
-          );
-        DELETE FROM vouchers
-          WHERE source_module = 'FACTORY'
-            AND id IN (
-              SELECT v.id FROM vouchers v
-              JOIN factory_containers fc ON v.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-COMM-'   || fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-FREIGHT-'|| fc.id || '-%'
-                                         OR v.voucher_number LIKE 'FACTORY-OC-'     || fc.id || '-%'
-              WHERE fc.deleted_at IS NOT NULL
-            );
         INSERT INTO migrations_log(key) VALUES ('orphan-factory-daybook-cleanup-v1');
       END IF;
     END $$`,

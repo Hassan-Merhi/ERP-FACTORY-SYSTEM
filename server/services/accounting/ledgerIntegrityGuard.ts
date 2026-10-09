@@ -2,6 +2,36 @@ import type { Pool } from "pg";
 
 import { logger } from "../../lib/logger";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { accountTypeNamesOf } from "./accountClassification";
+
+function typeList(...classes: Parameters<typeof accountTypeNamesOf>): string {
+  return accountTypeNamesOf(...classes)
+    .map((name) => {
+      if (!/^[a-z ]+$/.test(name)) throw new Error("ledger_integrity_unsafe_type_name");
+      return `'${name}'`;
+    })
+    .join(", ");
+}
+
+/**
+ * The engine's side for a sideless ledger opening (ledgerBalanceEngine
+ * defaultOpeningSide: accountClassification.defaultOpeningSide of the account
+ * type, Dr for a type the classifier does not know): Dr for assets and
+ * expenses, Cr for liabilities, equity and income; a party account Dr for a
+ * customer, Cr otherwise. Generated from the classifier's type lists, so the
+ * SQL cannot drift from it.
+ */
+const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_ledger_opening_side(p_type text)
+   RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
+     SELECT CASE
+              WHEN t IN (${typeList("asset", "expense")}) THEN 'Dr'
+              WHEN t IN (${typeList("liability", "equity", "income")}) THEN 'Cr'
+              WHEN t = 'customer' THEN 'Dr'
+              WHEN t IN (${typeList("party")}) THEN 'Cr'
+              ELSE 'Dr'
+            END
+       FROM (SELECT lower(btrim(COALESCE(p_type, ''))) AS t) normalized
+   $fn$`;
 
 /**
  * Ledger integrity guards (2026-10 accounting audit, wave 4).
@@ -14,12 +44,17 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  *   - foreign keys (ON DELETE RESTRICT) from voucher_entries to ledger, bank and
  *     fixed-asset accounts, so an account with lines cannot be hard-deleted;
  *   - CHECK constraints: amounts non-negative, at most one side per line;
- *   - a BEFORE trigger on voucher_entries: every account a line names belongs
+ *   - a BEFORE trigger on voucher_entries: a new line (or one whose targets
+ *     change) has one owner under the engine's attribution — one account
+ *     (ledger, bank or fixed asset; a bank with its linked ledger counts once)
+ *     with at most one party tag, or one party alone (wave 16 B); every
+ *     account a line names belongs
  *     to the line's company (a supplier may belong to the parent company or a
  *     subsidiary: the group shares suppliers in intercompany POs) and is not
  *     deleted;
  *   - a BEFORE trigger on ledger_accounts: an account whose balance (opening
- *     plus posted lines) is not zero cannot be soft-deleted.
+ *     plus posted lines; a sideless opening on its type's side, as the engine
+ *     reads it — wave 16 B) is not zero cannot be soft-deleted.
  *
  * Existing rows are left as they are: constraints are NOT VALID and the line
  * trigger only checks accounts when they are set or changed. The accounting
@@ -64,6 +99,8 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      target_company integer;
      target_deleted timestamp;
      parent_company integer;
+     account_targets integer;
+     party_targets integer;
    BEGIN
      IF erp_ledger_integrity_bypassed() THEN
        RETURN NEW;
@@ -76,6 +113,29 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
              OLD.employee_id, OLD.customer_id, OLD.factory_supplier_id)
      THEN
        RETURN NEW;
+     END IF;
+
+     -- Wave 16 (B): a new line, or a line whose targets change, must have one
+     -- owner under the engine's attribution (partyLineRules.ts): exactly one
+     -- account (ledger, bank or fixed asset) with at most one party tag
+     -- (supplier, employee, factory supplier or customer) — a tag on an
+     -- account line belongs to the account — or, with no account, exactly one
+     -- party. The one pair of accounts the engine defines is a bank with its
+     -- own linked ledger (the line counts on the ledger). A line with no target
+     -- (no owner) or with two accounts or two parties is refused. Existing
+     -- lines are exempt: an update that leaves the targets alone returned above.
+     account_targets := num_nonnulls(NEW.ledger_account_id, NEW.bank_account_id, NEW.fixed_asset_id);
+     party_targets := num_nonnulls(NEW.supplier_id, NEW.employee_id, NEW.factory_supplier_id, NEW.customer_id);
+     IF account_targets = 2 AND NEW.fixed_asset_id IS NULL
+        AND EXISTS (SELECT 1 FROM bank_accounts b
+                     WHERE b.id = NEW.bank_account_id AND b.linked_ledger_id = NEW.ledger_account_id) THEN
+       account_targets := 1;
+     END IF;
+     IF NOT ((account_targets = 1 AND party_targets <= 1) OR (account_targets = 0 AND party_targets = 1)) THEN
+       RAISE EXCEPTION USING ERRCODE = '23514',
+         MESSAGE = format('VOUCHER_LINE_TARGET_REQUIRED: a voucher line must post to exactly one account (line of voucher %s names %s accounts and %s parties)',
+                          NEW.voucher_id, account_targets, party_targets),
+         HINT = 'Choose one ledger, bank or fixed asset (optionally tagged with one party), or one party.';
      END IF;
 
      IF NEW.ledger_account_id IS NOT NULL THEN
@@ -169,6 +229,7 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
   // silently leave the books (company 10 lost ~1.5M of activity this way). An
   // account emptied by a journal (account migration does this) can be retired;
   // its history stays on its vouchers.
+  DEFAULT_OPENING_SIDE_FUNCTION,
   `CREATE OR REPLACE FUNCTION erp_ledger_account_delete_guard() RETURNS trigger
    LANGUAGE plpgsql AS $fn$
    DECLARE
@@ -177,7 +238,10 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      IF erp_ledger_integrity_bypassed() OR NEW.deleted_at IS NULL OR OLD.deleted_at IS NOT NULL THEN
        RETURN NEW;
      END IF;
-     SELECT (CASE WHEN OLD.opening_balance_side = 'Cr' THEN -1 ELSE 1 END) * COALESCE(OLD.opening_balance, 0)
+     -- Wave 16 (B): a sideless opening takes the engine's side for the type (it assumed Dr).
+     SELECT (CASE WHEN COALESCE(NULLIF(OLD.opening_balance_side, ''),
+                                erp_default_ledger_opening_side(OLD.account_type)) = 'Cr'
+                  THEN -1 ELSE 1 END) * COALESCE(OLD.opening_balance, 0)
             + COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)
        INTO balance
        FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
@@ -204,7 +268,7 @@ const INSTALL_LOCK_KEY = 741_220_263;
  * take no locks on the ledger tables (ADD CONSTRAINT and CREATE TRIGGER take
  * strong table locks even when they end up changing nothing).
  */
-export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v1";
+export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v2";
 
 // A schema push drops constraints it does not know about while the version
 // comment survives, so the constraints are checked as well as the version.

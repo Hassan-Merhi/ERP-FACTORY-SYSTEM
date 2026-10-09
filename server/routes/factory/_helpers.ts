@@ -1,9 +1,7 @@
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { AUTO_FILL_REF_TABLE } from "../../services/factory/daybookSourceIntegrity";
 import {
-  factoryFxRates,
   factoryDaybookEntries,
   ledgerAccounts,
   customerOrderBales,
@@ -30,28 +28,8 @@ import { systemAccountDefinition } from "../../services/accounting/systemAccount
 import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 import { withFactoryValuationEventTx } from "../../services/factory/factoryStockValueEvents";
 import { resolveMixSourcePricingBasis } from "../../services/factory/mixSourcePricingBasis";
-import {
-  findFactoryFxRateOnOrBefore,
-  recordedFactoryFxRateForDate,
-  storedFactoryFxRateOnOrBefore,
-} from "../../services/factory/factoryFxRateOnDate";
-
-function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
-  try {
-    const url = new URL(baseUrl);
-    const allowedDomains = ["api.frankfurter.app"];
-    if (!allowedDomains.includes(url.hostname)) throw new Error("Invalid host");
-    if (!["http:", "https:"].includes(url.protocol)) throw new Error("Invalid protocol");
-    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateISO)) throw new Error("Invalid parameter");
-    if (!/^[A-Z]{3}$/.test(currencyCode)) throw new Error("Invalid parameter");
-    url.pathname = `/${dateISO}`;
-    url.searchParams.set("from", currencyCode);
-    url.searchParams.set("to", "USD");
-    return url.href;
-  } catch {
-    throw new Error("Invalid URL");
-  }
-}
+import { findFactoryFxRateOnOrBefore } from "../../services/factory/factoryFxRateOnDate";
+import { resolveFactoryFxRateToUsd } from "../../services/factory/factoryFxRateReadOnly";
 
 export async function writeDaybookEntry(
   dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -122,52 +100,22 @@ export async function writeDaybookEntry(
 }
 
 /**
- * The factory rate (USD per unit) for a currency on a date (wave 8.4
- * continuation: date-aware). Precedence:
- *   1. the latest manual rate dated on or before `dateISO`;
- *   2. the rate already recorded for exactly that date (auto);
- *   3. the external historical rate for that date, recorded (auto, dated
- *      `dateISO`) so the same rate is used again;
- *   4. when the external source fails, the latest recorded rate dated on or
- *      before `dateISO`.
- * A rate dated after the transaction is never used (it used to take the most
- * recent manual rate whatever its date); with none of the above it throws.
+ * The factory rate (USD per unit) for a currency on a date, for posting flows.
+ * Precedence (resolveFactoryFxRateToUsd): the latest manual rate dated on or
+ * before `dateISO`; the rate recorded (auto) for exactly that date; the
+ * external historical rate for that date; when the external source fails, the
+ * latest recorded rate dated on or before `dateISO`. A rate dated after the
+ * transaction is never used; with none of the above it throws.
+ *
+ * Wave 17 C (owner decision 1): it never writes. A fetched external rate used
+ * to be recorded as an `auto` row by this lookup (and by the GET routes that
+ * call it); the posting now carries the rate it used on its own document, and
+ * a fetched rate becomes a recorded rate only through the audited Admin/Owner
+ * action (POST /api/factory/fx-rates/fetched, saveFetchedFactoryFxRate).
  */
 export async function getOrFetchFxRateToUsd(companyId: number, currencyCode: string, dateISO: string): Promise<string> {
   if (currencyCode === "USD") return "1";
-  const currency = currencyCode.toUpperCase();
-
-  const manualRate = await storedFactoryFxRateOnOrBefore(db, companyId, currency, dateISO, "manual");
-  if (manualRate) return manualRate.rate;
-
-  const existing = await recordedFactoryFxRateForDate(db, companyId, currency, dateISO);
-  if (existing) return existing;
-
-  try {
-    const response = await fetch(buildValidatedUrl("https://api.frankfurter.app", dateISO, currency));
-    if (!response.ok) throw new Error(`FX API returned ${response.status}`);
-    const data = await response.json();
-    const rate = data?.rates?.USD;
-    if (!rate || isNaN(rate)) throw new Error("Invalid rate from FX API");
-
-    const rateStr = String(rate);
-    await db.insert(factoryFxRates).values({
-      companyId,
-      currencyCode: currency,
-      rateToUsd: rateStr,
-      effectiveDate: dateISO,
-      source: "auto",
-    });
-
-    return rateStr;
-  } catch (err: unknown) {
-    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, currency, dateISO);
-    if (fallback) return fallback.rate;
-    throw new Error(
-      `No FX rate available for ${dateISO}/${currencyCode}. External API error: ${getErrorMessage(err)}`,
-      { cause: err }
-    );
-  }
+  return (await resolveFactoryFxRateToUsd(companyId, currencyCode, dateISO)).rate;
 }
 
 export async function getOrCreateLedgerAccount(

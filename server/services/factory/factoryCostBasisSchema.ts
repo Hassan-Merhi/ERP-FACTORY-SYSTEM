@@ -6,9 +6,12 @@
  *   - factory_pos_sale_bales: the bales each factory POS sale took;
  *   - factory_stock_value_events: factory stock value changes tagged by
  *     source for the daily factory stock journal;
- *   - factory_bale_recost_runs: applied, Owner-confirmed bale re-costs.
+ *   - factory_bale_recost_runs: applied, Owner-confirmed bale re-costs;
+ *   - factory_v3_loads.customer_order_id: the invoice a V3 load finalize
+ *     created (wave 17 B).
  *
- * Every statement is CREATE ... IF NOT EXISTS (no table rewrite). The routes
+ * Every statement is idempotent (CREATE ... IF NOT EXISTS, a column added only
+ * when missing; no table rewrite). The routes
  * that write these tables cannot work without them, so a failure is fatal,
  * like the required wave-11 columns (inventoryFidelitySchema.ts).
  */
@@ -52,6 +55,17 @@ export const FACTORY_COST_BASIS_DDL: readonly string[] = [
      applied_at timestamp NOT NULL DEFAULT now()
    )`,
   `CREATE INDEX IF NOT EXISTS factory_bale_recost_runs_company_idx ON factory_bale_recost_runs (company_id)`,
+  // Wave 17 B: the factory invoice a V3 load finalize created (re-finalize is
+  // idempotent on it). A nullable column, added only when missing, so a
+  // repeated boot takes no table lock.
+  `DO $v3_load_order$ BEGIN
+     IF to_regclass('factory_v3_loads') IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'factory_v3_loads' AND column_name = 'customer_order_id'
+     ) THEN
+       ALTER TABLE factory_v3_loads ADD COLUMN customer_order_id integer;
+     END IF;
+   END $v3_load_order$`,
 ];
 
 /** Creates the tables. Throws on failure (see the module comment). */

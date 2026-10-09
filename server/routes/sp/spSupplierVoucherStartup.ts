@@ -1,28 +1,30 @@
 import { runWithDatabaseMaintenanceScope } from "../../services/security/databaseScopeRuntimeContext";
-import { ensureSpSupplierVoucherSyncTrigger, repairSpSupplierVoucherLinks } from "./spSupplierVoucherSync";
+import { ensureSpSupplierVoucherSyncTrigger } from "./spSupplierVoucherSync";
 
 type SpSupplierVoucherStartupDependencies = {
   ensureTrigger: () => Promise<void>;
-  repairLinks: () => Promise<number>;
-  runMaintenanceScope: (reason: string, callback: () => Promise<number>) => Promise<number>;
+  runMaintenanceScope: (reason: string, callback: () => Promise<void>) => Promise<void>;
 };
 
 const defaultDependencies: SpSupplierVoucherStartupDependencies = {
   ensureTrigger: ensureSpSupplierVoucherSyncTrigger,
-  repairLinks: () => repairSpSupplierVoucherLinks(),
   runMaintenanceScope: (reason, callback) => runWithDatabaseMaintenanceScope(reason, callback),
 };
 
 /**
- * Runs the process-owned Supplier Partner voucher-link startup repair with an
- * explicit maintenance identity. Request-time setup/migration repairs continue
- * to use their verified tenant scope and never pass through this helper.
+ * Installs the Supplier Partner voucher-link trigger at startup (DDL only),
+ * with an explicit maintenance identity.
+ *
+ * Wave 16 (A): startup no longer repairs voucher supplier links. The repair
+ * rewrote supplier_id on posted vouchers and lines of every company in
+ * maintenance scope with no audit. Mismatches are listed by the integrity
+ * diagnostic and repaired only through the Owner preview/apply
+ * (GET /api/sp/admin/supplier-voucher-links/plan, POST …/apply).
  */
 export async function runSpSupplierVoucherStartup(
   dependencies: SpSupplierVoucherStartupDependencies = defaultDependencies
-): Promise<number> {
-  return dependencies.runMaintenanceScope("sp-supplier-voucher-sync-startup", async () => {
+): Promise<void> {
+  await dependencies.runMaintenanceScope("sp-supplier-voucher-sync-startup", async () => {
     await dependencies.ensureTrigger();
-    return dependencies.repairLinks();
   });
 }

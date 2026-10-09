@@ -17,6 +17,7 @@ import { vouchers, voucherEntries } from "@shared/schema";
 import { _npsCached, _npsSetCache } from "./reportsNetProfitCache";
 import { netProfitSection, type NetProfitSection } from "./netProfitExcelSheets";
 import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../services/accounting/balances/periodReportRules";
 import { MoneyDecimal, toMoney } from "../lib/money";
 
 type BreakdownAccount = { id: number; code: string | null; name: string };
@@ -94,6 +95,8 @@ export async function loadNetProfitDrillDown(
     eq(vouchers.companyId, companyId),
     eq(vouchers.optional, false),
     isNull(vouchers.deletedAt),
+    // The fiscal closing journal is not period profit (wave 17 A).
+    notFiscalClosingVoucherSql,
     inArray(voucherEntries.ledgerAccountId, accountIds),
   ];
   if (startDate) conditions.push(gte(voucherBookedOnSql, startDate));

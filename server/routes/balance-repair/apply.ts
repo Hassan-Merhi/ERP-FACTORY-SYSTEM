@@ -21,6 +21,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { ApplySnapshot, findOrCreateLedgerAccount, parseNum } from "./_helpers";
 import { resultRows } from "../../lib/queryResult";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerBalanceRepairApplyRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/apply ────────────────────────────────
@@ -278,10 +279,20 @@ export function registerBalanceRepairApplyRoutes(app: Express) {
           });
           snapshot.transfersDeleted.push(transferSnap);
 
-          // Delete: transfer first (FK restrict), then entries, then voucher
-          await db.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
-          await db.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${orphanedVid}`);
-          await db.execute(sql`DELETE FROM vouchers WHERE id = ${orphanedVid}`);
+          // Transfer row first, then the orphaned voucher. Wave 16 (A): the
+          // voucher is retired (soft delete with its lines, audited, number
+          // released) in the same transaction, not hard-deleted.
+          await db.transaction(async (tx) => {
+            await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, Number(row.id)));
+            if (orphVoucher) {
+              await retireVouchersTx(tx, {
+                companyId: orphVoucher.companyId,
+                voucherIds: [orphanedVid],
+                reason: "balance-repair-orphaned-transfer-voucher",
+                actor: sessionRetirementActor(req),
+              });
+            }
+          });
         }
 
         // ── 4. Fix deposit flags ──────────────────────────────────────────────

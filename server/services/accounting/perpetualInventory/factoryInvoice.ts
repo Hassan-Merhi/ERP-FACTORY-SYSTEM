@@ -20,15 +20,34 @@
  * the invoice they were missing.
  *
  * The journal is derived from the order's current state and replaced whole by
- * syncFactoryInvoiceTx, which finalize, dispatch invoicing, un-finalize and
- * every path that re-prices a finalized order call. An invoice in a currency
- * other than USD (a dispatch batch can carry one, with no rate stored) posts
- * nothing and is listed by listUnpostedFactoryInvoices.
+ * syncFactoryInvoiceTx, which finalize, dispatch invoicing, the V3 load
+ * finalize, un-finalize and every path that re-prices a finalized order call.
+ *
+ * An invoice in a currency other than USD (a dispatch batch can carry one)
+ * posts at the company's confirmed factory rate dated on or before the invoice
+ * date (wave 17 B, owner decision 3): the latest manual rate, else the latest
+ * recorded (auto) rate, never a later one (findFactoryFxRateOnOrBefore, the
+ * factory POS rule). Its lines are normalized like the factory POS receipt:
+ * USD base in debit/credit, the native amounts in transaction_*, the factory
+ * rate (USD per unit) as the historical rate. The receivable and the revenue
+ * are in the invoice currency; the cost of the bales is USD (bale cost is USD
+ * material cost), so the COGS lines are USD lines of the same voucher. An
+ * invoice with no such rate is refused (409 FACTORY_INVOICE_RATE_UNCONFIRMED)
+ * before anything is posted, and one already finalized without a journal is
+ * listed by listUnpostedFactoryInvoices. Before: such an invoice posted
+ * nothing and was only listed.
  */
 import { sql } from "drizzle-orm";
 
+import type Decimal from "decimal.js";
+import { voucherEntries } from "@shared/schema";
+
 import type { DatabaseOrTransaction, DbTransaction } from "../../../db";
+import { HttpError } from "../../../lib/httpHandlers";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { findFactoryFxRateOnOrBefore, normalizeFactoryCurrency } from "../../factory/factoryFxRateOnDate";
+import { normFactoryEntry } from "../../factory/factoryVoucherEntryAmounts";
+import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "../infrastructureVoucherIdentity";
 import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
 import {
   isSupplierPartnerCompany,
@@ -36,9 +55,30 @@ import {
   postLinkedJournalTx,
   removeLinkedJournalTx,
   systemAccountIdsTx,
+  type LinkedJournalLine,
 } from "./linkedJournal";
 
 export const FACTORY_INVOICE_SOURCE = "perpetual-factory-invoice";
+
+export const FACTORY_INVOICE_RATE_UNCONFIRMED = "FACTORY_INVOICE_RATE_UNCONFIRMED" as const;
+export const FACTORY_INVOICE_RATE_UNCONFIRMED_MESSAGE =
+  "This invoice is in a currency with no confirmed exchange rate on or before its date. Enter the factory exchange rate for that currency first.";
+
+/** A factory invoice the ledger cannot carry (no confirmed rate): refused before anything is posted. */
+export class FactoryInvoiceRateRefusalError extends HttpError {
+  readonly code = FACTORY_INVOICE_RATE_UNCONFIRMED;
+  constructor(
+    readonly currency: string,
+    readonly invoiceDate: string
+  ) {
+    super(409, FACTORY_INVOICE_RATE_UNCONFIRMED_MESSAGE);
+    this.name = "FactoryInvoiceRateRefusalError";
+  }
+
+  get body() {
+    return { code: this.code, message: this.message, currency: this.currency, invoiceDate: this.invoiceDate };
+  }
+}
 
 /**
  * Voucher numbers are unique across companies while each company runs its own
@@ -110,7 +150,6 @@ export async function syncFactoryInvoiceTx(
   );
   if (!order || order.status !== "FINALIZED" || order.deleted_at !== null || !order.invoice_number) return null;
   if (!order.invoice_date || !(await isPerpetualInventoryActive(tx, companyId, order.invoice_date))) return null;
-  if ((order.currency ?? "USD").toUpperCase() !== "USD") return null;
   if (await isSupplierPartnerCompany(tx, companyId)) return null;
 
   // Charges with their own CHARGE- voucher already debit the customer.
@@ -138,6 +177,9 @@ export async function syncFactoryInvoiceTx(
   );
   const cogs = toMoney(cost?.cost ?? 0).toDecimalPlaces(2);
   if (receivable.isZero() && cogs.isZero()) return null;
+  const currency = normalizeFactoryCurrency(order.currency);
+  const rate = await findFactoryFxRateOnOrBefore(tx, companyId, currency, order.invoice_date);
+  if (!rate) throw new FactoryInvoiceRateRefusalError(currency, order.invoice_date);
 
   const zero = new MoneyDecimal(0);
   const accounts = await systemAccountIdsTx(tx, companyId, ["COGS", "FACTORY_FINISHED_GOODS"]);
@@ -153,40 +195,120 @@ export async function syncFactoryInvoiceTx(
   const invoice = order.invoice_number;
   const debitReceivable = receivable.isNegative() ? zero : receivable;
   const creditReceivable = receivable.isNegative() ? receivable.negated() : zero;
-  return postLinkedJournalTx(tx, {
+  const invoiceLines: LinkedJournalLine[] = [
+    {
+      ledgerAccountId: customerAccountId,
+      customerId: order.customer_id,
+      debit: debitReceivable,
+      credit: creditReceivable,
+      narration: ["Factory invoice", invoice].join(" - "),
+    },
+    {
+      ledgerAccountId: revenueAccountId,
+      debit: creditReceivable,
+      credit: debitReceivable,
+      narration: ["Factory bale sales", invoice].join(" - "),
+    },
+  ];
+  const costLines: LinkedJournalLine[] = [
+    {
+      ledgerAccountId: accounts.get("COGS")!,
+      debit: cogs,
+      credit: zero,
+      narration: ["Cost of bales sold", invoice].join(" - "),
+    },
+    {
+      ledgerAccountId: accounts.get("FACTORY_FINISHED_GOODS")!,
+      debit: zero,
+      credit: cogs,
+      narration: ["Bales invoiced", invoice].join(" - "),
+    },
+  ];
+  const description = ["Factory invoice", invoice].join(" - ");
+  const identity = { sourceType: FACTORY_INVOICE_SOURCE, sourceId: orderId };
+  if (currency === "USD") {
+    return postLinkedJournalTx(tx, {
+      companyId,
+      voucherNumber: number,
+      voucherDate: order.invoice_date,
+      description,
+      identity,
+      lines: [...invoiceLines, ...costLines],
+    });
+  }
+  return postForeignCurrencyInvoiceTx(tx, {
     companyId,
     voucherNumber: number,
     voucherDate: order.invoice_date,
-    description: ["Factory invoice", invoice].join(" - "),
-    identity: { sourceType: FACTORY_INVOICE_SOURCE, sourceId: orderId },
-    lines: [
-      {
-        ledgerAccountId: customerAccountId,
-        customerId: order.customer_id,
-        debit: debitReceivable,
-        credit: creditReceivable,
-        narration: ["Factory invoice", invoice].join(" - "),
-      },
-      {
-        ledgerAccountId: revenueAccountId,
-        debit: creditReceivable,
-        credit: debitReceivable,
-        narration: ["Factory bale sales", invoice].join(" - "),
-      },
-      {
-        ledgerAccountId: accounts.get("COGS")!,
-        debit: cogs,
-        credit: zero,
-        narration: ["Cost of bales sold", invoice].join(" - "),
-      },
-      {
-        ledgerAccountId: accounts.get("FACTORY_FINISHED_GOODS")!,
-        debit: zero,
-        credit: cogs,
-        narration: ["Bales invoiced", invoice].join(" - "),
-      },
-    ],
+    description,
+    identity,
+    currency,
+    rate: rate.rate,
+    nativeLines: invoiceLines,
+    usdLines: costLines,
   });
+}
+
+/**
+ * A non-USD invoice's journal (decision 3): the receivable and revenue lines in
+ * the invoice currency at the factory rate, the cost lines in USD, every line
+ * normalized (USD base in debit/credit, native amounts in transaction_*).
+ * The receivable and the revenue are the same native amount at the same rate,
+ * and the cost lines are equal USD amounts, so the voucher balances exactly.
+ */
+async function postForeignCurrencyInvoiceTx(
+  tx: DbTransaction,
+  params: {
+    companyId: number;
+    voucherNumber: string;
+    voucherDate: string;
+    description: string;
+    identity: { sourceType: string; sourceId: number };
+    currency: string;
+    rate: string;
+    nativeLines: LinkedJournalLine[];
+    usdLines: LinkedJournalLine[];
+  }
+): Promise<number | null> {
+  const nonZero = (line: LinkedJournalLine) => !line.debit.isZero() || !line.credit.isZero();
+  const rows = [
+    ...params.nativeLines.filter(nonZero).map((line) => ({ line, currency: params.currency, rate: params.rate })),
+    ...params.usdLines.filter(nonZero).map((line) => ({ line, currency: "USD", rate: "1" })),
+  ].map(({ line, currency, rate }) => ({
+    line,
+    amounts: normFactoryEntry(currency, line.debit.toFixed(2), line.credit.toFixed(2), rate),
+  }));
+  if (rows.length === 0) return null;
+  const sum = (pick: (amounts: (typeof rows)[number]["amounts"]) => string): Decimal =>
+    rows.reduce((total, row) => total.plus(pick(row.amounts)), new MoneyDecimal(0));
+  const debits = sum((amounts) => amounts.debitAmount);
+  if (!debits.eq(sum((amounts) => amounts.creditAmount)))
+    throw new Error("A perpetual-inventory journal does not balance");
+
+  const { voucher } = await insertInfrastructureVoucherTx(
+    tx,
+    {
+      companyId: params.companyId,
+      voucherNumber: params.voucherNumber,
+      voucherType: "Journal",
+      voucherDate: params.voucherDate,
+      description: params.description,
+      totalAmount: debits.toDecimalPlaces(2).toFixed(2),
+      currency: params.currency,
+      exchangeRate: params.rate,
+    },
+    infrastructurePostingIdentity(params.identity.sourceType, params.identity.sourceId)
+  );
+  await tx.insert(voucherEntries).values(
+    rows.map(({ line, amounts }) => ({
+      voucherId: voucher.id,
+      ledgerAccountId: line.ledgerAccountId,
+      ...(line.customerId ? { customerId: line.customerId } : {}),
+      ...amounts,
+      narration: line.narration,
+    }))
+  );
+  return voucher.id;
 }
 
 export interface UnpostedFactoryInvoice {
@@ -200,8 +322,9 @@ export interface UnpostedFactoryInvoice {
 
 /**
  * Finalized invoices dated on or after the company's cut-over that carry no
- * ledger journal: today only invoices in a currency other than USD, which have
- * no exchange rate to post at.
+ * ledger journal: an invoice in a currency with no confirmed factory rate on
+ * or before its date (finalized before wave 17 B, when such an invoice was
+ * not refused), or any other invoice left unposted.
  */
 export async function listUnpostedFactoryInvoices(
   executor: DatabaseOrTransaction,
@@ -227,21 +350,27 @@ export async function listUnpostedFactoryInvoices(
          AND COALESCE(co.finalized_at, co.created_at)::date >= ${cutover.effectiveFrom}::date
          AND NOT EXISTS (
            SELECT 1 FROM vouchers v
-            WHERE v.company_id = ${companyId} AND v.voucher_number = 'INV-GL-' || ${companyId}::text || '-' || co.id::text
+            WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL
+              AND v.voucher_number = 'INV-GL-' || ${companyId}::text || '-' || co.id::text
          )
        ORDER BY co.id
     `
   );
-  return result
-    .filter((row) => !toMoney(row.grand_total).isZero())
-    .map((row) => ({
+  const unposted: UnpostedFactoryInvoice[] = [];
+  for (const row of result) {
+    if (toMoney(row.grand_total).isZero()) continue;
+    const currency = normalizeFactoryCurrency(row.currency);
+    const rated = await findFactoryFxRateOnOrBefore(executor, companyId, currency, row.invoice_date);
+    unposted.push({
       orderId: row.id,
       invoiceNumber: row.invoice_number,
       invoiceDate: row.invoice_date,
-      currency: (row.currency ?? "USD").toUpperCase(),
+      currency,
       grandTotal: toMoney(row.grand_total).toFixed(2),
-      reason: (row.currency ?? "USD").toUpperCase() !== "USD" ? "currency without an exchange rate" : "not posted",
-    }));
+      reason: rated ? "not posted" : "no confirmed exchange rate on or before the invoice date",
+    });
+  }
+  return unposted;
 }
 
 /** Re-syncs the invoice journal of every order whose charge a voucher carries (the voucher changed). */

@@ -15,6 +15,7 @@ import { eq, and, isNull, inArray, isNotNull, gte, lte } from "drizzle-orm";
 import { buildTrialBalance } from "../accounting/integrity/trialBalance";
 import { classifyAccountType } from "../accounting/accountClassification";
 import { voucherBookedOnSql } from "../accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../accounting/balances/periodReportRules";
 
 // ---------------------------------------------------------------------------
 // getProfitLoss — /api/reports/profit-loss
@@ -49,7 +50,14 @@ export async function getProfitLoss(
   const incomeAccountIds = incomeAccounts.map((acc) => acc.id);
   const expenseAccountIds = expenseAccounts.map((acc) => acc.id);
 
-  const plConditions = [eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)];
+  // The fiscal closing journal is not period profit (wave 17 A): a closed year
+  // still shows the profit it made. The balance sheet keeps it.
+  const plConditions = [
+    eq(vouchers.companyId, companyId),
+    eq(vouchers.optional, false),
+    isNull(vouchers.deletedAt),
+    notFiscalClosingVoucherSql,
+  ];
   // One date basis with the engine (wave 13, R2): a voucher counts from
   // COALESCE(effective_date, voucher_date).
   if (startDate) {

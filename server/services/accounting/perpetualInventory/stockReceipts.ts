@@ -12,7 +12,11 @@
  *     Dr Goods in Transit / Cr Purchases — what the PO voucher debited to
  *     Purchases.
  *
- *   STOCK-IN-{containerId}, dated with the offload:
+ *   STOCK-IN-{containerId}-{offloadId}, one per offload, dated with that
+ *   offload (wave 17 B; it was one STOCK-IN-{containerId} per container,
+ *   rebuilt whole on every offload and dated with the latest one, so a
+ *   partial offload credited the whole purchase cost and a later offload
+ *   rewrote a journal of an earlier, possibly closed, period):
  *     Dr Inventory          exactly the value the stock sub-ledger received
  *                           (container_offload_items.value_moved of active
  *                           offloads; the line value on a legacy line)
@@ -23,8 +27,12 @@
  *                           re-pricing. Landed value = Inventory + COGS.
  *     Cr Goods in Transit   the container's POs that are in transit: a PO with
  *                           a GIT-PO journal, or one dated before the cut-over
- *                           (the opening journal carried it as in transit)
- *     Cr each account an offload charge voucher debited, by that amount
+ *                           (the opening journal carried it as in transit),
+ *                           by the offloads' cumulative share of the POs'
+ *                           quantity
+ *     Cr each account an offload charge voucher debited, by that amount (the
+ *                           charge vouchers dated after the previous offload
+ *                           and on or before this one)
  *     Cr/Dr Purchases       the difference, so a PO and its landed value that
  *                           do not agree stay visible in Purchases
  *
@@ -81,6 +89,7 @@ import {
 } from "./linkedJournal";
 
 export const purchaseOrderGitVoucherNumber = (purchaseOrderId: number) => `GIT-PO-${purchaseOrderId}`;
+/** The prefix of a container's stock-in journals, and the number of the legacy single journal. */
 export const containerStockInVoucherNumber = (containerId: number) => `STOCK-IN-${containerId}`;
 
 const zero = () => new MoneyDecimal(0);
@@ -172,49 +181,185 @@ export async function removePurchaseOrderGitTx(
   await removeLinkedJournalTx(tx, companyId, purchaseOrderGitVoucherNumber(purchaseOrderId));
 }
 
-/** Posts (replacing any earlier one) the stock-in journal of a container's offload. */
+/**
+ * The stock-in journal number of one offload (wave 17 B): one journal per
+ * offload, dated with that offload.
+ */
+export const offloadStockInVoucherNumber = (containerId: number, offloadId: number) =>
+  `STOCK-IN-${containerId}-${offloadId}`;
+
+/** A share of `total` (2dp): the whole of it once `through` reaches 1. */
+function cumulativeShare(total: Decimal, through: Decimal): Decimal {
+  return through.gte(1) ? total : total.times(through).toDecimalPlaces(2);
+}
+
+interface OffloadRow {
+  id: number;
+  location_id: number | null;
+  offload_date: string | null;
+  total_bales: string;
+}
+
+interface ExistingStockIn {
+  id: number;
+  voucher_number: string;
+  voucher_date: string;
+  lines: string[];
+}
+
+const lineKey = (ledgerAccountId: number, debit: Decimal, credit: Decimal) =>
+  `${ledgerAccountId}:${debit.toFixed(2)}:${credit.toFixed(2)}`;
+
+/** The live stock-in journals of a container (the per-offload ones and a legacy STOCK-IN-{container}). */
+async function existingStockInJournalsTx(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number
+): Promise<ExistingStockIn[]> {
+  const found = await rows<{ id: number; voucher_number: string; voucher_date: string; lines: string[] | null }>(
+    tx,
+    sql`
+      SELECT v.id, v.voucher_number, v.voucher_date::text AS voucher_date,
+             array_agg(ve.ledger_account_id::text || ':' || ROUND(ve.debit_amount, 2)::text || ':'
+                       || ROUND(ve.credit_amount, 2)::text ORDER BY ve.id) FILTER (WHERE ve.id IS NOT NULL) AS lines
+        FROM vouchers v
+        LEFT JOIN voucher_entries ve ON ve.voucher_id = v.id
+       WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL
+         AND (v.voucher_number = ${containerStockInVoucherNumber(containerId)}
+              OR v.voucher_number LIKE ${`${containerStockInVoucherNumber(containerId)}-%`})
+       GROUP BY v.id
+    `
+  );
+  return found.map((row) => ({ ...row, lines: row.lines ?? [] }));
+}
+
+/** Removes every stock-in journal of a container (the container was deleted). */
+export async function removeContainerStockInJournalsTx(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number
+): Promise<void> {
+  for (const journal of await existingStockInJournalsTx(tx, companyId, containerId)) {
+    await removeLinkedJournalTx(tx, companyId, journal.voucher_number);
+  }
+}
+
+/**
+ * Posts the stock-in journals of a container's offloads (see the module
+ * comment, "one journal per offload"). Each active offload has its own
+ * journal, STOCK-IN-{container}-{offload}, dated with that offload (the
+ * container's offload date for its latest offload, else the offload's own
+ * date):
+ *   - Inventory and COGS: what that offload's lines received;
+ *   - Goods in Transit: the container's in-transit purchase cost, by the
+ *     offloads' cumulative share of the POs' quantity (an offload that
+ *     completes the quantity takes what is left), so a partial offload
+ *     credits only its share and the rest stays in transit;
+ *   - charges: the container's offload charge vouchers dated after the
+ *     previous offload and on or before this one (the latest offload takes
+ *     every later one);
+ *   - Purchases: the difference.
+ * A journal whose date and lines are unchanged is left as it is, so a later
+ * offload never rewrites an earlier offload's journal (in a closed period or
+ * not); a changed one is replaced; the journals of offloads that are gone (or
+ * suspended), and the legacy single journal STOCK-IN-{container}, are
+ * removed. Returns the id of the latest offload's journal, or null.
+ */
 export async function syncContainerStockInTx(
   tx: DbTransaction,
   companyId: number,
   containerId: number
 ): Promise<number | null> {
-  const number = containerStockInVoucherNumber(containerId);
-  await removeLinkedJournalTx(tx, companyId, number);
-
-  const [container] = await rows<{ offload_date: string | null; location_id: number | null; container_number: string }>(
+  const existing = await existingStockInJournalsTx(tx, companyId, containerId);
+  const [container] = await rows<{ container_number: string; offload_date: string | null }>(
     tx,
-    sql`
-      SELECT c.container_number,
-             COALESCE(c.offload_date::text, (
-               SELECT max(co.offloaded_at)::date::text FROM container_offloads co WHERE co.container_id = c.id
-             )) AS offload_date,
-             (SELECT co.location_id FROM container_offloads co
-               WHERE co.container_id = c.id ORDER BY co.id DESC LIMIT 1) AS location_id
-        FROM containers c
-       WHERE c.id = ${containerId} AND c.company_id = ${companyId}
-    `
+    sql`SELECT container_number, offload_date::text AS offload_date FROM containers
+         WHERE id = ${containerId} AND company_id = ${companyId}`
   );
-  if (!container?.offload_date) return null;
-  if (!(await isPerpetualInventoryActive(tx, companyId, container.offload_date))) return null;
-  if (await isSupplierPartnerCompany(tx, companyId)) return null;
+  const offloads = container
+    ? await rows<OffloadRow>(
+        tx,
+        sql`
+          SELECT co.id, co.location_id, co.offloaded_at::date::text AS offload_date, co.total_bales::text AS total_bales
+            FROM container_offloads co
+           WHERE co.container_id = ${containerId} AND co.optional = false
+           ORDER BY co.id
+        `
+      )
+    : [];
+  const desired = new Map<string, { offload: OffloadRow; date: string; lines: LinkedJournalLine[]; keys: string[] }>();
+  const supplierPartner = await isSupplierPartnerCompany(tx, companyId);
+  if (container && offloads.length > 0 && !supplierPartner) {
+    const latest = offloads[offloads.length - 1];
+    const dated = offloads.map((offload) => ({
+      offload,
+      date: offload.id === latest.id ? (container.offload_date ?? offload.offload_date) : offload.offload_date,
+    }));
+    const lines = await stockInLinesTx(tx, companyId, containerId, container, dated);
+    for (const entry of lines) {
+      if (!entry.date || !(await isPerpetualInventoryActive(tx, companyId, entry.date))) continue;
+      const kept = entry.lines
+        .map((line) => ({ ...line, debit: line.debit.toDecimalPlaces(2), credit: line.credit.toDecimalPlaces(2) }))
+        .filter((line) => !line.debit.isZero() || !line.credit.isZero());
+      if (kept.length === 0) continue;
+      desired.set(offloadStockInVoucherNumber(containerId, entry.offload.id), {
+        offload: entry.offload,
+        date: entry.date,
+        lines: kept,
+        keys: kept.map((line) => lineKey(line.ledgerAccountId, line.debit, line.credit)).sort(),
+      });
+    }
+  }
 
-  const [received] = await rows<{ value: string; inventory: string; cogs: string }>(
+  const unchanged = new Set<string>();
+  for (const journal of existing) {
+    const want = desired.get(journal.voucher_number);
+    if (want && want.date === journal.voucher_date && [...journal.lines].sort().join("|") === want.keys.join("|")) {
+      unchanged.add(journal.voucher_number);
+      continue;
+    }
+    await removeLinkedJournalTx(tx, companyId, journal.voucher_number);
+  }
+  let latestId: number | null = null;
+  for (const [number, want] of desired) {
+    if (unchanged.has(number)) {
+      latestId = existing.find((journal) => journal.voucher_number === number)?.id ?? latestId;
+      continue;
+    }
+    latestId = await postLinkedJournalTx(tx, {
+      companyId,
+      voucherNumber: number,
+      voucherDate: want.date,
+      description: ["Stock received", number].join(" - "),
+      identity: { sourceType: "perpetual-stock-in", sourceId: `${containerId}:${want.offload.id}` },
+      locationId: want.offload.location_id,
+      lines: want.lines,
+    });
+  }
+  return latestId;
+}
+
+/** The lines of each active offload's stock-in journal (see syncContainerStockInTx). */
+async function stockInLinesTx(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number,
+  container: { container_number: string; offload_date: string | null },
+  offloads: Array<{ offload: OffloadRow; date: string | null }>
+): Promise<Array<{ offload: OffloadRow; date: string | null; lines: LinkedJournalLine[] }>> {
+  const received = await rows<{ offload_id: number; value: string; inventory: string }>(
     tx,
     sql`
-      SELECT COALESCE(SUM(coi.total_value), 0)::text AS value,
-             COALESCE(SUM(COALESCE(coi.value_moved, coi.total_value)), 0)::text AS inventory,
-             COALESCE(SUM(COALESCE(coi.cogs_variance, 0)), 0)::text AS cogs
+      SELECT coi.offload_id, COALESCE(SUM(coi.total_value), 0)::text AS value,
+             COALESCE(SUM(COALESCE(coi.value_moved, coi.total_value)), 0)::text AS inventory
         FROM container_offload_items coi
         JOIN container_offloads co ON co.id = coi.offload_id
         JOIN containers c ON c.id = co.container_id
        WHERE co.container_id = ${containerId} AND c.company_id = ${companyId} AND co.optional = false
+       GROUP BY coi.offload_id
     `
   );
-  const value = toMoney(received?.value ?? 0).toDecimalPlaces(2);
-  if (!value.gt(0)) return null;
-  // What the sub-ledger received, and the landed value it did not (COGS).
-  const inventoryValue = toMoney(received?.inventory ?? 0).toDecimalPlaces(2);
-  const cogsValue = value.minus(inventoryValue);
+  const receivedBy = new Map(received.map((row) => [Number(row.offload_id), row]));
 
   // In transit: POs with their own GIT journal, POs the opening journal
   // carried as goods in transit, and what a pre-cut-over offload's reversal
@@ -223,6 +368,7 @@ export async function syncContainerStockInTx(
   const openingTransit = cutover ? await openingTransitPurchaseOrderIdsTx(tx, companyId) : null;
   const movedToTransit = await preCutoverTransitBalanceTx(tx, companyId, containerId);
   const pos = await purchaseOrderCosts(tx, companyId, sql`po.container_id = ${containerId}`);
+  const containerOffloadDate = container.offload_date ?? offloads[offloads.length - 1]?.date ?? null;
   let inTransit: Decimal = movedToTransit.balance;
   for (const po of pos) {
     if (!po.voucherDate) continue;
@@ -231,7 +377,7 @@ export async function syncContainerStockInTx(
       po.voucherDate < cutover.effectiveFrom &&
       (openingTransit !== null
         ? openingTransit.has(po.purchaseOrderId)
-        : container.offload_date >= cutover.effectiveFrom && !movedToTransit.exists);
+        : containerOffloadDate !== null && containerOffloadDate >= cutover.effectiveFrom && !movedToTransit.exists);
     const [git] = await rows<{ id: number }>(
       tx,
       sql`SELECT id FROM vouchers WHERE company_id = ${companyId}
@@ -239,6 +385,15 @@ export async function syncContainerStockInTx(
     );
     if (git || carriedByOpening) inTransit = inTransit.plus(po.purchases);
   }
+  const [ordered] = await rows<{ quantity: string }>(
+    tx,
+    sql`
+      SELECT COALESCE(SUM(li.quantity), 0)::text AS quantity
+        FROM po_line_items li JOIN purchase_orders po ON po.id = li.po_id
+       WHERE po.company_id = ${companyId} AND po.container_id = ${containerId}
+    `
+  );
+  const orderedQuantity = toMoney(ordered?.quantity ?? 0);
 
   // Charges booked by the offload: whatever account each charge voucher debited.
   // A charge voucher is the offload's by its posting identity, or by the number
@@ -248,10 +403,10 @@ export async function syncContainerStockInTx(
   // credit the charge (wave 11). Editing a charge voucher
   // (PUT /api/vouchers/:id/with-entries) keeps its voucher row and identity.
   const chargeNumber = `^(DUTY|OFFICE|TRANS|XFER|CHG)-${escapeRegExp(container.container_number)}-[0-9]+$`;
-  const charges = await rows<{ ledger_account_id: number; amount: string }>(
+  const charges = await rows<{ ledger_account_id: number; voucher_date: string; amount: string }>(
     tx,
     sql`
-      SELECT ve.ledger_account_id, SUM(ve.debit_amount)::text AS amount
+      SELECT ve.ledger_account_id, v.voucher_date::text AS voucher_date, SUM(ve.debit_amount)::text AS amount
         FROM vouchers v
         JOIN voucher_entries ve ON ve.voucher_id = v.id
        WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL AND COALESCE(v.optional, false) = false
@@ -265,55 +420,79 @@ export async function syncContainerStockInTx(
            OR v.voucher_number ~ ${chargeNumber}
          )
          AND ve.debit_amount > 0 AND ve.ledger_account_id IS NOT NULL
-       GROUP BY ve.ledger_account_id
+       GROUP BY ve.ledger_account_id, v.voucher_date
+       ORDER BY ve.ledger_account_id, v.voucher_date
     `
   );
-  const chargeTotal = charges.reduce((sum, row) => sum.plus(toMoney(row.amount)), zero());
-  const residual = value.minus(inTransit).minus(chargeTotal);
 
   const accounts = await systemAccountIdsTx(tx, companyId, ["GOODS_IN_TRANSIT", "PURCHASES", "COGS"]);
   const { id: inventoryAccountId } = await getOrCreateInventoryControlAccount(tx, companyId);
-  const lines: LinkedJournalLine[] = [
-    {
-      ledgerAccountId: inventoryAccountId,
-      debit: inventoryValue.isNegative() ? zero() : inventoryValue,
-      credit: inventoryValue.isNegative() ? inventoryValue.negated() : zero(),
-      narration: "Stock received at landed cost",
-    },
-    {
-      ledgerAccountId: accounts.get("COGS")!,
-      debit: cogsValue.isNegative() ? zero() : cogsValue,
-      credit: cogsValue.isNegative() ? cogsValue.negated() : zero(),
-      narration: "Landed cost of stock already sold (shortage settled, charge re-priced)",
-    },
-    {
-      ledgerAccountId: accounts.get("GOODS_IN_TRANSIT")!,
-      debit: zero(),
-      credit: inTransit,
-      narration: "Goods in transit received",
-    },
-    ...charges.map((row) => ({
-      ledgerAccountId: row.ledger_account_id,
-      debit: zero(),
-      credit: toMoney(row.amount),
-      narration: "Offload charge capitalised into stock",
-    })),
-    {
-      ledgerAccountId: accounts.get("PURCHASES")!,
-      debit: residual.isNegative() ? residual.negated() : zero(),
-      credit: residual.isNegative() ? zero() : residual,
-      narration: "Difference between purchase cost and landed stock value",
-    },
-  ];
-  return postLinkedJournalTx(tx, {
-    companyId,
-    voucherNumber: number,
-    voucherDate: container.offload_date,
-    description: ["Stock received", number].join(" - "),
-    identity: { sourceType: "perpetual-stock-in", sourceId: containerId },
-    locationId: container.location_id,
-    lines,
+  const signed = (ledgerAccountId: number, amount: Decimal, narration: string): LinkedJournalLine => ({
+    ledgerAccountId,
+    debit: amount.isNegative() ? zero() : amount,
+    credit: amount.isNegative() ? amount.negated() : zero(),
+    narration,
   });
+  const result: Array<{ offload: OffloadRow; date: string | null; lines: LinkedJournalLine[] }> = [];
+  let cumulativeQuantity: Decimal = zero();
+  let transitThrough: Decimal = zero();
+  let previousDate: string | null = null;
+  offloads.forEach(({ offload, date }, index) => {
+    const last = index === offloads.length - 1;
+    const row = receivedBy.get(offload.id);
+    const value = toMoney(row?.value ?? 0).toDecimalPlaces(2);
+    // What the sub-ledger received, and the landed value it did not (COGS).
+    const inventoryValue = toMoney(row?.inventory ?? 0).toDecimalPlaces(2);
+    const cogsValue = value.minus(inventoryValue);
+
+    cumulativeQuantity = cumulativeQuantity.plus(toMoney(offload.total_bales));
+    const through = orderedQuantity.gt(0)
+      ? cumulativeQuantity.dividedBy(orderedQuantity)
+      : new MoneyDecimal(last ? 1 : 0);
+    const transitNow = cumulativeShare(inTransit, through);
+    const transit = transitNow.minus(transitThrough);
+    transitThrough = transitNow;
+
+    const window = (chargeDate: string) =>
+      (previousDate === null || chargeDate > previousDate) && (last || date === null || chargeDate <= date);
+    const ownCharges = new Map<number, Decimal>();
+    for (const charge of charges) {
+      if (!window(charge.voucher_date)) continue;
+      ownCharges.set(
+        charge.ledger_account_id,
+        (ownCharges.get(charge.ledger_account_id) ?? zero()).plus(toMoney(charge.amount))
+      );
+    }
+    previousDate = date ?? previousDate;
+    const chargeTotal = [...ownCharges.values()].reduce((sum, amount) => sum.plus(amount), zero());
+    const residual = value.minus(transit).minus(chargeTotal);
+    if (!value.gt(0)) {
+      result.push({ offload, date, lines: [] });
+      return;
+    }
+    result.push({
+      offload,
+      date,
+      lines: [
+        signed(inventoryAccountId, inventoryValue, "Stock received at landed cost"),
+        signed(
+          accounts.get("COGS")!,
+          cogsValue,
+          "Landed cost of stock already sold (shortage settled, charge re-priced)"
+        ),
+        signed(accounts.get("GOODS_IN_TRANSIT")!, transit.negated(), "Goods in transit received"),
+        ...[...ownCharges.entries()].map(([ledgerAccountId, amount]) =>
+          signed(ledgerAccountId, amount.negated(), "Offload charge capitalised into stock")
+        ),
+        signed(
+          accounts.get("PURCHASES")!,
+          residual.negated(),
+          "Difference between purchase cost and landed stock value"
+        ),
+      ],
+    });
+  });
+  return result;
 }
 
 /**
@@ -336,12 +515,9 @@ export async function syncPurchaseOrderGitForVoucherTx(
     if (po.container_id !== null) containerIds.add(po.container_id);
   }
   for (const containerId of Array.from(containerIds)) {
-    const [stockIn] = await rows<{ id: number }>(
-      tx,
-      sql`SELECT id FROM vouchers WHERE company_id = ${companyId}
-           AND voucher_number = ${containerStockInVoucherNumber(containerId)}`
-    );
-    if (stockIn) await syncContainerStockInTx(tx, companyId, containerId);
+    if ((await existingStockInJournalsTx(tx, companyId, containerId)).length > 0) {
+      await syncContainerStockInTx(tx, companyId, containerId);
+    }
   }
 }
 

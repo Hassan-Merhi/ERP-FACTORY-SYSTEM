@@ -313,11 +313,8 @@ export function registerCreditNoteRoutes(app: Express) {
           }
         }
 
-        return createdVoucher;
-      });
-
-      try {
-        const auditItems = await db
+        // Wave 16 (B): audited in the creating transaction.
+        const auditItems = await tx
           .select({
             stockItemId: creditNoteItems.stockItemId,
             stockItemName: stockItems.name,
@@ -331,28 +328,31 @@ export function registerCreditNoteRoutes(app: Express) {
           .from(creditNoteItems)
           .leftJoin(stockItems, eq(creditNoteItems.stockItemId, stockItems.id))
           .leftJoin(locations, eq(creditNoteItems.locationId, locations.id))
-          .where(eq(creditNoteItems.voucherId, voucher.id));
+          .where(eq(creditNoteItems.voucherId, createdVoucher.id));
 
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "vouchers",
-          recordId: voucher.id,
-          recordIdentifier: voucher.voucherNumber,
-          changes: {
-            voucherType: { old: null, new: noteType },
-            date: { old: null, new: voucherDate },
-            totalAmount: { old: null, new: inventoryMoney(totalRefundAmount) },
-            itemCount: { old: null, new: auditItems.length },
-            items: { new: auditItems },
-            cashAccount: { old: null, new: cashAccountId },
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "vouchers",
+            recordId: createdVoucher.id,
+            recordIdentifier: createdVoucher.voucherNumber,
+            changes: {
+              voucherType: { old: null, new: noteType },
+              date: { old: null, new: voucherDate },
+              totalAmount: { old: null, new: inventoryMoney(totalRefundAmount) },
+              itemCount: { old: null, new: auditItems.length },
+              items: { new: auditItems },
+              cashAccount: { old: null, new: cashAccountId },
+            },
           },
-        });
-      } catch {
-        /* non-fatal */
-      }
+          tx
+        );
+
+        return createdVoucher;
+      });
 
       res.json({
         success: true,
@@ -688,9 +688,8 @@ export function registerCreditNoteRoutes(app: Express) {
           ledgerDelta: (await inventoryLedgerNetTx(tx, companyId, [voucherId])).minus(ledgerBefore),
           actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
         });
-      });
 
-      try {
+        // Wave 16 (B): audited in the editing transaction.
         const changes: Record<string, { old: unknown; new: unknown }> = {};
         if (voucherDate && voucher.voucherDate !== voucherDate)
           changes.date = { old: voucher.voucherDate, new: voucherDate };
@@ -719,19 +718,20 @@ export function registerCreditNoteRoutes(app: Express) {
               resolveName
             )
           : {};
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "vouchers",
-          recordId: voucherId,
-          recordIdentifier: voucher.voucherNumber,
-          changes: { ...changes, ...itemDiff },
-        });
-      } catch {
-        /* non-fatal */
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "update",
+            tableName: "vouchers",
+            recordId: voucherId,
+            recordIdentifier: voucher.voucherNumber,
+            changes: { ...changes, ...itemDiff },
+          },
+          tx
+        );
+      });
 
       res.json({ success: true, voucherId, message: `${noteType} updated successfully` });
     } catch (error: unknown) {

@@ -11,19 +11,19 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireRole } from "../../../auth";
-import { containers, containerOffloads, containerOffloadItems, vouchers, voucherEntries } from "@shared/schema";
+import { containers, containerOffloads, containerOffloadItems, vouchers } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { buildItemMap } from "../../../services/containers/offload-lifecycle/types";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import {
   postPreCutoverOffloadMovementTx,
   syncContainerStockInTx,
 } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -202,12 +202,15 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
               )
             );
 
-          const reversedAt = new Date();
-          for (const voucher of containerVouchers) {
-            await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucher.id);
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-            await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, voucher.id));
-          }
+          // Wave 16 (A): retired — soft-deleted with their lines (they used to be
+          // stripped of them), audited, numbers and posting identities released,
+          // so the next offload is a new posting cycle.
+          await retireVouchersTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            voucherIds: containerVouchers.map((voucher) => voucher.id),
+            reason: "container-offload-recalc-reverse",
+            actor: sessionRetirementActor(req),
+          });
 
           const hadiSpVouchers = await tx
             .select()
@@ -218,11 +221,12 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
                 sql`${vouchers.voucherNumber} LIKE ${"SP-AGENT-ERP-" + containerId + "-%"}`
               )
             );
-          for (const v of hadiSpVouchers) {
-            await deleteInfrastructurePostingIdentityForVoucherTx(tx, v.id);
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, v.id));
-            await tx.update(vouchers).set({ deletedAt: reversedAt }).where(eq(vouchers.id, v.id));
-          }
+          await retireVouchersTx(tx, {
+            companyId: 1,
+            voucherIds: hadiSpVouchers.map((voucher) => voucher.id),
+            reason: "container-offload-recalc-reverse",
+            actor: sessionRetirementActor(req),
+          });
 
           await tx.delete(containerOffloads).where(eq(containerOffloads.id, offloadRecord.id));
           // Back on the way: no offload date, so the container's POs read as in

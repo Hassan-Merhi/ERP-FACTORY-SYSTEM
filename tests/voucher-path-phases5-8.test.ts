@@ -62,7 +62,6 @@ const PHASE6_INTRINSIC_WRITERS = [
   "server/routes/factory/docs-users/companyImportRoutes.ts",
   "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
-  "server/services/rental/reclassifyDeferredRentService.ts",
 ] as const;
 
 const PHASE5_REPRESENTATIVE_ROUTES = [
@@ -123,7 +122,7 @@ describe("Voucher path review phases 5-8", () => {
 
   it("classifies all 11 special-purpose writers as deterministic or intrinsically replay-safe", () => {
     expect(voucherReview.summary.migrationImportRepair).toBe(0);
-    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(11);
+    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(10);
     expect(voucherReview.completed["phase-6-deterministic-source-writers"].files).toEqual(PHASE6_DETERMINISTIC_WRITERS);
     expect(voucherReview.completed["phase-6-intrinsic-replay-safe-writers"].files).toEqual(PHASE6_INTRINSIC_WRITERS);
     expect(PHASE6_INTRINSIC_REPLAY_SAFE_WRITERS).toEqual(PHASE6_INTRINSIC_WRITERS);

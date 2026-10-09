@@ -8,8 +8,17 @@ import {
   retailProductVariants,
   retailProducts,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
 import { db } from "../../db";
-import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
+import { lineAmount, MoneyDecimal, toMoney } from "../../lib/money";
+import {
+  addMovement,
+  lockInventoryRow,
+  nextAverageCost,
+  setInventoryQuantity,
+  type RetailTransaction,
+} from "./retailStockLedger";
+import { trackRetailStockValueTx, type RetailStockValueTracker } from "./retailInventoryJournal";
 import { settleRetailSaleTx, type RetailPaymentInput } from "./retailFinancialService";
 import { loadRetailSalePayments } from "./retailFinancialQueries";
 import {
@@ -160,8 +169,9 @@ export async function createRetailSaleInTx(
     return { saleId: existing.id, replayed: true };
   }
 
-  let totalAmount = 0;
-  let totalCost = 0;
+  // Exact money (wave 17 C): the totals are Decimal sums, never float sums.
+  let totalAmount = new MoneyDecimal(0);
+  let totalCost = new MoneyDecimal(0);
   for (const item of input.items) {
     const variant = await ensureRetailVariant(tx, companyId, item.variantId);
     const stock = await lockInventoryRow(tx, companyId, item.variantId, input.locationId);
@@ -174,7 +184,7 @@ export async function createRetailSaleInTx(
       );
     }
     await setInventoryQuantity(tx, companyId, item.variantId, input.locationId, after);
-    const unitPrice = toNumber(variant.sellingPrice);
+    const unitPrice = toMoney(variant.sellingPrice);
     const [saleItem] = await tx
       .insert(retailPosSaleItems)
       .values({
@@ -183,7 +193,7 @@ export async function createRetailSaleInTx(
         variantId: item.variantId,
         quantity: String(item.quantity),
         returnedQuantity: "0",
-        unitPrice: String(unitPrice),
+        unitPrice: unitPrice.toFixed(),
         // Snapshot cost at sale time so profit reports use the cost of the exact unit sold.
         unitCost: String(stock.averageCost > 0 ? stock.averageCost : toNumber(variant.cost)),
       })
@@ -202,13 +212,13 @@ export async function createRetailSaleInTx(
       createdBy: input.userId,
       metadata: { saleItemId: saleItem.id },
     });
-    totalAmount += unitPrice * item.quantity;
-    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * item.quantity;
+    totalAmount = totalAmount.plus(lineAmount(item.quantity, unitPrice));
+    totalCost = totalCost.plus(lineAmount(item.quantity, stock.averageCost > 0 ? stock.averageCost : variant.cost));
   }
 
   await tx
     .update(retailPosSales)
-    .set({ totalAmount: String(totalAmount), updatedAt: new Date() })
+    .set({ totalAmount: totalAmount.toFixed(), updatedAt: new Date() })
     .where(eq(retailPosSales.id, createdSale.id));
 
   await settleRetailSaleTx(tx, {
@@ -245,7 +255,14 @@ export interface RetailReturnInput {
 export async function createRetailReturnInTx(
   tx: RetailTransaction,
   input: RetailReturnInput
-): Promise<{ returnId: number; replayed: boolean; refundValue: number; costValue: number }> {
+): Promise<{
+  returnId: number;
+  replayed: boolean;
+  refundValue: Decimal;
+  costValue: Decimal;
+  /** Wave 17 (D): journals the stock value returned, after the refund journal (null on a replay). */
+  stockValue?: RetailStockValueTracker;
+}> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
     .insert(retailPosReturns)
@@ -265,7 +282,7 @@ export async function createRetailReturnInTx(
       .where(and(eq(retailPosReturns.companyId, companyId), eq(retailPosReturns.idempotencyKey, input.idempotencyKey)))
       .limit(1);
     if (!existing) throw new Error("Return retry could not be resolved");
-    return { returnId: existing.id, replayed: true, refundValue: 0, costValue: 0 };
+    return { returnId: existing.id, replayed: true, refundValue: new MoneyDecimal(0), costValue: new MoneyDecimal(0) };
   }
 
   await tx.execute(sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`);
@@ -304,9 +321,14 @@ export async function createRetailReturnInTx(
     .orderBy(retailPosSaleItems.id)
     .for("update");
   const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
+  const stockValue = await trackRetailStockValueTx(
+    tx,
+    companyId,
+    saleItemRows.map((row) => ({ variantId: row.variantId, locationId: sale.locationId }))
+  );
 
-  let refundValue = 0;
-  let costValue = 0;
+  let refundValue = new MoneyDecimal(0);
+  let costValue = new MoneyDecimal(0);
   for (const [saleItemId, quantity] of aggregate) {
     const saleItem = saleItemsById.get(saleItemId);
     if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
@@ -316,7 +338,15 @@ export async function createRetailReturnInTx(
 
     const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);
     const after = nextRetailReturnQuantity(stock.quantity, quantity);
-    await setInventoryQuantity(tx, companyId, saleItem.variantId, sale.locationId, after);
+    // Wave 17 (D): the units come back at the cost they left with (value-exact), blended into the average.
+    await setInventoryQuantity(
+      tx,
+      companyId,
+      saleItem.variantId,
+      sale.locationId,
+      after,
+      nextAverageCost(stock.quantity, stock.averageCost, quantity, toNumber(saleItem.unitCost))
+    );
     await tx
       .update(retailPosSaleItems)
       .set({ returnedQuantity: String(nextReturnedQuantity) })
@@ -334,8 +364,8 @@ export async function createRetailReturnInTx(
         unitCost: saleItem.unitCost,
       })
       .returning({ id: retailPosReturnItems.id });
-    refundValue += quantity * toNumber(saleItem.unitPrice);
-    costValue += quantity * toNumber(saleItem.unitCost);
+    refundValue = refundValue.plus(lineAmount(quantity, saleItem.unitPrice));
+    costValue = costValue.plus(lineAmount(quantity, saleItem.unitCost));
     await addMovement(tx, {
       companyId,
       variantId: saleItem.variantId,
@@ -351,5 +381,5 @@ export async function createRetailReturnInTx(
       metadata: { saleId, saleItemId: saleItem.id, ...input.metadata },
     });
   }
-  return { returnId: createdReturn.id, replayed: false, refundValue, costValue };
+  return { returnId: createdReturn.id, replayed: false, refundValue, costValue, stockValue };
 }

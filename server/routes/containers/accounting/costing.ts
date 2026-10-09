@@ -28,6 +28,7 @@ import {
 } from "../containerHelpers";
 import { moneyString, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const CHARGE_FIELDS = ["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const;
 type ChargeField = (typeof CHARGE_FIELDS)[number];
@@ -427,10 +428,15 @@ export function registerContainerCostingRoutes(app: Express) {
                 .where(and(eq(vouchers.companyId, po.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
                 .limit(1);
               if (staleFV) {
-                await db.transaction(async (tx) => {
-                  await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, staleFV.id));
-                  await tx.delete(vouchers).where(eq(vouchers.id, staleFV.id));
-                });
+                // Wave 16 (A): retired (soft delete with lines, audited), not hard-deleted.
+                await db.transaction((tx) =>
+                  retireVouchersTx(tx, {
+                    companyId: po.companyId,
+                    voucherIds: [staleFV.id],
+                    reason: "stale-freight-voucher-sync",
+                    actor: sessionRetirementActor(req),
+                  })
+                );
                 updatedFreightVouchers++;
               }
             }
@@ -446,10 +452,15 @@ export function registerContainerCostingRoutes(app: Express) {
                 .where(and(eq(vouchers.companyId, po.companyId), eq(vouchers.voucherNumber, parentFreightVoucherNum)))
                 .limit(1);
               if (stalePFV) {
-                await db.transaction(async (tx) => {
-                  await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, stalePFV.id));
-                  await tx.delete(vouchers).where(eq(vouchers.id, stalePFV.id));
-                });
+                // Wave 16 (A): retired (soft delete with lines, audited), not hard-deleted.
+                await db.transaction((tx) =>
+                  retireVouchersTx(tx, {
+                    companyId: po.companyId,
+                    voucherIds: [stalePFV.id],
+                    reason: "stale-parent-freight-journal-sync",
+                    actor: sessionRetirementActor(req),
+                  })
+                );
                 updatedFreightVouchers++;
                 logger.info(`[SyncAll] Deleted stale PARENT-FREIGHT journal for same-company PO ${po.poNumber}`);
               }

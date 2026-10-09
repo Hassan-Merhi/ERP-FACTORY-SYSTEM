@@ -93,5 +93,4 @@ export const PHASE6_INTRINSIC_REPLAY_SAFE_WRITERS = [
   "server/routes/factory/docs-users/companyImportRoutes.ts",
   "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
-  "server/services/rental/reclassifyDeferredRentService.ts",
 ] as const;

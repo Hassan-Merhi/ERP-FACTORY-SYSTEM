@@ -24,6 +24,7 @@ import {
   companies,
 } from "@shared/schema";
 import { parseId } from "../../lib/parseId";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 export function registerRentalAccrualConfigRoutes(
   app: Express,
@@ -445,10 +446,14 @@ export function registerRentalAccrualConfigRoutes(
       let reset = 0;
       if (voucherIdsToDelete.length > 0) {
         await db.transaction(async (tx) => {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIdsToDelete));
-          await tx
-            .delete(vouchers)
-            .where(and(inArray(vouchers.id, voucherIdsToDelete), eq(vouchers.companyId, companyId)));
+          // Wave 16 (A): the unpaid accruals are retired (soft delete with their
+          // lines, audited here, numbers released) before they are posted again.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: voucherIdsToDelete,
+            reason: "rent-accrual-reaccrue",
+            actor: sessionRetirementActor(req),
+          });
           // Clear stamps on all the rows we just wiped
           await tx
             .update(propertyMonthlyLedger)

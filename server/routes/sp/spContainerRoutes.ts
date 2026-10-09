@@ -245,9 +245,7 @@ export function registerSpContainerRoutes(app: Express) {
         }
 
         const totalUsd = parseNum(invoiceTotalUsd ?? lockedExisting.invoiceTotalUsd);
-        const supplierIdNum = supplierId
-          ? parseInt(String(supplierId))
-          : (lockedExisting.supplierId ?? null);
+        const supplierIdNum = supplierId ? parseInt(String(supplierId)) : (lockedExisting.supplierId ?? null);
         const newSupplierName = supplierName ?? lockedExisting.supplierName;
         const newInvoiceNumber = invoiceNumber ?? lockedExisting.invoiceNumber;
         const newInvoiceDate = invoiceDate ?? lockedExisting.invoiceDate;
@@ -280,6 +278,13 @@ export function registerSpContainerRoutes(app: Express) {
               totalAmount: String(totalUsd),
             })
             .where(eq(vouchers.id, lockedExisting.goodsOtwVoucherId));
+          // Wave 16 (A): the edit carries the container's supplier on the header
+          // itself; the container trigger no longer rewrites posted vouchers.
+          await tx.execute(
+            sql`UPDATE vouchers SET supplier_id = ${supplierIdNum}
+                 WHERE id = ${lockedExisting.goodsOtwVoucherId} AND company_id = ${companyId}
+                   AND supplier_id IS DISTINCT FROM ${supplierIdNum}`
+          );
 
           // Delete old entries and recreate with updated amounts
           await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, lockedExisting.goodsOtwVoucherId));

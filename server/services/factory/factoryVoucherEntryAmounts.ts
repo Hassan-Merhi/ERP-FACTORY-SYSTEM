@@ -1,7 +1,7 @@
 import Decimal from "decimal.js";
 
 import { RateConvention } from "../accounting/currencyAmounts";
-import { resolveStoredFxRate, resolveStoredFxRateOrThrow } from "./currencyConversion";
+import { resolveStoredFxRateOrThrow } from "./currencyConversion";
 
 export interface FactoryVoucherEntryAmounts {
   transactionCurrency: string;
@@ -202,23 +202,7 @@ export function containerFreightFxRateToUsd(container: {
   );
 }
 
-/**
- * The amount columns of a factory voucher entry: normalized when the rate is
- * known (USD, or a non-USD rate that is explicitly set), otherwise the legacy
- * shape (native amount in debit/credit, dual columns empty) so the entry stays
- * visible to the integrity diagnostic as unresolved instead of being normalized
- * at a guessed rate of 1.
- */
-export function factoryEntryAmountsOrLegacy(
-  currency: string | null | undefined,
-  debit: string | number,
-  credit: string | number,
-  fxRateToUsd: string | number | null | undefined,
-  rateConfirmed?: boolean
-): ReturnType<typeof normFactoryEntry> | { debitAmount: string; creditAmount: string } {
-  const ccy = (currency || "USD").trim().toUpperCase();
-  if (ccy !== "USD" && !resolveStoredFxRate(ccy, fxRateToUsd, rateConfirmed).looksSet) {
-    return { debitAmount: String(debit), creditAmount: String(credit) };
-  }
-  return normFactoryEntry(ccy, debit, credit, fxRateToUsd);
-}
+// Wave 17 (D): factoryEntryAmountsOrLegacy (the legacy shape — native amount in
+// the USD columns — when a non-USD document had no rate) is gone. Its writers
+// require a confirmed dated rate (factoryDocumentFxRate.ts) and post
+// normFactoryEntry, and the currency trigger refuses that shape (v2).

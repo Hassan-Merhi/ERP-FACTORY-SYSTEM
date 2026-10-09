@@ -37,8 +37,11 @@ export function registerStatsNetPositionRoutes(app: Express) {
       // ── 1. Accounts & voucher entries (cumulative up to toDate) ──────────
       const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
 
-      // Ledger accounts: scoped to the account's company so migrated accounts
-      // appear correctly in the destination; vouchers count from
+      // Ledger accounts: this company's vouchers on its own accounts (engine
+      // rule 4, wave 17 A; they were read by the account's company, so another
+      // company's lines on these accounts counted here). Lines of this
+      // company's vouchers on another company's or a missing account are the
+      // engine's missingAccount lines below. Vouchers count from
       // COALESCE(effective_date, voucher_date). COALESCE(base_debit_amount,
       // debit_amount): the historical USD base when available. Customers,
       // suppliers and employees come from the balance engine below.
@@ -57,6 +60,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
          JOIN vouchers        v  ON ve.voucher_id        = v.id
          JOIN ledger_accounts la ON ve.ledger_account_id = la.id
          WHERE la.company_id = $1
+           AND v.company_id  = $1
            AND v.optional    = false
            AND v.deleted_at IS NULL
            ${_npExcelDateClause}`,
@@ -101,6 +105,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         codes: "erp",
         payrollCurrentBalanceMemo: true,
         banks: true,
+        missingAccounts: true,
       });
       const accountsForClassify = (
         isSupplierPartner

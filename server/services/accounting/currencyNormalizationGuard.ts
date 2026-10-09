@@ -15,7 +15,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  * line, native/base amounts that contradict their rate, and the legacy USD/CFA
  * insert that the trigger converts). It is now installed at every boot by this
  * installer, with exactly the migration's definition (pinned by
- * tests/wave14-currency.test.ts), so CI and tests run against it.
+ * tests/wave14-currency.test.ts), so CI and tests run against it. Since wave
+ * 17 D the definition is CURRENCY_NORMALIZATION_MIGRATION (v2).
  *
  * Pattern of the other guards: idempotent (skipped when the version comment
  * and the trigger are present), one transaction under an advisory lock with a
@@ -26,7 +27,16 @@ import { getErrorMessage } from "../../lib/httpHandlers";
  */
 
 /** Bump whenever the definition below changes (and add a migration for it). */
-export const CURRENCY_NORMALIZATION_GUARD_VERSION = "2026-07-20-005-currency-normalization-v1";
+export const CURRENCY_NORMALIZATION_GUARD_VERSION = "2026-10-09-001-currency-normalization-v2";
+
+/**
+ * The migration holding the current definition. v1 is
+ * migrations/20260720_005 (USD/CFA normalized, other currencies left
+ * unresolved). v2 (wave 17 D, owner decision 1 of 2026-10-09) refuses a new
+ * line of any other currency without its transaction_* amounts; existing rows
+ * are untouched.
+ */
+export const CURRENCY_NORMALIZATION_MIGRATION = "migrations/20261009_001_voucher_entry_currency_normalization_v2.sql";
 
 export const CURRENCY_NORMALIZATION_TRIGGER = "voucher_entries_normalize_currency_before_write";
 export const CURRENCY_NORMALIZATION_FUNCTION = "normalize_voucher_entry_currency_amounts";
@@ -48,7 +58,7 @@ export const CURRENCY_NORMALIZATION_REQUIRED_COLUMNS: Readonly<Record<string, re
   ],
 };
 
-/** The function, verbatim from migrations/20260720_005. */
+/** The function, verbatim from CURRENCY_NORMALIZATION_MIGRATION. */
 export const CURRENCY_NORMALIZATION_FUNCTION_DDL = `CREATE OR REPLACE FUNCTION normalize_voucher_entry_currency_amounts()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -232,15 +242,27 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  -- Other currencies remain explicitly unresolved. They use several established
-  -- factory/supplier rate conventions, so this trigger must neither guess nor block
-  -- those flows. Leave the dual-currency fields NULL until the caller supplies a
-  -- complete historical rate and convention.
-  RETURN NEW;
+  -- Any other currency needs its native amounts, historical rate and convention
+  -- from the caller (several factory/supplier rate conventions exist, so the
+  -- trigger never guesses one). A NEW line without them (an INSERT, or an UPDATE
+  -- that changes its voucher, amounts or transaction currency) is refused. An
+  -- existing legacy line whose voucher and amounts are unchanged is left as it is.
+  IF TG_OP = 'UPDATE'
+     AND NEW.voucher_id IS NOT DISTINCT FROM OLD.voucher_id
+     AND NEW.debit_amount IS NOT DISTINCT FROM OLD.debit_amount
+     AND NEW.credit_amount IS NOT DISTINCT FROM OLD.credit_amount
+     AND NEW.transaction_currency IS NOT DISTINCT FROM OLD.transaction_currency THEN
+    RETURN NEW;
+  END IF;
+
+  RAISE EXCEPTION
+    'VOUCHER_LINE_NATIVE_AMOUNT_REQUIRED: a % voucher line (voucher %) needs its transaction-currency amounts, historical rate and rate convention',
+    voucher_currency, NEW.voucher_id
+    USING ERRCODE = '23514';
 END;
 $$`;
 
-/** The trigger, verbatim from migrations/20260720_005. */
+/** The trigger, verbatim from CURRENCY_NORMALIZATION_MIGRATION (unchanged since 20260720_005). */
 export const CURRENCY_NORMALIZATION_TRIGGER_DDL = `CREATE TRIGGER voucher_entries_normalize_currency_before_write
 BEFORE INSERT OR UPDATE OF
   voucher_id,

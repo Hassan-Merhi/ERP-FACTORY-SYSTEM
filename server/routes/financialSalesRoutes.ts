@@ -88,7 +88,9 @@ export function registerFinancialSalesRoutes(app: Express) {
         periodEndDate,
         accountId,
         req.session.userId!,
-        notes
+        notes,
+        // The close writes its audit row in its own transaction (wave 17 A).
+        { username: req.session.username || "unknown" }
       );
 
       res.json(closure);

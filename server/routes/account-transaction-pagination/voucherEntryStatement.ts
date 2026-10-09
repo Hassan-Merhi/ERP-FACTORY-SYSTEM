@@ -53,7 +53,9 @@ export function genericFilteredCte(
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bind(dates.rawStart)}::date`);
   }
-  conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bind(dates.effectiveEndDate)}::date`);
+  if (dates.effectiveEndDate) {
+    conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bind(dates.effectiveEndDate)}::date`);
+  }
   const baseFrom = `FROM voucher_entries ve JOIN vouchers v ON ve.voucher_id = v.id WHERE ${conditions.join(" AND ")}`;
 
   if (kind === "ledger") {

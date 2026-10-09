@@ -422,6 +422,26 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
             .where(and(eq(vouchers.id, linkedVoucherId), eq(vouchers.companyId, marker.companyId)));
         }
 
+        // Wave 16 (B): audited in the deleting transaction, with the linked
+        // programme vouchers it retired; an audit failure rolls the delete back.
+        const entrySnapshot = await snapshotVoucherEntries(requestedEntries, tx);
+        await logAudit(
+          {
+            userId: userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "vouchers",
+            recordId: voucherId,
+            recordIdentifier: lockedRequestedVoucher.voucherNumber,
+            changes: {
+              ...buildVoucherChangesForDelete(lockedRequestedVoucher, entrySnapshot),
+              linkedVoucherIds: { old: linkedVoucherIds, new: null },
+            },
+          },
+          tx
+        );
+
         return {
           replayed: false,
           requestedVoucher: lockedRequestedVoucher,
@@ -430,28 +450,6 @@ async function handleGoldenCoastPosDelete(req: Request, res: Response, next: Nex
         };
       });
     });
-
-    if (!deletion.replayed) {
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(deletion.requestedEntries);
-        await logAudit({
-          userId: userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "vouchers",
-          recordId: voucherId,
-          recordIdentifier: deletion.requestedVoucher.voucherNumber,
-          changes: buildVoucherChangesForDelete(deletion.requestedVoucher, entrySnapshot),
-        });
-      } catch (auditError: unknown) {
-        logger.error("Golden Coast POS linked delete audit failed (non-fatal)", {
-          companyId,
-          voucherId,
-          error: auditError,
-        });
-      }
-    }
 
     logger.info("Golden Coast POS linked deletion succeeded", {
       module: "vouchers",

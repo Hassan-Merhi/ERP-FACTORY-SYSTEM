@@ -21,10 +21,24 @@ import { MoneyDecimal, toMoney } from "../lib/money";
 import { resolveTransferLocations } from "./helpers/transferLocations";
 import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferItem } from "./stockTransferImportTypes";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
-import { postImportedTransferLinesTx, StockTransferImportSourceMissingError } from "./stockTransferImportPosting";
+import {
+  postImportedTransferLinesTx,
+  provisionalTransferImportRate,
+  StockTransferImportSourceMissingError,
+  type ProvisionalRateBasis,
+} from "./stockTransferImportPosting";
 import { sendBaleMirrorMovementRefusal } from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 /** Sends a wave 11/15 refusal (bale mirror, missing source after the cut-over); returns whether it did. */
+/** The lines moved at a provisional cost (wave 17 B), for the response. */
+function provisionalRatesOf(
+  lines: ReadonlyArray<{ stockItemId: number; rate: Decimal; provisional?: ProvisionalRateBasis }>
+): Array<{ stockItemId: number; rate: string; basis: ProvisionalRateBasis }> {
+  return lines
+    .filter((line) => line.provisional)
+    .map((line) => ({ stockItemId: line.stockItemId, rate: line.rate.toFixed(2), basis: line.provisional! }));
+}
+
 function sendStockTransferImportRefusal(res: Response, error: unknown): boolean {
   if (sendBaleMirrorMovementRefusal(res, error)) return true;
   if (!(error instanceof StockTransferImportSourceMissingError)) return false;
@@ -236,7 +250,12 @@ export function registerStockTransferImportRoutes(app: Express) {
       }
 
       let totalValue = new MoneyDecimal(0);
-      const transferItems: Array<{ stockItemId: number; quantity: Decimal; rate: Decimal }> = [];
+      const transferItems: Array<{
+        stockItemId: number;
+        quantity: Decimal;
+        rate: Decimal;
+        provisional?: ProvisionalRateBasis;
+      }> = [];
 
       // Prepare items with rates from inventory
       for (const item of items) {
@@ -259,13 +278,22 @@ export function registerStockTransferImportRoutes(app: Express) {
           )
           .limit(1);
 
-        // Use inventory rate if available, otherwise use stock item's selling price as fallback
-        const rate = inventoryItem ? toMoney(inventoryItem.averageRate) : toMoney(stockItem.sellingPrice);
+        // The source's average rate; with no source row, the item's latest cost as a
+        // provisional cost (selling price only when it has none; wave 17 B).
+        const provisional = inventoryItem
+          ? null
+          : await provisionalTransferImportRate(db, req.session.currentCompanyId!, stockItem);
+        const rate = inventoryItem ? toMoney(inventoryItem.averageRate) : provisional!.rate;
         const quantity = requestQuantity(item.quantity);
 
         totalValue = totalValue.plus(rate.times(quantity));
 
-        transferItems.push({ stockItemId: stockItem.id, quantity, rate });
+        transferItems.push({
+          stockItemId: stockItem.id,
+          quantity,
+          rate,
+          ...(provisional ? { provisional: provisional.basis } : {}),
+        });
       }
 
       const voucherNumber = `ST-${Date.now()}`;
@@ -320,6 +348,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         success: true,
         itemsCount: items.length,
         totalValue: totalValue.toFixed(2),
+        provisionalRates: provisionalRatesOf(transferItems),
       });
 
       // Fire-and-forget: send transfer image to destination WA group
@@ -652,6 +681,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         sourceLocationId: number;
         quantity: Decimal;
         rate: Decimal;
+        provisional?: ProvisionalRateBasis;
       }> = [];
 
       for (const item of items) {
@@ -690,8 +720,12 @@ export function registerStockTransferImportRoutes(app: Express) {
           )
           .limit(1);
 
-        // Use server-derived rate from inventory, or stock item's selling price as fallback
-        const serverRate = sourceInv[0] ? toMoney(sourceInv[0].averageRate) : toMoney(stockItem.sellingPrice);
+        // Server-derived rate from the source's inventory; with no source row, the
+        // item's latest cost as a provisional cost (selling price only when it has none).
+        const provisional = sourceInv[0]
+          ? null
+          : await provisionalTransferImportRate(db, req.session.currentCompanyId!, stockItem);
+        const serverRate = sourceInv[0] ? toMoney(sourceInv[0].averageRate) : provisional!.rate;
         const requestedQty = requestQuantity(item.quantity);
 
         processedItems.push({
@@ -699,6 +733,7 @@ export function registerStockTransferImportRoutes(app: Express) {
           sourceLocationId: item.sourceLocationId,
           quantity: requestedQty,
           rate: serverRate,
+          ...(provisional ? { provisional: provisional.basis } : {}),
         });
       }
 
@@ -779,6 +814,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         success: true,
         itemsCount: processedItems.length,
         totalValue: totalValue.toFixed(2),
+        provisionalRates: provisionalRatesOf(processedItems),
       });
 
       // Fire-and-forget: send transfer image to destination WA group

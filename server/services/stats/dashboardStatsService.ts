@@ -12,7 +12,9 @@ import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, inArray, gte, sql } from "drizzle-orm";
 import { classifyAccountType, expenseCategory } from "../accounting/accountClassification";
 import { voucherBookedOnSql } from "../accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../accounting/balances/periodReportRules";
 import { _getCached, _setCached } from "../shared/ttlCache";
+import { loadBalanceRows } from "../accounting/balances/ledgerBalanceEngine";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
 
@@ -79,6 +81,8 @@ export async function getMonthlyData(
               eq(vouchers.companyId, companyId),
               eq(vouchers.optional, false),
               isNull(vouchers.deletedAt),
+              // The fiscal closing journal is not a month's profit (wave 17 A).
+              notFiscalClosingVoucherSql,
               gte(voucherBookedOnSql, `${firstMonth}-01`),
               inArray(voucherEntries.ledgerAccountId, plAccountIds)
             )
@@ -151,72 +155,62 @@ export async function getStockSummary(companyId: number): Promise<{
 
 // ---------------------------------------------------------------------------
 // getExpenseBreakdown — /api/stats/expense-breakdown
-// Returns aggregated expense totals by account type for dashboard donut chart.
-// Uses TTL cache (30 s) to avoid repeated expensive joins.
+// Expense totals by category for the dashboard donut chart, on the balance
+// engine (wave 17 A), consistent with the P&L (getProfitLoss):
+//   - each expense-class account's net debit − credit over the period
+//     (startDate..endDate, both optional, COALESCE(effective_date,
+//     voucher_date)), so reversals and refunds reduce the category (before,
+//     every line with a net credit was dropped and the range was all time);
+//   - the fiscal closing journal is left out (periodReportRules.ts);
+//   - hidden accounts count, as in the P&L (they were left out here);
+//   - this company's vouchers on its own accounts (engine rule 4).
+// A category whose net is zero is left out; a net-credit category is
+// returned with its negative value.
+// Uses TTL cache (30 s) per company and range.
 // ---------------------------------------------------------------------------
-export async function getExpenseBreakdown(companyId: number): Promise<Array<{ name: string; value: number }> | null> {
-  const _ebCacheKey = `expense-breakdown:${companyId}`;
+export async function getExpenseBreakdown(
+  companyId: number,
+  range: { startDate?: string | null; endDate?: string | null } = {}
+): Promise<Array<{ name: string; value: number }> | null> {
+  const startDate = range.startDate ?? null;
+  const endDate = range.endDate ?? null;
+  const _ebCacheKey = `expense-breakdown:${companyId}:${startDate ?? ""}:${endDate ?? ""}`;
   const _ebCached = _getCached(_ebCacheKey);
   // Only this function writes this cache key, always as Array<{name, value}>.
   if (_ebCached) return _ebCached as Array<{ name: string; value: number }>;
 
-  // Get all expense-related ledger accounts
-  const allAccounts = await storage.getAllLedgerAccounts(companyId);
-
-  // Wave 13 (R3): every expense-class account by the shared classifier,
-  // bucketed by expenseCategory, as the P&L and the monthly profit count them.
-  // Before, only the exact types "Expense" / "Direct Expense" / "Indirect
-  // Expense" were read (mis-cased types, Government Taxes and COGS were
-  // missed) and PURCHASES / IMPORT_CHARGES were dropped by code here while the
-  // monthly profit counted Purchases.
-  const expenseAccounts = allAccounts.filter((acc) => classifyAccountType(acc.accountType, acc.subType) === "expense");
-
-  const expenseAccountIds = new Set(expenseAccounts.map((a) => a.id));
-  const accountTypeMap = new Map<number, string>();
-  for (const acc of expenseAccounts) {
-    accountTypeMap.set(acc.id, expenseCategory(acc.accountType, acc.subType) ?? "Expense");
+  // Every expense-class account by the shared classifier, hidden ones included
+  // (the P&L's rule), bucketed by expenseCategory.
+  const allAccounts = await storage.getAllLedgerAccounts(companyId, true);
+  const categoryOf = new Map<number, string>();
+  for (const acc of allAccounts) {
+    if (classifyAccountType(acc.accountType, acc.subType) !== "expense") continue;
+    categoryOf.set(acc.id, expenseCategory(acc.accountType, acc.subType) ?? "Expense");
   }
-
-  if (expenseAccountIds.size === 0) {
+  if (categoryOf.size === 0) {
     _setCached(_ebCacheKey, []);
     return [];
   }
 
-  // Single JOIN — replaces the two-query IN-clause anti-pattern.
-  // Directly filters entries to expense accounts for this company.
-  const expenseEntries = await db
-    .select({
-      ledgerAccountId: voucherEntries.ledgerAccountId,
-      debitAmount: voucherEntries.debitAmount,
-      creditAmount: voucherEntries.creditAmount,
-    })
-    .from(voucherEntries)
-    .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-    .where(
-      and(
-        eq(vouchers.companyId, companyId),
-        eq(vouchers.optional, false),
-        isNull(vouchers.deletedAt),
-        inArray(voucherEntries.ledgerAccountId, [...expenseAccountIds])
-      )
-    )
-    .execute();
+  const rows = await loadBalanceRows(db, {
+    companyId,
+    kind: "ledger",
+    ids: [...categoryOf.keys()],
+    from: startDate,
+    asOf: endDate,
+    excludeFiscalClose: true,
+  });
 
-  // Sum balances by expense type
   const expenseByType = new Map<string, Decimal>();
-
-  for (const entry of expenseEntries) {
-    if (!entry.ledgerAccountId) continue;
-    const accountType = accountTypeMap.get(entry.ledgerAccountId);
-    if (!accountType) continue;
-    const amount = toMoney(entry.debitAmount).minus(toMoney(entry.creditAmount));
-    if (amount.lte(0)) continue;
-    expenseByType.set(accountType, (expenseByType.get(accountType) ?? new MoneyDecimal(0)).plus(amount));
+  for (const row of rows) {
+    const category = row.id === null ? undefined : categoryOf.get(row.id);
+    if (!category) continue;
+    const net = row.periodDebit.minus(row.periodCredit);
+    expenseByType.set(category, (expenseByType.get(category) ?? new MoneyDecimal(0)).plus(net));
   }
 
-  // Convert to array format for chart
   const result = Array.from(expenseByType.entries())
-    .filter(([_, value]) => value.gt(0))
+    .filter(([, value]) => !value.isZero())
     .map(([name, value]) => ({
       name: name.replace(" Expense", ""),
       value: value.toDecimalPlaces(2).toNumber(),

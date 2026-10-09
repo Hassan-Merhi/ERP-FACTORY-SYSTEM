@@ -124,7 +124,7 @@ async function commissionJournal(containerId: number) {
 }
 
 const commissionVouchers = async (containerId: number) =>
-  all(`SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2`, [
+  all(`SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2 AND deleted_at IS NULL`, [
     factoryId,
     `FACTORY-COMM-${containerId}%`,
   ]);

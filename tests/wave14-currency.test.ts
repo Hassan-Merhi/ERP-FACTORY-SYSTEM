@@ -22,6 +22,7 @@ import { pool } from "../server/db";
 import {
   CURRENCY_NORMALIZATION_FUNCTION_DDL,
   CURRENCY_NORMALIZATION_GUARD_VERSION,
+  CURRENCY_NORMALIZATION_MIGRATION,
   CURRENCY_NORMALIZATION_TRIGGER,
   CURRENCY_NORMALIZATION_TRIGGER_DDL,
   ensureCurrencyNormalizationGuard,
@@ -95,10 +96,9 @@ afterAll(async () => {
 
 describe("currency normalization installer (decision 4)", () => {
   it("installs the migration's exact definition, idempotently and versioned", async () => {
-    const migration = fs.readFileSync(
-      path.join(process.cwd(), "migrations/20260720_005_voucher_entry_currency_normalization_trigger.sql"),
-      "utf8"
-    );
+    // Wave 17 (D): the current definition is v2 (CURRENCY_NORMALIZATION_MIGRATION);
+    // v1 stays in migrations/20260720_005.
+    const migration = fs.readFileSync(path.join(process.cwd(), CURRENCY_NORMALIZATION_MIGRATION), "utf8");
     expect(squash(migration)).toContain(squash(CURRENCY_NORMALIZATION_FUNCTION_DDL));
     expect(squash(migration)).toContain(`${squash(CURRENCY_NORMALIZATION_TRIGGER_DDL)};`);
 
@@ -274,14 +274,18 @@ describe("wave 6 legacy repair at a dated factory rate (decision 1)", () => {
         ).rows[0].id;
         voucherIds[key] = id;
         await client.query(
-          `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $2, $3, 0)`,
-          [id, ctx.cashAccountId, total]
+          `INSERT INTO voucher_entries (voucher_id, company_id, ledger_account_id, debit_amount, credit_amount) VALUES ($1, $4, $2, $3, 0)`,
+          [id, ctx.cashAccountId, total, ctx.companyId]
         );
         await client.query(
-          `INSERT INTO voucher_entries (voucher_id, factory_supplier_id, debit_amount, credit_amount) VALUES ($1, $2, 0, $3)`,
-          [id, supplierId, total]
+          `INSERT INTO voucher_entries (voucher_id, company_id, factory_supplier_id, debit_amount, credit_amount) VALUES ($1, $4, $2, 0, $3)`,
+          [id, supplierId, total, ctx.companyId]
         );
       };
+      // Legacy-shaped lines (native amounts in the USD columns) as history left
+      // them: the currency trigger v2 (wave 17 D) refuses a new one, so they are
+      // written with the triggers off.
+      await client.query("SET LOCAL session_replication_role = replica");
       await voucher("eur", "EUR", "1", "100");
       await voucher("aud", "AUD", "0", "50");
       await voucher("nzd", "NZD", "1", "40");

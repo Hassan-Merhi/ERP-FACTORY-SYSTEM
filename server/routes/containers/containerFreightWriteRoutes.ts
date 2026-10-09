@@ -1,12 +1,12 @@
 import { parseId } from "../../lib/parseId";
-import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
+import { HttpError, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { requireAuth, requireRole } from "../../auth";
+import { requireAuth } from "../../auth";
 import { logAudit } from "../_helpers";
-import { containers, containerCharges, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
+import { containers, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
 import type { InsertPurchaseOrder } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import {
@@ -16,50 +16,13 @@ import {
   isDebitOnlyEntry as isDebitOnly,
   syncIntercoParentVoucher,
 } from "./containerHelpers";
-import { MoneyDecimal, moneyString, sumMoney, toMoney, type MoneyInput } from "../../lib/money";
+import { moneyString, sumMoney, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
-import type { DatabaseOrTransaction } from "../../db";
+import { retireVouchersForRequestTx } from "../../services/accounting/voucherRetirement";
 
-/**
- * A charge as the purchase_orders numeric(20, 2) column stores it: Postgres
- * rounds half away from zero, so vouchers and container totals derived from
- * this value agree with the PO to the cent.
- */
-const storedCents = (value: unknown) =>
-  toMoney((typeof value === "string" ? value.trim() : value) as MoneyInput).toDecimalPlaces(
-    2,
-    MoneyDecimal.ROUND_HALF_UP
-  );
-
-/** Mirror a PO's charges into container_charges: one row per charge type, none when zero. */
-async function syncContainerCharges(
-  executor: DatabaseOrTransaction,
-  containerId: number,
-  charges: { chargeType: string; amount: Decimal }[]
-) {
-  for (const { chargeType, amount } of charges) {
-    const existingCharge = await executor
-      .select()
-      .from(containerCharges)
-      .where(and(eq(containerCharges.containerId, containerId), eq(containerCharges.chargeType, chargeType)))
-      .limit(1);
-
-    if (amount.isZero()) {
-      // Delete entry if charge is 0
-      if (existingCharge.length > 0) {
-        await executor.delete(containerCharges).where(eq(containerCharges.id, existingCharge[0].id));
-      }
-    } else if (existingCharge.length > 0) {
-      await executor
-        .update(containerCharges)
-        .set({ amount: moneyString(amount) })
-        .where(eq(containerCharges.id, existingCharge[0].id));
-    } else {
-      await executor.insert(containerCharges).values({ containerId, chargeType, amount: moneyString(amount) });
-    }
-  }
-}
 import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
+import { storedCents, syncContainerCharges } from "./containerChargeSync";
+import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
 import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
@@ -748,10 +711,9 @@ export function registerContainerFreightWriteRoutes(app: Express) {
                 .from(vouchers)
                 .where(and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
                 .limit(1);
-              if (existingFV) {
-                await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
-                await tx.delete(vouchers).where(eq(vouchers.id, existingFV.id));
-              }
+              // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
+              const fvIds = existingFV ? [existingFV.id] : [];
+              await retireVouchersForRequestTx(tx, req, existingPO.companyId, fvIds, "po-freight-voucher-removed");
             }
           }
         } else if (chargesWereEdited && existingPO.containerId) {
@@ -844,52 +806,7 @@ export function registerContainerFreightWriteRoutes(app: Express) {
     }
   });
 
-  // Delete a purchase order (Admin only)
-  app.delete("/api/purchase-orders/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid purchase order ID" });
-      }
-
-      const existingPO = await storage.getPurchaseOrderByIdForCompany(id, req.session.currentCompanyId!);
-      if (!existingPO) {
-        return res.status(404).json({ message: "Purchase order not found" });
-      }
-
-      // Verify purchase order belongs to current company
-      if (existingPO.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Access denied: Purchase order belongs to a different company",
-        });
-      }
-
-      await storage.deletePurchaseOrder(id);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "delete",
-          tableName: "purchase_orders",
-          recordId: existingPO.id,
-          recordIdentifier: existingPO.poNumber || `PO #${id}`,
-          changes: {
-            poNumber: { old: existingPO.poNumber },
-            supplier: { old: existingPO.supplierId },
-            itemsTotal: { old: existingPO.itemsTotal || "0" },
-            status: { old: existingPO.status },
-          },
-        });
-      } catch {
-        /* non-fatal */
-      }
-      res.json({ message: "Purchase order deleted successfully" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerPurchaseOrderDeleteRoute(app);
 
   // Delete a container (Admin only)
 

@@ -61,7 +61,7 @@
  * Every line carries its own date and is listed when dated on or before the
  * as-of date.
  */
-import { sql } from "drizzle-orm";
+import { lte, sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
@@ -141,12 +141,31 @@ function dateCut(column: ReturnType<typeof sql>, asOf: string | null | undefined
   return asOf ? sql` AND ${column} <= ${asOf}::date` : sql``;
 }
 
-/** A live voucher of the company whose number matches `pattern` (SQL LIKE or equality). */
-function liveVoucherExists(numberCondition: ReturnType<typeof sql>, companyColumn: ReturnType<typeof sql>) {
+/**
+ * The voucher alias is booked (COALESCE(effective_date, voucher_date)) on or
+ * before `asOf` — in the ledger at that date (wave 17 A). Without `asOf`,
+ * every posted voucher counts.
+ */
+function bookedBy(alias: "mv" | "cv" | "rv", asOf: string | null | undefined) {
+  if (!asOf) return sql``;
+  return sql` AND ${lte(sql.raw(`COALESCE(${alias}.effective_date, ${alias}.voucher_date)`), asOf)}`;
+}
+
+/**
+ * A live voucher of the company whose number matches `pattern` (SQL LIKE or
+ * equality), booked on or before `asOf` (wave 17 A): an invoice whose voucher
+ * is dated after the as-of date is not yet in the ledger at that date, so it
+ * is a memo line of that date's balance.
+ */
+function liveVoucherExists(
+  numberCondition: ReturnType<typeof sql>,
+  companyColumn: ReturnType<typeof sql>,
+  asOf: string | null | undefined
+) {
   return sql`EXISTS (
     SELECT 1 FROM vouchers mv
      WHERE mv.company_id = ${companyColumn} AND mv.deleted_at IS NULL AND mv.optional = false
-       AND ${numberCondition}
+       AND ${numberCondition}${bookedBy("mv", asOf)}
   )`;
 }
 
@@ -173,7 +192,7 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              (COALESCE(co.grand_total, 0) - COALESCE((
                 SELECT SUM(ch.amount) FROM customer_order_charges ch
                   JOIN vouchers cv ON cv.id = ch.voucher_id AND cv.company_id = co.company_id
-                                  AND cv.deleted_at IS NULL AND cv.optional = false
+                                  AND cv.deleted_at IS NULL AND cv.optional = false${bookedBy("cv", asOf)}
                  WHERE ch.order_id = co.id
              ), 0))::text AS native,
              UPPER(COALESCE(b.currency, 'USD')) AS currency,
@@ -184,7 +203,8 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
          AND co.customer_id IN (${idList(ids)})
          AND NOT ${liveVoucherExists(
            sql`mv.voucher_number = 'INV-GL-' || co.company_id::text || '-' || co.id::text`,
-           sql`co.company_id`
+           sql`co.company_id`,
+           asOf
          )}
          ${dateCut(invoiceDate, asOf)}
     `
@@ -216,12 +236,13 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
                 WHERE ps.id = cb.reference_id AND ps.company_id = cb.company_id
                   AND (ps.status = 'VOIDED' OR ${liveVoucherExists(
                     sql`mv.voucher_number = 'FPOS-RCPT-' || ps.id::text`,
-                    sql`ps.company_id`
+                    sql`ps.company_id`,
+                    asOf
                   )})))
          AND NOT (cb.reference_type = 'voucher' AND EXISTS (
                SELECT 1 FROM vouchers rv
                 WHERE rv.id = cb.reference_id AND rv.company_id = cb.company_id
-                  AND rv.deleted_at IS NULL AND rv.optional = false))
+                  AND rv.deleted_at IS NULL AND rv.optional = false${bookedBy("rv", asOf)}))
          ${dateCut(sql`cb.transaction_date::date`, asOf)}
     `
   );
@@ -322,7 +343,8 @@ function heldCommissionRows(executor: Executor, query: MemoQuery) {
          AND COALESCE(rs.commission_supplier_id, fc.supplier_id) IN (${idList(ids)})
          AND NOT ${liveVoucherExists(
            sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
-           sql`fc.company_id`
+           sql`fc.company_id`,
+           asOf
          )}
          ${dateCut(day, asOf)}
       UNION ALL
@@ -353,18 +375,20 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
              ${day}::text AS date, fc.status,
              fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
              (COALESCE(fc.total_kg, 0) * COALESCE(fc.rate_per_kg, 0))::text AS goods,
-             ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id::text || '-%'`, sql`fc.company_id`)} AS goods_posted,
+             ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id::text || '-%'`, sql`fc.company_id`, asOf)} AS goods_posted,
              fc.freight::text AS freight, fc.freight_currency_code, fc.freight_fx_rate_to_usd::text AS freight_fx_rate_to_usd,
              fc.freight_fx_rate_confirmed, fc.freight_paid_by, fc.freight_supplier_id,
              ${liveVoucherExists(
                sql`(mv.voucher_number = 'FACTORY-FREIGHT-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-FREIGHT-' || fc.id::text || '-%')`,
-               sql`fc.company_id`
+               sql`fc.company_id`,
+               asOf
              )} AS freight_posted,
              fc.commission_amount::text AS commission_amount, fc.commission_currency_code,
              fc.commission_fx_rate_to_usd::text AS commission_fx_rate_to_usd, fc.commission_fx_rate_confirmed,
              ${liveVoucherExists(
                sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
-               sql`fc.company_id`
+               sql`fc.company_id`,
+               asOf
              )} AS commission_posted
         FROM factory_containers fc
        WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL

@@ -340,7 +340,10 @@ export function registerContainerCrudRoutes(app: Express) {
         });
       }
 
-      await storage.deleteContainer(id);
+      await storage.deleteContainer(id, {
+        userId: req.session.userId ?? "unknown",
+        username: req.session.username || "unknown",
+      });
       try {
         await logAudit({
           userId: req.session.userId!,

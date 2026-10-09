@@ -14,9 +14,10 @@ import { requireAuth } from "../../../auth";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
 import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
 import { factoryContainers, voucherEntries, factoryContainerOtherCharges, vouchers } from "@shared/schema";
-import { eq, and, inArray, ilike } from "drizzle-orm";
+import { eq, and, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
 import { parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 type OtherChargeInput = {
   description: string;
@@ -166,8 +167,13 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
           );
         if (existingVouchers.length > 0) {
           const voucherIds = existingVouchers.map((voucher) => voucher.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds,
+            reason: "factory-container-other-charge-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         await tx

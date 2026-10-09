@@ -7,7 +7,8 @@
  *     charges that have their own CHARGE- voucher, and Dr COGS / Cr finished
  *     goods for the recorded cost of its bales; the factory customer ledger
  *     does not count it twice; un-finalizing removes it;
- *   - an invoice in another currency posts nothing and is listed;
+ *   - an invoice in another currency with no confirmed factory rate is
+ *     refused (wave 17 B; it used to post nothing) and is listed;
  *   - the daily factory stock journal moves the factory stock accounts to the
  *     costing value, credits the expensed cost of the raw material received,
  *     and puts what is left in production variance; a second run the same day
@@ -254,7 +255,7 @@ describe("factory invoices in the ledger", () => {
     await asMaintenance(() => db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId)));
   }, 60000);
 
-  it("posts nothing for an invoice in another currency and lists it", async () => {
+  it("refuses an invoice in another currency with no confirmed rate and lists it", async () => {
     const otherOrder = await asMaintenance(async () => {
       const batch = (
         await pool.query(
@@ -272,9 +273,10 @@ describe("factory invoices in the ledger", () => {
         )
       ).rows[0].id;
     });
-    expect(
-      await asMaintenance(() => db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, otherOrder)))
-    ).toBeNull();
+    // Wave 17 B (decision 3): no EUR rate on or before the invoice date, so it is refused (409).
+    await expect(
+      asMaintenance(() => db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, otherOrder)))
+    ).rejects.toMatchObject({ statusCode: 409, code: "FACTORY_INVOICE_RATE_UNCONFIRMED" });
     const unposted = await asMaintenance(() => listUnpostedFactoryInvoices(db, companyId));
     expect(unposted.map((row) => [row.invoiceNumber, row.currency, row.grandTotal])).toEqual([
       ["INV-900002", "EUR", "300.00"],

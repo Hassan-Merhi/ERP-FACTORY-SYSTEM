@@ -16,6 +16,7 @@ import {
   getDatabaseScopeRuntimeContext,
   runWithDatabaseScopeRuntimeContext,
 } from "../../services/security/databaseScopeRuntimeContext";
+import { retireVouchersByNumberTx } from "../../services/accounting/voucherRetirement";
 
 // ─── Intercompany POS ─────────────────────────────────────────────────────────
 //
@@ -274,14 +275,17 @@ async function addToRunningTotalVoucherTx(
   await tx.update(vouchers).set({ description: narration, totalAmount: totalText }).where(eq(vouchers.id, existing.id));
 }
 
+/**
+ * Retires the running-total journal before a rebuild (wave 16 A): soft delete,
+ * audited, its number and posting identity released; it used to be
+ * hard-deleted with no audit.
+ */
 async function deleteVoucherByNumberTx(tx: DbTransaction, companyId: number, voucherNumber: string): Promise<void> {
-  const [existing] = await tx
-    .select({ id: vouchers.id })
-    .from(vouchers)
-    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.voucherNumber, voucherNumber)));
-  if (!existing) return;
-  await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existing.id));
-  await tx.delete(vouchers).where(eq(vouchers.id, existing.id));
+  await retireVouchersByNumberTx(tx, {
+    companyId,
+    voucherNumbers: [voucherNumber],
+    reason: "intercompany-pos-mirror-rebuild",
+  });
 }
 
 /**

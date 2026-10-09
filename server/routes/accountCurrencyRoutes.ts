@@ -8,6 +8,7 @@ import { bankAccounts, companies, ledgerAccounts } from "@shared/schema";
 import { normalizeOpeningBalanceCurrency } from "../services/accounting/openingBalanceCurrency";
 import { getCashLedgerAccountSummary } from "../services/accounting/cashLedgerAccountSummaryService";
 import { getCashBankAccountSummary, getCashBankRevaluation } from "../services/accounting/cashBankRevaluationService";
+import { openingSideOf } from "../services/accounting/balances/openingSide";
 
 const OPENING_FIELDS = [
   "openingBalance",
@@ -181,7 +182,7 @@ export const normalizeAccountOpeningBalance: RequestHandler = async (req, res, n
   }
 };
 
-async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: number) {
+async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: number, asOf?: string) {
   const [account] = await db
     .select()
     .from(ledgerAccounts)
@@ -226,11 +227,15 @@ async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: nu
      WHERE ve.ledger_account_id = $1
        AND v.company_id = $2
        AND v.optional = false
-       AND v.deleted_at IS NULL`,
-    [ledgerAccountId, companyId]
+       AND v.deleted_at IS NULL
+       ${asOf ? "AND COALESCE(v.effective_date, v.voucher_date) <= $3::date" : ""}`,
+    asOf ? [ledgerAccountId, companyId, asOf] : [ledgerAccountId, companyId]
   );
 
   let historicalBalance = new Decimal(result.rows[0]?.historical_net || 0);
+  // The engine's one sideless-opening rule (wave 17 A): a sideless opening
+  // takes its account type's usual side (it was read as Dr).
+  const openingIsCr = openingSideOf("ledger", account.accountType, account.openingBalanceSide).side === "Cr";
   const openingBase = new Decimal(account.openingBalanceBaseAmount || account.openingBalance || 0);
   const openingNative = new Decimal(account.openingBalanceNativeAmount || 0);
   const hasNonZeroOpening = !openingBase.isZero() || !openingNative.isZero();
@@ -238,7 +243,7 @@ async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: nu
     hasNonZeroOpening &&
     (!account.openingBalanceCurrency || !account.openingBalanceBaseAmount || !account.openingBalanceNativeAmount);
   if (!openingBalanceCurrencyUnresolved && !openingBase.isZero()) {
-    historicalBalance = historicalBalance.plus(account.openingBalanceSide === "Cr" ? openingBase.neg() : openingBase);
+    historicalBalance = historicalBalance.plus(openingIsCr ? openingBase.neg() : openingBase);
   }
 
   return {
@@ -249,7 +254,7 @@ async function getHistoricalLedgerBalance(companyId: number, ledgerAccountId: nu
     openingBalanceCurrencyUnresolved,
     unresolvedOpeningBalanceRaw: openingBalanceCurrencyUnresolved
       ? new Decimal(account.openingBalance || 0)
-          .times(account.openingBalanceSide === "Cr" ? -1 : 1)
+          .times(openingIsCr ? -1 : 1)
           .toDecimalPlaces(6)
           .toFixed(6)
       : null,
@@ -273,8 +278,17 @@ export function registerAccountCurrencyRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = Number.parseInt(req.params.id, 10);
       if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ message: "Invalid account ID" });
+      // Optional as-of date (wave 17 A): COALESCE(effective_date, voucher_date) <= asOf;
+      // without it, everything posted (the engine's rule).
+      const asOfRaw = req.query?.asOf;
+      if (asOfRaw !== undefined && (typeof asOfRaw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(asOfRaw))) {
+        return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
+      }
+      const asOf = asOfRaw;
 
-      const cashSummary = await getCashLedgerAccountSummary(companyId, id);
+      // The cash/bank currency summary has no date cut, so a dated balance is
+      // the historical-base ledger balance below (the engine's basis).
+      const cashSummary = asOf ? null : await getCashLedgerAccountSummary(companyId, id);
       if (cashSummary) {
         const displayBalance = cashSummary.currentTranslatedBaseBalance ?? cashSummary.historicalBaseBalance;
         // historicalBaseBalance only covers entries whose currency is fully resolved to a
@@ -290,7 +304,7 @@ export function registerAccountCurrencyRoutes(app: Express) {
         return res.json({ balance, ...cashSummary });
       }
 
-      const historical = await getHistoricalLedgerBalance(companyId, id);
+      const historical = await getHistoricalLedgerBalance(companyId, id, asOf);
       if (historical) {
         // historicalBaseBalance = resolved-entry net (USD-denominated).
         // Add back: (1) unresolved OB, (2) unresolved legacy entry raw net.
@@ -310,6 +324,20 @@ export function registerAccountCurrencyRoutes(app: Express) {
         });
       }
 
+      if (asOf) {
+        // The revaluation summary has no date cut: a dated bank balance is the
+        // engine's (its own opening and its bank-only lines, historical base).
+        const [bank] = await db
+          .select({ id: bankAccounts.id })
+          .from(bankAccounts)
+          .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId), isNull(bankAccounts.deletedAt)))
+          .limit(1);
+        if (!bank) return res.status(404).json({ message: "Account not found" });
+        // Loaded on demand: the engine is only needed for a dated bank balance.
+        const { getPartyBalance } = await import("../services/accounting/balances/ledgerBalanceEngine");
+        const party = await getPartyBalance(db, { companyId, kind: "bank", id, asOf });
+        return res.json({ balance: Number(party?.historicalBaseClosing ?? 0), asOf });
+      }
       const bankSummary = await getCashBankAccountSummary(companyId, "bank", id);
       if (!bankSummary) return res.status(404).json({ message: "Account not found" });
       const displayBalance = bankSummary.currentTranslatedBaseBalance ?? bankSummary.historicalBaseBalance;

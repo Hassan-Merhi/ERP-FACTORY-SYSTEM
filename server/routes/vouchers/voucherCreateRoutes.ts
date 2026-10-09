@@ -309,23 +309,26 @@ export function registerVoucherCreateRoutes(app: Express) {
           await syncEmployeeBalancesFromEntries(txEntries, req.session.currentCompanyId!, false, tx);
         }
 
+        // Wave 16 (B): the creation is audited in this transaction.
+        const createEntriesSnap = await snapshotVoucherEntries(txEntries, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "create",
+            tableName: "vouchers",
+            recordId: txVoucher.id,
+            recordIdentifier: txVoucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(txVoucher, createEntriesSnap),
+          },
+          tx
+        );
+
         return { createdVoucher: txVoucher, createdEntries: txEntries };
       });
 
       const result = { voucher: createdVoucher, entries: createdEntries };
-
-      // Log the creation to audit log
-      const _createEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId: req.session.currentCompanyId!,
-        action: "create",
-        tableName: "vouchers",
-        recordId: createdVoucher.id,
-        recordIdentifier: createdVoucher.voucherNumber,
-        changes: buildVoucherChangesForCreate(createdVoucher, _createEntriesSnap),
-      });
 
       // Fire-and-forget intercompany notification check (Payment/Receipt only)
       triggerIntercompanyNotifications(

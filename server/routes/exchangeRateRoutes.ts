@@ -36,7 +36,8 @@ export function registerExchangeRateRoutes(app: Express) {
       const latestRate = await storage.getLatestExchangeRate(
         companyId,
         company.baseCurrency || "",
-        company.displayCurrency
+        company.displayCurrency,
+        today
       );
 
       if (!latestRate) {

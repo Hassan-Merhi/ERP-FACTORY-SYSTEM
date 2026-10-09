@@ -20,6 +20,7 @@ import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVo
 import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerFactoryContainerUpdateRoutes(app: Express) {
   app.patch("/api/factory/containers/:id", requireAuth, async (req: Request, res: Response) => {
@@ -439,8 +440,13 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           // Freight amount dropped to zero AND freight fields were explicitly changed →
           // delete the now-empty freight voucher.
           // (A date-only PATCH must never delete an existing freight voucher.)
-          await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
-          await tx.delete(vouchers).where(eq(vouchers.id, existingFV.id));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: [existingFV.id],
+            reason: "factory-container-freight-resync",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         if (commissionNeedsSync) await syncContainerCommissionJournalTx(tx, companyId, id);

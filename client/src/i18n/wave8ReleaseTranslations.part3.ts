@@ -645,4 +645,210 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "السلفة المحذوفة لـ{{0}}: ${{1}}{{2}}",
     fr: "Avance supprimée pour {{0}} : ${{1}}{{2}}",
   },
+  {
+    en: "Only an Admin or Owner can change the opening balance of an account that already has posted entries.",
+    ar: "لا يمكن إلا للمسؤول أو المالك تغيير الرصيد الافتتاحي لحساب لديه قيود مرحّلة.",
+    fr: "Seul un administrateur ou le propriétaire peut modifier le solde d’ouverture d’un compte qui a déjà des écritures comptabilisées.",
+  },
+  {
+    en: "This account already has posted entries, so its type cannot be moved to another category (for example Expense to Asset). Create a new account and move the balance with a journal entry.",
+    ar: "لهذا الحساب قيود مرحّلة، لذلك لا يمكن نقل نوعه إلى فئة أخرى (مثلاً من مصروف إلى أصل). أنشئ حساباً جديداً وانقل الرصيد بقيد يومية.",
+    fr: "Ce compte a déjà des écritures comptabilisées : son type ne peut pas passer dans une autre catégorie (par exemple de Charge à Actif). Créez un nouveau compte et transférez le solde par une écriture de journal.",
+  },
+  {
+    en: "This account already has voucher entries, so it cannot be moved to another company.",
+    ar: "لهذا الحساب قيود سندات، لذلك لا يمكن نقله إلى شركة أخرى.",
+    fr: "Ce compte a déjà des lignes de pièces : il ne peut pas être déplacé vers une autre société.",
+  },
+  {
+    en: "Failed to save market rate",
+    ar: "تعذر حفظ سعر السوق",
+    fr: "Échec de l’enregistrement du cours du marché",
+  },
+  {
+    en: "Market rate saved",
+    ar: "تم حفظ سعر السوق",
+    fr: "Cours du marché enregistré",
+  },
+  {
+    en: "A market rate is already saved for today",
+    ar: "تم حفظ سعر سوق لهذا اليوم مسبقاً",
+    fr: "Un cours du marché est déjà enregistré pour aujourd’hui",
+  },
+  {
+    en: "Save today's market rate",
+    ar: "حفظ سعر السوق لهذا اليوم",
+    fr: "Enregistrer le cours du marché du jour",
+  },
+  {
+    en: "No rate removed",
+    ar: "لم يُحذف أي سعر",
+    fr: "Aucun cours supprimé",
+  },
+  {
+    en: "Rates used by documents and recorded market rates were kept.",
+    ar: "تم الإبقاء على الأسعار التي استخدمتها المستندات وأسعار السوق المسجلة.",
+    fr: "Les cours utilisés par des documents et les cours du marché enregistrés ont été conservés.",
+  },
+  {
+    en: "The reviewed plan's planHash is required to apply the repair",
+    ar: "يلزم planHash الخاص بالخطة التي تمت مراجعتها لتطبيق الإصلاح",
+    fr: "Le planHash du plan examiné est requis pour appliquer la réparation",
+  },
+  {
+    en: "A three-letter non-USD currency code is required",
+    ar: "يلزم رمز عملة من ثلاثة أحرف غير الدولار الأمريكي",
+    fr: "Un code de devise à trois lettres autre que USD est requis",
+  },
+  {
+    en: "Amount must be positive and at most 1,000,000,000",
+    ar: "يجب أن يكون المبلغ موجباً وألا يتجاوز 1,000,000,000",
+    fr: "Le montant doit être positif et ne pas dépasser 1 000 000 000",
+  },
+  {
+    en: "${label} is not a valid amount",
+    ar: "{{0}} ليس مبلغاً صالحاً",
+    fr: "{{0}} n’est pas un montant valide",
+  },
+  {
+    en: "Could not resolve Retail accounting account ${status.code}",
+    ar: "تعذر تحديد حساب محاسبة التجزئة {{0}}",
+    fr: "Impossible de déterminer le compte comptable de détail {{0}}",
+  },
+  {
+    en: "This invoice is in a currency with no confirmed exchange rate on or before its date. Enter the factory exchange rate for that currency first.",
+    ar: "هذه الفاتورة بعملة ليس لها سعر صرف مؤكد في تاريخها أو قبله. أدخل سعر صرف المصنع لتلك العملة أولاً.",
+    fr: "Cette facture est dans une devise sans taux de change confirmé à sa date ou avant. Saisissez d’abord le taux de change de l’usine pour cette devise.",
+  },
+  {
+    en: "Under perpetual inventory a bale must come from a costed mix. Choose the mix the bales were pressed from.",
+    ar: "في ظل الجرد الدائم يجب أن تأتي البالة من خلطة لها تكلفة. اختر الخلطة التي كُبست منها البالات.",
+    fr: "En inventaire permanent, une balle doit provenir d’un mélange valorisé. Choisissez le mélange dont les balles ont été pressées.",
+  },
+  {
+    en: "The load's proforma or its customer was not found in this company.",
+    ar: "لم يتم العثور على الفاتورة المبدئية للحمولة أو على عميلها في هذه الشركة.",
+    fr: "La facture proforma du chargement ou son client est introuvable dans cette société.",
+  },
+  {
+    en: "The load has no bales to invoice.",
+    ar: "لا تحتوي الحمولة على بالات لإصدار فاتورة بها.",
+    fr: "Le chargement ne contient aucune balle à facturer.",
+  },
+  {
+    en: "Some bales of this load are no longer in stock. Remove them from the load before finalizing it.",
+    ar: "بعض بالات هذه الحمولة لم تعد في المخزون. أزلها من الحمولة قبل إنهائها.",
+    fr: "Certaines balles de ce chargement ne sont plus en stock. Retirez-les du chargement avant de le finaliser.",
+  },
+  {
+    en: "Some bales of this load have no stock location. Set their location before finalizing the load.",
+    ar: "بعض بالات هذه الحمولة ليس لها موقع مخزون. حدّد موقعها قبل إنهاء الحمولة.",
+    fr: "Certaines balles de ce chargement n’ont pas d’emplacement de stock. Définissez leur emplacement avant de finaliser le chargement.",
+  },
+  {
+    en: "Some bales of this load have an article that is not on the load's proforma, so they have no price. Add the article to the proforma before finalizing the load.",
+    ar: "بعض بالات هذه الحمولة لها صنف غير موجود في الفاتورة المبدئية للحمولة، لذلك ليس لها سعر. أضف الصنف إلى الفاتورة المبدئية قبل إنهاء الحمولة.",
+    fr: "Certaines balles de ce chargement ont un article absent de la facture proforma du chargement ; elles n’ont donc pas de prix. Ajoutez l’article à la proforma avant de finaliser le chargement.",
+  },
+  // Wave 16 (A): boot repairs and voucher hard deletes.
+  {
+    en: "This location still holds stock (a quantity or a value), so it cannot be permanently deleted. Move or write off the stock first, or keep it in Deleted Items.",
+    ar: "لا يزال هذا الموقع يحتفظ بمخزون (كمية أو قيمة)، لذلك لا يمكن حذفه نهائياً. انقل المخزون أو اشطبه أولاً، أو أبقه في العناصر المحذوفة.",
+    fr: "Cet emplacement contient encore du stock (une quantité ou une valeur) : il ne peut pas être supprimé définitivement. Transférez ou sortez d’abord le stock, ou laissez-le dans les éléments supprimés.",
+  },
+  {
+    en: "This voucher was replaced when its source document was posted again, so it cannot be restored. The replacement is the live voucher.",
+    ar: "تم استبدال هذا السند عندما أُعيد ترحيل مستنده المصدر، لذلك لا يمكن استعادته. البديل هو السند الساري.",
+    fr: "Cette pièce a été remplacée lorsque son document source a été comptabilisé à nouveau : elle ne peut pas être restaurée. La pièce de remplacement est la pièce active.",
+  },
+  {
+    en: "The insurance journal repair plan changed since it was reviewed; review it again before applying",
+    ar: "تغيّرت خطة إصلاح قيود التأمين منذ مراجعتها؛ راجعها مرة أخرى قبل التطبيق",
+    fr: "Le plan de correction des écritures d’assurance a changé depuis sa revue ; revoyez-le avant de l’appliquer",
+  },
+  {
+    en: "The supplier link repair plan changed since it was reviewed; review it again before applying",
+    ar: "تغيّرت خطة إصلاح روابط الموردين منذ مراجعتها؛ راجعها مرة أخرى قبل التطبيق",
+    fr: "Le plan de correction des liens fournisseurs a changé depuis sa revue ; revoyez-le avant de l’appliquer",
+  },
+  {
+    en: "An insurance journal line changed during the repair",
+    ar: "تغيّر سطر في قيد تأمين أثناء الإصلاح",
+    fr: "Une ligne d’écriture d’assurance a changé pendant la correction",
+  },
+  {
+    en: "There is nothing to repair",
+    ar: "لا يوجد ما يحتاج إلى إصلاح",
+    fr: "Il n’y a rien à corriger",
+  },
+  {
+    en: "asOf must be a single YYYY-MM-DD value",
+    ar: "يجب أن يكون asOf تاريخاً واحداً بالصيغة YYYY-MM-DD",
+    fr: "asOf doit être une seule date au format AAAA-MM-JJ",
+  },
+  {
+    en: "kind must be customer or supplier",
+    ar: "يجب أن يكون kind إما customer أو supplier",
+    fr: "kind doit être customer ou supplier",
+  },
+  {
+    en: "startDate must be on or before endDate",
+    ar: "يجب أن يكون startDate في تاريخ endDate أو قبله",
+    fr: "startDate doit être antérieure ou égale à endDate",
+  },
+  {
+    en: "Unsupported payment account type",
+    ar: "نوع حساب الدفع غير مدعوم",
+    fr: "Type de compte de paiement non pris en charge",
+  },
+  {
+    en: "This factory document is in a currency with no confirmed exchange rate on or before its date. Enter the dated factory exchange rate for that currency first.",
+    ar: "هذا المستند الخاص بالمصنع بعملة ليس لها سعر صرف مؤكد في تاريخه أو قبله. أدخل سعر صرف المصنع المؤرخ لتلك العملة أولاً.",
+    fr: "Ce document de l’usine est dans une devise sans taux de change confirmé à sa date ou avant. Saisissez d’abord le taux de change daté de l’usine pour cette devise.",
+  },
+  {
+    en: "This cash movement reason has no account mapped. Map the reason to an account in the Retail accounting settings first.",
+    ar: "لا يوجد حساب مرتبط بسبب حركة النقد هذا. اربط السبب بحساب في إعدادات محاسبة التجزئة أولاً.",
+    fr: "Aucun compte n’est associé à ce motif de mouvement de caisse. Associez d’abord le motif à un compte dans les paramètres comptables du commerce de détail.",
+  },
+  {
+    en: "This reason cannot be used for this cash movement direction.",
+    ar: "لا يمكن استخدام هذا السبب لهذا الاتجاه من حركة النقد.",
+    fr: "Ce motif ne peut pas être utilisé pour ce sens de mouvement de caisse.",
+  },
+  {
+    en: "A cash movement amount can have at most two decimals.",
+    ar: "يمكن أن يحتوي مبلغ حركة النقد على منزلتين عشريتين على الأكثر.",
+    fr: "Le montant d’un mouvement de caisse peut avoir au plus deux décimales.",
+  },
+  {
+    en: "A cash movement reason maps to one account: a ledger account or a bank account.",
+    ar: "يرتبط سبب حركة النقد بحساب واحد: حساب دفتر أستاذ أو حساب بنكي.",
+    fr: "Un motif de mouvement de caisse est associé à un seul compte : un compte général ou un compte bancaire.",
+  },
+  {
+    en: "The Retail inventory opening has already been applied for this company.",
+    ar: "تم تطبيق الرصيد الافتتاحي لمخزون التجزئة لهذه الشركة بالفعل.",
+    fr: "L’ouverture du stock de détail a déjà été appliquée pour cette société.",
+  },
+  {
+    en: "The Retail inventory opening changed since it was reviewed; review it again before applying.",
+    ar: "تغيّر الرصيد الافتتاحي لمخزون التجزئة منذ مراجعته؛ راجعه مرة أخرى قبل التطبيق.",
+    fr: "L’ouverture du stock de détail a changé depuis sa revue ; revoyez-la avant de l’appliquer.",
+  },
+  {
+    en: "Retail stock documents are dated after the chosen opening date. Choose a later opening date.",
+    ar: "توجد مستندات مخزون تجزئة مؤرخة بعد تاريخ الافتتاح المختار. اختر تاريخ افتتاح لاحقاً.",
+    fr: "Des documents de stock de détail sont datés après la date d’ouverture choisie. Choisissez une date d’ouverture plus tardive.",
+  },
+  {
+    en: "The Retail inventory opening date cannot be in the future.",
+    ar: "لا يمكن أن يكون تاريخ الرصيد الافتتاحي لمخزون التجزئة في المستقبل.",
+    fr: "La date d’ouverture du stock de détail ne peut pas être dans le futur.",
+  },
+  {
+    en: "Cash movement reason",
+    ar: "سبب حركة النقد",
+    fr: "Motif du mouvement de caisse",
+  },
 ];

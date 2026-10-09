@@ -16,17 +16,17 @@
  * in the caller's transaction; the closed-period trigger refuses that in a
  * closed period.
  */
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 
 import { ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
 import type { DatabaseOrTransaction } from "../../db";
 import { HttpError } from "../../lib/httpHandlers";
 import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
 } from "../accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx } from "../accounting/voucherRetirement";
 import { normalizeVoucherEntryAmounts } from "../accounting/currencyAmounts";
 
 export const FACTORY_PAYROLL_PAYMENT_ACCOUNT_REQUIRED =
@@ -125,7 +125,7 @@ export async function postFactoryPayrollPaymentVoucherTx(
   return { voucherId: voucher.id };
 }
 
-/** Removes every payment voucher of the payroll (PAYMENT-PAY-{id}-*) with its lines and posting identity. */
+/** Retires every payment voucher of the payroll (PAYMENT-PAY-{id}-*): soft delete with its lines, audited. */
 export async function removeFactoryPayrollPaymentVouchersTx(
   tx: DatabaseOrTransaction,
   companyId: number,
@@ -139,8 +139,7 @@ export async function removeFactoryPayrollPaymentVouchersTx(
     );
   const ids = rows.map((row) => row.id);
   if (ids.length === 0) return ids;
-  for (const voucherId of ids) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-  await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, ids));
-  await tx.delete(vouchers).where(inArray(vouchers.id, ids));
-  return ids;
+  // Wave 16 (A): retired (soft delete with lines, audited, number and identity released).
+  const retired = await retireVouchersTx(tx, { companyId, voucherIds: ids, reason: "factory-payroll-payment-removed" });
+  return retired.map((voucher) => voucher.id);
 }

@@ -12,7 +12,7 @@ import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
-import { getClientDate } from "../lib/dateUtils";
+import { flagFutureDated, serverBusinessDate, statementWindow } from "./helpers/statementWindow";
 import { higherPriorityTargetsAbsent } from "../services/accounting/balances/partyLineRules";
 import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
@@ -23,8 +23,22 @@ import {
 } from "../services/accounting/balances/customerLedgerStatement";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
 
+/**
+ * The statement body. Lines dated after the server's business date are
+ * flagged `futureDated` (wave 17 A); `endDate` is null when the statement
+ * lists everything posted.
+ */
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
-  return { transactions, currencySummary: summarizeAccountStatementCurrency(transactions), ...fields };
+  const businessDate = serverBusinessDate();
+  const flagged = flagFutureDated(transactions, businessDate);
+  return {
+    transactions: flagged.rows,
+    currencySummary: summarizeAccountStatementCurrency(flagged.rows),
+    ...fields,
+    endDate: fields.endDate ?? null,
+    businessDate,
+    futureDatedCount: flagged.futureDatedCount,
+  };
 }
 
 export function registerAccountTransactionRoutes(app: Express) {
@@ -37,14 +51,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid ledger account ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      // Cap the end date at today so future-dated vouchers are never shown
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // 1. Load the ledger account to get its authoritative company scope.
       //    Using ledgerAccount.companyId (not req.session.currentCompanyId) so the
@@ -142,13 +151,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid bank account ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load account to get authoritative company scope
       const [bankAccount] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, bankAccountId));
@@ -205,13 +210,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid fixed asset ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load account to get authoritative company scope
       const [fixedAsset] = await db.select().from(fixedAssets).where(eq(fixedAssets.id, fixedAssetId));
@@ -268,13 +269,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       const requestedCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
 
@@ -345,13 +342,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid employee ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load employee to get authoritative company scope
       const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
@@ -403,13 +396,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid customer ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load customer to get authoritative company scope
       const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));

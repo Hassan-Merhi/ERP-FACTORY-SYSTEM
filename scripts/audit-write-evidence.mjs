@@ -119,7 +119,6 @@ export const PHASE6_SPECIAL_PURPOSE_COMPLETED_WRITERS = new Set([
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
   "server/routes/sp-migration/spMigrationSetupRoutes.ts",
   "server/routes/stockTransferImportRoutes.ts",
-  "server/services/rental/reclassifyDeferredRentService.ts",
 ]);
 
 function sourceFiles(directory, collected = []) {

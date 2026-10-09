@@ -11,19 +11,13 @@ import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { eq, and, inArray, like, or } from "drizzle-orm";
-import {
-  factoryWorkers,
-  factoryWorkerAdvances,
-  factoryAdvanceRepayments,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
+import { eq, and, like, or } from "drizzle-orm";
+import { factoryWorkers, factoryWorkerAdvances, factoryAdvanceRepayments, vouchers } from "@shared/schema";
 import { logAudit } from "../../helpers/auditHelpers";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
 import { toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerWorkerRepaymentDeleteRoutes(app: Express) {
   app.delete("/api/factory/advance-repayments/:id", requireAuth, async (req: Request, res: Response) => {
@@ -88,9 +82,13 @@ export function registerWorkerRepaymentDeleteRoutes(app: Express) {
           );
         const voucherIds = receiptVouchers.map((v) => v.id);
         if (voucherIds.length > 0) {
-          for (const voucherId of voucherIds) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds,
+            reason: "advance-repayment-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         await writeDaybookEntry(tx, {

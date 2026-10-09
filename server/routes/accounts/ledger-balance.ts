@@ -7,11 +7,10 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
-import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { bankAccounts, ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
-import { MoneyDecimal, debitMinusCredit, signedOpeningBalance, toMoney } from "../../lib/money";
+import { toMoney } from "../../lib/money";
 import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { getCustomerByLedgerId } from "../../lib/factoryCustomerLedger";
 
@@ -30,13 +29,24 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      // Resolve the account inside the active tenant. Looking up by global ID
-      // first leaked balances for accounts owned by another company.
+      // Optional as-of date (inclusive): without it, everything posted.
+      const asOfRaw = req.query?.asOf;
+      if (asOfRaw !== undefined && (typeof asOfRaw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(asOfRaw))) {
+        return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
+      }
+      const asOf = asOfRaw ?? null;
+
+      // The balance engine (wave 17 A), company-scoped: this company's vouchers
+      // only, COALESCE(effective_date, voucher_date) <= asOf, the master's own
+      // opening with its side (a sideless ledger opening takes its type's
+      // usual side; it was Dr), each line counted once by the engine's
+      // ownership priority. A bank linked to this ledger (linked_ledger_id) is
+      // its own row: its opening and its bank-only lines are no longer folded
+      // into the ledger's balance (they were, so the bank was counted twice
+      // against the trial balance), and every company's bank lines are no
+      // longer read.
       const [account] = await db
-        .select({
-          openingBalance: ledgerAccounts.openingBalance,
-          openingBalanceSide: ledgerAccounts.openingBalanceSide,
-        })
+        .select({ id: ledgerAccounts.id })
         .from(ledgerAccounts)
         .where(and(eq(ledgerAccounts.id, ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
         .limit(1);
@@ -45,7 +55,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
       // ID in this company (entries are stored in voucherEntries.bankAccountId).
       if (!account) {
         const [bankAcct] = await db
-          .select({ openingBalance: bankAccounts.openingBalance, openingBalanceSide: bankAccounts.openingBalanceSide })
+          .select({ id: bankAccounts.id })
           .from(bankAccounts)
           .where(and(eq(bankAccounts.id, ledgerAccountId), eq(bankAccounts.companyId, companyId)))
           .limit(1);
@@ -56,11 +66,8 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
           return res.status(404).json({ message: "Account not found" });
         }
 
-        const bankTxs = await storage.getVoucherEntriesByBankAccount(ledgerAccountId);
-        const bankBalance = signedOpeningBalance(bankAcct.openingBalance, bankAcct.openingBalanceSide).plus(
-          debitMinusCredit(bankTxs)
-        );
-        return res.json({ balance: bankBalance.toNumber() });
+        const bank = await getPartyBalance(db, { companyId, kind: "bank", id: bankAcct.id, asOf });
+        return res.json({ balance: toMoney(bank?.closing).toNumber(), asOf });
       }
 
       // A ledger account a customer owns has no balance of its own: the
@@ -71,41 +78,21 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
       // reported separately and never added to `balance`.
       const owner = await getCustomerByLedgerId(ledgerAccountId);
       if (owner && owner.companyId === companyId) {
-        const party = await getPartyBalance(db, { companyId, kind: "customer", id: owner.id, memo: true });
+        const party = await getPartyBalance(db, { companyId, kind: "customer", id: owner.id, asOf, memo: true });
         return res.json({
           balance: toMoney(party?.closing).toNumber(),
           customerId: owner.id,
           notInLedgerTotal: toMoney(party?.memoTotal).toNumber(),
+          asOf,
         });
       }
 
-      const transactions = await storage.getVoucherEntriesByLedger(ledgerAccountId, undefined, undefined, companyId);
-      let movement = debitMinusCredit(transactions);
-
-      // Some bank accounts have a linkedLedgerId pointing to this ledger account.
-      // Their voucher entries are stored under bankAccountId (not ledgerAccountId),
-      // so getVoucherEntriesByLedger misses them. Keep those bank lookups tenant-scoped.
-      const linkedBanks = await db
-        .select({
-          id: bankAccounts.id,
-          openingBalance: bankAccounts.openingBalance,
-          openingBalanceSide: bankAccounts.openingBalanceSide,
-        })
-        .from(bankAccounts)
-        .where(and(eq(bankAccounts.linkedLedgerId, ledgerAccountId), eq(bankAccounts.companyId, companyId)));
-
-      let linkedBankOB = new MoneyDecimal(0);
-      for (const bank of linkedBanks) {
-        const bankTxs = await storage.getVoucherEntriesByBankAccount(bank.id);
-        movement = movement.plus(debitMinusCredit(bankTxs));
-        linkedBankOB = linkedBankOB.plus(signedOpeningBalance(bank.openingBalance, bank.openingBalanceSide));
-      }
-
-      const balance = signedOpeningBalance(account.openingBalance, account.openingBalanceSide)
-        .plus(linkedBankOB)
-        .plus(movement);
-
-      res.json({ balance: balance.toNumber() });
+      const ledger = await getPartyBalance(db, { companyId, kind: "ledger", id: ledgerAccountId, asOf });
+      res.json({
+        balance: toMoney(ledger?.closing).toNumber(),
+        asOf,
+        openingSideAssumed: ledger?.openingSideAssumed ?? false,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

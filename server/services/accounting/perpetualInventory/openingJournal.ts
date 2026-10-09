@@ -15,6 +15,8 @@
  *   Dr Factory Work in Progress      open mix-batch kg × mix cost per kg,
  *                                    plus bales awaiting pressing
  *   Dr Factory Finished Goods        bales held, at their recorded cost
+ *   Dr Factory Goods in Transit      the expensed cost of factory containers
+ *                                    not yet received (wave 17 B, below)
  *      Cr Opening Balance Equity     the total
  *
  * Each line posts the difference between that value and what the ledger
@@ -48,6 +50,30 @@
  * The plan lists the purchase orders the Goods in Transit line carries
  * (`goodsInTransitPurchaseOrderIds`), so a later stock-in journal credits Goods
  * in Transit only for what the opening put there (carriedByOpening).
+ *
+ * Wave 17 B apply guard (decision 6, factoryCutoverBlockers.ts): also refused
+ * (FACTORY_READINESS_BLOCKERS) while factory raw-stock rows or bales carry no
+ * USD cost, open mixes have no USD rate, stock bales with no mix are costed at
+ * the catalogue price (decision 2), or legacy factory foreign-currency lines
+ * are unrepaired (the wave 6 repair plan's count). The message gives the
+ * counts; the readiness report shows the same figures.
+ *
+ * Factory goods in transit (wave 17 B, re-audit HIGH). The factory books a
+ * container's cost to expense when its FACTORY- vouchers post (import,
+ * commission, freight, other charges), before the raw material arrives; the
+ * daily factory stock journal capitalises a receipt by crediting those expense
+ * accounts. For a container expensed before the cut-over and received after
+ * it, that credit would reduce the new period's expense for a cost of the old
+ * one. The approach is the ERP one (goods in transit carried by the opening,
+ * cleared by the receipt): the opening debits FACTORY_GOODS_IN_TRANSIT, per
+ * container not fully received at the eve (factory status not OFFLOADED), with
+ * what its FACTORY- vouchers dated before the cut-over debited to expense less
+ * the USD value of its receipts dated before the cut-over (when positive), and
+ * lists it (`factoryGoodsInTransit`); the daily factory journal credits Factory
+ * Goods in Transit with a later receipt of that container up to what the
+ * opening carried, and only the rest against the expense accounts. A carried
+ * amount the receipts never use (a short container) stays in Factory Goods in
+ * Transit, where the reconciliation shows it.
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -62,6 +88,7 @@ import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "..
 import { ensureSystemAccounts } from "../systemAccounts";
 import { ledgerBalancesByCode } from "./linkedJournal";
 import { factoryStockValuation, type UnvaluedRow } from "./factoryValuation";
+import { factoryCutoverBlockerMessage, factoryCutoverBlockers } from "./factoryCutoverBlockers";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
 
 export interface OpeningJournalLine {
@@ -98,6 +125,8 @@ export interface OpeningInventoryPlan {
   supplierPartner: boolean;
   /** The purchase orders the Goods in Transit line carries (dated before the cut-over, not offloaded by then). */
   goodsInTransitPurchaseOrderIds: number[];
+  /** Factory containers the Factory Goods in Transit line carries, with the amount (wave 17 B). */
+  factoryGoodsInTransit: Array<{ containerId: number; amount: string }>;
   alreadyApplied: boolean;
   postingReady: boolean;
 }
@@ -110,6 +139,7 @@ export class OpeningJournalRefusal extends Error {
       | "CUTOVER_IN_FUTURE"
       | "DOCUMENTS_ON_OR_AFTER_CUTOVER"
       | "READINESS_BLOCKERS"
+      | "FACTORY_READINESS_BLOCKERS"
       | "INVALID_DATE",
     message: string
   ) {
@@ -194,6 +224,8 @@ export async function planOpeningInventoryJournal(
       );
   const goodsInTransit = toMoney(transit[0]?.purchases ?? 0).toDecimalPlaces(2);
   const goodsInTransitPurchaseOrderIds = (transit[0]?.purchase_order_ids ?? []).map(Number);
+  const factoryGoodsInTransit = await factoryGoodsInTransitAtEve(executor, companyId, effectiveFrom);
+  const factoryTransitTotal = factoryGoodsInTransit.reduce((sum, row) => sum.plus(row.amount), new MoneyDecimal(0));
 
   const targets: Array<{ accountCode: string; target: Decimal; basis: string }> = [
     // A supplier-partner company's ERP inventory accounts are left as they are.
@@ -225,6 +257,11 @@ export async function planOpeningInventoryJournal(
       accountCode: "FACTORY_FINISHED_GOODS",
       target: finishedValue.toDecimalPlaces(2),
       basis: "bales held, at their recorded cost",
+    },
+    {
+      accountCode: "FACTORY_GOODS_IN_TRANSIT",
+      target: factoryTransitTotal.toDecimalPlaces(2),
+      basis: "expensed cost of factory containers not yet received",
     },
   ];
 
@@ -263,9 +300,58 @@ export async function planOpeningInventoryJournal(
     erpStock: erpStockDetail,
     supplierPartner,
     goodsInTransitPurchaseOrderIds,
+    factoryGoodsInTransit: factoryGoodsInTransit.map((row) => ({
+      containerId: row.containerId,
+      amount: row.amount.toFixed(2),
+    })),
     alreadyApplied: (await getInventoryCutover(executor, companyId)) !== null,
     postingReady: PERPETUAL_INVENTORY_POSTING_READY,
   };
+}
+
+/**
+ * Factory goods in transit on the eve (see the module comment): per factory
+ * container not fully received, what its FACTORY- vouchers dated before the
+ * cut-over debited to expense less the USD value of its receipts dated before
+ * it, when positive.
+ */
+export async function factoryGoodsInTransitAtEve(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  effectiveFrom: string
+): Promise<Array<{ containerId: number; amount: Decimal }>> {
+  const found = await rows<{ container_id: number; expensed: string; received: string }>(
+    executor,
+    sql`
+      WITH expensed AS (
+        SELECT substring(v.voucher_number FROM '^FACTORY-(?:IMPORT|COMM|FREIGHT|OC|POC)-([0-9]+)(?:-|$)')::int
+                 AS container_id,
+               SUM(ve.debit_amount) AS amount
+          FROM vouchers v
+          JOIN voucher_entries ve ON ve.voucher_id = v.id AND ve.debit_amount > 0
+          JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
+                                 AND la.account_type ILIKE '%expense%'
+         WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL AND COALESCE(v.optional, false) = false
+           AND COALESCE(v.effective_date, v.voucher_date) < ${effectiveFrom}::date
+           AND v.voucher_number ~ '^FACTORY-(IMPORT|COMM|FREIGHT|OC|POC)-[0-9]+(-|$)'
+         GROUP BY 1
+      )
+      SELECT e.container_id, e.amount::text AS expensed,
+             COALESCE((SELECT SUM(r.receipt_value_usd) FROM factory_container_receipts r
+                        WHERE r.company_id = ${companyId} AND r.container_id = e.container_id
+                          AND r.deleted_at IS NULL AND r.receipt_date < ${effectiveFrom}::date), 0)::text AS received
+        FROM expensed e
+        JOIN factory_containers fc ON fc.id = e.container_id AND fc.company_id = ${companyId}
+       WHERE fc.deleted_at IS NULL AND COALESCE(fc.status, '') <> 'OFFLOADED'
+       ORDER BY e.container_id
+    `
+  );
+  return found
+    .map((row) => ({
+      containerId: Number(row.container_id),
+      amount: toMoney(row.expensed).minus(toMoney(row.received)).toDecimalPlaces(2),
+    }))
+    .filter((row) => row.amount.gt(0));
 }
 
 /**
@@ -388,6 +474,10 @@ export async function applyOpeningInventoryJournal(
         // applied before the first document of its date (or moved to a later date).
         await assertNoDocumentsOnOrAfterTx(tx, companyId, effectiveFrom);
         if (!plan.supplierPartner) await assertInventoryReadyTx(tx, companyId);
+        // Wave 17 B (decision 6): unvalued factory rows, open mixes without a USD
+        // rate, no-mix bales at the catalogue price, unrepaired legacy FX lines.
+        const factoryBlocked = factoryCutoverBlockerMessage(await factoryCutoverBlockers(tx, companyId));
+        if (factoryBlocked) throw new OpeningJournalRefusal("FACTORY_READINESS_BLOCKERS", factoryBlocked);
         let id: number | null = null;
         if (plan.lines.length > 0) {
           const codes = [...plan.lines.map((line) => line.accountCode), "OPENING_BALANCE_EQUITY"];

@@ -10,8 +10,8 @@ describe("audit detail completeness", () => {
     const routes = read("server/routes/vouchers/immutableStockTransferRevisionRoutes.ts");
     const compatibility = read("server/routes/vouchers/adminPostUpdateStockTransferRevisionRoute.ts");
 
-    expect(routes).toContain('items: { new: revisionItemsForAudit(result.items) }');
-    expect(routes).toContain('items: { new: result.items }');
+    expect(routes).toContain("items: { new: revisionItemsForAudit(result.items) }");
+    expect(routes).toContain("items: { new: result.items }");
     expect(routes).toContain('"approve",');
     expect(compatibility).toContain("stockItemName: item.stockItemName");
     expect(compatibility).toContain("originalQuantity: item.originalQuantity");
@@ -70,7 +70,8 @@ describe("audit detail completeness", () => {
     expect(posUpdate).toContain("old: oldAuditRows.map");
     expect(posUpdate).toContain("new: updatedSalesItems.map");
     expect(posUpdate).toContain("totalAmount: item.totalSales");
-    expect(creditNotes).toContain("const auditItems = await db");
+    // Wave 16 B: the credit-note audit (with its items) is written in the transaction.
+    expect(creditNotes).toContain("const auditItems = await tx");
     expect(creditNotes).toContain("items: { new: auditItems }");
   });
 

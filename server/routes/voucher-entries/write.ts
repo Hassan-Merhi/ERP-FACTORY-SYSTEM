@@ -22,6 +22,7 @@ import {
 } from "../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
+import { logAudit } from "../_helpers";
 
 /**
  * After a single-line write, the voucher's stored lines must still satisfy the
@@ -33,6 +34,24 @@ async function assertStoredVoucherLinesValid(
 ): Promise<void> {
   const lines = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
   assertReplacementEntryAmounts(voucher.voucherType, voucher.optional, storedEntriesAsAmountInput(lines));
+}
+
+/** The fields of a line an audit row records. */
+function lineAuditSnapshot(line: typeof voucherEntries.$inferSelect | undefined) {
+  if (!line) return null;
+  return {
+    entryId: line.id,
+    ledgerAccountId: line.ledgerAccountId,
+    bankAccountId: line.bankAccountId,
+    fixedAssetId: line.fixedAssetId,
+    supplierId: line.supplierId,
+    employeeId: line.employeeId,
+    customerId: line.customerId,
+    factorySupplierId: line.factorySupplierId,
+    debitAmount: line.debitAmount,
+    creditAmount: line.creditAmount,
+    narration: line.narration,
+  };
 }
 
 export function registerVoucherEntryWriteRoutes(app: Express) {
@@ -113,6 +132,20 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
           // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
           await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucher.id);
           await assertStoredVoucherLinesValid(tx, voucher);
+          // Wave 16 (B): audited in the writing transaction.
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: voucher.companyId,
+              action: "update",
+              tableName: "vouchers",
+              recordId: voucher.id,
+              recordIdentifier: voucher.voucherNumber,
+              changes: { entryAdded: { new: lineAuditSnapshot(created) } },
+            },
+            tx
+          );
           return created;
         });
       } catch (validationError: unknown) {
@@ -232,6 +265,20 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
           // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
           await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucher.id);
           await assertStoredVoucherLinesValid(tx, voucher);
+          // Wave 16 (B): audited in the writing transaction.
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: voucher.companyId,
+              action: "update",
+              tableName: "vouchers",
+              recordId: voucher.id,
+              recordIdentifier: voucher.voucherNumber,
+              changes: { entryChanged: { old: lineAuditSnapshot(existingEntry), new: lineAuditSnapshot(row) } },
+            },
+            tx
+          );
           return row;
         });
       } catch (validationError: unknown) {

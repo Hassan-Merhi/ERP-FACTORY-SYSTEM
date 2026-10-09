@@ -2,6 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { retailVariantInventory, type RetailProductWrite } from "@shared/schema";
 import { retailStockMovements } from "@shared/schema/retailPos";
 import { db } from "../../db";
+import { trackRetailStockValueTx } from "./retailInventoryJournal";
 
 type RetailTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -47,6 +48,13 @@ export async function writeVariantInventoryWithMovement(
     }
   }
   const locationIds = [...new Set([...existing.keys(), ...desired.keys()])].sort((a, b) => a - b);
+  // Wave 17 (D): the value set here (quantity and cost) is journalled against
+  // RETAIL-INVENTORY-ADJUSTMENT once the Retail inventory opening is applied.
+  const stockValue = await trackRetailStockValueTx(
+    tx,
+    input.companyId,
+    locationIds.map((locationId) => ({ variantId: input.variantId, locationId }))
+  );
 
   for (const locationId of locationIds) {
     const before = existing.get(locationId) ?? 0;
@@ -84,4 +92,10 @@ export async function writeVariantInventoryWithMovement(
       metadata: { source: input.referenceType },
     });
   }
+  await stockValue.post({
+    kind: "product",
+    sourceId: `${input.eventPrefix}:${input.variantId}`,
+    description: `Retail product stock · product ${input.referenceId} · variant ${input.variantId}`,
+    actor: { userId: input.createdBy },
+  });
 }

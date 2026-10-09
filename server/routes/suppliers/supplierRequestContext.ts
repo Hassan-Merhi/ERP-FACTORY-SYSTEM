@@ -1,10 +1,14 @@
 import type { Request } from "express";
 
+import { requestRole } from "../../services/accounting/accountHistoryPolicy";
+
 import { SupplierRouteError } from "./supplierErrors";
 
 export interface SupplierAuditActor {
   userId: string;
   username: string;
+  /** The acting role, for the account-history rules (wave 16 B). */
+  role?: string | null;
 }
 
 export function getActiveSupplierCompanyId(req: Request): number {
@@ -36,5 +40,6 @@ export function getSupplierAuditActor(req: Request): SupplierAuditActor {
   return {
     userId: req.session.userId!,
     username: req.session.username || "unknown",
+    role: requestRole(req),
   };
 }
