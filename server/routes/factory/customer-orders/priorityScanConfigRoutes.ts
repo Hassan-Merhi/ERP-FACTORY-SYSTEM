@@ -20,6 +20,7 @@ import {
 } from "./priorityScanQueue";
 import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
 import { runAutomaticPriorityReprint } from "./priorityAutoAllocation";
+import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
@@ -93,6 +94,7 @@ class PriorityScanConfigError extends Error {
 }
 
 export function registerPriorityScanConfigRoutes(app: Express) {
+  registerPriorityAllocationHistoryRoutes(app);
   // Used by specialist relabel screens where the API returns a REF but not a
   // physical bale ID. Resolve server-side, never trusting the client to choose
   // a loading or a priority color.
