@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 
 export async function getCurrentShift(userId: string, locationId: number): Promise<schema.PosShift | undefined> {
   const [shift] = await db
@@ -51,11 +52,12 @@ export async function closeShift(id: number, closingCash: string, notes?: string
     );
 
   const salesCount = salesVouchers.length;
-  const salesTotal = salesVouchers.reduce((sum, voucher) => sum + parseFloat(voucher.totalAmount || "0"), 0);
-  const openingCash = parseFloat(shift.openingCash || "0");
-  const expectedCash = openingCash + salesTotal;
-  const actualClosing = parseFloat(closingCash);
-  const variance = actualClosing - expectedCash;
+  // Exact sums, so the stored variance is closing cash minus expected cash to the cent.
+  const salesTotal = sumMoney(salesVouchers.map((voucher) => voucher.totalAmount));
+  const expectedCash = toMoney(shift.openingCash).plus(salesTotal);
+  const actualClosing = parseMoneyInput(closingCash);
+  if (!actualClosing) throw new Error("Invalid amount");
+  const variance = actualClosing.minus(expectedCash);
 
   const [updated] = await db
     .update(schema.posShifts)
@@ -63,10 +65,10 @@ export async function closeShift(id: number, closingCash: string, notes?: string
       status: "closed",
       closedAt: sql`now()`,
       closingCash,
-      expectedCash: expectedCash.toFixed(2),
-      variance: variance.toFixed(2),
+      expectedCash: moneyString(expectedCash),
+      variance: moneyString(variance),
       salesCount,
-      salesTotal: salesTotal.toFixed(2),
+      salesTotal: moneyString(salesTotal),
       notes: notes || null,
     })
     .where(eq(schema.posShifts.id, id))
@@ -75,8 +77,5 @@ export async function closeShift(id: number, closingCash: string, notes?: string
 }
 
 export async function updateShiftStats(id: number, salesCount: number, salesTotal: string): Promise<void> {
-  await db
-    .update(schema.posShifts)
-    .set({ salesCount, salesTotal })
-    .where(eq(schema.posShifts.id, id));
+  await db.update(schema.posShifts).set({ salesCount, salesTotal }).where(eq(schema.posShifts.id, id));
 }

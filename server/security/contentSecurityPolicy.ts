@@ -1,53 +1,14 @@
 import type { Express, Request, Response } from "express";
 import express from "express";
-import type helmet from "helmet";
 
 import { logger } from "../lib/logger";
 
-export type CspMode = "off" | "report-only" | "enforce";
-
 /**
- * The policy ships report-only in production by default: violations are
- * collected at /api/csp-report without breaking the app. Set CSP_ENFORCE=true
- * to switch the same policy to enforcing once the report stream is clean.
- * Outside production the header stays off (Vite HMR relies on inline scripts)
- * unless CSP_ENFORCE=true is set explicitly to preview enforcement locally.
+ * Violation reports for the Content-Security-Policy. The policy itself is
+ * built and enforced in server/security/securityHeaders.ts, which points
+ * report-uri here.
  */
-export function resolveCspMode(env: NodeJS.ProcessEnv = process.env): CspMode {
-  if (env.CSP_ENFORCE === "true") return "enforce";
-  if (env.NODE_ENV === "production") return "report-only";
-  return "off";
-}
-
-const CSP_DIRECTIVES: Record<string, string[]> = {
-  "default-src": ["'self'"],
-  // The production bundle is external module scripts only (client/index.html
-  // carries no inline scripts), so scripts stay locked to 'self'.
-  "script-src": ["'self'"],
-  // 'unsafe-inline' is required for React/Radix inline styles and the app's
-  // own <style> blocks; Google Fonts serves the Inter/JetBrains stylesheets.
-  "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-  // https: covers operator-configured external logos; data:/blob: cover QR
-  // codes, label previews, and in-memory exports.
-  "img-src": ["'self'", "https:", "data:", "blob:"],
-  "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
-  // ws:/wss: cover the realtime socket; the font origins cover preconnect hints.
-  "connect-src": ["'self'", "ws:", "wss:", "https://fonts.googleapis.com", "https://fonts.gstatic.com"],
-  "media-src": ["'self'", "blob:", "data:"],
-  "object-src": ["'none'"],
-  "base-uri": ["'self'"],
-  "form-action": ["'self'"],
-  "frame-ancestors": ["'self'"],
-  "report-uri": ["/api/csp-report"],
-};
-
-type HelmetCspOption = NonNullable<Parameters<typeof helmet>[0]>["contentSecurityPolicy"];
-
-export function helmetContentSecurityPolicyOption(env: NodeJS.ProcessEnv = process.env): HelmetCspOption {
-  const mode = resolveCspMode(env);
-  if (mode === "off") return false;
-  return { directives: CSP_DIRECTIVES, reportOnly: mode === "report-only" };
-}
+export const CSP_REPORT_PATH = "/api/csp-report";
 
 // ── Violation report collection ─────────────────────────────────────────────
 // Browsers POST reports unauthenticated and without CSRF tokens, so
@@ -95,7 +56,7 @@ function readCspReportPayload(body: unknown): { directive: string; blocked: stri
 
 export function registerCspReportRoute(app: Express): void {
   app.post(
-    "/api/csp-report",
+    CSP_REPORT_PATH,
     express.json({ type: ["application/json", "application/csp-report"], limit: "100kb" }),
     (req: Request, res: Response) => {
       const { directive, blocked } = readCspReportPayload(req.body as unknown);
@@ -110,11 +71,7 @@ export function registerCspReportRoute(app: Express): void {
         // format prints only whitelisted context keys, so they would be dropped
         // from the context alone, leaving reports that cannot be acted on.
         const summary = `${detail.directive} blocked ${detail.blocked}`;
-        if (resolveCspMode() === "enforce") {
-          logger.warn(`[CSP] enforced policy violation reported: ${summary}`, detail);
-        } else {
-          logger.info(`[CSP] report-only policy observation: ${summary}`, detail);
-        }
+        logger.warn(`[CSP] enforced policy violation reported: ${summary}`, detail);
       }
       // Reports are best-effort telemetry: always acknowledge.
       res.sendStatus(204);

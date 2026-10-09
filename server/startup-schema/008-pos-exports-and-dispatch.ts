@@ -156,8 +156,8 @@ export const posExportsAndDispatch: string[] = [
 
   // ParcelsApp auto-tracking — new columns on containers
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_provider text`,
-  `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_enabled boolean NOT NULL DEFAULT true`,
-  `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_auto_update boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_enabled boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_auto_update boolean NOT NULL DEFAULT false`,
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_carrier_hint text`,
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_last_checked_at timestamptz`,
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS tracking_last_status text`,
@@ -204,6 +204,7 @@ export const posExportsAndDispatch: string[] = [
       order_date date NOT NULL,
       container_arrived_date date,
       note text,
+      anything text,
       is_done boolean NOT NULL DEFAULT false,
       done_at timestamp,
       done_by text,
@@ -230,14 +231,14 @@ export const posExportsAndDispatch: string[] = [
   `CREATE INDEX IF NOT EXISTS fscd_scr_idx ON factory_shipping_container_documents (scr_id)`,
   `CREATE INDEX IF NOT EXISTS fscd_company_idx ON factory_shipping_container_documents (company_id)`,
 
-  // Enable auto-tracking on all existing containers so "Track All Now" works immediately
-  // One-time init — wrapped so manual per-container disables are not reset on restart.
-  `DO $$ BEGIN
-      IF NOT EXISTS (SELECT 1 FROM migrations_log WHERE key = 'containers-tracking-enable-initial-v1') THEN
-        UPDATE containers SET tracking_enabled = true WHERE tracking_enabled = false AND status NOT IN ('Offloaded','Closed','Completed');
-        INSERT INTO migrations_log(key) VALUES ('containers-tracking-enable-initial-v1');
-      END IF;
-    END $$`,
+  // Automated carrier tracking is disabled system-wide. Keep the DB
+  // defaults and all existing rows off so manual/Excel updates are authoritative.
+  `ALTER TABLE containers ALTER COLUMN tracking_enabled SET DEFAULT false`,
+  `ALTER TABLE containers ALTER COLUMN tracking_auto_update SET DEFAULT false`,
+  `UPDATE containers
+      SET tracking_enabled = false,
+          tracking_auto_update = false
+    WHERE tracking_enabled = true OR tracking_auto_update = true`,
   // Stock Grades and Categories (May 2026)
   `CREATE TABLE IF NOT EXISTS stock_grades (
       id serial PRIMARY KEY,
@@ -274,6 +275,7 @@ export const posExportsAndDispatch: string[] = [
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS bl_docs text`,
   // Shipping company invoice columns on shipping container rows (May 2026)
   `ALTER TABLE customer_order_bales ADD COLUMN IF NOT EXISTS scanned_by text`,
+  `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS anything text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS ci_number text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS shipping_invoice_file_name text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS shipping_invoice_original_name text`,
@@ -300,6 +302,7 @@ export const posExportsAndDispatch: string[] = [
       created_at timestamptz NOT NULL DEFAULT now()
     )`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS note text`,
+  `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS details text`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS archived_at timestamp`,
   // One-time cleanup: remove ghost rows from factory_shipping_container_documents.

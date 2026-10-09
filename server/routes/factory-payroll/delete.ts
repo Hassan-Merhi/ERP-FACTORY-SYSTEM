@@ -18,6 +18,7 @@ import { rebuildPayrollGenVoucher } from "../payroll/_payrollAccountingHelper";
 import { factoryPayrolls, factoryWorkerAdvances, factoryAdvanceRepayments } from "@shared/schema";
 
 import { writeDaybookEntry } from "./_helpers";
+import { toMoney } from "../../lib/money";
 
 export function registerFactoryPayrollDeleteRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   app.delete("/api/factory/payroll/:id", requireAuth, async (req: Request, res: Response) => {
@@ -41,8 +42,8 @@ export function registerFactoryPayrollDeleteRoutes(app: Express, requireAuth: Re
 
       await db.transaction(async (tx: DbTransaction) => {
         // Restore advance balances that were settled at generate time
-        const advDeducted = parseFloat(existing.advances || "0");
-        if (advDeducted > 0) {
+        const advDeducted = toMoney(existing.advances);
+        if (advDeducted.gt(0)) {
           const repayments = await tx
             .select()
             .from(factoryAdvanceRepayments)
@@ -59,9 +60,8 @@ export function registerFactoryPayrollDeleteRoutes(app: Express, requireAuth: Re
               .from(factoryWorkerAdvances)
               .where(eq(factoryWorkerAdvances.id, rep.advanceId));
             if (!adv) continue;
-            const curr = parseFloat(adv.remainingBalance || "0");
-            const repAmt = parseFloat(rep.amount || "0");
-            const newBal = curr + repAmt;
+            // Exact: restoring a repayment puts back exactly the cents it took.
+            const newBal = toMoney(adv.remainingBalance).plus(toMoney(rep.amount));
             await tx
               .update(factoryWorkerAdvances)
               .set({
@@ -95,7 +95,7 @@ export function registerFactoryPayrollDeleteRoutes(app: Express, requireAuth: Re
         txType: "PAYROLL_DELETED",
         referenceId: id,
         referenceTable: "factory_payrolls",
-        description: `Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${parseFloat(existing.netSalary || "0").toFixed(2)})`,
+        description: `Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${toMoney(existing.netSalary).toFixed(2)})`,
         createdBy: req.session.userId ?? undefined,
       });
 

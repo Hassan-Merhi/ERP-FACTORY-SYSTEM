@@ -116,8 +116,8 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
               if (sourceLocId == null || destinationLocId == null) {
                 throw new Error("Stock transfer is missing source or destination location");
               }
-              const quantity = parseFloat(item.quantity);
-              const rate = parseFloat(item.rate);
+              const quantity = Number(item.quantity);
+              const rate = Number(item.rate);
 
               // Guard on inventoryApplied: only reverse if inventory was actually applied,
               // only apply if inventory was not already applied. Prevents stock corruption
@@ -200,9 +200,9 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
               .where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));
 
             for (const item of items) {
-              const rawQuantity = parseFloat(item.quantity);
+              const rawQuantity = Number(item.quantity);
               const quantity = Math.abs(rawQuantity);
-              const rate = parseFloat(item.rate);
+              const rate = Number(item.rate);
 
               // For Mixed adjustments, check the item's quantity sign:
               //   - Positive quantity = production (added)
@@ -287,8 +287,8 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
 
           if (hasSalesItems.length > 0 && existingVoucher.locationId) {
             for (const item of hasSalesItems) {
-              const quantity = parseFloat(item.quantity);
-              const costPrice = parseFloat(item.costPrice);
+              const quantity = Number(item.quantity);
+              const costPrice = Number(item.costPrice);
               if (willBeOptional) {
                 // Reverse: add back stock that was deducted by the sale
                 await adjustInventory(
@@ -338,8 +338,8 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
 
           if (hasCreditNoteItems.length > 0) {
             for (const item of hasCreditNoteItems) {
-              const quantity = parseFloat(item.quantity);
-              const rate = parseFloat(item.rate);
+              const quantity = Number(item.quantity);
+              const rate = Number(item.rate);
               if (willBeOptional) {
                 // Reverse: remove stock that was added by the credit note (customer return)
                 await adjustInventory(tx, item.locationId, item.stockItemId, -quantity, existingVoucher.companyId);

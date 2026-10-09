@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 
-import { db } from "../server/db";
+import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -118,5 +118,93 @@ describe("Item Market Analysis calculations", () => {
     expect(report.body.summary.soldQty).toBeCloseTo(8, 6);
     expect(report.body.summary.revenue).toBeCloseTo(160, 2);
     expect(report.body.summary.profit).toBeCloseTo(80, 2);
+
+    const priceBreakdown = await agent.get(
+      `/api/reports/item-market-analysis/sale-prices?companyId=${ctx.companyId}&stockItemId=${stockItemId}&startDate=2030-01-01&endDate=2030-12-31`
+    );
+    expect(priceBreakdown.status).toBe(200);
+
+    const salePrice = priceBreakdown.body.rows.find(
+      (entry: { activityType: string; unitPrice: number }) => entry.activityType === "sale" && entry.unitPrice === 20
+    );
+    const returnPrice = priceBreakdown.body.rows.find(
+      (entry: { activityType: string; unitPrice: number }) => entry.activityType === "return" && entry.unitPrice === 20
+    );
+
+    expect(salePrice).toMatchObject({
+      activityType: "sale",
+      unitPrice: 20,
+      quantity: 10,
+      revenue: 200,
+      profit: 100,
+      transactionCount: 1,
+    });
+    expect(returnPrice).toMatchObject({
+      activityType: "return",
+      unitPrice: 20,
+      quantity: -2,
+      revenue: -40,
+      profit: -20,
+      transactionCount: 1,
+    });
+  }, 60_000);
+
+  it("returns purchase cost both with and without offloading cost", async () => {
+    const stockItemId = ctx.stockItemIds[0];
+    const suffix = Date.now().toString();
+
+    const supplier = await pool.query<{ id: number }>(
+      `INSERT INTO suppliers (company_id, code, legal_name, email, active)
+       VALUES ($1, $2, $3, $4, true)
+       RETURNING id`,
+      [
+        ctx.companyId,
+        `${TEST_PREFIX}-SUP-${suffix}`.slice(0, 50),
+        `${TEST_PREFIX} offloading supplier`,
+        `${TEST_PREFIX}-${suffix}@example.test`,
+      ]
+    );
+
+    const container = await pool.query<{ id: number }>(
+      `INSERT INTO containers
+         (company_id, container_number, supplier_id, status, import_date, offload_date, items_total, charges_total, grand_total)
+       VALUES ($1, $2, $3, 'OFFLOADED', '2031-02-01', '2031-02-02', '50.00', '20.00', '70.00')
+       RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX}-CONT-${suffix}`, Number(supplier.rows[0].id)]
+    );
+
+    const po = await pool.query<{ id: number }>(
+      `INSERT INTO purchase_orders
+         (company_id, po_number, container_id, supplier_id, currency, items_total, status)
+       VALUES ($1, $2, $3, $4, 'USD', '50.00', 'Open')
+       RETURNING id`,
+      [ctx.companyId, `${TEST_PREFIX}-PO-${suffix}`, Number(container.rows[0].id), Number(supplier.rows[0].id)]
+    );
+
+    await pool.query(
+      `INSERT INTO po_line_items (po_id, stock_item_id, item_name, quantity, rate, line_total)
+       VALUES ($1, $2, 'Item Market landed cost fixture', '10.000', '5.00', '50.00')`,
+      [Number(po.rows[0].id), stockItemId]
+    );
+
+    await pool.query(
+      `INSERT INTO container_offloads
+         (container_id, location_id, total_bales, additional_cost_per_bale, offloaded_at, optional)
+       VALUES ($1, $2, '10.000', '2.00', '2031-02-02T12:00:00Z', false)`,
+      [Number(container.rows[0].id), ctx.locationId]
+    );
+
+    const report = await agent.get(
+      `/api/reports/item-market-analysis?companyIds=${ctx.companyId}&startDate=2031-02-01&endDate=2031-02-28`
+    );
+    expect(report.status).toBe(200);
+
+    const row = report.body.rows.find((entry: { stockItemId: number }) => entry.stockItemId === stockItemId);
+    expect(row).toBeTruthy();
+
+    expect(row.purchaseValue).toBeCloseTo(50, 2);
+    expect(row.weightedPurchaseCost).toBeCloseTo(5, 2);
+    expect(row.purchaseValueWithOffloading).toBeCloseTo(70, 2);
+    expect(row.weightedPurchaseCostWithOffloading).toBeCloseTo(7, 2);
   }, 60_000);
 });

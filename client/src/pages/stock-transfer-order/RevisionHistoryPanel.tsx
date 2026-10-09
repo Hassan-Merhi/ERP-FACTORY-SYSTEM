@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, GitBranch, Trash2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import type { StockTransferRevision } from "../stocktransferorder/types";
+import { confirmAction } from "@/components/ConfirmHost";
 
 type RevisionHistoryPanelProps = {
   editVoucherId: number | null;
@@ -95,7 +96,13 @@ export function RevisionHistoryPanel({
                       variant="ghost"
                       className="text-destructive hover:text-destructive"
                       onClick={async () => {
-                        if (!window.confirm(`Delete Rev ${revision.revisionNumber}? This cannot be undone.`)) return;
+                        if (
+                          !(await confirmAction({
+                            title: `Delete Rev ${revision.revisionNumber}? This cannot be undone.`,
+                            tone: "destructive",
+                          }))
+                        )
+                          return;
                         await apiRequest("DELETE", `/api/stock-transfer-revisions/${revision.id}`);
                         queryClient.invalidateQueries({
                           queryKey: ["/api/stock-transfers", transferId, "revisions"],

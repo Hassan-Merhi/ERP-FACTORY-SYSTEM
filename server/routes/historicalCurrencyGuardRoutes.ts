@@ -23,11 +23,12 @@ export const guardUnresolvedHistoricalCurrency: RequestHandler = async (req, res
   if (!companyId) return next();
 
   try {
-    const asOfDate = typeof req.query.toDate === "string"
-      ? req.query.toDate
-      : typeof req.query.endDate === "string"
-        ? req.query.endDate
-        : null;
+    const asOfDate =
+      typeof req.query.toDate === "string"
+        ? req.query.toDate
+        : typeof req.query.endDate === "string"
+          ? req.query.endDate
+          : null;
     const readiness = await getHistoricalCurrencyReadiness(companyId, asOfDate);
     if (readiness.ready) return next();
 
@@ -51,19 +52,14 @@ export const guardUnresolvedHistoricalCurrency: RequestHandler = async (req, res
 export function registerHistoricalCurrencyGuardRoutes(app: Express) {
   app.use(guardUnresolvedHistoricalCurrency);
 
-  app.get(
-    "/api/accounts/multi-currency/readiness",
-    requireAuth,
-    requireNonPOS,
-    async (req, res) => {
-      try {
-        const companyId = req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
-        const asOfDate = typeof req.query.toDate === "string" ? req.query.toDate : null;
-        return res.json(await getHistoricalCurrencyReadiness(companyId, asOfDate));
-      } catch (error: unknown) {
-        return res.status(500).json({ message: getErrorMessage(error) });
-      }
-    },
-  );
+  app.get("/api/accounts/multi-currency/readiness", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const asOfDate = typeof req.query.toDate === "string" ? req.query.toDate : null;
+      return res.json(await getHistoricalCurrencyReadiness(companyId, asOfDate));
+    } catch (error: unknown) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
 }

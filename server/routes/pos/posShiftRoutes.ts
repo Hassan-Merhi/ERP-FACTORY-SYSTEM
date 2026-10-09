@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { userLocations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerPosShiftRoutes(app: Express): void {
   // POS Shift Management Routes
@@ -118,7 +119,9 @@ export function registerPosShiftRoutes(app: Express): void {
         const assignedLocs = await db
           .select({ locationId: userLocations.locationId })
           .from(userLocations)
-          .where(and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, req.session.currentCompanyId!)));
+          .where(
+            and(eq(userLocations.userId, req.user.id), eq(userLocations.companyId, req.session.currentCompanyId!))
+          );
         const allowedIds = assignedLocs.map((l) => l.locationId);
         if (!allowedIds.includes(locationId)) {
           return res.status(403).json({ message: "You can only open shifts at your assigned location" });
@@ -183,6 +186,7 @@ export function registerPosShiftRoutes(app: Express): void {
       if (closingCash === undefined || closingCash === null) {
         return res.status(400).json({ message: "Closing cash amount is required" });
       }
+      if (!parseMoneyInput(closingCash)) return res.status(400).json({ message: "Invalid amount" });
 
       const closedShift = await storage.closeShift(shiftId, closingCash.toString(), notes);
       res.json(closedShift);

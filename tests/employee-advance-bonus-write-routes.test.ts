@@ -314,3 +314,87 @@ describe("DELETE /api/factory/employee-bonuses/:id", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("employee advances and bonuses at exact cents", () => {
+  it("stores a half-cent advance rounded half up", async () => {
+    // parseFloat("1.005").toFixed(2) is "1.00"; numeric(…, 2) keeps 1.01.
+    const advance = await giveAdvance("1.005");
+    const row = await advanceRow(advance.id);
+    expect(row?.amount).toBe("1.01");
+    expect(row?.remaining_balance).toBe("1.01");
+  });
+
+  it("moves the employee's balance by a half-cent bonus rounded half up", async () => {
+    const before = await employeeTotals(employeeId);
+    const bonus = (await giveBonus("1.005")) as { amount?: string };
+    expect(bonus.amount).toBe("1.01");
+    const after = await employeeTotals(employeeId);
+    expect(after.balance - before.balance).toBeCloseTo(1.01, 2);
+  });
+});
+
+describe("POST /api/payroll/bonus-employee", () => {
+  it("posts a half-cent bonus rounded up, not down", async () => {
+    // 1.005 parses to the float 1.00499999999999989…, which toFixed(2) wrote as 1.00.
+    const response = await agent
+      .post("/api/payroll/bonus-employee")
+      .send({ employeeId, amount: "1.005", date: "2026-04-02" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.voucher.totalAmount).toBe("1.01");
+    const entries = await pool.query<{ debit_amount: string; credit_amount: string }>(
+      `SELECT debit_amount, credit_amount FROM voucher_entries WHERE voucher_id = $1 ORDER BY id`,
+      [response.body.voucher.id]
+    );
+    expect(entries.rows.map((row) => [Number(row.debit_amount), Number(row.credit_amount)])).toEqual([
+      [1.01, 0],
+      [0, 1.01],
+    ]);
+  });
+
+  it("rejects an amount that does not parse", async () => {
+    const response = await agent
+      .post("/api/payroll/bonus-employee")
+      .send({ employeeId, amount: "abc", date: "2026-04-02" });
+
+    expect(response.status).toBe(400);
+  });
+});
+
+describe("POST /api/payroll/bonus-employee tenant boundary", () => {
+  it("refuses a bonus for another company's employee without posting anything", async () => {
+    const company = await pool.query<{ id: number }>(
+      `INSERT INTO companies (code, name, company_type, active, base_currency)
+       VALUES ($1, $2, 'erp', true, 'USD') RETURNING id`,
+      [`${TEST_PREFIX.toUpperCase()}X`, `${TEST_PREFIX}_ForeignCompany`]
+    );
+    const foreignCompanyId = company.rows[0].id;
+    const foreign = await pool.query<{ id: number }>(
+      `INSERT INTO employees (company_id, code, first_name, last_name, join_date, current_balance, total_deposits)
+       VALUES ($1, $2, 'Foreign', 'Tester', '2025-01-01', '0', '0') RETURNING id`,
+      [foreignCompanyId, `${TEST_PREFIX}-FX`]
+    );
+    const foreignEmployeeId = foreign.rows[0].id;
+    try {
+      const response = await agent
+        .post("/api/payroll/bonus-employee")
+        .send({ employeeId: foreignEmployeeId, amount: "50", date: "2026-04-02" });
+
+      expect(response.status).toBe(404);
+      const entries = await pool.query(`SELECT 1 FROM voucher_entries WHERE employee_id = $1`, [foreignEmployeeId]);
+      expect(entries.rowCount).toBe(0);
+      expect((await employeeTotals(foreignEmployeeId)).balance).toBe(0);
+    } finally {
+      const vouchers = await pool.query<{ voucher_id: number }>(
+        `DELETE FROM voucher_entries WHERE employee_id = $1 RETURNING voucher_id`,
+        [foreignEmployeeId]
+      );
+      for (const row of vouchers.rows) {
+        await pool.query(`DELETE FROM voucher_entries WHERE voucher_id = $1`, [row.voucher_id]);
+        await pool.query(`DELETE FROM vouchers WHERE id = $1`, [row.voucher_id]);
+      }
+      await pool.query(`DELETE FROM employees WHERE id = $1`, [foreignEmployeeId]);
+      await pool.query(`DELETE FROM companies WHERE id = $1`, [foreignCompanyId]);
+    }
+  });
+});

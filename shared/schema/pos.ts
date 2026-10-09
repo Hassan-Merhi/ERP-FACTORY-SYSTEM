@@ -16,6 +16,7 @@ import { z } from "zod";
 import { locations } from "./common";
 import { ledgerAccounts } from "./accounting";
 import { stockItems } from "./inventory";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../numericString";
 
 export const draftPosSales = pgTable("draft_pos_sales", {
   id: serial("id").primaryKey(),
@@ -69,8 +70,8 @@ export const insertDraftPosSaleItemSchema = createInsertSchema(draftPosSaleItems
   .extend({
     draftId: z.number().min(1, "Draft is required"),
     stockItemId: z.number().min(1, "Stock item is required"),
-    quantity: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Quantity must be positive"),
-    rate: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Rate must be non-negative"),
+    quantity: z.string().refine(isPositiveNumeric, "Quantity must be positive"),
+    rate: z.string().refine(isNonNegativeNumeric, "Rate must be non-negative"),
     amount: z.string(),
   });
 

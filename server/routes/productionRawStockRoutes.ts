@@ -20,6 +20,8 @@ import {
   suppliers,
   insertMixBatchSourceSchema,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../lib/money";
 
 export function registerProductionRawStockRoutes(app: Express) {
   // Production Raw Stock API Routes
@@ -48,14 +50,11 @@ export function registerProductionRawStockRoutes(app: Express) {
         .orderBy(desc(productionRawStock.offloadedAt));
 
       const result = rawStockRows.map((row) => {
-        const received = parseFloat(row.receivedKg);
-        const used = parseFloat(row.usedKg);
-        const remaining = received - used;
-        const cost = parseFloat(row.costPerKg);
+        const remaining = toMoney(row.receivedKg).minus(toMoney(row.usedKg));
         return {
           ...row,
           remainingKg: remaining.toFixed(3),
-          valueRemaining: (remaining * cost).toFixed(2),
+          valueRemaining: remaining.times(toMoney(row.costPerKg)).toFixed(2),
         };
       });
 
@@ -84,12 +83,12 @@ export function registerProductionRawStockRoutes(app: Express) {
       const finalReceivedKg = req.body.receivedKg || container.totalKg || null;
       const finalCostPerKg = req.body.costPerKg || container.ratePerKg || null;
 
-      if (!finalReceivedKg || parseFloat(finalReceivedKg) <= 0) {
+      if (!finalReceivedKg || !parseMoneyInput(finalReceivedKg)?.greaterThan(0)) {
         return res
           .status(400)
           .json({ message: "Received weight is required. Container has no saved Total KG - please provide a value." });
       }
-      if (!finalCostPerKg || parseFloat(finalCostPerKg) <= 0) {
+      if (!finalCostPerKg || !parseMoneyInput(finalCostPerKg)?.greaterThan(0)) {
         return res
           .status(400)
           .json({ message: "Cost per kg is required. Container has no saved Rate per KG - please provide a value." });
@@ -219,24 +218,24 @@ export function registerProductionRawStockRoutes(app: Express) {
         const batchNum = existingBatches.length + 1;
         const batchCode = batchData.batchCode || `MB-${year}-${String(batchNum).padStart(3, "0")}`;
 
-        let totalWeightKg = 0;
-        let totalCost = 0;
+        let totalWeightKg = new MoneyDecimal(0);
+        let totalCost = new MoneyDecimal(0);
         const validatedSources: Array<{
           containerId?: number;
           sourceBatchId?: number;
-          weightKg: number;
-          costPerKg: number;
-          totalCost: number;
+          weightKg: Decimal;
+          costPerKg: Decimal;
+          totalCost: Decimal;
         }> = [];
 
         // Process container sources
         if (hasSources) {
           for (const source of sources) {
             const cId = parseInt(source.containerId);
-            const wKg = parseFloat(source.weightKg);
-            const cPKg = parseFloat(source.costPerKg);
+            const wKg = parseMoneyInput(source.weightKg);
+            const cPKg = parseMoneyInput(source.costPerKg);
 
-            if (isNaN(cId) || isNaN(wKg) || isNaN(cPKg) || wKg <= 0) {
+            if (isNaN(cId) || !wKg || !cPKg || wKg.lessThanOrEqualTo(0)) {
               throw new Error("Invalid container source data");
             }
 
@@ -250,22 +249,22 @@ export function registerProductionRawStockRoutes(app: Express) {
               throw new Error(`Container ${cId} not found in production raw stock. Offload it first.`);
             }
 
-            const remaining = parseFloat(rawStock.receivedKg) - parseFloat(rawStock.usedKg);
-            if (wKg > remaining + 0.001) {
+            const remaining = toMoney(rawStock.receivedKg).minus(toMoney(rawStock.usedKg));
+            if (wKg.greaterThan(remaining.plus(0.001))) {
               throw new Error(
                 `Container ${rawStock.containerId} only has ${remaining.toFixed(3)} kg remaining, requested ${wKg}`
               );
             }
 
-            const newUsed = parseFloat(rawStock.usedKg) + wKg;
+            const newUsed = toMoney(rawStock.usedKg).plus(wKg);
             await tx
               .update(productionRawStock)
               .set({ usedKg: newUsed.toFixed(3) })
               .where(eq(productionRawStock.id, rawStock.id));
 
-            const sCost = wKg * cPKg;
-            totalWeightKg += wKg;
-            totalCost += sCost;
+            const sCost = wKg.times(cPKg);
+            totalWeightKg = totalWeightKg.plus(wKg);
+            totalCost = totalCost.plus(sCost);
             validatedSources.push({ containerId: cId, weightKg: wKg, costPerKg: cPKg, totalCost: sCost });
           }
         }
@@ -274,9 +273,9 @@ export function registerProductionRawStockRoutes(app: Express) {
         if (hasBatchSources) {
           for (const bSrc of batchSources) {
             const srcBatchId = parseInt(bSrc.sourceBatchId);
-            const wKg = parseFloat(bSrc.weightKg);
+            const wKg = parseMoneyInput(bSrc.weightKg);
 
-            if (isNaN(srcBatchId) || isNaN(wKg) || wKg <= 0) {
+            if (isNaN(srcBatchId) || !wKg || wKg.lessThanOrEqualTo(0)) {
               throw new Error("Invalid batch source data");
             }
 
@@ -290,30 +289,30 @@ export function registerProductionRawStockRoutes(app: Express) {
               throw new Error(`Source batch ${srcBatchId} not found`);
             }
 
-            const srcTotal = parseFloat(srcBatch.totalWeightKg);
-            const srcUsed = parseFloat(srcBatch.usedKg);
-            const srcRemaining = srcTotal - srcUsed;
+            const srcTotal = toMoney(srcBatch.totalWeightKg);
+            const srcUsed = toMoney(srcBatch.usedKg);
+            const srcRemaining = srcTotal.minus(srcUsed);
 
-            if (wKg > srcRemaining + 0.001) {
+            if (wKg.greaterThan(srcRemaining.plus(0.001))) {
               throw new Error(
                 `Batch ${srcBatch.batchCode} only has ${srcRemaining.toFixed(3)} kg remaining, requested ${wKg}`
               );
             }
 
             // Deduct from source batch's usedKg
-            const newUsed = srcUsed + wKg;
+            const newUsed = srcUsed.plus(wKg);
             await tx
               .update(mixBatches)
               .set({
                 usedKg: newUsed.toFixed(3),
-                status: newUsed >= srcTotal - 0.001 ? "COMPLETED" : srcBatch.status,
+                status: newUsed.greaterThanOrEqualTo(srcTotal.minus(0.001)) ? "COMPLETED" : srcBatch.status,
               })
               .where(eq(mixBatches.id, srcBatchId));
 
-            const srcCostPerKg = parseFloat(srcBatch.costPerKg);
-            const sCost = wKg * srcCostPerKg;
-            totalWeightKg += wKg;
-            totalCost += sCost;
+            const srcCostPerKg = toMoney(srcBatch.costPerKg);
+            const sCost = wKg.times(srcCostPerKg);
+            totalWeightKg = totalWeightKg.plus(wKg);
+            totalCost = totalCost.plus(sCost);
             validatedSources.push({
               sourceBatchId: srcBatchId,
               weightKg: wKg,
@@ -323,7 +322,9 @@ export function registerProductionRawStockRoutes(app: Express) {
           }
         }
 
-        const blendedCostPerKg = totalWeightKg > 0 ? totalCost / totalWeightKg : 0;
+        const blendedCostPerKg = totalWeightKg.greaterThan(0)
+          ? totalCost.dividedBy(totalWeightKg)
+          : new MoneyDecimal(0);
 
         const [batch] = await tx
           .insert(mixBatches)

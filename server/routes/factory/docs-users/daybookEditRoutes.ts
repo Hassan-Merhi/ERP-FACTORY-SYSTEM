@@ -31,6 +31,14 @@ import {
   factorySuppliers,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
+
+/** A voucher's exchange rate; a missing, zero or unreadable one counts as 1. */
+const voucherFxRate = (rate: MoneyInput) => {
+  const parsed = toMoney(rate || "1");
+  return parsed.isZero() ? new MoneyDecimal(1) : parsed;
+};
 
 export function registerFactoryDaybookEditRoutes(app: Express) {
   // ─────── DAYBOOK ENTRY EDIT ───────
@@ -100,9 +108,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         const voucherTxTypeMap: Record<string, string> = { Payment: "PAYMENT", Receipt: "RECEIPT", Journal: "JOURNAL" };
         const txTypeVal = voucherTxTypeMap[sourceVoucher.voucherType] || "JOURNAL";
         const currency = sourceVoucher.currency || "USD";
-        const fxRate = parseFloat(sourceVoucher.exchangeRate || "1") || 1;
-        const amtCurrency = parseFloat(sourceVoucher.totalAmount || "0");
-        const amtUsd = currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+        const fxRate = voucherFxRate(sourceVoucher.exchangeRate);
+        const amtCurrency = toMoney(sourceVoucher.totalAmount);
+        const amtUsd = currency === "USD" ? amtCurrency : amtCurrency.times(fxRate);
 
         // Insert a real daybook entry from this voucher so it can be edited going forward
         const [inserted] = await db
@@ -118,9 +126,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
                 ? description
                 : sourceVoucher.description || `${sourceVoucher.voucherType} voucher #${sourceVoucher.voucherNumber}`,
             currencyCode: currency,
-            amountCurrency: String(amtCurrency),
-            fxRateToUsd: String(fxRate),
-            amountUsd: String(amtUsd),
+            amountCurrency: amtCurrency.toFixed(2),
+            fxRateToUsd: fxRate.toFixed(),
+            amountUsd: amtUsd.toFixed(2),
             createdBy: userId,
           })
           .returning();
@@ -230,10 +238,16 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
       if (!reason || typeof reason !== "string" || reason.trim().length === 0) {
         return res.status(400).json({ message: "Edit reason is required" });
       }
-      const parsedAmount = parseFloat(newAmount);
-      if (isNaN(parsedAmount) || parsedAmount < 0) {
+      // Read the way parseFloat reads it, so the accepted input is unchanged.
+      const parsedAmount = parseMoneyInput(newAmount);
+      if (!parsedAmount || parsedAmount.lessThan(0)) {
         return res.status(400).json({ message: "newAmount must be a non-negative number" });
       }
+      // A supplied rate that does not parse used to make the entry's USD amount NaN.
+      const requestFx = newFxRate ? parseMoneyInput(String(newFxRate)) : null;
+      if (newFxRate && !requestFx) return res.status(400).json({ message: "Invalid amount" });
+      // The amount as the source columns receive it: the same text the float path wrote.
+      const amountText = parsedAmount.toFixed();
 
       const COST_TX_TYPES = ["OFFLOAD_RAW_STOCK", "FREIGHT", "COMMISSION", "DUTY", "OTHER_CHARGE"];
 
@@ -292,16 +306,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         ? await db
             .select({ name: factorySuppliers.name })
             .from(factorySuppliers)
-            .where(
-              and(
-                eq(factorySuppliers.id, container.supplierId),
-                eq(factorySuppliers.companyId, companyId)
-              )
-            )
+            .where(and(eq(factorySuppliers.id, container.supplierId), eq(factorySuppliers.companyId, companyId)))
         : [];
-      const supplierNarrationSuffix = materialSupplier?.name?.trim()
-        ? ` - ${materialSupplier.name.trim()}`
-        : "";
+      const supplierNarrationSuffix = materialSupplier?.name?.trim() ? ` - ${materialSupplier.name.trim()}` : "";
 
       const beforeJson = JSON.stringify(entry);
       const sourceType: string = isNonEmptyString(meta.sourceType) ? meta.sourceType : entry.txType;
@@ -310,13 +317,13 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         // ── 1. Update the specific source record ────────────────────────────────
         if (sourceType === "BASE_MATERIAL" || entry.txType === "OFFLOAD_RAW_STOCK") {
           // Editing base material cost: derive new ratePerKg from amount / actualKg
-          const actualKg = parseFloat(container.actualReceivedKg || "0");
-          if (actualKg <= 0) throw new Error("Container has no received weight");
-          const newRate = parsedAmount / actualKg;
+          const actualKg = toMoney(container.actualReceivedKg);
+          if (actualKg.lessThanOrEqualTo(0)) throw new Error("Container has no received weight");
+          const newRate = parsedAmount.dividedBy(actualKg);
           const ccy = newCurrencyCode || container.currencyCode || "USD";
           await tx
             .update(factoryContainers)
-            .set({ ratePerKg: String(newRate.toFixed(6)), currencyCode: ccy, updatedAt: new Date() })
+            .set({ ratePerKg: newRate.toFixed(6), currencyCode: ccy, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
         } else if (sourceType === "FREIGHT" || entry.txType === "FREIGHT") {
           const ccy =
@@ -325,8 +332,8 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             container.currencyCode ||
             "USD";
           let fx: string;
-          if (newFxRate) {
-            fx = String(newFxRate); // fresh explicit request input — trust it even if it equals 1
+          if (requestFx) {
+            fx = requestFx.toFixed(); // fresh explicit request input — trust it even if it equals 1
           } else {
             const fallbackRaw = container.fxRateToUsdOffload || container.fxRateToUsd;
             const { fxRate: resolvedFx, looksSet } = resolveStoredFxRate(ccy, fallbackRaw, container.fxRateConfirmed);
@@ -335,7 +342,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           }
           await tx
             .update(factoryContainers)
-            .set({ freight: String(parsedAmount), updatedAt: new Date() })
+            .set({ freight: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
           // Also update the daybook entry currency if it changed
           if (newCurrencyCode) {
@@ -349,13 +356,13 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           if (commId) {
             await tx
               .update(factoryContainerCommissions)
-              .set({ commissionTotal: String(parsedAmount) })
+              .set({ commissionTotal: amountText })
               .where(eq(factoryContainerCommissions.id, commId));
           }
           // Also sync the commissionAmount summary on the container
           await tx
             .update(factoryContainers)
-            .set({ commissionAmount: String(parsedAmount), updatedAt: new Date() })
+            .set({ commissionAmount: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
         } else if (sourceType === "DUTY" || entry.txType === "DUTY") {
           if (container.dutyStatus !== "CONFIRMED") {
@@ -366,14 +373,14 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           const oldDuty = container.dutyAmount;
           await tx
             .update(factoryContainers)
-            .set({ dutyAmount: String(parsedAmount), updatedAt: new Date() })
+            .set({ dutyAmount: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
           // Write duty audit log
           await tx.insert(factoryDutyAuditLog).values({
             companyId,
             containerId,
             oldDutyAmount: oldDuty || "0",
-            newDutyAmount: String(parsedAmount),
+            newDutyAmount: amountText,
             oldDutyStatus: "CONFIRMED",
             newDutyStatus: "CONFIRMED",
             notes: `Edited via daybook cost-edit. Reason: ${reason.trim()}`,
@@ -382,14 +389,14 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
         } else if (sourceType === "CONTAINER_OC") {
           await tx
             .update(factoryContainers)
-            .set({ otherCharges: String(parsedAmount), updatedAt: new Date() })
+            .set({ otherCharges: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
         } else if (sourceType === "OFFLOAD_ADDITIONAL" || sourceType === "POST_OFFLOAD_ADDITIONAL") {
           const chargeId = toPositiveInteger(meta.chargeId) ?? null;
           if (!chargeId) throw new Error("Missing chargeId in metaJson — cannot update individual additional charge");
           await tx
             .update(factoryOffloadAdditionalCharges)
-            .set({ amount: String(parsedAmount) })
+            .set({ amount: amountText })
             .where(
               and(
                 eq(factoryOffloadAdditionalCharges.id, chargeId),
@@ -401,7 +408,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           if (entry.txType === "OTHER_CHARGE") {
             await tx
               .update(factoryContainers)
-              .set({ otherCharges: String(parsedAmount), updatedAt: new Date() })
+              .set({ otherCharges: amountText, updatedAt: new Date() })
               .where(eq(factoryContainers.id, containerId!));
           }
         }
@@ -411,22 +418,22 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
         // ── 3. Update THIS daybook entry amount ──────────────────────────────────
         const entryCcy = newCurrencyCode || entry.currencyCode || "USD";
-        let fx: number;
-        if (newFxRate) {
-          fx = parseFloat(String(newFxRate)); // fresh explicit request input — trust it even if it equals 1
+        let fx: Decimal;
+        if (requestFx) {
+          fx = requestFx; // fresh explicit request input — trust it even if it equals 1
         } else {
           // factory_daybook_entries has no fxRateConfirmed column yet, so this still relies on
           // the legacy value-based heuristic (rate>0 && rate!==1) as a stopgap — a genuine
           // confirmed 1.0 rate stored directly on a daybook entry would be misflagged here.
           const { fxRate: resolvedFx, looksSet } = resolveStoredFxRate(entryCcy, entry.fxRateToUsd);
           if (!looksSet) throw new UnresolvedExchangeRateError(entryCcy);
-          fx = resolvedFx;
+          fx = toMoney(resolvedFx);
         }
-        const amtUsd = entryCcy === "USD" ? parsedAmount : parsedAmount * fx;
+        const amtUsd = entryCcy === "USD" ? parsedAmount : parsedAmount.times(fx);
         const updatedMetaJson = JSON.stringify({ ...meta, containerId, sourceType });
         await tx
           .update(factoryDaybookEntries)
-          .set({ amountCurrency: String(parsedAmount), amountUsd: String(amtUsd), metaJson: updatedMetaJson })
+          .set({ amountCurrency: parsedAmount.toFixed(2), amountUsd: amtUsd.toFixed(2), metaJson: updatedMetaJson })
           .where(eq(factoryDaybookEntries.id, entryId));
 
         // ── 4. Sync OFFLOAD_RAW_STOCK daybook entry (total inclusive cost) ────────
@@ -444,12 +451,14 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
               (container as { fxRateConfirmed: boolean | undefined }).fxRateConfirmed
             );
             if (!containerFxLooksSet) throw new UnresolvedExchangeRateError(containerCcy);
-            const totalUsd = containerCcy === "USD" ? totalCost : totalCost * containerFx;
+            const totalCostExact = toMoney(totalCost);
+            const totalUsd = containerCcy === "USD" ? totalCostExact : totalCostExact.times(toMoney(containerFx));
+            // Rounded once to the cents the columns keep (a 4-place string was rounded twice).
             await tx
               .update(factoryDaybookEntries)
               .set({
-                amountCurrency: String(totalCost.toFixed(4)),
-                amountUsd: String(totalUsd.toFixed(4)),
+                amountCurrency: totalCostExact.toFixed(2),
+                amountUsd: totalUsd.toFixed(2),
                 description: `Offloaded container ${container.containerNumber}${supplierNarrationSuffix}: ${container.actualReceivedKg} kg at ${inclusiveCostPerKg.toFixed(4)}/kg (inclusive) [edited]`,
               })
               .where(
@@ -467,7 +476,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           daybookEntryId: entryId,
           editedBy: userId,
           beforeJson,
-          afterJson: JSON.stringify({ ...entry, amountCurrency: String(parsedAmount) }),
+          afterJson: JSON.stringify({ ...entry, amountCurrency: amountText }),
           reason: reason.trim(),
         });
       });
@@ -618,8 +627,8 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             .where(and(eq(factoryPayrolls.id, payrollId), eq(factoryPayrolls.companyId, companyId)));
 
           if (payroll) {
-            const advAmt = parseFloat(payroll.advances || "0");
-            if (advAmt > 0) {
+            const advAmt = toMoney(payroll.advances);
+            if (advAmt.greaterThan(0)) {
               const workerAdvances = await tx
                 .select()
                 .from(factoryWorkerAdvances)
@@ -634,13 +643,12 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
               let toRestore = advAmt;
               for (const adv of workerAdvances) {
-                if (toRestore <= 0) break;
-                const bal = parseFloat(adv.remainingBalance || "0");
-                const originalAmt = parseFloat(adv.amount || "0");
-                const room = originalAmt - bal;
-                if (room <= 0) continue;
-                const restoreAmt = Math.min(room, toRestore);
-                const newBal = bal + restoreAmt;
+                if (toRestore.lessThanOrEqualTo(0)) break;
+                const bal = toMoney(adv.remainingBalance);
+                const room = toMoney(adv.amount).minus(bal);
+                if (room.lessThanOrEqualTo(0)) continue;
+                const restoreAmt = MoneyDecimal.min(room, toRestore);
+                const newBal = bal.plus(restoreAmt);
                 await tx
                   .update(factoryWorkerAdvances)
                   .set({
@@ -648,7 +656,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
                     fullyPaid: false,
                   })
                   .where(eq(factoryWorkerAdvances.id, adv.id));
-                toRestore -= restoreAmt;
+                toRestore = toRestore.minus(restoreAmt);
               }
             }
           }
@@ -668,7 +676,7 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
                 and(eq(factoryWorkerAdvances.id, repayment.advanceId), eq(factoryWorkerAdvances.companyId, companyId))
               );
             if (advance) {
-              const newBalance = parseFloat(advance.remainingBalance || "0") + parseFloat(repayment.amount || "0");
+              const newBalance = toMoney(advance.remainingBalance).plus(toMoney(repayment.amount));
               await tx
                 .update(factoryWorkerAdvances)
                 .set({
@@ -687,15 +695,13 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           (vNum.startsWith("EMP-DEP-") || vNum.startsWith("EMP-WD-") || vNum.startsWith("EMP-PAY-"))
         ) {
           // Group deltas by employeeId
-          const empDeltas = new Map<number, { creditTotal: number; debitTotal: number }>();
+          const empDeltas = new Map<number, { creditTotal: Decimal; debitTotal: Decimal }>();
           for (const entry of empEntries) {
             const empId = entry.employeeId as number;
-            const cr = parseFloat(entry.creditAmount || "0");
-            const dr = parseFloat(entry.debitAmount || "0");
-            if (!empDeltas.has(empId)) empDeltas.set(empId, { creditTotal: 0, debitTotal: 0 });
-            const d = empDeltas.get(empId)!;
-            d.creditTotal += cr;
-            d.debitTotal += dr;
+            const d = empDeltas.get(empId) ?? { creditTotal: new MoneyDecimal(0), debitTotal: new MoneyDecimal(0) };
+            d.creditTotal = d.creditTotal.plus(toMoney(entry.creditAmount));
+            d.debitTotal = d.debitTotal.plus(toMoney(entry.debitAmount));
+            empDeltas.set(empId, d);
           }
           for (const [empId, delta] of empDeltas) {
             const [emp] = await tx
@@ -703,20 +709,17 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
               .from(employees)
               .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
             if (!emp) continue;
-            const curBal = parseFloat(emp.currentBalance || "0");
-            const curDep = parseFloat(emp.totalDeposits || "0");
-            const curWith = parseFloat(emp.totalWithdrawals || "0");
             // CR entries = deposits (balance went up) → reverse: subtract
             // DR entries = withdrawals/deductions (balance went down) → reverse: add back
-            const newBal = curBal - delta.creditTotal + delta.debitTotal;
-            const newDep = Math.max(0, curDep - delta.creditTotal);
-            const newWith = Math.max(0, curWith - delta.debitTotal);
+            const newBal = toMoney(emp.currentBalance).minus(delta.creditTotal).plus(delta.debitTotal);
+            const newDep = MoneyDecimal.max(0, toMoney(emp.totalDeposits).minus(delta.creditTotal));
+            const newWith = MoneyDecimal.max(0, toMoney(emp.totalWithdrawals).minus(delta.debitTotal));
             await tx
               .update(employees)
               .set({
                 currentBalance: newBal.toFixed(2),
                 totalDeposits: newDep.toFixed(2),
-                ...(delta.debitTotal > 0 ? { totalWithdrawals: newWith.toFixed(2) } : {}),
+                ...(delta.debitTotal.greaterThan(0) ? { totalWithdrawals: newWith.toFixed(2) } : {}),
               })
               .where(eq(employees.id, empId));
           }
@@ -724,19 +727,19 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
 
         // 5. Write a VOIDED audit daybook entry (no voucher reference so it won't be filtered by soft-delete logic)
         const voidTxType = `${txTypeVal}_VOIDED`;
-        const amt = parseFloat(voucher.totalAmount || "0");
+        const amt = toMoney(voucher.totalAmount);
         const currency = voucher.currency || "USD";
-        const fxRate = parseFloat(voucher.exchangeRate || "1") || 1;
-        const amtUsd = currency === "USD" ? amt : amt * fxRate;
+        const fxRate = voucherFxRate(voucher.exchangeRate);
+        const amtUsd = currency === "USD" ? amt : amt.times(fxRate);
         await writeDaybookEntry(tx, {
           companyId,
           txDate: today,
           txType: voidTxType,
           description: `VOIDED: ${voucher.description || voucher.voucherNumber} (voucher #${voucherId})`,
           currencyCode: currency,
-          amountCurrency: amt,
-          fxRateToUsd: fxRate,
-          amountUsd: amtUsd,
+          amountCurrency: amt.toNumber(),
+          fxRateToUsd: fxRate.toNumber(),
+          amountUsd: amtUsd.toNumber(),
           createdBy: session.userId || undefined,
         });
       });

@@ -9,6 +9,8 @@ const SpGoldenCoast = lazy(() => import("@/pages/sp/SpGoldenCoast"));
 const RetailDashboard = lazy(() => import("@/pages/retail/RetailDashboard"));
 const RetailInventory = lazy(() => import("@/pages/retail/RetailInventory"));
 const RetailPOS = lazy(() => import("@/pages/pos/RetailPOS"));
+const RetailQuickAdd = lazy(() => import("@/pages/retail/RetailQuickAdd"));
+const RetailStockOperations = lazy(() => import("@/pages/retail/RetailStockOperations"));
 
 interface RouterProps {
   user: AuthMe;
@@ -43,6 +45,14 @@ export function Router({ user, posImportEnabled }: RouterProps) {
 
   if (location === "/retail/pos") {
     return <RetailPOS />;
+  }
+
+  if (location === "/retail/quick-add") {
+    return <RetailQuickAdd />;
+  }
+
+  if (location === "/retail/stock") {
+    return <RetailStockOperations />;
   }
 
   if (location === "/retail/reports") {

@@ -28,6 +28,8 @@ import {
 } from "@shared/schema";
 import { parseId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 
 export function registerRentalPaymentsAccrualRoutes(
   app: Express,
@@ -425,7 +427,7 @@ export function registerRentalPaymentsAccrualRoutes(
            GROUP BY ledger_row_id`,
           [contract.id, asOfDate]
         );
-        const paidByRowId = new Map(paymentSums.map((r) => [parseInt(r.ledger_row_id), parseFloat(r.total_paid)]));
+        const paidByRowId = new Map(paymentSums.map((r) => [parseInt(r.ledger_row_id), toMoney(r.total_paid)]));
 
         // Per-row ALL posted paid totals (no date filter) — used for the statement PAID column.
         // Needed because payments can be POSTED with a future payment_date (e.g. tenant pays on
@@ -438,9 +440,7 @@ export function registerRentalPaymentsAccrualRoutes(
            GROUP BY ledger_row_id`,
           [contract.id]
         );
-        const allPostedByRowId = new Map(
-          allPostedSums.map((r) => [parseInt(r.ledger_row_id), parseFloat(r.total_paid)])
-        );
+        const allPostedByRowId = new Map(allPostedSums.map((r) => [parseInt(r.ledger_row_id), toMoney(r.total_paid)]));
 
         // Per-row scheduled totals
         const { rows: scheduledSums } = await pool.query<{ ledger_row_id: string; total_scheduled: string }>(
@@ -451,23 +451,30 @@ export function registerRentalPaymentsAccrualRoutes(
           [contract.id]
         );
         const scheduledByRowId = new Map(
-          scheduledSums.map((r) => [parseInt(r.ledger_row_id), parseFloat(r.total_scheduled)])
+          scheduledSums.map((r) => [parseInt(r.ledger_row_id), toMoney(r.total_scheduled)])
         );
 
         // Enrich each ledger row with backend-calculated fields
         ledger = rawLedger.map((r) => {
           const dueDate = getRentalPeriodDueDate(r.year, r.month, billingDay);
           const isDue = dueDate <= asOfDate;
-          const effectivePaidAmount = paidByRowId.get(r.id) ?? 0;
+          // Exact decimals: the balance figures are differences of cent amounts,
+          // and float subtraction left residue such as 0.09999999999999432.
+          const effectivePaid = paidByRowId.get(r.id) ?? new MoneyDecimal(0);
           // allPostedPaid: all POSTED payments for this ledger row, regardless of payment_date.
           // This is what the statement PAID column should display so that future-dated posted
           // payments (e.g. paid a few days early) are shown correctly.
-          const allPostedPaid = allPostedByRowId.get(r.id) ?? 0;
-          const scheduledAmt = scheduledByRowId.get(r.id) ?? 0;
-          const expectedAmount = parseFloat(r.expectedAmount as string) || 0;
-          const expectedAsOf = isDue ? expectedAmount : 0;
-          const outstanding = Math.max(0, expectedAsOf - effectivePaidAmount);
-          const prepaidCredit = Math.max(0, effectivePaidAmount - expectedAsOf);
+          const allPosted = allPostedByRowId.get(r.id) ?? new MoneyDecimal(0);
+          const scheduled = scheduledByRowId.get(r.id) ?? new MoneyDecimal(0);
+          const expected = toMoney(r.expectedAmount as string);
+          const expectedAsOfExact = isDue ? expected : new MoneyDecimal(0);
+          const effectivePaidAmount = effectivePaid.toNumber();
+          const allPostedPaid = allPosted.toNumber();
+          const scheduledAmt = scheduled.toNumber();
+          const expectedAmount = expected.toNumber();
+          const expectedAsOf = expectedAsOfExact.toNumber();
+          const outstanding = MoneyDecimal.max(0, expectedAsOfExact.minus(effectivePaid)).toNumber();
+          const prepaidCredit = MoneyDecimal.max(0, effectivePaid.minus(expectedAsOfExact)).toNumber();
 
           // Use allPostedPaid (not effectivePaidAmount) for status so that a POSTED future-dated
           // payment is correctly labelled PAID/PREPAID rather than NOT_DUE.
@@ -683,7 +690,7 @@ export function registerRentalPaymentsAccrualRoutes(
           currency: string;
           notes: string | null;
           cashAccountId: number | null;
-          totalAmount: number;
+          totalAmount: Decimal;
           allocations: Array<{ id: number; year: number; month: number; amount: string }>;
         }
       >();
@@ -699,12 +706,12 @@ export function registerRentalPaymentsAccrualRoutes(
             currency: row.currency,
             notes: row.notes,
             cashAccountId: row.cashAccountId,
-            totalAmount: 0,
+            totalAmount: new MoneyDecimal(0),
             allocations: [],
           });
         }
         const g = groups.get(gid)!;
-        g.totalAmount += parseFloat(row.amount as string);
+        g.totalAmount = g.totalAmount.plus(toMoney(row.amount as string));
         g.allocations.push({ id: row.id, year: row.forYear, month: row.forMonth, amount: row.amount as string });
       }
 

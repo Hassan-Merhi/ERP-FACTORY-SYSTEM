@@ -103,9 +103,7 @@ export default function POSCustomers() {
 
   const onSubmit = (data: FormData) => createMutation.mutate(data);
 
-  const filteredCustomers = customers.filter((customer) =>
-    searchIncludes(customer.legalName, searchQuery)
-  );
+  const filteredCustomers = customers.filter((customer) => searchIncludes(customer.legalName, searchQuery));
 
   const totalCustomers = customers.length;
   const totalReceivables = customers

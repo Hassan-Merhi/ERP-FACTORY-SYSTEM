@@ -302,8 +302,8 @@ export const supplierPartnerAndAi: string[] = [
   // ── PO freight paid-by parent company account (May 2026) ──────────────
   `ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS freight_parent_account_id INTEGER`,
   // ── Factory container auto-tracking (May 2026) ────────────────────────
-  `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_enabled BOOLEAN NOT NULL DEFAULT true`,
-  `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_auto_update BOOLEAN NOT NULL DEFAULT true`,
+  `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_enabled BOOLEAN NOT NULL DEFAULT false`,
+  `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_auto_update BOOLEAN NOT NULL DEFAULT false`,
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_provider TEXT`,
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_last_status TEXT`,
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_last_location TEXT`,
@@ -316,6 +316,12 @@ export const supplierPartnerAndAi: string[] = [
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_next_check_at TIMESTAMPTZ`,
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_last_skip_reason TEXT`,
   `ALTER TABLE factory_containers ADD COLUMN IF NOT EXISTS tracking_carrier_hint TEXT`,
+  `ALTER TABLE factory_containers ALTER COLUMN tracking_enabled SET DEFAULT false`,
+  `ALTER TABLE factory_containers ALTER COLUMN tracking_auto_update SET DEFAULT false`,
+  `UPDATE factory_containers
+      SET tracking_enabled = false,
+          tracking_auto_update = false
+    WHERE tracking_enabled = true OR tracking_auto_update = true`,
   `CREATE TABLE IF NOT EXISTS factory_container_tracking_events (
       id SERIAL PRIMARY KEY,
       container_id INTEGER NOT NULL,

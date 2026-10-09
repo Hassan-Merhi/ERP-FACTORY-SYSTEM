@@ -1,14 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import FactoryContainerLoadingScan from "./FactoryContainerLoadingScan";
 import FactoryPendingLoadings from "./FactoryPendingLoadings";
+import FactoryPriorityScan from "./FactoryPriorityScan";
 import { Truck } from "lucide-react";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 import { useHubQueryState } from "@/hooks/use-hub-query-state";
+import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
+import { translatePriorityScanText } from "@/i18n/priorityScanTranslations";
 
-type LoadingsTab = "loadings" | "pending";
-const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending"];
+type LoadingsTab = "loadings" | "pending" | "priority";
+const ALL_LOADING_TABS: readonly LoadingsTab[] = ["loadings", "pending", "priority"];
 
 export default function FactoryLoadingsHub() {
+  const { language } = useApplicationLanguage();
+  const priorityScanLabel = translatePriorityScanText("priorityScan", language);
 
   const { data: settings } = useQuery({
     queryKey: ["/api/factory/settings"],
@@ -28,10 +33,12 @@ export default function FactoryLoadingsHub() {
   const showLoadings = !hiddenTabs.includes("hide_invoicing_loadings_tab");
   const showPending =
     settings?.loadingsTabPendingEnabled !== false && !hiddenTabs.includes("hide_tab_loadings_pending");
+  const showPriority = showLoadings && showPending;
 
   const visibleTabs: LoadingsTab[] = [
     ...(showLoadings ? (["loadings"] as const) : []),
     ...(showPending ? (["pending"] as const) : []),
+    ...(showPriority ? (["priority"] as const) : []),
   ];
   const [effectiveActiveTab, setActiveTab] = useHubQueryState<LoadingsTab>({
     key: "tab",
@@ -54,25 +61,29 @@ export default function FactoryLoadingsHub() {
           </div>
           <div>
             <h1 className="text-base font-semibold leading-tight">Loadings</h1>
-            <p className="text-xs text-muted-foreground">Container loading and pending sessions</p>
+            <p className="text-xs text-muted-foreground">
+              {translatePriorityScanText("loadingsHubSubtitle", language)}
+            </p>
           </div>
         </div>
         {/* Tab row */}
-        <div className="flex gap-0 px-4" role="tablist">
-          {showLoadings && <button
-            role="tab"
-            aria-selected={effectiveActiveTab === "loadings"}
-            data-testid="tab-container-loadings"
-            onClick={() => handleTabChange("loadings")}
-            className={[
-              "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-              effectiveActiveTab === "loadings"
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            ].join(" ")}
-          >
-            Container Loadings
-          </button>}
+        <div className="flex gap-0 px-4 overflow-x-auto" role="tablist">
+          {showLoadings && (
+            <button
+              role="tab"
+              aria-selected={effectiveActiveTab === "loadings"}
+              data-testid="tab-container-loadings"
+              onClick={() => handleTabChange("loadings")}
+              className={[
+                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                effectiveActiveTab === "loadings"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              Container Loadings
+            </button>
+          )}
           {showPending && (
             <button
               role="tab"
@@ -89,6 +100,22 @@ export default function FactoryLoadingsHub() {
               Pending Loadings
             </button>
           )}
+          {showPriority && (
+            <button
+              role="tab"
+              aria-selected={effectiveActiveTab === "priority"}
+              data-testid="tab-priority-scan"
+              onClick={() => handleTabChange("priority")}
+              className={[
+                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                effectiveActiveTab === "priority"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground",
+              ].join(" ")}
+            >
+              {priorityScanLabel}
+            </button>
+          )}
         </div>
       </div>
 
@@ -98,6 +125,7 @@ export default function FactoryLoadingsHub() {
         )}
         {effectiveActiveTab === "loadings" && showLoadings && <FactoryContainerLoadingScan />}
         {effectiveActiveTab === "pending" && showPending && <FactoryPendingLoadings />}
+        {effectiveActiveTab === "priority" && showPriority && <FactoryPriorityScan />}
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { getLocationById } from "./locationInventoryStorage";
@@ -102,12 +103,8 @@ export async function archiveStockGroupAtLocation(
 
   if (inventoryRecords.length === 0) throw new Error("No inventory found for this stock group at this location");
 
-  let totalQuantity = 0;
-  let totalValue = 0;
-  for (const inv of inventoryRecords) {
-    totalQuantity += parseFloat(inv.quantity);
-    totalValue += parseFloat(inv.totalValue);
-  }
+  const totalQuantity = sumMoney(inventoryRecords.map((inv) => inv.quantity));
+  const totalValue = sumMoney(inventoryRecords.map((inv) => inv.totalValue));
 
   const [archive] = await db
     .insert(schema.stockGroupLocationArchives)
@@ -117,8 +114,8 @@ export async function archiveStockGroupAtLocation(
       stockGroupId,
       locationName: location.name,
       stockGroupName,
-      totalQuantity: totalQuantity.toString(),
-      totalValue: totalValue.toString(),
+      totalQuantity: totalQuantity.toFixed(),
+      totalValue: totalValue.toFixed(),
       itemCount: inventoryRecords.length,
       archivedBy,
       notes,
@@ -241,18 +238,16 @@ export async function restoreStockGroupLocationArchive(
         );
 
       if (existing) {
-        const existingQty = parseFloat(existing.quantity);
-        const existingValue = parseFloat(existing.totalValue);
-        const archivedQty = parseFloat(item.quantity);
-        const archivedValue = parseFloat(item.totalValue);
-        const newQty = existingQty + archivedQty;
-        const newValue = existingValue + archivedValue;
-        const newRate = newQty > 0 ? newValue / newQty : 0;
+        // Exact sums: restoring an archive adds its quantity and value back to
+        // the row without float residue in the stored columns.
+        const newQty = toMoney(existing.quantity).plus(toMoney(item.quantity));
+        const newValue = toMoney(existing.totalValue).plus(toMoney(item.totalValue));
+        const newRate = newQty.gt(0) ? newValue.div(newQty) : new MoneyDecimal(0);
 
         await tx
           .update(schema.inventory)
           .set({
-            quantity: newQty.toString(),
+            quantity: newQty.toFixed(),
             averageRate: newRate.toFixed(2),
             totalValue: newValue.toFixed(2),
             lastUpdated: sql`now()`,

@@ -1,7 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { useState, useMemo, useEffect } from "react";
 import { hasAnyOpenDialog } from "@/hooks/use-escape-back";
-import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
@@ -22,7 +21,6 @@ import {
   ChevronRight,
   ChevronDown,
   Download,
-  GitCompare,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -336,8 +334,6 @@ export default function SalesReport() {
     setSelectedStockGroups,
   };
 
-  const [, navigate] = useLocation();
-
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
@@ -415,15 +411,6 @@ export default function SalesReport() {
         subtitle="Analyze profit and loss from POS transactions"
         meta={isMultiCompanyMode ? <span>All Companies</span> : undefined}
       >
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate("/sales-report/comparison")}
-          data-testid="button-compare-companies"
-        >
-          <GitCompare className="w-4 h-4 mr-2" />
-          Compare
-        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button

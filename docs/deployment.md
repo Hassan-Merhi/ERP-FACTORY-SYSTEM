@@ -104,7 +104,7 @@ Triggers on `push` and `pull_request` to `main`.
 
 Steps:
 1. Harden the runner and download the exact triggering repository archive.
-2. `actions/setup-node@v7` with Node 24.19.0 and npm cache.
+2. `actions/setup-node@v7` with Node 24.21.0 and npm cache.
 3. `npm ci --no-audit --bin-links=true` from `package-lock.json`.
 4. Run environment, type-escape, documentation, write-route, write-evidence,
    toolchain, and script-inventory contracts.

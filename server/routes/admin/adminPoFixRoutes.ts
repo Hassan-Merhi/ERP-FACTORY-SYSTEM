@@ -18,6 +18,8 @@ import {
 import { eq, and, or, isNull, like } from "drizzle-orm";
 
 import { registerPoSupplierReconciliationRoutes } from "./poSupplierReconciliationRoutes";
+import { calcPoAmountsExact } from "../containers/containerHelpers";
+import { MoneyDecimal, moneyString, parseMoneyInput } from "../../lib/money";
 
 export function registerAdminPoFixRoutes(app: Express) {
   registerPoSupplierReconciliationRoutes(app);
@@ -38,8 +40,8 @@ export function registerAdminPoFixRoutes(app: Express) {
           .json({ message: "Missing required fields: date, debitAccountId, creditAccountId, amount" });
       }
 
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      const parsedAmount = parseMoneyInput(amount);
+      if (!parsedAmount || parsedAmount.lessThanOrEqualTo(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
 
@@ -67,7 +69,7 @@ export function registerAdminPoFixRoutes(app: Express) {
           voucherType: "Journal",
           voucherDate: date,
           description: description || `Test data entry`,
-          totalAmount: parsedAmount.toFixed(2),
+          totalAmount: moneyString(parsedAmount),
           optional: true, // Start as draft/optional
         })
         .returning();
@@ -76,7 +78,7 @@ export function registerAdminPoFixRoutes(app: Express) {
       await db.insert(voucherEntries).values({
         voucherId: voucher.id,
         ledgerAccountId: debitAccountId,
-        debitAmount: parsedAmount.toFixed(2),
+        debitAmount: moneyString(parsedAmount),
         creditAmount: "0",
         narration: `Test data - ${description || debitAccount.name}`,
       });
@@ -86,7 +88,7 @@ export function registerAdminPoFixRoutes(app: Express) {
         voucherId: voucher.id,
         ledgerAccountId: creditAccountId,
         debitAmount: "0",
-        creditAmount: parsedAmount.toFixed(2),
+        creditAmount: moneyString(parsedAmount),
         narration: `Test data - ${description || creditAccount.name}`,
       });
 
@@ -148,7 +150,7 @@ export function registerAdminPoFixRoutes(app: Express) {
       const companiesToProcess = [selectedCompany];
 
       let totalFixed = 0;
-      let totalAmount = 0;
+      let totalAmount = new MoneyDecimal(0);
       const details: Array<{ company: string; poNumber: string; amount: number }> = [];
 
       // Process each company
@@ -241,20 +243,12 @@ export function registerAdminPoFixRoutes(app: Express) {
           }
 
           // Calculate PO total: items + freight + charges
-          const poItemsTotal = parseFloat(po.itemsTotal || "0");
-          const poFreight = parseFloat(po.freight || "0");
-          const poSurcharge = parseFloat(po.surcharge || "0");
-          const poFumigation = parseFloat(po.fumigation || "0");
-          const poDocumentCharges = parseFloat(po.documentCharges || "0");
-          const poDiscount = parseFloat(po.discount || "0");
-          const poOtherCharges = parseFloat(po.otherCharges || "0");
-          const poTotal =
-            poItemsTotal + poFreight + poSurcharge + poFumigation + poDocumentCharges - poDiscount + poOtherCharges;
+          const poTotal = calcPoAmountsExact(po).grossTotal;
 
           const poSupplier = po.supplierId
             ? await db.query.suppliers.findFirst({ where: eq(suppliers.id, po.supplierId) })
             : null;
-          if (poTotal <= 0) {
+          if (poTotal.lessThanOrEqualTo(0)) {
             continue; // Skip zero or negative amounts
           }
 
@@ -281,7 +275,7 @@ export function registerAdminPoFixRoutes(app: Express) {
               voucherType: "Journal",
               voucherDate,
               description: `Transfer supplier liability to ${parentCompany.name} Credit - PO ${po.poNumber} - Container ${container.containerNumber}`,
-              totalAmount: poTotal.toFixed(2),
+              totalAmount: moneyString(poTotal),
             })
             .returning();
 
@@ -290,7 +284,7 @@ export function registerAdminPoFixRoutes(app: Express) {
             await db.insert(voucherEntries).values({
               voucherId: voucher.id,
               supplierId: po.supplierId,
-              debitAmount: poTotal.toFixed(2),
+              debitAmount: moneyString(poTotal),
               creditAmount: "0",
               narration: `Transfer to ${parentCompany.name} Credit - PO ${po.poNumber}`,
             });
@@ -301,7 +295,7 @@ export function registerAdminPoFixRoutes(app: Express) {
             voucherId: voucher.id,
             ledgerAccountId: creditAccount[0].id,
             debitAmount: "0",
-            creditAmount: poTotal.toFixed(2),
+            creditAmount: moneyString(poTotal),
             narration: `PO ${po.poNumber} - Container ${container.containerNumber} (${parentCompany.name} paid)`,
           });
 
@@ -350,7 +344,7 @@ export function registerAdminPoFixRoutes(app: Express) {
               voucherType: "Journal",
               voucherDate,
               description: `${container.containerNumber} ${poSupplier?.legalName || "Unknown Supplier"}`,
-              totalAmount: poTotal.toFixed(2),
+              totalAmount: moneyString(poTotal),
             })
             .returning();
 
@@ -358,7 +352,7 @@ export function registerAdminPoFixRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: parentVoucher.id,
             ledgerAccountId: subsidiaryReceivableAccount[0].id,
-            debitAmount: poTotal.toFixed(2),
+            debitAmount: moneyString(poTotal),
             creditAmount: "0",
             narration: `PO ${po.poNumber} - ${company.name} owes us`,
           });
@@ -369,17 +363,17 @@ export function registerAdminPoFixRoutes(app: Express) {
               voucherId: parentVoucher.id,
               supplierId: po.supplierId,
               debitAmount: "0",
-              creditAmount: poTotal.toFixed(2),
+              creditAmount: moneyString(poTotal),
               narration: `PO ${po.poNumber} - Supplier payment`,
             });
           }
 
           totalFixed++;
-          totalAmount += poTotal;
+          totalAmount = totalAmount.plus(poTotal);
           details.push({
             company: company.name,
             poNumber: po.poNumber,
-            amount: poTotal,
+            amount: poTotal.toNumber(),
           });
         }
       }
@@ -387,7 +381,7 @@ export function registerAdminPoFixRoutes(app: Express) {
       res.json({
         message: `Fixed ${totalFixed} POs for ${selectedCompany.name} (parent: ${parentCompany.name})`,
         fixed: totalFixed,
-        totalAmount: totalAmount.toFixed(2),
+        totalAmount: moneyString(totalAmount),
         details,
         processedCompanies: 1,
       });
@@ -422,7 +416,7 @@ export function registerAdminPoFixRoutes(app: Express) {
 
       let fixed = 0;
       let skipped = 0;
-      let totalAmount = 0;
+      let totalAmount = new MoneyDecimal(0);
       const details = [];
 
       for (const po of allPOs) {
@@ -432,19 +426,12 @@ export function registerAdminPoFixRoutes(app: Express) {
         }
 
         // Calculate PO total
-        const itemsTotal = parseFloat(po.itemsTotal || "0");
-        const freight = parseFloat(po.freight || "0");
-        const surcharge = parseFloat(po.surcharge || "0");
-        const fumigation = parseFloat(po.fumigation || "0");
-        const documentCharges = parseFloat(po.documentCharges || "0");
-        const discount = parseFloat(po.discount || "0");
-        const otherCharges = parseFloat(po.otherCharges || "0");
-        const poTotal = itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+        const poTotal = calcPoAmountsExact(po).grossTotal;
 
         const _poSupplier = po.supplierId
           ? await db.query.suppliers.findFirst({ where: eq(suppliers.id, po.supplierId) })
           : null;
-        if (poTotal <= 0) {
+        if (poTotal.lessThanOrEqualTo(0)) {
           skipped++;
           continue;
         }
@@ -493,7 +480,7 @@ export function registerAdminPoFixRoutes(app: Express) {
           await db.insert(voucherEntries).values({
             voucherId: po.voucherId,
             ledgerAccountId: purchasesAccount.id,
-            debitAmount: poTotal.toFixed(2),
+            debitAmount: moneyString(poTotal),
             creditAmount: "0",
             narration: `PO ${po.poNumber} - Fix missing entry`,
           });
@@ -506,7 +493,7 @@ export function registerAdminPoFixRoutes(app: Express) {
             voucherId: po.voucherId,
             supplierId: po.supplierId,
             debitAmount: "0",
-            creditAmount: poTotal.toFixed(2),
+            creditAmount: moneyString(poTotal),
             narration: `PO ${po.poNumber} - Fix missing supplier entry`,
           });
           fixedThisPO = true;
@@ -514,10 +501,10 @@ export function registerAdminPoFixRoutes(app: Express) {
 
         if (fixedThisPO) {
           fixed++;
-          totalAmount += poTotal;
+          totalAmount = totalAmount.plus(poTotal);
           details.push({
             poNumber: po.poNumber,
-            amount: poTotal.toFixed(2),
+            amount: moneyString(poTotal),
             fixedPurchases: existingPurchaseEntry.length === 0,
             fixedSupplier: existingSupplierEntry.length === 0,
           });
@@ -530,7 +517,7 @@ export function registerAdminPoFixRoutes(app: Express) {
         message: `Fixed ${fixed} POs in ${parentCompany.name}. Skipped ${skipped} (already had entries or invalid).`,
         fixed,
         skipped,
-        totalAmount: totalAmount.toFixed(2),
+        totalAmount: moneyString(totalAmount),
         details,
       });
     } catch (error: unknown) {

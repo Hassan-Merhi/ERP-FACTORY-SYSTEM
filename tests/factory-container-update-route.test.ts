@@ -481,3 +481,73 @@ describe("PATCH /api/factory/containers/:id — freight payer canonicalisation",
     expect(account.rows[0].code).toBe("FREIGHT");
   });
 });
+
+describe("container goods value is exact", () => {
+  // 1000.5 kg at 0.35 is 350.175; the float product 350.17499999999995 was
+  // stored as 350.17 in the import voucher and the daybook.
+  async function importVoucherTotal(containerId: number): Promise<string> {
+    const voucher = await pool.query<{ total_amount: string }>(
+      `SELECT total_amount FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2`,
+      [ctx.companyId, `FACTORY-IMPORT-${containerId}-%`]
+    );
+    return voucher.rows[0]?.total_amount;
+  }
+  async function importDaybookAmount(containerId: number): Promise<string> {
+    const entry = await pool.query<{ amount_currency: string }>(
+      `SELECT amount_currency FROM factory_daybook_entries
+       WHERE company_id = $1 AND tx_type = 'CONTAINER_IMPORT' AND reference_id = $2`,
+      [ctx.companyId, containerId]
+    );
+    return entry.rows[0]?.amount_currency;
+  }
+
+  it("answers promptly for a rate with an out-of-range exponent", async () => {
+    // Formatting "1e-500000000" with toFixed() wrote out hundreds of millions of
+    // zeros and hung the process; the bounded parse reads it as 0.
+    seq += 1;
+    const started = Date.now();
+    const response = await agent.post("/api/factory/containers").send({
+      containerNumber: `${TEST_PREFIX}-EXP${seq}`,
+      supplierId,
+      currencyCode: "USD",
+      totalKg: "1000",
+      ratePerKg: "1e-500000000",
+      arrivalDate: "2026-06-08",
+    });
+    expect(response.status).toBeGreaterThanOrEqual(200);
+    expect(Date.now() - started).toBeLessThan(10000);
+  }, 20000);
+
+  it("posts the import voucher and daybook entry at the exact cents on create", async () => {
+    seq += 1;
+    const response = await agent.post("/api/factory/containers").send({
+      containerNumber: `${TEST_PREFIX}-EXACT${seq}`,
+      supplierId,
+      currencyCode: "USD",
+      totalKg: "1000.500",
+      ratePerKg: "0.35",
+      arrivalDate: "2026-06-08",
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+
+    expect(await importVoucherTotal(response.body.id)).toBe("350.18");
+    expect(await importDaybookAmount(response.body.id)).toBe("350.18");
+  });
+
+  it("re-syncs the import daybook entry at the exact cents on edit", async () => {
+    seq += 1;
+    const created = await agent.post("/api/factory/containers").send({
+      containerNumber: `${TEST_PREFIX}-EXACT${seq}`,
+      supplierId,
+      currencyCode: "USD",
+      totalKg: "1000",
+      ratePerKg: "0.35",
+      arrivalDate: "2026-06-08",
+    });
+    expect(created.status, JSON.stringify(created.body)).toBe(200);
+
+    const response = await patchContainer(created.body.id, { totalKg: "1000.500" });
+    expect(response.status).toBe(200);
+    expect(await importDaybookAmount(created.body.id)).toBe("350.18");
+  });
+});

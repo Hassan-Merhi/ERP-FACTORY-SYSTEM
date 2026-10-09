@@ -16,6 +16,8 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { getFactoryCompanyId, writeDaybookEntry } from "./helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerWorkerAdvanceAdminRoutes(app: Express) {
   app.post("/api/factory/advances/bulk", requireAuth, async (req: Request, res: Response) => {
@@ -72,8 +74,8 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
         const created: unknown[] = [];
         for (const item of items) {
           const workerId = parseInt(item.workerId);
-          const amount = parseFloat(item.amount);
-          if (!workerId || !amount || amount <= 0) continue;
+          const amount = parseMoneyInput(item.amount)?.toDecimalPlaces(2) ?? null;
+          if (!workerId || !amount || amount.lte(0)) continue;
 
           const [worker] = await tx
             .select({ fullName: factoryWorkers.fullName })
@@ -136,8 +138,8 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
             referenceId: advance.id,
             referenceTable: "factory_worker_advances",
             description: `Advance given to ${worker.fullName}: $${amount.toFixed(2)}`,
-            amountCurrency: amount,
-            amountUsd: amount,
+            amountCurrency: amount.toNumber(),
+            amountUsd: amount.toNumber(),
             createdBy: req.session.userId ?? undefined,
           });
 
@@ -240,41 +242,45 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
         advancesByWorker.set(adv.workerId, list);
       }
 
-      const payrollDeductionByWorker = new Map<number, number>();
+      // Exact decimals: a float balance such as 0.30000000000000004 used to read
+      // as a change against the stored 0.30.
+      const zero = new MoneyDecimal(0);
+      const payrollDeductionByWorker = new Map<number, Decimal>();
       for (const pr of allPayrolls) {
-        const amt = parseFloat(pr.advances || "0");
-        if (amt > 0) payrollDeductionByWorker.set(pr.workerId, (payrollDeductionByWorker.get(pr.workerId) || 0) + amt);
+        const amt = toMoney(pr.advances);
+        if (amt.gt(0))
+          payrollDeductionByWorker.set(pr.workerId, (payrollDeductionByWorker.get(pr.workerId) ?? zero).plus(amt));
       }
 
-      const manualRepaymentByAdvance = new Map<number, number>();
+      const manualRepaymentByAdvance = new Map<number, Decimal>();
       for (const rep of allRepayments) {
         manualRepaymentByAdvance.set(
           rep.advanceId,
-          (manualRepaymentByAdvance.get(rep.advanceId) || 0) + parseFloat(rep.amount || "0")
+          (manualRepaymentByAdvance.get(rep.advanceId) ?? zero).plus(toMoney(rep.amount))
         );
       }
 
       const changes: unknown[] = [];
       for (const [workerId, advances] of advancesByWorker) {
-        const balances: { id: number; bal: number }[] = [];
+        const balances: { id: number; bal: Decimal }[] = [];
         for (const adv of advances) {
-          const original = parseFloat(adv.amount || "0");
-          const manualPaid = manualRepaymentByAdvance.get(adv.id) || 0;
-          balances.push({ id: adv.id, bal: Math.max(0, original - manualPaid) });
+          const original = toMoney(adv.amount);
+          const manualPaid = manualRepaymentByAdvance.get(adv.id) ?? zero;
+          balances.push({ id: adv.id, bal: MoneyDecimal.max(0, original.minus(manualPaid)) });
         }
-        let remaining = payrollDeductionByWorker.get(workerId) || 0;
+        let remaining = payrollDeductionByWorker.get(workerId) ?? zero;
         for (const entry of balances) {
-          if (remaining <= 0) break;
-          const deduct = Math.min(entry.bal, remaining);
-          entry.bal = entry.bal - deduct;
-          remaining -= deduct;
+          if (remaining.lte(0)) break;
+          const deduct = MoneyDecimal.min(entry.bal, remaining);
+          entry.bal = entry.bal.minus(deduct);
+          remaining = remaining.minus(deduct);
         }
         for (let i = 0; i < advances.length; i++) {
           const adv = advances[i];
-          const newBal = Math.max(0, balances[i].bal);
+          const newBal = MoneyDecimal.max(0, balances[i].bal);
           const newBal2dp = newBal.toFixed(2);
-          const newFullyPaid = newBal <= 0.001;
-          const currentBal = parseFloat(adv.remainingBalance || "0");
+          const newFullyPaid = newBal.lte("0.001");
+          const currentBal = toMoney(adv.remainingBalance);
           const changed = adv.remainingBalance !== newBal2dp || adv.fullyPaid !== newFullyPaid;
           changes.push({
             advanceId: adv.id,

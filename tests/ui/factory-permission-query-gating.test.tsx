@@ -167,12 +167,26 @@ describe("Factory Stock Entry History support reads", () => {
   it("does not read the worker picker or production targets when their owning tabs are hidden", async () => {
     recordFetch(historyRoutes);
     await mount(
-      access({ hiddenCostFields: ["hide_tab_payrollhub_workers", "hide_tab_stockentry_production_targets"] })
+      access({
+        hiddenCostFields: [
+          "hide_tab_payrollhub_workers",
+          "hide_tab_stockentry_history",
+          "hide_tab_stockentry_production_targets",
+        ],
+      })
     );
     await settleAfter("/api/factory/bales/stock-entry-history");
 
     expect(wasRequested("/api/factory/workers?profile=picker")).toBe(false);
     expect(wasRequested("/api/factory/staff-tracking")).toBe(false);
+  });
+
+  it("reads the worker picker for a History user without Payroll Hub workers", async () => {
+    // Reassigning a bale's worker from History needs the picker on its own.
+    recordFetch(historyRoutes);
+    await mount(access({ hiddenCostFields: ["hide_tab_payrollhub_workers"] }));
+
+    await waitFor(() => expect(wasRequested("/api/factory/workers?profile=picker")).toBe(true));
   });
 
   it("reads the worker picker and production targets when their owning tabs are visible", async () => {

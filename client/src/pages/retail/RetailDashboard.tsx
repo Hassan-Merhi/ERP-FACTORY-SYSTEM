@@ -16,6 +16,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCompany } from "@/contexts/CompanyContext";
+import { RetailNav } from "./RetailNav";
+import { RetailVariantReports } from "./RetailVariantReports";
 
 interface Location {
   id: number;
@@ -33,6 +35,7 @@ interface DashboardRow {
   name?: string;
   brand?: string;
   brand_name?: string;
+  color?: string;
   size?: string;
   barcode?: string;
   location_name?: string;
@@ -188,10 +191,11 @@ function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]
         <CardTitle className="text-base">{title}</CardTitle>
       </CardHeader>
       <CardContent className="p-0 overflow-x-auto">
-        <table className="w-full min-w-[540px] text-sm">
+        <table className="w-full min-w-[620px] text-sm">
           <thead>
             <tr className="border-y bg-muted/30 text-left text-xs text-muted-foreground">
               <th className="px-4 py-2">Product</th>
+              <th className="px-3 py-2">Color</th>
               <th className="px-3 py-2">Size</th>
               {mode === "low" ? <th className="px-3 py-2">Location</th> : null}
               <th className="px-3 py-2 text-right">Qty</th>
@@ -207,6 +211,7 @@ function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]
                     <div className="font-medium">{row.name ?? row.product_name ?? "—"}</div>
                     <div className="text-xs text-muted-foreground">{row.code ?? row.product_code ?? row.barcode}</div>
                   </td>
+                  <td className="px-3 py-2.5">{row.color ?? "—"}</td>
                   <td className="px-3 py-2.5">{row.size ?? "—"}</td>
                   {mode === "low" ? <td className="px-3 py-2.5">{row.location_name ?? "—"}</td> : null}
                   <td className="px-3 py-2.5 text-right font-medium tabular-nums">{quantity(row.quantity)}</td>
@@ -223,7 +228,7 @@ function StockTable({ title, rows, mode }: { title: string; rows: DashboardRow[]
             ) : (
               <tr>
                 <td
-                  colSpan={mode === "low" || mode === "slow" ? 5 : 3}
+                  colSpan={mode === "low" ? 6 : mode === "slow" ? 5 : 4}
                   className="px-4 py-8 text-center text-muted-foreground"
                 >
                   Nothing to review.
@@ -293,6 +298,7 @@ export default function RetailDashboard() {
 
   return (
     <div className="mx-auto max-w-[1700px] space-y-5 p-4 md:p-6">
+      <RetailNav />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -489,6 +495,8 @@ export default function RetailDashboard() {
           </div>
         </>
       ) : null}
+
+      <RetailVariantReports companyKey={companyKey} />
     </div>
   );
 }

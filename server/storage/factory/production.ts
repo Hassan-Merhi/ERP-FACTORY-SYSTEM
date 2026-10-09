@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import { moneyString, toMoney } from "../../lib/money";
 
 export async function getProductionBalesByLocation(
   companyId: number,
@@ -193,9 +194,8 @@ export async function updateProductionBaleFromScan(
     const batch = await getMixBatchById(bale.mixBatchId, companyId);
     if (batch) {
       costPerKg = batch.costPerKg;
-      const weight = parseFloat(updates.weightKg);
-      const cost = parseFloat(costPerKg);
-      totalCost = (weight * cost).toFixed(2);
+      // Exact weight × rate at cents (the float product could round a half-cent down).
+      totalCost = moneyString(toMoney(updates.weightKg).times(toMoney(costPerKg)));
     }
   }
 

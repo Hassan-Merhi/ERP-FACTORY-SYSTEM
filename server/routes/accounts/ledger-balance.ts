@@ -19,6 +19,7 @@ import {
   customerOrders,
 } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
+import { MoneyDecimal, debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../../lib/money";
 
 export function registerAccountLedgerBalanceRoutes(app: Express) {
   // Get balance for a specific ledger account
@@ -62,16 +63,10 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         }
 
         const bankTxs = await storage.getVoucherEntriesByBankAccount(ledgerAccountId);
-        let bDebits = 0;
-        let bCredits = 0;
-        for (const tx of bankTxs) {
-          bDebits += parseFloat(tx.debitAmount || "0");
-          bCredits += parseFloat(tx.creditAmount || "0");
-        }
-        const bOB = parseFloat(bankAcct.openingBalance || "0");
-        const bSide = bankAcct.openingBalanceSide || "Dr";
-        const bankBalance = bOB * (bSide === "Cr" ? -1 : 1) + bDebits - bCredits;
-        return res.json({ balance: bankBalance });
+        const bankBalance = signedOpeningBalance(bankAcct.openingBalance, bankAcct.openingBalanceSide).plus(
+          debitMinusCredit(bankTxs)
+        );
+        return res.json({ balance: bankBalance.toNumber() });
       }
 
       // Check if this ledger account is linked to a customer in the same tenant.
@@ -149,23 +144,18 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
               .where(and(eq(voucherEntries.customerId, custId), isNull(voucherEntries.ledgerAccountId))),
           ]);
 
-          const salesTotal = parseFloat(salesRows[0]?.total || "0");
-          const nonInvNet = parseFloat(cbRows[0]?.net || "0");
-          const vNet = parseFloat(lVoucherRows[0]?.net || "0") + parseFloat(cVoucherRows[0]?.net || "0");
-          const ob = parseFloat(linkedCustomer.ob || "0");
-          const obSide = linkedCustomer.side || "Dr";
-          const balance = (obSide === "Dr" ? ob : -ob) + salesTotal + nonInvNet + vNet;
-          return res.json({ balance });
+          const ob = toMoney(linkedCustomer.ob);
+          // Anything but "Dr" (the default side) counts as a credit opening.
+          const signedOb = (linkedCustomer.side || "Dr") === "Dr" ? ob : ob.negated();
+          const balance = signedOb.plus(
+            sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVoucherRows[0]?.net, cVoucherRows[0]?.net])
+          );
+          return res.json({ balance: balance.toNumber() });
         }
       }
 
       const transactions = await storage.getVoucherEntriesByLedger(ledgerAccountId, undefined, undefined, companyId);
-      let debits = 0;
-      let credits = 0;
-      for (const tx of transactions) {
-        debits += parseFloat(tx.debitAmount || "0");
-        credits += parseFloat(tx.creditAmount || "0");
-      }
+      let movement = debitMinusCredit(transactions);
 
       // Some bank accounts have a linkedLedgerId pointing to this ledger account.
       // Their voucher entries are stored under bankAccountId (not ledgerAccountId),
@@ -179,23 +169,19 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         .from(bankAccounts)
         .where(and(eq(bankAccounts.linkedLedgerId, ledgerAccountId), eq(bankAccounts.companyId, companyId)));
 
-      let linkedBankOB = 0;
+      let linkedBankOB = new MoneyDecimal(0);
       for (const bank of linkedBanks) {
         const bankTxs = await storage.getVoucherEntriesByBankAccount(bank.id);
-        for (const tx of bankTxs) {
-          debits += parseFloat(tx.debitAmount || "0");
-          credits += parseFloat(tx.creditAmount || "0");
-        }
-        const bOB = parseFloat(bank.openingBalance || "0");
-        const bSide = bank.openingBalanceSide || "Dr";
-        linkedBankOB += bOB * (bSide === "Cr" ? -1 : 1);
+        movement = movement.plus(debitMinusCredit(bankTxs));
+        linkedBankOB = linkedBankOB.plus(signedOpeningBalance(bank.openingBalance, bank.openingBalanceSide));
       }
 
-      const rawOB = parseFloat((linkedCustomer?.ob ?? account.openingBalance) || "0");
       const rawSide = linkedCustomer?.side ?? account.openingBalanceSide;
-      const balance = rawOB * (rawSide === "Cr" ? -1 : 1) + linkedBankOB + debits - credits;
+      const balance = signedOpeningBalance(linkedCustomer?.ob ?? account.openingBalance, rawSide)
+        .plus(linkedBankOB)
+        .plus(movement);
 
-      res.json({ balance });
+      res.json({ balance: balance.toNumber() });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -242,8 +228,8 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
 
       const result = rows.map((r) => ({
         currency: r.currency || "USD",
-        totalDebit: parseFloat(r.totalDebit || "0"),
-        totalCredit: parseFloat(r.totalCredit || "0"),
+        totalDebit: toMoney(r.totalDebit).toNumber(),
+        totalCredit: toMoney(r.totalCredit).toNumber(),
       }));
 
       res.json(result);

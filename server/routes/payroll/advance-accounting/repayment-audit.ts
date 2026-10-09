@@ -21,6 +21,7 @@ import {
 } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
+import { toMoney } from "../../../lib/money";
 
 export function registerAdvanceRepaymentAuditRoutes(app: Express) {
   // GET /api/factory/advances/repayment-audit — find salary deduction advances missing cash vouchers
@@ -89,7 +90,7 @@ export function registerAdvanceRepaymentAuditRoutes(app: Express) {
         const adv = row.factory_worker_advances;
         const worker = row.factory_workers;
         const advRepays = repaysByAdvId.get(adv.id) || [];
-        const isPaid = adv.fullyPaid || parseFloat(adv.remainingBalance || "0") <= 0.005;
+        const isPaid = adv.fullyPaid || toMoney(adv.remainingBalance).lte("0.005");
 
         if (advRepays.length === 0) {
           if (isPaid) {
@@ -262,13 +263,13 @@ export function registerAdvanceRepaymentAuditRoutes(app: Express) {
           const adv = row.factory_worker_advances;
           const worker = row.factory_workers;
           const advRepays = repaysByAdvId.get(adv.id) || [];
-          const isPaid = adv.fullyPaid || parseFloat(adv.remainingBalance || "0") <= 0.005;
+          const isPaid = adv.fullyPaid || toMoney(adv.remainingBalance).lte("0.005");
           const workerName = worker.fullName || `Worker #${adv.workerId}`;
 
           if (advRepays.length === 0 && isPaid) {
             // Case B: no repayment record — create one + voucher
-            const amount = parseFloat(adv.amount || "0");
-            if (amount <= 0) continue;
+            const amount = toMoney(adv.amount);
+            if (amount.lte(0)) continue;
 
             const [repayment] = await tx
               .insert(factoryAdvanceRepayments)
@@ -322,8 +323,8 @@ export function registerAdvanceRepaymentAuditRoutes(app: Express) {
             // Case A: repayment records exist, re-create missing vouchers
             const missingRepays = advRepays.filter((r) => !voucheredRepayIds.has(r.id));
             for (const repay of missingRepays) {
-              const amount = parseFloat(repay.amount || "0");
-              if (amount <= 0) continue;
+              const amount = toMoney(repay.amount);
+              if (amount.lte(0)) continue;
               const rDate = repay.repaymentDate || repaymentDate;
               const narration = `Salary deduction repayment — ${workerName}: $${amount.toFixed(2)} (advance #${adv.id})`;
               const voucherNumber = `REPAY-SAL-${repay.id}-${Date.now()}`;

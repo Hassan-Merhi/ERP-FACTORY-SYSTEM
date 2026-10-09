@@ -188,6 +188,66 @@ export const retailWave1Translations: readonly Phase3SharedUiEntry[] = [
     ar: "الباركود موجود بالفعل في متغير آخر: {{0}}",
     fr: "Le code-barres existe déjà sur une autre variante : {{0}}",
   },
+  { en: "Colors / Sizes / Variants", ar: "الألوان / المقاسات / المتغيرات", fr: "Couleurs / Tailles / Variantes" },
+  { en: "Add variant", ar: "إضافة متغير", fr: "Ajouter une variante" },
+  { en: "Color *", ar: "اللون *", fr: "Couleur *" },
+  { en: "Variant images", ar: "صور المتغير", fr: "Images de la variante" },
+  { en: "Uploading variant image…", ar: "جارٍ رفع صورة المتغير…", fr: "Téléversement de l’image de variante…" },
+  {
+    en: "Each color and size combination has its own barcode, photos, pricing and location stock.",
+    ar: "لكل تركيبة لون ومقاس باركود وصور وتسعير ومخزون مواقع مستقل.",
+    fr: "Chaque combinaison de couleur et de taille possède son propre code-barres, ses photos, ses prix et son stock par emplacement.",
+  },
+  { en: "Remove variant", ar: "إزالة المتغير", fr: "Supprimer la variante" },
+  { en: "Variant image limit reached", ar: "تم بلوغ حد صور المتغير", fr: "Limite d’images de variante atteinte" },
+  {
+    en: "You can upload up to ${MAX_VARIANT_IMAGES} images per variant.",
+    ar: "يمكنك رفع ما يصل إلى {{0}} صور لكل متغير.",
+    fr: "Vous pouvez téléverser jusqu’à {{0}} images par variante.",
+  },
+  {
+    en: "Variant image upload failed",
+    ar: "فشل رفع صورة المتغير",
+    fr: "Échec du téléversement de l’image de variante",
+  },
+  {
+    en: "Could not upload variant image",
+    ar: "تعذر رفع صورة المتغير",
+    fr: "Impossible de téléverser l’image de variante",
+  },
+  {
+    en: "Every variant needs a color, size and barcode",
+    ar: "كل متغير يحتاج إلى لون ومقاس وباركود",
+    fr: "Chaque variante doit avoir une couleur, une taille et un code-barres",
+  },
+  { en: "Stock by color and size", ar: "المخزون حسب اللون والمقاس", fr: "Stock par couleur et taille" },
+  { en: "All colors", ar: "كل الألوان", fr: "Toutes les couleurs" },
+  { en: "Available colors", ar: "الألوان المتاحة", fr: "Couleurs disponibles" },
+  {
+    en: "Products grouped by brand and style with exact color, size, stock and barcode variants.",
+    ar: "منتجات مجمعة حسب العلامة والطراز مع متغيرات دقيقة للون والمقاس والمخزون والباركود.",
+    fr: "Produits regroupés par marque et modèle avec des variantes précises de couleur, taille, stock et code-barres.",
+  },
+  {
+    en: "Duplicate color/size in product: ${variant.color} / ${variant.size}",
+    ar: "تركيبة لون/مقاس مكررة في المنتج: {{0}} / {{1}}",
+    fr: "Combinaison couleur/taille dupliquée dans le produit : {{0}} / {{1}}",
+  },
+  {
+    en: "Barcode ${row.barcode} is assigned to more than one product/color/size in the file",
+    ar: "الباركود {{0}} مخصص لأكثر من منتج/لون/مقاس في الملف",
+    fr: "Le code-barres {{0}} est attribué à plusieurs produits/couleurs/tailles dans le fichier",
+  },
+  {
+    en: "Duplicate product/color/size/location row: ${row.code} / ${row.color} / ${row.size} / ${row.location}",
+    ar: "صف منتج/لون/مقاس/موقع مكرر: {{0}} / {{1}} / {{2}} / {{3}}",
+    fr: "Ligne produit/couleur/taille/emplacement dupliquée : {{0}} / {{1}} / {{2}} / {{3}}",
+  },
+  {
+    en: "${row.color} / ${row.size} on ${row.code} already uses barcode ${variant.barcode}",
+    ar: "{{0}} / {{1}} في {{2}} يستخدم بالفعل الباركود {{3}}",
+    fr: "{{0}} / {{1}} sur {{2}} utilise déjà le code-barres {{3}}",
+  },
 ];
 
 const exactTranslations = new Map<string, Phase3SharedUiEntry>();

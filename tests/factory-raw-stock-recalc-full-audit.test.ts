@@ -254,6 +254,22 @@ describe("getRawStockRecalcPreview — extended RecalcRow fields", () => {
     expect(row!.containerStatus).toBe("OFFLOADED");
   });
 
+  it("reports remaining kilograms exactly", async () => {
+    const container = await makeContainer({ containerNumber: `${TEST_PREFIX}-EXACT1`, ratePerKg: "5.000000" });
+    await makeRawStock({
+      containerId: container.id,
+      receivedKg: "0.3",
+      usedKg: "0.1",
+      costPerKg: "3.000000",
+      costPerKgUsd: "3.000000",
+    });
+
+    const rows = await getRawStockRecalcPreview(ctx.companyId);
+    const row = rows.find((r) => r.containerId === container.id);
+    // The float difference was 0.19999999999999998.
+    expect(row!.remainingKg).toBe(0.2);
+  });
+
   it("marks fullyUsed=true when usedKg === receivedKg", async () => {
     const container = await makeContainer({ containerNumber: `${TEST_PREFIX}-FULL1`, ratePerKg: "5.000000" });
     await makeRawStock({
@@ -352,7 +368,7 @@ describe("changed flag — 6dp costEquals, no EPS tolerance", () => {
 describe("computeRecalcFingerprint — includes otherChargesRows", () => {
   it("produces a different fingerprint when otherChargesRows changes", async () => {
     const container = await makeContainer({ containerNumber: `${TEST_PREFIX}-FP1`, ratePerKg: "2.000000" });
-    const rs = await makeRawStock({ containerId: container.id });
+    await makeRawStock({ containerId: container.id });
 
     const inputs1 = await loadRecalcFingerprintInputs(ctx.companyId, container.id);
     const fp1 = computeRecalcFingerprint(inputs1!);

@@ -16,6 +16,8 @@ import {
   inventorySnapshotFromStoredValues,
 } from "../../services/inventory/inventoryValuationSnapshot";
 import { calculateHistoricalLocationInventory } from "../_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import {
   inventory,
   containers,
@@ -74,10 +76,21 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
       ];
 
       // Initialize monthly buckets
-      const monthBuckets: Record<number, { inQty: number; inVal: number; outQty: number; outVal: number }> = {};
+      // Quantities and values stay exact and become numbers only in the response.
+      const ZERO = new MoneyDecimal(0);
+      type Bucket = { inQty: Decimal; inVal: Decimal; outQty: Decimal; outVal: Decimal };
+      const monthBuckets: Record<number, Bucket> = {};
       for (let m = 1; m <= 12; m++) {
-        monthBuckets[m] = { inQty: 0, inVal: 0, outQty: 0, outVal: 0 };
+        monthBuckets[m] = { inQty: ZERO, inVal: ZERO, outQty: ZERO, outVal: ZERO };
       }
+      const addIn = (month: number, qty: Decimal, val: Decimal) => {
+        monthBuckets[month].inQty = monthBuckets[month].inQty.plus(qty);
+        monthBuckets[month].inVal = monthBuckets[month].inVal.plus(val);
+      };
+      const addOut = (month: number, qty: Decimal, val: Decimal) => {
+        monthBuckets[month].outQty = monthBuckets[month].outQty.plus(qty);
+        monthBuckets[month].outVal = monthBuckets[month].outVal.plus(val);
+      };
 
       // 1. Stock Transfers - In and Out based on source/destination matching this location
       const stockTransfers = await db
@@ -107,19 +120,13 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
 
       for (const row of stockTransfers) {
         const month = Number(row.month);
-        const qty = parseFloat(row.quantity);
-        const val = parseFloat(row.totalAmount);
+        const qty = toMoney(row.quantity);
+        const val = toMoney(row.totalAmount);
 
         // Transfer OUT from this location (source = this location)
-        if (row.sourceLocationId === locationId) {
-          monthBuckets[month].outQty += qty;
-          monthBuckets[month].outVal += val;
-        }
+        if (row.sourceLocationId === locationId) addOut(month, qty, val);
         // Transfer IN to this location (destination = this location)
-        if (row.destinationLocationId === locationId) {
-          monthBuckets[month].inQty += qty;
-          monthBuckets[month].inVal += val;
-        }
+        if (row.destinationLocationId === locationId) addIn(month, qty, val);
       }
 
       // 2. Stock Adjustments at this location
@@ -146,15 +153,10 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
 
       for (const row of stockAdjustments) {
         const month = Number(row.month);
-        const qty = Math.abs(parseFloat(row.quantity));
-        const val = Math.abs(parseFloat(row.totalAmount));
-        if (row.adjustmentType === "Production" || parseFloat(row.quantity) > 0) {
-          monthBuckets[month].inQty += qty;
-          monthBuckets[month].inVal += val;
-        } else {
-          monthBuckets[month].outQty += qty;
-          monthBuckets[month].outVal += val;
-        }
+        const qty = toMoney(row.quantity).abs();
+        const val = toMoney(row.totalAmount).abs();
+        if (row.adjustmentType === "Production" || toMoney(row.quantity).greaterThan(0)) addIn(month, qty, val);
+        else addOut(month, qty, val);
       }
 
       // 3. Sales at this location (Outwards) — use totalCost (cost price) for inventory valuation
@@ -179,8 +181,7 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
 
       for (const row of salesData) {
         const month = Number(row.month);
-        monthBuckets[month].outQty += parseFloat(row.quantity);
-        monthBuckets[month].outVal += parseFloat(row.totalCost || "0");
+        addOut(month, toMoney(row.quantity), toMoney(row.totalCost));
       }
 
       // 4. Credit / Debit Note Items at this location
@@ -206,15 +207,10 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
 
       for (const row of creditDebitNotes) {
         const month = Number(row.month);
-        const qty = parseFloat(row.quantity);
-        const val = parseFloat(row.inventoryCost || "0") * qty;
-        if (row.noteType === "Credit Note") {
-          monthBuckets[month].inQty += qty;
-          monthBuckets[month].inVal += val;
-        } else {
-          monthBuckets[month].outQty += qty;
-          monthBuckets[month].outVal += val;
-        }
+        const qty = toMoney(row.quantity);
+        const val = toMoney(row.inventoryCost).times(qty);
+        if (row.noteType === "Credit Note") addIn(month, qty, val);
+        else addOut(month, qty, val);
       }
 
       // 5. Container Offloads at this location (Inwards - from PO imports)
@@ -245,8 +241,7 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
 
       for (const row of modernOffloadData) {
         const month = Number(row.month);
-        monthBuckets[month].inQty += parseFloat(row.quantity);
-        monthBuckets[month].inVal += parseFloat(row.totalValue);
+        addIn(month, toMoney(row.quantity), toMoney(row.totalValue));
       }
 
       // Legacy fallback: for older offloads without containerOffloadItems records
@@ -275,11 +270,9 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         // Skip offloads already handled by the modern containerOffloadItems method
         if (modernOffloadIds.has(row.offloadId)) continue;
         const month = Number(row.month);
-        const qty = parseFloat(row.quantity);
-        const baseValue = parseFloat(row.lineTotal);
-        const additionalCost = parseFloat(row.additionalCostPerBale || "0") * qty;
-        monthBuckets[month].inQty += qty;
-        monthBuckets[month].inVal += baseValue + additionalCost;
+        const qty = toMoney(row.quantity);
+        const additionalCost = toMoney(row.additionalCostPerBale).times(qty);
+        addIn(month, qty, toMoney(row.lineTotal).plus(additionalCost));
       }
 
       // Live inventory is the current snapshot source of truth. Use stored
@@ -313,12 +306,11 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
       const actualRate = liveInventory.rate;
 
       // Calculate total movements for the year from vouchers
-      const totalYearInQty = Object.values(monthBuckets).reduce((s, b) => s + b.inQty, 0);
-      const totalYearInVal = Object.values(monthBuckets).reduce((s, b) => s + b.inVal, 0);
-      const totalYearOutQty = Object.values(monthBuckets).reduce((s, b) => s + b.outQty, 0);
-      const totalYearOutVal = Object.values(monthBuckets).reduce((s, b) => s + b.outVal, 0);
-      const _totalYearNetQty = totalYearInQty - totalYearOutQty;
-      const _totalYearNetVal = totalYearInVal - totalYearOutVal;
+      const buckets = Object.values(monthBuckets);
+      const totalYearInQty = sumMoney(buckets.map((b) => b.inQty));
+      const totalYearInVal = sumMoney(buckets.map((b) => b.inVal));
+      const totalYearOutQty = sumMoney(buckets.map((b) => b.outQty));
+      const totalYearOutVal = sumMoney(buckets.map((b) => b.outVal));
 
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
@@ -336,14 +328,16 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         `${year - 1}-12-31`
       );
       const historicalRow = historicalAsOfPriorYearEnd.find((r) => r.stockItemId === stockItemId);
-      const derivedOpeningQty = historicalRow ? parseFloat(historicalRow.quantity) || 0 : 0;
-      const derivedOpeningVal = historicalRow ? parseFloat(historicalRow.totalValue) || 0 : 0;
+      const derivedOpeningQty = toMoney(historicalRow?.quantity);
+      const derivedOpeningVal = toMoney(historicalRow?.totalValue);
 
       // Calculate running closing balance starting from derived opening
       let runningQty = derivedOpeningQty;
       let runningVal = derivedOpeningVal;
 
-      const rate = (val: number, qty: number) => (qty > 0 ? val / qty : 0);
+      const rate = (val: Decimal, qty: Decimal) => (qty.greaterThan(0) ? val.dividedBy(qty).toNumber() : 0);
+      // Three-decimal quantities, halves toward +infinity as Math.round rounded them.
+      const qty3 = (qty: Decimal) => qty.toDecimalPlaces(3, MoneyDecimal.ROUND_HALF_CEIL);
 
       const monthlyData: Array<{
         month: number;
@@ -366,25 +360,25 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
         const bucket = monthBuckets[m];
         const openingQty = runningQty;
         const openingVal = runningVal;
-        runningQty += bucket.inQty - bucket.outQty;
-        runningVal += bucket.inVal - bucket.outVal;
-        const closingQty = Math.round(runningQty * 1000) / 1000;
+        runningQty = runningQty.plus(bucket.inQty).minus(bucket.outQty);
+        runningVal = runningVal.plus(bucket.inVal).minus(bucket.outVal);
+        const closingQty = qty3(runningQty);
         const closingVal = runningVal;
 
         monthlyData.push({
           month: m,
           monthName: monthNames[m - 1],
-          openingQty: Math.round(openingQty * 1000) / 1000,
-          openingValue: openingVal,
+          openingQty: qty3(openingQty).toNumber(),
+          openingValue: openingVal.toNumber(),
           openingRate: rate(openingVal, openingQty),
-          inwardQty: bucket.inQty,
-          inwardValue: bucket.inVal,
+          inwardQty: bucket.inQty.toNumber(),
+          inwardValue: bucket.inVal.toNumber(),
           inwardRate: rate(bucket.inVal, bucket.inQty),
-          outwardQty: bucket.outQty,
-          outwardValue: bucket.outVal,
+          outwardQty: bucket.outQty.toNumber(),
+          outwardValue: bucket.outVal.toNumber(),
           outwardRate: rate(bucket.outVal, bucket.outQty),
-          closingQty,
-          closingValue: closingVal,
+          closingQty: closingQty.toNumber(),
+          closingValue: closingVal.toNumber(),
           closingRate: rate(closingVal, closingQty),
         });
       }
@@ -411,17 +405,17 @@ export function registerLocationMonthlySummaryRoutes(app: Express) {
           : null;
 
       const grandTotal = {
-        openingQty: Math.round(derivedOpeningQty * 1000) / 1000,
-        openingValue: derivedOpeningVal,
+        openingQty: qty3(derivedOpeningQty).toNumber(),
+        openingValue: derivedOpeningVal.toNumber(),
         openingRate: rate(derivedOpeningVal, derivedOpeningQty),
-        inwardQty: totalYearInQty,
-        inwardValue: totalYearInVal,
+        inwardQty: totalYearInQty.toNumber(),
+        inwardValue: totalYearInVal.toNumber(),
         inwardRate: rate(totalYearInVal, totalYearInQty),
-        outwardQty: totalYearOutQty,
-        outwardValue: totalYearOutVal,
+        outwardQty: totalYearOutQty.toNumber(),
+        outwardValue: totalYearOutVal.toNumber(),
         outwardRate: rate(totalYearOutVal, totalYearOutQty),
-        closingQty: year === currentYear ? Math.round(actualQty * 1000) / 1000 : Math.round(runningQty * 1000) / 1000,
-        closingValue: year === currentYear ? actualValue : runningVal,
+        closingQty: year === currentYear ? Math.round(actualQty * 1000) / 1000 : qty3(runningQty).toNumber(),
+        closingValue: year === currentYear ? actualValue : runningVal.toNumber(),
         closingRate: year === currentYear ? actualRate : rate(runningVal, runningQty),
       };
 

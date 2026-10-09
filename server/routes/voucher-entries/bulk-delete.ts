@@ -12,6 +12,10 @@ import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
+import { MoneyDecimal, moneyString, toMoney } from "../../lib/money";
+
+/** A stored numeric column as the number adjustInventory takes. */
+const dbNumber = (value: string | null | undefined) => toMoney(value).toNumber();
 import {
   logAudit,
   syncEmployeeBalancesFromEntries,
@@ -120,8 +124,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                   .where(eq(stockTransferItems.transferId, transferVoucher.id));
 
                 for (const item of transferItemsList) {
-                  const qty = parseFloat(item.quantity);
-                  const transferRate = parseFloat(item.rate);
+                  const qty = dbNumber(item.quantity);
+                  const transferRate = dbNumber(item.rate);
                   // Use per-item sourceLocationId (multi-source transfers may differ per item)
                   const itemSourceId = item.sourceLocationId || transferVoucher.sourceLocationId!;
 
@@ -191,8 +195,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                   .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id));
 
                 for (const item of adjustmentItemsList) {
-                  const qty = parseFloat(item.quantity);
-                  const adjustmentRate = parseFloat(item.rate);
+                  const qty = dbNumber(item.quantity);
+                  const adjustmentRate = dbNumber(item.rate);
                   const absoluteQty = Math.abs(qty);
                   // `adjustment_type` is stored in both casings: createStockAdjustment
                   // writes "Production"/"Consumption"/"Mixed" while the
@@ -290,8 +294,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                 // Only reverse inventory if we have a definite location from the voucher
                 if (voucher.locationId) {
                   for (const item of saleItems) {
-                    const qty = parseFloat(item.quantity);
-                    const costPrice = parseFloat(item.costPrice || "0");
+                    const qty = dbNumber(item.quantity);
+                    const costPrice = dbNumber(item.costPrice);
 
                     // Add back sold items to inventory (reverse the sale deduction)
                     const result = await adjustInventory(
@@ -343,8 +347,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                 );
 
                 for (const item of noteItems) {
-                  const qty = parseFloat(item.quantity);
-                  const inventoryCost = parseFloat(item.inventoryCost || item.rate || "0");
+                  const qty = dbNumber(item.quantity);
+                  const inventoryCost = dbNumber(item.inventoryCost || item.rate);
 
                   if (voucher.voucherType === "Credit Note") {
                     // Credit Note forward: added qty to inventory
@@ -505,7 +509,7 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                     .where(eq(erpPayrollRunItems.runId, payRunId));
                   const payMonth = payRun.date.substring(0, 7);
                   for (const item of runItems) {
-                    if (parseFloat(item.deduction || "0") <= 0 || !item.employeeId) continue;
+                    if (toMoney(item.deduction).lessThanOrEqualTo(0) || !item.employeeId) continue;
                     const empAdvances = await tx
                       .select({ id: salaryAdvances.id })
                       .from(salaryAdvances)
@@ -527,19 +531,16 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                         )
                       );
                     for (const ded of deductions) {
-                      const dedAmt = parseFloat(ded.deductionAmount || "0");
+                      const dedAmt = toMoney(ded.deductionAmount);
                       const [adv] = await tx
                         .select()
                         .from(salaryAdvances)
                         .where(eq(salaryAdvances.id, ded.salaryAdvanceId));
                       if (!adv) continue;
-                      const newBal = Math.min(
-                        parseFloat(adv.remainingBalance || "0") + dedAmt,
-                        parseFloat(adv.amount || "0")
-                      );
+                      const newBal = MoneyDecimal.min(toMoney(adv.remainingBalance).plus(dedAmt), toMoney(adv.amount));
                       await tx
                         .update(salaryAdvances)
-                        .set({ remainingBalance: newBal.toFixed(2), fullyPaid: false })
+                        .set({ remainingBalance: moneyString(newBal), fullyPaid: false })
                         .where(eq(salaryAdvances.id, adv.id));
                       await tx.delete(salaryAdvanceDeductions).where(eq(salaryAdvanceDeductions.id, ded.id));
                     }

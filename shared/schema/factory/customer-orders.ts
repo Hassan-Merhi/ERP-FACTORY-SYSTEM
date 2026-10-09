@@ -11,11 +11,14 @@ import {
   uniqueIndex,
   index,
   jsonb,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { companies, locations } from "../common";
 import { customers, vouchers } from "../erp";
+import { isNonNegativeNumeric } from "../../numericString";
 
 // ─── Customer Proformas ───────────────────────────────────────────────────────
 export const customerProformas = pgTable(
@@ -90,9 +93,7 @@ export const insertCustomerProformaLineSchema = createInsertSchema(customerProfo
     articleCode: z.string().min(1, "Article code is required"),
     productName: z.string().min(1, "Product name is required"),
     quantity: z.number().int().min(1, "Quantity must be at least 1"),
-    pricePerBale: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Price must be non-negative"),
+    pricePerBale: z.string().refine(isNonNegativeNumeric, "Price must be non-negative"),
     pricingMode: z.enum(["per_bale", "per_kg"]).optional().default("per_bale"),
     pricePerKg: z.string().optional().nullable(),
   });
@@ -122,6 +123,7 @@ export const customerOrders = pgTable(
     containerNumber: varchar("container_number", { length: 100 }),
     shippingCompany: varchar("shipping_company", { length: 200 }),
     containerNotes: text("container_notes"),
+    bookingInfo: text("booking_info"),
     destination: text("destination"),
     verifiedByUserId: integer("verified_by_user_id"),
     verifiedAt: timestamp("verified_at"),
@@ -166,6 +168,7 @@ export const insertCustomerOrderSchema = createInsertSchema(customerOrders)
     containerNumber: z.string().optional().nullable(),
     shippingCompany: z.string().optional().nullable(),
     containerNotes: z.string().optional().nullable(),
+    bookingInfo: z.string().optional().nullable(),
     destination: z.string().optional().nullable(),
     verifiedByUserId: z.number().optional().nullable(),
     verifiedAt: z.date().optional().nullable(),
@@ -176,6 +179,64 @@ export const insertCustomerOrderSchema = createInsertSchema(customerOrders)
 
 export type InsertCustomerOrder = z.infer<typeof insertCustomerOrderSchema>;
 export type CustomerOrder = typeof customerOrders.$inferSelect;
+
+// ─── Priority Scan Loading Configuration ─────────────────────────────────────
+// Wave 1 foundation for the Priority Scan workflow. This table is deliberately
+// separate from customer_order_bales: changing a color, priority, or enabled
+// state can never move or rewrite bales already scanned into a loading.
+export const customerOrderPriorityScanConfigs = pgTable(
+  "customer_order_priority_scan_configs",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id").notNull(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => customerOrders.id, { onDelete: "cascade" }),
+    color: varchar("color", { length: 64 }).notNull(),
+    colorKey: varchar("color_key", { length: 64 }).notNull(),
+    priority: integer("priority").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    createdBy: varchar("created_by", { length: 100 }),
+    createdByName: text("created_by_name"),
+    updatedBy: varchar("updated_by", { length: 100 }),
+    updatedByName: text("updated_by_name"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyOrderUnique: uniqueIndex("copsc_company_order_unique").on(t.companyId, t.orderId),
+    activeColorUnique: uniqueIndex("copsc_active_color_unique")
+      .on(t.companyId, t.colorKey)
+      .where(sql`${t.enabled} = true`),
+    activePriorityUnique: uniqueIndex("copsc_active_priority_unique")
+      .on(t.companyId, t.priority)
+      .where(sql`${t.enabled} = true`),
+    companyEnabledPriorityIdx: index("copsc_company_enabled_priority_idx").on(t.companyId, t.enabled, t.priority),
+    priorityPositive: check("copsc_priority_positive", sql`${t.priority} > 0`),
+  })
+);
+
+export const insertCustomerOrderPriorityScanConfigSchema = createInsertSchema(customerOrderPriorityScanConfigs)
+  .omit({
+    id: true,
+    createdAt: true,
+    updatedAt: true,
+  })
+  .extend({
+    companyId: z.number().int().positive(),
+    orderId: z.number().int().positive(),
+    color: z.string().trim().min(1).max(64),
+    colorKey: z.string().trim().min(1).max(64),
+    priority: z.number().int().positive(),
+    enabled: z.boolean().optional(),
+    createdBy: z.string().optional().nullable(),
+    createdByName: z.string().optional().nullable(),
+    updatedBy: z.string().optional().nullable(),
+    updatedByName: z.string().optional().nullable(),
+  });
+
+export type InsertCustomerOrderPriorityScanConfig = z.infer<typeof insertCustomerOrderPriorityScanConfigSchema>;
+export type CustomerOrderPriorityScanConfig = typeof customerOrderPriorityScanConfigs.$inferSelect;
 
 // ─── Customer Order Lines ─────────────────────────────────────────────────────
 export const customerOrderLines = pgTable(

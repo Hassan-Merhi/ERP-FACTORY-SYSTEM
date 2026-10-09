@@ -9,7 +9,9 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { EXPECTED_CLIENT_RESPONSE_CODES, markExpectedClientResponse } from "../../../../lib/expectedClientResponse";
 import { parseId } from "../../../../lib/parseId";
+import { getCompanyBusinessDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
+import { storage } from "../../../../storage";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotalsForScannedArticle, type ScannedArticleTotalsPatch } from "./incrementalTotals";
 import {
@@ -18,6 +20,11 @@ import {
   shouldRequireProformaMembership,
 } from "./proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "../proformaCapacity";
+import {
+  advanceSatisfiedPriorityScanConfigs,
+  PRIORITY_SCAN_LOCK_NAMESPACE,
+  resolvePriorityScanArticleTarget,
+} from "../priorityScanQueue";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { evaluateProformaArticleCapacity } from "../proformaCapacityEnforcement";
 import {
@@ -29,6 +36,8 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
+import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleScanRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
@@ -41,6 +50,17 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
       const { scanCode, locationId } = req.body;
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
+      if (!(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
+
+      const isPriorityScan = req.body.priorityScan === true;
+      if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
+        return res.status(400).json({
+          message:
+            "Priority Scan cannot bypass proforma requirements or overload limits. Use the normal Pending Loading scanner for manual exceptions.",
+        });
+      }
 
       const parsedLocationId = Number.parseInt(String(locationId), 10);
       if (!Number.isInteger(parsedLocationId) || parsedLocationId <= 0) {
@@ -48,6 +68,9 @@ export function registerOrderBaleScanRoutes(app: Express) {
       }
 
       const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
+      const priorityScanBusinessDate = isPriorityScan
+        ? getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone)
+        : null;
 
       const [order] = await db
         .select()
@@ -109,11 +132,13 @@ export function registerOrderBaleScanRoutes(app: Express) {
         | { ok: false; httpStatus: number; body: Record<string, unknown> };
 
       const result: PickResult = await db.transaction(async (tx) => {
-        // Proforma lock first, then the order row, then the bale row. Every
-        // capacity-changing writer takes these in the same order, so a scan
-        // racing an import, an exchange or a finalization on this proforma
-        // waits here instead of measuring capacity mid-write, and no two paths
-        // can take the same resources in reverse and deadlock.
+        // Priority Scan serializes queue routing before taking any proforma
+        // capacity locks. Config edits use the same priority -> proforma order.
+        // Normal loading scans keep their established proforma-first path.
+        if (isPriorityScan) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        }
+
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
             companyId,
@@ -145,6 +170,21 @@ export function registerOrderBaleScanRoutes(app: Express) {
             body: { message: "Cannot add bales to a V5 order that is already in PENDING_VERIFICATION" },
           };
         }
+        if (
+          isPriorityScan &&
+          (currentOrder.status !== "LOADING" ||
+            !currentOrder.proformaIdUsed ||
+            currentOrder.proformaIdUsed !== order.proformaIdUsed)
+        ) {
+          return {
+            ok: false,
+            httpStatus: 409,
+            body: {
+              code: "PRIORITY_SCAN_ROUTE_CHANGED",
+              message: "Priority Scan loading changed while the reference was routing. Scan again.",
+            },
+          };
+        }
 
         const [bale] = await tx
           .select({
@@ -156,6 +196,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
             productName: factoryBales.productName,
             productId: factoryBales.productId,
             weightKg: factoryBales.weightKg,
+            stockEntryDate: factoryBales.stockEntryDate,
             productArticleCode: sql<string | null>`(
               SELECT fbp.article_code
               FROM factory_bale_products fbp
@@ -223,6 +264,18 @@ export function registerOrderBaleScanRoutes(app: Express) {
           };
         }
 
+        if (
+          isPriorityScan &&
+          bale.referenceNumber.toLowerCase() !== scanLower &&
+          bale.baleCode.toLowerCase() !== scanLower
+        ) {
+          return {
+            ok: false,
+            httpStatus: 400,
+            body: { message: "Priority Scan requires an exact bale reference or bale code." },
+          };
+        }
+
         if (bale.status === "RESERVED_FOR_ORDER") {
           const reservedBale = bale;
           if (reservedBale.reservedInThisOrder) {
@@ -270,11 +323,35 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
-        const ignoreProforma = req.body.allowBypassProforma === true;
+        let priorityScanSnapshot: { priority: number; color: string } | null = null;
+
+        if (isPriorityScan) {
+          const authoritativeTarget = effectiveArticleCode
+            ? await resolvePriorityScanArticleTarget(tx, companyId, effectiveArticleCode)
+            : null;
+          if (!authoritativeTarget || authoritativeTarget.orderId !== orderId) {
+            return {
+              ok: false,
+              httpStatus: 409,
+              body: {
+                code: "PRIORITY_SCAN_ROUTE_CHANGED",
+                message: authoritativeTarget
+                  ? `Priority Scan routing changed to Loading #${authoritativeTarget.orderId}. Routing again.`
+                  : "This reference is no longer required by an active Priority Scan loading.",
+              },
+            };
+          }
+          priorityScanSnapshot = {
+            priority: authoritativeTarget.priority,
+            color: authoritativeTarget.color,
+          };
+        }
+
+        const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
         const enforceOverload = shouldEnforceProformaOverload({
           ignoreProforma,
-          allowBypassOverload: req.body.allowBypassOverload === true,
-          isReinstatingRemovedBale: bale.removedFromThisOrder,
+          allowBypassOverload: !isPriorityScan && req.body.allowBypassOverload === true,
+          isReinstatingRemovedBale: !isPriorityScan && bale.removedFromThisOrder,
         });
 
         let priceUsed = bale.productSellingPrice || "0";
@@ -298,9 +375,8 @@ export function registerOrderBaleScanRoutes(app: Express) {
             const pricingMode = pricingLine.pricingMode ?? "per_bale";
             const perKgVal = pricingLine.pricePerKg;
             if (pricingMode === "per_kg" && perKgVal) {
-              const weightKg = parseFloat(String(bale.weightKg || "0"));
-              const pkgRate = parseFloat(String(perKgVal));
-              priceUsed = !isNaN(weightKg) && !isNaN(pkgRate) ? (weightKg * pkgRate).toFixed(2) : "0";
+              // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
+              priceUsed = toMoney(bale.weightKg).times(toMoney(perKgVal)).toFixed(2);
             } else {
               priceUsed = pricingLine.pricePerBale || "0";
             }
@@ -377,12 +453,53 @@ export function registerOrderBaleScanRoutes(app: Express) {
           })
           .returning();
 
+        if (isPriorityScan && priorityScanSnapshot && priorityScanBusinessDate) {
+          await tx.execute(sql`
+            INSERT INTO factory_priority_scan_history
+              (company_id, order_id, bale_id, reference_number, product_name, article_code,
+               priority, color, business_date, scanned_by)
+            VALUES (
+              ${companyId},
+              ${orderId},
+              ${bale.id},
+              ${bale.referenceNumber},
+              ${resolvedBaleName},
+              ${effectiveArticleCode || bale.articleCode},
+              ${priorityScanSnapshot.priority},
+              ${priorityScanSnapshot.color},
+              ${priorityScanBusinessDate},
+              ${scannerName}
+            )
+          `);
+        }
+
         // V5 bales remain IN_STOCK during loading — only legacy V2/V3 orders set RESERVED_FOR_ORDER.
         if (!order.proformaIdUsed) {
           await tx
             .update(factoryBales)
             .set({ status: "RESERVED_FOR_ORDER", updatedAt: new Date() })
             .where(eq(factoryBales.id, bale.id));
+        }
+
+        // A successful Priority Scan is also a Daily Scan verification for the
+        // bale's production day. Keep this in the same transaction so the two
+        // scan views can never disagree after a successful allocation. The
+        // unique constraint makes rescans/idempotent retries harmless.
+        if (isPriorityScan && bale.stockEntryDate) {
+          await tx.execute(sql`
+            INSERT INTO factory_daily_bale_scans
+              (company_id, scan_date, reference_number, article_code, product_name, weight_kg, scanned_by_user_id)
+            VALUES (
+              ${String(companyId)},
+              ${bale.stockEntryDate},
+              ${bale.referenceNumber},
+              ${bale.articleCode},
+              ${bale.productName},
+              ${bale.weightKg},
+              ${req.session.userId == null ? null : String(req.session.userId)}
+            )
+            ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
+          `);
         }
 
         const recalculated = await recalculateOrderTotalsForScannedArticle(
@@ -407,6 +524,21 @@ export function registerOrderBaleScanRoutes(app: Express) {
         return res.status(result.httpStatus).json(result.body);
       }
 
+      let priorityScanAdvance = null;
+      if (req.body.priorityScan === true) {
+        try {
+          priorityScanAdvance = await advanceSatisfiedPriorityScanConfigs(companyId, orderId);
+        } catch (advanceError) {
+          // The bale allocation has already committed. Never turn a successful
+          // physical scan into a retryable 500 just because queue advancement
+          // failed; the next Priority Scan route resolution will reconcile it.
+          logger.error("Priority Scan auto-advance failed after bale allocation", {
+            orderId,
+            error: getErrorMessage(advanceError),
+          });
+        }
+      }
+
       return res.json({
         compactBaleScan: true,
         orderId,
@@ -417,6 +549,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
         bale: result.bale,
         line: result.line,
         totals: result.totals,
+        priorityScanAdvance,
       });
     } catch (error: unknown) {
       logger.error("Error adding bale to order:", { error });

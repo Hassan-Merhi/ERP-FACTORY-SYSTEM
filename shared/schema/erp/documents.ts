@@ -16,6 +16,7 @@ import { z } from "zod";
 import { companies } from "../common";
 import { suppliers } from "./parties";
 import { customers } from "./vouchers";
+import { isPositiveNumeric } from "../../numericString";
 
 export const referenceSequences = pgTable(
   "reference_sequences",
@@ -69,9 +70,7 @@ export const insertBaleLabelPrintSchema = createInsertSchema(baleLabelPrints)
     articleCode: z.string().min(1, "Article code is required"),
     referenceNumber: z.string().min(1, "Reference number is required"),
     pieces: z.number().min(1, "Pieces must be at least 1"),
-    approxWeightKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
+    approxWeightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
     printedByUserId: z.string().optional(),
     printedAt: z.date().optional(),
     scannedByUserId: z.string().optional(),
