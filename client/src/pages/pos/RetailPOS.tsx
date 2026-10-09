@@ -396,7 +396,7 @@ export default function RetailPOS() {
         title: "Discount approved",
         description: `Approved by ${data.managerName ?? "manager"}. Completing sale…`,
       });
-      saleMutation.mutate();
+      saleMutation.mutate({ approvalToken: data.approvalToken });
     },
     onError: (error) => setApprovalRequest((current) => ({ ...current, pending: false, error: error.message })),
   });
