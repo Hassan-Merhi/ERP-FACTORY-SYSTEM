@@ -1,5 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
+import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -193,7 +194,7 @@ export default function FactoryReprintLabels() {
       return;
     }
 
-    const labels: LabelData[] = rowsToPrint.map((row) => ({
+    let labels: LabelData[] = rowsToPrint.map((row) => ({
       referenceNumber: row.bale.referenceNumber || row.bale.baleCode,
       articleCode: row.product?.articleCode || row.bale.articleCode || row.bale.category || "",
       pieces: row.bale.quantity || 1,
@@ -201,22 +202,19 @@ export default function FactoryReprintLabels() {
       productName: row.bale.productName || row.product?.name || row.bale.category || "",
     }));
 
-    for (const [index, row] of rowsToPrint.entries()) {
-      try {
+    try {
+      labels = await preparePriorityPrintLabels(
+        labels, modeApiRequest, rowsToPrint.map((row) => row.bale.id)
+      );
+      // Keep existing per-bale reprint audit records. These repeat the same
+      // server assignment lookup idempotently and can never reassign a bale.
+      for (const row of rowsToPrint) {
         const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-        if (!response.ok) throw new Error("Could not prepare priority reprint");
-        const result = (await response.json()) as {
-          priorityAllocation?: { color: string; orderId: number; priority: number } | null;
-        };
-        if (result.priorityAllocation) {
-          labels[index].priorityColor = result.priorityAllocation.color;
-          labels[index].priorityOrderId = result.priorityAllocation.orderId;
-          labels[index].priorityNumber = result.priorityAllocation.priority;
-        }
-      } catch (error) {
-        toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
-        return;
+        if (!response.ok) throw new Error("Could not record label reprint");
       }
+    } catch (error) {
+      toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
     }
 
     if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
