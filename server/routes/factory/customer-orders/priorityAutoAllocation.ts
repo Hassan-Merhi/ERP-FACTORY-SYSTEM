@@ -63,6 +63,7 @@ export async function allocateAutomaticPriorityBaleTx(
            reversed_at AS "reversedAt"
       FROM factory_priority_auto_allocations
      WHERE company_id = ${companyId} AND bale_id = ${baleId}
+       AND reversed_at IS NULL
      LIMIT 1
   `)) as { orderId: number; priority: number; color: string; source: "stock-entry" | "reprint"; reversedAt: string | null } | undefined;
   if (existing) {
