@@ -25,6 +25,8 @@ import { eq, and, desc, sql, inArray, isNull, lte } from "drizzle-orm";
 import { computeNetPositionInventory } from "./netPositionInventory";
 import { computeNetPositionSupplierBalances } from "./netPositionSupplierBalances";
 import { resultRows } from "../../../lib/queryResult";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 export function registerEmployeeNetPositionRoutes(app: Express) {
   app.get("/api/factory/net-position", requireAuth, async (req: Request, res: Response) => {
@@ -80,7 +82,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       `);
       const configFxRates: Record<string, number> = {};
       for (const row of fxRateRows.rows) {
-        configFxRates[row.currency_code as string] = parseFloat(row.rate_to_usd as string);
+        configFxRates[row.currency_code as string] = toMoney(row.rate_to_usd as string).toNumber();
       }
       // Only use manually configured rates — no hardcoded fallbacks
       const getConfigFx = (cc: string): number => configFxRates[cc] ?? 1;
@@ -121,14 +123,18 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           ? await db.select().from(voucherEntries).where(inArray(voucherEntries.voucherId, fVoucherIds))
           : [];
 
-      const accBalances = new Map<number, { debit: number; credit: number }>();
+      const exactBalances = new Map<number, { debit: Decimal; credit: Decimal }>();
       for (const e of factoryEntries) {
         if (!e.ledgerAccountId) continue;
-        const cur = accBalances.get(e.ledgerAccountId) || { debit: 0, credit: 0 };
-        accBalances.set(e.ledgerAccountId, {
-          debit: cur.debit + parseFloat(e.debitAmount || "0"),
-          credit: cur.credit + parseFloat(e.creditAmount || "0"),
+        const cur = exactBalances.get(e.ledgerAccountId);
+        exactBalances.set(e.ledgerAccountId, {
+          debit: toMoney(e.debitAmount).plus(cur?.debit ?? 0),
+          credit: toMoney(e.creditAmount).plus(cur?.credit ?? 0),
         });
+      }
+      const accBalances = new Map<number, { debit: number; credit: number }>();
+      for (const [id, { debit, credit }] of exactBalances) {
+        accBalances.set(id, { debit: debit.toNumber(), credit: credit.toNumber() });
       }
 
       // ── 2b. Classify accounts using the shared ERP formula ─────────────────
@@ -226,7 +232,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           )
           .groupBy(customerBalances.customerId);
 
-        const cCbNetMap = new Map(cCbNetRows.map((r) => [r.customerId, parseFloat(r.net || "0")]));
+        const cCbNetMap = new Map(cCbNetRows.map((r) => [r.customerId, toMoney(r.net)]));
 
         // 2. Correction for INVOICE rows: replace stored debitAmount with live grandTotal
         //    of FINALIZED orders — identical to the statement correction on the Customers page.
@@ -255,7 +261,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           )
           .groupBy(customerBalances.customerId);
 
-        const cInvCorrMap = new Map(cInvCorrRows.map((r) => [r.customerId, parseFloat(r.correction || "0")]));
+        const cInvCorrMap = new Map(cInvCorrRows.map((r) => [r.customerId, toMoney(r.correction)]));
 
         // 3. Voucher entries via ledgerAccountId — EXCLUDE CHARGE-* AND INV-* (matches Customers page).
         const cLedgerVoucherRows =
@@ -279,7 +285,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
                 .where(inArray(voucherEntries.ledgerAccountId, custLedgerIds))
                 .groupBy(voucherEntries.ledgerAccountId)
             : [];
-        const cLedgerVoucherMap = new Map(cLedgerVoucherRows.map((r) => [r.ledgerAccountId, parseFloat(r.net || "0")]));
+        const cLedgerVoucherMap = new Map(cLedgerVoucherRows.map((r) => [r.ledgerAccountId, toMoney(r.net)]));
 
         // 4. Voucher entries directly linked via customerId — EXCLUDE CHARGE-* AND INV-* (matches Customers page).
         const cVoucherRows = await db
@@ -301,21 +307,20 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           .where(and(inArray(voucherEntries.customerId, cIds), isNull(voucherEntries.ledgerAccountId)))
           .groupBy(voucherEntries.customerId);
 
-        const cVoucherMap = new Map(cVoucherRows.map((r) => [r.customerId, parseFloat(r.net || "0")]));
+        const cVoucherMap = new Map(cVoucherRows.map((r) => [r.customerId, toMoney(r.net)]));
 
         for (const c of allCustomersForNP) {
-          const cbNet = cCbNetMap.get(c.id) ?? 0;
-          const invCorr = cInvCorrMap.get(c.id) ?? 0;
-          const ledgerVoucherNet = c.ledgerAccountId ? (cLedgerVoucherMap.get(c.ledgerAccountId) ?? 0) : 0;
-          const directVoucherNet = cVoucherMap.get(c.id) ?? 0;
-          const voucherNet = ledgerVoucherNet + directVoucherNet;
-          const opening = parseFloat(c.openingBalance || "0");
-          const openingSide = c.openingBalanceSide || "Dr";
-          const totalBalance = (openingSide === "Dr" ? opening : -opening) + cbNet + invCorr + voucherNet;
-          if (Math.abs(totalBalance) > 0.01) {
+          const ledgerVoucherNet = c.ledgerAccountId ? cLedgerVoucherMap.get(c.ledgerAccountId) : undefined;
+          const opening = toMoney(c.openingBalance);
+          const totalBalance = ((c.openingBalanceSide || "Dr") === "Dr" ? opening : opening.negated())
+            .plus(cCbNetMap.get(c.id) ?? 0)
+            .plus(cInvCorrMap.get(c.id) ?? 0)
+            .plus(ledgerVoucherNet ?? 0)
+            .plus(cVoucherMap.get(c.id) ?? 0);
+          if (totalBalance.abs().greaterThan(0.01)) {
             customerItems.push({
               name: c.legalName || `Customer #${c.id}`,
-              balanceUsd: round2(totalBalance),
+              balanceUsd: round2(totalBalance.toNumber()),
               ledgerAccountId: c.ledgerAccountId || undefined,
             });
           }
@@ -327,16 +332,10 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
       // Only Stock In Hand switches valuation mode; Balance on Table stays on
       // its original all-time blended raw-material cost basis.
       const valuationMode = req.query.valuationMode === "selling" ? "selling" : "cost";
-      const {
-        inventorySellValue,
-        inventorySellingValue,
-        rawMaterialStockValue,
-        stockOtwValue,
-        balanceOnTableValue,
-      } = await computeNetPositionInventory({
+      const { inventorySellValue, inventorySellingValue, rawMaterialStockValue, stockOtwValue, balanceOnTableValue } =
+        await computeNetPositionInventory({
           companyId,
           asOf,
-          round2,
           getConfigFx,
           configFxRates,
           supplierLockedRateMapNp,
@@ -375,7 +374,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
         id: r.id,
         customerName: r.customerName || `Customer #${r.customerId}`,
         orderDate: r.orderDate,
-        grandTotal: round2(parseFloat(r.grandTotal || "0")),
+        grandTotal: round2(toMoney(r.grandTotal).toNumber()),
         totalQtyBales: r.totalQtyBales ?? 0,
       });
 
@@ -389,9 +388,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
 
       // ── 5. Combine and return ────────────────────────────────────────────
       // Rename for clarity — these are the two factory-specific values.
-      const baleInventoryValue = round2(
-        valuationMode === "selling" ? inventorySellingValue : inventorySellValue
-      );
+      const baleInventoryValue = round2(valuationMode === "selling" ? inventorySellingValue : inventorySellValue);
       const selectedBalanceOnTableValue = round2(balanceOnTableValue);
 
       // Guard: strip any ledger account whose category could collide with our
@@ -433,7 +430,7 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
           AND  remaining_balance > 0
       `);
       const workerAdvRow = resultRows(workerAdvRes)[0] ?? {};
-      const workerAdvancesValue = round2(parseFloat(String(workerAdvRow.total ?? "0")) || 0);
+      const workerAdvancesValue = round2(toMoney(String(workerAdvRow.total ?? "0")).toNumber());
 
       // ── Split customer items into DR (asset) and CR (liability) ──────────────
       const customerDrItems = customerItems.filter((c) => c.balanceUsd > 0);
@@ -498,14 +495,14 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
               ledgerByContract.set(row.contractId, arr);
             }
 
-            const expectedAsOfByContract = new Map<number, number>();
+            const expectedAsOfByContract = new Map<number, Decimal>();
             for (const c of activeContracts) {
               const billingDay = getRentalBillingDay(c.startDate as string);
               const rows = ledgerByContract.get(c.id) ?? [];
-              let expected = 0;
+              let expected = new MoneyDecimal(0);
               for (const row of rows) {
                 const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
-                if (billingDate <= asOf) expected += parseFloat(row.expectedAmount as string) || 0;
+                if (billingDate <= asOf) expected = expected.plus(toMoney(row.expectedAmount as string));
               }
               expectedAsOfByContract.set(c.id, expected);
             }
@@ -518,18 +515,17 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
                GROUP BY contract_id`,
               [contractIds, asOf]
             );
-            const paidAsOfByContract = new Map<number, number>();
-            postedRows.forEach((r) => paidAsOfByContract.set(parseInt(r.contract_id), parseFloat(r.paid)));
+            const paidAsOfByContract = new Map<number, Decimal>();
+            postedRows.forEach((r) => paidAsOfByContract.set(parseInt(r.contract_id), toMoney(r.paid)));
 
+            // Positive = tenant still owes (outstanding receivable); negative =
+            // tenant overpaid (advance credit we hold). Both count at their size.
+            let rentTotal = new MoneyDecimal(prepaidRent);
             for (const c of activeContracts) {
-              const expected = expectedAsOfByContract.get(c.id) ?? 0;
-              const paid = paidAsOfByContract.get(c.id) ?? 0;
-              const raw = expected - paid; // positive = tenant still owes; negative = tenant overpaid
-              if (raw > 0)
-                prepaidRent += raw; // outstanding receivable
-              else if (raw < 0) prepaidRent += -raw; // advance credit we hold
+              const expected = expectedAsOfByContract.get(c.id) ?? new MoneyDecimal(0);
+              rentTotal = rentTotal.plus(expected.minus(paidAsOfByContract.get(c.id) ?? 0).abs());
             }
-            prepaidRent = round2(prepaidRent);
+            prepaidRent = round2(rentTotal.toNumber());
           }
         }
       }
@@ -555,20 +551,20 @@ export function registerEmployeeNetPositionRoutes(app: Express) {
             isNull(employees.deletedAt)
           )
         );
-      let employeeSalariesPayable = 0;
-      let employeeReceivablesTotal = 0;
+      let salariesPayableExact = new MoneyDecimal(0);
+      let receivablesExact = new MoneyDecimal(0);
       const employeeReceivableItems: { name: string; balanceUsd: number }[] = [];
       for (const emp of allEmployeesForNP) {
-        const bal = parseFloat(emp.currentBalance || "0");
-        if (bal > 0) employeeSalariesPayable += bal;
-        else if (bal < 0) {
-          employeeReceivablesTotal += Math.abs(bal);
+        const bal = toMoney(emp.currentBalance);
+        if (bal.greaterThan(0)) salariesPayableExact = salariesPayableExact.plus(bal);
+        else if (bal.lessThan(0)) {
+          receivablesExact = receivablesExact.plus(bal.abs());
           const empName = [emp.firstName, emp.lastName].filter(Boolean).join(" ").trim();
-          if (empName) employeeReceivableItems.push({ name: empName, balanceUsd: Math.abs(bal) });
+          if (empName) employeeReceivableItems.push({ name: empName, balanceUsd: bal.abs().toNumber() });
         }
       }
-      employeeSalariesPayable = round2(employeeSalariesPayable);
-      employeeReceivablesTotal = round2(employeeReceivablesTotal);
+      const employeeSalariesPayable = round2(salariesPayableExact.toNumber());
+      const employeeReceivablesTotal = round2(receivablesExact.toNumber());
 
       // forUsTotal: ledger assets + inventory + raw material + balance on table + stock OTW
       //             + customer receivables (DR) + pending orders + verified orders + loading orders

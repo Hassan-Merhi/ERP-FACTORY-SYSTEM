@@ -22,6 +22,15 @@ import {
   factorySettings,
 } from "@shared/schema";
 import { eq, and, or, sql, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+
+/** A stored amount (or its fallback when empty) as an exact decimal. */
+const amount = (value: unknown, fallback = "0") => toMoney((value || fallback) as string);
+/** a + b computed exactly; running totals stay numbers in these responses. */
+const plus = (a: number, b: Decimal | number) => toMoney(a).plus(b).toNumber();
+/** Rounded half up to 2 decimals, as a number for the spreadsheet cell. */
+const cents = (value: Decimal) => value.toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
 
 export function registerFactoryLocationInventoryRoutes(app: Express) {
   app.get("/api/factory/location-inventory/:locationId", requireAuth, async (req: Request, res: Response) => {
@@ -131,9 +140,9 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
         const product = getProduct(b);
         const groupKey = product ? `p:${product.id}` : `a:${b.articleCode || b.baleCode || "unknown"}`;
         const existing = grouped.get(groupKey);
-        const qty = parseFloat(String(b.quantity || "1"));
-        const weight = parseFloat(String(b.weightKg || "0"));
-        const productionPrice = parseFloat(String(product?.productionPrice || "0"));
+        const qty = amount(b.quantity, "1").toNumber();
+        const weight = amount(b.weightKg).toNumber();
+        const productionPrice = amount(product?.productionPrice).toNumber();
         const sellingPrice = String(product?.sellingPrice || "0");
         const categoryName = product?.categoryId
           ? categoryMap.get(product.categoryId) || b.category || null
@@ -142,9 +151,9 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
         const refNum: string = b.referenceNumber || "";
         const isLoading = loadingBaleIds.has(b.id);
         if (existing) {
-          existing.quantity += qty;
-          existing.totalWeight += weight;
-          existing.totalCost += productionPrice;
+          existing.quantity = plus(existing.quantity, qty);
+          existing.totalWeight = plus(existing.totalWeight, weight);
+          existing.totalCost = plus(existing.totalCost, productionPrice);
           existing.baleCount += 1;
           if (isLoading) existing.loadingCount += 1;
           if (refNum) existing.referenceNumbers.push(refNum);
@@ -252,18 +261,18 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
         const product = getProduct(b);
         const groupKey = product ? `p:${product.id}` : `a:${b.articleCode || b.baleCode || "unknown"}`;
         const existing = grouped.get(groupKey);
-        const qty = parseFloat(String(b.quantity || "1"));
-        const weight = parseFloat(String(b.weightKg || "0"));
-        const productionPrice = parseFloat(String(product?.productionPrice || "0"));
+        const qty = amount(b.quantity, "1").toNumber();
+        const weight = amount(b.weightKg).toNumber();
+        const productionPrice = amount(product?.productionPrice).toNumber();
         const sellingPrice = String(product?.sellingPrice || "0");
         const categoryName = product?.categoryId
           ? categoryMap.get(product.categoryId) || b.category || null
           : b.category || null;
         const categoryId = product?.categoryId || null;
         if (existing) {
-          existing.quantity += qty;
-          existing.totalWeight += weight;
-          existing.totalCost += productionPrice;
+          existing.quantity = plus(existing.quantity, qty);
+          existing.totalWeight = plus(existing.totalWeight, weight);
+          existing.totalCost = plus(existing.totalCost, productionPrice);
           existing.baleCount += 1;
         } else {
           grouped.set(groupKey, {
@@ -371,8 +380,8 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
 
         const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
         const productCategoryNameMap = new Map(products.map((p) => [p.id, categoryMap.get(p.categoryId!) || ""]));
-        const productProductionPriceMap = new Map(products.map((p) => [p.id, parseFloat(p.productionPrice || "0")]));
-        const productSellingPriceMap = new Map(products.map((p) => [p.id, parseFloat(p.sellingPrice || "0")]));
+        const productProductionPriceMap = new Map(products.map((p) => [p.id, amount(p.productionPrice).toNumber()]));
+        const productSellingPriceMap = new Map(products.map((p) => [p.id, amount(p.sellingPrice).toNumber()]));
 
         const isWiperOrGarbage = (catName: string) => {
           const n = catName.toLowerCase();
@@ -393,12 +402,12 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
 
         for (const b of bales) {
           const pid = b.productId || 0;
-          const weight = parseFloat(String(b.weightKg || "0"));
+          const weight = amount(b.weightKg).toNumber();
           const catName = productCategoryNameMap.get(pid) || b.category || "";
           const target = isWiperOrGarbage(catName) ? wgGrouped : mainGrouped;
           const existing = target.get(pid);
           if (existing) {
-            existing.totalWeight += weight;
+            existing.totalWeight = plus(existing.totalWeight, weight);
             existing.baleCount += 1;
           } else {
             target.set(pid, {
@@ -480,34 +489,35 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
           ws.columns = cols;
           styleHeaderRow(ws.getRow(1), headerColor);
 
-          let totalBales = 0,
-            totalKg = 0,
-            totalCost = 0,
-            totalSell = 0;
+          let totalBales = 0;
+          let totalKg: Decimal = new MoneyDecimal(0);
+          let totalCost: Decimal = new MoneyDecimal(0);
+          let totalSell: Decimal = new MoneyDecimal(0);
           rows.forEach((row, idx) => {
-            const wpb = row.baleCount > 0 ? row.totalWeight / row.baleCount : 0;
-            const tc = row.productionPrice * row.baleCount;
-            const ts = row.sellingPrice * row.baleCount;
+            const weight = toMoney(row.totalWeight);
+            const wpb = row.baleCount > 0 ? weight.div(row.baleCount) : new MoneyDecimal(0);
+            const tc = toMoney(row.productionPrice).times(row.baleCount);
+            const ts = toMoney(row.sellingPrice).times(row.baleCount);
             totalBales += row.baleCount;
-            totalKg += row.totalWeight;
-            totalCost += tc;
-            totalSell += ts;
+            totalKg = totalKg.plus(weight);
+            totalCost = totalCost.plus(tc);
+            totalSell = totalSell.plus(ts);
 
             const rd: Record<string, string | number> = {
               articleCode: row.articleCode,
               productName: row.productName,
               category: row.category,
               baleCount: row.baleCount,
-              weightPerBale: parseFloat(wpb.toFixed(2)),
-              totalWeight: parseFloat(row.totalWeight.toFixed(2)),
+              weightPerBale: cents(wpb),
+              totalWeight: cents(weight),
             };
             if (includeCost) {
               rd.productionPrice = row.productionPrice;
-              rd.totalCostValue = parseFloat(tc.toFixed(2));
+              rd.totalCostValue = cents(tc);
             }
             if (includeSellPrice) {
               rd.sellingPrice = row.sellingPrice;
-              rd.totalSellValue = parseFloat(ts.toFixed(2));
+              rd.totalSellValue = cents(ts);
             }
             const exRow = ws.addRow(rd);
             applyDataRow(exRow, idx % 2 === 1, altColor);
@@ -532,15 +542,15 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
             category: "",
             baleCount: totalBales,
             weightPerBale: "",
-            totalWeight: parseFloat(totalKg.toFixed(2)),
+            totalWeight: cents(totalKg),
           };
           if (includeCost) {
             td.productionPrice = "";
-            td.totalCostValue = parseFloat(totalCost.toFixed(2));
+            td.totalCostValue = cents(totalCost);
           }
           if (includeSellPrice) {
             td.sellingPrice = "";
-            td.totalSellValue = parseFloat(totalSell.toFixed(2));
+            td.totalSellValue = cents(totalSell);
           }
           const tr = ws.addRow(td);
           tr.font = { bold: true };
@@ -595,11 +605,11 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
             productName: b.productName || "",
             category: productCategoryNameMap.get(pid) || b.category || "",
             grade: b.grade || "",
-            weightKg: parseFloat(String(b.weightKg || "0")),
+            weightKg: amount(b.weightKg).toNumber(),
           };
           if (includeCost) {
-            rd.costPerKg = parseFloat(String(b.costPerKg || "0"));
-            rd.totalCost = parseFloat(String(b.totalCost || "0"));
+            rd.costPerKg = amount(b.costPerKg).toNumber();
+            rd.totalCost = amount(b.totalCost).toNumber();
           }
           const exRow = baleSheet.addRow(rd);
           applyDataRow(exRow, idx % 2 === 1, ROW_ALT);
@@ -640,11 +650,11 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
         garbageDetailSheet.columns = garbageBaleCols;
         styleHeaderRow(garbageDetailSheet.getRow(1), HEADER_ORANGE);
 
-        let gbTotalKg = 0;
+        let gbTotalKg: Decimal = new MoneyDecimal(0);
         garbageBales.forEach((b, idx) => {
           const pid = b.productId ?? 0;
-          const w = parseFloat(String(b.weightKg || "0"));
-          gbTotalKg += w;
+          const w = amount(b.weightKg).toNumber();
+          gbTotalKg = gbTotalKg.plus(w);
           const rd: Record<string, string | number> = {
             referenceNumber: b.referenceNumber,
             baleCode: b.baleCode || "",
@@ -655,8 +665,8 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
             weightKg: w,
           };
           if (includeCost) {
-            rd.costPerKg = parseFloat(String(b.costPerKg || "0"));
-            rd.totalCost = parseFloat(String(b.totalCost || "0"));
+            rd.costPerKg = amount(b.costPerKg).toNumber();
+            rd.totalCost = amount(b.totalCost).toNumber();
           }
           const exRow = garbageDetailSheet.addRow(rd);
           applyDataRow(exRow, idx % 2 === 1, ROW_WG_DETAIL_ALT);
@@ -677,12 +687,12 @@ export function registerFactoryLocationInventoryRoutes(app: Express) {
             productName: `TOTAL — ${garbageBales.length} bales`,
             category: "",
             grade: "",
-            weightKg: parseFloat(gbTotalKg.toFixed(2)),
+            weightKg: cents(gbTotalKg),
           };
           if (includeCost) {
             gtd.costPerKg = "";
-            gtd.totalCost = parseFloat(
-              garbageBales.reduce((s, b) => s + parseFloat(String(b.totalCost || "0")), 0).toFixed(2)
+            gtd.totalCost = cents(
+              garbageBales.reduce((sum: Decimal, b) => sum.plus(amount(b.totalCost)), new MoneyDecimal(0))
             );
           }
           const gtr = garbageDetailSheet.addRow(gtd);

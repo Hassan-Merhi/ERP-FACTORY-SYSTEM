@@ -71,7 +71,7 @@ export function RetailPaymentPanel({
                   const method = event.target.value as RetailPaymentMethod;
                   update(index, {
                     method,
-                    tenderedAmount: method === "cash" ? payment.tenderedAmount ?? payment.amount : null,
+                    tenderedAmount: method === "cash" ? (payment.tenderedAmount ?? payment.amount) : null,
                   });
                 }}
               >

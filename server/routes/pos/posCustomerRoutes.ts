@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { userCompanyRoles, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { toMoney } from "../../lib/money";
 
 export function registerPosCustomerRoutes(app: Express): void {
   // POS Customers - GET endpoint (for POS users with canAccessCustomers permission)
@@ -48,41 +49,44 @@ export function registerPosCustomerRoutes(app: Express): void {
               undefined,
               req.session.currentCompanyId
             );
-            const openingBalance = parseFloat(customer.openingBalance || "0");
+            const openingBalance = toMoney(customer.openingBalance);
             const openingSide = customer.openingBalanceSide || "Dr";
 
+            // Exact: a float running total over every entry drifted.
             const balance = entries.reduce(
               (sum, entry) => {
-                const debit = parseFloat(entry.debitAmount || "0");
-                const credit = parseFloat(entry.creditAmount || "0");
+                const debit = toMoney(entry.debitAmount);
+                const credit = toMoney(entry.creditAmount);
 
-                if (debit > 0 && credit === 0) {
-                  return sum + debit;
-                } else if (credit > 0 && debit === 0) {
-                  return sum - credit;
+                if (debit.gt(0) && credit.eq(0)) {
+                  return sum.plus(debit);
+                } else if (credit.gt(0) && debit.eq(0)) {
+                  return sum.minus(credit);
                 }
                 return sum;
               },
-              openingSide === "Dr" ? openingBalance : -openingBalance
+              openingSide === "Dr" ? openingBalance : openingBalance.negated()
             );
 
             return {
               ...customer,
-              balance: Math.abs(balance),
-              balanceSide: balance >= 0 ? "Dr" : "Cr",
+              balance: balance.abs().toNumber(),
+              balanceSide: balance.gte(0) ? "Dr" : "Cr",
             };
           }
 
           const customerBalance = await storage.getCustomerBalance(customer.id, req.session.currentCompanyId!);
-          const openingBalance = parseFloat(customer.openingBalance || "0");
+          const openingBalance = toMoney(customer.openingBalance);
           const openingSide = customer.openingBalanceSide || "Dr";
 
-          const totalBalance = (openingSide === "Dr" ? openingBalance : -openingBalance) + customerBalance;
+          const totalBalance = (openingSide === "Dr" ? openingBalance : openingBalance.negated()).plus(
+            toMoney(customerBalance)
+          );
 
           return {
             ...customer,
-            balance: Math.abs(totalBalance),
-            balanceSide: totalBalance >= 0 ? "Dr" : "Cr",
+            balance: totalBalance.abs().toNumber(),
+            balanceSide: totalBalance.gte(0) ? "Dr" : "Cr",
           };
         })
       );

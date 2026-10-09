@@ -18,6 +18,8 @@ import { eq, and, or } from "drizzle-orm";
 import { recalculateOrderTotals } from "../../factory/_helpers";
 import { customerOrderCharges, customerOrders, factoryDaybookEntries as fde } from "@shared/schema";
 import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvidence";
+import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
+import { syncContainerChargeVoucherEditTx } from "../../../services/containers/offload-lifecycle/charge-voucher-sync";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
@@ -64,9 +66,25 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         }
       }
 
-      const totalDebits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.debitAmount || "0"), 0);
-      const totalCredits = entries.reduce((sum: number, entry) => sum + parseFloat(entry.creditAmount || "0"), 0);
-      if (!voucher.optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
+      // Each leg is written to a numeric column as sent, so a value that is not
+      // a finite number ("NaN", "12abc") is refused rather than summed as zero.
+      const validAmount = (value: unknown) =>
+        value === undefined ||
+        value === null ||
+        value === "" ||
+        (typeof value === "number" && Number.isFinite(value)) ||
+        (typeof value === "string" && /^\s*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\s*$/.test(value));
+      if (!entries.every((entry) => validAmount(entry.debitAmount) && validAmount(entry.creditAmount))) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      // Summed as decimals: in floats 0.10 + 0.20 against 0.31 differed by
+      // 0.00999..., so a one-cent imbalance passed the check.
+      const exactDebits = sumMoney(entries.map((entry) => entry.debitAmount));
+      const exactCredits = sumMoney(entries.map((entry) => entry.creditAmount));
+      const totalDebits = exactDebits.toNumber();
+      const totalCredits = exactCredits.toNumber();
+      if (!voucher.optional && exactDebits.minus(exactCredits).abs().greaterThanOrEqualTo(0.01)) {
         return res.status(400).json({ message: "Total debits must equal total credits for active vouchers" });
       }
 
@@ -150,7 +168,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
             try {
               const debitAmt = String(entry.debitAmount || "0");
               const creditAmt = String(entry.creditAmount || "0");
-              if (parseFloat(debitAmt) + parseFloat(creditAmt) > 0) {
+              if (toMoney(debitAmt).plus(toMoney(creditAmt)).greaterThan(0)) {
                 const norm = normalizeVoucherEntryAmounts({
                   transactionCurrency: editVoucherCurrency,
                   baseCurrency: "USD",
@@ -226,6 +244,16 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         throw error;
       }
 
+      // An edited duty/transport/office charge voucher re-prices the offloaded bales.
+      await db.transaction((tx) =>
+        syncContainerChargeVoucherEditTx(tx, {
+          companyId: existingVoucher.companyId,
+          voucherNumber: existingVoucher.voucherNumber,
+          oldTotal: existingVoucher.optional ? 0 : existingVoucher.totalAmount,
+          newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
+        })
+      );
+
       const _oldEntriesSnap = await snapshotVoucherEntries(oldEntries).catch(() => []);
       const _newEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);
       await logAudit({
@@ -248,11 +276,11 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
         if (ict) {
           const otherVoucherId = ict.fromVoucherId === id ? ict.toVoucherId : ict.fromVoucherId;
           if (otherVoucherId) {
-            const newTotal = parseFloat(updatedVoucher.totalAmount || "0");
+            const newTotal = toMoney(updatedVoucher.totalAmount);
             const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
             if (otherVoucher) {
-              const oldTotal = parseFloat(otherVoucher.totalAmount || "0");
-              const ratio = oldTotal > 0 ? newTotal / oldTotal : 1;
+              const oldTotal = toMoney(otherVoucher.totalAmount);
+              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
               const otherEntries = await db
                 .select()
                 .from(voucherEntries)
@@ -261,8 +289,8 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
                 await db
                   .update(voucherEntries)
                   .set({
-                    debitAmount: (parseFloat(e.debitAmount || "0") * ratio).toFixed(2),
-                    creditAmount: (parseFloat(e.creditAmount || "0") * ratio).toFixed(2),
+                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
+                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
                   })
                   .where(eq(voucherEntries.id, e.id));
               }

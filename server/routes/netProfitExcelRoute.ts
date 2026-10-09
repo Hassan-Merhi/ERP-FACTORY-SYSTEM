@@ -27,6 +27,8 @@ import {
   type NetProfitBalanceEntry,
   type NetProfitSheetContext,
 } from "./netProfitExcelSheets";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 
 export function registerNetProfitExcelRoute(app: Express) {
   app.get("/api/reports/net-profit-excel", requireAuth, async (req, res) => {
@@ -112,14 +114,15 @@ export function registerNetProfitExcelRoute(app: Express) {
         .execute();
 
       // Group POS sales by month
-      const salesByMonth = new Map<string, number>();
-      let totalSalesAll = 0;
+      const ZERO = new MoneyDecimal(0);
+      const salesByMonth = new Map<string, Decimal>();
+      let totalSalesAll = ZERO;
       for (const s of allSalesRows) {
         const d = new Date(s.voucherDate);
         const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        const v = parseFloat(s.total || "0");
-        salesByMonth.set(mk, (salesByMonth.get(mk) || 0) + v);
-        totalSalesAll += v;
+        const v = toMoney(s.total);
+        salesByMonth.set(mk, (salesByMonth.get(mk) ?? ZERO).plus(v));
+        totalSalesAll = totalSalesAll.plus(v);
       }
 
       // ERP voucher-based income: income accounts excluded from directIncomes/indirectIncomes
@@ -170,16 +173,14 @@ export function registerNetProfitExcelRoute(app: Express) {
           )
           .execute();
         for (const e of erpIncEntries) {
-          const credit = parseFloat(e.creditAmount || "0");
-          const debit = parseFloat(e.debitAmount || "0");
-          const net = credit - debit;
-          if (Math.abs(net) < 0.001) continue;
+          const net = toMoney(e.creditAmount).minus(toMoney(e.debitAmount));
+          if (net.abs().lessThan(0.001)) continue;
           const vDate = voucherDateMap.get(e.voucherId);
           if (!vDate) continue;
           const d = new Date(vDate);
           const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-          salesByMonth.set(mk, (salesByMonth.get(mk) || 0) + net);
-          totalSalesAll += net;
+          salesByMonth.set(mk, (salesByMonth.get(mk) ?? ZERO).plus(net));
+          totalSalesAll = totalSalesAll.plus(net);
         }
       }
 
@@ -211,20 +212,22 @@ export function registerNetProfitExcelRoute(app: Express) {
               .where(inArray(voucherEntries.voucherId, allTimeIdsXlsx))
               .execute()
           : [];
-      const allTimeBalsXlsx = new Map<number, { debit: number; credit: number }>();
+      type DebitCredit = { debit: Decimal; credit: Decimal };
+      const NO_BALANCE: DebitCredit = { debit: ZERO, credit: ZERO };
+      const allTimeBalsXlsx = new Map<number, DebitCredit>();
       for (const e of allTimeEntriesXlsx) {
         if (e.ledgerAccountId) {
-          const d = parseFloat(e.debitAmount || "0"),
-            c = parseFloat(e.creditAmount || "0");
-          const cur = allTimeBalsXlsx.get(e.ledgerAccountId) || { debit: 0, credit: 0 };
-          allTimeBalsXlsx.set(e.ledgerAccountId, { debit: cur.debit + d, credit: cur.credit + c });
+          const cur = allTimeBalsXlsx.get(e.ledgerAccountId) ?? NO_BALANCE;
+          allTimeBalsXlsx.set(e.ledgerAccountId, {
+            debit: cur.debit.plus(toMoney(e.debitAmount)),
+            credit: cur.credit.plus(toMoney(e.creditAmount)),
+          });
         }
       }
 
       // Opening Stock
       const allStockItems = await storage.getAllStockItems(companyId);
-      let openingStockValue = 0;
-      for (const item of allStockItems) openingStockValue += parseFloat(item.openingValue || "0");
+      const openingStockValue = sumMoney(allStockItems.map((item) => item.openingValue)).toNumber();
 
       // Closing Stock (current inventory)
       const activeLocData = await db
@@ -233,7 +236,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
         .execute();
       const activeLocIds = activeLocData.map((l) => l.id);
-      let closingStockValue = 0;
+      let closingStockExact = ZERO;
       if (activeLocIds.length > 0) {
         const invData = await db
           .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
@@ -241,28 +244,29 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(inArray(inventory.locationId, activeLocIds))
           .execute();
         for (const inv of invData)
-          closingStockValue += parseFloat(inv.quantity || "0") * parseFloat(inv.averageRate || "0");
+          closingStockExact = closingStockExact.plus(toMoney(inv.quantity).times(toMoney(inv.averageRate)));
       }
+      const closingStockValue = closingStockExact.toNumber();
 
       // Net Position - same calculation as dashboard (/api/stats/net-profit)
       const npRound2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
       // Build supplier balance map from all-time entries
-      const xlsxSupplierBals = new Map<number, { debit: number; credit: number }>();
-      const xlsxEmployeeBals = new Map<number, { debit: number; credit: number }>();
+      const xlsxSupplierBals = new Map<number, DebitCredit>();
+      const xlsxEmployeeBals = new Map<number, DebitCredit>();
       for (const e of allTimeEntriesXlsx) {
-        const d = parseFloat(e.debitAmount || "0");
-        const c = parseFloat(e.creditAmount || "0");
+        const d = toMoney(e.debitAmount);
+        const c = toMoney(e.creditAmount);
         if (e.supplierId) {
-          const cur = xlsxSupplierBals.get(e.supplierId) || { debit: 0, credit: 0 };
+          const cur = xlsxSupplierBals.get(e.supplierId) ?? NO_BALANCE;
           xlsxSupplierBals.set(e.supplierId, {
-            debit: cur.debit + (d > 0 && c === 0 ? d : 0),
-            credit: cur.credit + (c > 0 && d === 0 ? c : 0),
+            debit: d.greaterThan(0) && c.isZero() ? cur.debit.plus(d) : cur.debit,
+            credit: c.greaterThan(0) && d.isZero() ? cur.credit.plus(c) : cur.credit,
           });
         }
         if (e.employeeId) {
-          const cur = xlsxEmployeeBals.get(e.employeeId) || { debit: 0, credit: 0 };
-          xlsxEmployeeBals.set(e.employeeId, { debit: cur.debit + d, credit: cur.credit + c });
+          const cur = xlsxEmployeeBals.get(e.employeeId) ?? NO_BALANCE;
+          xlsxEmployeeBals.set(e.employeeId, { debit: cur.debit.plus(d), credit: cur.credit.plus(c) });
         }
       }
 
@@ -350,24 +354,24 @@ export function registerNetProfitExcelRoute(app: Express) {
         )
         .orderBy(desc(exchangeRates.effectiveDate))
         .limit(1);
-      const xlsxCurrentCfaRate = xlsxCfaRateRows.length > 0 ? parseFloat(xlsxCfaRateRows[0].rate) : 0;
+      const xlsxCurrentCfaRate = xlsxCfaRateRows.length > 0 ? toMoney(xlsxCfaRateRows[0].rate) : ZERO;
 
-      let npForUs = 0,
-        npOnUs = 0;
+      let npForUs = ZERO,
+        npOnUs = ZERO;
       for (const acc of companyAccounts) {
         if (npExpenseTypes.includes(acc.accountType || "")) continue;
         if (acc.accountType === "Income") continue;
         if (isExcludedFromNp(acc)) continue;
-        const opening = parseFloat(acc.openingBalance || "0");
-        const openingSigned = acc.openingBalanceSide === "Dr" ? opening : -opening;
-        const bal = allTimeBalsXlsx.get(acc.id) || { debit: 0, credit: 0 };
-        let net = openingSigned + bal.debit - bal.credit;
+        const opening = toMoney(acc.openingBalance);
+        const openingSigned = acc.openingBalanceSide === "Dr" ? opening : opening.negated();
+        const bal = allTimeBalsXlsx.get(acc.id) ?? NO_BALANCE;
+        let net = openingSigned.plus(bal.debit).minus(bal.credit);
         // Revalue Cash accounts: amounts are in CFA, divide by current rate to get USD
-        if (xlsxCurrentCfaRate > 0 && acc.accountType === "Cash") {
-          net = net / xlsxCurrentCfaRate;
+        if (xlsxCurrentCfaRate.greaterThan(0) && acc.accountType === "Cash") {
+          net = net.dividedBy(xlsxCurrentCfaRate);
         }
-        if (net > 0) npForUs += net;
-        else if (net < 0) npOnUs += Math.abs(net);
+        if (net.greaterThan(0)) npForUs = npForUs.plus(net);
+        else if (net.lessThan(0)) npOnUs = npOnUs.plus(net.abs());
       }
 
       // For All Time (no endDate): include inventory, workers, OTW — current values match the dashboard.
@@ -375,7 +379,7 @@ export function registerNetProfitExcelRoute(app: Express) {
       const xlsxIsAllTime = !endDate;
       if (xlsxIsAllTime) {
         // Add stock on floor (inventory) as asset
-        npForUs += closingStockValue;
+        npForUs = npForUs.plus(closingStockExact);
 
         // Add worker/employee liabilities
         const xlsxEmployees = await db
@@ -391,9 +395,11 @@ export function registerNetProfitExcelRoute(app: Express) {
           .execute();
         const xlsxManagedAdvances = await loadSalaryAdvanceNetPositionAdjustments(companyId, null);
         const xlsxPayrollSigned = npRound2(
-          xlsxEmployees
-            .filter((employee) => employee.employeeType !== "Worker")
-            .reduce((sum, employee) => sum + parseFloat(employee.currentBalance || "0"), 0)
+          sumMoney(
+            xlsxEmployees
+              .filter((employee) => employee.employeeType !== "Worker")
+              .map((employee) => employee.currentBalance)
+          ).toNumber()
         );
         const xlsxWorkerIds = new Set(
           xlsxEmployees.filter((employee) => employee.employeeType === "Worker").map((employee) => employee.id)
@@ -403,8 +409,8 @@ export function registerNetProfitExcelRoute(app: Express) {
             .filter((advance) => xlsxWorkerIds.has(advance.employeeId))
             .reduce((sum, advance) => sum + advance.remainingBalance, 0)
         );
-        npForUs += Math.max(0, -xlsxPayrollSigned) + xlsxWorkerAdvances;
-        npOnUs += Math.max(0, xlsxPayrollSigned);
+        npForUs = npForUs.plus(Math.max(0, -xlsxPayrollSigned)).plus(xlsxWorkerAdvances);
+        npOnUs = npOnUs.plus(Math.max(0, xlsxPayrollSigned));
 
         // Add OTW containers as assets
         const xlsxOtwContainers = await db
@@ -413,7 +419,7 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(and(eq(containers.companyId, companyId), eq(containers.status, "OTW")))
           .execute();
         for (const c of xlsxOtwContainers) {
-          npForUs += parseFloat(c.grandTotal || c.itemsTotal || "0");
+          npForUs = npForUs.plus(toMoney(c.grandTotal || c.itemsTotal));
         }
       }
 
@@ -428,15 +434,14 @@ export function registerNetProfitExcelRoute(app: Express) {
           .where(and(eq(companyScopedSuppliers.companyId, companyId), isNull(companyScopedSuppliers.deletedAt)))
           .execute();
         for (const sup of xlsxAllSuppliers) {
-          const balance = xlsxSupplierBals.get(sup.id) || { debit: 0, credit: 0 };
-          const opening = parseFloat(sup.openingBalance || "0");
-          const netBalance = opening + balance.credit - balance.debit;
-          if (netBalance > 0) npOnUs += netBalance;
-          else if (netBalance < 0) npForUs += Math.abs(netBalance);
+          const balance = xlsxSupplierBals.get(sup.id) ?? NO_BALANCE;
+          const netBalance = toMoney(sup.openingBalance).plus(balance.credit).minus(balance.debit);
+          if (netBalance.greaterThan(0)) npOnUs = npOnUs.plus(netBalance);
+          else if (netBalance.lessThan(0)) npForUs = npForUs.plus(netBalance.abs());
         }
       }
 
-      const netPositionValue = npRound2(npForUs - npOnUs);
+      const netPositionValue = npRound2(npForUs.minus(npOnUs).toNumber());
 
       // Import charges IDs
       const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
@@ -467,7 +472,7 @@ export function registerNetProfitExcelRoute(app: Express) {
         const totalStats = computeStats(
           sheetCtx,
           allBalances,
-          totalSalesAll,
+          totalSalesAll.toNumber(),
           openingStockValue,
           closingStockValue,
           false
@@ -476,7 +481,7 @@ export function registerNetProfitExcelRoute(app: Express) {
           const monthVIds = vouchersByMonth.get(mk)!;
           const monthEntries = monthVIds.flatMap((id) => entriesByVoucherId.get(id) || []);
           const monthBalances = computeBalancesFromEntries(monthEntries);
-          const monthSales = salesByMonth.get(mk) || 0;
+          const monthSales = (salesByMonth.get(mk) ?? ZERO).toNumber();
           return computeStats(sheetCtx, monthBalances, monthSales, 0, 0, true);
         });
         const monthLabels = sortedMonths.map(fmtMonthLabel);
@@ -493,7 +498,14 @@ export function registerNetProfitExcelRoute(app: Express) {
       } else {
         // Single sheet
         const allBalances = computeBalancesFromEntries(allPeriodEntries);
-        const stats = computeStats(sheetCtx, allBalances, totalSalesAll, openingStockValue, closingStockValue, false);
+        const stats = computeStats(
+          sheetCtx,
+          allBalances,
+          totalSalesAll.toNumber(),
+          openingStockValue,
+          closingStockValue,
+          false
+        );
         const ws = workbook.addWorksheet("Net Profit Report");
         writeSheet(sheetCtx, ws, stats, periodLabel, false, 0);
       }

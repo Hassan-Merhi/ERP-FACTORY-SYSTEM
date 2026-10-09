@@ -12,7 +12,7 @@ import type { DragEvent } from "react";
 import { ChevronDown, ChevronRight, GripVertical } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { computeGroupTotals, type CustomerOrderGroup } from "./invoiceCalculations";
+import { computeGroupTotals, getLoadedBalesColorClass, type CustomerOrderGroup } from "./invoiceCalculations";
 import { fmtKg, InvoiceOrderRow, type InvoiceOrderRowContext } from "./InvoiceOrderRow";
 
 interface InvoiceGroupRowProps extends InvoiceOrderRowContext {
@@ -77,11 +77,14 @@ export function InvoiceGroupRow({
         <TableCell className="text-muted-foreground text-sm">—</TableCell>
         {!orderRowContext.hideProformaCol && <TableCell />}
         <TableCell />
+        {orderRowContext.showBookingInfo && <TableCell />}
         <TableCell />
         <TableCell />
         <TableCell />
         <TableCell />
-        <TableCell className="text-right font-mono">{totals.totalBales}</TableCell>
+        <TableCell className="text-right font-mono text-lg font-bold tabular-nums">
+          <span className={getLoadedBalesColorClass(totals.totalBales)}>{totals.totalBales}</span>
+        </TableCell>
         <TableCell className="text-right font-mono text-sm">{fmtKg(totals.totalWeightKg)}</TableCell>
         <TableCell className="text-right font-mono">
           {totals.totalRemaining > 0 ? (

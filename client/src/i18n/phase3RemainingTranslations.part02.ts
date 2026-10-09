@@ -740,7 +740,7 @@ export const phase3RemainingTranslationsPart02: readonly Phase3SharedUiEntry[] =
   { en: "Advance Deduction", ar: "التخفيض المسبق", fr: "Déduction anticipée" },
   { en: "Advance deleted", ar: "السلفة المحذوفة", fr: "Avancée supprimée" },
   {
-    en: 'Advance deleted for ${worker?.fullName || "Unknown"}: $${parseFloat(advance.amount).toFixed(2)}${repayNote}${voucherNote}',
+    en: 'Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${repayNote}${voucherNote}',
     ar: "السلف المحذوفة{{0}}: ${{1}}{{2}}{{3}}",
     fr: "Avancée supprimée pour{{0}}: ${{1}}{{2}}{{3}}",
   },
@@ -771,7 +771,7 @@ export const phase3RemainingTranslationsPart02: readonly Phase3SharedUiEntry[] =
     fr: "Avance inversée et remise en état",
   },
   {
-    en: 'Advance reversed for ${worker?.fullName || "Unknown"}: $${parseFloat(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)',
+    en: 'Advance reversed for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)',
     ar: "السلف المعكوسة{{0}}: ${{1}}أعيدت إلى ما لم يسدد بعد{{2}}التسديد (المدفوعات) المشطوبة",
     fr: "Avance inversée pour{{0}}: ${{1}}restaurés ({{2}}remboursement(s) supprimé(s)",
   },

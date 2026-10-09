@@ -16,6 +16,7 @@ import { z } from "zod";
 import { locations } from "../common";
 import { ledgerAccounts } from "../accounting";
 import { factoryContainers, factorySuppliers } from "./suppliers-containers";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../../numericString";
 
 // ─── Factory Raw Stock ────────────────────────────────────────────────────────
 export const factoryRawStock = pgTable(
@@ -61,13 +62,9 @@ export const insertFactoryRawStockSchema = createInsertSchema(factoryRawStock)
   .extend({
     companyId: z.number().min(1, "Company is required"),
     containerId: z.number().min(1, "Container is required"),
-    receivedKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Received kg must be positive"),
+    receivedKg: z.string().refine(isPositiveNumeric, "Received kg must be positive"),
     usedKg: z.string().optional(),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
     costPerKgUsd: z.string().optional().nullable(),
     commissionPersonName: z.string().optional().nullable(),
     commissionAmount: z.string().optional().nullable(),
@@ -241,15 +238,9 @@ export const insertFactoryMixBatchSchema = createInsertSchema(factoryMixBatches)
     companyId: z.number().min(1, "Company is required"),
     batchCode: z.string().optional(),
     name: z.string().optional(),
-    totalWeightKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Total weight must be positive"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
+    totalWeightKg: z.string().refine(isPositiveNumeric, "Total weight must be positive"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
     usedKg: z.string().optional(),
     status: z.enum(["ACTIVE", "COMPLETED", "OPEN", "CLOSED", "CARRY_FORWARD"]).optional(),
     operatorUser: z.string().optional().nullable(),
@@ -291,13 +282,9 @@ export const insertFactoryMixBatchSourceSchema = createInsertSchema(factoryMixBa
     containerId: z.number().optional().nullable(),
     supplierId: z.number().optional().nullable(),
     sourceBatchId: z.number().optional().nullable(),
-    weightKg: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
-    costPerKg: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost per kg must be non-negative"),
-    totalCost: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Total cost must be non-negative"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
+    costPerKg: z.string().refine(isNonNegativeNumeric, "Cost per kg must be non-negative"),
+    totalCost: z.string().refine(isNonNegativeNumeric, "Total cost must be non-negative"),
   });
 
 export type InsertFactoryMixBatchSource = z.infer<typeof insertFactoryMixBatchSourceSchema>;
@@ -422,7 +409,7 @@ export const insertFactoryBaleSchema = createInsertSchema(factoryBales)
     productName: z.string().optional().nullable(),
     category: z.string().optional().nullable(),
     grade: z.string().optional().nullable(),
-    weightKg: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Weight must be positive"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
     costPerKg: z.string().optional(),
     totalCost: z.string().optional(),
     status: z

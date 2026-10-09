@@ -12,6 +12,7 @@ import fs from "fs";
 import { factoryDaybookEntries, factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
+import { daybookAmountUsd } from "../../../lib/money";
 
 /** Normalize a USD voucher entry (IDENTITY convention). Returns dual-currency fields spread-ready. */
 export function normUsd(debit: string | number, credit: string | number) {
@@ -61,8 +62,7 @@ export async function writeDaybookEntry(
   const currency = opts.currencyCode || "USD";
   const fxRate = opts.fxRateToUsd || 1;
   const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd =
-    opts.amountUsd !== undefined ? opts.amountUsd : currency === "USD" ? amtCurrency : amtCurrency * fxRate;
+  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
   await dbOrTx.insert(factoryDaybookEntries).values({
     companyId: opts.companyId,
     txDate: opts.txDate,
@@ -74,7 +74,7 @@ export async function writeDaybookEntry(
     currencyCode: currency,
     amountCurrency: String(amtCurrency),
     fxRateToUsd: String(fxRate),
-    amountUsd: String(amtUsd),
+    amountUsd: amtUsd,
     createdBy: opts.createdBy || null,
   });
 }

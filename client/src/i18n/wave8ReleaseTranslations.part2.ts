@@ -594,6 +594,26 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     fr: "Performance des articles",
   },
   {
+    en: "Sale price breakdown",
+    ar: "تفصيل أسعار البيع",
+    fr: "Détail des prix de vente",
+  },
+  {
+    en: "Sold Price",
+    ar: "سعر البيع",
+    fr: "Prix de vente",
+  },
+  {
+    en: "No sale price history for this item.",
+    ar: "لا يوجد سجل لأسعار بيع هذا الصنف.",
+    fr: "Aucun historique de prix de vente pour cet article.",
+  },
+  {
+    en: "Failed to load sale price breakdown.",
+    ar: "تعذر تحميل تفصيل أسعار البيع.",
+    fr: "Impossible de charger le détail des prix de vente.",
+  },
+  {
     en: "Click an item to see its country breakdown",
     ar: "انقر على صنف لعرض توزيعه حسب الدولة",
     fr: "Cliquez sur un article pour voir sa répartition par pays",
@@ -609,9 +629,29 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     fr: "Valeur d’achat",
   },
   {
+    en: "Purchase + Offloading",
+    ar: "الشراء + تكلفة التفريغ",
+    fr: "Achat + frais de déchargement",
+  },
+  {
+    en: "Cost Only",
+    ar: "التكلفة فقط",
+    fr: "Coût uniquement",
+  },
+  {
+    en: "Cost + Offloading",
+    ar: "التكلفة + تكلفة التفريغ",
+    fr: "Coût + frais de déchargement",
+  },
+  {
     en: "Avg Purchase",
     ar: "متوسط الشراء",
     fr: "Achat moyen",
+  },
+  {
+    en: "Avg Cost + Offloading",
+    ar: "متوسط التكلفة + تكلفة التفريغ",
+    fr: "Coût moyen + frais de déchargement",
   },
   {
     en: "Top Profit Country",
@@ -818,70 +858,5 @@ export const wave8ReleaseTranslationsPart2: readonly Phase3SharedUiEntry[] = [
     en: "Failed to load POS sale details",
     ar: "فشل تحميل تفاصيل بيع نقطة البيع",
     fr: "Échec du chargement des détails de la vente au point de vente",
-  },
-  {
-    en: "One or more selected companies could not be found",
-    ar: "تعذر العثور على شركة أو أكثر من الشركات المحددة",
-    fr: "Une ou plusieurs des sociétés sélectionnées sont introuvables",
-  },
-  {
-    en: "Item Market Analysis can only compare ERP companies",
-    ar: "لا يمكن لتحليل سوق الأصناف مقارنة سوى شركات ERP",
-    fr: "L’analyse du marché des articles ne peut comparer que des sociétés ERP",
-  },
-  {
-    en: "Load 250 more",
-    ar: "تحميل 250 إضافية",
-    fr: "Charger 250 de plus",
-  },
-  {
-    en: "All Profit",
-    ar: "كل الأرباح",
-    fr: "Tous les bénéfices",
-  },
-  {
-    en: "COGS Reconciliation",
-    ar: "تسوية تكلفة البضاعة المباعة",
-    fr: "Rapprochement du coût des ventes",
-  },
-  {
-    en: "Adjusted Cost Profit",
-    ar: "الربح بالتكلفة المعدّلة",
-    fr: "Bénéfice au coût ajusté",
-  },
-  {
-    en: "Freight + Charges: Included",
-    ar: "الشحن + الرسوم: مشمولة",
-    fr: "Fret + frais : inclus",
-  },
-  {
-    en: "Freight + Charges: Excluded",
-    ar: "الشحن + الرسوم: مستبعدة",
-    fr: "Fret + frais : exclus",
-  },
-  {
-    en: "Invoice Total (With Charges)",
-    ar: "إجمالي الفاتورة (مع الرسوم)",
-    fr: "Total de la facture (avec frais)",
-  },
-  {
-    en: "Total Cost (With Charges)",
-    ar: "إجمالي التكلفة (مع الرسوم)",
-    fr: "Coût total (avec frais)",
-  },
-  {
-    en: "Expand a customer to see each loading, verified or finalized invoice. Totals below include freight and extra charges.",
-    ar: "وسّع العميل لعرض كل عملية تحميل أو فاتورة متحقق منها أو معتمدة. الإجماليات أدناه تشمل الشحن والرسوم الإضافية.",
-    fr: "Développez un client pour voir chaque chargement ou facture vérifiée ou finalisée. Les totaux ci-dessous incluent le fret et les frais supplémentaires.",
-  },
-  {
-    en: "Expand a customer to see each loading, verified or finalized invoice. Totals below exclude freight and extra charges.",
-    ar: "وسّع العميل لعرض كل عملية تحميل أو فاتورة متحقق منها أو معتمدة. الإجماليات أدناه تستثني الشحن والرسوم الإضافية.",
-    fr: "Développez un client pour voir chaque chargement ou facture vérifiée ou finalisée. Les totaux ci-dessous excluent le fret et les frais supplémentaires.",
-  },
-  {
-    en: "Invalid includeCharges filter",
-    ar: "عامل تصفية includeCharges غير صالح",
-    fr: "Filtre includeCharges non valide",
   },
 ];

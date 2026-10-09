@@ -160,6 +160,10 @@ describe("broker bulk FX settlement", () => {
     expect(
       (await agent.post(url()).send({ fromCurrencyCode: "AUD", totalAmount: "-1", fxRateToUsd: "0.66" })).status
     ).toBe(400);
+    // "abc" used to pass the "<= 0" check as NaN.
+    expect(
+      (await agent.post(url()).send({ fromCurrencyCode: "AUD", totalAmount: "abc", fxRateToUsd: "0.66" })).status
+    ).toBe(400);
     expect(
       (
         await agent
@@ -184,6 +188,16 @@ describe("broker bulk FX settlement", () => {
       expect.objectContaining({ supplierId: newerSupplierId, allocated: "700.0000", overpayment: "200.0000" }),
     ]);
     expect(await transfersFor(olderSupplierId)).toEqual([]);
+  });
+
+  it("converts to USD exactly at the transfer's four decimals", async () => {
+    // 0.06 x 0.0025 = 0.00015; the float product 0.00014999999999999999 printed 0.0001.
+    const response = await agent
+      .post(url())
+      .send({ fromCurrencyCode: "AUD", totalAmount: "0.06", fxRateToUsd: "0.0025", dryRun: true });
+    expect(response.status, response.text).toBe(200);
+    expect(response.body.totalUsd).toBe("0.0002");
+    expect(response.body.transfers[0].toAmountUsd).toBe("0.0002");
   });
 
   it("can fill the newest supplier first", async () => {

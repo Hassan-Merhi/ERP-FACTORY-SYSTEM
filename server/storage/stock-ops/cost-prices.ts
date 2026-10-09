@@ -5,6 +5,7 @@ import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { getStockItemByCodeOrAlias } from "../inventory";
 import { toFiniteNumber } from "@shared/typeGuards";
+import { moneyString, parseMoneyInput } from "../../lib/money";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { recordInventoryValuationOverride } from "../../services/inventory/recordInventoryValuationOverride";
 
@@ -95,6 +96,18 @@ interface LineItemUpdate {
   totalAmount?: string;
 }
 
+/**
+ * Quantity × rate at cents, exact and rounded half up. The float product
+ * rounded the binary value: 3 × 1.115 is 3.3449… as a float and was stored
+ * as 3.34.
+ */
+export function lineTotal(quantity: string, rate: string): string {
+  const qty = parseMoneyInput(quantity);
+  const unitRate = parseMoneyInput(rate);
+  if (!qty || !unitRate) throw new Error("Invalid quantity or rate value");
+  return moneyString(qty.times(unitRate));
+}
+
 export async function updateStockTransferItem(
   id: number,
   updates: Partial<{ stockItemId: number; quantity: string; rate: string }>
@@ -109,10 +122,7 @@ export async function updateStockTransferItem(
 
   const finalQuantity = updates.quantity !== undefined ? updates.quantity : currentItem.quantity;
   const finalRate = updates.rate !== undefined ? updates.rate : currentItem.rate;
-  const qty = parseFloat(finalQuantity);
-  const rate = parseFloat(finalRate);
-  if (isNaN(qty) || isNaN(rate)) throw new Error("Invalid quantity or rate value");
-  updateData.totalAmount = (qty * rate).toFixed(2);
+  updateData.totalAmount = lineTotal(finalQuantity, finalRate);
 
   const [updated] = await db
     .update(schema.stockTransferItems)
@@ -139,10 +149,7 @@ export async function updateStockAdjustmentItem(
 
   const finalQuantity = updates.quantity !== undefined ? updates.quantity : currentItem.quantity;
   const finalRate = updates.rate !== undefined ? updates.rate : currentItem.rate;
-  const qty = parseFloat(finalQuantity);
-  const rate = parseFloat(finalRate);
-  if (isNaN(qty) || isNaN(rate)) throw new Error("Invalid quantity or rate value");
-  updateData.totalAmount = (qty * rate).toFixed(2);
+  updateData.totalAmount = lineTotal(finalQuantity, finalRate);
 
   const [updated] = await db
     .update(schema.stockAdjustmentItems)

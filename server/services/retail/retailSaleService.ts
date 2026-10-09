@@ -10,11 +10,8 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
-import {
-  loadRetailSalePayments,
-  settleRetailSaleTx,
-  type RetailPaymentInput,
-} from "./retailFinancialService";
+import { settleRetailSaleTx, type RetailPaymentInput } from "./retailFinancialService";
+import { loadRetailSalePayments } from "./retailFinancialQueries";
 import {
   nextRetailReturnQuantity,
   nextRetailSaleQuantity,

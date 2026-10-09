@@ -129,9 +129,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
   });
 
   const summary = reconciliationQuery.data?.summary;
-  const problems = (reconciliationQuery.data?.rows ?? []).filter(
-    (row) => row.paymentMismatch || row.accountingMissing
-  );
+  const problems = (reconciliationQuery.data?.rows ?? []).filter((row) => row.paymentMismatch || row.accountingMissing);
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
@@ -148,11 +146,13 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
               onChange={(event) => setLocationId(event.target.value)}
             >
               <option value="">Company default</option>
-              {locations.filter((location) => location.id > 0).map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
+              {locations
+                .filter((location) => location.id > 0)
+                .map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
             </select>
           </div>
           {draft && accounts ? (
@@ -164,9 +164,7 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                     className="mt-1 h-9 w-full rounded-md border bg-background px-2 text-sm"
                     value={String(draft[key] ?? "")}
                     onChange={(event) =>
-                      setDraft((current) =>
-                        current ? { ...current, [key]: Number(event.target.value) } : current
-                      )
+                      setDraft((current) => (current ? { ...current, [key]: Number(event.target.value) } : current))
                     }
                   >
                     {accounts.ledgers.map((account) => (
@@ -184,7 +182,9 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                   value={draft.bankAccountId ?? ""}
                   onChange={(event) =>
                     setDraft((current) =>
-                      current ? { ...current, bankAccountId: event.target.value ? Number(event.target.value) : null } : current
+                      current
+                        ? { ...current, bankAccountId: event.target.value ? Number(event.target.value) : null }
+                        : current
                     )
                   }
                 >
@@ -246,7 +246,8 @@ export function RetailFinancialPanel({ companyKey }: { companyKey: number }) {
                         <span>{new Date(row.created_at).toLocaleString()}</span>
                       </div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        Sale {row.totalAmount.toFixed(2)} · Paid {row.payments.toFixed(2)} · Refunds {row.refunds.toFixed(2)}
+                        Sale {row.totalAmount.toFixed(2)} · Paid {row.payments.toFixed(2)} · Refunds{" "}
+                        {row.refunds.toFixed(2)}
                         {row.accountingMissing ? " · accounting missing" : ""}
                         {row.paymentMismatch ? " · payment mismatch" : ""}
                       </div>

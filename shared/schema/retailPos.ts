@@ -231,19 +231,31 @@ export const retailAccountingSettings = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
     locationId: integer("location_id").references(() => locations.id, { onDelete: "cascade" }),
-    cashLedgerAccountId: integer("cash_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
-    cardLedgerAccountId: integer("card_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
-    bankLedgerAccountId: integer("bank_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    cashLedgerAccountId: integer("cash_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    cardLedgerAccountId: integer("card_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    bankLedgerAccountId: integer("bank_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
     bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
-    mobileLedgerAccountId: integer("mobile_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
-    otherLedgerAccountId: integer("other_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    mobileLedgerAccountId: integer("mobile_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
+    otherLedgerAccountId: integer("other_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
     salesRevenueLedgerAccountId: integer("sales_revenue_ledger_account_id").references(() => ledgerAccounts.id, {
       onDelete: "restrict",
     }),
     inventoryAssetLedgerAccountId: integer("inventory_asset_ledger_account_id").references(() => ledgerAccounts.id, {
       onDelete: "restrict",
     }),
-    cogsLedgerAccountId: integer("cogs_ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    cogsLedgerAccountId: integer("cogs_ledger_account_id").references(() => ledgerAccounts.id, {
+      onDelete: "restrict",
+    }),
     discountsLedgerAccountId: integer("discounts_ledger_account_id").references(() => ledgerAccounts.id, {
       onDelete: "restrict",
     }),

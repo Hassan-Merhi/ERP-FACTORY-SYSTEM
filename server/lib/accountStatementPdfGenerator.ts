@@ -20,6 +20,8 @@ import {
 } from "@shared/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import type Decimal from "decimal.js";
+import { sumMoney, toMoney } from "./money";
 import {
   buildFactoryCustomerLedgerEntries,
   getCustomerByLedgerId,
@@ -155,7 +157,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       .from(customers)
       .where(eq(customers.ledgerAccountId, accountId))
       .limit(1);
-    rawOB = parseFloat(linkedCust?.openingBalance ?? acct?.openingBalance ?? "0") || 0;
+    rawOB = toMoney(linkedCust?.openingBalance ?? acct?.openingBalance).toNumber();
     obSide = linkedCust?.openingBalanceSide ?? acct?.openingBalanceSide ?? "Dr";
 
     let useFactoryView = false;
@@ -178,13 +180,13 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     rawEntries = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate);
     const [acct] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, accountId));
     accountName = acct?.name ?? "Bank Account";
-    rawOB = parseFloat(acct?.openingBalance ?? "0") || 0;
+    rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = acct?.openingBalanceSide ?? "Dr";
   } else if (accountType === "fixed-asset") {
     rawEntries = await storage.getVoucherEntriesByFixedAsset(accountId, startDate, endDate);
     const [acct] = await db.select().from(fixedAssets).where(eq(fixedAssets.id, accountId));
     accountName = acct?.name ?? "Fixed Asset";
-    rawOB = parseFloat(acct?.openingBalance ?? "0") || 0;
+    rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = "Dr";
   } else if (accountType === "supplier") {
     rawEntries = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate);
@@ -193,7 +195,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     // The supplier opening balance only belongs to the explicitly configured
     // parent company's books — never guessed via "lowest company ID".
     const isParentForSupplier = await isParentCompanyContext(companyId);
-    rawOB = isParentForSupplier ? parseFloat(acct?.openingBalance ?? "0") || 0 : 0;
+    rawOB = isParentForSupplier ? toMoney(acct?.openingBalance).toNumber() : 0;
     obSide = "Cr";
   } else if (accountType === "employee") {
     rawEntries = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate);
@@ -206,7 +208,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       .from(employees)
       .where(eq(employees.id, accountId));
     accountName = acct ? `${acct.firstName} ${acct.lastName}` : "Employee";
-    rawOB = parseFloat(acct?.openingBalance ?? "0") || 0;
+    rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = "Cr";
   } else if (accountType === "customer") {
     const customerStmt = await storage.getCustomerStatement(accountId, companyId, startDate, endDate);
@@ -222,14 +224,14 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     }));
     const [acct] = await db.select().from(customers).where(eq(customers.id, accountId));
     accountName = acct?.legalName ?? "Customer";
-    rawOB = parseFloat(acct?.openingBalance ?? "0") || 0;
+    rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = "Dr";
   } else {
     throw new Error(`Unknown account type: ${accountType}`);
   }
 
   // ── 2. Opening balance (pre-period if startDate given) ──
-  let openingBalance = isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB;
+  let openingBalanceExact: Decimal = toMoney(isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB);
 
   if (startDate) {
     let factoryPrePeriodApplied = false;
@@ -244,7 +246,7 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
             linkedCust.companyId,
             startDate
           );
-          openingBalance += tot.debit - tot.credit;
+          openingBalanceExact = openingBalanceExact.plus(tot.debit).minus(tot.credit);
           factoryPrePeriodApplied = true;
         }
       }
@@ -282,11 +284,13 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
             scopeCondition
           )
         );
-      const d = parseFloat(tot?.d ?? "0") || 0;
-      const c = parseFloat(tot?.c ?? "0") || 0;
-      openingBalance += isSupplier ? c - d : d - c;
+      const d = toMoney(tot?.d);
+      const c = toMoney(tot?.c);
+      openingBalanceExact = isSupplier ? openingBalanceExact.plus(c).minus(d) : openingBalanceExact.plus(d).minus(c);
     }
   }
+
+  const openingBalance = openingBalanceExact.toNumber();
 
   // ── 3. Group entries by voucherId ──
   const voucherMap = new Map<
@@ -298,18 +302,18 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
       voucherDate: string;
       description: string;
       narration: string;
-      totalDebit: number;
-      totalCredit: number;
+      totalDebit: Decimal;
+      totalCredit: Decimal;
     }
   >();
   for (const e of rawEntries) {
     const vid = Number(e.voucherId);
-    const d = parseFloat(e.debitAmount ?? "0") || 0;
-    const c = parseFloat(e.creditAmount ?? "0") || 0;
+    const d = toMoney(e.debitAmount);
+    const c = toMoney(e.creditAmount);
     const existing = voucherMap.get(vid);
     if (existing) {
-      existing.totalDebit += d;
-      existing.totalCredit += c;
+      existing.totalDebit = existing.totalDebit.plus(d);
+      existing.totalCredit = existing.totalCredit.plus(c);
       if (!existing.narration && e.narration) existing.narration = e.narration;
     } else {
       voucherMap.set(vid, {
@@ -330,10 +334,17 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   });
 
   // ── 4. Running balance ──
-  let running = openingBalance;
+  let running: Decimal = openingBalanceExact;
   const rowsWithBalance = rows.map((r) => {
-    running += isSupplier ? r.totalCredit - r.totalDebit : r.totalDebit - r.totalCredit;
-    return { ...r, runningBalance: running };
+    running = isSupplier
+      ? running.plus(r.totalCredit).minus(r.totalDebit)
+      : running.plus(r.totalDebit).minus(r.totalCredit);
+    return {
+      ...r,
+      totalDebit: r.totalDebit.toNumber(),
+      totalCredit: r.totalCredit.toNumber(),
+      runningBalance: running.toNumber(),
+    };
   });
 
   // ── 5. Company info ──
@@ -615,8 +626,8 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     y = 36;
   }
 
-  const totD = rowsWithBalance.reduce((s, r) => s + r.totalDebit, 0);
-  const totC = rowsWithBalance.reduce((s, r) => s + r.totalCredit, 0);
+  const totD = sumMoney(rows.map((r) => r.totalDebit)).toNumber();
+  const totC = sumMoney(rows.map((r) => r.totalCredit)).toNumber();
   const closingBal =
     rowsWithBalance.length > 0 ? rowsWithBalance[rowsWithBalance.length - 1].runningBalance : openingBalance;
   const closingSide = closingBal >= 0 ? (isSupplier ? t.cr : t.dr) : isSupplier ? t.dr : t.cr;

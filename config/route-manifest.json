@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2052,
+  "routeCount": 2054,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1468,7 +1468,6 @@
     "GET /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]",
     "GET /api/pos-transfer-detail [requireAuth > <anonymous>]",
     "POST /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]",
-    "PUT /api/stock-transfers/:id [requireAuth > <anonymous>]",
     "GET /api/stock-adjustments [requireAuth > requireNonPOS > <anonymous>]",
     "POST /api/stock-adjustments [requireAuth > requireNonPOS > stockAdjustmentCreateHandler]",
     "PUT /api/stock-adjustments/:id [requireAuth > requireNonPOS > <anonymous>]",
@@ -1535,6 +1534,7 @@
     "GET /api/reports/stock-in-sales/detail [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/stock-in-sales/movements [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/stock-in-sales/comparison [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
+    "GET /api/reports/item-market-analysis/sale-prices [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/item-market-analysis [requireAuth > requireNonPOS > <anonymous> > <anonymous>]",
     "GET /api/reports/sales [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/reports/stock-movement [requireAuth > requireNonPOS > <anonymous>]",
@@ -1549,6 +1549,8 @@
     "GET /api/debug/import-cycle [requireAuth > <anonymous> > <anonymous> > <anonymous> > <anonymous>]",
     "GET /api/debug/orphaned-charge-vouchers [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/admin/fix-orphaned-charge-vouchers [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/admin/offload-charge-voucher-repair [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/admin/offload-charge-voucher-repair [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/offloads [requireAuth > <anonymous>]",
     "GET /api/offloads/:id [requireAuth > <anonymous>]",
     "POST /api/offloads/:id/toggle-optional [requireAuth > <anonymous> > <anonymous>]",

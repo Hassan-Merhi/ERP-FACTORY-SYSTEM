@@ -20,6 +20,8 @@ import {
   vouchers,
   type LedgerAccount,
 } from "@shared/schema";
+import { sumMoney, toMoney } from "../../lib/money";
+import { postableAdjustments } from "./postableAdjustments";
 
 export function registerPayrollBulkAdjustmentRoutes(app: Express) {
   // Payroll - Bulk Employee Bonus Deposit
@@ -39,11 +41,8 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         return res.status(400).json({ message: "Date is required" });
       }
 
-      // Filter out empty/zero amounts and validate
-      const validBonuses = bonuses.filter((b) => {
-        const amount = parseFloat(b.amount);
-        return !isNaN(amount) && amount > 0;
-      });
+      // Filter out empty/zero amounts and employees outside this company
+      const validBonuses = await postableAdjustments(bonuses, req.session.currentCompanyId);
 
       if (validBonuses.length === 0) {
         return res.status(400).json({ message: "No valid bonus amounts provided" });
@@ -63,7 +62,7 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
       const _allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
 
       // Calculate total amount
-      const totalAmount = validBonuses.reduce((sum: number, b) => sum + parseFloat(b.amount), 0);
+      const totalAmount = sumMoney(validBonuses.map((b) => b.amount)).toNumber();
 
       // Create single voucher for all bonuses
       const voucherNumber = `BONUS-BULK-${Date.now()}`;
@@ -80,10 +79,10 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         .returning();
 
       // Group bonuses by worker group and create one debit entry per group
-      const bonusByGroup = new Map<string, number>();
+      const bonusByGroup = new Map<string, ReturnType<typeof toMoney>>();
       for (const b of validBonuses) {
-        const grp = (bonusEmpGroupMap.get(b.employeeId) || "").trim() || "__default__";
-        bonusByGroup.set(grp, (bonusByGroup.get(grp) || 0) + parseFloat(b.amount));
+        const grp = (bonusEmpGroupMap.get(b.employee.id) || "").trim() || "__default__";
+        bonusByGroup.set(grp, (bonusByGroup.get(grp) ?? toMoney(0)).plus(b.amount));
       }
       const freshAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
       for (const [grp, grpTotal] of bonusByGroup) {
@@ -120,18 +119,8 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
       // Process each employee bonus
       const results = [];
       for (const bonus of validBonuses) {
-        const [employee] = await db.select().from(employees).where(eq(employees.id, bonus.employeeId));
-
-        if (!employee) {
-          continue; // Skip if employee not found
-        }
-
-        // Verify employee belongs to current company
-        if (employee.companyId !== req.session.currentCompanyId) {
-          continue;
-        }
-
-        const bonusAmount = parseFloat(bonus.amount);
+        const { employee } = bonus;
+        const bonusAmount = bonus.amount.toNumber();
 
         // Credit employee (using employeeId field directly instead of separate ledger account)
         await db.insert(voucherEntries).values({
@@ -169,7 +158,7 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         const [updatedEmp] = await db.select().from(employees).where(eq(employees.id, result.employeeId));
         updatedBonusResults.push({
           ...result,
-          newBalance: updatedEmp ? parseFloat(updatedEmp.currentBalance) : 0,
+          newBalance: updatedEmp ? toMoney(updatedEmp.currentBalance).toNumber() : 0,
         });
       }
 
@@ -201,17 +190,14 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
       }
 
       // Filter out empty/zero amounts and validate
-      const validWithdrawals = withdrawals.filter((w) => {
-        const amount = parseFloat(w.amount);
-        return !isNaN(amount) && amount > 0;
-      });
+      const validWithdrawals = await postableAdjustments(withdrawals, req.session.currentCompanyId);
 
       if (validWithdrawals.length === 0) {
         return res.status(400).json({ message: "No valid withdrawal amounts provided" });
       }
 
       // Calculate total amount
-      const totalAmount = validWithdrawals.reduce((sum: number, w) => sum + parseFloat(w.amount), 0);
+      const totalAmount = sumMoney(validWithdrawals.map((w) => w.amount)).toNumber();
 
       // Get payment account (bank or cash)
       let paymentAccount;
@@ -219,7 +205,12 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         [paymentAccount] = await db
           .select()
           .from(bankAccounts)
-          .where(eq(bankAccounts.id, parseInt(paymentAccountId)));
+          .where(
+            and(
+              eq(bankAccounts.id, parseInt(paymentAccountId)),
+              eq(bankAccounts.companyId, req.session.currentCompanyId!)
+            )
+          );
       } else {
         const allAccounts = await storage.getAllLedgerAccounts(req.session.currentCompanyId);
         paymentAccount = allAccounts.find((a) => a.id === parseInt(paymentAccountId));
@@ -278,12 +269,8 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
       // Process each employee withdrawal
       const results = [];
       for (const withdrawal of validWithdrawals) {
-        const [employee] = await db.select().from(employees).where(eq(employees.id, withdrawal.employeeId));
-
-        if (!employee) continue;
-        if (employee.companyId !== req.session.currentCompanyId) continue;
-
-        const withdrawAmount = parseFloat(withdrawal.amount);
+        const { employee } = withdrawal;
+        const withdrawAmount = withdrawal.amount.toNumber();
 
         // Debit employee (using employeeId field directly instead of separate ledger account)
         await db.insert(voucherEntries).values({
@@ -321,7 +308,7 @@ export function registerPayrollBulkAdjustmentRoutes(app: Express) {
         const [updatedEmp] = await db.select().from(employees).where(eq(employees.id, result.employeeId));
         updatedWithdrawResults.push({
           ...result,
-          newBalance: updatedEmp ? parseFloat(updatedEmp.currentBalance) : 0,
+          newBalance: updatedEmp ? toMoney(updatedEmp.currentBalance).toNumber() : 0,
         });
       }
 

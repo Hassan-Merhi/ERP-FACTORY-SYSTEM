@@ -16,6 +16,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { locations } from "./common";
 import { baleRecodeSessions, customerOrders, customerProformas } from "./factoryBase";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../numericString";
 
 // This module owns the bilingual replacements for tables that persist Factory
 // catalog names. shared/schema/factory.ts explicitly re-exports these definitions
@@ -180,10 +181,7 @@ export const insertFactoryBaleSchema = createInsertSchema(factoryBales)
     category: z.string().optional().nullable(),
     categoryAr: z.string().optional().nullable(),
     grade: z.string().optional().nullable(),
-    weightKg: z.string().refine((value) => {
-      const parsed = Number.parseFloat(value);
-      return Number.isFinite(parsed) && parsed > 0;
-    }, "Weight must be positive"),
+    weightKg: z.string().refine(isPositiveNumeric, "Weight must be positive"),
     costPerKg: z.string().optional(),
     totalCost: z.string().optional(),
     status: z
@@ -231,11 +229,9 @@ export const insertCustomerProformaLineSchema = createInsertSchema(customerProfo
     productName: z.string().min(1, "Product name is required"),
     productNameAr: z.string().optional().nullable(),
     quantity: z.number().int().min(1, "Quantity must be at least 1"),
-    pricePerBale: z
-      .string()
-      .refine((value) => Number.isFinite(Number.parseFloat(value)) && Number.parseFloat(value) >= 0, {
-        message: "Price must be non-negative",
-      }),
+    pricePerBale: z.string().refine(isNonNegativeNumeric, {
+      message: "Price must be non-negative",
+    }),
     pricingMode: z.enum(["per_bale", "per_kg"]).optional().default("per_bale"),
     pricePerKg: z.string().optional().nullable(),
   });

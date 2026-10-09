@@ -269,7 +269,8 @@ export default function FactoryShippingContainers() {
             !(r.clientName || "").toLowerCase().includes(q) &&
             !(r.containerNumber || "").toLowerCase().includes(q) &&
             !(r.destination || "").toLowerCase().includes(q) &&
-            !(r.shippingCompany || "").toLowerCase().includes(q)
+            !(r.shippingCompany || "").toLowerCase().includes(q) &&
+            !(r.anything || "").toLowerCase().includes(q)
           )
             return false;
         }
@@ -360,7 +361,9 @@ export default function FactoryShippingContainers() {
           <span className="flex items-center gap-1">
             <XCircle className="h-3.5 w-3.5 text-red-500" /> No documents
           </span>
-          <span>Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Arrived) to edit inline.</span>
+          <span>
+            Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Anything, Arrived) to edit inline.
+          </span>
         </div>
 
         {/* ── Main Table ── */}
@@ -393,6 +396,7 @@ export default function FactoryShippingContainers() {
                 {colVis.containerCost && <TableHead className="text-xs min-w-[100px]">Container Cost</TableHead>}
                 {colVis.ciNumber && <TableHead className="text-xs min-w-[100px]">CI No.</TableHead>}
                 {colVis.note && <TableHead className="text-xs min-w-[110px]">Note</TableHead>}
+                {colVis.anything && <TableHead className="text-xs min-w-[150px]">Anything</TableHead>}
                 {colVis.whatsapp && <TableHead className="text-xs min-w-[90px]">WhatsApp</TableHead>}
                 {colVis.done && <TableHead className="text-xs min-w-[80px]">Done</TableHead>}
               </TableRow>
@@ -400,13 +404,13 @@ export default function FactoryShippingContainers() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     {allDisplayRows.length === 0 ? "No active records." : "No records match the current filters."}
                   </TableCell>
                 </TableRow>
@@ -564,6 +568,17 @@ export default function FactoryShippingContainers() {
                           placeholder="Add note"
                           onSave={(v) => patchRowMutation.mutate({ id: r.id, patch: { note: v || null } })}
                           testId={`cell-note-${r.id}`}
+                        />
+                      </TableCell>
+                    )}
+
+                    {colVis.anything && (
+                      <TableCell>
+                        <EditableCellInput
+                          value={r.anything || ""}
+                          placeholder="Type anything"
+                          onSave={(v) => patchRowMutation.mutate({ id: r.id, patch: { anything: v || null } })}
+                          testId={`cell-anything-${r.id}`}
                         />
                       </TableCell>
                     )}

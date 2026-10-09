@@ -13,6 +13,7 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { upload } from "./_helpers";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 import { readExcel, sheetToJson } from "../excelHelper";
 import {
   baleProducts,
@@ -101,13 +102,13 @@ export function registerProductionBaleRoutes(app: Express) {
       }
 
       const numBales = parseInt(quantity);
-      const weight = parseFloat(weightPerBale);
+      const weight = parseMoneyInput(weightPerBale);
 
       if (isNaN(numBales) || numBales < 1 || numBales > 1000) {
         return res.status(400).json({ message: "Quantity must be between 1 and 1000" });
       }
 
-      if (isNaN(weight) || weight <= 0 || weight > 500) {
+      if (!weight || !weight.gt(0) || weight.gt(500)) {
         return res.status(400).json({ message: "Weight must be between 1 and 500 kg" });
       }
 
@@ -118,7 +119,7 @@ export function registerProductionBaleRoutes(app: Express) {
       }
 
       let batch = null;
-      let costPerKg = 0;
+      let costPerKg = new MoneyDecimal(0);
       let totalCostPerBale = "0";
 
       if (mixBatchId) {
@@ -127,18 +128,18 @@ export function registerProductionBaleRoutes(app: Express) {
           return res.status(404).json({ message: "Mix batch not found" });
         }
 
-        const totalWeight = weight * numBales;
-        const remainingKg = parseFloat(batch.totalWeightKg) - parseFloat(batch.usedKg || "0");
-        if (totalWeight > remainingKg + 0.001) {
+        const totalWeight = weight.times(numBales);
+        const remainingKg = toMoney(batch.totalWeightKg).minus(toMoney(batch.usedKg));
+        if (totalWeight.gt(remainingKg.plus(0.001))) {
           return res.status(400).json({
             message: `Not enough remaining in mix batch. Available: ${remainingKg.toFixed(3)} kg, Requested: ${totalWeight.toFixed(3)} kg`,
           });
         }
-        costPerKg = parseFloat(batch.costPerKg);
-        totalCostPerBale = (weight * costPerKg).toFixed(2);
+        costPerKg = toMoney(batch.costPerKg);
+        totalCostPerBale = weight.times(costPerKg).toFixed(2);
       }
 
-      const totalWeight = weight * numBales;
+      const totalWeight = weight.times(numBales);
 
       // Wrap everything in a transaction for atomicity
       const result = await db.transaction(async (tx) => {
@@ -194,8 +195,8 @@ export function registerProductionBaleRoutes(app: Express) {
             barcodeValue: barcode,
             quantity: 1,
             weightKg: weight.toString(),
-            costPerKg: costPerKg > 0 ? costPerKg.toString() : "0",
-            totalCost: costPerKg > 0 ? totalCostPerBale : "0",
+            costPerKg: costPerKg.gt(0) ? costPerKg.toString() : "0",
+            totalCost: costPerKg.gt(0) ? totalCostPerBale : "0",
             status: isPressing ? "PENDING" : "IN_STOCK",
             pressedAt: new Date(),
           };
@@ -205,7 +206,7 @@ export function registerProductionBaleRoutes(app: Express) {
         }
 
         if (batch && mixBatchId) {
-          const newUsedKg = parseFloat(batch.usedKg || "0") + totalWeight;
+          const newUsedKg = toMoney(batch.usedKg).plus(totalWeight);
           await tx
             .update(mixBatches)
             .set({
@@ -422,22 +423,21 @@ export function registerProductionBaleRoutes(app: Express) {
       }
 
       const scannedBaleRecords = pendingBales.filter((b) => scannedIds.includes(b.id));
-      const totalWeight = scannedBaleRecords.reduce((sum, b) => sum + parseFloat(b.weightKg || "0"), 0);
-      const mixRemainingKg = parseFloat(mixBatch.totalWeightKg) - parseFloat(mixBatch.usedKg || "0");
-      if (totalWeight > mixRemainingKg + 0.001) {
+      const totalWeight = sumMoney(scannedBaleRecords.map((b) => b.weightKg));
+      const mixRemainingKg = toMoney(mixBatch.totalWeightKg).minus(toMoney(mixBatch.usedKg));
+      if (totalWeight.gt(mixRemainingKg.plus(0.001))) {
         return res.status(400).json({
           message: `Not enough remaining in mix batch. Available: ${mixRemainingKg.toFixed(3)} kg, Required: ${totalWeight.toFixed(3)} kg`,
         });
       }
 
-      const costPerKg = parseFloat(mixBatch.costPerKg);
+      const costPerKg = toMoney(mixBatch.costPerKg);
 
       const updated = await db.transaction(async (tx) => {
         const finalizedBales = [];
         for (const baleId of scannedIds) {
           const baleRecord = scannedBaleRecords.find((b) => b.id === baleId);
-          const baleWeight = parseFloat(baleRecord?.weightKg || "0");
-          const baleTotalCost = (baleWeight * costPerKg).toFixed(2);
+          const baleTotalCost = toMoney(baleRecord?.weightKg).times(costPerKg).toFixed(2);
 
           const [updatedBale] = await tx
             .update(productionBales)
@@ -461,7 +461,7 @@ export function registerProductionBaleRoutes(app: Express) {
           if (updatedBale) finalizedBales.push(updatedBale);
         }
 
-        const newUsedKg = parseFloat(mixBatch.usedKg || "0") + totalWeight;
+        const newUsedKg = toMoney(mixBatch.usedKg).plus(totalWeight);
         await tx
           .update(mixBatches)
           .set({

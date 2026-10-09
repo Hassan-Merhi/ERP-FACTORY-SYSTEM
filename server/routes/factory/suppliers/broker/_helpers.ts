@@ -5,6 +5,8 @@
  */
 import { db } from "../../../../db";
 import { sqlArray } from "../../../../lib/sqlArray";
+import { toMoney, sumMoney } from "../../../../lib/money";
+import type Decimal from "decimal.js";
 import { isSupplierPaidFreight } from "../_supplierStatementHelpers";
 import {
   factorySuppliers,
@@ -181,8 +183,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     type: "container" | "payment" | "fx_out" | "fx_in" | "commission" | "freight" | "other_charge" | "opening_balance";
     description: string;
     ref: string;
-    amount: number;
-    commissionAmount: number | null;
+    amount: Decimal;
+    commissionAmount: Decimal | null;
     commissionCurrency: string | null;
     isOtw?: boolean;
   };
@@ -199,16 +201,16 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   for (const c of allContainers) {
     const supplierName = supplierNameOf(c.supplierId);
     const cc = c.currencyCode || "USD";
-    const kg = parseFloat(c.totalKg || "0");
-    const rate = parseFloat(c.ratePerKg || "0");
+    const kg = toMoney(c.totalKg);
+    const rate = toMoney(c.ratePerKg);
     // Own-account freight (freightPaidBy="own") must not appear in the broker/supplier ledger
-    const freight = isSupplierPaidFreight(c) ? parseFloat(c.freight || "0") : 0;
+    const freight = isSupplierPaidFreight(c) ? toMoney(c.freight) : toMoney(0);
     // Use freightCurrencyCode directly (DB default is "USD", so AUD containers correctly separate USD freight)
     const freightCc = c.freightCurrencyCode || cc;
     const freightSameCcy = freightCc === cc;
     // Freight is always a separate row — container row shows goods only
-    const mainAmt = kg * rate;
-    const commAmt = parseFloat(c.commissionAmount || "0");
+    const mainAmt = kg.times(rate);
+    const commAmt = toMoney(c.commissionAmount);
     const commCc = c.commissionCurrencyCode || "USD";
     const dateVal = c.arrivalDate
       ? String(c.arrivalDate)
@@ -228,7 +230,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     });
 
     // Cross-currency freight: add as an individual ledger row in the freight currency section
-    if (freight > 0 && !freightSameCcy) {
+    if (freight.gt(0) && !freightSameCcy) {
       addRow(freightCc, {
         date: dateVal,
         type: "freight",
@@ -240,7 +242,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
       });
     }
     // Same-currency freight: add a separate freight row in the container's currency section
-    if (freight > 0 && freightSameCcy) {
+    if (freight.gt(0) && freightSameCcy) {
       addRow(cc, {
         date: dateVal,
         type: "freight",
@@ -256,7 +258,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     // Commission from the broker's own containers and any non-USD commission stay excluded.
     const commSupplierId = c.commissionSupplierId ?? null;
     const commForBroker = commSupplierId === brokerId || commSupplierId === null;
-    if (commAmt > 0 && commCc === "USD" && c.supplierId !== brokerId && commForBroker) {
+    if (commAmt.gt(0) && commCc === "USD" && c.supplierId !== brokerId && commForBroker) {
       addRow("USD", {
         date: dateVal,
         type: "commission",
@@ -278,7 +280,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
       type: "payment",
       description: `Payment — ${supplierName}`,
       ref: p.notes || "Payment",
-      amount: -parseFloat(p.amount || "0"),
+      amount: toMoney(p.amount).negated(),
       commissionAmount: null,
       commissionCurrency: null,
     });
@@ -296,7 +298,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
       type: "payment",
       description: `Payment — ${supplierName}`,
       ref: p.voucherNumber || "Voucher Payment",
-      amount: -parseFloat(p.debitAmount || "0"),
+      amount: toMoney(p.debitAmount).negated(),
       commissionAmount: null,
       commissionCurrency: null,
     });
@@ -313,9 +315,9 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     if (seenFxIds.has(t.id)) continue;
     seenFxIds.add(t.id);
     const fromCc = t.fromCurrencyCode || "USD";
-    const fromAmt = parseFloat(t.fromAmount || "0");
-    const toUsd = parseFloat(t.toAmountUsd || "0");
-    const rate = fromAmt > 0 ? (toUsd / fromAmt).toFixed(4) : "1";
+    const fromAmt = toMoney(t.fromAmount);
+    const toUsd = toMoney(t.toAmountUsd);
+    const rate = fromAmt.gt(0) ? toUsd.dividedBy(fromAmt).toFixed(4) : "1";
     const dateVal = t.date ? String(t.date) : null;
     const isFromBroker = t.fromSupplierId === brokerId;
     const isToBroker = t.toSupplierId === brokerId;
@@ -328,7 +330,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
         type: "fx_out",
         description: `FX ${fromCc}→USD @ ${rate}`,
         ref: `FX-${t.id}`,
-        amount: -fromAmt,
+        amount: fromAmt.negated(),
         commissionAmount: null,
         commissionCurrency: null,
       });
@@ -355,7 +357,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
         type: "fx_out",
         description: `FX USD out @ ${rate}`,
         ref: `FX-${t.id}`,
-        amount: -fromAmt,
+        amount: fromAmt.negated(),
         commissionAmount: null,
         commissionCurrency: null,
       });
@@ -369,7 +371,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   // Post-offload charges can only be added to OFFLOADED containers, so OTW-toggle is irrelevant.
   for (const oc of allOffloadCharges) {
     const cc = oc.currencyCode || "USD";
-    const amt = parseFloat(oc.amount || "0");
+    const amt = toMoney(oc.amount);
     const supplierName = supplierNameOf(oc.supplierId);
     const dateVal = oc.createdAt ? new Date(oc.createdAt).toISOString().split("T")[0] : null;
     addRow(cc, {
@@ -388,7 +390,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     // Skip charges tied to OTW containers when toggle is off
     if (oc.containerId != null && !filteredContainerIdSet.has(oc.containerId)) continue;
     const cc = oc.chargeCurrencyCode || oc.containerCurrencyCode || "USD";
-    const amt = parseFloat(oc.amount || "0");
+    const amt = toMoney(oc.amount);
     const dateVal = oc.createdAt ? new Date(oc.createdAt).toISOString().split("T")[0] : null;
     addRow(cc, {
       date: dateVal,
@@ -432,7 +434,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
     // Skip charges tied to OTW containers when toggle is off
     if (!filteredContainerIdSet.has(c.id)) continue;
     const cc = c.otherChargesCurrencyCode || "USD";
-    const amt = parseFloat(c.otherCharges || "0");
+    const amt = toMoney(c.otherCharges);
     const chargeSupplierName = supplierNameOf(c.otherChargesSupplierId);
     const containerSupplierName = supplierNameOf(c.supplierId);
     const dateVal = c.arrivalDate
@@ -453,8 +455,8 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
 
   // Inject opening balance rows (always USD) for broker and all linked suppliers
   for (const s of allSuppliers) {
-    const ob = parseFloat(s.openingBalance || "0");
-    if (ob !== 0) {
+    const ob = toMoney(s.openingBalance);
+    if (!ob.isZero()) {
       if (!ledgerByCurrency["USD"]) ledgerByCurrency["USD"] = [];
       ledgerByCurrency["USD"].unshift({
         date: null,
@@ -480,26 +482,31 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   // Build ledgers with running balance
   const currencyLedgers = Object.entries(ledgerByCurrency)
     .map(([cc, rows]) => {
-      let runBal = 0;
+      let runBal = toMoney(0);
       const rowsWithBal = rows.map((row) => {
         // Commission is excluded from the broker balance until explicitly transferred.
         // commissionAmount is always null now, but guard defensively.
-        runBal += row.amount;
-        return { ...row, runningBalance: runBal };
+        runBal = runBal.plus(row.amount);
+        return {
+          ...row,
+          amount: row.amount.toNumber(),
+          commissionAmount: row.commissionAmount?.toNumber() ?? null,
+          runningBalance: runBal.toNumber(),
+        };
       });
-      const containerRows = rows.filter((r) => r.type === "container");
-      const totalContainers = containerRows.length;
-      const totalValue = containerRows.reduce((s, r) => s + r.amount, 0);
-      const totalPaid = Math.abs(rows.filter((r) => r.type === "payment").reduce((s, r) => s + r.amount, 0));
-      const totalFxOut = Math.abs(rows.filter((r) => r.type === "fx_out").reduce((s, r) => s + r.amount, 0));
-      const totalFxIn = rows.filter((r) => r.type === "fx_in").reduce((s, r) => s + r.amount, 0);
-      const totalOtherCharges = rows.filter((r) => r.type === "other_charge").reduce((s, r) => s + r.amount, 0);
-      const totalFreight = rows.filter((r) => r.type === "freight").reduce((s, r) => s + r.amount, 0);
-      const totalCommission = rows.reduce((s, r) => s + (r.commissionAmount || 0), 0);
+      const totalOf = (type: LedgerRow["type"]) => sumMoney(rows.filter((r) => r.type === type).map((r) => r.amount));
+      const totalContainers = rows.filter((r) => r.type === "container").length;
+      const totalValue = totalOf("container");
+      const totalPaid = totalOf("payment").abs();
+      const totalFxOut = totalOf("fx_out").abs();
+      const totalFxIn = totalOf("fx_in");
+      const totalOtherCharges = totalOf("other_charge");
+      const totalFreight = totalOf("freight");
+      const totalCommission = sumMoney(rows.map((r) => r.commissionAmount));
       // A "broker pool" section is the USD section that has no containers —
       // it represents USD the broker has received from FX settlements and commission transfers.
       // Its balance is an ASSET (received), not a payable, so CR/DR labels are inverted vs normal sections.
-      const isBrokerPool = cc === "USD" && totalContainers === 0 && totalFxIn > 0;
+      const isBrokerPool = cc === "USD" && totalContainers === 0 && totalFxIn.gt(0);
       return {
         currencyCode: cc,
         rows: rowsWithBal,

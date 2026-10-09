@@ -39,7 +39,6 @@ const TEST_PREFIX = "vpurchadj";
 let ctx: TestContext;
 let agent: request.SuperAgentTest;
 let supplierId: number;
-let containerId: number;
 let seq = 0;
 
 function today(): string {
@@ -173,7 +172,6 @@ beforeAll(async () => {
     .returning();
   supplierId = supplier.id;
   await pool.query("UPDATE suppliers SET company_id = $1 WHERE id = $2", [ctx.companyId, supplierId]);
-  containerId = 0;
 }, 90000);
 
 afterAll(async () => {
@@ -236,6 +234,32 @@ describe("PATCH /api/vouchers/:id/purchase", () => {
     // 300 - 1000 = -700 against a 1000.00 container items total.
     expect(updatedContainer.itemsTotal).toBe("300.00");
     expect(updatedContainer.grandTotal).toBe("550.00");
+  });
+
+  it("totals lines exactly and rounds each half cent up", async () => {
+    const { container, voucher, po } = await seedPurchase();
+
+    const response = await agent
+      .patch(`/api/vouchers/${voucher.id}/purchase`)
+      .send({ items: [{ stockItemId: ctx.stockItemIds[0], itemName: "Half cent", quantity: "1.3", rate: "0.35" }] });
+
+    expect(response.status).toBe(200);
+    // 1.3 * 0.35 is 0.455 exactly; the float product 0.45499999999999996 stored 0.45.
+    expect(response.body.totalAmount).toBe("0.46");
+    expect((await poLines(po.id))[0].lineTotal).toBe("0.46");
+    expect((await containerRow(container.id)).itemsTotal).toBe("0.46");
+  });
+
+  it("rejects a line amount that does not parse before writing anything", async () => {
+    const { voucher, po } = await seedPurchase();
+
+    const response = await agent
+      .patch(`/api/vouchers/${voucher.id}/purchase`)
+      .send({ items: [{ stockItemId: ctx.stockItemIds[0], itemName: "Bad", quantity: "abc", rate: "1" }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Invalid amount");
+    expect((await poLines(po.id)).map((line) => line.lineTotal)).toEqual(["1000.00"]);
   });
 
   it("leaves the date and description untouched when the request omits them", async () => {
@@ -510,6 +534,24 @@ describe("PATCH /api/vouchers/:id/adjustment", () => {
       [header.rows[0].id]
     );
     expect(items.rows.map((row) => Number(row.total_amount))).toEqual([30, 100]);
+  });
+
+  it("totals adjustment lines exactly and rejects a rate that does not parse", async () => {
+    const { voucher } = await seedAdjustment("Production");
+
+    const bad = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      locationId: ctx.locationId,
+      items: [{ stockItemId: ctx.stockItemIds[0], quantity: "1", rate: "abc" }],
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body.message).toBe("Invalid amount");
+
+    const response = await agent.patch(`/api/vouchers/${voucher.id}/adjustment`).send({
+      locationId: ctx.locationId,
+      items: [{ stockItemId: ctx.stockItemIds[0], quantity: "1.3", rate: "0.35" }],
+    });
+    expect(response.status).toBe(200);
+    expect(response.body.totalAmount).toBe("0.46");
   });
 
   it("reverses the previous lines out of the old location before applying the new ones", async () => {

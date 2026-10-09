@@ -275,7 +275,10 @@ describe("factory bale ledger route behavior", () => {
     await routes.get("GET /api/factory/waste-dispatch/history")!(req(), res);
 
     expect(res.body).toEqual([
-      expect.objectContaining({ id: 7, bales: [expect.objectContaining({ id: 101 }), expect.objectContaining({ id: 102 })] }),
+      expect.objectContaining({
+        id: 7,
+        bales: [expect.objectContaining({ id: 101 }), expect.objectContaining({ id: 102 })],
+      }),
       expect.objectContaining({ id: 8, bales: [] }),
     ]);
   });
@@ -306,6 +309,43 @@ describe("factory bale ledger route behavior", () => {
     await routes.get("DELETE /api/factory/waste-dispatch/:id")!(req({ params: { id: "77" } }), missing);
     expect(missing.statusCode).toBe(404);
     expect(missing.body).toEqual({ message: "Dispatch not found" });
+  });
+
+  it("totals a waste dispatch's weight and written-off cost exactly", async () => {
+    harness.selectResults.push([]); // no earlier dispatch number
+    const dispatchValues: Record<string, unknown>[] = [];
+    const txSelects: unknown[][] = [
+      [
+        { id: 1, status: "IN_STOCK", referenceNumber: "B-1", weightKg: "0.1", totalCost: "0.10", productId: null },
+        { id: 2, status: "IN_STOCK", referenceNumber: "B-2", weightKg: "0.2", totalCost: "0.20", productId: null },
+      ],
+    ];
+    const tx: any = {
+      select: () => ({ from: () => ({ where: async () => txSelects.shift() ?? [] }) }),
+      insert: () => ({
+        values: (values: Record<string, unknown>) => {
+          dispatchValues.push(values);
+          return { returning: async () => [{ id: 9, ...values }] };
+        },
+      }),
+      execute: async () => ({ rows: [] }),
+    };
+    (harness.db as any).transaction = vi.fn(async (callback: (t: unknown) => unknown) => callback(tx));
+
+    const res = resHarness();
+    await routes.get("POST /api/factory/waste-dispatch/submit")!(
+      req({ session: { currentCompanyId: 4, userId: "u1" }, body: { baleIds: [1, 2], dispatchDate: "2026-09-17" } }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    // The float sums were 0.30000000000000004.
+    expect(res.body).toMatchObject({ totalBales: 2, totalWeightKg: 0.3, totalCostWrittenOff: 0.3 });
+    expect(dispatchValues[0]).toMatchObject({ totalWeightKg: "0.300", totalCostWrittenOff: "0.30" });
+    expect(harness.writeDaybookEntry).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ amountUsd: 0.3, amountCurrency: 0.3 })
+    );
   });
 
   it("validates waste-dispatch submit payloads before numbering or stock mutations", async () => {

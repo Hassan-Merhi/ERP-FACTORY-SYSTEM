@@ -83,9 +83,7 @@ export function RetailShiftPanel({
   const summaryQuery = useQuery<ShiftSummary>({
     queryKey: ["retail-shift-summary", shift?.id],
     queryFn: async () =>
-      json<ShiftSummary>(
-        await fetch(`/api/pos/retail/shifts/${shift!.id}/summary`, { credentials: "include" })
-      ),
+      json<ShiftSummary>(await fetch(`/api/pos/retail/shifts/${shift!.id}/summary`, { credentials: "include" })),
     enabled: Boolean(shift?.id),
     staleTime: 5_000,
   });
@@ -111,7 +109,8 @@ export function RetailShiftPanel({
       await refresh();
       toast({ title: "Cashier shift opened" });
     },
-    onError: (error: Error) => toast({ title: "Could not open shift", description: error.message, variant: "destructive" }),
+    onError: (error: Error) =>
+      toast({ title: "Could not open shift", description: error.message, variant: "destructive" }),
   });
 
   const movementMutation = useMutation({
@@ -269,14 +268,18 @@ export function RetailShiftPanel({
 
         {(historyQuery.data ?? []).filter((entry) => entry.status === "closed").length > 0 ? (
           <div className="border-t pt-3">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent shifts</div>
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Recent shifts
+            </div>
             <div className="space-y-1.5">
               {(historyQuery.data ?? [])
                 .filter((entry) => entry.status === "closed")
                 .slice(0, 5)
                 .map((entry) => (
                   <div key={entry.id} className="grid grid-cols-[1fr_auto_auto] gap-2 text-xs">
-                    <span>#{entry.id} · {new Date(entry.openedAt).toLocaleDateString()}</span>
+                    <span>
+                      #{entry.id} · {new Date(entry.openedAt).toLocaleDateString()}
+                    </span>
                     <span>Expected {money(Number(entry.expectedCash ?? 0))}</span>
                     <span className={Math.abs(Number(entry.variance ?? 0)) > 0.005 ? "text-destructive" : ""}>
                       Var {money(Number(entry.variance ?? 0))}

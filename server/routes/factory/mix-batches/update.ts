@@ -24,6 +24,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchUpdateRoutes(app: Express) {
   app.patch("/api/factory/mix-batches/:id", requireAuth, async (req: Request, res: Response) => {
@@ -77,6 +78,17 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         return res.json(updated);
       }
 
+      // Source weights are read the way parseFloat reads them; one that does not
+      // parse would otherwise reach usedKg as NaN.
+      const sourceWeights = [...(supplierSources || []), ...(batchSources || [])].map(
+        (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg)
+      );
+      if (sourceWeights.some((weight) => weight === null)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
+      const ZERO = new MoneyDecimal(0);
+
       // Capture old values before the transaction so the audit log has real before/after diffs.
       const [batchBefore] = await db
         .select()
@@ -93,8 +105,6 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           .for("update");
         if (!batch) throw new Error("Mix batch not found");
 
-        const _usedKg = parseFloat(batch.usedKg || "0");
-
         // ── 1. Reverse all existing sources ──
         const oldSources = await tx
           .select()
@@ -108,7 +118,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
               .from(factoryRawStock)
               .where(eq(factoryRawStock.containerId, src.containerId));
             if (rsRow) {
-              const newUsed = Math.max(0, parseFloat(rsRow.usedKg) - parseFloat(src.weightKg));
+              const newUsed = MoneyDecimal.max(ZERO, toMoney(rsRow.usedKg).minus(toMoney(src.weightKg)));
               await tx
                 .update(factoryRawStock)
                 .set({ usedKg: newUsed.toFixed(3) })
@@ -125,17 +135,17 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
               .innerJoin(factoryContainers, eq(factoryRawStock.containerId, factoryContainers.id))
               .where(and(eq(factoryRawStock.companyId, companyId), eq(factoryContainers.supplierId, src.supplierId)))
               .orderBy(desc(factoryRawStock.offloadedAt), desc(factoryRawStock.id));
-            let toRestore = parseFloat(src.weightKg);
+            let toRestore = toMoney(src.weightKg);
             for (const rs of supplierRawStocks) {
-              if (toRestore <= 0.001) break;
-              const usedNow = parseFloat(rs.usedKg);
-              if (usedNow <= 0) continue;
-              const restore = Math.min(toRestore, usedNow);
+              if (toRestore.lessThanOrEqualTo(0.001)) break;
+              const usedNow = toMoney(rs.usedKg);
+              if (usedNow.lessThanOrEqualTo(0)) continue;
+              const restore = MoneyDecimal.min(toRestore, usedNow);
               await tx
                 .update(factoryRawStock)
-                .set({ usedKg: Math.max(0, usedNow - restore).toFixed(3) })
+                .set({ usedKg: MoneyDecimal.max(ZERO, usedNow.minus(restore)).toFixed(3) })
                 .where(eq(factoryRawStock.id, rs.id));
-              toRestore -= restore;
+              toRestore = toRestore.minus(restore);
             }
           } else if (src.sourceBatchId) {
             const [srcBatch] = await tx
@@ -143,7 +153,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
               .from(factoryMixBatches)
               .where(eq(factoryMixBatches.id, src.sourceBatchId));
             if (srcBatch) {
-              const newUsed = Math.max(0, parseFloat(srcBatch.usedKg) - parseFloat(src.weightKg));
+              const newUsed = MoneyDecimal.max(ZERO, toMoney(srcBatch.usedKg).minus(toMoney(src.weightKg)));
               await tx
                 .update(factoryMixBatches)
                 .set({ usedKg: newUsed.toFixed(3), status: "ACTIVE" })
@@ -163,8 +173,8 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
         for (const source of supplierSources || []) {
           // costPerKg from the client is NEVER trusted for a real supplier.
-          const { supplierId, weightKg } = source;
-          const weight = parseFloat(weightKg);
+          const { supplierId } = source;
+          const weight = weightOf(source);
 
           // Locked, offload-time moving-average rate — never derived from remaining/
           // available kg or all-time received kg, so it doesn't shift depending on
@@ -176,32 +186,32 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
 
           // FIFO allocation of usedKg only — this determines WHICH container rows get
           // debited, never the cost rate itself (that's fixed above).
-          const perRsDeductions: Array<{ containerId: number; deduct: number }> = [];
+          const perRsDeductions: Array<{ containerId: number; deduct: Decimal }> = [];
           let remaining = weight;
           for (const rs of supplierRawStocks) {
-            if (remaining <= 0.001) break;
-            const avail = rs.receivedKg - rs.usedKg;
-            if (avail <= 0) continue;
-            const deduct = Math.min(remaining, avail);
+            if (remaining.lessThanOrEqualTo(0.001)) break;
+            const avail = toMoney(rs.receivedKg).minus(toMoney(rs.usedKg));
+            if (avail.lessThanOrEqualTo(0)) continue;
+            const deduct = MoneyDecimal.min(remaining, avail);
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${deduct}` })
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${deduct.toFixed()}` })
               .where(eq(factoryRawStock.id, rs.id));
             perRsDeductions.push({ containerId: rs.containerId, deduct });
-            remaining -= deduct;
+            remaining = remaining.minus(deduct);
           }
-          if (remaining > 0.001 && supplierRawStocks.length > 0) {
+          if (remaining.greaterThan(0.001) && supplierRawStocks.length > 0) {
             const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
             await tx
               .update(factoryRawStock)
-              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining}` })
+              .set({ usedKg: sql`${factoryRawStock.usedKg} + ${remaining.toFixed()}` })
               .where(eq(factoryRawStock.id, lastRs.id));
             const ex = perRsDeductions.find((d) => d.containerId === lastRs.containerId);
-            if (ex) ex.deduct += remaining;
+            if (ex) ex.deduct = ex.deduct.plus(remaining);
             else perRsDeductions.push({ containerId: lastRs.containerId, deduct: remaining });
           }
 
-          const dW = new Decimal(weight);
+          const dW = weight;
           const dCpk = new Decimal(costPerKg);
           dTotalWeightKg = dTotalWeightKg.plus(dW);
           dTotalCost = dTotalCost.plus(dW.times(dCpk));
@@ -213,7 +223,7 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             }
             sourceRecords.push({
               supplierId,
-              weightKg: String(weight),
+              weightKg: weight.toFixed(),
               costPerKg: String(costPerKg),
               totalCost: dW.times(dCpk).toDecimalPlaces(6).toFixed(6),
             });
@@ -222,38 +232,38 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
             sourceRecords.push({
               supplierId,
               containerId: d.containerId,
-              weightKg: String(d.deduct),
+              weightKg: d.deduct.toFixed(),
               costPerKg: String(costPerKg),
-              totalCost: new Decimal(d.deduct).times(dCpk).toDecimalPlaces(6).toFixed(6),
+              totalCost: d.deduct.times(dCpk).toDecimalPlaces(6).toFixed(6),
             });
           }
         }
 
         for (const bSource of batchSources || []) {
-          const { sourceBatchId, weightKg } = bSource;
+          const { sourceBatchId } = bSource;
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
             .where(and(eq(factoryMixBatches.id, sourceBatchId), eq(factoryMixBatches.companyId, companyId)))
             .for("update");
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
-          const batchRemaining = parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg);
-          const weight = parseFloat(weightKg);
-          if (weight > batchRemaining + 0.001)
+          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const weight = weightOf(bSource);
+          if (weight.greaterThan(batchRemaining.plus(0.001)))
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
-          const cost = parseFloat(srcBatch.costPerKg);
+          const cost = toMoney(srcBatch.costPerKg);
           await tx
             .update(factoryMixBatches)
-            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight}`, updatedAt: new Date() })
+            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight.toFixed()}`, updatedAt: new Date() })
             .where(eq(factoryMixBatches.id, srcBatch.id));
-          const dWb = new Decimal(weight);
-          const dCostB = new Decimal(cost);
+          const dWb = weight;
+          const dCostB = cost;
           dTotalWeightKg = dTotalWeightKg.plus(dWb);
           dTotalCost = dTotalCost.plus(dWb.times(dCostB));
           sourceRecords.push({
             sourceBatchId,
-            weightKg: String(weight),
-            costPerKg: String(cost),
+            weightKg: weight.toFixed(),
+            costPerKg: cost.toFixed(),
             totalCost: dWb.times(dCostB).toDecimalPlaces(6).toFixed(6),
           });
         }
@@ -326,8 +336,8 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
         referenceId: result.id,
         referenceTable: "factory_mix_batches",
         description: `Mix batch edited: ${result.batchCode}${result.name ? ` – ${result.name}` : ""} (${parseFloat(result.totalWeightKg || "0").toFixed(1)} kg)`,
-        amountCurrency: parseFloat(result.totalCost || "0"),
-        amountUsd: parseFloat(result.totalCost || "0"),
+        amountCurrency: toMoney(result.totalCost).toNumber(),
+        amountUsd: toMoney(result.totalCost).toNumber(),
       });
 
       await logAudit({
@@ -342,8 +352,8 @@ export function registerFactoryMixBatchUpdateRoutes(app: Express) {
           ...(name !== undefined ? { name: { old: batchBefore.name ?? null, new: name?.trim() || null } } : {}),
           ...(notes !== undefined ? { notes: { old: batchBefore.notes ?? null, new: notes?.trim() || null } } : {}),
           totalWeightKg: {
-            old: parseFloat(batchBefore.totalWeightKg || "0").toFixed(3),
-            new: parseFloat(result.totalWeightKg || "0").toFixed(3),
+            old: toMoney(batchBefore.totalWeightKg).toFixed(3),
+            new: toMoney(result.totalWeightKg).toFixed(3),
           },
         },
       });

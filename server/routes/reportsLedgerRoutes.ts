@@ -4,6 +4,7 @@ import { and, eq, gte, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../lib/money";
 import { ledgerAccounts, locations, suppliers, voucherEntries, vouchers } from "@shared/schema";
 
 export function registerReportsLedgerRoutes(app: Express) {
@@ -45,12 +46,11 @@ export function registerReportsLedgerRoutes(app: Express) {
         )
         .execute();
 
-      const openingRawMonthly = parseFloat(account.openingBalance || "0");
       const openingBalSideMonthly = (account.openingBalanceSide as string) || "Dr";
-      let openingBalance = openingBalSideMonthly === "Cr" ? openingRawMonthly : -openingRawMonthly;
-      for (const entry of openingEntries) {
-        openingBalance += parseFloat(entry.credit || "0") - parseFloat(entry.debit || "0");
-      }
+      // Credit-positive, as this report has always signed it.
+      const openingBalance = toMoney(0)
+        .minus(signedOpeningBalance(account.openingBalance, openingBalSideMonthly))
+        .minus(debitMinusCredit(openingEntries.map((e) => ({ debitAmount: e.debit, creditAmount: e.credit }))));
 
       const entries = await db
         .select({
@@ -90,36 +90,36 @@ export function registerReportsLedgerRoutes(app: Express) {
       const monthlyData: { month: number; monthName: string; debit: number; credit: number; closingBalance: number }[] =
         [];
       let runningBalance = openingBalance;
+      const monthDebits = [];
+      const monthCredits = [];
 
       for (let month = 0; month < 12; month++) {
         const monthEntries = entries.filter((entry) => {
           const date = new Date(entry.date);
           return date.getMonth() === month && date.getFullYear() === start.getFullYear();
         });
-        let debit = 0;
-        let credit = 0;
-        for (const entry of monthEntries) {
-          debit += parseFloat(entry.debit || "0");
-          credit += parseFloat(entry.credit || "0");
-        }
-        runningBalance += credit - debit;
+        const debit = sumMoney(monthEntries.map((entry) => entry.debit));
+        const credit = sumMoney(monthEntries.map((entry) => entry.credit));
+        monthDebits.push(debit);
+        monthCredits.push(credit);
+        runningBalance = runningBalance.plus(credit).minus(debit);
         monthlyData.push({
           month: month + 1,
           monthName: monthNames[month],
-          debit,
-          credit,
-          closingBalance: runningBalance,
+          debit: debit.toNumber(),
+          credit: credit.toNumber(),
+          closingBalance: runningBalance.toNumber(),
         });
       }
 
       res.json({
         account: { id: account.id, code: account.code, name: account.name },
-        openingBalance,
+        openingBalance: openingBalance.toNumber(),
         months: monthlyData,
         grandTotal: {
-          debit: monthlyData.reduce((sum, month) => sum + month.debit, 0),
-          credit: monthlyData.reduce((sum, month) => sum + month.credit, 0),
-          closingBalance: runningBalance,
+          debit: sumMoney(monthDebits).toNumber(),
+          credit: sumMoney(monthCredits).toNumber(),
+          closingBalance: runningBalance.toNumber(),
         },
         dateRange: {
           startDate: start.toISOString().split("T")[0],
@@ -184,12 +184,11 @@ export function registerReportsLedgerRoutes(app: Express) {
         )
         .execute();
 
-      const openingRaw = parseFloat(account.openingBalance || "0");
       const openingBalSide = (account.openingBalanceSide as string) || "Dr";
-      let openingBalance = openingBalSide === "Cr" ? openingRaw : -openingRaw;
-      for (const entry of openingEntries) {
-        openingBalance += parseFloat(entry.credit || "0") - parseFloat(entry.debit || "0");
-      }
+      // Credit-positive, as this report has always signed it.
+      const openingBalance = toMoney(0)
+        .minus(signedOpeningBalance(account.openingBalance, openingBalSide))
+        .minus(debitMinusCredit(openingEntries.map((e) => ({ debitAmount: e.debit, creditAmount: e.credit }))));
 
       const voucherEntriesData = await db
         .select({
@@ -256,25 +255,24 @@ export function registerReportsLedgerRoutes(app: Express) {
             particulars,
             voucherType: entry.voucherType,
             voucherNumber: entry.voucherNumber,
-            debit: parseFloat(entry.debit || "0"),
-            credit: parseFloat(entry.credit || "0"),
+            debit: toMoney(entry.debit).toNumber(),
+            credit: toMoney(entry.credit).toNumber(),
           };
         })
       );
 
-      const totals = {
-        debit: vouchersWithDetails.reduce((sum, voucher) => sum + voucher.debit, 0),
-        credit: vouchersWithDetails.reduce((sum, voucher) => sum + voucher.credit, 0),
-      };
+      const totalDebit = sumMoney(voucherEntriesData.map((entry) => entry.debit));
+      const totalCredit = sumMoney(voucherEntriesData.map((entry) => entry.credit));
+      const totals = { debit: totalDebit.toNumber(), credit: totalCredit.toNumber() };
       res.json({
         account: { id: account.id, code: account.code, name: account.name },
         month,
         monthName: monthNames[month],
         year,
-        openingBalance,
+        openingBalance: openingBalance.toNumber(),
         vouchers: vouchersWithDetails,
         totals,
-        closingBalance: openingBalance + totals.credit - totals.debit,
+        closingBalance: openingBalance.plus(totalCredit).minus(totalDebit).toNumber(),
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

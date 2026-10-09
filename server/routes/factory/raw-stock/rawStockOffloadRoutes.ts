@@ -25,6 +25,13 @@ import { eq, and, or, inArray, ilike } from "drizzle-orm";
 import { registerRawStockReverseOffloadRoute } from "./rawStockReverseOffloadRoute";
 import { computeOffloadCosting } from "./offloadCosting";
 import { applySubsequentReceipt } from "./subsequentReceipt";
+import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { allLedgerAccountsOwned } from "../../helpers/companyOwnership";
+
+/** A request amount as the number parseFloat read it (NaN when it does not parse). */
+function requestNumber(value: unknown): number {
+  return parseMoneyInput(value)?.toNumber() ?? NaN;
+}
 
 export function registerRawStockOffloadRoutes(app: Express) {
   app.post("/api/factory/raw-stock/offload", requireAuth, async (req: Request, res: Response) => {
@@ -60,11 +67,25 @@ export function registerRawStockOffloadRoutes(app: Express) {
         idempotencyKey,
       } = req.body;
       if (!containerId) return res.status(400).json({ message: "Container ID is required" });
+      // Charge and commission accounts are body ids the path-based company scope never sees.
+      const chargeAccountIds = [
+        reqFreightAccountId,
+        reqOtherChargesAccountId,
+        reqDutyAccountId,
+        commission?.ledgerAccountId,
+        ...(Array.isArray(reqAdditionalCharges) ? reqAdditionalCharges : []).map(
+          (charge: { ledgerAccountId?: unknown }) => charge?.ledgerAccountId
+        ),
+      ];
+      if (!(await allLedgerAccountsOwned(companyId, chargeAccountIds))) {
+        return res.status(400).json({ message: "Account not found" });
+      }
 
       // Validate receivedKg upfront — required for both first and subsequent receipts.
       // An explicit positive finite value is mandatory; the old `receivedKg || declaredKg`
       // fallback silently accepted a missing receivedKg and treated it as a full offload.
-      if (!receivedKg || !Number.isFinite(parseFloat(receivedKg || "")) || parseFloat(receivedKg) <= 0) {
+      const receivedKgInput = parseMoneyInput(receivedKg);
+      if (!receivedKg || !receivedKgInput || receivedKgInput.lessThanOrEqualTo(0)) {
         return res.status(400).json({ message: "receivedKg must be a positive finite number" });
       }
 
@@ -79,16 +100,9 @@ export function registerRawStockOffloadRoutes(app: Express) {
         ? await db
             .select({ name: factorySuppliers.name })
             .from(factorySuppliers)
-            .where(
-              and(
-                eq(factorySuppliers.id, container.supplierId),
-                eq(factorySuppliers.companyId, companyId)
-              )
-            )
+            .where(and(eq(factorySuppliers.id, container.supplierId), eq(factorySuppliers.companyId, companyId)))
         : [];
-      const supplierNarrationSuffix = materialSupplier?.name?.trim()
-        ? ` - ${materialSupplier.name.trim()}`
-        : "";
+      const supplierNarrationSuffix = materialSupplier?.name?.trim() ? ` - ${materialSupplier.name.trim()}` : "";
 
       const [existingRawStock] = await db
         .select()
@@ -108,14 +122,14 @@ export function registerRawStockOffloadRoutes(app: Express) {
       const mixBatchAllocationsArr = Array.isArray(reqMixBatchAllocations) ? reqMixBatchAllocations : [];
 
       let fxRate: number;
-      if (reqFxRate && parseFloat(reqFxRate) > 0) {
+      if (reqFxRate && requestNumber(reqFxRate) > 0) {
         // User explicitly set the FX rate — always honour it
-        fxRate = parseFloat(reqFxRate);
+        fxRate = requestNumber(reqFxRate);
       } else if (currencyCode === "USD") {
         fxRate = 1;
       } else {
         try {
-          fxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, currencyCode, offloadDate));
+          fxRate = requestNumber(await getOrFetchFxRateToUsd(companyId, currencyCode, offloadDate));
         } catch (err: unknown) {
           // Do NOT silently default to 1 for a non-USD offload — that would understate
           // (or overstate) the USD landed cost by the entire FX differential with no
@@ -159,10 +173,10 @@ export function registerRawStockOffloadRoutes(app: Express) {
           ? container.freightSupplierId
           : null;
 
-      const freightVal = parseFloat(reqFreight || "0");
-      const otherChargesVal = parseFloat(reqOtherCharges || "0");
+      const freightVal = requestNumber(reqFreight || "0");
+      const otherChargesVal = requestNumber(reqOtherCharges || "0");
       const additionalChargesArr = Array.isArray(reqAdditionalCharges) ? reqAdditionalCharges : [];
-      const dutyVal = reqDutyStatus === "CONFIRMED" ? parseFloat(reqDutyAmount || "0") : 0;
+      const dutyVal = reqDutyStatus === "CONFIRMED" ? requestNumber(reqDutyAmount || "0") : 0;
       const dutyStatus = reqDutyStatus || "NONE";
 
       // ── Commission computation (DB insert deferred into the transaction) ──────
@@ -313,9 +327,8 @@ export function registerRawStockOffloadRoutes(app: Express) {
         //    the correct blended rate for all material consumed from that supplier.
         //    FIFO / containerId is stored for provenance only.
         for (const alloc of mixBatchAllocationsArr) {
-          const allocKg = parseFloat(alloc.weightKg || "0");
-          if (!alloc.mixBatchId || allocKg <= 0) continue;
-          const dAllocKg = new Decimal(allocKg);
+          const dAllocKg = parseMoneyInput(alloc.weightKg || "0");
+          if (!alloc.mixBatchId || !dAllocKg || dAllocKg.lessThanOrEqualTo(0)) continue;
           // Rate: supplier moving-average for supplier-backed containers;
           //       container's own USD rate for no-supplier containers.
           const dAllocRate = container.supplierId ? new Decimal(firstReceiptNewLockedRate) : dCostPerKgUsd;
@@ -327,7 +340,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
             containerId,
             supplierId: container.supplierId || null,
             sourceType: firstSrcType,
-            weightKg: String(allocKg),
+            weightKg: dAllocKg.toFixed(),
             costPerKg: dAllocRate.toDecimalPlaces(6).toFixed(6),
             totalCost: dAllocKg.times(dAllocRate).toDecimalPlaces(6).toFixed(6),
             inventorySupplierId: container.supplierId || null,
@@ -384,7 +397,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
             commissionFxRateToUsd: commTotalVal > 0 ? String(commFxRateForUsd) : null,
             commissionFxRateConfirmed: commTotalVal > 0,
             commissionFxRateDate: commTotalVal > 0 ? offloadDate : null,
-            dutyAmount: dutyStatus !== "NONE" ? String(parseFloat(reqDutyAmount || "0")) : null,
+            dutyAmount: dutyStatus !== "NONE" ? String(requestNumber(reqDutyAmount || "0")) : null,
             dutyAccountId: reqDutyAccountId ? parseInt(reqDutyAccountId) : null,
             dutyStatus,
             dutyNotes: reqDutyNotes || null,
@@ -410,7 +423,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
         const insertedAdditionalCharges = [];
         if (additionalChargesArr.length > 0) {
           for (const charge of additionalChargesArr) {
-            if (parseFloat(charge.amount || "0") > 0) {
+            if (requestNumber(charge.amount || "0") > 0) {
               const [inserted] = await tx
                 .insert(factoryOffloadAdditionalCharges)
                 .values({
@@ -462,7 +475,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
             referenceTable: "factory_container_commissions",
             description: `Commission for ${commissionRecord.personName} on container ${container.containerNumber}`,
             currencyCode: commissionRecord.currencyCode || "USD",
-            amountCurrency: parseFloat(commissionRecord.commissionTotal),
+            amountCurrency: toMoney(commissionRecord.commissionTotal).toNumber(),
             fxRateToUsd: resolveStoredFxRateOrThrow(
               commissionRecord.currencyCode,
               commissionRecord.fxRateToUsd,
@@ -514,7 +527,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
           });
         }
         for (const insertedCharge of insertedAdditionalCharges) {
-          const chargeAmount = parseFloat(insertedCharge.amount || "0");
+          const chargeAmount = toMoney(insertedCharge.amount).toNumber();
           if (chargeAmount > 0) {
             await writeDaybookEntry(tx, {
               companyId,
@@ -525,7 +538,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
               referenceTable: "factory_containers",
               currencyCode: insertedCharge.currencyCode || currencyCode,
               amountCurrency: chargeAmount,
-              fxRateToUsd: parseFloat(insertedCharge.fxRateToUsd || String(fxRate)),
+              fxRateToUsd: requestNumber(insertedCharge.fxRateToUsd || String(fxRate)),
               metaJson: JSON.stringify({ containerId, sourceType: "OFFLOAD_ADDITIONAL", chargeId: insertedCharge.id }),
             });
           }
@@ -573,7 +586,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
         if (freightVal > 0 && (reqFreightAccountId || effectiveFreightSupplierId)) {
           const freightVoucherNum = `FACTORY-FREIGHT-${containerId}-${Date.now()}`;
           const freightVoucherCcy = reqFreightCurrencyCode || currencyCode;
-          const freightFx = parseFloat(reqFreightFxRate || String(fxRate));
+          const freightFx = requestNumber(reqFreightFxRate || String(fxRate));
           const [freightVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -632,7 +645,7 @@ export function registerRawStockOffloadRoutes(app: Express) {
         if (otherChargesVal > 0 && (reqOtherChargesAccountId || reqOtherChargesSupplierId)) {
           const ocMainVoucherNum = `FACTORY-OC-${containerId}-MAIN-${Date.now()}`;
           const ocVoucherCcy = reqOtherChargesCurrencyCode || currencyCode;
-          const ocFx = parseFloat(reqOtherChargesFxRate || String(fxRate));
+          const ocFx = requestNumber(reqOtherChargesFxRate || String(fxRate));
           const [ocMainVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -686,13 +699,18 @@ export function registerRawStockOffloadRoutes(app: Express) {
 
         // 10. Additional charges vouchers (double-entry, Dr Factory Charges Payable / Cr chosen)
         for (const inserted of insertedAdditionalCharges) {
-          const chargeAmount = parseFloat(inserted.amount || "0");
+          const chargeExact = toMoney(inserted.amount);
+          const chargeAmount = chargeExact.toNumber();
           if (chargeAmount <= 0) continue;
           if (!inserted.ledgerAccountId && !inserted.supplierId) continue;
           const addlChargeCcy = inserted.currencyCode || currencyCode;
-          const addlChargeFxNum = parseFloat(inserted.fxRateToUsd || String(fxRate));
+          const addlChargeFxNum = requestNumber(inserted.fxRateToUsd || String(fxRate));
           const addlChargeFx = String(addlChargeFxNum);
-          const addlChargeUsd = addlChargeCcy === "USD" ? chargeAmount : chargeAmount * addlChargeFxNum;
+          // Exact: 1.3 at 0.35 is 0.455, kept as 0.46; the float product
+          // 0.45499999999999996 was kept as 0.45.
+          const addlChargeUsd = (
+            addlChargeCcy === "USD" ? chargeExact : chargeExact.times(toMoney(addlChargeFx))
+          ).toFixed();
           const ocVoucherNum = `FACTORY-OC-${containerId}-${inserted.id}-${Date.now()}`;
           const [ocVoucher] = await tx
             .insert(vouchers)

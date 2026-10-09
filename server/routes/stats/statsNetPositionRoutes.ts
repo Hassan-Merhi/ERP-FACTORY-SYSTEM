@@ -7,6 +7,7 @@ import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { logAudit, calculateHistoricalLocationInventory } from "../_helpers";
 import { getClientDate } from "../../lib/dateUtils";
+import { sumMoney, toMoney } from "../../lib/money";
 import { inventory, containers, vouchers, locations, factoryWorkerAdvances } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, or, inArray, sql, isNull, lte } from "drizzle-orm";
@@ -92,28 +93,25 @@ export function registerStatsNetPositionRoutes(app: Express) {
       const companyEntries = companyEntriesRaw.rows;
       const ledgerAccEntries = ledgerAccEntriesRaw.rows;
 
-      const accountBalances = new Map<number, { debit: number; credit: number }>();
-      const supplierBalances = new Map<number, { debit: number; credit: number }>();
-      for (const e of ledgerAccEntries) {
-        if (e.ledger_account_id) {
-          const id = parseInt(e.ledger_account_id);
-          const cur = accountBalances.get(id) || { debit: 0, credit: 0 };
-          accountBalances.set(id, {
-            debit: cur.debit + parseFloat(e.debit_amount || "0"),
-            credit: cur.credit + parseFloat(e.credit_amount || "0"),
-          });
+      // Sum each id's debits and credits exactly, then hand numbers to the classifiers.
+      const exactBalances = (rows: Array<{ id: string | null; debit_amount: string; credit_amount: string }>) => {
+        const grouped = new Map<number, { debits: string[]; credits: string[] }>();
+        for (const e of rows) {
+          if (!e.id) continue;
+          const id = parseInt(e.id);
+          const cur = grouped.get(id) || { debits: [], credits: [] };
+          cur.debits.push(e.debit_amount);
+          cur.credits.push(e.credit_amount);
+          grouped.set(id, cur);
         }
-      }
-      for (const e of companyEntries) {
-        if (e.supplier_id) {
-          const id = parseInt(e.supplier_id);
-          const cur = supplierBalances.get(id) || { debit: 0, credit: 0 };
-          supplierBalances.set(id, {
-            debit: cur.debit + parseFloat(e.debit_amount || "0"),
-            credit: cur.credit + parseFloat(e.credit_amount || "0"),
-          });
+        const balances = new Map<number, { debit: number; credit: number }>();
+        for (const [id, { debits, credits }] of Array.from(grouped)) {
+          balances.set(id, { debit: sumMoney(debits).toNumber(), credit: sumMoney(credits).toNumber() });
         }
-      }
+        return balances;
+      };
+      const accountBalances = exactBalances(ledgerAccEntries.map((e) => ({ ...e, id: e.ledger_account_id })));
+      const supplierBalances = exactBalances(companyEntries.map((e) => ({ ...e, id: e.supplier_id })));
 
       // ── 2. Classify accounts ──────────────────────────────────────────────
       const parentCompanyId = await storage.getParentCompanyId();
@@ -185,7 +183,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
         .where(and(eq(locations.companyId, companyId), eq(locations.active, true), isNull(locations.deletedAt)))
         .execute();
       const activeLocIds = activeLocsData.map((l) => l.id);
-      let stockOnFloor = 0;
+      const stockLines: Array<{ quantity: string | null; averageRate: string | null }> = [];
       if (activeLocIds.length > 0) {
         if (toDate) {
           // Parallelize across locations — each location is independent
@@ -194,9 +192,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
           );
           for (const items of allHistorical) {
             for (const inv of items) {
-              const qty = parseFloat(inv.quantity || "0");
-              const rate = parseFloat(inv.averageRate || "0");
-              if (qty > 0) stockOnFloor += qty * rate;
+              if (toMoney(inv.quantity).gt(0)) stockLines.push(inv);
             }
           }
         } else {
@@ -205,10 +201,12 @@ export function registerStatsNetPositionRoutes(app: Express) {
             .from(inventory)
             .where(inArray(inventory.locationId, activeLocIds))
             .execute();
-          for (const inv of invData)
-            stockOnFloor += parseFloat(inv.quantity || "0") * parseFloat(inv.averageRate || "0");
+          stockLines.push(...invData);
         }
       }
+      const stockOnFloor = sumMoney(
+        stockLines.map((inv) => toMoney(inv.quantity).times(toMoney(inv.averageRate)))
+      ).toNumber();
       if (stockOnFloor > 0) {
         forUsTotal += stockOnFloor;
         forUsAccounts.push({
@@ -234,7 +232,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
           .select({ total: sql<string>`COALESCE(SUM(CAST(remaining_balance AS numeric)), 0)` })
           .from(factoryWorkerAdvances)
           .where(and(eq(factoryWorkerAdvances.companyId, companyId), eq(factoryWorkerAdvances.fullyPaid, false)));
-        const workerAdvances = parseFloat(fwAdvRow2?.total || "0");
+        const workerAdvances = toMoney(fwAdvRow2?.total).toNumber();
         if (workerAdvances > 0) {
           forUsTotal += workerAdvances;
           forUsAccounts.push({
@@ -264,8 +262,7 @@ export function registerStatsNetPositionRoutes(app: Express) {
       let supplierAssets = 0;
       for (const sup of allSuppliers) {
         const balance = supplierBalances.get(sup.id) || { debit: 0, credit: 0 };
-        const opening = parseFloat(sup.openingBalance || "0");
-        const netBalance = opening + balance.credit - balance.debit;
+        const netBalance = toMoney(sup.openingBalance).plus(balance.credit).minus(balance.debit).toNumber();
         if (netBalance > 0) {
           supplierLiabilities += netBalance;
           onUsAccounts.push({ name: sup.legalName, code: sup.code || "", value: netBalance, category: "Supplier" });
@@ -296,11 +293,12 @@ export function registerStatsNetPositionRoutes(app: Express) {
           )
         : and(eq(containers.companyId, companyId), eq(containers.status, "OTW"));
       const otwContainers = await db.select().from(containers).where(excelOtwQuery).execute();
-      let stockOtwValue = 0;
-      for (const container of otwContainers) {
-        const gTotal = parseFloat(container.grandTotal ?? "0");
-        stockOtwValue += gTotal || parseFloat(container.itemsTotal ?? "0");
-      }
+      const stockOtwValue = sumMoney(
+        otwContainers.map((container) => {
+          const gTotal = toMoney(container.grandTotal);
+          return gTotal.isZero() ? container.itemsTotal : gTotal;
+        })
+      ).toNumber();
       if (stockOtwValue > 0) {
         forUsTotal += stockOtwValue;
         forUsAccounts.push({

@@ -8,6 +8,7 @@ import { factoryWorkers, employees } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { sqlArray } from "../../../lib/sqlArray";
 import { resultRows } from "../../../lib/queryResult";
+import { MoneyDecimal, sumMoney, toMoney } from "../../../lib/money";
 
 export function registerEmployeeAttendanceRoutes(app: Express) {
   app.get("/api/factory/net-position/payroll-breakdown", requireAuth, async (req: Request, res: Response) => {
@@ -39,7 +40,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           id: r.id,
           name: `${r.firstName} ${r.lastName}`.trim(),
           code: r.code ?? "",
-          balance: parseFloat(r.currentBalance || "0"),
+          balance: toMoney(r.currentBalance).toNumber(),
         }))
         // Only show employees the company owes money to (positive balance = payroll payable).
         // Negative-balance employees owe the company — they appear on the "What We Have"
@@ -185,9 +186,9 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         workerId: Number(r.workerId),
         netSalary: r.netSalary ?? "0",
       }));
-      const paidSalaryMap = new Map<number, number>();
+      const paidSalaryMap = new Map<number, string[]>();
       for (const r of paidPayrollList) {
-        paidSalaryMap.set(r.workerId, (paidSalaryMap.get(r.workerId) || 0) + parseFloat(r.netSalary));
+        paidSalaryMap.set(r.workerId, [...(paidSalaryMap.get(r.workerId) || []), r.netSalary]);
       }
 
       let totalPresent = 0;
@@ -222,7 +223,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
           baseSalary: w.baseSalary ?? "0",
           salaryType: w.salaryType ?? "Monthly",
           transportAllowance: w.transportAllowance ?? "0",
-          paidSalary: (paidSalaryMap.get(w.id) || 0).toFixed(2),
+          paidSalary: sumMoney(paidSalaryMap.get(w.id) || []).toFixed(2),
         };
       });
 
@@ -261,7 +262,7 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
 
       const daysInMonth = new Date(year, now.getMonth() + 1, 0).getDate();
       const currentDay = now.getDate();
-      const ratio = currentDay / daysInMonth;
+      const ratio = new MoneyDecimal(currentDay).div(daysInMonth);
       const monthEnd = `${year}-${month}-${String(daysInMonth).padStart(2, "0")}`;
 
       const includeBreakdown = req.query.includeBreakdown === "true";
@@ -297,11 +298,13 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         `),
       ]);
 
-      const totalWorkerBaseSalary = parseFloat(String(workerAgg.rows[0]?.totalWorkerBaseSalary ?? "0"));
-      const totalWorkerTransport = parseFloat(String(workerAgg.rows[0]?.totalWorkerTransport ?? "0"));
-      const totalWorkerPaid = parseFloat(String(payrollAgg.rows[0]?.totalWorkerPaid ?? "0"));
-      const totalEmployeeMonthlySalary = parseFloat(String(employeeAgg.rows[0]?.totalEmployeeMonthlySalary ?? "0"));
-      const totalEmployeeBalance = parseFloat(String(employeeAgg.rows[0]?.totalEmployeeBalance ?? "0"));
+      const totalWorkerBaseSalary = toMoney(String(workerAgg.rows[0]?.totalWorkerBaseSalary ?? "0")).toNumber();
+      const totalWorkerTransport = toMoney(String(workerAgg.rows[0]?.totalWorkerTransport ?? "0")).toNumber();
+      const totalWorkerPaid = toMoney(String(payrollAgg.rows[0]?.totalWorkerPaid ?? "0")).toNumber();
+      const totalEmployeeMonthlySalary = toMoney(
+        String(employeeAgg.rows[0]?.totalEmployeeMonthlySalary ?? "0")
+      ).toNumber();
+      const totalEmployeeBalance = toMoney(String(employeeAgg.rows[0]?.totalEmployeeBalance ?? "0")).toNumber();
 
       // When breakdown is not requested, return lightweight summary only (no row-level data).
       if (!includeBreakdown) {
@@ -363,26 +366,26 @@ export function registerEmployeeAttendanceRoutes(app: Express) {
         totalEmployeeMonthlySalary,
         totalEmployeeBalance,
         workerBreakdown: workers.map((w) => {
-          const base = parseFloat(w.baseSalary ?? "0");
-          const transport = parseFloat(w.transportAllowance ?? "0");
+          const base = toMoney(w.baseSalary);
+          const transport = toMoney(w.transportAllowance);
           return {
             id: w.id,
             name: w.fullName,
-            baseSalary: base,
-            transport,
-            expected: base * ratio,
-            transportProrated: transport * ratio,
-            total: (base + transport) * ratio,
+            baseSalary: base.toNumber(),
+            transport: transport.toNumber(),
+            expected: base.times(ratio).toNumber(),
+            transportProrated: transport.times(ratio).toNumber(),
+            total: base.plus(transport).times(ratio).toNumber(),
           };
         }),
         employeeBreakdown: empRows.map((e) => {
-          const monthly = parseFloat(e.monthlySalary ?? "0");
+          const monthly = toMoney(e.monthlySalary);
           return {
             id: e.id,
             name: `${e.firstName} ${e.lastName}`.trim(),
-            monthlySalary: monthly,
-            expected: monthly * ratio,
-            balance: parseFloat(e.currentBalance ?? "0"),
+            monthlySalary: monthly.toNumber(),
+            expected: monthly.times(ratio).toNumber(),
+            balance: toMoney(e.currentBalance).toNumber(),
           };
         }),
       });

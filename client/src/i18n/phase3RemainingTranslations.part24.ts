@@ -43,9 +43,9 @@ export const phase3RemainingTranslationsPart24: readonly Phase3SharedUiEntry[] =
     fr: "Le compte lié doit appartenir à la société du client",
   },
   {
-    en: 'Supplier payment: ${spSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}',
-    ar: 'دفعة المورد: ${spSupplier?.name || "غير معروف"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}',
-    fr: 'Paiement fournisseur : ${spSupplier?.name || "Inconnu"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode}',
+    en: 'Supplier payment: ${spSupplier?.name || "Unknown"} – ${payAmtStr} ${payment.currencyCode}',
+    ar: 'دفعة المورد: ${spSupplier?.name || "غير معروف"} – ${payAmtStr} ${payment.currencyCode}',
+    fr: 'Paiement fournisseur : ${spSupplier?.name || "Inconnu"} – ${payAmtStr} ${payment.currencyCode}',
   },
   {
     en: "Access denied: Ledger account belongs to a different company",

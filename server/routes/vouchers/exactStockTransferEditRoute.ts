@@ -7,6 +7,8 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { storage } from "../../storage";
+import { sumMoney } from "../../lib/money";
+import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 
 const bodySchema = z.object({
   voucherDate: z.string().optional(),
@@ -86,13 +88,34 @@ export function registerExactStockTransferEditRoute(app: Express): void {
           };
         });
 
+        // The new destination, sources and items are body ids, outside the
+        // path-based company scope: all must belong to this company.
+        const ownedLocations = await ownLocationIds(companyId, [
+          parsed.destinationLocationId,
+          ...items.map((item) => item.sourceLocationId),
+        ]);
+        if (
+          !ownedLocations.has(parsed.destinationLocationId) ||
+          items.some((item) => !ownedLocations.has(item.sourceLocationId))
+        ) {
+          return res.status(400).json({ message: "Location not found" });
+        }
+        if (
+          !(await allStockItemsOwned(
+            companyId,
+            items.map((item) => item.stockItemId)
+          ))
+        ) {
+          return res.status(400).json({ message: "Stock item not found" });
+        }
+
         const updated = await storage.updateStockTransfer(
           transfer.id,
           parsed.destinationLocationId,
           parsed.description,
           items
         );
-        const totalAmount = updated.items.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
+        const totalAmount = sumMoney(updated.items.map((item) => item.totalAmount));
         const uniqueSources = Array.from(new Set(items.map((item) => item.sourceLocationId)));
 
         await db

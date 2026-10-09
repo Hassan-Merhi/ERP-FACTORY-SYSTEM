@@ -304,6 +304,18 @@ describe("bank and fixed-asset route behavior", () => {
     expect(res.body.message).toContain("Useful life");
   });
 
+  it("creates a fixed asset in the active company, ignoring a companyId in the body", async () => {
+    harness.storage.getFixedAssetByCode.mockResolvedValue(null);
+    harness.storage.createFixedAsset.mockResolvedValue({ id: 9 });
+    const res = resHarness();
+    await routes.get("POST /api/fixed-assets")!(
+      req({ body: { companyId: 999, code: "VAN", name: "Van", depreciationMethod: "None" } }),
+      res
+    );
+    expect(res.statusCode).toBe(201);
+    expect(harness.storage.createFixedAsset).toHaveBeenCalledWith(expect.objectContaining({ companyId: 4 }));
+  });
+
   it("blocks fixed-asset deletion while voucher entries still reference it", async () => {
     harness.executeResults.push({ rows: [{ cnt: "2" }] });
     const res = resHarness();

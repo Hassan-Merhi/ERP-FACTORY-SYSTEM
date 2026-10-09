@@ -252,3 +252,37 @@ describe("DELETE /api/factory/transporters/:id/transactions/:txId", () => {
     expect(response.status).toBe(404);
   });
 });
+
+describe("POST /api/transporter-statement/:accountId/reallocate", () => {
+  it("allocates payments to charges exactly, leaving no sub-cent remainder", async () => {
+    const created = await createTransporter(`${TEST_PREFIX}_fifo`);
+    const transporterAccount = await transporterLedgerAccountId(created.id);
+    for (const amount of ["0.10", "0.20"]) {
+      const charge = await agent
+        .post(`/api/factory/transporters/${created.id}/charges`)
+        .send({ amount, txDate: "2026-03-01", expenseAccountId });
+      expect(charge.status).toBe(200);
+    }
+    for (const [amount, txDate] of [
+      ["0.30", "2026-03-02"],
+      ["1.00", "2026-03-03"],
+    ]) {
+      const payment = await agent
+        .post(`/api/factory/transporters/${created.id}/payments`)
+        .send({ amount, txDate, cashAccountId: ctx.cashAccountId });
+      expect(payment.status).toBe(200);
+    }
+
+    const response = await agent.post(`/api/transporter-statement/${transporterAccount}/reallocate`).send({});
+
+    expect(response.status).toBe(200);
+    // 0.30 pays 0.10 and 0.20 in full. In floats the second charge kept a
+    // 2.8e-17 remainder, which the 1.00 payment then "allocated" a third time.
+    expect(response.body.allocationsCreated).toBe(2);
+    const allocations = await pool.query<{ allocated_amount: string }>(
+      `SELECT allocated_amount FROM transporter_payment_allocations WHERE company_id = $1 ORDER BY id`,
+      [ctx.companyId]
+    );
+    expect(allocations.rows.map((row) => Number(row.allocated_amount))).toEqual([0.1, 0.2]);
+  });
+});

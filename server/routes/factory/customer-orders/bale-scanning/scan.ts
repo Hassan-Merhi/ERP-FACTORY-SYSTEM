@@ -9,7 +9,9 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { EXPECTED_CLIENT_RESPONSE_CODES, markExpectedClientResponse } from "../../../../lib/expectedClientResponse";
 import { parseId } from "../../../../lib/parseId";
+import { getCompanyBusinessDate } from "../../../../lib/dateUtils";
 import { db } from "../../../../db";
+import { storage } from "../../../../storage";
 import { requireAuth } from "../../../../auth";
 import { recalculateOrderTotalsForScannedArticle, type ScannedArticleTotalsPatch } from "./incrementalTotals";
 import {
@@ -34,6 +36,8 @@ import {
 } from "@shared/schema";
 import { eq, and, or, sql } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
+import { isFactorySessionLocation } from "../../../helpers/companyOwnership";
+import { toMoney } from "../../../../lib/money";
 
 export function registerOrderBaleScanRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/bales", requireAuth, async (req: Request, res: Response) => {
@@ -46,6 +50,9 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
       const { scanCode, locationId } = req.body;
       if (!scanCode || !locationId) return res.status(400).json({ message: "scanCode and locationId are required" });
+      if (!(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       const isPriorityScan = req.body.priorityScan === true;
       if (isPriorityScan && (req.body.allowBypassProforma === true || req.body.allowBypassOverload === true)) {
@@ -61,6 +68,9 @@ export function registerOrderBaleScanRoutes(app: Express) {
       }
 
       const scannerName: string | null = req.session?.username || req.session?.name || req.session?.email || null;
+      const priorityScanBusinessDate = isPriorityScan
+        ? getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone)
+        : null;
 
       const [order] = await db
         .select()
@@ -313,6 +323,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
 
         const effectiveArticleCode: string = (bale.articleCode || bale.productArticleCode || "").trim();
         const normalizedEffectiveArticleCode = normalizeLoadingArticleCode(effectiveArticleCode);
+        let priorityScanSnapshot: { priority: number; color: string } | null = null;
 
         if (isPriorityScan) {
           const authoritativeTarget = effectiveArticleCode
@@ -330,6 +341,10 @@ export function registerOrderBaleScanRoutes(app: Express) {
               },
             };
           }
+          priorityScanSnapshot = {
+            priority: authoritativeTarget.priority,
+            color: authoritativeTarget.color,
+          };
         }
 
         const ignoreProforma = !isPriorityScan && req.body.allowBypassProforma === true;
@@ -360,9 +375,8 @@ export function registerOrderBaleScanRoutes(app: Express) {
             const pricingMode = pricingLine.pricingMode ?? "per_bale";
             const perKgVal = pricingLine.pricePerKg;
             if (pricingMode === "per_kg" && perKgVal) {
-              const weightKg = parseFloat(String(bale.weightKg || "0"));
-              const pkgRate = parseFloat(String(perKgVal));
-              priceUsed = !isNaN(weightKg) && !isNaN(pkgRate) ? (weightKg * pkgRate).toFixed(2) : "0";
+              // Exact: 3 kg at 1.115/kg is 3.345, which the float product rounded to 3.34.
+              priceUsed = toMoney(bale.weightKg).times(toMoney(perKgVal)).toFixed(2);
             } else {
               priceUsed = pricingLine.pricePerBale || "0";
             }
@@ -438,6 +452,26 @@ export function registerOrderBaleScanRoutes(app: Express) {
             scannedBy: scannerName,
           })
           .returning();
+
+        if (isPriorityScan && priorityScanSnapshot && priorityScanBusinessDate) {
+          await tx.execute(sql`
+            INSERT INTO factory_priority_scan_history
+              (company_id, order_id, bale_id, reference_number, product_name, article_code,
+               priority, color, business_date, scanned_by)
+            VALUES (
+              ${companyId},
+              ${orderId},
+              ${bale.id},
+              ${bale.referenceNumber},
+              ${resolvedBaleName},
+              ${effectiveArticleCode || bale.articleCode},
+              ${priorityScanSnapshot.priority},
+              ${priorityScanSnapshot.color},
+              ${priorityScanBusinessDate},
+              ${scannerName}
+            )
+          `);
+        }
 
         // V5 bales remain IN_STOCK during loading — only legacy V2/V3 orders set RESERVED_FOR_ORDER.
         if (!order.proformaIdUsed) {

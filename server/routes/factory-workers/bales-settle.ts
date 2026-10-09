@@ -11,6 +11,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
 import { eq, and, desc, sql, gte, lte, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 import {
   factoryWorkers,
   factoryBales,
@@ -146,24 +148,25 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
 
       const days = daysInPeriod(effectiveStart, endDate);
       const weekdays = countWeekdays(effectiveStart, endDate);
-      const baseSal = parseFloat(worker.baseSalary || "0");
+      const baseSalExact = toMoney(worker.baseSalary);
+      const baseSal = baseSalExact.toNumber();
       const payFreq = worker.payFrequency || "Monthly";
       const salType = worker.salaryType || "Monthly";
 
-      let earned = 0;
+      let earned: Decimal = new MoneyDecimal(0);
       const validRange = effectiveStart <= endDate;
 
       // Time-based frequencies use payFrequency field; production-based fall back to salaryType
       if (!validRange) {
-        earned = 0;
+        earned = new MoneyDecimal(0);
       } else if (payFreq === "Hourly") {
-        earned = (parseFloat(hoursWorked) || 0) * parseFloat(worker.hourlyRate || "0");
+        earned = (parseMoneyInput(hoursWorked) ?? new MoneyDecimal(0)).times(toMoney(worker.hourlyRate));
       } else if (payFreq === "Weekly") {
-        earned = (days / 7) * parseFloat(worker.weeklySalary || "0");
+        earned = new MoneyDecimal(days).dividedBy(7).times(toMoney(worker.weeklySalary));
       } else if (payFreq === "Bi-Weekly") {
-        earned = (days / 14) * parseFloat(worker.biWeeklySalary || "0");
+        earned = new MoneyDecimal(days).dividedBy(14).times(toMoney(worker.biWeeklySalary));
       } else if (salType === "Daily") {
-        earned = weekdays * baseSal;
+        earned = baseSalExact.times(weekdays);
       } else if (salType === "Per Bale" || salType === "Per KG") {
         const bales = await db
           .select()
@@ -177,10 +180,9 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
             )
           );
         if (salType === "Per Bale") {
-          earned = bales.length * parseFloat(worker.perBaleRate || "0");
+          earned = toMoney(worker.perBaleRate).times(bales.length);
         } else {
-          const totalKg = bales.reduce((s: number, b) => s + parseFloat(b.weightKg || "0"), 0);
-          earned = totalKg * parseFloat(worker.perKgRate || "0");
+          earned = sumMoney(bales.map((b) => b.weightKg)).times(toMoney(worker.perKgRate));
         }
       } else {
         // Monthly: base pay on actual attendance records in the effective period
@@ -197,9 +199,9 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
           );
         if (attendanceRows.length === 0) {
           // No attendance records — fall back to calendar-day proration
-          earned = computeMonthlyPay(baseSal, effectiveStart, endDate);
+          earned = toMoney(computeMonthlyPay(baseSal, effectiveStart, endDate));
         } else {
-          earned = computeMonthlyPayFromAttendance(baseSal, effectiveStart, attendanceRows);
+          earned = toMoney(computeMonthlyPayFromAttendance(baseSal, effectiveStart, attendanceRows));
         }
       }
 
@@ -227,11 +229,7 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
             inArray(factoryPayrolls.status, ["APPROVED", "PAID"])
           )
         );
-      const totalPaid = paidPayrolls.reduce(
-        (s: number, p) =>
-          s + parseFloat(p.netSalary || "0") + parseFloat(p.advances || "0") + parseFloat(p.deductions || "0"),
-        0
-      );
+      const totalPaid = sumMoney(paidPayrolls.flatMap((p) => [p.netSalary, p.advances, p.deductions]));
 
       // Compute outstanding advances (remaining balance not yet recovered)
       const outstandingAdvances = await db
@@ -244,9 +242,9 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
             eq(factoryWorkerAdvances.fullyPaid, false)
           )
         );
-      const totalAdvances = outstandingAdvances.reduce((s: number, a) => s + parseFloat(a.remainingBalance || "0"), 0);
+      const totalAdvances = sumMoney(outstandingAdvances.map((a) => a.remainingBalance));
 
-      const balance = earned - totalPaid - totalAdvances;
+      const balance = earned.minus(totalPaid).minus(totalAdvances);
 
       // dryRun: just return calculation, no DB changes
       if (dryRun) {
@@ -271,14 +269,14 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
           workerId: id,
           periodStart: effectiveStart,
           periodEnd: endDate,
-          baseSalary: String(earned.toFixed(2)),
+          baseSalary: earned.toFixed(2),
           baleEarnings: "0",
           kgEarnings: "0",
           overtimePay: "0",
           bonuses: "0",
-          deductions: String(totalPaid.toFixed(2)),
-          advances: String(totalAdvances.toFixed(2)),
-          netSalary: String(balance.toFixed(2)),
+          deductions: totalPaid.toFixed(2),
+          advances: totalAdvances.toFixed(2),
+          netSalary: balance.toFixed(2),
           balesCount: 0,
           kgProcessed: "0",
           overtimeHours: "0",
@@ -314,8 +312,9 @@ export function registerFactoryWorkerBaleSettleRoutes(app: Express, requireAuth:
         referenceId: id,
         referenceTable: "factory_workers",
         description: `Settlement for ${worker.fullName}: earned $${earned.toFixed(2)}, paid $${totalPaid.toFixed(2)}, advances $${totalAdvances.toFixed(2)}, balance $${balance.toFixed(2)}`,
-        amountCurrency: Math.abs(balance),
-        amountUsd: Math.abs(balance),
+        // The settled balance at the cents its payroll row stores.
+        amountCurrency: balance.abs().toDecimalPlaces(2).toNumber(),
+        amountUsd: balance.abs().toDecimalPlaces(2).toNumber(),
         createdBy: req.session.userId ?? undefined,
       });
 

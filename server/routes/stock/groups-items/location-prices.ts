@@ -9,7 +9,8 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
-import { locationPriceGroups } from "@shared/schema";
+import { ownLocationIds } from "../../helpers/companyOwnership";
+import { locationPriceGroups, stockItemLocationPrices, stockItems } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 export function registerStockItemLocationPriceRoutes(app: Express) {
@@ -61,6 +62,11 @@ export function registerStockItemLocationPriceRoutes(app: Express) {
       }
 
       const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // The location is a body id, outside the path-based company scope.
+      if (!(await ownLocationIds(companyId, [locationId])).has(Number(locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       // Save price for the target location
       await storage.upsertLocationPrice(stockItemId, locationId, sellingPrice);
@@ -91,6 +97,16 @@ export function registerStockItemLocationPriceRoutes(app: Express) {
       if (isNaN(priceId)) {
         return res.status(400).json({ message: "Invalid price ID" });
       }
+
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      // Reached by id alone: the price must be on one of this company's stock items.
+      const [owned] = await db
+        .select({ id: stockItemLocationPrices.id })
+        .from(stockItemLocationPrices)
+        .innerJoin(stockItems, eq(stockItems.id, stockItemLocationPrices.stockItemId))
+        .where(and(eq(stockItemLocationPrices.id, priceId), eq(stockItems.companyId, companyId)));
+      if (!owned) return res.status(404).json({ message: "Not found" });
 
       await storage.deleteLocationPrice(priceId);
       res.json({ message: "Location price deleted successfully" });

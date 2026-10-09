@@ -1,23 +1,17 @@
 import type { Express } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
-import {
-  bankAccounts,
-  ledgerAccounts,
-  posShifts,
-  retailCashMovements,
-} from "@shared/schema";
+import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./pos/retailPosContext";
+import { getRetailAccountingSettings, saveRetailAccountingSettings } from "../services/retail/retailFinancialService";
 import {
-  getRetailAccountingSettings,
   getRetailFinancialReconciliation,
   getRetailShiftSummary,
   listRetailFinancialAccounts,
-  saveRetailAccountingSettings,
-} from "../services/retail/retailFinancialService";
+} from "../services/retail/retailFinancialQueries";
 
 const nullableId = z.union([z.coerce.number().int().positive(), z.null()]).optional();
 
@@ -44,10 +38,7 @@ const cashMovementSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(191),
 });
 
-async function assertAccountOwnership(
-  companyId: number,
-  patch: z.infer<typeof settingsSchema>
-): Promise<void> {
+async function assertAccountOwnership(companyId: number, patch: z.infer<typeof settingsSchema>): Promise<void> {
   const ledgerIds = [
     patch.cashLedgerAccountId,
     patch.cardLedgerAccountId,
@@ -67,7 +58,8 @@ async function assertAccountOwnership(
       .select({ id: ledgerAccounts.id })
       .from(ledgerAccounts)
       .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, [...new Set(ledgerIds)])));
-    if (owned.length !== new Set(ledgerIds).size) throw new Error("One or more Retail ledger accounts belong to another company");
+    if (owned.length !== new Set(ledgerIds).size)
+      throw new Error("One or more Retail ledger accounts belong to another company");
   }
   if (typeof patch.bankAccountId === "number") {
     const [bank] = await db

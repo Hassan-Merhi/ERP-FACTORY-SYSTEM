@@ -4,7 +4,6 @@ import { z } from "zod";
 import {
   locations,
   retailBrands,
-  retailPosSaleItems,
   retailPosSales,
   retailProductVariants,
   retailProducts,

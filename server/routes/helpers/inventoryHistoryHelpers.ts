@@ -18,6 +18,8 @@ import {
   stockCategories as stockCategoriesTable,
 } from "@shared/schema";
 import { eq, and, sql, gt, inArray, isNull } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 
 // TEMP DEBUG (historical opening-stock audit): gate behind an explicit env
 // flag so routine exports/inventory reads stay quiet by default. Enable with
@@ -26,20 +28,45 @@ const DEBUG_HISTORICAL_INVENTORY = process.env.DEBUG_HISTORICAL_INVENTORY === "1
 
 function exactMovementValue(
   exactTotal: string | number | null | undefined,
-  quantity: number,
-  fallbackRate: number
-): number {
+  quantity: Decimal,
+  fallbackRate: Decimal
+): Decimal {
   if (exactTotal !== null && exactTotal !== undefined && exactTotal !== "") {
-    const parsed = typeof exactTotal === "number" ? exactTotal : Number.parseFloat(exactTotal);
-    if (Number.isFinite(parsed)) return Math.abs(parsed);
+    try {
+      const parsed = new MoneyDecimal(exactTotal);
+      if (parsed.isFinite()) return parsed.abs();
+    } catch {
+      // Not a number: fall back to quantity x rate below.
+    }
   }
-  return Math.abs(quantity * fallbackRate);
+  return quantity.times(fallbackRate).abs();
 }
 
-function refreshHistoricalRate(data: { quantity: number; totalValue: number; rate: number }): void {
-  if (data.quantity > 0) {
-    data.rate = data.totalValue > 0 ? data.totalValue / data.quantity : data.rate;
+type HistoricalStock = { quantity: Decimal; totalValue: Decimal; rate: number };
+
+function emptyHistoricalStock(): HistoricalStock {
+  return { quantity: new MoneyDecimal(0), totalValue: new MoneyDecimal(0), rate: 0 };
+}
+
+/** Moves a stock item's reconstructed quantity and value, then refreshes its rate. */
+function applyHistoricalMovement(
+  inventoryMap: Map<number, HistoricalStock>,
+  stockItemId: number,
+  quantity: Decimal,
+  value: Decimal
+): void {
+  const existing = inventoryMap.get(stockItemId) ?? emptyHistoricalStock();
+  existing.quantity = existing.quantity.plus(quantity);
+  existing.totalValue = existing.totalValue.plus(value);
+  if (existing.quantity.greaterThan(0) && existing.totalValue.greaterThan(0)) {
+    existing.rate = existing.totalValue.dividedBy(existing.quantity).toNumber();
   }
+  inventoryMap.set(stockItemId, existing);
+}
+
+/** Plain decimal text; zero is always "0", never "-0". */
+function plainNumber(value: Decimal): string {
+  return value.isZero() ? "0" : value.toFixed();
 }
 
 export type HistoricalLocationInventoryRow = {
@@ -159,9 +186,9 @@ export async function calculateHistoricalLocationInventory(
 
   if (seedStockItemIds.size === 0) return [];
 
-  const inventoryMap = new Map<number, { quantity: number; totalValue: number; rate: number }>();
+  const inventoryMap = new Map<number, HistoricalStock>();
   for (const stockItemId of Array.from(seedStockItemIds)) {
-    inventoryMap.set(stockItemId, { quantity: 0, totalValue: 0, rate: 0 });
+    inventoryMap.set(stockItemId, emptyHistoricalStock());
   }
 
   // Seed the backward reconstruction from the exact stored asset value. The
@@ -169,8 +196,8 @@ export async function calculateHistoricalLocationInventory(
   for (const inv of currentInventory) {
     const snapshot = inventorySnapshotFromStoredValues(inv.quantity, inv.totalValue, inv.averageRate);
     inventoryMap.set(inv.stockItemId, {
-      quantity: snapshot.quantity,
-      totalValue: snapshot.totalValue,
+      quantity: new MoneyDecimal(snapshot.quantity),
+      totalValue: new MoneyDecimal(snapshot.totalValue),
       rate: snapshot.rate,
     });
   }
@@ -196,18 +223,9 @@ export async function calculateHistoricalLocationInventory(
     .execute();
 
   for (const sale of salesAfterDate) {
-    const qty = parseFloat(sale.quantity) || 0;
-    const cost = parseFloat(sale.costPrice) || 0;
-    const value = exactMovementValue(sale.totalCost, qty, cost);
-    const existing = inventoryMap.get(sale.stockItemId) || {
-      quantity: 0,
-      totalValue: 0,
-      rate: 0,
-    };
-    existing.quantity += qty;
-    existing.totalValue += value;
-    refreshHistoricalRate(existing);
-    inventoryMap.set(sale.stockItemId, existing);
+    const qty = toMoney(sale.quantity);
+    const value = exactMovementValue(sale.totalCost, qty, toMoney(sale.costPrice));
+    applyHistoricalMovement(inventoryMap, sale.stockItemId, qty, value);
   }
 
   const adjustmentsAfterDate = await db
@@ -236,19 +254,10 @@ export async function calculateHistoricalLocationInventory(
     // stock_adjustment_items.quantity is stored signed. Reverse both quantity
     // and the exact stored line value with the same sign so historical value is
     // not reconstructed from the rounded rate.
-    const qty = parseFloat(adj.quantity) || 0;
-    const rate = parseFloat(adj.rate) || 0;
-    const absoluteValue = exactMovementValue(adj.totalAmount, qty, rate);
-    const signedValue = qty < 0 ? -absoluteValue : absoluteValue;
-    const existing = inventoryMap.get(adj.stockItemId) || {
-      quantity: 0,
-      totalValue: 0,
-      rate: 0,
-    };
-    existing.quantity -= qty;
-    existing.totalValue -= signedValue;
-    refreshHistoricalRate(existing);
-    inventoryMap.set(adj.stockItemId, existing);
+    const qty = toMoney(adj.quantity);
+    const absoluteValue = exactMovementValue(adj.totalAmount, qty, toMoney(adj.rate));
+    const signedValue = qty.lessThan(0) ? absoluteValue.negated() : absoluteValue;
+    applyHistoricalMovement(inventoryMap, adj.stockItemId, qty.negated(), signedValue.negated());
   }
 
   // TEMP DEBUG (historical opening-stock audit): show the reversal effect for
@@ -258,10 +267,10 @@ export async function calculateHistoricalLocationInventory(
   if (DEBUG_HISTORICAL_INVENTORY && adjustmentsAfterDate.length > 0) {
     const sample = adjustmentsAfterDate[0];
     const currentSample = currentInventory.find((i) => i.stockItemId === sample.stockItemId);
-    const currentQty = currentSample ? parseFloat(currentSample.quantity) || 0 : 0;
+    const currentQty = toMoney(currentSample?.quantity).toString();
     const adjustmentsForSample = adjustmentsAfterDate.filter((a) => a.stockItemId === sample.stockItemId);
-    const reversedQty = adjustmentsForSample.reduce((s, a) => s + (parseFloat(a.quantity) || 0), 0);
-    const historicalQty = inventoryMap.get(sample.stockItemId)?.quantity ?? 0;
+    const reversedQty = adjustmentsForSample.reduce((s, a) => s.plus(toMoney(a.quantity)), new MoneyDecimal(0));
+    const historicalQty = (inventoryMap.get(sample.stockItemId)?.quantity ?? new MoneyDecimal(0)).toString();
     logger.info(
       `[calculateHistoricalLocationInventory] DEBUG sample stockItemId=${sample.stockItemId} locationId=${locationId} cutoff=${cutoffDateStr} ` +
         `currentQty=${currentQty} afterCutoffAdjustmentsQty(signed,reversed)=${reversedQty} historicalOpeningQty=${historicalQty}`
@@ -290,18 +299,9 @@ export async function calculateHistoricalLocationInventory(
     .execute();
 
   for (const transfer of transfersInAfterDate) {
-    const qty = parseFloat(transfer.quantity) || 0;
-    const rate = parseFloat(transfer.rate) || 0;
-    const value = exactMovementValue(transfer.totalAmount, qty, rate);
-    const existing = inventoryMap.get(transfer.stockItemId) || {
-      quantity: 0,
-      totalValue: 0,
-      rate: 0,
-    };
-    existing.quantity -= qty;
-    existing.totalValue -= value;
-    refreshHistoricalRate(existing);
-    inventoryMap.set(transfer.stockItemId, existing);
+    const qty = toMoney(transfer.quantity);
+    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate));
+    applyHistoricalMovement(inventoryMap, transfer.stockItemId, qty.negated(), value.negated());
   }
 
   const transfersOutAfterDate = await db
@@ -326,18 +326,9 @@ export async function calculateHistoricalLocationInventory(
     .execute();
 
   for (const transfer of transfersOutAfterDate) {
-    const qty = parseFloat(transfer.quantity) || 0;
-    const rate = parseFloat(transfer.rate) || 0;
-    const value = exactMovementValue(transfer.totalAmount, qty, rate);
-    const existing = inventoryMap.get(transfer.stockItemId) || {
-      quantity: 0,
-      totalValue: 0,
-      rate: 0,
-    };
-    existing.quantity += qty;
-    existing.totalValue += value;
-    refreshHistoricalRate(existing);
-    inventoryMap.set(transfer.stockItemId, existing);
+    const qty = toMoney(transfer.quantity);
+    const value = exactMovementValue(transfer.totalAmount, qty, toMoney(transfer.rate));
+    applyHistoricalMovement(inventoryMap, transfer.stockItemId, qty, value);
   }
 
   const offloadsAfterDate = await db
@@ -360,18 +351,9 @@ export async function calculateHistoricalLocationInventory(
     .execute();
 
   for (const offload of offloadsAfterDate) {
-    const qty = parseFloat(offload.quantity) || 0;
-    const cost = parseFloat(offload.rate) || 0;
-    const value = exactMovementValue(offload.totalValue, qty, cost);
-    const existing = inventoryMap.get(offload.stockItemId) || {
-      quantity: 0,
-      totalValue: 0,
-      rate: 0,
-    };
-    existing.quantity -= qty;
-    existing.totalValue -= value;
-    refreshHistoricalRate(existing);
-    inventoryMap.set(offload.stockItemId, existing);
+    const qty = toMoney(offload.quantity);
+    const value = exactMovementValue(offload.totalValue, qty, toMoney(offload.rate));
+    applyHistoricalMovement(inventoryMap, offload.stockItemId, qty.negated(), value.negated());
   }
 
   // Reverse credit/debit notes AFTER the target date. Credit Notes restored
@@ -398,18 +380,13 @@ export async function calculateHistoricalLocationInventory(
     .execute();
 
   for (const note of creditDebitNotesAfterDate) {
-    const qty = parseFloat(note.quantity) || 0;
-    const cost = parseFloat(note.inventoryCost) || 0;
-    const existing = inventoryMap.get(note.stockItemId) || { quantity: 0, totalValue: 0, rate: 0 };
+    const qty = toMoney(note.quantity);
+    const value = qty.times(toMoney(note.inventoryCost));
     if (note.noteType === "Credit Note") {
-      existing.quantity -= qty;
-      existing.totalValue -= qty * cost;
+      applyHistoricalMovement(inventoryMap, note.stockItemId, qty.negated(), value.negated());
     } else {
-      existing.quantity += qty;
-      existing.totalValue += qty * cost;
+      applyHistoricalMovement(inventoryMap, note.stockItemId, qty, value);
     }
-    refreshHistoricalRate(existing);
-    inventoryMap.set(note.stockItemId, existing);
   }
 
   const stockItemIdList = Array.from(inventoryMap.keys());
@@ -440,9 +417,9 @@ export async function calculateHistoricalLocationInventory(
     const detail = detailMap.get(stockItemId);
     results.push({
       stockItemId,
-      quantity: data.quantity.toString(),
+      quantity: plainNumber(data.quantity),
       averageRate: data.rate.toString(),
-      totalValue: data.totalValue.toString(),
+      totalValue: plainNumber(data.totalValue),
       stockItemCode: detail?.code ?? "",
       stockItemName: detail?.name ?? "",
       stockItemUom: detail?.uom ?? "",

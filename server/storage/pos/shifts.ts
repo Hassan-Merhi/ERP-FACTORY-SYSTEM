@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 
 export async function getCurrentShift(userId: string, locationId: number): Promise<schema.PosShift | undefined> {
   const [shift] = await db
@@ -47,9 +48,10 @@ export async function closeShift(id: number, closingCash: string, notes?: string
     .where(eq(schema.companies.id, shift.companyId))
     .limit(1);
 
-  let salesCount = 0;
-  let salesTotal = 0;
-  let expectedCash = parseFloat(shift.openingCash || "0");
+  let salesCount: number;
+  // Exact sums, so the stored variance is closing cash minus expected cash to the cent.
+  let salesTotal = toMoney(0);
+  let expectedCash = toMoney(shift.openingCash);
 
   if (company?.companyType === "retail") {
     const payments = await db
@@ -60,12 +62,7 @@ export async function closeShift(id: number, closingCash: string, notes?: string
         amount: schema.retailPosPayments.amount,
       })
       .from(schema.retailPosPayments)
-      .where(
-        and(
-          eq(schema.retailPosPayments.companyId, shift.companyId),
-          eq(schema.retailPosPayments.shiftId, id)
-        )
-      );
+      .where(and(eq(schema.retailPosPayments.companyId, shift.companyId), eq(schema.retailPosPayments.shiftId, id)));
     const cashMovements = await db
       .select({
         movementType: schema.retailCashMovements.movementType,
@@ -73,45 +70,46 @@ export async function closeShift(id: number, closingCash: string, notes?: string
       })
       .from(schema.retailCashMovements)
       .where(
-        and(
-          eq(schema.retailCashMovements.companyId, shift.companyId),
-          eq(schema.retailCashMovements.shiftId, id)
-        )
+        and(eq(schema.retailCashMovements.companyId, shift.companyId), eq(schema.retailCashMovements.shiftId, id))
       );
 
     const saleIds = new Set<number>();
-    let cashNet = 0;
+    let cashNet = toMoney(0);
     for (const payment of payments) {
-      const amount = parseFloat(payment.amount || "0");
+      const amount = toMoney(payment.amount);
       if (payment.paymentType === "payment") {
         saleIds.add(payment.saleId);
-        salesTotal += amount;
-        if (payment.method === "cash") cashNet += amount;
+        salesTotal = salesTotal.plus(amount);
+        if (payment.method === "cash") cashNet = cashNet.plus(amount);
       } else if (payment.paymentType === "refund" && payment.method === "cash") {
-        cashNet -= amount;
+        cashNet = cashNet.minus(amount);
       }
     }
     for (const movement of cashMovements) {
-      const amount = parseFloat(movement.amount || "0");
-      cashNet += movement.movementType === "cash_in" ? amount : -amount;
+      const amount = toMoney(movement.amount);
+      cashNet = movement.movementType === "cash_in" ? cashNet.plus(amount) : cashNet.minus(amount);
     }
     salesCount = saleIds.size;
-    expectedCash += cashNet;
+    expectedCash = expectedCash.plus(cashNet);
   } else {
     const salesVouchers = await db
       .select()
       .from(schema.vouchers)
       .where(
-        and(eq(schema.vouchers.shiftId, id), eq(schema.vouchers.voucherType, "Sales"), isNull(schema.vouchers.deletedAt))
+        and(
+          eq(schema.vouchers.shiftId, id),
+          eq(schema.vouchers.voucherType, "Sales"),
+          isNull(schema.vouchers.deletedAt)
+        )
       );
     salesCount = salesVouchers.length;
-    salesTotal = salesVouchers.reduce((sum, voucher) => sum + parseFloat(voucher.totalAmount || "0"), 0);
-    expectedCash += salesTotal;
+    salesTotal = sumMoney(salesVouchers.map((voucher) => voucher.totalAmount));
+    expectedCash = expectedCash.plus(salesTotal);
   }
 
-  const actualClosing = parseFloat(closingCash);
-  if (!Number.isFinite(actualClosing)) throw new Error("Closing cash must be a valid amount");
-  const variance = actualClosing - expectedCash;
+  const actualClosing = parseMoneyInput(closingCash);
+  if (!actualClosing) throw new Error("Invalid amount");
+  const variance = actualClosing.minus(expectedCash);
 
   const [updated] = await db
     .update(schema.posShifts)
@@ -119,10 +117,10 @@ export async function closeShift(id: number, closingCash: string, notes?: string
       status: "closed",
       closedAt: sql`now()`,
       closingCash,
-      expectedCash: expectedCash.toFixed(2),
-      variance: variance.toFixed(2),
+      expectedCash: moneyString(expectedCash),
+      variance: moneyString(variance),
       salesCount,
-      salesTotal: salesTotal.toFixed(2),
+      salesTotal: moneyString(salesTotal),
       notes: notes || null,
     })
     .where(and(eq(schema.posShifts.id, id), eq(schema.posShifts.status, "open")))
@@ -132,8 +130,5 @@ export async function closeShift(id: number, closingCash: string, notes?: string
 }
 
 export async function updateShiftStats(id: number, salesCount: number, salesTotal: string): Promise<void> {
-  await db
-    .update(schema.posShifts)
-    .set({ salesCount, salesTotal })
-    .where(eq(schema.posShifts.id, id));
+  await db.update(schema.posShifts).set({ salesCount, salesTotal }).where(eq(schema.posShifts.id, id));
 }

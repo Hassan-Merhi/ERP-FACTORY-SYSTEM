@@ -16,6 +16,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { customers } from "../erp";
 import { customerProformas } from "./customer-orders";
+import { isNonNegativeNumeric } from "../../numericString";
 
 // ─── Customer Dispatch Batch Sequences ───────────────────────────────────────
 export const customerDispatchBatchSequences = pgTable("customer_dispatch_batch_sequences", {
@@ -237,9 +238,7 @@ export const insertInsuranceMemberSchema = createInsertSchema(insuranceMembers)
     companyId: z.number().min(1, "Company is required"),
     name: z.string().min(1, "Name is required"),
     startDate: z.string().min(1, "Start date is required"),
-    amount: z
-      .string()
-      .refine((v) => !isNaN(parseFloat(v)) && parseFloat(v) >= 0, "Amount must be a non-negative number"),
+    amount: z.string().refine(isNonNegativeNumeric, "Amount must be a non-negative number"),
     nationality: z.string().optional().nullable(),
     positionWorking: z.string().optional().nullable(),
     insuranceNumber: z.string().optional().nullable(),

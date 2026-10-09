@@ -54,13 +54,36 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
         COUNT(DISTINCT c.id)::int AS import_count,
         COALESCE(SUM(pli.quantity::numeric), 0) AS imported_qty,
         COALESCE(SUM(pli.line_total::numeric), 0) AS purchase_value,
+        COALESCE(
+          SUM(pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0)),
+          0
+        ) AS offloading_value,
+        COALESCE(
+          SUM(
+            pli.line_total::numeric +
+            (pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0))
+          ),
+          0
+        ) AS purchase_value_with_offloading,
         COUNT(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN'))::int AS currency_count,
         ARRAY_AGG(DISTINCT COALESCE(NULLIF(po.currency, ''), 'UNKNOWN')) AS currencies,
-        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost
+        SUM(pli.line_total::numeric) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost,
+        SUM(
+          pli.line_total::numeric +
+          (pli.quantity::numeric * COALESCE(offload.additional_cost_per_bale, 0))
+        ) / NULLIF(SUM(pli.quantity::numeric), 0) AS weighted_purchase_cost_with_offloading
       FROM eligible_items e
       JOIN po_line_items pli ON pli.stock_item_id = e.id
       JOIN purchase_orders po ON po.id = pli.po_id
       JOIN containers c ON c.id = po.container_id
+      LEFT JOIN LATERAL (
+        SELECT co.additional_cost_per_bale::numeric AS additional_cost_per_bale
+        FROM container_offloads co
+        WHERE co.container_id = c.id
+          AND COALESCE(co.optional, false) = false
+        ORDER BY co.offloaded_at DESC, co.id DESC
+        LIMIT 1
+      ) offload ON true
       WHERE po.company_id = $1
         AND c.offload_date IS NOT NULL
         AND ($3::date IS NULL OR c.offload_date >= $3::date)
@@ -127,6 +150,11 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       COALESCE(i.imported_qty, 0) AS imported_qty,
       CASE WHEN i.currency_count = 1 THEN i.purchase_value ELSE NULL END AS purchase_value,
       CASE WHEN i.currency_count = 1 THEN i.weighted_purchase_cost ELSE NULL END AS weighted_purchase_cost,
+      CASE WHEN i.currency_count = 1 THEN i.purchase_value_with_offloading ELSE NULL END AS purchase_value_with_offloading,
+      CASE
+        WHEN i.currency_count = 1 THEN i.weighted_purchase_cost_with_offloading
+        ELSE NULL
+      END AS weighted_purchase_cost_with_offloading,
       COALESCE(i.currencies, ARRAY[]::text[]) AS purchase_currencies,
       COALESCE(s.sold_qty, 0) AS sold_qty,
       COALESCE(s.revenue, 0) AS revenue,
@@ -156,6 +184,12 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       importedQty: numberValue(raw.imported_qty),
       purchaseValue: raw.purchase_value == null ? null : numberValue(raw.purchase_value),
       weightedPurchaseCost: raw.weighted_purchase_cost == null ? null : numberValue(raw.weighted_purchase_cost),
+      purchaseValueWithOffloading:
+        raw.purchase_value_with_offloading == null ? null : numberValue(raw.purchase_value_with_offloading),
+      weightedPurchaseCostWithOffloading:
+        raw.weighted_purchase_cost_with_offloading == null
+          ? null
+          : numberValue(raw.weighted_purchase_cost_with_offloading),
       purchaseCurrencies: Array.isArray(raw.purchase_currencies) ? raw.purchase_currencies : [],
       soldQty,
       revenue,
@@ -186,5 +220,86 @@ export async function getItemMarketAnalysis(filters: ItemMarketAnalysisFilters) 
       ...totals,
       marginPct: marginPct(totals.profit, totals.revenue),
     },
+  };
+}
+
+export interface ItemMarketSalePriceBreakdownFilters {
+  companyId: number;
+  stockItemId: number;
+  locationIds: number[];
+  startDate?: string;
+  endDate?: string;
+}
+
+export async function getItemMarketSalePriceBreakdown(filters: ItemMarketSalePriceBreakdownFilters) {
+  const result = await pool.query(
+    `
+    WITH activity AS (
+      SELECT
+        'sale'::text AS activity_type,
+        s.selling_price::numeric AS unit_price,
+        s.quantity::numeric AS quantity,
+        s.total_sales::numeric AS revenue,
+        (s.total_sales::numeric - s.total_cost::numeric) AS profit
+      FROM sales_items s
+      JOIN vouchers v ON v.id = s.voucher_id
+      JOIN stock_items si ON si.id = s.stock_item_id
+      WHERE v.company_id = $1
+        AND si.company_id = $1
+        AND s.stock_item_id = $2
+        AND v.voucher_type = 'Sales'
+        AND v.deleted_at IS NULL
+        AND COALESCE(v.optional, false) = false
+        AND v.location_id = ANY($3::int[])
+        AND ($4::date IS NULL OR v.voucher_date >= $4::date)
+        AND ($5::date IS NULL OR v.voucher_date <= $5::date)
+
+      UNION ALL
+
+      SELECT
+        'return'::text AS activity_type,
+        cni.rate::numeric AS unit_price,
+        -cni.quantity::numeric AS quantity,
+        -cni.total_value::numeric AS revenue,
+        -(
+          cni.total_value::numeric -
+          (cni.quantity::numeric * cni.inventory_cost::numeric)
+        ) AS profit
+      FROM credit_note_items cni
+      JOIN vouchers v ON v.id = cni.voucher_id
+      JOIN stock_items si ON si.id = cni.stock_item_id
+      WHERE v.company_id = $1
+        AND si.company_id = $1
+        AND cni.stock_item_id = $2
+        AND v.voucher_type = 'Credit Note'
+        AND v.deleted_at IS NULL
+        AND COALESCE(v.optional, false) = false
+        AND cni.location_id = ANY($3::int[])
+        AND ($4::date IS NULL OR v.voucher_date >= $4::date)
+        AND ($5::date IS NULL OR v.voucher_date <= $5::date)
+    )
+    SELECT
+      activity_type,
+      unit_price,
+      COALESCE(SUM(quantity), 0) AS quantity,
+      COALESCE(SUM(revenue), 0) AS revenue,
+      COALESCE(SUM(profit), 0) AS profit,
+      COUNT(*)::int AS transaction_count
+    FROM activity
+    GROUP BY activity_type, unit_price
+    ORDER BY CASE WHEN activity_type = 'sale' THEN 0 ELSE 1 END, unit_price DESC
+    `,
+    [filters.companyId, filters.stockItemId, filters.locationIds, filters.startDate ?? null, filters.endDate ?? null]
+  );
+
+  return {
+    rows: result.rows.map((raw) => ({
+      activityType: String(raw.activity_type) as "sale" | "return",
+      unitPrice: numberValue(raw.unit_price),
+      quantity: numberValue(raw.quantity),
+      revenue: numberValue(raw.revenue),
+      profit: numberValue(raw.profit),
+      transactionCount: Number(raw.transaction_count || 0),
+    })),
   };
 }
