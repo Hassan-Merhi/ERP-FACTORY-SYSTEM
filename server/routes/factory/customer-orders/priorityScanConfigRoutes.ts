@@ -19,6 +19,7 @@ import {
   rewriteActivePriorityQueue,
 } from "./priorityScanQueue";
 import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
+import { runAutomaticPriorityReprint } from "./priorityAutoAllocation";
 
 const MAX_COLOR_LENGTH = 64;
 const MAX_PRIORITY = 10_000;
@@ -92,6 +93,32 @@ class PriorityScanConfigError extends Error {
 }
 
 export function registerPriorityScanConfigRoutes(app: Express) {
+  // Used by specialist relabel screens where the API returns a REF but not a
+  // physical bale ID. Resolve server-side, never trusting the client to choose
+  // a loading or a priority color.
+  app.post("/api/factory/customer-orders/loading-list/automatic-print-preflight", requireAuth,
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const referenceNumber = String(req.body?.referenceNumber || "").trim();
+        if (!referenceNumber) return res.status(400).json({ message: "referenceNumber required" });
+        const [bale] = await db.select({ id: factoryBales.id }).from(factoryBales).where(
+          and(eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt),
+            sql`LOWER(${factoryBales.referenceNumber}) = ${referenceNumber.toLowerCase()}`)
+        ).limit(1);
+        if (!bale) return res.status(404).json({ message: "Bale not found" });
+        const priorityAllocation = await runAutomaticPriorityReprint(companyId, bale.id,
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId));
+        return res.json({ priorityAllocation });
+      } catch (error) {
+        logger.error("Automatic Priority Print preflight failed", { error });
+        return res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
+
   app.get(PRIORITY_SCAN_ROUTE_PATH, requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
