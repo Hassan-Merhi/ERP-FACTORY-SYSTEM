@@ -62,7 +62,8 @@ async function createStock(productId: number, qty: number) {
 
 async function countRows(table: "factory_priority_auto_allocations" | "factory_priority_scan_history") {
   const res = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM ${table} WHERE company_id = $1`, [ctx.companyId]
+    `SELECT COUNT(*)::text AS count FROM ${table} WHERE company_id = $1`,
+    [ctx.companyId]
   );
   return Number(res.rows[0].count);
 }
@@ -72,16 +73,18 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
-    username: `${PREFIX}_testuser`, password: "testpassword123",
+    username: `${PREFIX}_testuser`,
+    password: "testpassword123",
   });
   expect(login.status).toBe(200);
   const selected = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   expect(selected.status).toBe(200);
 
-  await pool.query(
-    "INSERT INTO customers (company_id, code, legal_name) VALUES ($1, $2, $3)",
-    [ctx.companyId, `${PREFIX}-CUSTOMER`, "Automatic Priority Customer"]
-  );
+  await pool.query("INSERT INTO customers (company_id, code, legal_name) VALUES ($1, $2, $3)", [
+    ctx.companyId,
+    `${PREFIX}-CUSTOMER`,
+    "Automatic Priority Customer",
+  ]);
   const matching = await pool.query<{ id: number }>(
     `INSERT INTO factory_bale_products
       (company_id, code, name, article_code, production_price, selling_price)
@@ -109,18 +112,21 @@ afterAll(async () => {
     await pool.query("DELETE FROM customer_order_priority_scan_configs WHERE company_id = $1", [ctx.companyId]);
     await pool.query(
       `DELETE FROM customer_order_bales WHERE order_id IN
-       (SELECT id FROM customer_orders WHERE company_id = $1)`, [ctx.companyId]
+       (SELECT id FROM customer_orders WHERE company_id = $1)`,
+      [ctx.companyId]
     );
     await pool.query(
       `DELETE FROM customer_order_lines WHERE order_id IN
-       (SELECT id FROM customer_orders WHERE company_id = $1)`, [ctx.companyId]
+       (SELECT id FROM customer_orders WHERE company_id = $1)`,
+      [ctx.companyId]
     );
     await pool.query("DELETE FROM canonical_stock_movement_audit WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM canonical_stock_movement_requests WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [ctx.companyId]);
     await pool.query(
       `DELETE FROM factory_bale_production_attributions WHERE bale_id IN
-       (SELECT id FROM factory_bales WHERE company_id = $1)`, [ctx.companyId]
+       (SELECT id FROM factory_bales WHERE company_id = $1)`,
+      [ctx.companyId]
     );
     await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_bale_sequences WHERE company_id = $1", [ctx.companyId]);
@@ -153,8 +159,13 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(created.body.automaticPriorityModeEnabled).toBe(true);
     expect(created.body.autoPrioritySummary).toEqual({ allocated: 3, leftInStock: 0 });
     const assignments = created.body.autoPriorityAllocations as Array<{
-      baleId: number; referenceNumber: string; orderId: number;
-      priority: number; color: string; source: string; existing: boolean
+      baleId: number;
+      referenceNumber: string;
+      orderId: number;
+      priority: number;
+      color: string;
+      source: string;
+      existing: boolean;
     }>;
     expect(assignments).toHaveLength(3);
     expect(assignments.map((a) => a.orderId)).toEqual([redOrderId, redOrderId, blueOrderId]);
@@ -177,19 +188,24 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(links.rows.map((r) => Number(r.price_used))).toEqual([10, 10, 12]);
 
     const firstOrder = await pool.query<{ total_qty_bales: number }>(
-      "SELECT total_qty_bales FROM customer_orders WHERE id = $1", [redOrderId]
+      "SELECT total_qty_bales FROM customer_orders WHERE id = $1",
+      [redOrderId]
     );
     expect(firstOrder.rows[0].total_qty_bales).toBe(2);
     const config = await pool.query<{ enabled: boolean }>(
-      "SELECT enabled FROM customer_order_priority_scan_configs WHERE order_id = $1", [redOrderId]
+      "SELECT enabled FROM customer_order_priority_scan_configs WHERE order_id = $1",
+      [redOrderId]
     );
     expect(config.rows[0].enabled).toBe(false); // completed priority automatically advanced
 
     const original = await agent.get(HISTORY).query({ baleId: assignments[0].baleId });
     expect(original.status).toBe(200);
     expect(original.body.items[0]).toMatchObject({
-      orderId: redOrderId, originalPriority: 1,
-      originalColor: "#dc2626", allocationSource: "stock-entry", active: true,
+      orderId: redOrderId,
+      originalPriority: 1,
+      originalColor: "#dc2626",
+      allocationSource: "stock-entry",
+      active: true,
     });
     expect(await countRows("factory_priority_auto_allocations")).toBe(3);
     expect(await countRows("factory_priority_scan_history")).toBe(3);
@@ -202,11 +218,13 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(created.body.autoPriorityAllocations).toHaveLength(1);
     expect(created.body.autoPriorityAllocations[0].orderId).toBe(blueOrderId);
     const blue = await pool.query<{ total_qty_bales: number }>(
-      "SELECT total_qty_bales FROM customer_orders WHERE id = $1", [blueOrderId]
+      "SELECT total_qty_bales FROM customer_orders WHERE id = $1",
+      [blueOrderId]
     );
     expect(blue.rows[0].total_qty_bales).toBe(2);
     const blueConfig = await pool.query<{ enabled: boolean }>(
-      "SELECT enabled FROM customer_order_priority_scan_configs WHERE order_id = $1", [blueOrderId]
+      "SELECT enabled FROM customer_order_priority_scan_configs WHERE order_id = $1",
+      [blueOrderId]
     );
     expect(blueConfig.rows[0].enabled).toBe(false);
     expect(await countRows("factory_priority_auto_allocations")).toBe(4);
@@ -243,10 +261,7 @@ describe("Phase 4: atomic new-stock priority routing", () => {
 
   it("serializes concurrent Stock Entry batches against the same remaining proforma capacity", async () => {
     const thirdOrderId = await addLoading(1, "#16a34a", "9.00");
-    const [left, right] = await Promise.all([
-      createStock(matchingProductId, 2),
-      createStock(matchingProductId, 2),
-    ]);
+    const [left, right] = await Promise.all([createStock(matchingProductId, 2), createStock(matchingProductId, 2)]);
     expect(left.status).toBe(200);
     expect(right.status).toBe(200);
     const assignments = [
@@ -287,14 +302,13 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(await countRows("factory_priority_auto_allocations")).toBe(oldAssignments);
     const archived = await agent.get(HISTORY).query({ orderId: redOrderId });
     expect(archived.status).toBe(200);
-    expect(archived.body.items.every((item: { originalColor: string }) =>
-      item.originalColor === "#dc2626"
-    )).toBe(true);
+    expect(archived.body.items.every((item: { originalColor: string }) => item.originalColor === "#dc2626")).toBe(true);
   }, 60000);
 
   it("rolls back the complete Stock Entry if an item is invalid", async () => {
     const before = await pool.query<{ total: string }>(
-      "SELECT COUNT(*)::text AS total FROM factory_bales WHERE company_id = $1", [ctx.companyId]
+      "SELECT COUNT(*)::text AS total FROM factory_bales WHERE company_id = $1",
+      [ctx.companyId]
     );
     const attempted = await agent.post(STOCK).send({
       erpLocationId: ctx.locationId,
@@ -305,7 +319,8 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     });
     expect(attempted.status).toBeGreaterThanOrEqual(400);
     const after = await pool.query<{ total: string }>(
-      "SELECT COUNT(*)::text AS total FROM factory_bales WHERE company_id = $1", [ctx.companyId]
+      "SELECT COUNT(*)::text AS total FROM factory_bales WHERE company_id = $1",
+      [ctx.companyId]
     );
     expect(after.rows[0].total).toBe(before.rows[0].total);
   }, 60000);

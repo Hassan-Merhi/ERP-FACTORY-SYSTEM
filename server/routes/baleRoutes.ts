@@ -16,7 +16,7 @@ import {
   insertBaleSchema,
   factoryBaleSequences,
 } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 // Module-level bwip-js cache — loaded once on first barcode request, then reused.
 // This avoids the cold-start latency of re-importing the library on every request.
@@ -33,6 +33,8 @@ import { registerBaleTransferRoutes } from "./baleTransferRoutes";
 import { registerProductionBaleRoutes } from "./productionBaleRoutes";
 import { registerProductionRawStockRoutes } from "./productionRawStockRoutes";
 import { registerBaleLookupRoutes } from "./baleLookupRoutes";
+
+class LabelPrintRequestError extends Error {}
 
 export function registerBaleRoutes(app: Express) {
   // Pre-warm bwip-js at server startup so the first barcode render is instant.
@@ -337,7 +339,9 @@ export function registerBaleRoutes(app: Express) {
   // Bale Label Prints - create label print records with unique reference numbers
   app.post("/api/bale-label-prints", requireAuth, async (req, res) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      // Print records and offline/standalone references keep the active
+      // session company, exactly as before.
+      const companyId = req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
@@ -347,24 +351,48 @@ export function registerBaleRoutes(app: Express) {
         return res.status(400).json({ message: "No bales provided" });
       }
 
-      // All existing physical bales in this print request are routed under a
-      // single company queue lock + transaction. If one reference is invalid,
-      // the batch rolls back instead of partially allocating printed labels.
-      const { runAutomaticPriorityPrintBatch } = await import("./factory/customer-orders/priorityAutoAllocation");
-      const physicalBaleIds = [...new Set(bales.map((item: { productionBaleId?: unknown }) =>
-        Number(item.productionBaleId)).filter((id: number) => Number.isSafeInteger(id) && id > 0))];
-      const prepared = physicalBaleIds.length > 0
-        ? await runAutomaticPriorityPrintBatch(
-            companyId,
-            physicalBaleIds.map((baleId) => ({ baleId })),
-            String(req.session.username || req.session.userId || "automatic"),
-            req.session.userId == null ? null : String(req.session.userId)
+      // A physical bale may belong to the active company or the session's
+      // pinned Factory company; never to any other company.
+      const authorizedCompanyIds = [
+        ...new Set(
+          [req.session.currentCompanyId, req.session.factoryCompanyId].filter(
+            (id): id is number => Number.isSafeInteger(id) && Number(id) > 0
           )
-        : [];
-      const priorityAllocations = prepared.flatMap((item) =>
-        item.priorityAllocation ? [item.priorityAllocation] : []);
+        ),
+      ];
+      const physicalBaleIds = [
+        ...new Set(
+          bales
+            .map((item: { productionBaleId?: unknown }) => Number(item.productionBaleId))
+            .filter((id: number) => Number.isSafeInteger(id) && id > 0)
+        ),
+      ];
+      const { prepareAutomaticPriorityPrintBatchTx } = await import("./factory/customer-orders/priorityAutoAllocation");
+      const { PRIORITY_SCAN_LOCK_NAMESPACE } = await import("./factory/customer-orders/priorityScanQueue");
+      const actorName = String(req.session.username || req.session.userId || "automatic");
+      const actorId = req.session.userId == null ? null : String(req.session.userId);
 
-      const labelPrints = await db.transaction(async (tx) => {
+      const { labelPrints, priorityAllocations } = await db.transaction(async (tx) => {
+        const owners =
+          physicalBaleIds.length > 0
+            ? await tx
+                .select({ id: factoryBales.id, companyId: factoryBales.companyId })
+                .from(factoryBales)
+                .where(
+                  and(inArray(factoryBales.id, physicalBaleIds), inArray(factoryBales.companyId, authorizedCompanyIds))
+                )
+            : [];
+        const ownerById = new Map(owners.map((row) => [row.id, row.companyId]));
+        if (ownerById.size !== physicalBaleIds.length) {
+          throw new LabelPrintRequestError("Cannot print a physical bale belonging to another company or not found");
+        }
+        const baleCompanyIds = [...new Set(owners.map((row) => row.companyId))].sort((a, b) => a - b);
+        // Priority Scan queue locks come first (ascending company), matching
+        // Stock Entry, before any bale/reference-sequence row locks below.
+        for (const ownerCompanyId of baleCompanyIds) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${ownerCompanyId})`);
+        }
+
         const results = [];
         for (const bale of bales) {
           let referenceNumber: string;
@@ -372,21 +400,22 @@ export function registerBaleRoutes(app: Express) {
           // If the bale already has a reference number (assigned by stock-entry),
           // reuse it — do NOT generate a new one or we'll collide with factory_bales unique constraint.
           if (bale.productionBaleId) {
+            const baleCompanyId = ownerById.get(Number(bale.productionBaleId))!;
             const [existingBale] = await tx
               .select({ referenceNumber: factoryBales.referenceNumber })
               .from(factoryBales)
-              .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, companyId)));
+              .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, baleCompanyId)));
 
             if (existingBale?.referenceNumber) {
               // Bale already has a reference (e.g. assigned by stock-entry) — reuse it
               referenceNumber = existingBale.referenceNumber;
-            } else if (existingBale) {
-              // Bale exists in this company but has no reference yet.
-              referenceNumber = await generateSafeRef(tx, companyId);
-              await tx.update(factoryBales).set({ referenceNumber })
-                .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, companyId)));
             } else {
-              throw new Error("Cannot print a physical bale belonging to another company or not found");
+              // Bale has no ref yet (e.g. pressing batch bale) — generate one safely
+              referenceNumber = await generateSafeRef(tx, companyId);
+              await tx
+                .update(factoryBales)
+                .set({ referenceNumber })
+                .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, baleCompanyId)));
             }
           } else if (bale.referenceNumber) {
             // Pre-allocated offline ref — use it directly (sequence was already advanced)
@@ -413,11 +442,31 @@ export function registerBaleRoutes(app: Express) {
 
           results.push(labelPrint);
         }
-        return results;
+
+        // Resolve priority assignments in the SAME transaction as the print
+        // records, after every bale has its reference: either both commit or
+        // neither does. Saved snapshots are returned even when the mode is OFF;
+        // the mode only gates NEW automatic allocations.
+        const allocations = [];
+        for (const ownerCompanyId of baleCompanyIds) {
+          const ids = physicalBaleIds.filter((id) => ownerById.get(id) === ownerCompanyId);
+          const prepared = await prepareAutomaticPriorityPrintBatchTx(
+            tx,
+            ownerCompanyId,
+            ids.map((baleId) => ({ baleId })),
+            actorName,
+            actorId
+          );
+          for (const item of prepared) if (item.priorityAllocation) allocations.push(item.priorityAllocation);
+        }
+        return { labelPrints: results, priorityAllocations: allocations };
       });
 
       res.json({ labelPrints, priorityAllocations });
     } catch (error: unknown) {
+      if (error instanceof LabelPrintRequestError) {
+        return res.status(400).json({ message: error.message });
+      }
       logger.error("Error creating bale label prints:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -425,43 +474,70 @@ export function registerBaleRoutes(app: Express) {
 
   app.post("/api/bale-label-prints/reprint", requireAuth, async (req, res) => {
     try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      // Reprint audit rows keep the active session company, as before.
+      const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const baleId = Number(req.body?.baleId);
       if (!Number.isSafeInteger(baleId) || baleId < 1) {
         return res.status(400).json({ message: "Valid baleId required" });
       }
-      const [physicalBale] = await db.select({ id: factoryBales.id }).from(factoryBales)
-        .where(and(
-          eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId),
-          sql`${factoryBales.deletedAt} IS NULL`
-        )).limit(1);
-      if (!physicalBale) return res.status(404).json({ message: "Physical bale not found or deleted" });
-      // Resolve before recording the print. Reprints of already assigned bales
-      // return their original snapshot; unassigned bales may enter Priority Scan.
-      const { runAutomaticPriorityReprint } = await import("./factory/customer-orders/priorityAutoAllocation");
-      const priorityAllocation = await runAutomaticPriorityReprint(
-        companyId, Number(baleId),
-        String(req.session.username || req.session.userId || "automatic"),
-        req.session.userId == null ? null : String(req.session.userId)
-      );
-      const [existing] = await db
+      const authorizedCompanyIds = [
+        ...new Set(
+          [req.session.currentCompanyId, req.session.factoryCompanyId].filter(
+            (id): id is number => Number.isSafeInteger(id) && Number(id) > 0
+          )
+        ),
+      ];
+      const [bale] = await db
         .select()
-        .from(baleLabelPrints)
-        .where(and(eq(baleLabelPrints.companyId, companyId), eq(baleLabelPrints.productionBaleId, baleId)));
-      if (existing) {
-        await db
-          .update(baleLabelPrints)
-          .set({ printedAt: new Date(), printedByUserId: req.session.userId || null })
-          .where(eq(baleLabelPrints.id, existing.id));
-      } else {
-        const [bale] = await db.select().from(factoryBales).where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId)));
-        if (bale) {
+        .from(factoryBales)
+        .where(
+          and(
+            eq(factoryBales.id, baleId),
+            inArray(factoryBales.companyId, authorizedCompanyIds),
+            sql`${factoryBales.deletedAt} IS NULL`
+          )
+        )
+        .limit(1);
+      if (!bale) return res.status(404).json({ message: "Physical bale not found or deleted" });
+
+      const { prepareAutomaticPriorityPrintBatchTx } = await import("./factory/customer-orders/priorityAutoAllocation");
+      const { PRIORITY_SCAN_LOCK_NAMESPACE } = await import("./factory/customer-orders/priorityScanQueue");
+      const priorityAllocation = await db.transaction(async (tx) => {
+        // Resolve under the bale company's queue lock, in the same transaction
+        // as the reprint audit. Already assigned bales return their original
+        // snapshot; an unassigned bale may enter Priority Scan only while ON.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${bale.companyId})`);
+        const [prepared] = await prepareAutomaticPriorityPrintBatchTx(
+          tx,
+          bale.companyId,
+          [{ baleId }],
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId)
+        );
+
+        const [existing] = await tx
+          .select()
+          .from(baleLabelPrints)
+          .where(and(eq(baleLabelPrints.companyId, companyId), eq(baleLabelPrints.productionBaleId, baleId)));
+        if (existing) {
+          await tx
+            .update(baleLabelPrints)
+            .set({ printedAt: new Date(), printedByUserId: req.session.userId || null })
+            .where(eq(baleLabelPrints.id, existing.id));
+        } else {
           const product = bale.productId
-            ? (await db.select().from(factoryBaleProducts).where(and(eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, companyId))))[0]
+            ? (
+                await tx
+                  .select()
+                  .from(factoryBaleProducts)
+                  .where(
+                    and(eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, bale.companyId))
+                  )
+              )[0]
             : null;
           const refNum = bale.referenceNumber || `REPRINT-${baleId}`;
-          await db.insert(baleLabelPrints).values({
+          await tx.insert(baleLabelPrints).values({
             companyId,
             productionBaleId: baleId,
             productId: bale.productId || null,
@@ -473,7 +549,8 @@ export function registerBaleRoutes(app: Express) {
             printedAt: new Date(),
           });
         }
-      }
+        return prepared?.priorityAllocation ?? null;
+      });
       res.json({ success: true, printedAt: new Date().toISOString(), priorityAllocation });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

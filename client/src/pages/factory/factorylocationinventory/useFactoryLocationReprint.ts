@@ -1,4 +1,4 @@
-import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
+import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -52,7 +52,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
   const openBrowserReprintLabels = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const format = getPaperFormat();
-    if (format === "A4" && !designColor && !labels.some((label) => label.priorityColor)) {
+    if (format === "A4" && !designColor) {
       setReprintPendingLabels(labels);
       setReprintDesignPickerOpen(true);
       return;
@@ -128,11 +128,13 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
 
     try {
       labels = await preparePriorityPrintLabels(
-        labels, modeApiRequest, reprintBales.map((row) => row.bale.id)
+        labels,
+        modeApiRequest,
+        reprintBales.map((row) => row.bale.id)
       );
-      for (const row of reprintBales) {
+      for (const [index, row] of reprintBales.entries()) {
         const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-        if (!response.ok) throw new Error("Could not record label reprint");
+        await assertReprintMatchesPrepared(response, labels[index]);
       }
     } catch (error) {
       toast({ title: "Reprint preparation failed", description: errorMessage(error), variant: "destructive" });

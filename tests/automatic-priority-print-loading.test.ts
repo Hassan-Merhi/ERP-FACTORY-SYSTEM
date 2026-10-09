@@ -12,7 +12,8 @@ beforeAll(async () => {
   await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
-  const login = await agent.post("/api/auth/login")
+  const login = await agent
+    .post("/api/auth/login")
     .send({ username: `${PREFIX}_testuser`, password: "testpassword123" });
   expect(login.status).toBe(200);
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
@@ -64,7 +65,8 @@ describe("Automatic Priority Printing and Loading", () => {
     const firstOrderId = await newLoading(firstProforma);
     const secondOrderId = await newLoading(nextProforma);
     const configure = async (orderId: number, color: string, priority: number) =>
-      agent.put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
+      agent
+        .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
         .send({ color, priority, enabled: true });
     expect((await configure(firstOrderId, "#dc2626", 1)).status).toBe(200);
     expect((await configure(secondOrderId, "#2563eb", 2)).status).toBe(200);
@@ -84,13 +86,21 @@ describe("Automatic Priority Printing and Loading", () => {
     const print = await agent.post("/api/bale-label-prints/reprint").send({ baleId });
     expect(print.status).toBe(200);
     expect(print.body.priorityAllocation).toMatchObject({
-      baleId, orderId: firstOrderId, color: "#dc2626", priority: 1, existing: false,
+      baleId,
+      orderId: firstOrderId,
+      color: "#dc2626",
+      priority: 1,
+      existing: false,
     });
 
     const secondPrint = await agent.post("/api/bale-label-prints/reprint").send({ baleId });
     expect(secondPrint.status).toBe(200);
     expect(secondPrint.body.priorityAllocation).toMatchObject({
-      baleId, orderId: firstOrderId, color: "#dc2626", priority: 1, existing: true,
+      baleId,
+      orderId: firstOrderId,
+      color: "#dc2626",
+      priority: 1,
+      existing: true,
     });
     const linkage = await pool.query<{ id: number }>(
       "SELECT id FROM customer_order_bales WHERE order_id = $1 AND bale_id = $2",
@@ -100,14 +110,14 @@ describe("Automatic Priority Printing and Loading", () => {
 
     // Full proforma causes Red to auto-complete, leaving Blue at #1.
     const afterFulfilled = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-configs");
-    expect(afterFulfilled.body.find((r: {orderId:number}) => r.orderId === firstOrderId).enabled).toBe(false);
+    expect(afterFulfilled.body.find((r: { orderId: number }) => r.orderId === firstOrderId).enabled).toBe(false);
 
     // A loading-bale removal preserves historical evidence, releases the unique
     // active allocation, and returns the previously completed loading to #1.
     const remove = await agent.delete(`/api/factory/customer-orders/${firstOrderId}/bales/${linkage.rows[0].id}`);
     expect(remove.status).toBe(200);
     const afterRemoval = await agent.get("/api/factory/customer-orders/loading-list/priority-scan-configs");
-    const red = afterRemoval.body.find((r: {orderId:number}) => r.orderId === firstOrderId);
+    const red = afterRemoval.body.find((r: { orderId: number }) => r.orderId === firstOrderId);
     expect(red.enabled).toBe(true);
     expect(red.priority).toBe(1);
     const autoRows = await pool.query<{ reversed_at: string | null }>(

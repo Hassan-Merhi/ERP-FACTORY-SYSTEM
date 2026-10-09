@@ -14,8 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactoryBaleProduct } from "@shared/schema";
-import { generateA5LabelsHtml, generateCombinedLabelsHtml, type LabelData } from "@/lib/labelHtml";
-import { getPaperFormat } from "@/components/LabelPrintSettings";
+import { priorityLogoTextStyleAttr, type LabelData } from "@/lib/labelHtml";
 import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 
 interface CartItem {
@@ -38,6 +37,7 @@ function generatePressingLabelHtml(
     pieces: number;
     approxWeightKg: string;
     productName: string;
+    priorityColor?: string | null;
   }>
 ) {
   let labelsHtml = "";
@@ -47,7 +47,7 @@ function generatePressingLabelHtml(
         <div class="code-label">
           <div class="label-top">
             <div class="logo-section">
-              <div class="logo-text">HMD</div>
+              <div class="logo-text"${priorityLogoTextStyleAttr(label)}>HMD</div>
               <div class="logo-subtitle">INTERNATIONAL GROUP</div>
             </div>
             <div class="info-section">
@@ -215,30 +215,18 @@ export default function PressingBales() {
         priorityAllocations
       );
 
-      // Keep original 76mm Pressing labels for ordinary bales. A priority
-      // assignment uses the approved colored-HMD A4/A5 artwork instead.
-      const prioritized = labels.filter((label) => !!label.priorityColor);
-      const ordinary = labels.filter((label) => !label.priorityColor);
-      const documents: string[] = [];
-      if (ordinary.length) documents.push(generatePressingLabelHtml(ordinary));
-      if (prioritized.length) {
-        documents.push(
-          getPaperFormat() === "A5"
-            ? generateA5LabelsHtml(prioritized)
-            : generateCombinedLabelsHtml(prioritized)
-        );
+      // Same 76mm Pressing label for every bale; a priority bale only shows
+      // its small "HMD" text in the saved priority color.
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast({ title: "Error", description: "Please allow pop-ups to print labels", variant: "destructive" });
+        return;
       }
-      for (const [index, html] of documents.entries()) {
-        const printWindow = window.open("", "_blank");
-        if (!printWindow) {
-          toast({ title: "Error", description: "Please allow pop-ups to print labels", variant: "destructive" });
-          return;
-        }
-        printWindow.document.write(html);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => printWindow.print(), 500 + index * 600);
-      }
+
+      printWindow.document.write(generatePressingLabelHtml(labels));
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 500);
     } catch (error) {
       toast({
         title: "Error",

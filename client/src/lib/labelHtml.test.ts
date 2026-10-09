@@ -14,6 +14,7 @@ import {
   generateA5LabelsHtml,
   generateCombinedLabelsHtml,
   generateStickerLabelsHtml,
+  priorityLogoTextStyleAttr,
   resolvePriorityLabelColor,
   validatePriorityLabelColor,
   type LabelData,
@@ -130,37 +131,58 @@ describe("A5 and sticker labels", () => {
 });
 
 describe("Automatic Priority Printing labels", () => {
-  it("colors only the small HMD lettering using the original assigned red", () => {
+  const printers = [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml];
+
+  function stripPriorityLogo(html: string): string {
+    return html
+      .replace(/<svg class="[^"]*priority-hmd-logo"[\s\S]*?<\/svg>/g, "<LOGO>")
+      .replace(/<img class="(?:logo-img|sticker-logo)"[^>]*\/>/g, "<LOGO>");
+  }
+
+  it("colors only the small HMD artwork inside the barcode box with the saved red", () => {
     const bale = label({ priorityColor: "#dc2626", priorityOrderId: 123, priorityNumber: 1 });
-    for (const html of [
-      generateCombinedLabelsHtml([bale]),
-      generateA5LabelsHtml([bale]),
-      generateStickerLabelsHtml([bale]),
-    ]) {
-      expect(html).toContain("priority-hmd-letters");
-      expect(html).toContain("color: #dc2626 !important");
-      expect(html).toContain("INTERNATIONAL GROUP");
+    for (const print of printers) {
+      const html = print([bale]);
+      // One recolored small logo; the letters layer gets the color, the
+      // INTERNATIONAL GROUP subtitle layer stays black.
+      expect(html.match(/class="(?:logo-img|sticker-logo) priority-hmd-logo"/g)).toHaveLength(1);
+      expect(html).toContain('data-priority-color="#dc2626"');
+      expect(html).toContain("0 0 0 0 0.8627 0 0 0 0 0.1490 0 0 0 0 0.1490");
+      expect(html).toContain("0 0 0 0 0 0 0 0 0 0 0 0 0 0 0");
+      expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
       expect(html).toContain("REF-001");
       expect(html).toContain("ART-100");
+      expect(html).toContain("/api/barcode/REF-001");
     }
   });
 
-  it("uses the new HMD globe artwork layout on priority A4 and A5", () => {
-    const bale = label({ priorityColor: "#16a34a" });
-    expect(generateCombinedLabelsHtml([bale])).toContain('class="a4-page priority-print-a4"');
-    expect(generateA5LabelsHtml([bale])).toContain('class="a5-page priority-print-a5"');
+  it("keeps the exact ordinary A4/A5/sticker layout and large HMD banners for priority bales", () => {
+    const [design] = A4_DESIGN_OPTIONS;
+    const ordinary = label({ designColor: design.value });
+    const priority = label({ designColor: design.value, priorityColor: "#2563eb" });
+    for (const print of printers) {
+      expect(stripPriorityLogo(print([priority]))).toBe(stripPriorityLogo(print([ordinary])));
+    }
+    // The large banner artwork is still printed twice per A4 page.
+    const a4 = generateCombinedLabelsHtml([priority]);
+    expect(a4.match(new RegExp(`/labels/hmd-${design.value}.jpg`, "g"))).toHaveLength(2);
+    expect(a4).not.toContain("priority-print-a4");
+    expect(a4).not.toMatch(/stripe/i);
+    expect(generateA5LabelsHtml([priority])).toContain("a5-page a5-page1");
   });
 
-  it("leaves the original normal layout unchanged without a priority assignment", () => {
-    const html = generateCombinedLabelsHtml([label()]);
-    expect(html).not.toContain('class="a4-page priority-print-a4"');
-    expect(html).toContain('class="a4-page"');
+  it("leaves ordinary labels with their original logo markup", () => {
+    for (const print of printers) {
+      const html = print([label({ customerLogoUrl: "https://example.test/logo.png" })]);
+      expect(html).toContain('src="https://example.test/logo.png" alt="Logo"');
+      expect(html).not.toContain('class="priority-hmd-letters"');
+    }
   });
 
   it("rejects invalid colors instead of printing a misleading priority label", () => {
     const malicious = label({ priorityColor: "red; position:absolute" });
     expect(resolvePriorityLabelColor(malicious.priorityColor)).toBeNull();
-    for (const print of [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml]) {
+    for (const print of printers) {
       expect(() => print([malicious])).toThrow(/Unrecognized Priority Scan label color/);
     }
   });
@@ -177,30 +199,10 @@ describe("Automatic Priority Printing labels", () => {
     expect(validatePriorityLabelColor(label())).toBeNull();
   });
 
-  it("keeps the priority artwork within the existing two A4 halves", () => {
-    const html = generateCombinedLabelsHtml([label({ priorityColor: "#dc2626" })]);
-    expect(html).toContain("class=\"priority-a4-half\"");
-    expect(html.match(/class="priority-a4-half"/g)).toHaveLength(2);
-    expect(html).toContain("height: 148.5mm");
-    expect(html).toContain("height: 90mm");
-    expect(html).toContain("height: 58.5mm");
-    expect(html.match(/class="priority-large-hmd"/g)).toHaveLength(2);
-    expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
-  });
-
-  it("uses two A5 pages, retaining the readable barcode and a single colored HMD wordmark", () => {
-    const html = generateA5LabelsHtml([label({ priorityColor: "Red" })]);
-    expect(html.match(/class="a5-page priority-print-a5"/g)).toHaveLength(2);
-    expect(html).toContain("color: #dc2626 !important");
-    expect(html).toContain("height: 145mm");
-    expect(html).toContain("/api/barcode/REF-001");
-    expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
-  });
-
   it("keeps sticker dimensions, article and reference unchanged", () => {
     const html = generateStickerLabelsHtml([label({ priorityColor: "Blue", priorityNumber: 2 })]);
     expect(html).toContain("@page { size: 3in 1.97in");
-    expect(html).toContain("color: #2563eb !important");
+    expect(html).toContain('data-priority-color="#2563eb"');
     expect(html).toContain('class="ref-barcode-img"');
     expect(html).toContain("REF-001");
     expect(html).toContain("ART-100");
@@ -213,21 +215,37 @@ describe("Automatic Priority Printing labels", () => {
       label({ referenceNumber: "NORMAL-02" }),
       label({ referenceNumber: "PRIORITY-03", priorityColor: "#2563eb" }),
     ];
-    for (const print of [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml]) {
+    for (const print of printers) {
       const html = print(items);
       expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(2);
-      expect(html).toContain("PRIORITY-01");
-      expect(html).toContain("NORMAL-02");
-      expect(html).toContain("PRIORITY-03");
-      expect(html).toContain("color: #dc2626 !important");
-      expect(html).toContain("color: #2563eb !important");
+      expect(html).toContain('data-priority-color="#dc2626"');
+      expect(html).toContain('data-priority-color="#2563eb"');
+      const normal = html.slice(html.indexOf("NORMAL-02") - 3000, html.indexOf("NORMAL-02"));
+      expect(normal).not.toContain("priority-hmd-logo");
+      // SVG filter ids must be unique within one print document.
+      const ids = [...html.matchAll(/filter id="([^"]+)"/g)].map((m) => m[1]);
+      expect(new Set(ids).size).toBe(ids.length);
     }
   });
 
-  it("renders the product text as escaped content in new priority artwork", () => {
+  it("renders product text as escaped content", () => {
     const maliciousName = "PANT <img src=x onerror=alert(1)>";
-    const html = generateCombinedLabelsHtml([label({ priorityColor: "#dc2626", productName: maliciousName })]);
-    expect(html).not.toContain('class="priority-a4-main-product">PANT <img');
-    expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    for (const print of printers) {
+      const html = print([label({ priorityColor: "#dc2626", productName: maliciousName })]);
+      expect(html).not.toContain("PANT <img src=x");
+      expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
+    }
+  });
+});
+
+describe("legacy Pressing/Production text logo", () => {
+  it("colors only the HMD text for a priority bale and leaves ordinary labels untouched", () => {
+    expect(priorityLogoTextStyleAttr({ referenceNumber: "R1" })).toBe("");
+    const attr = priorityLogoTextStyleAttr({ referenceNumber: "R1", priorityColor: "Blue" });
+    expect(attr).toContain("color: #2563eb");
+    expect(attr).toContain('data-priority-color="#2563eb"');
+    expect(() => priorityLogoTextStyleAttr({ referenceNumber: "R1", priorityColor: "url(x)" })).toThrow(
+      /Unrecognized Priority Scan label color/
+    );
   });
 });

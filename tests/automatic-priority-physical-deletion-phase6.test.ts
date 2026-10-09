@@ -51,12 +51,19 @@ beforeAll(async () => {
   await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
-  expect((await agent.post("/api/auth/login").send({
-    username: `${PREFIX}_testuser`, password: "testpassword123",
-  })).status).toBe(200);
+  expect(
+    (
+      await agent.post("/api/auth/login").send({
+        username: `${PREFIX}_testuser`,
+        password: "testpassword123",
+      })
+    ).status
+  ).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
-  await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2",
-    [ctx.userId, ctx.companyId]);
+  await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2", [
+    ctx.userId,
+    ctx.companyId,
+  ]);
   await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
 
   const customer = await pool.query<{ id: number }>(
@@ -121,7 +128,8 @@ afterAll(async () => {
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [ctx.companyId]);
     await pool.query(
       `DELETE FROM factory_bale_production_attributions WHERE bale_id IN
-       (SELECT id FROM factory_bales WHERE company_id = $1)`, [ctx.companyId]
+       (SELECT id FROM factory_bales WHERE company_id = $1)`,
+      [ctx.companyId]
     );
     await pool.query("DELETE FROM factory_daily_bale_scans WHERE company_id = $1", [String(ctx.companyId)]);
     await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [ctx.companyId]);
@@ -169,16 +177,20 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     );
     expect(links).toHaveLength(0);
     const { rows: order } = await pool.query<{ total_qty_bales: number }>(
-      "SELECT total_qty_bales FROM customer_orders WHERE id = $1", [orderId]
+      "SELECT total_qty_bales FROM customer_orders WHERE id = $1",
+      [orderId]
     );
     expect(order[0].total_qty_bales).toBe(0);
-    const history = await agent.get(
-      "/api/factory/customer-orders/loading-list/priority-allocation-history"
-    ).query({ baleId: allocatedBale.id });
+    const history = await agent
+      .get("/api/factory/customer-orders/loading-list/priority-allocation-history")
+      .query({ baleId: allocatedBale.id });
     expect(history.status).toBe(200);
     expect(history.body.items[0]).toMatchObject({
-      originalPriority: 1, originalColor: "#dc2626", active: false,
-      reversedBy: `${PREFIX}_testuser`, reversalReason: "Production bale damaged",
+      originalPriority: 1,
+      originalColor: "#dc2626",
+      active: false,
+      reversedBy: `${PREFIX}_testuser`,
+      reversalReason: "Production bale damaged",
     });
     expect(history.body.items[0].reversedAt).toBeTruthy();
     const { rows: audit } = await pool.query(
@@ -237,9 +249,7 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
   });
 
   it("generic restore refuses to recreate physical stock after a canonical debit", async () => {
-    const restore = await agent.post(
-      `/api/deleted-items/factoryBale/${unusedBale.id}/restore`
-    );
+    const restore = await agent.post(`/api/deleted-items/factoryBale/${unusedBale.id}/restore`);
     expect(restore.status).toBe(409);
     expect(String(restore.body.message)).toMatch(/inventory|stock re-entry/i);
     expect((await baleStatus(unusedBale.id)).status).toBe("DELETED");
@@ -248,11 +258,9 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
   });
 
   it("cannot resurrect a physically deleted bale or bypass reversal through REMOVED", async () => {
-    const revive = await agent.patch(`/api/factory/bales/${allocatedBale.id}/status`)
-      .send({ status: "IN_STOCK" });
+    const revive = await agent.patch(`/api/factory/bales/${allocatedBale.id}/status`).send({ status: "IN_STOCK" });
     expect(revive.status).toBe(409);
-    const removed = await agent.patch(`/api/factory/bales/${allocatedBale.id}/status`)
-      .send({ status: "REMOVED" });
+    const removed = await agent.patch(`/api/factory/bales/${allocatedBale.id}/status`).send({ status: "REMOVED" });
     expect(removed.status).toBe(409);
     expect(await inventoryQty()).toBe(0);
   });
@@ -268,8 +276,7 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect(deletion.status).toBe(200);
     expect(deletion.body.updated).toBe(2);
     expect(await removedMovements()).toBe(4);
-    const revive = await agent.patch("/api/factory/bales/bulk-status")
-      .send({ ids, status: "IN_STOCK" });
+    const revive = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "IN_STOCK" });
     expect(revive.status).toBeGreaterThanOrEqual(400);
   }, 60000);
 
@@ -293,5 +300,153 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect((await baleStatus(bale.id)).status).toBe("IN_STOCK");
     expect(await inventoryQty()).toBe(quantityBefore);
     expect(await removedMovements()).toBe(4);
+  }, 60000);
+});
+
+describe("Phase 6 review fixes: every deletion path, live links only", () => {
+  const extraOrders: number[] = [];
+
+  async function customerId(): Promise<number> {
+    const { rows } = await pool.query<{ id: number }>("SELECT id FROM customers WHERE company_id = $1 AND code = $2", [
+      ctx.companyId,
+      `${PREFIX}-CUSTOMER`,
+    ]);
+    return rows[0].id;
+  }
+  async function newOrder(status: string): Promise<number> {
+    const { rows } = await pool.query<{ id: number }>(
+      `INSERT INTO customer_orders (company_id, customer_id, order_date, status)
+       VALUES ($1, $2, CURRENT_DATE, $3) RETURNING id`,
+      [ctx.companyId, await customerId(), status]
+    );
+    extraOrders.push(rows[0].id);
+    return rows[0].id;
+  }
+  async function newStockBales(quantity: number): Promise<Array<{ id: number; referenceNumber: string }>> {
+    // Mode ON would route the bale into a priority loading; these cases need
+    // ordinary stock, so turn it off just for the receipt.
+    expect((await agent.put("/api/factory/automatic-priority-mode").send({ enabled: false })).status).toBe(200);
+    const stock = await agent.post("/api/factory/stock-entry").send({
+      erpLocationId: ctx.locationId,
+      items: [{ productId, quantity, weightPerBale: "40" }],
+    });
+    expect(stock.status).toBe(200);
+    return stock.body.bales;
+  }
+  async function link(order: number, bale: { id: number; referenceNumber: string }): Promise<void> {
+    await pool.query(
+      `INSERT INTO customer_order_bales
+        (order_id, bale_id, bale_reference, location_id, weight, article_code, bale_name, price_used)
+       VALUES ($1, $2, $3, $4, '40', $5, 'Adult Jogger Pant', '35')`,
+      [order, bale.id, bale.referenceNumber, ctx.locationId, ARTICLE]
+    );
+  }
+
+  afterAll(async () => {
+    if (!extraOrders.length) return;
+    await pool.query("DELETE FROM customer_order_bale_removals WHERE order_id = ANY($1::int[])", [extraOrders]);
+    await pool.query("DELETE FROM customer_order_bales WHERE order_id = ANY($1::int[])", [extraOrders]);
+    await pool.query("DELETE FROM customer_order_lines WHERE order_id = ANY($1::int[])", [extraOrders]);
+  });
+
+  it("deletes a bale whose only link is a cancelled loading, keeping that order's history", async () => {
+    const [bale] = await newStockBales(1);
+    const cancelled = await newOrder("CANCELLED");
+    await link(cancelled, bale);
+    const before = await inventoryQty();
+    const movementsBefore = await removedMovements();
+
+    const deleted = await agent.delete(`/api/factory/bales/${bale.id}`);
+    expect(deleted.status).toBe(200);
+    expect(await inventoryQty()).toBe(before - 1);
+    expect(await removedMovements()).toBe(movementsBefore + 1);
+    // The cancelled order's own record of the bale is left alone.
+    const { rows } = await pool.query("SELECT id FROM customer_order_bales WHERE order_id = $1 AND bale_id = $2", [
+      cancelled,
+      bale.id,
+    ]);
+    expect(rows).toHaveLength(1);
+  }, 60000);
+
+  it("answers business rejections with 4xx, not 500", async () => {
+    const missing = await agent.delete("/api/factory/bales/2147483000");
+    expect(missing.status).toBe(404);
+    const [bale] = await newStockBales(1);
+    const locked = await newOrder("FINALIZED");
+    await link(locked, bale);
+    const rejected = await agent.delete(`/api/factory/bales/${bale.id}`);
+    expect(rejected.status).toBe(409);
+    expect((await baleStatus(bale.id)).status).toBe("IN_STOCK");
+  }, 60000);
+
+  it("quantity removal never picks bales on a live loading", async () => {
+    // Earlier cases leave other stock at this location; isolate on fresh bales
+    // by loading every existing in-stock bale of the product first.
+    const live = await newOrder("LOADING");
+    const { rows: existing } = await pool.query<{ id: number; reference_number: string }>(
+      `SELECT id, reference_number FROM factory_bales fb
+        WHERE company_id = $1 AND product_id = $2 AND status = 'IN_STOCK' AND deleted_at IS NULL
+          AND NOT EXISTS (SELECT 1 FROM customer_order_bales cob WHERE cob.bale_id = fb.id)`,
+      [ctx.companyId, productId]
+    );
+    for (const row of existing) await link(live, { id: row.id, referenceNumber: row.reference_number });
+    const [loaded, free] = await newStockBales(2);
+    await link(live, loaded);
+    const before = await inventoryQty();
+
+    const tooMany = await agent.post("/api/factory/stock-entry/remove-by-product").send({
+      productId,
+      locationId: ctx.locationId,
+      qty: 2,
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+    });
+    expect(tooMany.status).toBe(400);
+    expect(await inventoryQty()).toBe(before);
+
+    const one = await agent.post("/api/factory/stock-entry/remove-by-product").send({
+      productId,
+      locationId: ctx.locationId,
+      qty: 1,
+      supervisorUsername: `${PREFIX}_testuser`,
+      supervisorPassword: "testpassword123",
+    });
+    expect(one.status).toBe(200);
+    expect(one.body.bales.map((b: { id: number }) => b.id)).toEqual([free.id]);
+    expect((await baleStatus(loaded.id)).status).toBe("IN_STOCK");
+    expect(await inventoryQty()).toBe(before - 1);
+  }, 60000);
+
+  it("Barcode Lookup delete-everywhere uses the same single inventory reversal", async () => {
+    const [bale] = await newStockBales(1);
+    const before = await inventoryQty();
+    const movementsBefore = await removedMovements();
+    const deleted = await agent.delete(
+      `/api/lookup/reference/${encodeURIComponent(bale.referenceNumber)}/delete-everywhere`
+    );
+    expect(deleted.status).toBe(200);
+    expect(await inventoryQty()).toBe(before - 1);
+    expect(await removedMovements()).toBe(movementsBefore + 1);
+    const { rows } = await pool.query(
+      "SELECT id FROM factory_physical_bale_deletions WHERE company_id = $1 AND bale_id = $2",
+      [ctx.companyId, bale.id]
+    );
+    expect(rows).toHaveLength(1);
+    const again = await agent.delete(
+      `/api/lookup/reference/${encodeURIComponent(bale.referenceNumber)}/delete-everywhere`
+    );
+    expect(again.status).toBeGreaterThanOrEqual(400);
+    expect(await inventoryQty()).toBe(before - 1);
+  }, 60000);
+
+  it("status edits cannot move a bale on an open loading out of stock without reversal", async () => {
+    const [bale] = await newStockBales(1);
+    const live = await newOrder("LOADING");
+    await link(live, bale);
+    const single = await agent.patch(`/api/factory/bales/${bale.id}/status`).send({ status: "SOLD" });
+    expect(single.status).toBe(409);
+    const bulk = await agent.patch("/api/factory/bales/bulk-status").send({ ids: [bale.id], status: "PRESSED" });
+    expect(bulk.status).toBe(400);
+    expect((await baleStatus(bale.id)).status).toBe("IN_STOCK");
   }, 60000);
 });

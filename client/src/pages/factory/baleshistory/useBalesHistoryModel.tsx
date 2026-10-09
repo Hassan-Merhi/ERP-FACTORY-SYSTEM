@@ -464,7 +464,11 @@ export function useBalesHistoryModel() {
       }
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
     } catch (error) {
-      toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({
+        title: "Reprint preparation failed",
+        description: getErrorDetails(error).message,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -489,7 +493,7 @@ export function useBalesHistoryModel() {
   const openBrowserReprint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const fmt = getPaperFormat();
-    if (fmt === "A4" && !designColor && !labels.some((label) => label.priorityColor)) {
+    if (fmt === "A4" && !designColor) {
       setPendingReprintLabels(labels);
       setDesignPickerOpen(true);
       return;

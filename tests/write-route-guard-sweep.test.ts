@@ -301,8 +301,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/shipping-container-rows/:id/restore",
   "POST /api/factory/shipping-container-rows/sync",
   "POST /api/factory/stock-entry",
-  "POST /api/factory/stock-entry/remove",
-  "POST /api/factory/stock-entry/remove-by-product",
   "POST /api/factory/supplier-payments",
   "POST /api/factory/suppliers",
   "POST /api/factory/transporters",
@@ -454,12 +452,19 @@ afterAll(() => {
  * POST /api/sales-report/recalculate-costs left the sensitive list outright, as
  * the stock-transfer-revision routes did: historical sale costs are immutable,
  * and the route now answers 409 HISTORICAL_SALE_COST_IMMUTABLE without writing.
+ *
+ * The two supervised stock-removal routes joined them with Automatic Priority
+ * Printing & Loading: every physical bale deletion now goes through
+ * server/routes/factory/stock/physicalBaleDeletion.ts, so the route files no
+ * longer name the inventory table themselves, but the routes still move stock.
  */
 const DELEGATED_WRITE_ROUTES = [
   "DELETE /api/waste-dispatches/:id",
   "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/recover-bales",
   "POST /api/factory/customer-proformas/:id/create-loading",
+  "POST /api/factory/stock-entry/remove",
+  "POST /api/factory/stock-entry/remove-by-product",
   "POST /api/stock-adjustments",
   "POST /api/waste-dispatches",
   "PUT /api/stock-adjustments/:id",

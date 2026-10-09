@@ -273,18 +273,21 @@ describe("PATCH /api/factory/bales/bulk-status", () => {
     for (const id of ids) expect((await baleRow(id))?.status).toBe("PRESSED");
   });
 
-  it("sets deletedAt when the bulk status is DELETED, and clears it otherwise", async () => {
+  it("sets deletedAt when the bulk status is DELETED, and never revives it by a status edit", async () => {
     const id = await createBale();
 
     await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "DELETED" });
     expect((await baleRow(id))?.deleted_at).not.toBeNull();
 
-    // Moving a bale back out of DELETED has to clear the tombstone, or it stays
-    // filtered out of stock while claiming to be IN_STOCK.
-    await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "IN_STOCK" });
+    // A physical deletion goes through the controlled deletion service (one
+    // inventory decrement + audit). Flipping the bale back to IN_STOCK by a
+    // status edit would recreate stock without a receipt, so it is refused and
+    // the tombstone stays.
+    const revive = await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "IN_STOCK" });
+    expect(revive.status).toBe(400);
     const row = await baleRow(id);
-    expect(row?.status).toBe("IN_STOCK");
-    expect(row?.deleted_at).toBeNull();
+    expect(row?.status).toBe("DELETED");
+    expect(row?.deleted_at).not.toBeNull();
   });
 
   it("rejects an empty id list or a status outside the allowed set", async () => {

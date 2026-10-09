@@ -121,7 +121,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         }
         const factoryProducts =
           productIds.length > 0
-            ? await tx.select().from(factoryBaleProducts).where(and(eq(factoryBaleProducts.companyId, companyId), inArray(factoryBaleProducts.id, productIds)))
+            ? await tx
+                .select()
+                .from(factoryBaleProducts)
+                .where(and(eq(factoryBaleProducts.companyId, companyId), inArray(factoryBaleProducts.id, productIds)))
             : [];
         const productMap = new Map(factoryProducts.map((p) => [p.id, p]));
 
@@ -132,7 +135,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         const categoryIds = Array.from(categoryIdSet);
         const factoryCats =
           categoryIds.length > 0
-            ? await tx.select().from(factoryCategories).where(and(eq(factoryCategories.companyId, companyId), inArray(factoryCategories.id, categoryIds)))
+            ? await tx
+                .select()
+                .from(factoryCategories)
+                .where(and(eq(factoryCategories.companyId, companyId), inArray(factoryCategories.id, categoryIds)))
             : [];
         const categoryMap = new Map(factoryCats.map((c) => [c.id, c]));
 

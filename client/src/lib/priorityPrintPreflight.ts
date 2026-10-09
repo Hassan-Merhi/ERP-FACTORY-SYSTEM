@@ -1,7 +1,9 @@
 import type { LabelData } from "./labelHtml";
 
-export const PRIORITY_PRINT_BATCH_URL =
-  "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch";
+export const PRIORITY_PRINT_BATCH_URL = "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch";
+
+/** Must match the route's per-request limit. */
+export const PRIORITY_PRINT_BATCH_LIMIT = 200;
 
 export type PrintRequest = (method: string, url: string, body?: unknown) => Promise<Response>;
 
@@ -14,10 +16,7 @@ export interface PriorityPrintAssignment {
   existing: boolean;
   source: string;
 }
-export interface PriorityPrintCandidate {
-  baleId?: number;
-  referenceNumber: string;
-}
+export type PriorityPrintCandidate = { baleId: number } | { referenceNumber: string };
 interface PriorityPrintRow {
   baleId: number;
   referenceNumber: string;
@@ -40,36 +39,40 @@ export async function preparePriorityPrintLabels(
   baleIds?: Array<number | undefined>
 ): Promise<LabelData[]> {
   if (labels.length === 0) return [];
-  const items: PriorityPrintCandidate[] = labels.map((label, index) => ({
-    referenceNumber: label.referenceNumber,
-    ...(baleIds?.[index] != null ? { baleId: baleIds[index] } : {}),
-  }));
-  const response = await request("POST", PRIORITY_PRINT_BATCH_URL, { items });
-  if (!response.ok) {
-    const error = await response.json().catch(() => null);
-    throw new Error(
-      typeof error?.message === "string" ? error.message : "Could not prepare priority labels"
-    );
-  }
-  const body = (await response.json()) as { results?: PriorityPrintRow[] };
-  if (!Array.isArray(body.results)) throw new Error("Incomplete priority print response");
+  // A physical bale ID is authoritative. Some screens print a fallback code
+  // when a bale has no stored reference, so never send that label text as a
+  // reference to be cross-checked against the ID.
+  const items: PriorityPrintCandidate[] = labels.map((label, index) =>
+    baleIds?.[index] != null ? { baleId: baleIds[index] } : { referenceNumber: label.referenceNumber }
+  );
 
   const byId = new Map<number, PriorityPrintRow>();
   const byRef = new Map<string, PriorityPrintRow>();
-  for (const row of body.results) {
-    if (!row || !Number.isSafeInteger(row.baleId) ||
-        typeof row.referenceNumber !== "string") {
-      throw new Error("Invalid priority print response");
+  // The server caps one atomic preflight at PRIORITY_PRINT_BATCH_LIMIT bales.
+  // Larger "select all" prints are prepared in consecutive atomic chunks; a
+  // failing chunk stops the whole print before any window is rendered.
+  for (let offset = 0; offset < items.length; offset += PRIORITY_PRINT_BATCH_LIMIT) {
+    const chunk = items.slice(offset, offset + PRIORITY_PRINT_BATCH_LIMIT);
+    const response = await request("POST", PRIORITY_PRINT_BATCH_URL, { items: chunk });
+    if (!response.ok) {
+      const error = await response.json().catch(() => null);
+      throw new Error(typeof error?.message === "string" ? error.message : "Could not prepare priority labels");
     }
-    byId.set(row.baleId, row);
-    byRef.set(row.referenceNumber.toLowerCase(), row);
+    const body = (await response.json()) as { results?: PriorityPrintRow[] };
+    if (!Array.isArray(body.results)) throw new Error("Incomplete priority print response");
+    for (const row of body.results) {
+      if (!row || !Number.isSafeInteger(row.baleId) || typeof row.referenceNumber !== "string") {
+        throw new Error("Invalid priority print response");
+      }
+      byId.set(row.baleId, row);
+      byRef.set(row.referenceNumber.toLowerCase(), row);
+    }
   }
 
   return labels.map((label, index) => {
-    const matched = baleIds?.[index] != null
-      ? byId.get(baleIds[index]!)
-      : byRef.get(label.referenceNumber.toLowerCase());
-    if (!matched || matched.referenceNumber.toLowerCase() !== label.referenceNumber.toLowerCase()) {
+    const byBaleId = baleIds?.[index] != null;
+    const matched = byBaleId ? byId.get(baleIds[index]!) : byRef.get(label.referenceNumber.toLowerCase());
+    if (!matched || (!byBaleId && matched.referenceNumber.toLowerCase() !== label.referenceNumber.toLowerCase())) {
       throw new Error(`Priority preparation missing bale ${label.referenceNumber}`);
     }
     const assignment = matched.priorityAllocation;
@@ -97,11 +100,11 @@ export async function preparePriorityPrintLabels(
 /** Apply snapshots already returned by a label-print audit endpoint.
  *  Missing snapshots mean ordinary label printing, never a guessed color.
  */
-export function withRecordedPriorityAllocations(
-  labels: LabelData[],
+export function withRecordedPriorityAllocations<T extends LabelData>(
+  labels: T[],
   baleIds: number[],
   allocations: PriorityPrintAssignment[]
-): LabelData[] {
+): T[] {
   const byBale = new Map(allocations.map((a) => [a.baleId, a]));
   return labels.map((label, index) => {
     const assignment = byBale.get(baleIds[index]);
@@ -114,4 +117,21 @@ export function withRecordedPriorityAllocations(
         }
       : label;
   });
+}
+
+/**
+ * The per-bale reprint audit endpoint resolves the assignment again. If a
+ * priority loading became eligible between the preflight and the audit call,
+ * the label prepared earlier would be stale: fail closed instead of printing
+ * an ordinary label for a bale that is now allocated (or vice versa).
+ */
+export async function assertReprintMatchesPrepared(response: Response, label: LabelData): Promise<void> {
+  if (!response.ok) throw new Error("Could not record label reprint");
+  const body = (await response.json().catch(() => null)) as {
+    priorityAllocation?: { orderId?: number | null } | null;
+  } | null;
+  const recordedOrderId = body?.priorityAllocation?.orderId ?? null;
+  if (recordedOrderId !== (label.priorityOrderId ?? null)) {
+    throw new Error(`Loading changed for ${label.referenceNumber}. Refresh before printing.`);
+  }
 }

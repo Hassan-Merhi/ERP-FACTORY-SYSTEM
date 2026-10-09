@@ -8,9 +8,7 @@ import { sql } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import { ensurePriorityScanSchema } from "../server/startup/priorityScanSchema";
-import {
-  reversePriorityAllocationForDeletedBaleTx,
-} from "../server/routes/factory/customer-orders/priorityAutoAllocation";
+import { reversePriorityAllocationForDeletedBaleTx } from "../server/routes/factory/customer-orders/priorityAutoAllocation";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../server/routes/factory/customer-orders/priorityScanQueue";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -31,10 +29,13 @@ beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [ctx.companyId]);
-  await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2",
-    [ctx.userId, ctx.companyId]);
+  await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2", [
+    ctx.userId,
+    ctx.companyId,
+  ]);
   const login = await agent.post("/api/auth/login").send({
-    username: `${PREFIX}_testuser`, password: "testpassword123",
+    username: `${PREFIX}_testuser`,
+    password: "testpassword123",
   });
   if (login.status !== 200) throw new Error(`Login failed: ${login.status}`);
   const active = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
@@ -60,6 +61,14 @@ beforeAll(async () => {
     [ctx.companyId, referenceNumber, ctx.locationId]
   );
   baleId = bale.rows[0].id;
+  // A real allocation always links the bale to its loading in the same
+  // transaction; the saved snapshot is only authoritative while that link lives.
+  await pool.query(
+    `INSERT INTO customer_order_bales
+       (order_id, bale_id, bale_reference, location_id, weight, article_code, bale_name, price_used)
+     VALUES ($1, $2, $3, $4, '42', 'P2-PANT', 'Adult Jogger Pant', '0')`,
+    [orderId, baleId, referenceNumber, ctx.locationId]
+  );
 
   const history = await pool.query<{ id: string }>(
     `INSERT INTO factory_priority_scan_history
@@ -92,6 +101,7 @@ afterAll(async () => {
     await pool.query("DELETE FROM factory_priority_auto_allocations WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_priority_scan_history WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM customer_order_priority_scan_configs WHERE company_id = $1", [ctx.companyId]);
+    await pool.query("DELETE FROM customer_order_bales WHERE order_id = $1", [orderId]);
   }
   if (otherCompanyId) {
     await pool.query("DELETE FROM factory_priority_scan_history WHERE company_id = $1", [otherCompanyId]);
@@ -108,10 +118,16 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(res.body.nextCursor).toBeNull();
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0]).toMatchObject({
-      baleId, orderId, referenceNumber, articleCode: "P2-PANT",
-      originalPriority: 1, originalColor: "#dc2626",
-      assignedByName: "Original Loader", assignedByUserId: ctx.userId,
-      allocationSource: "stock-entry", active: true,
+      baleId,
+      orderId,
+      referenceNumber,
+      articleCode: "P2-PANT",
+      originalPriority: 1,
+      originalColor: "#dc2626",
+      assignedByName: "Original Loader",
+      assignedByUserId: ctx.userId,
+      allocationSource: "stock-entry",
+      active: true,
     });
     expect(res.body.items[0].assignedAt).toBeTruthy();
   });
@@ -122,7 +138,11 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     const res = await agent.post(PRINT_PREFLIGHT).send({ referenceNumber });
     expect(res.status).toBe(200);
     expect(res.body.priorityAllocation).toMatchObject({
-      orderId, baleId, color: "#dc2626", priority: 1, existing: true,
+      orderId,
+      baleId,
+      color: "#dc2626",
+      priority: 1,
+      existing: true,
     });
     const rows = await pool.query<{ count: string }>(
       "SELECT count(*)::text AS count FROM factory_priority_auto_allocations WHERE company_id = $1 AND bale_id = $2",
@@ -138,7 +158,11 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
       const reprint = await agent.post(PRINT_PREFLIGHT).send({ referenceNumber });
       expect(reprint.status).toBe(200);
       expect(reprint.body.priorityAllocation).toMatchObject({
-        baleId, orderId, color: "#dc2626", priority: 1, existing: true,
+        baleId,
+        orderId,
+        color: "#dc2626",
+        priority: 1,
+        existing: true,
       });
     }
     const snapshot = await pool.query<{ count: string }>(
@@ -152,12 +176,14 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(snapshot.rows[0].count).toBe("1");
     expect(timeline.rows[0].count).toBe("1");
 
-    await expect(pool.query(
-      `INSERT INTO factory_priority_auto_allocations
+    await expect(
+      pool.query(
+        `INSERT INTO factory_priority_auto_allocations
          (company_id, bale_id, order_id, reference_number, priority, color, allocation_source)
        VALUES ($1, $2, $3, $4, 1, '#dc2626', 'reprint')`,
-      [ctx.companyId, baleId, orderId, referenceNumber]
-    )).rejects.toMatchObject({ code: "23505" });
+        [ctx.companyId, baleId, orderId, referenceNumber]
+      )
+    ).rejects.toMatchObject({ code: "23505" });
 
     const off = await agent.put("/api/factory/automatic-priority-mode").send({ enabled: false });
     expect(off.status).toBe(200);
@@ -165,8 +191,11 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
 
   it("rejects unbounded or malformed queries", async () => {
     for (const query of [
-      {}, { baleId: "NaN" }, { orderId: -1 },
-      { baleId, limit: 101 }, { baleId, beforeId: "wrong" },
+      {},
+      { baleId: "NaN" },
+      { orderId: -1 },
+      { baleId, limit: 101 },
+      { baleId, beforeId: "wrong" },
       { referenceNumber: "" },
     ]) {
       const res = await agent.get(HISTORY_URL).query(query);
@@ -178,8 +207,11 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     await db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${ctx.companyId})`);
       await reversePriorityAllocationForDeletedBaleTx(tx, {
-        companyId: ctx.companyId, baleId, actor: "Supervisor",
-        actorId: ctx.userId, reason: "Physical bale deleted",
+        companyId: ctx.companyId,
+        baleId,
+        actor: "Supervisor",
+        actorId: ctx.userId,
+        reason: "Physical bale deleted",
       });
     });
 
@@ -187,10 +219,13 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0]).toMatchObject({
-      originalPriority: 1, originalColor: "#dc2626",
+      originalPriority: 1,
+      originalColor: "#dc2626",
       assignedByName: "Original Loader",
-      reversedBy: "Supervisor", reversedByUserId: ctx.userId,
-      reversalReason: "Physical bale deleted", active: false,
+      reversedBy: "Supervisor",
+      reversedByUserId: ctx.userId,
+      reversalReason: "Physical bale deleted",
+      active: false,
     });
     expect(res.body.items[0].reversedAt).toBeTruthy();
 
@@ -212,7 +247,9 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(first.status).toBe(200);
     expect(first.body.items).toHaveLength(1);
     expect(first.body.items[0]).toMatchObject({
-      originalPriority: 2, originalColor: "#2563eb", allocationSource: "manual",
+      originalPriority: 2,
+      originalColor: "#2563eb",
+      allocationSource: "manual",
     });
     expect(first.body.nextCursor).toBeTruthy();
 
@@ -220,7 +257,10 @@ describe("Phase 2: immutable company-scoped Priority Scan allocation timeline", 
     expect(older.status).toBe(200);
     expect(older.body.items).toHaveLength(1);
     expect(older.body.items[0]).toMatchObject({
-      id: originalHistoryId, originalPriority: 1, originalColor: "#dc2626", active: false,
+      id: originalHistoryId,
+      originalPriority: 1,
+      originalColor: "#dc2626",
+      active: false,
     });
   });
 

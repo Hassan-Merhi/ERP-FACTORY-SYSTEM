@@ -36,8 +36,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
-import { generateA5LabelsHtml, generateCombinedLabelsHtml, type LabelData } from "@/lib/labelHtml";
-import { getPaperFormat } from "@/components/LabelPrintSettings";
+import { priorityLogoTextStyleAttr } from "@/lib/labelHtml";
 import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 import type { Location, FactoryMixBatch } from "@shared/schema";
 import { useEscapeBack } from "@/hooks/use-escape-back";
@@ -57,6 +56,7 @@ function generateFinalLabelHtml(
     approxWeightKg: string;
     productName: string;
     locationName?: string;
+    priorityColor?: string | null;
   }>
 ) {
   let labelsHtml = "";
@@ -66,7 +66,7 @@ function generateFinalLabelHtml(
         <div class="code-label">
           <div class="label-top">
             <div class="logo-section">
-              <div class="logo-text">HMD</div>
+              <div class="logo-text"${priorityLogoTextStyleAttr(label)}>HMD</div>
               <div class="logo-subtitle">INTERNATIONAL GROUP</div>
             </div>
             <div class="info-section">
@@ -307,7 +307,7 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
           } = await labelResponse.json();
 
           const baleMap = new Map(finalizedBales.map((b) => [b.id, b]));
-          const labels: LabelData[] = withRecordedPriorityAllocations(
+          const labels = withRecordedPriorityAllocations(
             labelPrints.map((lp) => {
               const bale = baleMap.get(lp.productionBaleId) || {};
               return {
@@ -323,28 +323,16 @@ function BatchDetailView({ batch, onBack }: { batch: PressingBatch; onBack: () =
             priorityAllocations
           );
 
-          const prioritized = labels.filter(label => !!label.priorityColor);
-          const ordinary = labels.filter(label => !label.priorityColor);
-          const documents: string[] = [];
-          // Leave normal finalization labels byte-for-byte in their old format.
-          if (ordinary.length) documents.push(generateFinalLabelHtml(ordinary));
-          if (prioritized.length) {
-            documents.push(
-              getPaperFormat() === "A5"
-                ? generateA5LabelsHtml(prioritized)
-                : generateCombinedLabelsHtml(prioritized)
-            );
-          }
-          for (const [index, html] of documents.entries()) {
-            const printWindow = window.open("", "_blank");
-            if (printWindow) {
-              printWindow.document.write(html);
-              printWindow.document.close();
-              printWindow.focus();
-              setTimeout(() => printWindow.print(), 500 + index * 600);
-            } else {
-              toast({ title: "Warning", description: "Please allow pop-ups to print labels", variant: "destructive" });
-            }
+          // Same finalization label for every bale; a priority bale only shows
+          // its small "HMD" text in the saved priority color.
+          const printWindow = window.open("", "_blank");
+          if (printWindow) {
+            printWindow.document.write(generateFinalLabelHtml(labels));
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => printWindow.print(), 500);
+          } else {
+            toast({ title: "Warning", description: "Please allow pop-ups to print labels", variant: "destructive" });
           }
         } else {
           toast({

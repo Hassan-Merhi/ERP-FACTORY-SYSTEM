@@ -1,6 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
-import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
+import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -146,7 +146,7 @@ export default function FactoryReprintLabels() {
   const openBrowserPrint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const fmt = getPaperFormat();
-    if (fmt === "A4" && !designColor && !labels.some((label) => label.priorityColor)) {
+    if (fmt === "A4" && !designColor) {
       setPendingLabels(labels);
       setDesignPickerOpen(true);
       return;
@@ -204,16 +204,22 @@ export default function FactoryReprintLabels() {
 
     try {
       labels = await preparePriorityPrintLabels(
-        labels, modeApiRequest, rowsToPrint.map((row) => row.bale.id)
+        labels,
+        modeApiRequest,
+        rowsToPrint.map((row) => row.bale.id)
       );
-      // Keep existing per-bale reprint audit records. These repeat the same
-      // server assignment lookup idempotently and can never reassign a bale.
-      for (const row of rowsToPrint) {
+      // Keep existing per-bale reprint audit records. They repeat the same
+      // server assignment lookup idempotently and must agree with the labels.
+      for (const [index, row] of rowsToPrint.entries()) {
         const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-        if (!response.ok) throw new Error("Could not record label reprint");
+        await assertReprintMatchesPrepared(response, labels[index]);
       }
     } catch (error) {
-      toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      toast({
+        title: "Reprint preparation failed",
+        description: getErrorDetails(error).message,
+        variant: "destructive",
+      });
       return;
     }
 
@@ -356,9 +362,7 @@ export default function FactoryReprintLabels() {
 
                 <div className="max-h-52 overflow-y-auto space-y-0.5">
                   {uniqueArticleCodes
-                    .filter(
-                      (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
-                    )
+                    .filter((c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c))
                     .map((code) => (
                       <label
                         key={code}
@@ -380,9 +384,8 @@ export default function FactoryReprintLabels() {
                         <span>{code}</span>
                       </label>
                     ))}
-                  {uniqueArticleCodes.filter(
-                    (c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c)
-                  ).length === 0 && (
+                  {uniqueArticleCodes.filter((c) => !articleCodeSearch.trim() || searchAny(articleCodeSearch, c))
+                    .length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-2">No article codes found</p>
                   )}
                 </div>

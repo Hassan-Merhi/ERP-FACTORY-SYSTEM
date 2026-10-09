@@ -46,9 +46,9 @@ export const openBrowserPrint = (
   // are ready by the time the print window tries to render them.
   prefetchBannersForPrint();
   const paperFormat = getPaperFormat();
-  const hasPerLabelColors = labels.some((l) => l.designColor || l.priorityColor);
+  const hasPerLabelColors = labels.some((l) => l.designColor);
   const hasPerLabelLogos = labels.some((l) => l.customerLogoUrl);
-  const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.customerLogoUrl || l.priorityColor);
+  const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.customerLogoUrl);
 
   const preOpened = preOpenedWindowsRef.current;
   preOpenedWindowsRef.current = null;
@@ -162,7 +162,13 @@ export const printLabels = async (
         pieces: 1,
         approxWeightKg: bale.weightKg || "0",
         productName: bale.productName || "",
-        ...(assignment ? { priorityColor: assignment.color, priorityOrderId: assignment.orderId, priorityNumber: assignment.priority } : {}),
+        ...(assignment
+          ? {
+              priorityColor: assignment.color,
+              priorityOrderId: assignment.orderId,
+              priorityNumber: assignment.priority,
+            }
+          : {}),
         ...(effectiveColor ? { designColor: effectiveColor } : {}),
       };
     });
@@ -181,9 +187,21 @@ export const printLabels = async (
         openBrowserPrint(labels, undefined, preOpenedWindowsRef);
       }
     } else {
+      if (isZebraMode()) {
+        toast({
+          title: "Priority labels need a color printer",
+          description:
+            "Bales assigned to a priority loading print through the browser so the colored HMD logo is kept.",
+        });
+      }
       openBrowserPrint(labels, undefined, preOpenedWindowsRef);
     }
   } catch (error) {
+    // Do not leave blank pre-opened print tabs behind when preparation fails.
+    const preOpened = preOpenedWindowsRef.current;
+    preOpenedWindowsRef.current = null;
+    if (preOpened?.a4 && !preOpened.a4.closed) preOpened.a4.close();
+    if (preOpened?.sticker && !preOpened.sticker.closed) preOpened.sticker.close();
     toast({ title: "Print Error", description: getErrorDetails(error).message, variant: "destructive" });
   }
 };

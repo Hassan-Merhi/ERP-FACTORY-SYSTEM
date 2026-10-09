@@ -79,7 +79,9 @@ export function RemoveFromStockTab() {
   const { formatDisplayDate } = useDateFormat();
 
   const { data: workers = [] } = useQuery<WorkerOption[]>({ queryKey: ["/api/factory/workers?profile=picker"] });
-  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({ queryKey: ["/api/factory/bale-products?profile=picker"] });
+  const { data: baleProducts } = useQuery<FactoryBaleProduct[]>({
+    queryKey: ["/api/factory/bale-products?profile=picker"],
+  });
 
   const bulkUpdateNamesMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -141,7 +143,7 @@ export function RemoveFromStockTab() {
   const openBrowserPrint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const paperFormat = getPaperFormat();
-    const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.priorityColor);
+    const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor);
 
     if (labelsForA4.length > 0) {
       const labelHtml =
@@ -230,7 +232,7 @@ export function RemoveFromStockTab() {
         ],
       });
       if (!labelResponse.ok) throw new Error("Failed to create label");
-      const { labelPrints, priorityAllocations = [] } = await labelResponse.json() as {
+      const { labelPrints, priorityAllocations = [] } = (await labelResponse.json()) as {
         labelPrints: LabelPrintResult[];
         priorityAllocations?: Array<{ baleId: number; color: string; orderId: number; priority: number }>;
       };
@@ -239,22 +241,28 @@ export function RemoveFromStockTab() {
         referenceNumber: lp.referenceNumber,
         articleCode: lp.articleCode || bale.articleCode || "",
         pieces: lp.pieces || 1,
-        approxWeightKg: lp.approxWeightKg || bale.weightKg || "0",
+        approxWeightKg: String(lp.approxWeightKg || bale.weightKg || "0"),
         productName: bale.productName || "",
-        ...(assignment ? { priorityColor: assignment.color, priorityOrderId: assignment.orderId, priorityNumber: assignment.priority } : {}),
+        ...(assignment
+          ? {
+              priorityColor: assignment.color,
+              priorityOrderId: assignment.orderId,
+              priorityNumber: assignment.priority,
+            }
+          : {}),
       }));
       const product = baleProducts?.find((p) => p.id === bale.productId);
-      const assignedColor = product?.labelDesignColor as A4DesignColor | null | undefined;
+      const assignedColor = (product?.labelDesignColor as A4DesignColor | null | undefined) ?? undefined;
       if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
         try {
           await printRawZpl(buildZplBatch(labels, true));
           toast({ title: "Label sent to Zebra printer" });
         } catch (_err) {
-          if (assignedColor || labels.some((label) => label.priorityColor)) openBrowserPrint(labels, assignedColor);
+          if (assignedColor) openBrowserPrint(labels, assignedColor);
           else printDirectNoDesign(labels);
         }
       } else {
-        if (assignedColor || labels.some((label) => label.priorityColor)) openBrowserPrint(labels, assignedColor);
+        if (assignedColor) openBrowserPrint(labels, assignedColor);
         else printDirectNoDesign(labels);
       }
     } catch (error) {

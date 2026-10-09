@@ -266,8 +266,9 @@ export function useFactorySettingsModel() {
     if (data) {
       // The automatic allocation flag has its own protected editor and must
       // never leak into the generic bulk settings Save payload.
-      const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } =
-        data as FactorySettingsData & { automaticPriorityPrintingEnabled?: boolean };
+      const { automaticPriorityPrintingEnabled: _automaticMode, ...bulkSettings } = data as FactorySettingsData & {
+        automaticPriorityPrintingEnabled?: boolean;
+      };
       setSettings({ ...defaultSettings, ...bulkSettings });
       const waGroupId = (data as FactorySettingsData & { productionWorkerMatrixWhatsappGroupId?: string | null })
         .productionWorkerMatrixWhatsappGroupId;

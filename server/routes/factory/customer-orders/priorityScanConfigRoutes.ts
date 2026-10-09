@@ -65,7 +65,7 @@ async function disableStalePriorityScanConfigs(companyId: number): Promise<void>
   // Stale cleanup is a QUEUE WRITE, even when triggered by a GET request.
   // Serialize it with stock-entry routing, manual scan, deletion/recovery,
   // and configuration edits. A read must never race a queue rewrite.
-  await db.transaction(async tx => {
+  await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
     const disabled = await tx.execute(sql`
       UPDATE customer_order_priority_scan_configs AS config
@@ -88,7 +88,11 @@ async function disableStalePriorityScanConfigs(companyId: number): Promise<void>
     if (resultRows(disabled).length === 0) return;
     const active = await loadActivePriorityRows(tx, companyId);
     await rewriteActivePriorityQueue(
-      tx, companyId, active.map(row => row.id), null, "system:stale-compact"
+      tx,
+      companyId,
+      active.map((row) => row.id),
+      null,
+      "system:stale-compact"
     );
   });
 }
@@ -107,20 +111,31 @@ export function registerPriorityScanConfigRoutes(app: Express) {
   // Prepare whole sets of existing factory bales before any label is rendered.
   // Each request is atomic: a bad reference cannot leave half the set newly
   // allocated. Existing snapshot colors are returned even when the switch is OFF.
-  app.post("/api/factory/customer-orders/loading-list/automatic-print-preflight-batch",
-    requireAuth, async (req: Request, res: Response) => {
+  app.post(
+    "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch",
+    requireAuth,
+    async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         const items = req.body?.items;
-        if (!Array.isArray(items) || items.length === 0 || items.length > 200 ||
-            items.some(item => !item || typeof item !== "object" ||
+        if (
+          !Array.isArray(items) ||
+          items.length === 0 ||
+          items.length > 200 ||
+          items.some(
+            (item) =>
+              !item ||
+              typeof item !== "object" ||
               ((item.baleId === undefined || !Number.isSafeInteger(item.baleId) || item.baleId < 1) &&
-               (typeof item.referenceNumber !== "string" || !item.referenceNumber.trim())))) {
+                (typeof item.referenceNumber !== "string" || !item.referenceNumber.trim()))
+          )
+        ) {
           return res.status(400).json({ message: "Provide 1–200 valid bale IDs or reference numbers" });
         }
         const results = await runAutomaticPriorityPrintBatch(
-          companyId, items,
+          companyId,
+          items,
           String(req.session.username || req.session.userId || "automatic"),
           req.session.userId == null ? null : String(req.session.userId)
         );
@@ -140,21 +155,33 @@ export function registerPriorityScanConfigRoutes(app: Express) {
   // Used by specialist relabel screens where the API returns a REF but not a
   // physical bale ID. Resolve server-side, never trusting the client to choose
   // a loading or a priority color.
-  app.post("/api/factory/customer-orders/loading-list/automatic-print-preflight", requireAuth,
+  app.post(
+    "/api/factory/customer-orders/loading-list/automatic-print-preflight",
+    requireAuth,
     async (req: Request, res: Response) => {
       try {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
         const referenceNumber = String(req.body?.referenceNumber || "").trim();
         if (!referenceNumber) return res.status(400).json({ message: "referenceNumber required" });
-        const [bale] = await db.select({ id: factoryBales.id }).from(factoryBales).where(
-          and(eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt),
-            sql`LOWER(${factoryBales.referenceNumber}) = ${referenceNumber.toLowerCase()}`)
-        ).limit(1);
+        const [bale] = await db
+          .select({ id: factoryBales.id })
+          .from(factoryBales)
+          .where(
+            and(
+              eq(factoryBales.companyId, companyId),
+              isNull(factoryBales.deletedAt),
+              sql`LOWER(${factoryBales.referenceNumber}) = ${referenceNumber.toLowerCase()}`
+            )
+          )
+          .limit(1);
         if (!bale) return res.status(404).json({ message: "Bale not found" });
-        const priorityAllocation = await runAutomaticPriorityReprint(companyId, bale.id,
+        const priorityAllocation = await runAutomaticPriorityReprint(
+          companyId,
+          bale.id,
           String(req.session.username || req.session.userId || "automatic"),
-          req.session.userId == null ? null : String(req.session.userId));
+          req.session.userId == null ? null : String(req.session.userId)
+        );
         return res.json({ priorityAllocation });
       } catch (error) {
         logger.error("Automatic Priority Print preflight failed", { error });

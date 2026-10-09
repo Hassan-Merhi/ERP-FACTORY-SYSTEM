@@ -53,7 +53,9 @@ export function AutomaticPriorityPrintingCard() {
       );
       void queryClient.invalidateQueries({ queryKey: [URL] });
       void queryClient.invalidateQueries({ queryKey: ["/api/factory/settings"] });
-      toast({ title: updated.enabled ? "Automatic Priority Printing enabled" : "Automatic Priority Printing disabled" });
+      toast({
+        title: updated.enabled ? "Automatic Priority Printing enabled" : "Automatic Priority Printing disabled",
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Could not change automatic printing", description: error.message, variant: "destructive" });
@@ -69,9 +71,9 @@ export function AutomaticPriorityPrintingCard() {
       <CardHeader>
         <CardTitle>Automatic Priority Printing &amp; Loading</CardTitle>
         <CardDescription>
-          When ON, eligible new and reprinted bales are automatically allocated to their highest-priority
-          loading. When OFF, future prints follow the original workflow. Existing allocations and their
-          original colors are never reversed by this switch.
+          When ON, eligible new and reprinted bales are automatically allocated to their highest-priority loading. When
+          OFF, future prints follow the original workflow. Existing allocations and their original colors are never
+          reversed by this switch.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -91,7 +93,9 @@ export function AutomaticPriorityPrintingCard() {
         {isError ? (
           <div className="flex items-center justify-between gap-2 text-sm text-destructive" role="alert">
             <span>Unable to read the current setting. No changes are allowed until it loads.</span>
-            <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry</Button>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>
+              Retry
+            </Button>
           </div>
         ) : isPending || !companyId ? (
           <p className="text-xs text-muted-foreground">Loading company setting…</p>

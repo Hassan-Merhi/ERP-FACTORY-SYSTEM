@@ -32,17 +32,23 @@ export function registerPriorityAllocationHistoryRoutes(app: Express): void {
     const baleId = optionalId(req.query.baleId);
     const orderId = optionalId(req.query.orderId);
     const beforeId = optionalId(req.query.beforeId);
-    const referenceNumber = typeof req.query.referenceNumber === "string"
-      ? req.query.referenceNumber.trim()
-      : "";
+    const referenceNumber = typeof req.query.referenceNumber === "string" ? req.query.referenceNumber.trim() : "";
     const rawLimit = req.query.limit;
-    const limit = rawLimit === undefined ? 50
-      : typeof rawLimit === "string" && /^[1-9][0-9]*$/.test(rawLimit) ? Number(rawLimit) : NaN;
+    const limit =
+      rawLimit === undefined
+        ? 50
+        : typeof rawLimit === "string" && /^[1-9][0-9]*$/.test(rawLimit)
+          ? Number(rawLimit)
+          : NaN;
 
-    if ([baleId, orderId, beforeId].some((id) => id !== null && !Number.isSafeInteger(id)) ||
-        !Number.isSafeInteger(limit) || limit < 1 || limit > MAX_PAGE_SIZE ||
-        referenceNumber.length > 100 ||
-        (req.query.referenceNumber !== undefined && !referenceNumber)) {
+    if (
+      [baleId, orderId, beforeId].some((id) => id !== null && !Number.isSafeInteger(id)) ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > MAX_PAGE_SIZE ||
+      referenceNumber.length > 100 ||
+      (req.query.referenceNumber !== undefined && !referenceNumber)
+    ) {
       return res.status(400).json({ message: "Invalid history filter or limit" });
     }
     if (baleId === null && orderId === null && !referenceNumber) {
@@ -58,26 +64,28 @@ export function registerPriorityAllocationHistoryRoutes(app: Express): void {
     }
 
     try {
-      const rows = await db.select({
-        id: factoryPriorityScanHistory.id,
-        baleId: factoryPriorityScanHistory.baleId,
-        orderId: factoryPriorityScanHistory.orderId,
-        referenceNumber: factoryPriorityScanHistory.referenceNumber,
-        articleCode: factoryPriorityScanHistory.articleCode,
-        productName: factoryPriorityScanHistory.productName,
-        originalPriority: factoryPriorityScanHistory.priority,
-        originalColor: factoryPriorityScanHistory.color,
-        originalProformaId: factoryPriorityScanHistory.proformaId,
-        allocationSource: factoryPriorityScanHistory.allocationSource,
-        assignedByName: factoryPriorityScanHistory.scannedBy,
-        assignedByUserId: factoryPriorityScanHistory.assignedByUserId,
-        businessDate: factoryPriorityScanHistory.businessDate,
-        assignedAt: factoryPriorityScanHistory.scannedAt,
-        reversedAt: factoryPriorityScanHistory.reversedAt,
-        reversedBy: factoryPriorityScanHistory.reversedBy,
-        reversedByUserId: factoryPriorityScanHistory.reversedByUserId,
-        reversalReason: factoryPriorityScanHistory.reversalReason,
-      }).from(factoryPriorityScanHistory)
+      const rows = await db
+        .select({
+          id: factoryPriorityScanHistory.id,
+          baleId: factoryPriorityScanHistory.baleId,
+          orderId: factoryPriorityScanHistory.orderId,
+          referenceNumber: factoryPriorityScanHistory.referenceNumber,
+          articleCode: factoryPriorityScanHistory.articleCode,
+          productName: factoryPriorityScanHistory.productName,
+          originalPriority: factoryPriorityScanHistory.priority,
+          originalColor: factoryPriorityScanHistory.color,
+          originalProformaId: factoryPriorityScanHistory.proformaId,
+          allocationSource: factoryPriorityScanHistory.allocationSource,
+          assignedByName: factoryPriorityScanHistory.scannedBy,
+          assignedByUserId: factoryPriorityScanHistory.assignedByUserId,
+          businessDate: factoryPriorityScanHistory.businessDate,
+          assignedAt: factoryPriorityScanHistory.scannedAt,
+          reversedAt: factoryPriorityScanHistory.reversedAt,
+          reversedBy: factoryPriorityScanHistory.reversedBy,
+          reversedByUserId: factoryPriorityScanHistory.reversedByUserId,
+          reversalReason: factoryPriorityScanHistory.reversalReason,
+        })
+        .from(factoryPriorityScanHistory)
         .where(and(...filters))
         .orderBy(desc(factoryPriorityScanHistory.id))
         .limit(limit + 1);

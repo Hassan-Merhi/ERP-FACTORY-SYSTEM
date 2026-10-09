@@ -47,8 +47,7 @@ import type { FactoryBale, FactoryBaleProduct, Location, FactoryCategory } from 
 import type { CartItem, CreatedBale } from "./wipersreentry/types";
 import { exportCreatedBalesWorkbook } from "./wipersreentry/exportWorkbook";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
-import { buildLabelData, printLabelsInBrowser } from "./wipersreentry/printUtils";
-import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
+import { preparePriorityWipersLabels, printLabelsInBrowser } from "./wipersreentry/printUtils";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 export default function WipersReEntry() {
@@ -245,22 +244,10 @@ export default function WipersReEntry() {
     setDesignPickerOpen(true);
   };
 
-  const preparePriorityLabels = (): Promise<LabelData[]> =>
-    preparePriorityPrintLabels(
-      buildLabelData(createdBales || []),
-      modeApiRequest,
-      (createdBales || []).map((bale) => bale.id)
-    );
-
   const handlePrint = async (format: "A4" | "A5" | "sticker") => {
     if (!createdBales || createdBales.length === 0) return;
-    let labels: LabelData[];
-    try {
-      labels = await preparePriorityLabels();
-    } catch (error) {
-      toast({ title: "Priority print preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
-      return;
-    }
+    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
+    if (!labels) return;
 
     if (isZebraMode() && format === "sticker" && !labels.some((label) => label.priorityColor)) {
       try {
@@ -281,19 +268,14 @@ export default function WipersReEntry() {
 
   const handlePrintAll = async () => {
     if (!createdBales || createdBales.length === 0) return;
-    let labels: LabelData[];
-    try {
-      labels = await preparePriorityLabels();
-    } catch (error) {
-      toast({ title: "Priority print preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
-      return;
-    }
+    const labels = await preparePriorityWipersLabels(createdBales, modeApiRequest, toast);
+    if (!labels) return;
     const paperFormat = getPaperFormat();
-    if (paperFormat === "A4" && !labels.some((label) => label.priorityColor)) {
+    if (paperFormat === "A4") {
       setPendingLabels(labels);
       setDesignPickerOpen(true);
     } else {
-      openBrowserPrint(labels, paperFormat === "A4" ? "A4" : "A5");
+      openBrowserPrint(labels, "sticker");
     }
   };
 
@@ -314,7 +296,9 @@ export default function WipersReEntry() {
     return <Redirect to="/factory/bale-relabeling" />;
   }
   if (!showWipersReEntry) {
-    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>
+    );
   }
 
   return (

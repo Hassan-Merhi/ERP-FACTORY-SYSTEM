@@ -16,10 +16,11 @@ let ctx: TestContext;
 let agent: request.SuperAgentTest;
 
 async function setRole(role: string) {
-  await pool.query(
-    "UPDATE user_company_roles SET role = $1 WHERE user_id = $2 AND company_id = $3",
-    [role, ctx.userId, ctx.companyId]
-  );
+  await pool.query("UPDATE user_company_roles SET role = $1 WHERE user_id = $2 AND company_id = $3", [
+    role,
+    ctx.userId,
+    ctx.companyId,
+  ]);
   const response = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   expect(response.status).toBe(200);
 }
@@ -27,10 +28,10 @@ async function setRole(role: string) {
 beforeAll(async () => {
   ctx = await seedTestData(PREFIX);
   await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [ctx.companyId]);
-  await pool.query(
-    "UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2",
-    [ctx.userId, ctx.companyId]
-  );
+  await pool.query("UPDATE user_company_roles SET role = 'Admin' WHERE user_id = $1 AND company_id = $2", [
+    ctx.userId,
+    ctx.companyId,
+  ]);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
     username: `${PREFIX}_testuser`,
@@ -63,7 +64,9 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
       {},
     ]) {
       const response = await agent.put(ENDPOINT).send(body);
-      expect(response.status).toBe(400);
+      // A foreign companyId is stopped earlier by the shared tenant guard (403);
+      // every other malformed payload is rejected by the route itself (400).
+      expect(response.status).toBe("companyId" in body ? 403 : 400);
     }
     expect((await agent.get(ENDPOINT)).body.enabled).toBe(false);
   });
@@ -135,17 +138,24 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
     await setRole("Admin");
   });
 
-  it("allows Owner and Developer but still requires the active company session", async () => {
-    await setRole("Owner");
-    expect((await agent.get(ENDPOINT)).body.canEdit).toBe(true);
-    const owner = await agent.put(ENDPOINT).send({ enabled: true });
-    expect(owner.status).toBe(200);
+  it("follows the Factory Settings page owner: Developer may edit, Owner may only read", async () => {
+    try {
+      // Factory Settings is an admin-level page (Admin/Developer) in the
+      // Factory access registry, so Owner can read the state but the backend
+      // access boundary refuses the write.
+      await setRole("Owner");
+      expect((await agent.get(ENDPOINT)).body).toMatchObject({ enabled: false, canEdit: false });
+      const owner = await agent.put(ENDPOINT).send({ enabled: true });
+      expect(owner.status).toBe(403);
+      expect((await agent.get(ENDPOINT)).body.enabled).toBe(false);
 
-    await setRole("Developer");
-    expect((await agent.get(ENDPOINT)).body.canEdit).toBe(true);
-    const developer = await agent.put(ENDPOINT).send({ enabled: false });
-    expect(developer.status).toBe(200);
-    await setRole("Admin");
+      await setRole("Developer");
+      expect((await agent.get(ENDPOINT)).body.canEdit).toBe(true);
+      expect((await agent.put(ENDPOINT).send({ enabled: true })).status).toBe(200);
+      expect((await agent.put(ENDPOINT).send({ enabled: false })).status).toBe(200);
+    } finally {
+      await setRole("Admin");
+    }
   });
 
   it("keeps OFF until explicitly re-enabled and audits the state transition", async () => {
@@ -173,10 +183,10 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
          VALUES ('APRMODEALT', '${PREFIX}-other-company', 'USD', 'factory') RETURNING id`
     );
     const otherCompanyId = another.rows[0].id;
-    await pool.query(
-      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`,
-      [ctx.userId, otherCompanyId]
-    );
+    await pool.query(`INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`, [
+      ctx.userId,
+      otherCompanyId,
+    ]);
     try {
       const changed = await agent.post("/api/auth/set-company").send({ companyId: otherCompanyId });
       expect(changed.status).toBe(200);
@@ -190,5 +200,4 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
       await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
     }
   });
-
 });

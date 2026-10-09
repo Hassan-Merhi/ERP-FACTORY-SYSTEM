@@ -109,8 +109,12 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           await recalculateOrderTotals(tx, orderId);
           for (const row of removedLinks) {
             await reversePriorityAllocationForDeletedBaleTx(tx, {
-              companyId, baleId: row.baleId, detachedOrderId: orderId,
-              actor: String(username || userId || "unknown"), actorId: userId, reason: "Loading emptied",
+              companyId,
+              baleId: row.baleId,
+              detachedOrderId: orderId,
+              actor: String(username || userId || "unknown"),
+              actorId: userId,
+              reason: "Loading emptied",
               deferQueueRecovery: true,
             });
           }
@@ -164,7 +168,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         return res.status(400).json({ message: "Can only remove bales from orders that are not yet cancelled" });
 
       const updatedPayload = await db.transaction(async (tx) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
         if (order.proformaIdUsed) {
           await acquireProformaCapacityTransactionLock(tx, {
             companyId,
@@ -215,7 +219,9 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         await recalculateOrderTotals(tx, orderId);
         if (orderBale) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
-            companyId, baleId: orderBale.baleId, detachedOrderId: orderId,
+            companyId,
+            baleId: orderBale.baleId,
+            detachedOrderId: orderId,
             actor: String(req.session.username || req.session.userId || "unknown"),
             actorId: req.session.userId == null ? null : String(req.session.userId),
             reason: "Bale removed from loading",
@@ -300,7 +306,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
       }
 
       await db.transaction(async (tx) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
         // 5. Remove from customer_order_bales
         await tx.delete(customerOrderBales).where(eq(customerOrderBales.id, orderBale.id));
 
@@ -325,8 +331,12 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         // 8. Recalculate order totals (regenerates order lines + grand total)
         await recalculateOrderTotals(tx, orderId);
         await reversePriorityAllocationForDeletedBaleTx(tx, {
-          companyId, baleId, detachedOrderId: orderId,
-          actor: String(username || userId || "unknown"), actorId: userId, reason: "Bale returned to stock",
+          companyId,
+          baleId,
+          detachedOrderId: orderId,
+          actor: String(username || userId || "unknown"),
+          actorId: userId,
+          reason: "Bale returned to stock",
         });
 
         // 9. For FINALIZED orders: sync customer_balances + daybook INVOICE entry

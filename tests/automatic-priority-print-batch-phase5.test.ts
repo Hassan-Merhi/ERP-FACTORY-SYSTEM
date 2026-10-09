@@ -22,7 +22,8 @@ let secondBale: { id: number; referenceNumber: string };
 async function allocations() {
   const { rows } = await pool.query<{ count: string }>(
     `SELECT COUNT(*)::text AS count FROM factory_priority_auto_allocations
-      WHERE company_id = $1 AND reversed_at IS NULL`, [ctx.companyId]
+      WHERE company_id = $1 AND reversed_at IS NULL`,
+    [ctx.companyId]
   );
   return Number(rows[0].count);
 }
@@ -33,15 +34,18 @@ async function history() {
   );
   return Number(rows[0].count);
 }
-const batchInput = (bale: { id: number; referenceNumber: string }) =>
-  ({ baleId: bale.id, referenceNumber: bale.referenceNumber });
+const batchInput = (bale: { id: number; referenceNumber: string }) => ({
+  baleId: bale.id,
+  referenceNumber: bale.referenceNumber,
+});
 
 beforeAll(async () => {
   await ensurePriorityScanSchema(pool);
   ctx = await seedTestData(PREFIX);
   agent = request.agent(ctx.app);
   const login = await agent.post("/api/auth/login").send({
-    username: `${PREFIX}_testuser`, password: "testpassword123",
+    username: `${PREFIX}_testuser`,
+    password: "testpassword123",
   });
   expect(login.status).toBe(200);
   expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
@@ -68,9 +72,9 @@ beforeAll(async () => {
     [ctx.companyId, customer.rows[0].id, proforma.rows[0].id]
   );
   orderId = loading.rows[0].id;
-  const configured = await agent.put(
-    `/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`
-  ).send({ color: "#dc2626", priority: 1, enabled: true });
+  const configured = await agent
+    .put(`/api/factory/customer-orders/${orderId}/loading-list/priority-scan-config`)
+    .send({ color: "#dc2626", priority: 1, enabled: true });
   expect(configured.status).toBe(200);
   const product = await pool.query<{ id: number }>(
     `INSERT INTO factory_bale_products
@@ -94,6 +98,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (ctx?.companyId) {
     await pool.query("DELETE FROM factory_priority_auto_allocations WHERE company_id = $1", [ctx.companyId]);
+    await pool.query("DELETE FROM bale_label_prints WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_priority_scan_history WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM customer_order_priority_scan_configs WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM customer_order_bales WHERE order_id = $1", [orderId]);
@@ -103,7 +108,8 @@ afterAll(async () => {
     await pool.query("DELETE FROM canonical_stock_movements WHERE company_id = $1", [ctx.companyId]);
     await pool.query(
       `DELETE FROM factory_bale_production_attributions WHERE bale_id IN
-       (SELECT id FROM factory_bales WHERE company_id = $1)`, [ctx.companyId]
+       (SELECT id FROM factory_bales WHERE company_id = $1)`,
+      [ctx.companyId]
     );
     await pool.query("DELETE FROM factory_bales WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_bale_sequences WHERE company_id = $1", [ctx.companyId]);
@@ -131,8 +137,12 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
     expect(res.status).toBe(200);
     expect(res.body.results).toHaveLength(2);
     expect(res.body.results[0].priorityAllocation).toMatchObject({
-      orderId, baleId: firstBale.id, color: "#dc2626",
-      priority: 1, source: "reprint", existing: false,
+      orderId,
+      baleId: firstBale.id,
+      color: "#dc2626",
+      priority: 1,
+      source: "reprint",
+      existing: false,
     });
     expect(res.body.results[1].priorityAllocation).toBeNull();
     expect(await allocations()).toBe(1);
@@ -147,7 +157,10 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
       expect(res.status).toBe(200);
       expect(res.body.results).toHaveLength(1);
       expect(res.body.results[0].priorityAllocation).toMatchObject({
-        orderId, color: "#dc2626", priority: 1, existing: true,
+        orderId,
+        color: "#dc2626",
+        priority: 1,
+        existing: true,
       });
     }
     expect(await allocations()).toBe(1);
@@ -161,7 +174,10 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.results[0].priorityAllocation).toMatchObject({
-      orderId, color: "#dc2626", priority: 1, existing: true,
+      orderId,
+      color: "#dc2626",
+      priority: 1,
+      existing: true,
     });
     expect(res.body.results[1].priorityAllocation).toBeNull();
     expect(await allocations()).toBe(1);
@@ -178,5 +194,74 @@ describe("Phase 5: atomic existing-bale print and reprint", () => {
     });
     expect(missing.status).toBe(400);
     expect(await allocations()).toBe(1);
+  }, 60000);
+});
+
+describe("Phase 5 review fixes: label-print endpoints and stale snapshots", () => {
+  async function labelPrints(): Promise<number> {
+    const { rows } = await pool.query<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM bale_label_prints WHERE company_id = $1",
+      [ctx.companyId]
+    );
+    return Number(rows[0].count);
+  }
+
+  it("/api/bale-label-prints records prints and returns saved snapshots in one transaction", async () => {
+    const before = await labelPrints();
+    const res = await agent.post("/api/bale-label-prints").send({
+      bales: [firstBale, secondBale].map((bale) => ({
+        productionBaleId: bale.id,
+        productId,
+        articleCode: "PRINT-PANT",
+        pieces: 1,
+        approxWeightKg: "40",
+      })),
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.labelPrints.map((row: { referenceNumber: string }) => row.referenceNumber)).toEqual([
+      firstBale.referenceNumber,
+      secondBale.referenceNumber,
+    ]);
+    // Mode is OFF: the saved Red snapshot is returned, nothing new is allocated.
+    expect(res.body.priorityAllocations).toHaveLength(1);
+    expect(res.body.priorityAllocations[0]).toMatchObject({ baleId: firstBale.id, orderId, color: "#dc2626" });
+    expect(await labelPrints()).toBe(before + 2);
+    expect(await allocations()).toBe(1);
+  }, 60000);
+
+  it("/api/bale-label-prints rejects another company's bale with 400 and writes nothing", async () => {
+    const before = await labelPrints();
+    const res = await agent.post("/api/bale-label-prints").send({
+      bales: [
+        { productionBaleId: firstBale.id, articleCode: "PRINT-PANT", pieces: 1, approxWeightKg: "40" },
+        { productionBaleId: 2147483000, articleCode: "PRINT-PANT", pieces: 1, approxWeightKg: "40" },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(await labelPrints()).toBe(before);
+  }, 60000);
+
+  it("/reprint returns the same saved assignment as the preflight", async () => {
+    const res = await agent.post("/api/bale-label-prints/reprint").send({ baleId: firstBale.id });
+    expect(res.status).toBe(200);
+    expect(res.body.priorityAllocation).toMatchObject({ orderId, color: "#dc2626", existing: true });
+    expect(await allocations()).toBe(1);
+  }, 60000);
+
+  it("never reprints the old loading color once the bale left that loading outside physical deletion", async () => {
+    // An exchange or a loading cancellation removes the link directly.
+    await pool.query("DELETE FROM customer_order_bales WHERE order_id = $1 AND bale_id = $2", [orderId, firstBale.id]);
+    const res = await agent.post(BATCH).send({ items: [{ baleId: firstBale.id }] });
+    expect(res.status).toBe(200);
+    expect(res.body.results[0].priorityAllocation).toBeNull();
+    expect(await allocations()).toBe(0);
+    const { rows } = await pool.query<{ reversed_at: string | null; color: string }>(
+      "SELECT reversed_at, color FROM factory_priority_scan_history WHERE company_id = $1 AND bale_id = $2",
+      [ctx.companyId, firstBale.id]
+    );
+    // Original evidence is kept (still Red) and marked reversed.
+    expect(rows).toHaveLength(1);
+    expect(rows[0].color).toBe("#dc2626");
+    expect(rows[0].reversed_at).not.toBeNull();
   }, 60000);
 });

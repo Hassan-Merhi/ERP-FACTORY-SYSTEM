@@ -215,7 +215,9 @@ export default function FactoryBaleRelabeling() {
     return <Redirect to="/factory/bale-relabeling/wipers-re-entry" />;
   }
   if (!showRelabeling) {
-    return <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>;
+    return (
+      <div className="p-6 text-sm text-muted-foreground">No Bale Relabeling tabs are available for this user.</div>
+    );
   }
 
   return (

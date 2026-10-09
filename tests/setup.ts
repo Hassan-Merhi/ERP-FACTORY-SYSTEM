@@ -80,6 +80,10 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "autoprt5",
   "autodel6",
   "autoque7",
+  "aprmode",
+  "aprh2",
+  "autopriority",
+  "autoe2e",
   "ordfin",
 ]);
 

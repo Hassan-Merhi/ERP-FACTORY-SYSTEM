@@ -89,7 +89,7 @@ export interface LoadingProformaProgress {
  * not hide missing bales of another article.
  */
 export function getLoadingProformaProgress(snapshot: ProformaCapacitySnapshot): LoadingProformaProgress {
-  const onProforma = snapshot.articles.filter(article => article.isOnProforma);
+  const onProforma = snapshot.articles.filter((article) => article.isOnProforma);
   const requestedQty = onProforma.reduce((sum, article) => sum + Math.max(0, article.requestedQty), 0);
   const loadedQty = onProforma.reduce((sum, article) => sum + Math.max(0, article.currentOrderLoadedQty), 0);
   const remainingQty = onProforma.reduce(

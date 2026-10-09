@@ -187,12 +187,16 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
           });
           break;
         case "factoryBale": {
-          const result = await db.transaction(async tx => {
+          const result = await db.transaction(async (tx) => {
             await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-            const [bale] = await tx.select({
-              id: factoryBales.id, deletedAt: factoryBales.deletedAt,
-            }).from(factoryBales)
-              .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, itemId))).limit(1);
+            const [bale] = await tx
+              .select({
+                id: factoryBales.id,
+                deletedAt: factoryBales.deletedAt,
+              })
+              .from(factoryBales)
+              .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, itemId)))
+              .limit(1);
             if (!bale) return "missing";
             if (!bale.deletedAt) return "already-active";
 
@@ -200,19 +204,26 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             // appended canonical journal evidence. Simply clearing deletedAt
             // would create a bale without inventory. It needs a controlled
             // re-entry with a new receipt and audit workflow instead.
-            const removal = firstRow(await tx.execute(sql`
+            const removal =
+              firstRow(
+                await tx.execute(sql`
               SELECT id FROM factory_physical_bale_deletions
                WHERE company_id = ${companyId} AND bale_id = ${itemId}
                LIMIT 1
-            `)) || firstRow(await tx.execute(sql`
+            `)
+              ) ||
+              firstRow(
+                await tx.execute(sql`
               SELECT id FROM canonical_stock_movements
                WHERE company_id = ${companyId}
                  AND source_type = 'factory_bale_removal'
                  AND source_id = ${String(itemId)}
                LIMIT 1
-            `));
+            `)
+              );
             if (removal) return "requires-reentry";
-            await tx.update(factoryBales)
+            await tx
+              .update(factoryBales)
               .set({ deletedAt: null, status: "IN_STOCK", updatedAt: new Date() })
               .where(and(eq(factoryBales.id, itemId), eq(factoryBales.companyId, companyId)));
             return "restored";
@@ -221,7 +232,8 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
           if (result === "already-active") return res.status(409).json({ message: "Bale is not deleted" });
           if (result === "requires-reentry") {
             return res.status(409).json({
-              message: "This bale has a recorded physical deletion. Use a controlled stock re-entry; restoring its status alone would create phantom inventory or undo the deletion audit.",
+              message:
+                "This bale has a recorded physical deletion. Use a controlled stock re-entry; restoring its status alone would create phantom inventory or undo the deletion audit.",
             });
           }
           break;
