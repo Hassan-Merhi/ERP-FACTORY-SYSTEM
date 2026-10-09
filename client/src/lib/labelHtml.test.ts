@@ -171,6 +171,8 @@ describe("Automatic Priority Printing labels", () => {
     expect(resolvePriorityLabelColor("Red")).toBe("#dc2626");
     expect(resolvePriorityLabelColor("Blue")).toBe("#2563eb");
     expect(resolvePriorityLabelColor("Green")).toBe("#16a34a");
+    expect(resolvePriorityLabelColor("Navy")).toBe("#000080");
+    expect(resolvePriorityLabelColor("Lime")).toBe("#00ff00");
     expect(resolvePriorityLabelColor("rgb(0,0,0);position:absolute")).toBeNull();
     expect(validatePriorityLabelColor(label())).toBeNull();
   });
