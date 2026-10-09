@@ -62,12 +62,12 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
 
       const result = await db.transaction(async (tx) => {
-        // Acquire the queue lock before stock/inventory row locks to avoid
-        // deadlocks with concurrent automatic bale deletion and manual scans.
+        // Serialize the mode decision itself with Settings ON/OFF changes and
+        // priority configuration edits. Never take stock/proforma locks first.
+        // Even with the feature OFF, a concurrent toggle must not change the
+        // mode midway through a Stock Entry batch.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
         const automaticMode = await automaticPriorityModeEnabled(tx, companyId);
-        if (automaticMode) {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-        }
         let mixBatch = null;
         if (mixBatchId) {
           const [mb] = await tx
