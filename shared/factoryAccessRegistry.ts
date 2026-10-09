@@ -29,7 +29,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Overview",
     group: "Production",
     route: "/factory/production-report",
-    aliases: ["/factory/bale-ledger", "/factory/pos"],
+    aliases: ["/factory/bale-ledger"],
     pinned: true,
     landing: true,
   },
@@ -127,6 +127,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
   },
 
   // Sales
+  {
+    key: "factory/pos",
+    label: "Factory POS",
+    group: "Sales",
+    route: "/factory/pos",
+    sidebar: true,
+    landing: true,
+  },
   {
     key: "factory/invoicing",
     label: "Invoicing",
