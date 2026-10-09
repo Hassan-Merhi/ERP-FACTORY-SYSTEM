@@ -104,8 +104,12 @@ async function backfillCompany(client: PoolClient, companyId: number): Promise<S
         await client.query(
           `DELETE FROM voucher_entries ve
              USING ledger_accounts la
-            WHERE la.id = ve.ledger_account_id AND ve.voucher_id = $1 AND la.code = 'INVENTORY'`,
-          [voucherId]
+            WHERE la.id = ve.ledger_account_id
+              AND ve.voucher_id = $1
+              AND ve.company_id = $2
+              AND la.company_id = $2
+              AND la.code = 'INVENTORY'`,
+          [voucherId, companyId]
         );
         await client.query(
           `INSERT INTO voucher_entries
@@ -119,9 +123,11 @@ async function backfillCompany(client: PoolClient, companyId: number): Promise<S
              FROM voucher_entries ve
              JOIN ledger_accounts la ON la.id = ve.ledger_account_id
             WHERE ve.voucher_id = $1
+              AND ve.company_id = $4
+              AND la.company_id = $4
               AND la.code = ANY($3::text[])
             ORDER BY ve.id`,
-          [voucherId, inventoryAccountId, ADJUSTMENT_CODES]
+          [voucherId, inventoryAccountId, ADJUSTMENT_CODES, companyId]
         );
         await client.query("RELEASE SAVEPOINT stock_adjustment_backfill");
         result.balanced += 1;
