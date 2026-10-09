@@ -48,7 +48,7 @@ export function useAgentLedger(
   });
 
   const { data: agentAccountRows = [], isLoading: agentsLoading } = useQuery<AgentAccount[]>({
-    queryKey: [pinnedUrl, selectedCompany?.id],
+    queryKey: isFactory ? [pinnedUrl, selectedCompany?.id] : [pinnedUrl],
     enabled: !!selectedCompany,
   });
 
