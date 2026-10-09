@@ -23,8 +23,10 @@ import { CommandPalette } from "./CommandPalette";
 
 vi.mock("wouter", () => ({ useLocation: () => ["/", vi.fn()] }));
 vi.mock("@/components/AppSidebar", () => ({
+  isRetailHiddenErpPath: () => false,
   useErpVisibleSections: () => ({ sections: [], visiblePinnedItems: [], visibleUtilityItems: [] }),
 }));
+vi.mock("@/contexts/CompanyContext", () => ({ useCompany: () => ({ selectedCompany: null }) }));
 vi.mock("@/components/FactorySidebar", () => ({ useFactoryVisibleSections: () => ({ sections: [] }) }));
 vi.mock("@/components/PropertiesSidebar", () => ({ PROPERTIES_NAV_SECTIONS: [] }));
 
