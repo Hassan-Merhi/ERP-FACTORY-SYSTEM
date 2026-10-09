@@ -1,0 +1,265 @@
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { db } from "../../../db";
+import { firstRow } from "../../../lib/queryResult";
+import { getCompanyBusinessDate } from "../../../lib/dateUtils";
+import { storage } from "../../../storage";
+import { toMoney } from "../../../lib/money";
+import {
+  customerOrderBales,
+  customerOrders,
+  customerOrderPriorityScanConfigs,
+  customerProformaLines,
+  factoryBales,
+  factoryBaleProducts,
+  factorySettings,
+} from "@shared/schema";
+import { recalculateOrderTotals } from "../_helpers";
+import { recalculateOrderTotalsForScannedArticle } from "./bale-scanning/incrementalTotals";
+import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy";
+import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import {
+  PRIORITY_SCAN_LOCK_NAMESPACE,
+  advanceSatisfiedPriorityScanConfigsLockedTx,
+  loadActivePriorityRows,
+  resolvePriorityScanArticleTarget,
+  rewriteActivePriorityQueue,
+  type PriorityScanTransaction,
+} from "./priorityScanQueue";
+
+export interface AutomaticPriorityAllocation {
+  baleId: number;
+  referenceNumber: string;
+  orderId: number;
+  priority: number;
+  color: string;
+  source: "stock-entry" | "reprint" | "manual";
+  existing: boolean;
+}
+
+/** Read directly in the write transaction; never rely on the 30s settings cache. */
+export async function automaticPriorityModeEnabled(tx: PriorityScanTransaction, companyId: number) {
+  const [settings] = await tx.select({ extraSettings: factorySettings.extraSettings })
+    .from(factorySettings).where(eq(factorySettings.companyId, companyId));
+  return ((settings?.extraSettings || {}) as Record<string, unknown>).automaticPriorityPrintingEnabled === true;
+}
+
+/** Caller must hold PRIORITY_SCAN_LOCK_NAMESPACE/companyId. */
+export async function allocateAutomaticPriorityBaleTx(
+  tx: PriorityScanTransaction,
+  args: { companyId: number; baleId: number; username: string | null; userId: string | null; source: "stock-entry" | "reprint" }
+): Promise<AutomaticPriorityAllocation | null> {
+  const { companyId, baleId, username, userId, source } = args;
+  if (!(await automaticPriorityModeEnabled(tx, companyId))) return null;
+  const [bale] = await tx.select().from(factoryBales)
+    .where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt)))
+    .limit(1);
+  if (!bale || bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
+
+  // Snapshot has an immutable company/bale unique key. Reprinting an existing
+  // allocation uses its original priority/color even after the queue changes.
+  const existing = firstRow(await tx.execute(sql`
+    SELECT order_id AS "orderId", priority, color, allocation_source AS "source",
+           reversed_at AS "reversedAt"
+      FROM factory_priority_auto_allocations
+     WHERE company_id = ${companyId} AND bale_id = ${baleId}
+     LIMIT 1
+  `)) as { orderId: number; priority: number; color: string; source: "stock-entry" | "reprint"; reversedAt: string | null } | undefined;
+  if (existing) {
+    if (existing.reversedAt) return null;
+    return {
+      baleId, referenceNumber: bale.referenceNumber, orderId: Number(existing.orderId),
+      priority: Number(existing.priority), color: existing.color, source: existing.source, existing: true,
+    };
+  }
+
+  // Never move a bale previously scanned manually or assigned to another order.
+  const linked = firstRow(await tx.execute(sql`
+    SELECT cob.order_id AS "orderId", co.status
+      FROM customer_order_bales cob JOIN customer_orders co ON co.id = cob.order_id
+     WHERE cob.bale_id = ${baleId} AND co.company_id = ${companyId}
+       AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL
+     LIMIT 1
+  `)) as { orderId: number; status: string } | undefined;
+  if (linked) {
+    const prior = firstRow(await tx.execute(sql`
+      SELECT priority, color FROM factory_priority_scan_history
+       WHERE company_id = ${companyId} AND bale_id = ${baleId}
+         AND order_id = ${linked.orderId} AND reversed_at IS NULL
+       ORDER BY id ASC LIMIT 1
+    `)) as { priority: number; color: string } | undefined;
+    return prior ? {
+      baleId, referenceNumber: bale.referenceNumber, orderId: Number(linked.orderId),
+      priority: Number(prior.priority), color: prior.color, source: "manual", existing: true,
+    } : null;
+  }
+
+  const articleCode = (bale.articleCode || "").trim() ||
+    (bale.productId
+      ? (await tx.select({ articleCode: factoryBaleProducts.articleCode }).from(factoryBaleProducts)
+          .where(and(eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, companyId)))
+          .limit(1))[0]?.articleCode?.trim()
+      : "") || "";
+  if (!articleCode) return null;
+
+  // Lock proforma capacity in queue order BEFORE locking the bale, mirroring
+  // the manual scanner's priority -> proforma -> bale locking convention.
+  const target = await resolvePriorityScanArticleTarget(tx, companyId, articleCode);
+  if (!target) return null;
+
+  const [lockedBale] = await tx.select().from(factoryBales)
+    .where(and(eq(factoryBales.companyId, companyId), eq(factoryBales.id, baleId)))
+    .for("update");
+  if (!lockedBale || lockedBale.deletedAt || lockedBale.status !== "IN_STOCK" ||
+      !lockedBale.erpLocationId) return null;
+
+  const [order] = await tx.select({ id: customerOrders.id, status: customerOrders.status,
+    proformaIdUsed: customerOrders.proformaIdUsed })
+    .from(customerOrders)
+    .where(and(eq(customerOrders.companyId, companyId), eq(customerOrders.id, target.orderId)))
+    .for("update");
+  if (!order || order.status !== "LOADING" || order.proformaIdUsed !== target.proformaId) return null;
+
+  // Under the proforma lock, recheck capacity and duplicates at the last write boundary.
+  const snapshot = await getProformaCapacitySnapshot(tx, {
+    companyId, proformaId: target.proformaId, currentOrderId: target.orderId,
+  });
+  const article = snapshot?.articles.find((a) => a.normalizedArticleCode === normalizeLoadingArticleCode(articleCode));
+  if (!article?.isOnProforma || article.remainingQty < 1) return null;
+  const duplicate = firstRow(await tx.execute(sql`
+    SELECT cob.id FROM customer_order_bales cob
+      JOIN customer_orders co ON co.id = cob.order_id
+     WHERE cob.bale_id = ${baleId} AND co.company_id = ${companyId}
+       AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL LIMIT 1
+  `));
+  if (duplicate) return null;
+
+  const [product] = lockedBale.productId
+    ? await tx.select({ name: factoryBaleProducts.name, nameAr: factoryBaleProducts.nameAr,
+      sellingPrice: factoryBaleProducts.sellingPrice })
+        .from(factoryBaleProducts)
+        .where(and(eq(factoryBaleProducts.companyId, companyId),
+          eq(factoryBaleProducts.id, lockedBale.productId))).limit(1)
+    : [];
+  const [proformaPrice] = await tx.select({
+    pricingMode: customerProformaLines.pricingMode,
+    pricePerKg: customerProformaLines.pricePerKg,
+    pricePerBale: customerProformaLines.pricePerBale,
+  }).from(customerProformaLines).where(and(
+    eq(customerProformaLines.proformaId, target.proformaId),
+    sql`LOWER(TRIM(${customerProformaLines.articleCode})) = ${normalizeLoadingArticleCode(articleCode)}`
+  )).limit(1);
+  const priceUsed = proformaPrice
+    ? proformaPrice.pricingMode === "per_kg" && proformaPrice.pricePerKg
+      ? toMoney(lockedBale.weightKg).times(toMoney(proformaPrice.pricePerKg)).toFixed(2)
+      : proformaPrice.pricePerBale || "0"
+    : product?.sellingPrice || "0";
+
+  await tx.insert(customerOrderBales).values({
+    orderId: target.orderId,
+    baleId,
+    baleReference: lockedBale.referenceNumber,
+    locationId: lockedBale.erpLocationId,
+    weight: lockedBale.weightKg,
+    articleCode,
+    baleName: product?.name || lockedBale.productName || articleCode,
+    baleNameAr: product?.nameAr || null,
+    priceUsed,
+    scannedBy: username,
+  });
+
+  await tx.execute(sql`
+    INSERT INTO factory_priority_auto_allocations
+      (company_id, bale_id, order_id, reference_number, priority, color, allocation_source)
+    VALUES (${companyId}, ${baleId}, ${target.orderId},
+      ${lockedBale.referenceNumber}, ${target.priority}, ${target.color}, ${source})
+  `);
+  const businessDate = getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone);
+  await tx.execute(sql`
+    INSERT INTO factory_priority_scan_history
+      (company_id, order_id, bale_id, reference_number, product_name, article_code,
+       priority, color, business_date, scanned_by, allocation_source)
+    VALUES (${companyId}, ${target.orderId}, ${baleId}, ${lockedBale.referenceNumber},
+      ${product?.name || lockedBale.productName || articleCode}, ${articleCode},
+      ${target.priority}, ${target.color}, ${businessDate}, ${username}, 'automatic')
+  `);
+
+  if (lockedBale.stockEntryDate) {
+    await tx.execute(sql`
+      INSERT INTO factory_daily_bale_scans
+        (company_id, scan_date, reference_number, article_code, product_name, weight_kg, scanned_by_user_id)
+      VALUES (${String(companyId)}, ${lockedBale.stockEntryDate}, ${lockedBale.referenceNumber},
+        ${articleCode}, ${product?.name || lockedBale.productName},
+        ${lockedBale.weightKg}, ${userId})
+      ON CONFLICT (company_id, scan_date, reference_number) DO NOTHING
+    `);
+  }
+  await recalculateOrderTotalsForScannedArticle(tx, target.orderId, articleCode);
+  await advanceSatisfiedPriorityScanConfigsLockedTx(tx, companyId, target.orderId);
+  return { baleId, referenceNumber: lockedBale.referenceNumber, orderId: target.orderId,
+    priority: target.priority, color: target.color, source, existing: false };
+}
+
+/** Caller holds the company queue lock. Keep historical evidence, remove only active links. */
+export async function reversePriorityAllocationForDeletedBaleTx(
+  tx: PriorityScanTransaction,
+  args: { companyId: number; baleId: number; actor: string; reason: string }
+): Promise<number[]> {
+  const { companyId, baleId, actor, reason } = args;
+  const rows = await tx.select({ id: customerOrderBales.id, orderId: customerOrderBales.orderId,
+    proformaIdUsed: customerOrders.proformaIdUsed })
+    .from(customerOrderBales)
+    .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
+    .where(and(eq(customerOrderBales.baleId, baleId), eq(customerOrders.companyId, companyId),
+      isNull(customerOrders.deletedAt)));
+  const affected = [...new Set(rows.map((r) => r.orderId))];
+  // Respect the existing priority -> proforma lock order.
+  for (const id of [...new Set(rows.map((r) => r.proformaIdUsed).filter((id): id is number => id != null))].sort((a,b)=>a-b)) {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(73203, ${id})`);
+  }
+
+  if (rows.length) {
+    await tx.delete(customerOrderBales).where(eq(customerOrderBales.baleId, baleId));
+    for (const orderId of affected) await recalculateOrderTotals(tx, orderId);
+  }
+  await tx.execute(sql`
+    UPDATE factory_priority_auto_allocations SET reversed_at = now(),
+      reversed_by = ${actor}, reversal_reason = ${reason}
+    WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
+  `);
+  await tx.execute(sql`
+    UPDATE factory_priority_scan_history SET reversed_at = now()
+    WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
+  `);
+
+  // A loading that was automatically completed must return to #1 if deletion
+  // reopened demand, without reassigning any already scanned bale.
+  const activeRows = await loadActivePriorityRows(tx, companyId);
+  for (const orderId of affected) {
+    const [config] = await tx.select().from(customerOrderPriorityScanConfigs)
+      .where(and(eq(customerOrderPriorityScanConfigs.companyId, companyId),
+        eq(customerOrderPriorityScanConfigs.orderId, orderId))).limit(1);
+    if (!config || config.enabled || config.updatedByName !== "system:auto-completed") continue;
+    const [order] = await tx.select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })
+      .from(customerOrders).where(and(eq(customerOrders.companyId, companyId),
+        eq(customerOrders.id, orderId), isNull(customerOrders.deletedAt))).limit(1);
+    if (order?.status !== "LOADING" || !order.proformaIdUsed) continue;
+    const snapshot = await getProformaCapacitySnapshot(tx, {
+      companyId, proformaId: order.proformaIdUsed, currentOrderId: orderId,
+    });
+    if (snapshot && snapshot.requestedTotalQty > 0 && snapshot.remainingTotalQty > 0) {
+      const remaining = (await loadActivePriorityRows(tx, companyId)).map((r) => r.id);
+      await rewriteActivePriorityQueue(tx, companyId,
+        [config.id, ...remaining.filter((id) => id !== config.id)], null, "system:reopened-after-deletion");
+    }
+  }
+  return affected;
+}
+
+export async function runAutomaticPriorityReprint(
+  companyId: number, baleId: number, username: string | null, userId: string | null
+): Promise<AutomaticPriorityAllocation | null> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+    return allocateAutomaticPriorityBaleTx(tx, { companyId, baleId, username, userId, source: "reprint" });
+  });
+}
