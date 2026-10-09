@@ -48,6 +48,32 @@ export function toMoney(value: MoneyInput): Decimal {
   }
 }
 
+/**
+ * Split `total` across lines in proportion to `weights`, each share in cents,
+ * so the shares add up to `total` exactly. Rounding each share on its own can
+ * leave the parts a cent off the whole; the cent left over goes to the
+ * largest weight. With no positive weight, everything goes to the first line.
+ */
+export function allocateCents(weights: readonly MoneyInput[], total: MoneyInput): Decimal[] {
+  if (weights.length === 0) return [];
+  const exactTotal = toMoney(total).toDecimalPlaces(MONEY_DECIMAL_PLACES);
+  const parts = weights.map(toMoney);
+  const weightSum = sumMoney(parts);
+  if (!weightSum.gt(0)) return parts.map((_, index) => (index === 0 ? exactTotal : new MoneyDecimal(0)));
+  const shares = parts.map((weight) =>
+    exactTotal.times(weight).dividedBy(weightSum).toDecimalPlaces(MONEY_DECIMAL_PLACES)
+  );
+  let largest = 0;
+  for (let index = 1; index < parts.length; index += 1) if (parts[index].gt(parts[largest])) largest = index;
+  shares[largest] = shares[largest].plus(exactTotal.minus(sumMoney(shares)));
+  return shares;
+}
+
+/** Quantity x rate as an exact Decimal; round it once where it is stored. */
+export function lineAmount(quantity: MoneyInput, rate: MoneyInput): Decimal {
+  return toMoney(quantity).times(toMoney(rate));
+}
+
 /** Exact sum of money values. */
 export function sumMoney(values: Iterable<MoneyInput>): Decimal {
   let total = new MoneyDecimal(0);
