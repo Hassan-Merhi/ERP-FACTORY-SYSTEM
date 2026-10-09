@@ -439,6 +439,20 @@ describe("Phase 6 review fixes: every deletion path, live links only", () => {
     expect(await inventoryQty()).toBe(before - 1);
   }, 60000);
 
+  it("waste dispatch refuses a bale that is still on a live loading", async () => {
+    const [loaded, free] = await newStockBales(2);
+    const live = await newOrder("LOADING");
+    await link(live, loaded);
+    const before = await inventoryQty();
+    const refused = await agent
+      .post("/api/factory/waste-dispatch/submit")
+      .send({ baleIds: [free.id, loaded.id], dispatchDate: "2026-10-09" });
+    expect(refused.status).toBe(400);
+    expect(String(refused.body.message)).toContain("customer loading");
+    expect((await baleStatus(free.id)).status).toBe("IN_STOCK");
+    expect(await inventoryQty()).toBe(before);
+  }, 60000);
+
   it("status edits cannot move a bale on an open loading out of stock without reversal", async () => {
     const [bale] = await newStockBales(1);
     const live = await newOrder("LOADING");
