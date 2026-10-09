@@ -122,6 +122,41 @@ const factoryStaffTrackingTranslations = {
   chooseWorker: { en: "Choose worker", ar: "اختر عاملاً", fr: "Choisir un ouvrier" },
   workerLinkSaved: { en: "Workers linked", ar: "تم ربط العمال", fr: "Ouvriers liés" },
   workerUnlinked: { en: "Workers unlinked", ar: "تم إلغاء ربط العمال", fr: "Ouvriers dissociés" },
+  unlinkSplitTitle: {
+    en: "Split Fixed Target before unlinking",
+    ar: "قسّم الهدف الثابت قبل إلغاء الربط",
+    fr: "Répartir l’objectif fixe avant de dissocier",
+  },
+  unlinkSplitDescription: {
+    en: "Each worker gets a separate fixed target from this date onward. The total must stay the same.",
+    ar: "يحصل كل عامل على هدف ثابت مستقل بدءاً من هذا التاريخ. يجب أن يبقى المجموع كما هو.",
+    fr: "Chaque ouvrier reçoit un objectif fixe individuel à partir de cette date. Le total doit rester identique.",
+  },
+  unlinkSplitNoTarget: {
+    en: "No shared target is set. Each worker will keep a blank fixed target.",
+    ar: "لم يُحدّد هدف مشترك. سيبقى الهدف الثابت لكل عامل فارغاً.",
+    fr: "Aucun objectif commun n’est défini. Les objectifs individuels resteront vides.",
+  },
+  unlinkSplitAuto: {
+    en: "Split evenly",
+    ar: "قسّم بالتساوي",
+    fr: "Répartir également",
+  },
+  unlinkSplitAllocated: {
+    en: "Allocated",
+    ar: "الموزّع",
+    fr: "Réparti",
+  },
+  unlinkSplitConfirm: {
+    en: "Confirm Unlink",
+    ar: "تأكيد إلغاء الربط",
+    fr: "Confirmer la dissociation",
+  },
+  unlinkSplitWholeBales: {
+    en: "Keep whole bales for whole targets (up to two decimals for fractional targets). All shares must total the original target.",
+    ar: "استخدم أعداداً صحيحة للأهداف الكاملة، وحتى منزلتين عشريتين للأهداف الكسرية. يجب أن يساوي مجموع الحصص الهدف الأصلي.",
+    fr: "Utilisez des balles entières pour un objectif entier (deux décimales maximum pour un objectif fractionnaire). La somme doit égaler l’objectif initial.",
+  },
   workerLinkFailed: {
     en: "Could not update worker link",
     ar: "تعذر تحديث ربط العمال",
