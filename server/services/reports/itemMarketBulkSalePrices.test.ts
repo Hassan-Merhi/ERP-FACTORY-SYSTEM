@@ -31,12 +31,22 @@ describe("Item Market Analysis bulk sale-price export", () => {
     mocks.query.mockResolvedValue({
       rows: [
         {
-          stock_item_id: "12", activity_type: "sale", unit_price: "80.50",
-          quantity: "5", revenue: "402.5", profit: "32.25", transaction_count: 2,
+          stock_item_id: "12",
+          activity_type: "sale",
+          unit_price: "80.50",
+          quantity: "5",
+          revenue: "402.5",
+          profit: "32.25",
+          transaction_count: 2,
         },
         {
-          stock_item_id: "12", activity_type: "return", unit_price: "80.50",
-          quantity: "-1", revenue: "-80.5", profit: "-6.45", transaction_count: 1,
+          stock_item_id: "12",
+          activity_type: "return",
+          unit_price: "80.50",
+          quantity: "-1",
+          revenue: "-80.5",
+          profit: "-6.45",
+          transaction_count: 1,
         },
       ],
     });
@@ -54,12 +64,24 @@ describe("Item Market Analysis bulk sale-price export", () => {
     expect(sql).toContain("v.voucher_date <= $5::date");
     expect(result).toEqual([
       {
-        companyId: 7, stockItemId: 12, activityType: "sale", unitPrice: 80.5,
-        quantity: 5, revenue: 402.5, profit: 32.25, transactionCount: 2,
+        companyId: 7,
+        stockItemId: 12,
+        activityType: "sale",
+        unitPrice: 80.5,
+        quantity: 5,
+        revenue: 402.5,
+        profit: 32.25,
+        transactionCount: 2,
       },
       {
-        companyId: 7, stockItemId: 12, activityType: "return", unitPrice: 80.5,
-        quantity: -1, revenue: -80.5, profit: -6.45, transactionCount: 1,
+        companyId: 7,
+        stockItemId: 12,
+        activityType: "return",
+        unitPrice: 80.5,
+        quantity: -1,
+        revenue: -80.5,
+        profit: -6.45,
+        transactionCount: 1,
       },
     ]);
   });
