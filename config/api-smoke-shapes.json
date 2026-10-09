@@ -9,7 +9,7 @@
   "routes": {
     "/api/accounts/all": {
       "status": 200,
-      "shape": "{accounts:[{accountId:scalar,accountType:scalar,active:scalar,balance:scalar,balanceSide:scalar,code:scalar,id:scalar,name:scalar,openingBalance:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar,type:scalar}],asOfDate:scalar}"
+      "shape": "{accounts:[{accountId:scalar,accountType:scalar,active:scalar,balance:scalar,balanceSide:scalar,code:scalar,id:scalar,name:scalar,openingBalance:scalar,openingBalanceSide:scalar,parentId:scalar,subType:scalar,type:scalar}],allPosted:scalar,asOfDate:scalar}"
     },
     "/api/accounts/all-ledger": {
       "status": 200,
@@ -153,7 +153,7 @@
     },
     "/api/chatbot/alerts": {
       "status": 200,
-      "shape": "{lowStock:[],openPOs:[],overdueCustomers:[],pendingPayrolls:[]}"
+      "shape": "{lowStock:[],openPOs:[],overdueCustomers:[],pendingPayrolls:[],receivablesNotInLedger:scalar}"
     },
     "/api/chatbot/all-history": {
       "status": 200,
@@ -1253,7 +1253,7 @@
     },
     "/api/reports/balance-sheet": {
       "status": 200,
-      "shape": "{asOfDate:scalar,assets:{banks:[],fixedAssets:[],ledgers:[],total:scalar},equity:{accounts:[],total:scalar},liabilities:{ledgers:[],suppliers:[],total:scalar}}"
+      "shape": "{asOfDate:scalar,assets:{lines:[],total:scalar},balanced:scalar,difference:scalar,equity:{currentEarnings:scalar,lines:[],total:scalar},liabilities:{lines:[],total:scalar},unclassified:{lines:[],total:scalar}}"
     },
     "/api/reports/closing-stock-summary": {
       "status": 200,
@@ -1521,7 +1521,7 @@
     },
     "/api/stats/import-cycle-balance": {
       "status": 200,
-      "shape": "{components:{apTransactionBalance:scalar,assetBalance:scalar,bankBalance:scalar,cashBalance:scalar,cogsBalance:scalar,consumptionBalance:scalar,directExpenseBalance:scalar,dutyAgentBalance:scalar,equityTransactionBalance:scalar,generalExpenseBalance:scalar,governmentTaxesBalance:scalar,incomeBalance:scalar,indirectExpenseBalance:scalar,liabilityBalance:scalar,loansBalance:scalar,openingBalanceEquity:scalar,openingStockValue:scalar,payrollExpenseBalance:scalar,payrollLiabilitiesBalance:scalar,productionBalance:scalar,profitBalance:scalar,salaryAdvancesBalance:scalar,stockOnFloorValue:scalar,stockOtwValue:scalar,supplierBalance:scalar,transporterAgentBalance:scalar},netImportCycleBalance:scalar,precisionTrace:{adjustedBalance:scalar,calculation:{assetTotal:{…},expenseTotal:{…},liabilityTotal:{…}},discrepancyExplanation:scalar,finalRoundedBalance:scalar,formula:scalar,rawNetBalance:scalar,storedEquityAdjustment:scalar}}"
+      "shape": "{componentBasis:{apTransactionBalance:scalar,assetBalance:scalar,bankBalance:scalar,cashBalance:scalar,cogsBalance:scalar,consumptionBalance:scalar,directExpenseBalance:scalar,dutyAgentBalance:scalar,equityTransactionBalance:scalar,generalExpenseBalance:scalar,governmentTaxesBalance:scalar,incomeBalance:scalar,indirectExpenseBalance:scalar,liabilityBalance:scalar,loansBalance:scalar,openingBalanceEquity:scalar,openingStockValue:scalar,payrollExpenseBalance:scalar,payrollLiabilitiesBalance:scalar,productionBalance:scalar,profitBalance:scalar,salaryAdvancesBalance:scalar,stockOnFloorValue:scalar,stockOtwValue:scalar,supplierBalance:scalar,transporterAgentBalance:scalar},components:{apTransactionBalance:scalar,assetBalance:scalar,bankBalance:scalar,cashBalance:scalar,cogsBalance:scalar,consumptionBalance:scalar,directExpenseBalance:scalar,dutyAgentBalance:scalar,equityTransactionBalance:scalar,generalExpenseBalance:scalar,governmentTaxesBalance:scalar,incomeBalance:scalar,indirectExpenseBalance:scalar,liabilityBalance:scalar,loansBalance:scalar,openingBalanceEquity:scalar,openingStockValue:scalar,payrollExpenseBalance:scalar,payrollLiabilitiesBalance:scalar,productionBalance:scalar,profitBalance:scalar,salaryAdvancesBalance:scalar,stockOnFloorValue:scalar,stockOtwValue:scalar,supplierBalance:scalar,transporterAgentBalance:scalar},netImportCycleBalance:scalar,precisionTrace:{adjustedBalance:scalar,calculation:{assetTotal:{…},expenseTotal:{…},liabilityTotal:{…}},discrepancyExplanation:scalar,finalRoundedBalance:scalar,formula:scalar,rawNetBalance:scalar,storedEquityAdjustment:scalar}}"
     },
     "/api/stats/import-cycle-diagnostics": {
       "status": 200,
@@ -1533,7 +1533,7 @@
     },
     "/api/stats/net-profit": {
       "status": 200,
-      "shape": "{currency:{currentCashBankTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentTranslatedLedgerAccountIds:[scalar],reportTotalsProvisional:scalar,unresolvedAccountCount:scalar,unresolvedAccounts:[]},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
+      "shape": "{currency:{currentCashBankTranslationApplied:scalar,historicalBaseCreditTotal:scalar,historicalBaseDebitTotal:scalar,historicalValuesLocked:scalar,nativeCreditByCurrency:{},nativeDebitByCurrency:{},provisionalReason:scalar,rateConvention:scalar,totalsProvisional:scalar,unresolvedLegacyEntryCount:scalar,unresolvedLegacyRawNet:scalar},currencyRevaluation:{appliedToCurrentSnapshotOnly:scalar,currentCashBankTranslationDifference:scalar,currentCfaPerUsd:scalar,currentTranslatedBankAccountIds:[],currentTranslatedLedgerAccountIds:[scalar],reportTotalsProvisional:scalar,unresolvedAccountCount:scalar,unresolvedAccounts:[]},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{accounts:[],breakdown:[],total:scalar},expensesTotal:scalar,forUs:{accounts:[{…}],breakdown:[{…}],total:scalar},forUsTotal:scalar,income:{accounts:[],breakdown:[],total:scalar},incomeTotal:scalar,netPosition:scalar,netPositionBreakdown:{assets:{breakdown:[…],total:scalar},equity:{accounts:[],includedInNetPosition:scalar,total:scalar},expenses:{breakdown:[],total:scalar},income:{breakdown:[],total:scalar},liabilities:{breakdown:[],total:scalar},netPosition:scalar},netPositionLabel:scalar,netProfit:scalar,netWorth:scalar,notInLedger:{label:scalar,lines:[],total:scalar},onUs:{accounts:[],breakdown:[],total:scalar},onUsTotal:scalar,ownersCapital:scalar,spPosProfit:scalar,totalExpenses:scalar,totalIncome:scalar}"
     },
     "/api/stats/stock-summary": {
       "status": 200,
