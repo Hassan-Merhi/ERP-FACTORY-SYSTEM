@@ -227,6 +227,14 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
   it("never reactivates manually disabled or verified loadings", async () => {
     const manuallyDisabled = await loading();
     await configure(manuallyDisabled, 4, "#7c3aed");
+    // The loading was completed automatically, then an operator explicitly
+    // switched it OFF. The later human action must win over auto recovery.
+    await pool.query(
+      `UPDATE customer_order_priority_scan_configs SET enabled = FALSE,
+         updated_by_name = 'system:auto-completed', updated_by = NULL
+       WHERE company_id = $1 AND order_id = $2`,
+      [ctx.companyId, manuallyDisabled]
+    );
     await configure(manuallyDisabled, 4, "#7c3aed", false);
 
     const verified = await loading("VERIFIED");
@@ -274,6 +282,41 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
     expect(await activeOrderIds()).toEqual([older, newer, ...before]);
     const after = (await queue()).filter(row => row.enabled).sort((a,b) => a.priority - b.priority);
     expect(after.map(row => row.priority)).toEqual(after.map((_, index) => index + 1));
+  }, 60000);
+
+  it("does not resurrect a loading whose own proforma requirement remains fully satisfied", async () => {
+    const satisfied = await loading();
+    await attachBale(satisfied, `${PREFIX}-SAT-1`);
+    await attachBale(satisfied, `${PREFIX}-SAT-2`);
+    await pool.query(
+      `INSERT INTO customer_order_priority_scan_configs
+         (company_id, order_id, color, color_key, priority, enabled, updated_by_name)
+       VALUES ($1, $2, '#f59e0b', '#f59e0b', 99, FALSE, 'system:auto-completed')`,
+      [ctx.companyId, satisfied]
+    );
+    const recovered = await db.transaction(async tx => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${ctx.companyId})`);
+      return reactivateAutoCompletedPriorityLoadingsLockedTx(tx, ctx.companyId, [satisfied]);
+    });
+    expect(recovered).toHaveLength(0);
+    expect((await queue()).find(row => row.orderId === satisfied)?.enabled).toBe(false);
+  });
+
+  it("serializes two simultaneous recovery attempts into exactly one queue reactivation", async () => {
+    const pending = await loading();
+    await pool.query(
+      `INSERT INTO customer_order_priority_scan_configs
+         (company_id, order_id, color, color_key, priority, enabled, updated_by_name)
+       VALUES ($1, $2, '#f59e0b', '#f59e0b', 99, FALSE, 'system:auto-completed')`,
+      [ctx.companyId, pending]
+    );
+    const attempt = () => db.transaction(async tx => {
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${ctx.companyId})`);
+      return reactivateAutoCompletedPriorityLoadingsLockedTx(tx, ctx.companyId, [pending]);
+    });
+    const [first, second] = await Promise.all([attempt(), attempt()]);
+    expect(first.length + second.length).toBe(1);
+    expect((await queue()).filter(row => row.enabled && row.orderId === pending)).toHaveLength(1);
   }, 60000);
 
   it("is idempotent and does not reopen a previously reopened or manually disabled loading twice", async () => {
