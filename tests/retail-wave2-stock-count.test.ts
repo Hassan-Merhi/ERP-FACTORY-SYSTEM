@@ -453,5 +453,4 @@ describeWithDatabase("Retail Wave 2 — physical stock count sessions", () => {
     expect(finalized.status).toBe(201);
     expect(await quantityOf(variantAId)).toBe(beforeSale - 1);
   });
-
 });

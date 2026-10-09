@@ -50,7 +50,9 @@ describe("Retail POS Wave 2 transaction invariants", () => {
   });
 
   it("uses database transactions and idempotency for sale, return, transfer and cancellation", () => {
-    const route = read("server/routes/pos/retailPosRoutes.ts");
+    // The cancellation route lives in its own module, registered from retailPosRoutes.ts.
+    const route =
+      read("server/routes/pos/retailPosRoutes.ts") + read("server/routes/pos/retailPosCancellationRoutes.ts");
     const schema = read("shared/schema/retailPos.ts");
 
     expect(route).toContain('app.post("/api/pos/retail/sales"');

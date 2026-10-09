@@ -428,6 +428,7 @@ export async function createRetailSaleInTx(
     saleId: createdSale.id,
     saleIdempotencyKey: input.idempotencyKey,
     totalAmount: priced.totalAmount,
+    taxAmount: priced.taxAmount,
     totalCost,
     userId: input.userId,
     username: input.username ?? null,

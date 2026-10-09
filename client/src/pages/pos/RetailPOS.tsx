@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  ArrowRightLeft,
-  Minus,
-  Percent,
-  Plus,
-  Printer,
-  Repeat,
-  RotateCcw,
-  ScanLine,
-  ShoppingCart,
-  Trash2,
-} from "lucide-react";
+import { Percent, ScanLine, ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -25,6 +14,12 @@ import { RetailCameraScanner } from "./RetailCameraScanner";
 import { RetailExchangeDialog } from "./RetailExchangeDialog";
 import { RetailItemImage, RetailScanFeedback } from "./RetailScanFeedback";
 import { RetailPaymentPanel } from "./RetailPaymentPanel";
+import {
+  RetailCartLineRow,
+  RetailLastSaleSummary,
+  RetailRecentSalesCard,
+  RetailVariantTransferCard,
+} from "./RetailPOSPanels";
 import { RetailShiftPanel, type RetailShift } from "./RetailShiftPanel";
 import { useRetailReceiptPrinter } from "./retailReceipt";
 import { RetailApprovalDialog } from "./RetailApprovalDialog";
@@ -637,104 +632,23 @@ export default function RetailPOS() {
           </CardHeader>
           <CardContent className="space-y-3">
             {cart.map((line) => (
-              <div
+              <RetailCartLineRow
                 key={line.variantId}
-                className="flex items-center gap-3 rounded-lg border p-3"
-                data-testid="cart-line"
-              >
-                <RetailItemImage item={line} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium" data-no-translate>
-                    {line.brand} · {line.name}
-                  </div>
-                  <div className="text-xs text-muted-foreground" data-no-translate>
-                    <strong className="text-foreground">{line.color}</strong> ·{" "}
-                    <strong className="text-foreground">{line.size}</strong> · {line.barcode}
-                  </div>
-                  <div
-                    className={`text-xs ${line.cartQuantity > line.quantity ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    <span data-i18n-ui>Available here</span>: {line.quantity}
-                  </div>
-                  {((line.priceOverride ?? null) !== null || (line.discountType ?? "none") !== "none") && (
-                    <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400" data-no-translate>
-                      {line.priceOverride != null
-                        ? `Override ${money(line.priceOverride)}`
-                        : line.discountType === "percent"
-                          ? `-${line.discountValue ?? 0}%`
-                          : `-${money(line.discountValue ?? 0)} / unit`}
-                      {line.discountReason ? ` · ${line.discountReason}` : ""}
-                    </div>
-                  )}
-                  <div className="mt-2 flex items-center gap-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      aria-label="Decrease quantity"
-                      onClick={() =>
-                        setCart((current) =>
-                          current.map((item) =>
-                            item.variantId === line.variantId
-                              ? { ...item, cartQuantity: Math.max(1, item.cartQuantity - 1) }
-                              : item
-                          )
-                        )
-                      }
-                    >
-                      <Minus className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="w-8 text-center text-sm font-medium">{line.cartQuantity}</span>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      className="h-8 w-8"
-                      aria-label="Increase quantity"
-                      onClick={() => setLastScan(addItem(line))}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                    <span className="ml-auto text-sm font-semibold" data-no-translate>
-                      {(() => {
-                        const priced = previewLineFor(line.variantId);
-                        const adjusted =
-                          Boolean(line.priceOverride != null) || (line.discountType ?? "none") !== "none";
-                        return adjusted ? (
-                          <>
-                            <span className="mr-1 text-xs font-normal text-muted-foreground line-through">
-                              {money(line.price * line.cartQuantity)}
-                            </span>
-                            {money(priced?.lineTotal ?? line.price * line.cartQuantity)}
-                          </>
-                        ) : (
-                          money(priced?.lineTotal ?? line.price * line.cartQuantity)
-                        );
-                      })()}
-                    </span>
-                    <Button
-                      size="icon"
-                      variant={
-                        line.priceOverride != null || (line.discountType ?? "none") !== "none" ? "default" : "outline"
-                      }
-                      className="h-8 w-8"
-                      aria-label="Line discount or price override"
-                      onClick={() => setAdjustLine(line)}
-                      data-testid="retail-line-discount"
-                    >
-                      <Percent className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8"
-                      aria-label="Remove from cart"
-                      onClick={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+                line={line}
+                pricedLineTotal={previewLineFor(line.variantId)?.lineTotal ?? null}
+                onDecrease={() =>
+                  setCart((current) =>
+                    current.map((item) =>
+                      item.variantId === line.variantId
+                        ? { ...item, cartQuantity: Math.max(1, item.cartQuantity - 1) }
+                        : item
+                    )
+                  )
+                }
+                onIncrease={() => setLastScan(addItem(line))}
+                onAdjust={() => setAdjustLine(line)}
+                onRemove={() => setCart((current) => current.filter((item) => item.variantId !== line.variantId))}
+              />
             ))}
             {!cart.length && (
               <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -865,183 +779,38 @@ export default function RetailPOS() {
             >
               {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
             </Button>
-            {lastSale && (
-              <div className="rounded-lg border bg-muted/30 p-3 text-sm" data-testid="last-sale">
-                <div className="flex items-center justify-between gap-2">
-                  <strong>Sale #{lastSale.id}</strong>
-                  <span>{money(lastSale.totalAmount)}</span>
-                </div>
-                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground" data-no-translate>
-                  {lastSale.items.map((item) => (
-                    <div key={item.id}>
-                      {item.quantity} × {item.name} · {item.color} · {item.size}
-                    </div>
-                  ))}
-                </div>
-                {lastSale.payments?.length ? (
-                  <div className="mt-2 border-t pt-2 text-xs text-muted-foreground">
-                    {lastSale.payments.map((payment) => (
-                      <div key={payment.id} className="flex justify-between">
-                        <span>{payment.paymentType === "refund" ? "Refund" : payment.method}</span>
-                        <span>{money(payment.amount)}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => printReceipt(lastSale)}>
-                  <Printer className="mr-2 h-4 w-4" /> Print receipt
-                </Button>
-              </div>
-            )}
+            {lastSale && <RetailLastSaleSummary sale={lastSale} onPrint={() => printReceipt(lastSale)} />}
           </CardContent>
         </Card>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Recent retail sales & returns</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {(salesQuery.data ?? []).map((sale) => (
-              <div key={sale.id} className="rounded-lg border p-3">
-                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <strong>Sale #{sale.id}</strong>
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {new Date(sale.createdAt).toLocaleString()}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">{money(sale.totalAmount)}</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{sale.status}</span>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      aria-label="Print receipt"
-                      onClick={() => printReceipt(sale)}
-                    >
-                      <Printer className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  {sale.items.map((item) => {
-                    const remaining = Math.max(0, item.quantity - item.returnedQuantity);
-                    return (
-                      <div key={item.id} className="flex items-center gap-2 text-sm">
-                        <RetailItemImage item={item} className="h-9 w-9" />
-                        <span className="min-w-0 flex-1 truncate" data-no-translate>
-                          {item.name} · {item.color} · {item.size}{" "}
-                          <span className="text-muted-foreground">× {item.quantity}</span>
-                        </span>
-                        {item.returnedQuantity > 0 && (
-                          <span className="text-xs text-muted-foreground">Returned {item.returnedQuantity}</span>
-                        )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={sale.status !== "completed" || remaining < 1 || returnMutation.isPending}
-                          onClick={() =>
-                            returnMutation.mutate({
-                              saleId: sale.id,
-                              saleItemId: item.id,
-                              returnedQuantity: item.returnedQuantity,
-                            })
-                          }
-                        >
-                          <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                          Return 1
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-                {sale.status === "completed" && (
-                  <div className="mt-3 flex flex-wrap justify-end gap-2">
-                    <Button size="sm" variant="outline" onClick={() => setExchangeSale(sale)}>
-                      <Repeat className="mr-1 h-3.5 w-3.5" /> Exchange
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={cancelMutation.isPending}
-                      onClick={() => cancelMutation.mutate(sale.id)}
-                    >
-                      Cancel / reverse sale
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
-            {!salesQuery.isLoading && !(salesQuery.data ?? []).length && (
-              <div className="text-sm text-muted-foreground">No retail sales at this location yet.</div>
-            )}
-          </CardContent>
-        </Card>
+        <RetailRecentSalesCard
+          sales={salesQuery.data ?? []}
+          isLoading={salesQuery.isLoading}
+          returnPending={returnMutation.isPending}
+          cancelPending={cancelMutation.isPending}
+          onPrint={printReceipt}
+          onReturnOne={(sale, item) =>
+            returnMutation.mutate({ saleId: sale.id, saleItemId: item.id, returnedQuantity: item.returnedQuantity })
+          }
+          onExchange={setExchangeSale}
+          onCancel={(sale) => cancelMutation.mutate(sale.id)}
+        />
 
         {!isPosRole && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <ArrowRightLeft className="h-5 w-5" /> Exact-variant transfer
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div>
-                <Label>Variant (Color · Size)</Label>
-                <select
-                  value={transferVariantId}
-                  onChange={(event) => setTransferVariantId(event.target.value ? Number(event.target.value) : "")}
-                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">Choose exact product + color + size</option>
-                  {(itemsQuery.data ?? []).map((item) => (
-                    <option key={item.variantId} value={item.variantId}>
-                      {item.name} · {item.brand} · {item.color} · {item.size} · Qty {item.quantity}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <Label>Destination</Label>
-                <select
-                  value={transferToLocationId}
-                  onChange={(event) => setTransferToLocationId(event.target.value ? Number(event.target.value) : "")}
-                  className="mt-1 h-10 w-full rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="">Choose destination</option>
-                  {locations
-                    .filter((location) => location.id !== selectedLocation?.id)
-                    .map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.name}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
-                <Label htmlFor="retail-transfer-qty">Quantity</Label>
-                <Input
-                  id="retail-transfer-qty"
-                  type="number"
-                  min="0.000001"
-                  step="1"
-                  value={transferQuantity}
-                  onChange={(event) => setTransferQuantity(Number(event.target.value))}
-                />
-              </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={transferMutation.isPending || !transferVariantId || !transferToLocationId}
-                onClick={() => transferMutation.mutate()}
-              >
-                {transferMutation.isPending ? "Transferring…" : "Transfer exact variant"}
-              </Button>
-            </CardContent>
-          </Card>
+          <RetailVariantTransferCard
+            items={itemsQuery.data ?? []}
+            destinations={locations.filter((location) => location.id !== selectedLocation?.id)}
+            variantId={transferVariantId}
+            toLocationId={transferToLocationId}
+            quantity={transferQuantity}
+            pending={transferMutation.isPending}
+            onVariantChange={setTransferVariantId}
+            onDestinationChange={setTransferToLocationId}
+            onQuantityChange={setTransferQuantity}
+            onSubmit={() => transferMutation.mutate()}
+          />
         )}
       </div>
 

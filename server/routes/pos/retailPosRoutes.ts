@@ -6,7 +6,6 @@ import {
   customers,
   locations,
   retailBrands,
-  retailPosSaleItems,
   retailPosSales,
   retailProductVariants,
   retailProducts,
@@ -52,6 +51,7 @@ import {
   refundRetailPaymentsTx,
   validateRetailShiftTx,
 } from "../../services/retail/retailFinancialService";
+import { registerRetailPosCancellationRoute } from "./retailPosCancellationRoutes";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
@@ -138,12 +138,6 @@ const adjustmentSchema = z.object({
     .refine((value) => value !== 0, "Adjustment cannot be zero"),
   reason: z.string().trim().min(1).max(500),
   reference: z.string().trim().max(191).optional(),
-});
-
-const cancelSchema = z.object({
-  locationId: z.coerce.number().int().positive(),
-  idempotencyKey: idempotencyKeySchema,
-  reason: z.string().trim().min(1).max(500).optional(),
 });
 
 function toNumber(value: string | number | null | undefined): number {
@@ -647,6 +641,7 @@ export function registerRetailPosRoutes(app: Express): void {
             sourceId: String(returned.returnId),
             idempotencyKey: `retail-pos-return:${returned.returnId}`,
             refundAmount: returned.refundAmount,
+            refundTaxAmount: returned.refundTaxAmount,
             restoredCost: returned.costValue,
             refunds,
             userId,
@@ -814,85 +809,7 @@ export function registerRetailPosRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/pos/retail/sales/:saleId/cancel", requireAuth, async (req, res) => {
-    try {
-      const companyId = await requireRetailCompany(req, res);
-      if (!companyId) return;
-      const saleId = Number(req.params.saleId);
-      if (!Number.isInteger(saleId) || saleId <= 0) return res.status(400).json({ message: "Invalid sale" });
-      const body = cancelSchema.parse(req.body);
-      await ensureCompanyLocation(companyId, body.locationId);
-      const userId = currentUserId(req);
-      const result = await db.transaction(async (tx) => {
-        const [operation] = await tx
-          .insert(retailStockOperations)
-          .values({
-            companyId,
-            operationType: "cancellation",
-            idempotencyKey: body.idempotencyKey,
-            referenceId: String(saleId),
-            createdBy: userId,
-            metadata: { reason: body.reason ?? null },
-          })
-          .onConflictDoNothing({ target: [retailStockOperations.companyId, retailStockOperations.idempotencyKey] })
-          .returning({ id: retailStockOperations.id });
-        if (!operation) return { replayed: true };
-
-        await tx.execute(
-          sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`
-        );
-        const [sale] = await tx
-          .select({ id: retailPosSales.id, locationId: retailPosSales.locationId, status: retailPosSales.status })
-          .from(retailPosSales)
-          .where(and(eq(retailPosSales.id, saleId), eq(retailPosSales.companyId, companyId)))
-          .limit(1);
-        if (!sale) throw new Error("Retail sale not found");
-        if (sale.locationId !== body.locationId)
-          throw new Error("Cancellation location must match the original sale location");
-        if (sale.status === "canceled") return { replayed: true };
-
-        const saleItems = await tx
-          .select({
-            id: retailPosSaleItems.id,
-            variantId: retailPosSaleItems.variantId,
-            quantity: retailPosSaleItems.quantity,
-            returnedQuantity: retailPosSaleItems.returnedQuantity,
-          })
-          .from(retailPosSaleItems)
-          .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
-
-        for (const item of saleItems) {
-          const quantityToRestore = Math.max(0, toNumber(item.quantity) - toNumber(item.returnedQuantity));
-          if (quantityToRestore <= 0) continue;
-          const stock = await lockInventoryRow(tx, companyId, item.variantId, sale.locationId);
-          const after = stock.quantity + quantityToRestore;
-          await setInventoryQuantity(tx, companyId, item.variantId, sale.locationId, after);
-          await addMovement(tx, {
-            companyId,
-            variantId: item.variantId,
-            locationId: sale.locationId,
-            movementType: "cancellation",
-            quantityDelta: quantityToRestore,
-            before: stock.quantity,
-            after,
-            eventKey: `cancellation:${operation.id}:${item.id}`,
-            referenceType: "retail_pos_sale",
-            referenceId: saleId,
-            createdBy: userId,
-            metadata: { saleItemId: item.id, reason: body.reason ?? null },
-          });
-        }
-        await tx
-          .update(retailPosSales)
-          .set({ status: "canceled", canceledAt: new Date(), updatedAt: new Date() })
-          .where(eq(retailPosSales.id, saleId));
-        return { replayed: false, operationId: operation.id };
-      });
-      res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
-    } catch (error) {
-      res.status(400).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerRetailPosCancellationRoute(app);
 
   app.get("/api/pos/retail/movements", requireAuth, async (req, res) => {
     try {

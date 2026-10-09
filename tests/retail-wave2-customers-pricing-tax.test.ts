@@ -81,6 +81,19 @@ async function updateSettings(patch: Record<string, unknown>): Promise<void> {
   expect(response.status).toBe(200);
 }
 
+/** Net debit minus credit per ledger code on a voucher, for the Retail accounts. */
+async function retailJournal(voucherId: number): Promise<Record<string, number>> {
+  const result = await pool.query<{ code: string; net: string }>(
+    `SELECT la.code, SUM(COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0)) AS net
+       FROM voucher_entries ve
+       JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+      WHERE ve.voucher_id = $1
+      GROUP BY la.code`,
+    [voucherId]
+  );
+  return Object.fromEntries(result.rows.map((row) => [row.code, Number(row.net)]));
+}
+
 describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", () => {
   beforeAll(async () => {
     app = await setupTestApp();
@@ -574,6 +587,26 @@ describeWithDatabase("Retail Wave 2 — customers, pricing, discounts and tax", 
     expect(returned.status).toBe(201);
     expect(returned.body.refundAmount).toBe(106.2);
     expect(returned.body.refundTaxAmount).toBe(16.2);
+
+    // Revenue is booked net of tax; the tax goes to Retail Tax Payable, and a return reverses both.
+    expect(body.accountingVoucherId).toBeGreaterThan(0);
+    const saleJournal = await retailJournal(body.accountingVoucherId);
+    expect(saleJournal["RETAIL-SALES"]).toBe(-180);
+    expect(saleJournal["RETAIL-TAX"]).toBe(-32.4);
+    const [returnPosting] = await db
+      .select({ voucherId: schema.accountingPostingRequests.voucherId })
+      .from(schema.accountingPostingRequests)
+      .where(
+        and(
+          eq(schema.accountingPostingRequests.companyId, companyId),
+          eq(schema.accountingPostingRequests.sourceType, "retail-pos-return"),
+          eq(schema.accountingPostingRequests.sourceId, String(returned.body.returnId))
+        )
+      )
+      .limit(1);
+    const returnJournal = await retailJournal(Number(returnPosting?.voucherId));
+    expect(returnJournal["RETAIL-SALES"]).toBe(90);
+    expect(returnJournal["RETAIL-TAX"]).toBe(16.2);
     expect(await variantQuantity(variantAId)).toBeGreaterThan(0);
 
     const [storedSale] = await db
