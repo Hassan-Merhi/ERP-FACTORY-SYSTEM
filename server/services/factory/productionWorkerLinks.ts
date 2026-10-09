@@ -2,10 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
-import {
-  resolveUnlinkBaleAllocations,
-  type WorkerBaleAllocation,
-} from "@shared/factoryProductionTargetSplit";
+import { resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
 
 export interface ProductionWorkerLinkMember {
   workerId: number;
@@ -130,8 +127,7 @@ export async function createProductionWorkerLink(input: {
         AND m.worker_id = ANY(${sqlArray(workerIds)})
     `);
     const nextEffectiveFromRaw = resultRows(nextConflictResult)[0]?.nextEffectiveFrom;
-    const nextEffectiveFrom =
-      nextEffectiveFromRaw == null ? null : String(nextEffectiveFromRaw);
+    const nextEffectiveFrom = nextEffectiveFromRaw == null ? null : String(nextEffectiveFromRaw);
 
     await tx.execute(sql`
       UPDATE factory_worker_production_links l
@@ -160,9 +156,7 @@ export async function createProductionWorkerLink(input: {
     const linkId = Number(resultRows(linkResult)[0]?.id);
     if (!linkId) throw new Error("Could not create worker link");
 
-    const memberValues = workerIds.map(
-      (workerId) => sql`(${linkId}, ${input.companyId}, ${workerId}, now())`
-    );
+    const memberValues = workerIds.map((workerId) => sql`(${linkId}, ${input.companyId}, ${workerId}, now())`);
     await tx.execute(sql`
       INSERT INTO factory_worker_production_link_members (
         link_id, company_id, worker_id, created_at

@@ -19,8 +19,11 @@ export function evenSplitBales(total: number, workerIds: number[]): WorkerBaleAl
   if (!Number.isSafeInteger(total) || total < 0) {
     throw new ProductionTargetSplitError("Shared target must be a non-negative whole number of bales");
   }
-  if (workerIds.length === 0 || new Set(workerIds).size !== workerIds.length ||
-      workerIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+  if (
+    workerIds.length === 0 ||
+    new Set(workerIds).size !== workerIds.length ||
+    workerIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+  ) {
     throw new ProductionTargetSplitError("Worker list is invalid");
   }
 
@@ -38,8 +41,11 @@ export function resolveUnlinkBaleAllocations(
   workerIds: number[],
   requested?: WorkerBaleAllocation[]
 ): Map<number, number | null> {
-  if (workerIds.length === 0 || new Set(workerIds).size !== workerIds.length ||
-      workerIds.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+  if (
+    workerIds.length === 0 ||
+    new Set(workerIds).size !== workerIds.length ||
+    workerIds.some((id) => !Number.isSafeInteger(id) || id <= 0)
+  ) {
     throw new ProductionTargetSplitError("Worker list is invalid");
   }
 
@@ -62,10 +68,15 @@ export function resolveUnlinkBaleAllocations(
   const allocations = new Map<number, number>();
   let sum = 0;
   for (const entry of requested) {
-    if (entry === null || typeof entry !== "object" ||
-        !Number.isSafeInteger(entry.workerId) || !expectedIds.has(entry.workerId) ||
-        allocations.has(entry.workerId) ||
-        !Number.isSafeInteger(entry.targetBales) || entry.targetBales < 0) {
+    if (
+      entry === null ||
+      typeof entry !== "object" ||
+      !Number.isSafeInteger(entry.workerId) ||
+      !expectedIds.has(entry.workerId) ||
+      allocations.has(entry.workerId) ||
+      !Number.isSafeInteger(entry.targetBales) ||
+      entry.targetBales < 0
+    ) {
       throw new ProductionTargetSplitError("Allocations require unique workers and whole, non-negative bale counts");
     }
     allocations.set(entry.workerId, entry.targetBales);

@@ -2,7 +2,14 @@ import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link2, Loader2, Unlink2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { evenSplitBales } from "@shared/factoryProductionTargetSplit";
 import { Button } from "@/components/ui/button";
@@ -47,21 +54,23 @@ export function ProductionWorkerLinkControl({
   const currentMemberIds = useMemo(() => {
     const linkedIds = row.linkedWorkerIds?.length
       ? row.linkedWorkerIds
-      : row.linkedWorkers?.map((member) => member.workerId) ?? [];
+      : (row.linkedWorkers?.map((member) => member.workerId) ?? []);
     return [...new Set([row.personId, ...linkedIds])];
   }, [row.personId, row.linkedWorkerIds, row.linkedWorkers]);
 
   const remainingSlots = Math.max(0, MAX_LINKED_WORKERS - currentMemberIds.length);
 
   const unlinkMembers = useMemo(
-    () => currentMemberIds
-      .map((workerId) => ({
-        workerId,
-        name: rows.find((candidate) => candidate.personId === workerId)?.name ??
-          row.linkedWorkers?.find((member) => member.workerId === workerId)?.workerName ??
-          String(workerId),
-      }))
-      .sort((a, b) => a.workerId - b.workerId),
+    () =>
+      currentMemberIds
+        .map((workerId) => ({
+          workerId,
+          name:
+            rows.find((candidate) => candidate.personId === workerId)?.name ??
+            row.linkedWorkers?.find((member) => member.workerId === workerId)?.workerName ??
+            String(workerId),
+        }))
+        .sort((a, b) => a.workerId - b.workerId),
     [currentMemberIds, rows, row.linkedWorkers]
   );
 
@@ -69,13 +78,15 @@ export function ProductionWorkerLinkControl({
     const value = unlinkDraft[member.workerId];
     return sum + (value === "" || value === undefined ? 0 : Number(value));
   }, 0);
-  const validSplit = unlinkTarget === null ||
-    (Number.isSafeInteger(unlinkTarget) && unlinkTarget >= 0 &&
+  const validSplit =
+    unlinkTarget === null ||
+    (Number.isSafeInteger(unlinkTarget) &&
+      unlinkTarget >= 0 &&
       unlinkMembers.every((member) => {
         const value = unlinkDraft[member.workerId];
-        return value !== "" && value !== undefined &&
-          Number.isSafeInteger(Number(value)) && Number(value) >= 0;
-      }) && allocatedTotal === unlinkTarget);
+        return value !== "" && value !== undefined && Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+      }) &&
+      allocatedTotal === unlinkTarget);
 
   const fillEvenSplit = (total: number) => {
     const split = evenSplitBales(total, currentMemberIds);
@@ -104,9 +115,7 @@ export function ProductionWorkerLinkControl({
           candidate.active &&
           candidate.linkGroupId == null
       )
-      .sort((left, right) =>
-        left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true })
-      );
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: "base", numeric: true }));
   }, [currentMemberIds, rows, selectedPartnerIds]);
 
   const selectedPartners = useMemo(
@@ -152,15 +161,11 @@ export function ProductionWorkerLinkControl({
         targetBales === undefined
           ? (row.targetBales ?? partners.find((partner) => partner.targetBales != null)?.targetBales ?? null)
           : targetBales;
-      const response = await factoryApiRequest(
-        "POST",
-        "/api/factory/staff-tracking/production-worker-links",
-        {
-          effectiveFrom,
-          workerIds,
-          targetBales: sharedTargetBales,
-        }
-      );
+      const response = await factoryApiRequest("POST", "/api/factory/staff-tracking/production-worker-links", {
+        effectiveFrom,
+        workerIds,
+        targetBales: sharedTargetBales,
+      });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
         throw new Error(body.message || tr("workerLinkFailed"));
@@ -186,12 +191,14 @@ export function ProductionWorkerLinkControl({
         `/api/factory/staff-tracking/production-worker-links/${row.linkGroupId}/unlink`,
         {
           effectiveTo: effectiveFrom,
-          ...(unlinkTarget === null ? {} : {
-            allocations: unlinkMembers.map((member) => ({
-              workerId: member.workerId,
-              targetBales: Number(unlinkDraft[member.workerId]),
-            })),
-          }),
+          ...(unlinkTarget === null
+            ? {}
+            : {
+                allocations: unlinkMembers.map((member) => ({
+                  workerId: member.workerId,
+                  targetBales: Number(unlinkDraft[member.workerId]),
+                })),
+              }),
         }
       );
       if (!response.ok) {
@@ -217,99 +224,116 @@ export function ProductionWorkerLinkControl({
   if (!selectingPartners) {
     return (
       <>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 text-xs"
-          disabled={disabled || busy || !canAddPartners}
-          onClick={() => setSelectingPartners(true)}
-          data-testid={`button-link-worker-${row.personId}`}
-        >
-          <Link2 className="mr-1 h-3 w-3" />
-          {tr("linkWorker")}
-        </Button>
-        {row.linkGroupId != null && (
+        <div className="flex flex-wrap items-center gap-1.5">
           <Button
             type="button"
             variant="ghost"
             size="sm"
             className="h-7 px-2 text-xs"
-            disabled={disabled || busy}
-            onClick={openUnlinkDialog}
-            data-testid={`button-unlink-worker-${row.personId}`}
+            disabled={disabled || busy || !canAddPartners}
+            onClick={() => setSelectingPartners(true)}
+            data-testid={`button-link-worker-${row.personId}`}
           >
-            {unlinkMutation.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Unlink2 className="mr-1 h-3 w-3" />
-            )}
-            {tr("unlink")}
+            <Link2 className="mr-1 h-3 w-3" />
+            {tr("linkWorker")}
           </Button>
-        )}
-      </div>
-      <Dialog open={unlinkOpen} onOpenChange={(open) => !busy && setUnlinkOpen(open)}>
-        <DialogContent className="max-w-md" data-testid={`dialog-unlink-target-${row.personId}`}>
-          <DialogHeader>
-            <DialogTitle>{tr("unlinkSplitTitle")}</DialogTitle>
-            <DialogDescription>{tr("unlinkSplitDescription")}</DialogDescription>
-          </DialogHeader>
-          {unlinkTarget === null ? (
-            <p className="text-sm text-muted-foreground">{tr("unlinkSplitNoTarget")}</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold tabular-nums">{tr("totalTarget")}: {unlinkTarget}</span>
-                <Button type="button" variant="outline" size="sm"
-                  disabled={busy || !Number.isSafeInteger(unlinkTarget) || unlinkTarget < 0}
-                  onClick={() => fillEvenSplit(unlinkTarget)}
-                  data-testid={`button-even-split-${row.personId}`}>
-                  {tr("unlinkSplitAuto")}
-                </Button>
-              </div>
-              {unlinkMembers.map((member) => (
-                <div key={member.workerId} className="flex items-center gap-3">
-                  <label className="min-w-0 flex-1 truncate text-sm" dir="auto"
-                    htmlFor={`unlink-target-${row.personId}-${member.workerId}`}>
-                    {member.name}
-                  </label>
-                  <Input
-                    id={`unlink-target-${row.personId}-${member.workerId}`}
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="w-24 text-right tabular-nums"
-                    disabled={busy}
-                    value={unlinkDraft[member.workerId] ?? ""}
-                    onChange={(event) => setUnlinkDraft((current) => ({
-                      ...current,
-                      [member.workerId]: event.target.value,
-                    }))}
-                    data-testid={`input-unlink-target-${member.workerId}`}
-                  />
-                </div>
-              ))}
-              <div className="text-sm font-medium tabular-nums">
-                {tr("unlinkSplitAllocated")}: {allocatedTotal} / {unlinkTarget}
-              </div>
-              {!validSplit && (
-                <p className="text-xs text-destructive" role="alert">{tr("unlinkSplitWholeBales")}</p>
+          {row.linkGroupId != null && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-xs"
+              disabled={disabled || busy}
+              onClick={openUnlinkDialog}
+              data-testid={`button-unlink-worker-${row.personId}`}
+            >
+              {unlinkMutation.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Unlink2 className="mr-1 h-3 w-3" />
               )}
-            </div>
-          )}
-          <DialogFooter>
-            <Button type="button" variant="outline" disabled={busy}
-              onClick={() => setUnlinkOpen(false)}>{tr("cancel")}</Button>
-            <Button type="button" disabled={busy || !validSplit}
-              onClick={() => unlinkMutation.mutate()}
-              data-testid={`button-confirm-unlink-${row.personId}`}>
-              {unlinkMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {tr("unlinkSplitConfirm")}
+              {tr("unlink")}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
+        </div>
+        <Dialog open={unlinkOpen} onOpenChange={(open) => !busy && setUnlinkOpen(open)}>
+          <DialogContent className="max-w-md" data-testid={`dialog-unlink-target-${row.personId}`}>
+            <DialogHeader>
+              <DialogTitle>{tr("unlinkSplitTitle")}</DialogTitle>
+              <DialogDescription>{tr("unlinkSplitDescription")}</DialogDescription>
+            </DialogHeader>
+            {unlinkTarget === null ? (
+              <p className="text-sm text-muted-foreground">{tr("unlinkSplitNoTarget")}</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold tabular-nums">
+                    {tr("totalTarget")}: {unlinkTarget}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={busy || !Number.isSafeInteger(unlinkTarget) || unlinkTarget < 0}
+                    onClick={() => fillEvenSplit(unlinkTarget)}
+                    data-testid={`button-even-split-${row.personId}`}
+                  >
+                    {tr("unlinkSplitAuto")}
+                  </Button>
+                </div>
+                {unlinkMembers.map((member) => (
+                  <div key={member.workerId} className="flex items-center gap-3">
+                    <label
+                      className="min-w-0 flex-1 truncate text-sm"
+                      dir="auto"
+                      htmlFor={`unlink-target-${row.personId}-${member.workerId}`}
+                    >
+                      {member.name}
+                    </label>
+                    <Input
+                      id={`unlink-target-${row.personId}-${member.workerId}`}
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="w-24 text-right tabular-nums"
+                      disabled={busy}
+                      value={unlinkDraft[member.workerId] ?? ""}
+                      onChange={(event) =>
+                        setUnlinkDraft((current) => ({
+                          ...current,
+                          [member.workerId]: event.target.value,
+                        }))
+                      }
+                      data-testid={`input-unlink-target-${member.workerId}`}
+                    />
+                  </div>
+                ))}
+                <div className="text-sm font-medium tabular-nums">
+                  {tr("unlinkSplitAllocated")}: {allocatedTotal} / {unlinkTarget}
+                </div>
+                {!validSplit && (
+                  <p className="text-xs text-destructive" role="alert">
+                    {tr("unlinkSplitWholeBales")}
+                  </p>
+                )}
+              </div>
+            )}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={busy} onClick={() => setUnlinkOpen(false)}>
+                {tr("cancel")}
+              </Button>
+              <Button
+                type="button"
+                disabled={busy || !validSplit}
+                onClick={() => unlinkMutation.mutate()}
+                data-testid={`button-confirm-unlink-${row.personId}`}
+              >
+                {unlinkMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {tr("unlinkSplitConfirm")}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </>
     );
   }
