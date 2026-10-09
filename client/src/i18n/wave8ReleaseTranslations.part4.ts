@@ -269,4 +269,9 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "لن يكون السند {{0}} متوازنًا؛ لم يُطبَّق أي شيء",
     fr: "La pièce {{0}} ne serait pas équilibrée ; rien n’a été appliqué",
   },
+  {
+    en: "Retail stock count ${session.code}",
+    ar: "جرد مخزون التجزئة ${session.code}",
+    fr: "Inventaire du stock de détail ${session.code}",
+  },
 ];
