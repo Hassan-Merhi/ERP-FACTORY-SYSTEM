@@ -131,13 +131,15 @@ export async function resolvePriorityScanArticleTarget(
  * proforma has at least one requested bale and this loading itself has consumed
  * every requested quantity.
  */
-export async function advanceSatisfiedPriorityScanConfigs(
+/**
+ * Called by automatic Stock Entry and reprint allocations while the caller holds
+ * the company-scoped queue lock. Runs in the same transaction as bale assignment.
+ */
+export async function advanceSatisfiedPriorityScanConfigsLockedTx(
+  tx: PriorityScanTransaction,
   companyId: number,
   triggerOrderId?: number
 ): Promise<PriorityScanAdvanceResult> {
-  return db.transaction(async (tx) => {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-
     const activeRows = await loadActivePriorityRows(tx, companyId);
     if (activeRows.length === 0) {
       return { completedOrderIds: [], activeOrderId: null, activePriority: null };
@@ -204,5 +206,15 @@ export async function advanceSatisfiedPriorityScanConfigs(
       activeOrderId,
       activePriority: activeOrderId == null ? null : 1,
     };
+}
+
+/** Existing standalone path for manual Priority Scan and queue reads. */
+export async function advanceSatisfiedPriorityScanConfigs(
+  companyId: number,
+  triggerOrderId?: number
+): Promise<PriorityScanAdvanceResult> {
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+    return advanceSatisfiedPriorityScanConfigsLockedTx(tx, companyId, triggerOrderId);
   });
 }
