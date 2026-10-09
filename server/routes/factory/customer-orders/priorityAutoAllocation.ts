@@ -7,7 +7,6 @@ import { toMoney } from "../../../lib/money";
 import {
   customerOrderBales,
   customerOrders,
-  customerOrderPriorityScanConfigs,
   customerProformaLines,
   factoryBales,
   factoryBaleProducts,
@@ -22,9 +21,8 @@ import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcur
 import {
   PRIORITY_SCAN_LOCK_NAMESPACE,
   advanceSatisfiedPriorityScanConfigsLockedTx,
-  loadActivePriorityRows,
   resolvePriorityScanArticleTarget,
-  rewriteActivePriorityQueue,
+  reactivateAutoCompletedPriorityLoadingsLockedTx,
   type PriorityScanTransaction,
 } from "./priorityScanQueue";
 
@@ -222,7 +220,15 @@ export async function allocateAutomaticPriorityBaleTx(
 /** Caller holds the company queue lock. Keep historical evidence, remove only active links. */
 export async function reversePriorityAllocationForDeletedBaleTx(
   tx: PriorityScanTransaction,
-  args: { companyId: number; baleId: number; actor: string; actorId?: string | null; reason: string; detachedOrderId?: number }
+  args: {
+    companyId: number;
+    baleId: number;
+    actor: string;
+    actorId?: string | null;
+    reason: string;
+    detachedOrderId?: number;
+    deferQueueRecovery?: boolean;
+  }
 ): Promise<number[]> {
   const { companyId, baleId, actor, reason } = args;
   const rows = await tx.select({ id: customerOrderBales.id, orderId: customerOrderBales.orderId,
@@ -271,26 +277,11 @@ export async function reversePriorityAllocationForDeletedBaleTx(
     WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
   `);
 
-  // A loading that was automatically completed must return to #1 if deletion
-  // reopened demand, without reassigning any already scanned bale.
-  const activeRows = await loadActivePriorityRows(tx, companyId);
-  for (const orderId of affected) {
-    const [config] = await tx.select().from(customerOrderPriorityScanConfigs)
-      .where(and(eq(customerOrderPriorityScanConfigs.companyId, companyId),
-        eq(customerOrderPriorityScanConfigs.orderId, orderId))).limit(1);
-    if (!config || config.enabled || config.updatedByName !== "system:auto-completed") continue;
-    const [order] = await tx.select({ status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })
-      .from(customerOrders).where(and(eq(customerOrders.companyId, companyId),
-        eq(customerOrders.id, orderId), isNull(customerOrders.deletedAt))).limit(1);
-    if (order?.status !== "LOADING" || !order.proformaIdUsed) continue;
-    const snapshot = await getProformaCapacitySnapshot(tx, {
-      companyId, proformaId: order.proformaIdUsed, currentOrderId: orderId,
-    });
-    if (snapshot && snapshot.requestedTotalQty > 0 && snapshot.remainingTotalQty > 0) {
-      const remaining = (await loadActivePriorityRows(tx, companyId)).map((r) => r.id);
-      await rewriteActivePriorityQueue(tx, companyId,
-        [config.id, ...remaining.filter((id) => id !== config.id)], null, "system:reopened-after-deletion");
-    }
+  // Bulk removal callers defer recovery until ALL selected links are detached.
+  // This guarantees input iteration order cannot decide which old loading
+  // gets priority #1 when several auto-completed loadings reopen together.
+  if (!args.deferQueueRecovery && affected.length > 0) {
+    await reactivateAutoCompletedPriorityLoadingsLockedTx(tx, companyId, affected);
   }
   return affected;
 }
