@@ -74,11 +74,6 @@ export async function allocateAutomaticPriorityBaleTx(
     };
   }
 
-  // OFF prevents NEW automatic allocation, but must never erase the original
-  // label destination/color for a bale that was assigned while ON.
-  if (!(await automaticPriorityModeEnabled(tx, companyId))) return null;
-  if (bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
-
   // Never move a bale previously scanned manually or assigned to another order.
   const linked = firstRow(await tx.execute(sql`
     SELECT cob.order_id AS "orderId", co.status
@@ -99,6 +94,11 @@ export async function allocateAutomaticPriorityBaleTx(
       priority: Number(prior.priority), color: prior.color, source: "manual", existing: true,
     } : null;
   }
+
+  // OFF prevents NEW automatic allocation, but must never erase the original
+  // label destination/color for a bale that was assigned while ON.
+  if (!(await automaticPriorityModeEnabled(tx, companyId))) return null;
+  if (bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
 
   const articleCode = (bale.articleCode || "").trim() ||
     (bale.productId
@@ -288,5 +288,66 @@ export async function runAutomaticPriorityReprint(
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
     return allocateAutomaticPriorityBaleTx(tx, { companyId, baleId, username, userId, source: "reprint" });
+  });
+}
+
+/** Prepare an entire print batch under ONE company lock and transaction.
+ *  Invalid/deleted/foreign bales fail the batch instead of silently printing
+ *  unallocated labels. Original assignments are returned when mode is OFF.
+ *  The caller must not print if this operation fails.
+ */
+export interface AutomaticPriorityPrintCandidate {
+  baleId?: number;
+  referenceNumber?: string;
+}
+export interface AutomaticPriorityPrintResult {
+  baleId: number;
+  referenceNumber: string;
+  priorityAllocation: AutomaticPriorityAllocation | null;
+}
+export async function runAutomaticPriorityPrintBatch(
+  companyId: number,
+  items: AutomaticPriorityPrintCandidate[],
+  username: string | null,
+  userId: string | null
+): Promise<AutomaticPriorityPrintResult[]> {
+  if (!Array.isArray(items) || items.length === 0 || items.length > 200) {
+    throw new Error("Print batch must contain 1 to 200 bales");
+  }
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+    const seen = new Set<number>();
+    const out: AutomaticPriorityPrintResult[] = [];
+    for (const item of items) {
+      if (!item || typeof item !== "object") throw new Error("Invalid print batch item");
+      const baleId = item.baleId;
+      const ref = item.referenceNumber?.trim();
+      if (baleId === undefined && !ref) throw new Error("Each print requires a physical bale ID or exact reference");
+      if (baleId !== undefined && (!Number.isSafeInteger(baleId) || baleId < 1)) {
+        throw new Error("Invalid physical bale ID");
+      }
+      if (ref && ref.length > 100) throw new Error("Invalid bale reference");
+      const [bale] = await tx.select({
+        id: factoryBales.id,
+        referenceNumber: factoryBales.referenceNumber,
+      }).from(factoryBales).where(and(
+        eq(factoryBales.companyId, companyId),
+        isNull(factoryBales.deletedAt),
+        ...(baleId !== undefined ? [eq(factoryBales.id, baleId)] :
+          [sql`LOWER(${factoryBales.referenceNumber}) = ${ref!.toLowerCase()}`])
+      )).limit(1);
+      if (!bale) throw new Error("Bale not found or already deleted in this company");
+      if (baleId !== undefined && ref && bale.referenceNumber.toLowerCase() !== ref.toLowerCase()) {
+        throw new Error("Print reference does not match bale ID");
+      }
+      if (!seen.has(bale.id)) {
+        seen.add(bale.id);
+        const priorityAllocation = await allocateAutomaticPriorityBaleTx(tx, {
+          companyId, baleId: bale.id, username, userId, source: "reprint",
+        });
+        out.push({ baleId: bale.id, referenceNumber: bale.referenceNumber, priorityAllocation });
+      }
+    }
+    return out;
   });
 }
