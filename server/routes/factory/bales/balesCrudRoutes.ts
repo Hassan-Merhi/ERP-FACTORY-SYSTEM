@@ -10,10 +10,11 @@ import { logAudit } from "../../helpers/auditHelpers";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
+import { getClientDate } from "../../../lib/dateUtils";
 import { firstRow } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import { reversePriorityAllocationForDeletedBaleTx } from "../customer-orders/priorityAutoAllocation";
+import { deletePhysicalFactoryBalesTx } from "../stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
@@ -221,6 +222,36 @@ export function registerBalesCrudRoutes(app: Express) {
       ];
       if (!ALLOWED.includes(status))
         return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
+      // These states have physical stock implications. Arbitrary status PATCH
+      // must not bypass the same atomic reversal used by supervised deletion.
+      if (status === "REMOVED") {
+        return res.status(409).json({ message: "Use physical bale deletion to remove this bale from stock." });
+      }
+      if (status === "DELETED") {
+        const [deleted] = await db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+          return deletePhysicalFactoryBalesTx(tx, {
+            companyId, baleIds: [id],
+            actorId: req.session.userId == null ? null : String(req.session.userId),
+            actorName: String(req.session.username || req.session.userId || "unknown"),
+            reason: "Physical bale deleted via status change",
+            businessDate: getClientDate(req),
+          });
+        });
+        try {
+          await logAudit({
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId, action: "delete", tableName: "factory_bales",
+            recordId: id, recordIdentifier: deleted.referenceNumber || `Bale #${id}`,
+            changes: { status: { old: "IN_STOCK", new: "DELETED" } },
+          });
+        } catch (auditError) {
+          logger.error("Bale status deletion audit failed after commit", { error: auditError });
+        }
+        return res.json({ id, status: "DELETED" });
+      }
+
 
       const now = new Date();
       const result = await db
@@ -335,6 +366,9 @@ export function registerBalesCrudRoutes(app: Express) {
         .from(factoryBales)
         .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)));
       if (!baleBeforeStatusChange) return res.status(404).json({ message: "Bale not found" });
+      if (["DELETED", "REMOVED"].includes(baleBeforeStatusChange.status)) {
+        return res.status(409).json({ message: "A physically deleted bale cannot be reactivated by a status change." });
+      }
 
       const now = new Date();
       const [updated] = await db
@@ -370,71 +404,31 @@ export function registerBalesCrudRoutes(app: Express) {
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
 
-      const updated = await db.transaction(async (tx) => {
+      const actorName = String(req.session.username || req.session.userId || "unknown");
+      const [deleted] = await db.transaction(async (tx) => {
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-        const [bale] = await tx.select().from(factoryBales)
-          .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId))).limit(1);
-        if (!bale || bale.deletedAt || bale.status === "DELETED") return null;
-        const autoRow = firstRow(await tx.execute(sql`
-          SELECT id FROM factory_priority_auto_allocations
-           WHERE company_id = ${companyId} AND bale_id = ${id} AND reversed_at IS NULL
-           LIMIT 1
-        `));
-        if (autoRow) {
-          await reversePriorityAllocationForDeletedBaleTx(tx, {
-            companyId, baleId: id, actor: String(req.session.username || req.session.userId || "unknown"),
-            actorId: req.session.userId == null ? null : String(req.session.userId),
-            reason: "Factory bale deleted",
-          });
-          // A V5 loaded bale is still IN_STOCK, so the original inventory receipt
-          // needs precisely one corresponding stock movement reversal.
-          if (bale.status === "IN_STOCK" && bale.erpLocationId) {
-            const [product] = bale.productId
-              ? await tx.select().from(factoryBaleProducts).where(and(
-                eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, companyId)))
-              : [];
-            const itemCode = product?.articleCode || product?.code || bale.articleCode || bale.baleCode;
-            const [item] = await tx.select({ id: stockItems.id }).from(stockItems)
-              .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, itemCode))).limit(1);
-            if (!item) throw new Error("Missing ERP stock item; cannot safely reverse an automatically allocated bale.");
-            const [inventoryBefore] = await tx.select({ averageRate: inventory.averageRate }).from(inventory)
-              .where(and(eq(inventory.companyId, companyId),
-                eq(inventory.locationId, bale.erpLocationId), eq(inventory.stockItemId, item.id))).limit(1);
-            const unitCost = Math.max(0, Number(inventoryBefore?.averageRate || 0));
-            await adjustInventory(tx, bale.erpLocationId, item.id, -1, companyId);
-            await postStockMovementTx(tx, {
-              companyId, stockItemId: item.id, kind: "adjustment", quantity: "1",
-              unitCost: String(unitCost), fromLocationId: bale.erpLocationId,
-              occurredAt: new Date().toISOString(),
-              source: {
-                sourceType: "factory_bale_removal",
-                sourceId: String(bale.id),
-                idempotencyKey: `factory-bale-removal:${companyId}:${bale.id}`,
-              },
-              actor: { userId: String(req.session.userId || ""), username: String(req.session.username || "unknown"),
-                reason: "Factory bale deleted" },
-              allowNegativeStock: true,
-            }, createDatabaseStockMovementAdapter());
-          }
-        }
-        const [result] = await tx.update(factoryBales)
-          .set({ status: "DELETED", deletedAt: new Date(), updatedAt: new Date() })
-          .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
-          .returning({ id: factoryBales.id });
-        return result;
+        return deletePhysicalFactoryBalesTx(tx, {
+          companyId, baleIds: [id], actorId: req.session.userId == null ? null : String(req.session.userId),
+          actorName, reason: "Bale removed from Factory Bale History", businessDate: getClientDate(req),
+        });
       });
-
-      if (!updated) return res.status(404).json({ message: "Bale not found or already deleted" });
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "delete",
-        tableName: "bales",
-        recordId: id,
-        recordIdentifier: `Bale #${id}`,
-        changes: null,
-      });
+      // The committed daybook + permanent Priority Scan history are authoritative.
+      // A secondary audit writer failure cannot turn a successful deletion
+      // into a false retryable error (which would attempt a second reversal).
+      try {
+        await logAudit({
+          userId: req.session.userId!,
+          username: req.session.username || req.session.userId!,
+          companyId,
+          action: "delete",
+          tableName: "bales",
+          recordId: id,
+          recordIdentifier: deleted.referenceNumber || `Bale #${id}`,
+          changes: null,
+        });
+      } catch (auditError) {
+        logger.error("Bale deletion succeeded but secondary audit write failed", { error: auditError });
+      }
       res.json({ message: "Bale deleted" });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
