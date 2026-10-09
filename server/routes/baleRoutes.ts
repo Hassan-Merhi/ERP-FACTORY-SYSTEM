@@ -347,6 +347,23 @@ export function registerBaleRoutes(app: Express) {
         return res.status(400).json({ message: "No bales provided" });
       }
 
+      // Print of an existing physical bale is eligible for Priority Scan, just
+      // like Reprint. A fresh Stock Entry has already been allocated atomically.
+      const { runAutomaticPriorityReprint } = await import("./factory/customer-orders/priorityAutoAllocation");
+      const priorityAllocations = [];
+      const seenBales = new Set<number>();
+      for (const item of bales) {
+        const baleId = Number(item.productionBaleId);
+        if (!Number.isSafeInteger(baleId) || baleId <= 0 || seenBales.has(baleId)) continue;
+        seenBales.add(baleId);
+        const allocation = await runAutomaticPriorityReprint(
+          companyId, baleId,
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId)
+        );
+        if (allocation) priorityAllocations.push(allocation);
+      }
+
       const labelPrints = await db.transaction(async (tx) => {
         const results = [];
         for (const bale of bales) {
@@ -396,7 +413,7 @@ export function registerBaleRoutes(app: Express) {
         return results;
       });
 
-      res.json({ labelPrints });
+      res.json({ labelPrints, priorityAllocations });
     } catch (error: unknown) {
       logger.error("Error creating bale label prints:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
