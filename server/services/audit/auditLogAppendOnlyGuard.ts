@@ -37,6 +37,10 @@ function sqlTextArray(values: readonly string[]): string {
 }
 
 export const AUDIT_LOG_APPEND_ONLY_DDL: readonly string[] = [
+  // audit_log outlives the company it describes: an empty company's deletion
+  // keeps its audit rows (wave 12 decision 4), and append-only rows cannot be
+  // cleared first, so audit_log carries no foreign key to companies.
+  `ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_company_id_fkey`,
   `CREATE OR REPLACE FUNCTION erp_audit_log_is_financial(audit_table text) RETURNS boolean
    LANGUAGE sql IMMUTABLE AS $fn$
      SELECT lower(btrim(COALESCE(audit_table, ''))) = ANY (${sqlTextArray(FINANCIAL_AUDIT_TABLES)})
@@ -77,7 +81,7 @@ export const AUDIT_LOG_APPEND_ONLY_DDL: readonly string[] = [
 ];
 
 /** Version of AUDIT_LOG_APPEND_ONLY_DDL (and of the financial table list). Bump it whenever either changes. */
-export const AUDIT_LOG_APPEND_ONLY_VERSION = "2026-10-audit-log-append-only-v1";
+export const AUDIT_LOG_APPEND_ONLY_VERSION = "2026-10-audit-log-append-only-v2";
 
 const INSTALL_LOCK_KEY = 2026_10_120;
 
@@ -88,7 +92,8 @@ async function installedVersion(client: { query: Pool["query"] }): Promise<strin
   const result = await client.query<{ version: string | null }>(
     `SELECT obj_description(to_regprocedure('erp_audit_log_append_only()'), 'pg_proc') AS version
       WHERE EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'audit_log_append_only' AND NOT tgisinternal)
-        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'audit_log_no_truncate' AND NOT tgisinternal)`
+        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'audit_log_no_truncate' AND NOT tgisinternal)
+        AND NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'audit_log_company_id_fkey')`
   );
   return result.rows[0]?.version ?? null;
 }

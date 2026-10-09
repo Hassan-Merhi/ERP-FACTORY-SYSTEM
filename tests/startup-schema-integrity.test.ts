@@ -156,7 +156,7 @@ import { startupMigrations } from "../server/startup-schema";
  * the fss_log_color block), 1405 to 1413. Nothing else moved.
  */
 const EXPECTED_STATEMENT_COUNT = 1421;
-const EXPECTED_CONTENT_HASH = "725a023405ec3076585a044c91037c4f6b63de8f7e84e8273077877fe56ab92c";
+const EXPECTED_CONTENT_HASH = "73d7a6c27ae4335db419cd8d6186e40b99b18364b9887242384e54892edbd258";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -231,6 +231,12 @@ const EXPECTED_CONTENT_HASH = "725a023405ec3076585a044c91037c4f6b63de8f7e84e8273
  * longer line up. 010's inventory company backfill was made a no-op when
  * nothing is mismatched and no longer moves a cut-over company's stock. The
  * count goes from 1413 to 1421.
+ *
+ * Re-pinned again (2026-10 accounting audit, wave 12): 006 no longer adds
+ * audit_log_company_id_fkey and drops it instead. audit_log is append-only and
+ * outlives the company it describes, so an empty company's deletion keeps its
+ * audit rows; with the RESTRICT key no company could ever be deleted. One
+ * statement replaced, so the count is unchanged.
  */
 
 function contentHash(statements: string[]): string {
