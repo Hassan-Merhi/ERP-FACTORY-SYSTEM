@@ -50,11 +50,10 @@ export async function allocateAutomaticPriorityBaleTx(
   args: { companyId: number; baleId: number; username: string | null; userId: string | null; source: "stock-entry" | "reprint" }
 ): Promise<AutomaticPriorityAllocation | null> {
   const { companyId, baleId, username, userId, source } = args;
-  if (!(await automaticPriorityModeEnabled(tx, companyId))) return null;
   const [bale] = await tx.select().from(factoryBales)
     .where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId), isNull(factoryBales.deletedAt)))
     .limit(1);
-  if (!bale || bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
+  if (!bale) return null;
 
   // An active snapshot has a company/bale uniqueness boundary. Reprinting an existing
   // allocation uses its original priority/color even after the queue changes.
@@ -73,6 +72,11 @@ export async function allocateAutomaticPriorityBaleTx(
       priority: Number(existing.priority), color: existing.color, source: existing.source, existing: true,
     };
   }
+
+  // OFF prevents NEW automatic allocation, but must never erase the original
+  // label destination/color for a bale that was assigned while ON.
+  if (!(await automaticPriorityModeEnabled(tx, companyId))) return null;
+  if (bale.status !== "IN_STOCK" || !bale.erpLocationId) return null;
 
   // Never move a bale previously scanned manually or assigned to another order.
   const linked = firstRow(await tx.execute(sql`
@@ -169,20 +173,28 @@ export async function allocateAutomaticPriorityBaleTx(
     scannedBy: username,
   });
 
-  await tx.execute(sql`
-    INSERT INTO factory_priority_auto_allocations
-      (company_id, bale_id, order_id, reference_number, priority, color, allocation_source)
-    VALUES (${companyId}, ${baleId}, ${target.orderId},
-      ${lockedBale.referenceNumber}, ${target.priority}, ${target.color}, ${source})
-  `);
   const businessDate = getCompanyBusinessDate((await storage.getCompanySettings(companyId))?.timezone);
-  await tx.execute(sql`
+  // The append-only scan timeline is the historical source of truth; the
+  // active auto-allocation record links back to this exact event.
+  const historyRow = firstRow(await tx.execute(sql`
     INSERT INTO factory_priority_scan_history
       (company_id, order_id, bale_id, reference_number, product_name, article_code,
-       priority, color, business_date, scanned_by, allocation_source)
+       priority, color, business_date, scanned_by, assigned_by_user_id, proforma_id, allocation_source)
     VALUES (${companyId}, ${target.orderId}, ${baleId}, ${lockedBale.referenceNumber},
       ${product?.name || lockedBale.productName || articleCode}, ${articleCode},
-      ${target.priority}, ${target.color}, ${businessDate}, ${username}, 'automatic')
+      ${target.priority}, ${target.color}, ${businessDate}, ${username}, ${userId},
+      ${target.proformaId}, ${source})
+    RETURNING id
+  `)) as { id: number | string } | undefined;
+  if (!historyRow) throw new Error("Failed to save Priority Scan allocation history");
+
+  await tx.execute(sql`
+    INSERT INTO factory_priority_auto_allocations
+      (company_id, bale_id, order_id, reference_number, priority, color, allocation_source,
+       proforma_id, article_code, assigned_by_user_id, assigned_by_name, history_id)
+    VALUES (${companyId}, ${baleId}, ${target.orderId},
+      ${lockedBale.referenceNumber}, ${target.priority}, ${target.color}, ${source},
+      ${target.proformaId}, ${articleCode}, ${userId}, ${username}, ${historyRow.id})
   `);
 
   if (lockedBale.stockEntryDate) {
@@ -204,7 +216,7 @@ export async function allocateAutomaticPriorityBaleTx(
 /** Caller holds the company queue lock. Keep historical evidence, remove only active links. */
 export async function reversePriorityAllocationForDeletedBaleTx(
   tx: PriorityScanTransaction,
-  args: { companyId: number; baleId: number; actor: string; reason: string; detachedOrderId?: number }
+  args: { companyId: number; baleId: number; actor: string; actorId?: string | null; reason: string; detachedOrderId?: number }
 ): Promise<number[]> {
   const { companyId, baleId, actor, reason } = args;
   const rows = await tx.select({ id: customerOrderBales.id, orderId: customerOrderBales.orderId,
@@ -233,7 +245,10 @@ export async function reversePriorityAllocationForDeletedBaleTx(
     WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
   `);
   await tx.execute(sql`
-    UPDATE factory_priority_scan_history SET reversed_at = now()
+    UPDATE factory_priority_scan_history
+       SET reversed_at = now(), reversed_by = ${actor},
+           reversed_by_user_id = ${args.actorId ?? null},
+           reversal_reason = ${reason}
     WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
   `);
 
