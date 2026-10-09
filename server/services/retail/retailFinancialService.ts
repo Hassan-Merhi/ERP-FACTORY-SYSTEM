@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import Decimal from "decimal.js";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import {
@@ -53,6 +54,16 @@ export interface RetailAccountingSettingsResolved {
   discountsLedgerAccountId: number;
   taxPayableLedgerAccountId: number;
   storeCreditLedgerAccountId: number;
+}
+
+/**
+ * Per-row idempotency key that fits the 191-character column. A long base key is
+ * hashed instead of truncated, so the suffix that tells rows apart always survives.
+ */
+export function deriveRetailIdempotencyKey(base: string, suffix: string): string {
+  const key = `${base}:${suffix}`;
+  if (key.length <= 191) return key;
+  return `${createHash("sha256").update(base).digest("hex")}:${suffix}`;
 }
 
 function money(value: Decimal.Value): string {
@@ -297,7 +308,9 @@ export async function validateRetailShiftTx(
         eq(posShifts.status, "open")
       )
     )
-    .limit(1);
+    .limit(1)
+    // Shared lock: closeShift takes FOR UPDATE, so a close waits for in-flight sales to commit.
+    .for("share");
   if (!shift) throw new Error("Retail cashier shift is not open for this location");
   if (shift.userId !== input.userId) throw new Error("Retail cashier shift belongs to another user");
   return shift;
@@ -372,7 +385,7 @@ export async function settleRetailSaleTx(
     const amount = new Decimal(payment.amount);
     const tendered = payment.tenderedAmount == null ? null : new Decimal(payment.tenderedAmount);
     const change = payment.method === "cash" && tendered ? Decimal.max(0, tendered.minus(amount)) : new Decimal(0);
-    const key = `${input.saleIdempotencyKey}:payment:${index}`.slice(0, 191);
+    const key = deriveRetailIdempotencyKey(input.saleIdempotencyKey, `payment:${index}`);
     const [inserted] = await tx
       .insert(retailPosPayments)
       .values({
@@ -596,14 +609,15 @@ export async function refundRetailPaymentsTx(
     const available = Decimal.max(0, new Decimal(original.amount).minus(refundedByPayment.get(original.id) ?? 0));
     if (available.isZero()) continue;
     const amount = Decimal.min(available, remaining);
-    const key = `${input.idempotencyKey}:refund:${original.id}`.slice(0, 191);
+    const key = deriveRetailIdempotencyKey(input.idempotencyKey, `refund:${original.id}`);
     const [inserted] = await tx
       .insert(retailPosPayments)
       .values({
         companyId: input.companyId,
         saleId: input.saleId,
         locationId: input.locationId,
-        shiftId: input.shiftId ?? original.shiftId ?? null,
+        // Only the validated current shift; a closed historical shift must not absorb later cash.
+        shiftId: input.shiftId ?? null,
         paymentType: "refund",
         method: original.method,
         amount: money(amount),

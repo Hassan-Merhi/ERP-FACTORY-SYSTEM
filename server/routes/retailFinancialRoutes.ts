@@ -174,35 +174,48 @@ export function registerRetailFinancialRoutes(app: Express): void {
       const body = cashMovementSchema.parse(req.body);
       const userId = currentUserId(req);
 
-      const [created] = await db
-        .insert(retailCashMovements)
-        .values({
-          companyId,
-          locationId: shift.locationId,
-          shiftId,
-          movementType: body.movementType,
-          amount: body.amount.toFixed(6),
-          reason: body.reason,
-          idempotencyKey: body.idempotencyKey,
-          createdBy: userId,
-        })
-        .onConflictDoNothing({ target: [retailCashMovements.companyId, retailCashMovements.idempotencyKey] })
-        .returning();
+      // Shared lock on the shift: closeShift locks it FOR UPDATE, so a movement either
+      // commits before the close totals are read or sees the shift closed.
+      const result = await db.transaction(async (tx) => {
+        const [locked] = await tx
+          .select({ status: posShifts.status })
+          .from(posShifts)
+          .where(and(eq(posShifts.id, shiftId), eq(posShifts.companyId, companyId)))
+          .for("share");
+        if (locked?.status !== "open") return null;
+        const [created] = await tx
+          .insert(retailCashMovements)
+          .values({
+            companyId,
+            locationId: shift.locationId,
+            shiftId,
+            movementType: body.movementType,
+            amount: body.amount.toFixed(6),
+            reason: body.reason,
+            idempotencyKey: body.idempotencyKey,
+            createdBy: userId,
+          })
+          .onConflictDoNothing({ target: [retailCashMovements.companyId, retailCashMovements.idempotencyKey] })
+          .returning();
 
-      const row =
-        created ??
-        (
-          await db
-            .select()
-            .from(retailCashMovements)
-            .where(
-              and(
-                eq(retailCashMovements.companyId, companyId),
-                eq(retailCashMovements.idempotencyKey, body.idempotencyKey)
+        const row =
+          created ??
+          (
+            await tx
+              .select()
+              .from(retailCashMovements)
+              .where(
+                and(
+                  eq(retailCashMovements.companyId, companyId),
+                  eq(retailCashMovements.idempotencyKey, body.idempotencyKey)
+                )
               )
-            )
-            .limit(1)
-        )[0];
+              .limit(1)
+          )[0];
+        return { created, row };
+      });
+      if (!result) return res.status(409).json({ message: "Shift is already closed" });
+      const { created, row } = result;
       if (!row) throw new Error("Cash movement retry could not be resolved");
       if (
         !created &&

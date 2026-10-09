@@ -39,94 +39,99 @@ export async function openShift(shift: schema.InsertPosShift): Promise<schema.Po
 }
 
 export async function closeShift(id: number, closingCash: string, notes?: string): Promise<schema.PosShift> {
-  const shift = await getShiftById(id);
-  if (!shift) throw new Error("Shift not found");
+  // Lock the shift first: retail checkouts and cash movements hold a shared lock on
+  // it, so the totals below include every write committed before the shift closes.
+  return db.transaction(async (tx) => {
+    const [shift] = await tx.select().from(schema.posShifts).where(eq(schema.posShifts.id, id)).for("update");
+    if (!shift) throw new Error("Shift not found");
+    if (shift.status !== "open") throw new Error("Shift is already closed");
 
-  const [company] = await db
-    .select({ companyType: schema.companies.companyType })
-    .from(schema.companies)
-    .where(eq(schema.companies.id, shift.companyId))
-    .limit(1);
+    const [company] = await tx
+      .select({ companyType: schema.companies.companyType })
+      .from(schema.companies)
+      .where(eq(schema.companies.id, shift.companyId))
+      .limit(1);
 
-  let salesCount: number;
-  // Exact sums, so the stored variance is closing cash minus expected cash to the cent.
-  let salesTotal = toMoney(0);
-  let expectedCash = toMoney(shift.openingCash);
+    let salesCount: number;
+    // Exact sums, so the stored variance is closing cash minus expected cash to the cent.
+    let salesTotal = toMoney(0);
+    let expectedCash = toMoney(shift.openingCash);
 
-  if (company?.companyType === "retail") {
-    const payments = await db
-      .select({
-        saleId: schema.retailPosPayments.saleId,
-        paymentType: schema.retailPosPayments.paymentType,
-        method: schema.retailPosPayments.method,
-        amount: schema.retailPosPayments.amount,
-      })
-      .from(schema.retailPosPayments)
-      .where(and(eq(schema.retailPosPayments.companyId, shift.companyId), eq(schema.retailPosPayments.shiftId, id)));
-    const cashMovements = await db
-      .select({
-        movementType: schema.retailCashMovements.movementType,
-        amount: schema.retailCashMovements.amount,
-      })
-      .from(schema.retailCashMovements)
-      .where(
-        and(eq(schema.retailCashMovements.companyId, shift.companyId), eq(schema.retailCashMovements.shiftId, id))
-      );
+    if (company?.companyType === "retail") {
+      const payments = await tx
+        .select({
+          saleId: schema.retailPosPayments.saleId,
+          paymentType: schema.retailPosPayments.paymentType,
+          method: schema.retailPosPayments.method,
+          amount: schema.retailPosPayments.amount,
+        })
+        .from(schema.retailPosPayments)
+        .where(and(eq(schema.retailPosPayments.companyId, shift.companyId), eq(schema.retailPosPayments.shiftId, id)));
+      const cashMovements = await tx
+        .select({
+          movementType: schema.retailCashMovements.movementType,
+          amount: schema.retailCashMovements.amount,
+        })
+        .from(schema.retailCashMovements)
+        .where(
+          and(eq(schema.retailCashMovements.companyId, shift.companyId), eq(schema.retailCashMovements.shiftId, id))
+        );
 
-    const saleIds = new Set<number>();
-    let cashNet = toMoney(0);
-    for (const payment of payments) {
-      const amount = toMoney(payment.amount);
-      if (payment.paymentType === "payment") {
-        saleIds.add(payment.saleId);
-        salesTotal = salesTotal.plus(amount);
-        if (payment.method === "cash") cashNet = cashNet.plus(amount);
-      } else if (payment.paymentType === "refund" && payment.method === "cash") {
-        cashNet = cashNet.minus(amount);
+      const saleIds = new Set<number>();
+      let cashNet = toMoney(0);
+      for (const payment of payments) {
+        const amount = toMoney(payment.amount);
+        if (payment.paymentType === "payment") {
+          saleIds.add(payment.saleId);
+          salesTotal = salesTotal.plus(amount);
+          if (payment.method === "cash") cashNet = cashNet.plus(amount);
+        } else if (payment.paymentType === "refund" && payment.method === "cash") {
+          cashNet = cashNet.minus(amount);
+        }
       }
+      for (const movement of cashMovements) {
+        const amount = toMoney(movement.amount);
+        cashNet = movement.movementType === "cash_in" ? cashNet.plus(amount) : cashNet.minus(amount);
+      }
+      salesCount = saleIds.size;
+      expectedCash = expectedCash.plus(cashNet);
+    } else {
+      const salesVouchers = await tx
+        .select()
+        .from(schema.vouchers)
+        .where(
+          and(
+            eq(schema.vouchers.shiftId, id),
+            eq(schema.vouchers.voucherType, "Sales"),
+            isNull(schema.vouchers.deletedAt)
+          )
+        );
+      salesCount = salesVouchers.length;
+      salesTotal = sumMoney(salesVouchers.map((voucher) => voucher.totalAmount));
+      expectedCash = expectedCash.plus(salesTotal);
     }
-    for (const movement of cashMovements) {
-      const amount = toMoney(movement.amount);
-      cashNet = movement.movementType === "cash_in" ? cashNet.plus(amount) : cashNet.minus(amount);
-    }
-    salesCount = saleIds.size;
-    expectedCash = expectedCash.plus(cashNet);
-  } else {
-    const salesVouchers = await db
-      .select()
-      .from(schema.vouchers)
-      .where(
-        and(
-          eq(schema.vouchers.shiftId, id),
-          eq(schema.vouchers.voucherType, "Sales"),
-          isNull(schema.vouchers.deletedAt)
-        )
-      );
-    salesCount = salesVouchers.length;
-    salesTotal = sumMoney(salesVouchers.map((voucher) => voucher.totalAmount));
-    expectedCash = expectedCash.plus(salesTotal);
-  }
 
-  const actualClosing = parseMoneyInput(closingCash);
-  if (!actualClosing) throw new Error("Invalid amount");
-  const variance = actualClosing.minus(expectedCash);
+    const actualClosing = parseMoneyInput(closingCash);
+    if (!actualClosing) throw new Error("Invalid amount");
+    const variance = actualClosing.minus(expectedCash);
 
-  const [updated] = await db
-    .update(schema.posShifts)
-    .set({
-      status: "closed",
-      closedAt: sql`now()`,
-      closingCash,
-      expectedCash: moneyString(expectedCash),
-      variance: moneyString(variance),
-      salesCount,
-      salesTotal: moneyString(salesTotal),
-      notes: notes || null,
-    })
-    .where(and(eq(schema.posShifts.id, id), eq(schema.posShifts.status, "open")))
-    .returning();
-  if (!updated) throw new Error("Shift is already closed");
-  return updated;
+    const [updated] = await tx
+      .update(schema.posShifts)
+      .set({
+        status: "closed",
+        closedAt: sql`now()`,
+        closingCash,
+        expectedCash: moneyString(expectedCash),
+        variance: moneyString(variance),
+        salesCount,
+        salesTotal: moneyString(salesTotal),
+        notes: notes || null,
+      })
+      .where(and(eq(schema.posShifts.id, id), eq(schema.posShifts.status, "open")))
+      .returning();
+    if (!updated) throw new Error("Shift is already closed");
+    return updated;
+  });
 }
 
 export async function updateShiftStats(id: number, salesCount: number, salesTotal: string): Promise<void> {
