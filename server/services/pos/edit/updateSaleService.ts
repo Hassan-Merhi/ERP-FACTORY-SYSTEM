@@ -41,6 +41,7 @@ import {
   postGoldenCoastPosAccountingTx,
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
+import { spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
   // HandlerErrorResult bodies are plain JSON message objects; the response
@@ -219,7 +220,10 @@ export async function applyPosSaleUpdateTx(
     }
     const payableAmount = Math.max(
       0,
-      Number((rebuildResult.grandTotal - rebuildResult.totalQtySoldEdit * editSpDeductionPerQty).toFixed(2))
+      spPayableAfterDeduction(
+        rebuildResult.grandTotal,
+        spDeductionAmount(rebuildResult.totalQtySoldEdit, editSpDeductionPerQty)
+      )
     );
     await postGoldenCoastPosAccountingTx({
       tx,

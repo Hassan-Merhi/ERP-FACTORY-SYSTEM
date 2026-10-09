@@ -18,6 +18,7 @@ import type { VoucherEntryRow } from "./posEditSaleTypes";
 import { voucherEntries } from "@shared/schema";
 import { logger } from "../../../lib/logger";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
+import { saleTotalCents, spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
 
 /**
  * Normalize a single entry amount with the voucher's historical currency and rate.
@@ -200,15 +201,15 @@ export async function rebuildSaleAccountingEntries(
     //   Dr Cash / Receivable              = grandTotal  (debit entry already written above)
     //   Cr Supplier Cash Payable          = grandTotal − deductionAmount
     //   Cr Deduction Clearing (hidden)    = deductionAmount          (if deduction > 0)
-    const grandTotalRounded = Number(grandTotal.toFixed(2));
-    const editDeductionAmount = Number((totalQtySoldEdit * editSpDeductionPerQty).toFixed(2));
+    const grandTotalRounded = saleTotalCents(grandTotal);
+    const editDeductionAmount = spDeductionAmount(totalQtySoldEdit, editSpDeductionPerQty);
     if (editDeductionAmount > Math.abs(grandTotalRounded)) {
       throw new Error(
         `Supplier payable deduction (${editDeductionAmount}) exceeds the sale total (${grandTotalRounded}). ` +
           `Adjust the deduction per qty setting on this location.`
       );
     }
-    const editSpPayableAmount = Number((grandTotalRounded - editDeductionAmount).toFixed(2));
+    const editSpPayableAmount = spPayableAfterDeduction(grandTotalRounded, editDeductionAmount);
 
     if (grandTotalRounded > 0) {
       if (editSpPayableAmount > 0) {
