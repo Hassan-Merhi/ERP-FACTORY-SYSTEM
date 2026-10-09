@@ -35,7 +35,7 @@ export function registerAgentFreightAccountRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.get("/api/agent-accounts", requireAuth, readPinnedAgents);
+  app.get("/api/agent-accounts", requireAuth, (req, res) => readPinnedAgents(req, res));
   app.get("/api/factory/agents/pinned", requireAuth, requireFactoryAgentIfNeeded, readPinnedAgents);
 
   const addPinnedAgent = async (req: Request, res: Response) => {
@@ -58,7 +58,7 @@ export function registerAgentFreightAccountRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.post("/api/agent-accounts", requireAuth, addPinnedAgent);
+  app.post("/api/agent-accounts", requireAuth, (req, res) => addPinnedAgent(req, res));
   app.post("/api/factory/agents/pinned", requireAuth, requireFactoryAgentIfNeeded, addPinnedAgent);
 
   const removePinnedAgent = async (req: Request, res: Response) => {
@@ -74,7 +74,7 @@ export function registerAgentFreightAccountRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.delete("/api/agent-accounts/:accountId", requireAuth, removePinnedAgent);
+  app.delete("/api/agent-accounts/:accountId", requireAuth, (req, res) => removePinnedAgent(req, res));
   app.delete("/api/factory/agents/pinned/:accountId", requireAuth, requireFactoryAgentIfNeeded, removePinnedAgent);
 
   // ── FREIGHT ACCOUNTS (Financial Snapshot) ─────────────────────────────────
