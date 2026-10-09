@@ -201,6 +201,10 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             // would create a bale without inventory. It needs a controlled
             // re-entry with a new receipt and audit workflow instead.
             const removal = firstRow(await tx.execute(sql`
+              SELECT id FROM factory_physical_bale_deletions
+               WHERE company_id = ${companyId} AND bale_id = ${itemId}
+               LIMIT 1
+            `)) || firstRow(await tx.execute(sql`
               SELECT id FROM canonical_stock_movements
                WHERE company_id = ${companyId}
                  AND source_type = 'factory_bale_removal'
@@ -217,7 +221,7 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
           if (result === "already-active") return res.status(409).json({ message: "Bale is not deleted" });
           if (result === "requires-reentry") {
             return res.status(409).json({
-              message: "This physical bale removal has an ERP inventory reversal. Use a controlled stock re-entry; restoring the status alone would create phantom inventory.",
+              message: "This bale has a recorded physical deletion. Use a controlled stock re-entry; restoring its status alone would create phantom inventory or undo the deletion audit.",
             });
           }
           break;
