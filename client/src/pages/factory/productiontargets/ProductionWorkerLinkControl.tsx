@@ -11,7 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { evenSplitBales } from "@shared/factoryProductionTargetSplit";
+import { evenSplitBales, isValidBaleTarget } from "@shared/factoryProductionTargetSplit";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -76,17 +76,21 @@ export function ProductionWorkerLinkControl({
 
   const allocatedTotal = unlinkMembers.reduce((sum, member) => {
     const value = unlinkDraft[member.workerId];
-    return sum + (value === "" || value === undefined ? 0 : Number(value));
+    return sum + (value === "" || value === undefined ? 0 : Math.round(Number(value) * 100));
   }, 0);
   const validSplit =
     unlinkTarget === null ||
-    (Number.isSafeInteger(unlinkTarget) &&
-      unlinkTarget >= 0 &&
+    (isValidBaleTarget(unlinkTarget) &&
       unlinkMembers.every((member) => {
         const value = unlinkDraft[member.workerId];
-        return value !== "" && value !== undefined && Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+        return (
+          value !== "" &&
+          value !== undefined &&
+          isValidBaleTarget(Number(value)) &&
+          (!Number.isInteger(unlinkTarget) || Number.isInteger(Number(value)))
+        );
       }) &&
-      allocatedTotal === unlinkTarget);
+      allocatedTotal === Math.round(unlinkTarget * 100));
 
   const fillEvenSplit = (total: number) => {
     const split = evenSplitBales(total, currentMemberIds);
@@ -94,9 +98,11 @@ export function ProductionWorkerLinkControl({
   };
 
   const openUnlinkDialog = () => {
-    const shared = targetBales === undefined ? (row.targetBales ?? null) : targetBales;
+    // The daily Edit Targets value can override the shared fixed target.
+    // Unlink always allocates the authoritative repeating Fixed Target.
+    const shared = row.defaultTargetBales ?? null;
     setUnlinkTarget(shared ?? null);
-    if (shared !== null && shared !== undefined && Number.isSafeInteger(shared) && shared >= 0) {
+    if (shared !== null && isValidBaleTarget(shared)) {
       fillEvenSplit(shared);
     } else {
       setUnlinkDraft({});
@@ -274,7 +280,7 @@ export function ProductionWorkerLinkControl({
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={busy || !Number.isSafeInteger(unlinkTarget) || unlinkTarget < 0}
+                    disabled={busy || !isValidBaleTarget(unlinkTarget)}
                     onClick={() => fillEvenSplit(unlinkTarget)}
                     data-testid={`button-even-split-${row.personId}`}
                   >
@@ -294,7 +300,7 @@ export function ProductionWorkerLinkControl({
                       id={`unlink-target-${row.personId}-${member.workerId}`}
                       type="number"
                       min="0"
-                      step="1"
+                      step={Number.isInteger(unlinkTarget) ? "1" : "0.01"}
                       className="w-24 text-right tabular-nums"
                       disabled={busy}
                       value={unlinkDraft[member.workerId] ?? ""}
@@ -309,7 +315,7 @@ export function ProductionWorkerLinkControl({
                   </div>
                 ))}
                 <div className="text-sm font-medium tabular-nums">
-                  {tr("unlinkSplitAllocated")}: {allocatedTotal} / {unlinkTarget}
+                  {tr("unlinkSplitAllocated")}: {allocatedTotal / 100} / {unlinkTarget}
                 </div>
                 {!validSplit && (
                   <p className="text-xs text-destructive" role="alert">
