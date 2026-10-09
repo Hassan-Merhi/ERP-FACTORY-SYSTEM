@@ -72,10 +72,9 @@ export function registerStatsNetProfitRoutes(app: Express) {
       // Uses shared helper (netPositionHelper.ts) – single source of truth for
       // the asset vs liability classification formula used by both ERP and Factory.
 
-      // A company only delegates supplier liabilities to another company when it is
-      // explicitly linked through companies.parent_company_id. Standalone companies
-      // must show their own supplier balances even when a global parent company exists.
-      const shouldIncludeSuppliers = companyRecord?.parentCompanyId == null;
+      // One supplier-inclusion rule (wave 13, owner decision 2): supplier payables
+      // count in the posting company, parent link or not.
+      const shouldIncludeSuppliers = true; // ERP_NET_POSITION_INCLUDES_SUPPLIERS (netPositionParties.ts)
       // Build excluded-from-expenses set (needed for the P&L expense pass below)
       const importChargesParent = companyAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
       const excludedFromExpenses = new Set<number>();

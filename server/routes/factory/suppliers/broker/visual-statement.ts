@@ -22,6 +22,11 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { MoneyDecimal, toMoney } from "../../../../lib/money";
+import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerViews,
+} from "../balance/factorySupplierLedger";
 import type Decimal from "decimal.js";
 import {
   entryNativeAmounts,
@@ -62,7 +67,13 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       let containerQuery = db
         .select()
         .from(factoryContainers)
-        .where(and(eq(factoryContainers.companyId, companyId), inArray(factoryContainers.supplierId, allSupplierIds)))
+        .where(
+          and(
+            eq(factoryContainers.companyId, companyId),
+            inArray(factoryContainers.supplierId, allSupplierIds),
+            isNull(factoryContainers.deletedAt)
+          )
+        )
         .$dynamic();
       if (from) containerQuery = containerQuery.where(sql`${factoryContainers.arrivalDate} >= ${from}`);
       if (to) containerQuery = containerQuery.where(sql`${factoryContainers.arrivalDate} <= ${to}`);
@@ -81,7 +92,8 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
           goodsAmount: kg.times(rate).toNumber(),
           goodsCurrency: c.currencyCode || "USD",
           freightAmount: toMoney(c.freight).toNumber(),
-          freightCurrency: c.freightCurrencyCode || "USD",
+          // Freight with no currency of its own is in the container's currency (as every other reader).
+          freightCurrency: c.freightCurrencyCode || c.currencyCode || "USD",
           commissionAmount: toMoney(c.commissionAmount).toNumber(),
           commissionCurrency: c.commissionCurrencyCode || "USD",
           arrivalDate: c.arrivalDate ? String(c.arrivalDate) : null,
@@ -153,8 +165,8 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
             )
           )
           .$dynamic();
-        if (from) vpayQ = vpayQ.where(sql`${vouchers.voucherDate} >= ${from}`);
-        if (to) vpayQ = vpayQ.where(sql`${vouchers.voucherDate} <= ${to}`);
+        if (from) vpayQ = vpayQ.where(sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) >= ${from}`);
+        if (to) vpayQ = vpayQ.where(sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) <= ${to}`);
         vpayRows = await vpayQ.orderBy(vouchers.voucherDate);
       }
 
@@ -284,7 +296,18 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
         addPaid(p.fromCurrency, p.fromAmount);
       }
 
+      // Ledger balances (wave 13, owner decision 3) as of `to`; the container
+      // and payment figures above are the operational view (memo).
+      const views = await loadFactorySupplierLedgerViews(db, companyId, { ids: allSupplierIds, asOf: to ?? null });
+      const viewOf = (id: number) => views.get(id) ?? emptyFactorySupplierLedgerView(id);
+
       return res.json({
+        balanceBasis: "ledger",
+        ledgerView: {
+          broker: viewOf(broker.id),
+          linkedSuppliers: linked.map((s) => ({ name: s.name, ...viewOf(s.id) })),
+        },
+        operationalMemoLabel: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
         broker: { id: broker.id, name: broker.name },
         linkedSuppliers: linked.map((s) => ({ id: s.id, name: s.name })),
         containers: containerRows,

@@ -56,8 +56,10 @@ interface GroupNetPositionData {
     netPosition: number;
   };
   intercompany: {
-    mode: "already-excluded";
+    mode: "paired-elimination";
     additionalElimination: number;
+    /** Unmatched or mismatched intercompany amounts, part of the group totals (wave 13). */
+    differences?: GroupLineItem[];
     note: string;
   };
 }
@@ -91,8 +93,7 @@ function CompanySide({
   const grouped = useMemo(() => groupByCategory(lines), [lines]);
   const entries = Object.entries(grouped).sort(
     ([, a], [, b]) =>
-      b.reduce((sum, line) => sum + Math.abs(line.value), 0) -
-      a.reduce((sum, line) => sum + Math.abs(line.value), 0)
+      b.reduce((sum, line) => sum + Math.abs(line.value), 0) - a.reduce((sum, line) => sum + Math.abs(line.value), 0)
   );
   const sideClass = side === "have" ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400";
 
@@ -100,7 +101,11 @@ function CompanySide({
     <div className="rounded-xl border border-border/70 overflow-hidden bg-card/50">
       <div className="flex items-center justify-between gap-3 px-4 py-3 bg-muted/30 border-b">
         <div className="flex items-center gap-2">
-          {side === "have" ? <ArrowUpRight className="h-4 w-4 text-emerald-600" /> : <ArrowDownRight className="h-4 w-4 text-rose-600" />}
+          {side === "have" ? (
+            <ArrowUpRight className="h-4 w-4 text-emerald-600" />
+          ) : (
+            <ArrowDownRight className="h-4 w-4 text-rose-600" />
+          )}
           <span className="font-semibold text-sm">{title}</span>
         </div>
         <span className={`font-mono font-bold tabular-nums ${sideClass}`}>{formatAmount(total)}</span>
@@ -119,9 +124,14 @@ function CompanySide({
               </div>
               <div className="divide-y divide-border/50">
                 {categoryLines.map((line, index) => (
-                  <div key={`${line.label}-${index}`} className="flex items-start justify-between gap-4 px-3 py-2 text-sm">
+                  <div
+                    key={`${line.label}-${index}`}
+                    className="flex items-start justify-between gap-4 px-3 py-2 text-sm"
+                  >
                     <span className="min-w-0 break-words">{line.label}</span>
-                    <span className={`shrink-0 font-mono tabular-nums ${line.value < 0 ? "text-rose-600 dark:text-rose-400" : ""}`}>
+                    <span
+                      className={`shrink-0 font-mono tabular-nums ${line.value < 0 ? "text-rose-600 dark:text-rose-400" : ""}`}
+                    >
                       {formatAmount(line.value)}
                     </span>
                   </div>
@@ -135,7 +145,13 @@ function CompanySide({
   );
 }
 
-function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition; formatAmount: (amount: number) => string }) {
+function CompanyCard({
+  company,
+  formatAmount,
+}: {
+  company: GroupCompanyPosition;
+  formatAmount: (amount: number) => string;
+}) {
   const [open, setOpen] = useState(true);
   const positive = company.netPosition >= 0;
 
@@ -154,7 +170,9 @@ function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition;
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold truncate">{company.companyName}</h3>
-                <Badge variant="outline" className="text-[10px]">{company.companyCode}</Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {company.companyCode}
+                </Badge>
               </div>
               <p className="text-xs text-muted-foreground mt-0.5">{company.companyType.replace(/_/g, " ")}</p>
             </div>
@@ -175,11 +193,17 @@ function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition;
             <div className="flex items-start justify-end gap-2">
               <div>
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Net Position</div>
-                <div className={`font-mono tabular-nums text-sm font-bold ${positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                <div
+                  className={`font-mono tabular-nums text-sm font-bold ${positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                >
                   {formatAmount(company.netPosition)}
                 </div>
               </div>
-              {open ? <ChevronDown className="h-4 w-4 text-muted-foreground mt-3" /> : <ChevronRight className="h-4 w-4 text-muted-foreground mt-3" />}
+              {open ? (
+                <ChevronDown className="h-4 w-4 text-muted-foreground mt-3" />
+              ) : (
+                <ChevronRight className="h-4 w-4 text-muted-foreground mt-3" />
+              )}
             </div>
           </div>
         </div>
@@ -188,8 +212,20 @@ function CompanyCard({ company, formatAmount }: { company: GroupCompanyPosition;
       {open && (
         <CardContent className="pt-0 pb-5 px-4 sm:px-5">
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <CompanySide title="What We Have" lines={company.forUsLines} total={company.forUsTotal} side="have" formatAmount={formatAmount} />
-            <CompanySide title="What We Owe" lines={company.onUsLines} total={company.onUsTotal} side="owe" formatAmount={formatAmount} />
+            <CompanySide
+              title="What We Have"
+              lines={company.forUsLines}
+              total={company.forUsTotal}
+              side="have"
+              formatAmount={formatAmount}
+            />
+            <CompanySide
+              title="What We Owe"
+              lines={company.onUsLines}
+              total={company.onUsTotal}
+              side="owe"
+              formatAmount={formatAmount}
+            />
           </div>
         </CardContent>
       )}
@@ -238,7 +274,8 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
               <Badge variant="secondary">ERP only</Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">
-              Combined What We Have, What We Owe, and Net Position across active ERP companies. Supplier Partner, Factory, and Properties are excluded.
+              Combined What We Have, What We Owe, and Net Position across active ERP companies. Supplier Partner,
+              Factory, and Properties are excluded.
             </p>
           </div>
         </div>
@@ -257,11 +294,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
               data-testid="input-group-net-position-date"
             />
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setRefreshGeneration((value) => value + 1)}
-            disabled={isFetching}
-          >
+          <Button variant="outline" onClick={() => setRefreshGeneration((value) => value + 1)} disabled={isFetching}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isFetching ? "animate-spin" : ""}`} /> Refresh
           </Button>
           <Button onClick={exportExcel} disabled={!data}>
@@ -273,7 +306,9 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
       {isLoading ? (
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[0, 1, 2].map((key) => <Skeleton key={key} className="h-32 rounded-xl" />)}
+            {[0, 1, 2].map((key) => (
+              <Skeleton key={key} className="h-32 rounded-xl" />
+            ))}
           </div>
           <Skeleton className="h-72 rounded-xl" />
         </div>
@@ -281,8 +316,12 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
         <Card>
           <CardContent className="py-10 text-center">
             <p className="font-medium">Group Net Position could not be loaded.</p>
-            <p className="text-sm text-muted-foreground mt-1">{error instanceof Error ? error.message : "Unknown error"}</p>
-            <Button className="mt-4" variant="outline" onClick={() => refetch()}>Try Again</Button>
+            <p className="text-sm text-muted-foreground mt-1">
+              {error instanceof Error ? error.message : "Unknown error"}
+            </p>
+            <Button className="mt-4" variant="outline" onClick={() => refetch()}>
+              Try Again
+            </Button>
           </CardContent>
         </Card>
       ) : (
@@ -323,7 +362,9 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted-foreground">Group Net Position</p>
-                    <p className={`text-2xl font-bold font-mono tabular-nums mt-2 ${data.totals.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                    <p
+                      className={`text-2xl font-bold font-mono tabular-nums mt-2 ${data.totals.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                    >
                       {formatAmount(data.totals.netPosition)}
                     </p>
                   </div>
@@ -340,7 +381,9 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
                   <CardTitle className="text-base">Company Overview</CardTitle>
-                  <p className="text-xs text-muted-foreground mt-1">{data.companyCount} companies included · as of {data.asOfDate}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {data.companyCount} companies included · as of {data.asOfDate}
+                  </p>
                 </div>
                 <Badge variant="outline">Group total: {formatAmount(data.totals.netPosition)}</Badge>
               </div>
@@ -362,18 +405,51 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
                         <div className="font-medium">{company.companyName}</div>
                         <div className="text-xs text-muted-foreground">{company.companyCode}</div>
                       </td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">{formatAmount(company.forUsTotal)}</td>
-                      <td className="py-3 px-3 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">{formatAmount(company.onUsTotal)}</td>
-                      <td className={`py-3 pl-3 text-right font-mono tabular-nums font-semibold ${company.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
+                        {formatAmount(company.forUsTotal)}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums text-rose-600 dark:text-rose-400">
+                        {formatAmount(company.onUsTotal)}
+                      </td>
+                      <td
+                        className={`py-3 pl-3 text-right font-mono tabular-nums font-semibold ${company.netPosition >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}
+                      >
                         {formatAmount(company.netPosition)}
+                      </td>
+                    </tr>
+                  ))}
+                  {(data.intercompany.differences ?? []).map((line) => (
+                    <tr
+                      key={line.label}
+                      className="border-b border-border/50"
+                      data-testid="row-intercompany-difference"
+                    >
+                      <td className="py-3 pr-4">
+                        <div className="font-medium">Intercompany difference</div>
+                        <div className="text-xs text-muted-foreground">{line.label}</div>
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "forUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono tabular-nums">
+                        {line.side === "onUs" ? formatAmount(line.value) : "—"}
+                      </td>
+                      <td className="py-3 pl-3 text-right font-mono tabular-nums">
+                        {formatAmount(line.side === "forUs" ? line.value : -line.value)}
                       </td>
                     </tr>
                   ))}
                   <tr className="bg-muted/30 font-semibold">
                     <td className="py-3 pr-4">GROUP TOTAL</td>
-                    <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(data.totals.forUsTotal)}</td>
-                    <td className="py-3 px-3 text-right font-mono tabular-nums">{formatAmount(data.totals.onUsTotal)}</td>
-                    <td className="py-3 pl-3 text-right font-mono tabular-nums">{formatAmount(data.totals.netPosition)}</td>
+                    <td className="py-3 px-3 text-right font-mono tabular-nums">
+                      {formatAmount(data.totals.forUsTotal)}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono tabular-nums">
+                      {formatAmount(data.totals.onUsTotal)}
+                    </td>
+                    <td className="py-3 pl-3 text-right font-mono tabular-nums">
+                      {formatAmount(data.totals.netPosition)}
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -391,7 +467,10 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
           <div className="space-y-4">
             <div>
               <h3 className="text-lg font-semibold">Company Breakdown</h3>
-              <p className="text-sm text-muted-foreground">Each company is loaded from its own Net Position data, regardless of which company is currently selected.</p>
+              <p className="text-sm text-muted-foreground">
+                Each company is loaded from its own Net Position data, regardless of which company is currently
+                selected.
+              </p>
             </div>
             {data.companies.map((company) => (
               <CompanyCard key={company.companyId} company={company} formatAmount={formatAmount} />

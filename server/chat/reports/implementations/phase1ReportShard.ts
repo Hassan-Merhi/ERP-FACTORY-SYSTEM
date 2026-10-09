@@ -47,7 +47,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
-        WHERE v.voucher_date BETWEEN ${dateFrom} AND ${dateTo}
+        WHERE COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
           AND LOWER(TRIM(la.account_type)) IN (${profitAndLossAccountTypesSql()})
         GROUP BY la.account_type, la.sub_type
       `);
@@ -101,7 +101,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM ledger_accounts la
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
-        WHERE la.company_id = ${companyId} AND la.account_type IN ('Cash','Bank') AND la.active = true AND la.deleted_at IS NULL
+        WHERE la.company_id = ${companyId} AND LOWER(TRIM(la.account_type)) IN ('cash', 'bank') AND la.active = true AND la.deleted_at IS NULL
         GROUP BY la.id, la.name, la.account_type, la.opening_balance, la.opening_balance_side
         ORDER BY la.account_type, la.name
       `);
@@ -322,7 +322,7 @@ async function runPhase1Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         JOIN vouchers v ON v.id = ve.voucher_id AND v.optional = false AND v.deleted_at IS NULL AND v.voucher_type = 'Receipt'
         WHERE la.company_id = ${companyId} AND la.active = true
-          AND v.voucher_date BETWEEN ${dateFrom} AND ${dateTo}
+          AND COALESCE(v.effective_date, v.voucher_date) BETWEEN ${dateFrom} AND ${dateTo}
           AND LOWER(TRIM(la.account_type)) NOT IN (${nonPartyAccountTypesSql()})
           AND CAST(ve.credit_amount AS numeric) > 0
         GROUP BY la.id, la.name

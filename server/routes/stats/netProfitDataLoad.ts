@@ -27,7 +27,6 @@ export type NetProfitLedgerAccount = {
 export interface NetProfitData {
   companyRecord: Company | undefined;
   companyAccounts: NetProfitLedgerAccount[];
-  parentCompanyId: number | null;
   hasMigratedEntries: boolean;
   companyBaseCurrency: string;
   accountBalances: Map<number, { debit: number; credit: number }>;
@@ -69,7 +68,9 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   // the right SQL form for every subsequent query in this handler.
   // Both probes are run in the same parallel batch as the other startup calls
   // to add zero sequential latency on the happy path.
-  const [companyRecord, companyAccounts, parentCompanyId, groupedLedgerRows, hasMigratedResult] = await Promise.all([
+  // Wave 13 (owner decision 2): the global parentCompanyId setting no longer
+  // gates supplier inclusion, so it is not loaded here.
+  const [companyRecord, companyAccounts, groupedLedgerRows, hasMigratedResult] = await Promise.all([
     storage.getCompanyById(companyId),
     // Use a raw pool query so we only SELECT the original columns that are
     // guaranteed to exist in every deployment (including pre-migration prod).
@@ -146,7 +147,6 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
           category: row.category,
         }))
       ),
-    storage.getParentCompanyId(),
     // 1. Ledger-account balances — account-company scoped (migrated-account rule)
     // COALESCE(base_debit_amount, debit_amount): uses historical USD base when available
     // (i.e. after backfill), falls back to debit_amount for legacy rows.
@@ -218,7 +218,6 @@ export async function loadNetProfitData(companyId: number, toDate: string | null
   return {
     companyRecord,
     companyAccounts,
-    parentCompanyId,
     hasMigratedEntries,
     companyBaseCurrency,
     accountBalances,

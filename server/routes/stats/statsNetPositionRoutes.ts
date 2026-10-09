@@ -84,8 +84,9 @@ export function registerStatsNetPositionRoutes(app: Express) {
       const accountBalances = exactBalances(ledgerAccEntries.map((e) => ({ ...e, id: e.ledger_account_id })));
 
       // ── 2. Classify accounts ──────────────────────────────────────────────
-      const parentCompanyId = await storage.getParentCompanyId();
-      const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
+      // One supplier-inclusion rule (wave 13, owner decision 2): supplier payables
+      // count in the posting company; the global parentCompanyId setting no longer gates them.
+      const shouldIncludeSuppliers = true; // ERP_NET_POSITION_INCLUDES_SUPPLIERS (netPositionParties.ts)
       // SP formula: Cash + Customer A/R + Stock (inventory) → What We Have; sp_payable and Loan/Loans → What We Owe.
       const isSupplierPartner = company?.companyType === "supplier_partner";
       // Customers, suppliers and employees from the one balance engine (as the

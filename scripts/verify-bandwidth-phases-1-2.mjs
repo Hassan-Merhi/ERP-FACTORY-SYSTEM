@@ -265,7 +265,7 @@ requireText(
 requireText(supplierBatcher, "queueMicrotask", "Concurrent supplier balance reads must batch in the same turn.");
 requireText(
   supplierBatcher,
-  "pendingByCompany",
+  "entryBatcher(String(companyId), supplierId)",
   "Supplier entry batches must remain isolated by company context."
 );
 requireText(

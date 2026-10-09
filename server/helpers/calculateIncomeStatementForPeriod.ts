@@ -3,7 +3,8 @@
  *
  * Pulls only the voucher entries that fall WITHIN fromDate..toDate
  * (not cumulative) so each monthly sheet can show "what happened this month"
- * rather than the cumulative balance-sheet snapshot.
+ * rather than the cumulative balance-sheet snapshot. A voucher counts from
+ * COALESCE(effective_date, voucher_date), the balance engine's date basis.
  */
 
 import { db } from "../db";
@@ -14,6 +15,7 @@ import type Decimal from "decimal.js";
 import { round2 } from "../netPositionHelper";
 import { MoneyDecimal, toMoney } from "../lib/money";
 import { classifyAccountType, expenseCategory } from "../services/accounting/accountClassification";
+import { voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
 
 export interface IncomeLineItem {
   label: string;
@@ -65,8 +67,9 @@ export async function calculateIncomeStatementForPeriod(
         eq(vouchers.companyId, companyId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        gte(vouchers.voucherDate, fromDate),
-        lte(vouchers.voucherDate, toDate)
+        // One date basis with the engine (wave 13, R2).
+        gte(voucherBookedOnSql, fromDate),
+        lte(voucherBookedOnSql, toDate)
       )
     )
     .execute();

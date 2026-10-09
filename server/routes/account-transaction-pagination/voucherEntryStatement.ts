@@ -1,4 +1,5 @@
 import { pool } from "../../db";
+import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
 import {
   ContinuousCursorError,
   continuousCursorScope,
@@ -46,6 +47,8 @@ export function genericFilteredCte(
     return `$${values.length}`;
   };
   const conditions = [`ve.${column} = $1`, "v.optional = false", "v.deleted_at IS NULL"];
+  // A supplier lists the lines the balance engine attributes to it (wave 13).
+  if (kind === "supplier") conditions.push(higherPriorityTargetsAbsent("ve", "supplier_id"));
   if (companyId) conditions.push(`v.company_id = ${bind(companyId)}`);
   if (dates.rawStart) {
     conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bind(dates.rawStart)}::date`);
@@ -149,6 +152,7 @@ export async function loadVoucherPrePeriodNet(options: {
      FROM voucher_entries ve
      JOIN vouchers v ON v.id = ve.voucher_id
      WHERE ve.${column} = $1
+       AND ${column === "supplier_id" ? higherPriorityTargetsAbsent("ve", "supplier_id") : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyCondition}

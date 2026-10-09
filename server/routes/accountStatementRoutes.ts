@@ -23,7 +23,6 @@ import { db } from "../db";
 import { MoneyDecimal, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
-import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
 import { loadPartyOpeningSides } from "./helpers/partyOpeningSide";
 import { liveVoucherInCompany, voucherBookedOnSql } from "../services/accounting/balances/partyLineRules";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
@@ -182,18 +181,11 @@ export function registerAccountStatementRoutes(app: Express) {
         rawOB = toMoney(acct.ob);
         obSide = acct?.side ?? "Dr";
       } else if (accountType === "supplier") {
-        const isParentForSupplier = await isParentCompanyContext(companyId);
-        if (isParentForSupplier) {
-          const [acct] = await db
-            .select({ ob: suppliers.openingBalance })
-            .from(suppliers)
-            .where(eq(suppliers.id, accountId));
-          rawOB = toMoney(acct?.ob);
-        } else {
-          rawOB = new MoneyDecimal(0);
-        }
-        // suppliers.opening_balance_side, null → Cr.
-        obSide = (await loadPartyOpeningSides("suppliers", [accountId])).get(accountId) ?? "Cr";
+        // The balance engine's period opening (wave 13): the supplier's opening
+        // with its side, counted in the supplier's own company only, plus the
+        // lines the engine attributes to it before endDate. Cr positive.
+        const party = await getPartyBalance(db, { companyId, kind: "supplier", id: accountId, from: endDate ?? null });
+        return res.json({ balance: toMoney(party?.opening).negated().toNumber() });
       } else if (accountType === "employee") {
         const [acct] = await db
           .select({ ob: employees.openingBalance })
@@ -410,6 +402,17 @@ export function registerAccountStatementRoutes(app: Express) {
           .where(eq(suppliers.id, accountId));
         if (!acct) return res.status(404).json({ message: "Supplier not found" });
         accountName = acct.name ?? "Supplier";
+        // Opening at the balance engine's period start (wave 13): the supplier's
+        // own opening with its side, in its own company, plus earlier lines.
+        const party = await getPartyBalance(db, {
+          companyId,
+          kind: "supplier",
+          id: accountId,
+          from: startDate ?? null,
+        });
+        const opening = toMoney(party?.opening);
+        openingBalanceExact = opening.abs();
+        openingBalanceSide = opening.isNegative() ? "Cr" : "Dr";
       } else if (accountType === "employee") {
         const [acct] = await db
           .select({ firstName: employees.firstName, lastName: employees.lastName })
@@ -432,7 +435,9 @@ export function registerAccountStatementRoutes(app: Express) {
       } else if (accountType === "bank") {
         txRows = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId);
       } else if (accountType === "supplier") {
-        txRows = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate);
+        txRows = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate, {
+          ownedOnly: true,
+        });
       } else if (accountType === "employee") {
         txRows = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate);
       }

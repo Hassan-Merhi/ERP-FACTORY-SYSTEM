@@ -25,7 +25,6 @@ import { sumMoney, toMoney } from "./money";
 import { getCustomerByLedgerId } from "./factoryCustomerLedger";
 import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
 import { loadCustomerLedgerLines } from "../services/accounting/balances/customerLedgerStatement";
-import { isParentCompanyContext } from "../routes/helpers/supplierBalanceHelpers";
 
 export interface StatementPdfOptions {
   accountType: string;
@@ -184,13 +183,14 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
     rawOB = toMoney(acct?.openingBalance).toNumber();
     obSide = "Dr";
   } else if (accountType === "supplier") {
-    rawEntries = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate);
+    rawEntries = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate, {
+      ownedOnly: true,
+    });
     const [acct] = await db.select().from(suppliers).where(eq(suppliers.id, accountId));
     accountName = acct?.legalName ?? "Supplier";
-    // The supplier opening balance only belongs to the explicitly configured
-    // parent company's books — never guessed via "lowest company ID".
-    const isParentForSupplier = await isParentCompanyContext(companyId);
-    rawOB = isParentForSupplier ? toMoney(acct?.openingBalance).toNumber() : 0;
+    // Opening from the balance engine (wave 13): the supplier's own opening with
+    // its side, counted in the supplier's company only; set below.
+    rawOB = 0;
     obSide = "Cr";
   } else if (accountType === "employee") {
     rawEntries = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate);
@@ -221,7 +221,11 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   // ── 2. Opening balance (pre-period if startDate given) ──
   let openingBalanceExact: Decimal = toMoney(isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB);
 
-  if (customerOwnerId) {
+  if (isSupplier) {
+    // The engine's period opening (opening + lines before startDate), Cr positive.
+    const party = await getPartyBalance(db, { companyId, kind: "supplier", id: accountId, from: startDate ?? null });
+    openingBalanceExact = toMoney(party?.opening).negated();
+  } else if (customerOwnerId) {
     const party = await getPartyBalance(db, {
       companyId,
       kind: "customer",

@@ -456,4 +456,45 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "هذا العميل مذكور في بنود سندات أو مبيعات، لذا لا يمكن حذفه نهائياً. أبقه في العناصر المحذوفة.",
     fr: "Ce client figure sur des lignes de pièces ou des ventes : il ne peut pas être supprimé définitivement. Conservez-le dans les éléments supprimés.",
   },
+  // Wave 13 (B): payables, statements, group.
+  {
+    en: "Ledger balance",
+    ar: "رصيد الدفتر",
+    fr: "Solde comptable",
+  },
+  {
+    en: "Ledger balance (USD)",
+    ar: "رصيد الدفتر (دولار أمريكي)",
+    fr: "Solde comptable (USD)",
+  },
+  {
+    en: "Ledger balance by currency",
+    ar: "رصيد الدفتر حسب العملة",
+    fr: "Solde comptable par devise",
+  },
+  {
+    en: "Some ledger lines hold a foreign amount without a USD conversion",
+    ar: "تحتوي بعض بنود الدفتر على مبلغ بعملة أجنبية دون تحويل إلى الدولار الأمريكي",
+    fr: "Certaines lignes comptables contiennent un montant en devise sans conversion en USD",
+  },
+  {
+    en: "Not yet in the ledger (memo)",
+    ar: "غير مسجّل في الدفتر بعد (للعلم)",
+    fr: "Pas encore en comptabilité (mémo)",
+  },
+  {
+    en: "Lines without a confirmed exchange rate are listed but not totalled",
+    ar: "البنود التي ليس لها سعر صرف مؤكد مدرجة ولكنها غير محتسبة في المجموع",
+    fr: "Les lignes sans taux de change confirmé sont listées mais non totalisées",
+  },
+  {
+    en: "Operational container figure (memo)",
+    ar: "رقم الحاويات التشغيلي (للعلم)",
+    fr: "Chiffre opérationnel des conteneurs (mémo)",
+  },
+  {
+    en: "Intercompany difference",
+    ar: "فرق بين الشركات",
+    fr: "Écart intersociétés",
+  },
 ];

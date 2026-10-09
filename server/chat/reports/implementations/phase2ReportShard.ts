@@ -1,4 +1,4 @@
-import { db, sql, nonPartyAccountTypesSql } from "./reportShardSupport";
+import { db, sql, nonPartyAccountTypesSql, accountTypesOfClassSql } from "./reportShardSupport";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 
 export const phase2QueryTypes = [
@@ -145,7 +145,7 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN locations l ON l.id = sav.location_id
         WHERE si.company_id = ${companyId}
           AND si.name ILIKE ${"%" + itemName + "%"}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
       `);
@@ -325,7 +325,7 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
         LEFT JOIN vouchers v ON v.id = ve.voucher_id
         WHERE la.company_id = ${companyId} AND la.active = true AND la.deleted_at IS NULL
-          AND la.account_type IN ('Accounts Payable','Liability','Transporter Agent','Duty Agent')
+          AND LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("liability")})
         GROUP BY la.id, la.name, la.opening_balance, la.opening_balance_side
         HAVING (
           COALESCE(CASE WHEN la.opening_balance_side = 'Dr' THEN -CAST(la.opening_balance AS numeric) ELSE CAST(la.opening_balance AS numeric) END, 0)
@@ -435,13 +435,13 @@ async function runPhase2Report(ctx: DataQueryContext): Promise<DataQueryResult> 
       const runPL = async (from: string, to: string) => {
         const r = await db.execute<{ revenue: string; expenses: string }>(sql`
           SELECT
-            COALESCE(SUM(CASE WHEN la.account_type IN ('Income') THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS revenue,
-            COALESCE(SUM(CASE WHEN la.account_type IN ('Expense','Direct Expense','Indirect Expense') THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS expenses
+            COALESCE(SUM(CASE WHEN LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("income")}) THEN CAST(ve.credit_amount AS numeric) - CAST(ve.debit_amount AS numeric) ELSE 0 END), 0) AS revenue,
+            COALESCE(SUM(CASE WHEN LOWER(TRIM(la.account_type)) IN (${accountTypesOfClassSql("expense")}) THEN CAST(ve.debit_amount AS numeric) - CAST(ve.credit_amount AS numeric) ELSE 0 END), 0) AS expenses
           FROM voucher_entries ve
           JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL AND v.optional = false
           JOIN ledger_accounts la ON la.id = ve.ledger_account_id
           WHERE la.company_id = ${companyId}
-            AND CAST(v.voucher_date AS text) BETWEEN ${from} AND ${to}
+            AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${from} AND ${to}
         `);
         const row = r.rows[0];
         const rev = parseFloat(row?.revenue || "0");

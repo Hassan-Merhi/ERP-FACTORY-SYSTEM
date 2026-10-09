@@ -121,3 +121,27 @@ export function liveVoucherInCompany(companyId: number): SQL {
 export function customerOwnedLineSql(companyId: number, customerId: number): SQL {
   return sql.raw(customerOwnedLinePredicate(`"voucher_entries"`, intLiteral(companyId), intLiteral(customerId)));
 }
+
+// ── non-customer parties (wave 13) ────────────────────────────────────────────
+
+/** A voucher-line column that names a non-customer party. */
+export type PartyTargetColumn = (typeof NON_CUSTOMER_TARGET_COLUMNS)[number];
+
+/**
+ * Predicate on a voucher-line alias: the line names no target of higher
+ * priority than `column`, so the engine attributes a line naming `column` to
+ * that party. A supplier-tagged line on a ledger account, a bank or a fixed
+ * asset belongs to that account, not to the supplier; combine with
+ * `<alias>.<column> = id` to list exactly the lines the engine counts.
+ */
+export function higherPriorityTargetsAbsent(alias: string, column: PartyTargetColumn): string {
+  if (!/^[a-z_][a-z0-9_]*$|^"[a-z_]+"$/.test(alias)) throw new Error("party_line_rules_unsafe_alias");
+  const higher = NON_CUSTOMER_TARGET_COLUMNS.slice(0, NON_CUSTOMER_TARGET_COLUMNS.indexOf(column));
+  if (higher.length === 0) return "TRUE";
+  return higher.map((target) => `${alias}.${target} IS NULL`).join(" AND ");
+}
+
+/** drizzle form on the un-aliased voucher_entries table. */
+export function partyOwnedLineSql(column: PartyTargetColumn): SQL {
+  return sql.raw(higherPriorityTargetsAbsent(`"voucher_entries"`, column));
+}

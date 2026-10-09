@@ -47,11 +47,16 @@ interface SupplierBalance {
   totalContainers: number;
   receivedContainers: number;
   fxUnresolved: boolean;
+  operationalMemo: { totalValue: string; fxUnresolved: boolean };
 }
 
-/** Balance owed, as a number. */
+/**
+ * Operational balance owed, as a number. Wave 13 (owner decision 3): the
+ * primary `totalValue` is the ledger balance from the balance engine; the
+ * container formula these tests pin is returned as `operationalMemo`.
+ */
 function balanceOf(row: SupplierBalance): number {
-  return Number(row.totalValue);
+  return Number(row.operationalMemo.totalValue);
 }
 
 function paidOf(row: SupplierBalance): number {
@@ -172,7 +177,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
     expect(balanceOf(supplier)).toBeCloseTo(350, 2);
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(supplier.receivedContainers).toBe(2);
-    expect(supplier.fxUnresolved).toBe(false);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(false);
   });
 
   it("counts a direct supplier payment against the balance", async () => {
@@ -244,7 +249,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
     // A draft must not settle anything.
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(balanceOf(supplier)).toBeCloseTo(200, 2);
-    expect(supplier.fxUnresolved).toBe(false);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(false);
   });
 
   it("excludes an unresolvable-currency payment and flags the supplier instead of guessing", async () => {
@@ -263,7 +268,7 @@ describe("GET /api/factory/suppliers/with-balances", () => {
 
     expect(paidOf(supplier)).toBeCloseTo(0, 2);
     expect(balanceOf(supplier)).toBeCloseTo(200, 2);
-    expect(supplier.fxUnresolved).toBe(true);
+    expect(supplier.operationalMemo.fxUnresolved).toBe(true);
   });
 
   it("puts a post-offload charge on the supplier only when the charge names one", async () => {

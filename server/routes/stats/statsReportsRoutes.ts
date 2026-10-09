@@ -4,7 +4,6 @@ import {
   addInventoryValues,
   divideInventoryValues,
   multiplyInventoryValues,
-  subtractInventoryValues,
   toInventoryDecimal,
 } from "../../lib/inventoryMath";
 import { db } from "../../db";
@@ -15,15 +14,15 @@ import {
   stockItems,
   containers,
   vouchers,
-  voucherEntries,
   salesItems,
   suppliers,
   locations,
   companies,
 } from "@shared/schema";
-import { eq, and, inArray, sql, isNotNull, isNull } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { _getCached, _setCached } from "../../services/shared/ttlCache";
 import { countedStockRowValue } from "../../services/inventory/stockValuation";
+import { getFinancialRatios } from "../../services/reports/financialReportsService";
 
 const numberValue = (value: unknown) =>
   toInventoryDecimal(value as unknown as Parameters<typeof toInventoryDecimal>[0]).toNumber();
@@ -251,89 +250,14 @@ export function registerStatsReportsRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { startDate, endDate } = req.query;
-      const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
-      const incomeAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Income").map((account) => account.id)
-      );
-      const expenseAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Expense").map((account) => account.id)
-      );
-      const assetAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Asset").map((account) => account.id)
-      );
-      const liabilityAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Liability").map((account) => account.id)
-      );
+      const startDate =
+        typeof req.query.startDate === "string" && req.query.startDate ? req.query.startDate : undefined;
+      const endDate = typeof req.query.endDate === "string" && req.query.endDate ? req.query.endDate : undefined;
       const cacheKey = `ratios:${companyId}:${startDate ?? ""}:${endDate ?? ""}`;
       const cached = _getCached(cacheKey);
       if (cached) return res.json(cached);
-
-      const entryConditions = [eq(vouchers.companyId, companyId)];
-      if (startDate) entryConditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
-      if (endDate) entryConditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
-      const companyEntries = await db
-        .select({
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          ledgerAccountId: voucherEntries.ledgerAccountId,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(...entryConditions, isNotNull(voucherEntries.ledgerAccountId)))
-        .execute();
-
-      let totalIncome = toInventoryDecimal(0);
-      let totalExpenses = toInventoryDecimal(0);
-      let totalAssets = toInventoryDecimal(0);
-      let totalLiabilities = toInventoryDecimal(0);
-      for (const entry of companyEntries) {
-        if (!entry.ledgerAccountId) continue;
-        const debit = toInventoryDecimal(entry.debitAmount);
-        const credit = toInventoryDecimal(entry.creditAmount);
-        if (incomeAccountIds.has(entry.ledgerAccountId)) totalIncome = totalIncome.plus(credit.minus(debit));
-        if (expenseAccountIds.has(entry.ledgerAccountId)) totalExpenses = totalExpenses.plus(debit.minus(credit));
-        if (assetAccountIds.has(entry.ledgerAccountId)) totalAssets = totalAssets.plus(debit.minus(credit));
-        if (liabilityAccountIds.has(entry.ledgerAccountId))
-          totalLiabilities = totalLiabilities.plus(credit.minus(debit));
-      }
-
-      const salesConditions = [eq(vouchers.companyId, companyId)];
-      if (startDate) salesConditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
-      if (endDate) salesConditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
-      const salesData = await db
-        .select({ totalSales: salesItems.totalSales, totalCost: salesItems.totalCost })
-        .from(salesItems)
-        .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-        .where(and(...salesConditions))
-        .execute();
-      const totalSales = addInventoryValues(...salesData.map((sale) => sale.totalSales));
-      const totalCost = addInventoryValues(...salesData.map((sale) => sale.totalCost));
-      const grossProfit = subtractInventoryValues(totalSales, totalCost);
-      const netProfit = subtractInventoryValues(totalIncome, totalExpenses);
-      const totalEquity = subtractInventoryValues(totalAssets, totalLiabilities);
-      const result = {
-        ratios: {
-          grossProfitMargin: percentage(grossProfit, totalSales),
-          netProfitMargin: percentage(netProfit, totalIncome),
-          currentRatio: totalLiabilities.isPositive()
-            ? divideInventoryValues(totalAssets, totalLiabilities).toNumber()
-            : 0,
-          debtToEquity: totalEquity.isPositive() ? divideInventoryValues(totalLiabilities, totalEquity).toNumber() : 0,
-        },
-        underlying: {
-          totalIncome: totalIncome.toNumber(),
-          totalExpenses: totalExpenses.toNumber(),
-          totalSales: totalSales.toNumber(),
-          totalCost: totalCost.toNumber(),
-          grossProfit: grossProfit.toNumber(),
-          netProfit: netProfit.toNumber(),
-          totalAssets: totalAssets.toNumber(),
-          totalLiabilities: totalLiabilities.toNumber(),
-          totalEquity: totalEquity.toNumber(),
-        },
-        filters: { startDate: startDate || null, endDate: endDate || null },
-      };
+      // Wave 13 (R4): on the P&L and the balance sheet (see getFinancialRatios).
+      const result = await getFinancialRatios(companyId, startDate, endDate);
       _setCached(cacheKey, result);
       res.json(result);
     } catch (error: unknown) {

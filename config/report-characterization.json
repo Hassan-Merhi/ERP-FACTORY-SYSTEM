@@ -19,8 +19,8 @@
     },
     "GET /api/factory/suppliers/:supplierId/statement": {
       "status": 200,
-      "shape": "{brokerContainers,currencyGroups,fxTransfers,ledger,linkedSupplierGroups,obCommissions,offloadCharges,payments,statement,summary,supplier,voucherPayments}",
-      "hash": "c744dde780be869ca88c8c74469c2405b547aff44dded594119247f721e72b7f"
+      "shape": "{balanceBasis,brokerContainers,currencyGroups,fxTransfers,ledger,ledgerView,linkedSupplierGroups,obCommissions,offloadCharges,operationalMemoLabel,payments,statement,summary,supplier,voucherPayments}",
+      "hash": "9d1f53b585be70655b670f0cb7026995c1e25e952937900833a9a345e8e39b28"
     },
     "PATCH /api/purchase-orders/:poId": {
       "status": 200,

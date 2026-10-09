@@ -203,24 +203,25 @@ describe("account statement route behavior", () => {
     expect(harness.db.selectDistinct).not.toHaveBeenCalled();
   });
 
-  it("computes supplier opening balance only for the parent books and scopes history to the selected company", async () => {
-    harness.selectResults.push([{ ob: "100" }], [{ totalDebit: "20", totalCredit: "45" }]);
+  // Wave 13: the supplier pre-period balance is the balance engine's period
+  // opening (the supplier's own opening, counted in its own company only, with
+  // its side, plus earlier lines of this company). It used to add the opening
+  // when the global parent-company setting named this company, without its side.
+  it("opens a supplier at the balance engine's period opening, Cr positive", async () => {
+    harness.getPartyBalance.mockResolvedValue({ opening: "-125.00" });
     const parent = responseHarness();
     await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
       request({ params: { type: "supplier", id: "8" }, query: { endDate: "2026-08-01" } }),
       parent
     );
     expect(parent.body).toEqual({ balance: 125 });
-    expect(harness.isParentCompanyContext).toHaveBeenCalledWith(4);
-
-    harness.isParentCompanyContext.mockResolvedValue(false);
-    harness.selectResults.push([{ totalDebit: "20", totalCredit: "45" }]);
-    const child = responseHarness();
-    await routes.get("GET /api/accounts/:type/:id/pre-period-balance")!(
-      request({ params: { type: "supplier", id: "8" }, query: { endDate: "2026-08-01" } }),
-      child
-    );
-    expect(child.body).toEqual({ balance: 25 });
+    expect(harness.getPartyBalance).toHaveBeenCalledWith(harness.db, {
+      companyId: 4,
+      kind: "supplier",
+      id: 8,
+      from: "2026-08-01",
+    });
+    expect(harness.isParentCompanyContext).not.toHaveBeenCalled();
   });
 
   it("applies Dr/Cr sign conventions to bank opening balances and prior vouchers", async () => {

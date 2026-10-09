@@ -1,6 +1,5 @@
 import { logAudit } from "../_helpers";
 import { getSupplierBalanceForContext, resolveParentCompanyId } from "../helpers/supplierBalanceHelpers";
-import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { SupplierRouteError } from "./supplierErrors";
 import type { SupplierAuditActor } from "./supplierRequestContext";
 import { supplierRepository } from "./supplierRepository";
@@ -84,19 +83,19 @@ export const supplierService = {
         suppliers = await supplierRepository.listAll(parentCompanyId);
       }
     }
-
-    const openingSides = await loadPartyOpeningSides(
-      "suppliers",
-      suppliers.map((supplier) => supplier.id)
+    // A supplier of another company that this company posted to (owner
+    // decision 2): its payable counts here, so it is listed with the lines
+    // this company booked. Its opening stays in its own company.
+    const listedIds = new Set(suppliers.map((supplier) => supplier.id));
+    const postedHere = (await supplierRepository.listPostedFromOtherCompanies(companyId)).filter(
+      (supplier) => !listedIds.has(supplier.id)
     );
+
     return Promise.all(
-      suppliers.map(async (supplier) => {
+      [...suppliers, ...postedHere].map(async (supplier) => {
         const [containerCount, balanceResult, purchaseOrders] = await Promise.all([
           supplierRepository.getContainerCount(supplier.id, companyId),
-          getSupplierBalanceForContext(
-            { ...supplier, openingBalanceSide: openingSides.get(supplier.id) ?? "Cr" },
-            companyId
-          ),
+          getSupplierBalanceForContext(supplier, companyId),
           supplierRepository.getPurchaseOrders(supplier.id, companyId),
         ]);
 
@@ -105,6 +104,10 @@ export const supplierService = {
           containerCount,
           balance: balanceResult.balance,
           openingBalance: balanceResult.openingBalance,
+          openingBalanceSide: balanceResult.openingBalanceSide,
+          balanceBasis: balanceResult.balanceBasis,
+          // True for a supplier owned by another company: only this company's postings are counted.
+          postedFromOtherCompany: supplier.companyId !== companyId,
           hasActivity: containerCount > 0 || balanceResult.hasActivity || purchaseOrders.length > 0,
         };
       })
@@ -117,11 +120,9 @@ export const supplierService = {
 
   async balance(supplierId: number, companyId: number) {
     const supplier = await requireSupplier(supplierId, companyId);
-    const { balance, openingBalance, balancesByCurrency, historicalBaseBalance } = await getSupplierBalanceForContext(
-      supplier,
-      companyId
-    );
-    return { balance, openingBalance, balancesByCurrency, historicalBaseBalance };
+    const { balance, openingBalance, openingBalanceSide, balancesByCurrency, historicalBaseBalance, balanceBasis } =
+      await getSupplierBalanceForContext(supplier, companyId);
+    return { balance, openingBalance, openingBalanceSide, balancesByCurrency, historicalBaseBalance, balanceBasis };
   },
 
   async create(companyId: number, input: unknown, actor: SupplierAuditActor) {

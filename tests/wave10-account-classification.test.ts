@@ -258,9 +258,10 @@ describe("ledger reports", () => {
     expect(income.get(ids.RECOVERY)).toBe(40);
     expect(income.get(ids.REVENUE)).toBe(300);
     expect(income.has(ids.CAPITAL)).toBe(false);
-    // Expense balances are credit-minus-debit in this report.
-    expect(expense.get(ids.DUTY)).toBe(-25);
-    expect(expense.get(ids.UPPER)).toBe(-10);
+    // Expense balances are debit-minus-credit since wave 13 (they were
+    // credit-minus-debit, which made netProfit add the expenses).
+    expect(expense.get(ids.DUTY)).toBe(25);
+    expect(expense.get(ids.UPPER)).toBe(10);
   });
 
   it("the monthly income statement counts Indirect Income and not Profit as revenue", async () => {

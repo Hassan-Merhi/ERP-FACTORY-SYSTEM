@@ -13,6 +13,7 @@ import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
 import { getClientDate } from "../lib/dateUtils";
+import { higherPriorityTargetsAbsent } from "../services/accounting/balances/partyLineRules";
 import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
 import {
@@ -286,11 +287,13 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this company" });
       }
 
+      // The supplier's own lines, as the balance engine attributes them (wave 13).
       const transactions = await storage.getVoucherEntriesBySupplier(
         supplierId,
         filterCompanyId ?? undefined,
         rawStart,
-        effectiveEndDate
+        effectiveEndDate,
+        { ownedOnly: true }
       );
 
       let preNetBalance = 0;
@@ -300,6 +303,8 @@ export function registerAccountTransactionRoutes(app: Express) {
         // company's history for this (globally shared) supplier record.
         const conditions = [
           `ve.supplier_id = $1`,
+          // The supplier's own lines, as the balance engine attributes them (wave 13).
+          higherPriorityTargetsAbsent("ve", "supplier_id"),
           `v.optional = false`,
           `v.deleted_at IS NULL`,
           `COALESCE(v.effective_date::date, v.voucher_date::date) < $2::date`,

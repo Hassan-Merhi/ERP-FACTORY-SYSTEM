@@ -10,15 +10,11 @@ import { db } from "../../db";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { storage } from "../../storage";
-import { vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, isNull, inArray, isNotNull } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { vouchers, voucherEntries, salesItems, ledgerAccounts } from "@shared/schema";
+import { eq, and, isNull, inArray, isNotNull, gte, lte } from "drizzle-orm";
 import { buildTrialBalance } from "../accounting/integrity/trialBalance";
-import {
-  canonicalAccountType,
-  classifyAccountType,
-  PROFIT_AND_LOSS_ACCOUNT_TYPES,
-} from "../accounting/accountClassification";
+import { classifyAccountType } from "../accounting/accountClassification";
+import { voucherBookedOnSql } from "../accounting/balances/partyLineRules";
 
 // ---------------------------------------------------------------------------
 // getProfitLoss — /api/reports/profit-loss
@@ -54,11 +50,13 @@ export async function getProfitLoss(
   const expenseAccountIds = expenseAccounts.map((acc) => acc.id);
 
   const plConditions = [eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)];
+  // One date basis with the engine (wave 13, R2): a voucher counts from
+  // COALESCE(effective_date, voucher_date).
   if (startDate) {
-    plConditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
+    plConditions.push(gte(voucherBookedOnSql, startDate));
   }
   if (endDate) {
-    plConditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
+    plConditions.push(lte(voucherBookedOnSql, endDate));
   }
 
   // Single JOIN query — replaces two-step (fetch voucher IDs → inArray entries)
@@ -110,18 +108,22 @@ export async function getProfitLoss(
     }))
     .filter((item) => item.balance !== 0);
 
+  // Expenses are read debit-minus-credit (wave 13). They used to carry the
+  // credit-minus-debit balance of the income side, so totalExpenses was
+  // negative and netProfit (income − expenses) added the expenses instead of
+  // subtracting them.
   const expenseItems = expenseAccounts
     .map((acc) => ({
       id: acc.id,
       code: acc.code,
       name: acc.name,
       accountType: acc.accountType,
-      balance: accountBalances.get(acc.id) || 0,
+      balance: exactBalances.get(acc.id)?.negated().toNumber() || 0,
     }))
     .filter((item) => item.balance !== 0);
 
   const totalIncomeExact = sumMoney(incomeItems.map((item) => exactBalances.get(item.id)));
-  const totalExpensesExact = sumMoney(expenseItems.map((item) => exactBalances.get(item.id)));
+  const totalExpensesExact = sumMoney(expenseItems.map((item) => exactBalances.get(item.id)?.negated()));
   const totalIncome = totalIncomeExact.toNumber();
   const totalExpenses = totalExpensesExact.toNumber();
   const netProfit = totalIncomeExact.minus(totalExpensesExact).toNumber();
@@ -142,10 +144,15 @@ export async function getProfitLoss(
 //
 // Built on the trial balance (wave 9), so every figure is a posted line of a
 // live, non-optional voucher or an opening balance with its own side, and the
-// statement balances exactly when the ledger does:
-//   - ledger accounts by type: asset types are assets, liability types are
-//     liabilities, Equity is equity, income-statement types make the current
-//     earnings line; any other type is listed as unclassified;
+// statement balances exactly when the ledger does. Every ledger row is
+// classified by classifyAccountType (wave 13, R1), the classifier the P&L
+// uses, so the current earnings line is the P&L's net profit to the same date:
+//   - asset class: assets; liability class: liabilities; equity class
+//     (Equity, Profit): equity; income and expense classes (Revenue,
+//     Indirect Income, Government Taxes, COGS, ...): current earnings;
+//   - party class (Intercompany, Customer, Supplier ledger accounts) by the
+//     side of its balance: an asset in debit, a liability in credit;
+//   - an unknown type is listed as unclassified, never guessed;
 //   - bank accounts and fixed assets are assets;
 //   - customers, suppliers, employees and factory suppliers count on the side
 //     their balance falls (a supplier in debit is an asset, a customer in
@@ -158,6 +165,9 @@ export async function getProfitLoss(
 //   - `difference` is assets − (liabilities + equity + current earnings +
 //     unclassified), which is the trial balance's unexplained difference
 //     (unbalanced openings, single-sided stock vouchers), never plugged.
+// Before wave 13 the statement kept its own type sets: Government Taxes was a
+// liability (the P&L treats it as an expense) and Profit was in current
+// earnings (the classifier calls it equity).
 // ---------------------------------------------------------------------------
 export interface BalanceSheetLine {
   kind: string;
@@ -179,23 +189,23 @@ export interface BalanceSheet {
   balanced: boolean;
 }
 
-const BALANCE_SHEET_ASSET_TYPES = new Set(["Asset", "Current Asset", "Fixed Asset", "Bank", "Cash", "Customer"]);
-const BALANCE_SHEET_LIABILITY_TYPES = new Set([
-  "Liability",
-  "Loan",
-  "Loans",
-  "Duty Agent",
-  "Transporter Agent",
-  "Accounts Payable",
-  "Supplier",
-  "Government Taxes",
-  "Intercompany",
-]);
-const BALANCE_SHEET_EARNINGS_TYPES = new Set([...PROFIT_AND_LOSS_ACCOUNT_TYPES, "Revenue", "Profit"]);
 const PARTY_KINDS = new Set(["customer", "supplier", "employee", "factorySupplier"]);
 
+/** sub_type of the company's ledger accounts, so a row is classified as the P&L classifies it. */
+async function ledgerSubTypes(companyId: number): Promise<Map<number, string | null>> {
+  const rows = await db
+    .select({ id: ledgerAccounts.id, subType: ledgerAccounts.subType })
+    .from(ledgerAccounts)
+    .where(eq(ledgerAccounts.companyId, companyId))
+    .execute();
+  return new Map(rows.map((row) => [row.id, row.subType ?? null] as const));
+}
+
 export async function getBalanceSheet(companyId: number, asOfDate: string | undefined): Promise<BalanceSheet> {
-  const trialBalance = await buildTrialBalance(companyId, asOfDate ?? null);
+  const [trialBalance, subTypes] = await Promise.all([
+    buildTrialBalance(companyId, asOfDate ?? null),
+    ledgerSubTypes(companyId),
+  ]);
   const assets: BalanceSheetLine[] = [];
   const liabilities: BalanceSheetLine[] = [];
   const equity: BalanceSheetLine[] = [];
@@ -206,7 +216,6 @@ export async function getBalanceSheet(companyId: number, asOfDate: string | unde
     // Debit-positive closing balance.
     const debit = toMoney(row.closingDebit).minus(toMoney(row.closingCredit));
     if (debit.isZero()) continue;
-    const type = canonicalAccountType(row.accountType) ?? row.accountType ?? null;
     const line = (balance: Decimal): BalanceSheetLine => ({
       kind: row.kind,
       id: row.id,
@@ -215,22 +224,39 @@ export async function getBalanceSheet(companyId: number, asOfDate: string | unde
       accountType: row.accountType,
       balance: balance.toFixed(2),
     });
+    const bySign = () => (debit.isPositive() ? assets.push(line(debit)) : liabilities.push(line(debit.negated())));
     if (row.kind === "bank" || row.kind === "fixedAsset") {
       assets.push(line(debit));
-    } else if (PARTY_KINDS.has(row.kind)) {
-      if (debit.isPositive()) assets.push(line(debit));
-      else liabilities.push(line(debit.negated()));
-    } else if (row.kind === "ledger" && type && BALANCE_SHEET_ASSET_TYPES.has(type)) {
-      assets.push(line(debit));
-    } else if (row.kind === "ledger" && type && BALANCE_SHEET_LIABILITY_TYPES.has(type)) {
-      liabilities.push(line(debit.negated()));
-    } else if (row.kind === "ledger" && type === "Equity") {
-      equity.push(line(debit.negated()));
-    } else if (row.kind === "ledger" && type && BALANCE_SHEET_EARNINGS_TYPES.has(type)) {
-      currentEarnings = currentEarnings.minus(debit);
-    } else {
-      // Credit-positive, like the right-hand side it is compared with.
-      unclassified.push(line(debit.negated()));
+      continue;
+    }
+    if (PARTY_KINDS.has(row.kind)) {
+      bySign();
+      continue;
+    }
+    const accountClass =
+      row.kind === "ledger"
+        ? classifyAccountType(row.accountType, row.id === null ? null : subTypes.get(row.id))
+        : "unknown";
+    switch (accountClass) {
+      case "asset":
+        assets.push(line(debit));
+        break;
+      case "liability":
+        liabilities.push(line(debit.negated()));
+        break;
+      case "equity":
+        equity.push(line(debit.negated()));
+        break;
+      case "income":
+      case "expense":
+        currentEarnings = currentEarnings.minus(debit);
+        break;
+      case "party":
+        bySign();
+        break;
+      default:
+        // Credit-positive, like the right-hand side it is compared with.
+        unclassified.push(line(debit.negated()));
     }
   }
 
@@ -250,5 +276,91 @@ export async function getBalanceSheet(companyId: number, asOfDate: string | unde
     unclassified: { lines: unclassified, total: unclassifiedTotal.toFixed(2) },
     difference: difference.toFixed(2),
     balanced: difference.isZero(),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// getFinancialRatios — /api/reports/ratios (wave 13, R4)
+//
+// Built on the two statements, so a ratio never disagrees with them:
+//   - income, expenses and net profit are getProfitLoss over the range
+//     (classifier, live non-optional vouchers, COALESCE(effective_date,
+//     voucher_date));
+//   - assets and liabilities are the balance sheet's totals at the range's end
+//     (closing balances including openings, banks, fixed assets and parties
+//     by side); equity is assets − liabilities (net assets) as before;
+//   - sales and cost are the sales items of live, non-optional vouchers in the
+//     range on the same date basis.
+// Before, the route matched only the exact types "Income" / "Expense" /
+// "Asset" / "Liability", read deleted and optional vouchers, summed period
+// movements of asset and liability accounts as if they were balances (no
+// openings, no banks or parties) and filtered by voucher_date.
+// ---------------------------------------------------------------------------
+export interface FinancialRatios {
+  ratios: { grossProfitMargin: number; netProfitMargin: number; currentRatio: number; debtToEquity: number };
+  underlying: {
+    totalIncome: number;
+    totalExpenses: number;
+    totalSales: number;
+    totalCost: number;
+    grossProfit: number;
+    netProfit: number;
+    totalAssets: number;
+    totalLiabilities: number;
+    totalEquity: number;
+  };
+  filters: { startDate: string | null; endDate: string | null };
+}
+
+function percentOf(numerator: Decimal, denominator: Decimal): number {
+  return denominator.isZero() ? 0 : numerator.div(denominator).times(100).toNumber();
+}
+
+export async function getFinancialRatios(
+  companyId: number,
+  startDate: string | undefined,
+  endDate: string | undefined
+): Promise<FinancialRatios> {
+  const salesConditions = [eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)];
+  if (startDate) salesConditions.push(gte(voucherBookedOnSql, startDate));
+  if (endDate) salesConditions.push(lte(voucherBookedOnSql, endDate));
+  const [profitLoss, balanceSheet, salesData] = await Promise.all([
+    getProfitLoss(companyId, startDate, endDate),
+    getBalanceSheet(companyId, endDate),
+    db
+      .select({ totalSales: salesItems.totalSales, totalCost: salesItems.totalCost })
+      .from(salesItems)
+      .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
+      .where(and(...salesConditions))
+      .execute(),
+  ]);
+  const totalIncome = toMoney(profitLoss.totalIncome);
+  const totalExpenses = toMoney(profitLoss.totalExpenses);
+  const netProfit = totalIncome.minus(totalExpenses);
+  const totalSales = sumMoney(salesData.map((sale) => sale.totalSales));
+  const totalCost = sumMoney(salesData.map((sale) => sale.totalCost));
+  const grossProfit = totalSales.minus(totalCost);
+  const totalAssets = toMoney(balanceSheet.assets.total);
+  const totalLiabilities = toMoney(balanceSheet.liabilities.total);
+  const totalEquity = totalAssets.minus(totalLiabilities);
+  return {
+    ratios: {
+      grossProfitMargin: percentOf(grossProfit, totalSales),
+      netProfitMargin: percentOf(netProfit, totalIncome),
+      currentRatio: totalLiabilities.isPositive() ? totalAssets.div(totalLiabilities).toNumber() : 0,
+      debtToEquity: totalEquity.isPositive() ? totalLiabilities.div(totalEquity).toNumber() : 0,
+    },
+    underlying: {
+      totalIncome: totalIncome.toNumber(),
+      totalExpenses: totalExpenses.toNumber(),
+      totalSales: totalSales.toNumber(),
+      totalCost: totalCost.toNumber(),
+      grossProfit: grossProfit.toNumber(),
+      netProfit: netProfit.toNumber(),
+      totalAssets: totalAssets.toNumber(),
+      totalLiabilities: totalLiabilities.toNumber(),
+      totalEquity: totalEquity.toNumber(),
+    },
+    filters: { startDate: startDate || null, endDate: endDate || null },
   };
 }

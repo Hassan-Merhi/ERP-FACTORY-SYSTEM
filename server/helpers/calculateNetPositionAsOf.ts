@@ -113,7 +113,7 @@ export async function calculateNetPositionAsOf(
     loadNetPositionParties(companyId, {
       asOf: toDate,
       customers: !isSupplierPartner,
-      suppliers: companyRow?.parentCompanyId == null,
+      suppliers: true, // ERP_NET_POSITION_INCLUDES_SUPPLIERS (netPositionParties.ts)
       factorySuppliers: false,
       employees: "erp",
       codes: "erp",
@@ -131,10 +131,9 @@ export async function calculateNetPositionAsOf(
     }
   }
 
-  // Match the live dashboard: supplier balances are delegated only by an
-  // explicit per-company parent link. A standalone ERP company still owns and
-  // reports its suppliers even when some unrelated global parent exists.
-  const shouldIncludeSuppliers = companyRow?.parentCompanyId == null;
+  // One supplier-inclusion rule (wave 13, owner decision 2), as the live
+  // dashboard: supplier payables count in the posting company.
+  const shouldIncludeSuppliers = true; // ERP_NET_POSITION_INCLUDES_SUPPLIERS (netPositionParties.ts)
 
   // SP formula: What We Have = Cash + SP-HADI-IC receivable (Hadi holds the cash on SP's behalf);
   // What We Owe = Supplier Cash Payable plus Loan/Loans balances. Customers are excluded by design.

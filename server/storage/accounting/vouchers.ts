@@ -4,6 +4,7 @@ import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import { db, pool } from "../../db";
 import * as schema from "@shared/schema";
 import type { Voucher, InsertVoucher } from "@shared/schema";
+import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
 
 /**
  * One statement line: a voucher's postings against a single account, already
@@ -305,11 +306,22 @@ export async function getVoucherEntriesByFixedAsset(
   return result.rows;
 }
 
+/**
+ * The supplier's own lines, on the balance engine's attribution (wave 13): a
+ * supplier-tagged line on a ledger account, bank or fixed asset belongs to
+ * that account, so an account statement (`ownedOnly`) never lists a line the
+ * account also counts. Without it every supplier-tagged line is returned: the
+ * unified supplier ledger and the supplier-partner reconciliation read
+ * supplier-tagged payable evidence on the SP payable accounts by design.
+ */
+const SUPPLIER_OWNED_LINE = higherPriorityTargetsAbsent("ve", "supplier_id");
+
 export async function getVoucherEntriesBySupplier(
   supplierId: number,
   companyId?: number,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  options: { ownedOnly?: boolean } = {}
 ): Promise<AccountStatementEntryRow[]> {
   const params: StatementQueryParams = [supplierId];
   let dateFilters = "";
@@ -349,6 +361,7 @@ export async function getVoucherEntriesBySupplier(
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
      WHERE ve.supplier_id = $1
+       AND ${options.ownedOnly ? SUPPLIER_OWNED_LINE : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyFilter}

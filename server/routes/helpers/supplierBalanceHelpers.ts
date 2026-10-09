@@ -1,17 +1,21 @@
 // Canonical, company-isolated supplier balance calculation.
 //
-// Supplier rows are company-owned through suppliers.company_id. A supplier may
-// be read or posted only from its owning company. The legacy parent-company
-// setting is retained solely for historical opening-balance ownership when no
-// active company context is available; it must never make an explicitly
-// unlinked company behave like a child company.
+// Supplier rows are company-owned through suppliers.company_id (NOT NULL).
+// Balances come from the one balance engine (wave 13): the opening belongs to
+// the supplier's company and each posted line to its voucher's company. The
+// legacy parent-company setting below is kept for the readers that still use
+// it (parent fallback pickers, raw-material reconciliation); it no longer
+// decides any supplier balance.
 
 import type Decimal from "decimal.js";
 import { toMoney } from "../../lib/money";
-import { loadPartyOpeningSides, partyOpeningSide, type OpeningSide } from "./partyOpeningSide";
+import { partyOpeningSide, type OpeningSide } from "./partyOpeningSide";
 import { storage } from "../../storage";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
-import { getVoucherEntriesBySupplierBatched } from "../performance/supplierVoucherEntryBatcher";
+import {
+  getSupplierEngineBalanceBatched,
+  getVoucherEntriesBySupplierBatched,
+} from "../performance/supplierVoucherEntryBatcher";
 
 let parentCompanyResolution: Promise<number> | null = null;
 
@@ -105,7 +109,7 @@ export function isSupplierVisibleToCompany(
 }
 
 export interface SupplierBalanceContextResult {
-  /** Signed balance, Cr positive (we owe the supplier): opening + Σ(credit − debit). */
+  /** Signed balance, Cr positive (we owe the supplier): the engine's closing, negated. */
   balance: number;
   /** Owned opening amount (unsigned); its side is openingBalanceSide. */
   openingBalance: number;
@@ -126,18 +130,20 @@ export interface SupplierBalanceContextResult {
     baseDebitAmount?: string | null;
     baseCreditAmount?: string | null;
   }>;
-  /** Net balance in each transaction currency: { currency: { debit, credit, net } }. */
+  /** Net balance in each transaction currency: { currency: { debit, credit, net } }, of the same lines. */
   balancesByCurrency: Record<string, { debit: number; credit: number; net: number }>;
   /** Sum of base credits minus base debits, including the owned opening balance. */
   historicalBaseBalance: number;
+  /** Always "ledger": the figures are the balance engine's (wave 13). */
+  balanceBasis: "ledger";
+  /** The company whose vouchers were read (the voucher company). */
+  voucherCompanyId: number | null;
 }
 
 export interface SupplierBalanceContextOptions {
   /**
-   * Account pickers can still provide company-scoped activity when the legacy
-   * supplier opening-balance owner is ambiguous. In that narrow read-only
-   * context, treat the unowned legacy opening balance as zero instead of
-   * making unrelated ledger accounts fail to load.
+   * Kept for callers written before wave 13; suppliers.company_id is NOT NULL,
+   * so an opening always has an owner and this no longer changes anything.
    */
   allowUnconfiguredLegacyScope?: boolean;
   /** Count only vouchers dated (COALESCE(effective_date, voucher_date)) on or before this day. */
@@ -146,7 +152,7 @@ export interface SupplierBalanceContextOptions {
   startDate?: string;
 }
 
-function emptySupplierBalance(): SupplierBalanceContextResult {
+function emptySupplierBalance(companyId: number | null): SupplierBalanceContextResult {
   return {
     balance: 0,
     openingBalance: 0,
@@ -156,6 +162,8 @@ function emptySupplierBalance(): SupplierBalanceContextResult {
     entries: [],
     balancesByCurrency: {},
     historicalBaseBalance: 0,
+    balanceBasis: "ledger",
+    voucherCompanyId: companyId,
   };
 }
 
@@ -172,15 +180,24 @@ function isoDay(value: unknown): string | null {
 }
 
 /**
- * Canonical supplier balance for a viewing company.
+ * Supplier balance for a viewing company, from the one balance engine
+ * (accounting audit wave 13, A1).
  *
- * When suppliers.company_id is present, a mismatched company receives an empty
- * result even if historical cross-company voucher references still exist. This
- * prevents legacy references from making a foreign supplier visible.
+ *   - The balance is the engine's (kind "supplier"): the supplier's opening
+ *     with its side, counted only in the supplier's own company, plus the
+ *     lines the engine attributes to it in the voucher company. A
+ *     supplier-tagged line on a ledger account, bank or fixed asset is that
+ *     account's line and is not counted here (it used to be counted twice:
+ *     once on the account, once on the supplier).
+ *   - Vouchers count from COALESCE(effective_date, voucher_date); a line
+ *     carrying both a debit and a credit is netted.
+ *   - The company filter is always applied. A subsidiary that posted to a
+ *     parent's shared supplier sees the lines it posted (owner decision 2:
+ *     the payable counts in the posting company), never the parent's opening
+ *     or the parent's lines.
  *
- * Every posted line counts as credit − debit: a line carrying both a debit and
- * a credit is netted, not dropped. The opening follows
- * suppliers.opening_balance_side (null → Cr).
+ * `entries` and `balancesByCurrency` are the same owned lines, so the
+ * per-currency view always foots to the balance's lines.
  */
 export async function getSupplierBalanceForContext(
   supplier: {
@@ -192,34 +209,16 @@ export async function getSupplierBalanceForContext(
   companyId?: number | null,
   options: SupplierBalanceContextOptions = {}
 ): Promise<SupplierBalanceContextResult> {
-  if (companyId && supplier.companyId && supplier.companyId !== companyId) {
-    return emptySupplierBalance();
-  }
+  const voucherCompanyId = companyId || supplier.companyId || null;
+  if (!voucherCompanyId) return emptySupplierBalance(null);
 
-  let ownsOpeningBalance: boolean;
-  if (supplier.companyId) {
-    ownsOpeningBalance = !companyId || supplier.companyId === companyId;
-  } else {
-    try {
-      ownsOpeningBalance = await isParentCompanyContext(companyId);
-    } catch (error) {
-      if (!(options.allowUnconfiguredLegacyScope && error instanceof ParentCompanyNotConfiguredError)) {
-        throw error;
-      }
-      ownsOpeningBalance = false;
-    }
-  }
-  const openingAmount = ownsOpeningBalance ? toMoney(supplier.openingBalance) : toMoney(0);
-  let openingBalanceSide: OpeningSide = "Cr";
-  if (supplier.openingBalanceSide !== undefined) {
-    openingBalanceSide = partyOpeningSide(supplier.openingBalanceSide);
-  } else if (!openingAmount.isZero()) {
-    openingBalanceSide = (await loadPartyOpeningSides("suppliers", [supplier.id])).get(supplier.id) ?? "Cr";
-  }
-  // Cr positive: a Dr opening (the supplier owes us) is negative.
-  const signedOpening = openingBalanceSide === "Dr" ? openingAmount.negated() : openingAmount;
-
-  const allEntries = await getVoucherEntriesBySupplierBatched(supplier.id, companyId || undefined);
+  const [party, allEntries] = await Promise.all([
+    getSupplierEngineBalanceBatched(supplier.id, voucherCompanyId, {
+      asOf: options.endDate ?? null,
+      from: options.startDate ?? null,
+    }),
+    getVoucherEntriesBySupplierBatched(supplier.id, voucherCompanyId),
+  ]);
   const entries = options.endDate
     ? allEntries.filter((entry) => {
         const day = isoDay(entry.voucherDate);
@@ -227,21 +226,15 @@ export async function getSupplierBalanceForContext(
       })
     : allEntries;
 
-  let balanceD = signedOpening;
-  let periodOpeningD = signedOpening;
-  let historicalBaseD = signedOpening;
+  // Engine amounts are debit positive; a supplier balance is Cr positive.
+  const masterOpening = toMoney(party?.masterOpening);
+  let openingBalanceSide: OpeningSide;
+  if (masterOpening.isNegative()) openingBalanceSide = "Cr";
+  else if (masterOpening.greaterThan(0)) openingBalanceSide = "Dr";
+  else openingBalanceSide = partyOpeningSide(supplier.openingBalanceSide ?? null);
+
   const byCurrency: Record<string, { debit: Decimal; credit: Decimal }> = {};
   for (const entry of entries) {
-    const net = toMoney(entry.creditAmount).minus(toMoney(entry.debitAmount));
-    balanceD = balanceD.plus(net);
-    if (options.startDate) {
-      const day = isoDay(entry.voucherDate);
-      if (day !== null && day < options.startDate) periodOpeningD = periodOpeningD.plus(net);
-    }
-    historicalBaseD = historicalBaseD
-      .plus(toMoney(entry.baseCreditAmount ?? entry.creditAmount))
-      .minus(toMoney(entry.baseDebitAmount ?? entry.debitAmount));
-
     const ccy: string = (entry.transactionCurrency as string | null) || "USD";
     const bucket = byCurrency[ccy] ?? { debit: toMoney(0), credit: toMoney(0) };
     byCurrency[ccy] = {
@@ -249,7 +242,6 @@ export async function getSupplierBalanceForContext(
       credit: bucket.credit.plus(toMoney(entry.transactionCreditAmount ?? entry.creditAmount)),
     };
   }
-
   const balancesByCurrency: Record<string, { debit: number; credit: number; net: number }> = {};
   for (const [ccy, { debit, credit }] of Object.entries(byCurrency)) {
     balancesByCurrency[ccy] = {
@@ -259,16 +251,18 @@ export async function getSupplierBalanceForContext(
     };
   }
 
-  const openingBalance = openingAmount.toNumber();
+  const openingBalance = masterOpening.abs().toNumber();
   return {
-    balance: balanceD.toNumber(),
+    balance: toMoney(party?.closing).negated().toNumber(),
     openingBalance,
     openingBalanceSide,
-    periodOpeningBalance: periodOpeningD.toNumber(),
+    periodOpeningBalance: toMoney(party?.opening).negated().toNumber(),
     hasActivity: entries.length > 0 || openingBalance !== 0,
     entries,
     balancesByCurrency,
-    historicalBaseBalance: historicalBaseD.toNumber(),
+    historicalBaseBalance: toMoney(party?.historicalBaseClosing).negated().toNumber(),
+    balanceBasis: "ledger",
+    voucherCompanyId,
   };
 }
 

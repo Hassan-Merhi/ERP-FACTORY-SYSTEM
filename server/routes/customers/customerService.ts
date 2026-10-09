@@ -5,6 +5,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { logAudit } from "../_helpers";
 import { getCustomersWithBalances } from "./customerBalanceQuery";
+import { loadCustomerLedgerEntryRows } from "../../services/accounting/balances/customerLedgerStatement";
 import { CustomerRouteError } from "./customerErrors";
 import type { CustomerAuditActor } from "./customerRequestContext";
 
@@ -79,12 +80,16 @@ export const customerService = {
     return requireCustomer(customerId, companyId);
   },
 
+  /**
+   * The customer's statement lines on the balance engine (wave 13, A3): its
+   * owned linked ledger plus its customer-tagged lines that name no other
+   * target (partyLineRules.customerOwnedLineSql), posted vouchers of this
+   * company only, dated COALESCE(effective_date, voucher_date). So opening +
+   * these lines foots to the engine balance the Customers page shows.
+   */
   async transactions(customerId: number, companyId: number, startDate?: string, endDate?: string) {
-    const customer = await requireCustomer(customerId, companyId);
-    if (customer.ledgerAccountId) {
-      return storage.getVoucherEntriesByLedger(customer.ledgerAccountId, startDate, endDate, companyId);
-    }
-    return storage.getVoucherEntriesByCustomer(customerId, startDate, endDate);
+    await requireCustomer(customerId, companyId);
+    return loadCustomerLedgerEntryRows(db, { companyId, customerId, from: startDate ?? null, to: endDate ?? null });
   },
 
   async create(companyId: number, input: unknown, actor: CustomerAuditActor) {

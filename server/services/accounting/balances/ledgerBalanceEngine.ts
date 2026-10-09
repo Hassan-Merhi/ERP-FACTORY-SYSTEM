@@ -48,6 +48,7 @@ import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { defaultOpeningSide as defaultOpeningSideOfType } from "../accountClassification";
 import { customerLinksBody, intLiteral, noNonCustomerTarget } from "./partyLineRules";
 import { loadPartyMemoLines, memoTotal, type PartyBalanceMemoLine, type MemoPartyKind } from "./unpostedMemo";
 
@@ -142,8 +143,21 @@ interface RawOpeningRow {
 
 const ZERO = new MoneyDecimal(0);
 
-/** Default side for an opening stored without one (openingBalanceResolutionRoutes rules). */
-function defaultOpeningSide(kind: BalanceRowKind): "Dr" | "Cr" {
+/**
+ * Default side for an opening stored without one. A ledger account takes the
+ * usual side of its type (wave 13, C1: Dr for assets and expenses, Cr for
+ * liabilities, equity and income — the rule the net-profit Excel and the
+ * opening-balance resolution already used); before, every sideless ledger
+ * opening was Dr, so a sideless liability or income opening counted on the
+ * wrong side. Other masters keep their record type's side (suppliers,
+ * employees and factory suppliers Cr; customers, banks and fixed assets Dr),
+ * as does a ledger account whose type the classifier does not know.
+ */
+function defaultOpeningSide(kind: BalanceRowKind, accountType: string | null): "Dr" | "Cr" {
+  if (kind === "ledger") {
+    const byType = defaultOpeningSideOfType(accountType);
+    if (byType) return byType;
+  }
   return kind === "supplier" || kind === "employee" || kind === "factorySupplier" ? "Cr" : "Dr";
 }
 
@@ -273,7 +287,7 @@ export async function loadBalanceRows(executor: DatabaseOrTransaction, scope: Ba
   for (const row of openings) {
     const amount = toMoney(row.opening_balance);
     const side = row.opening_side === "Dr" || row.opening_side === "Cr" ? row.opening_side : null;
-    const signed = (side ?? defaultOpeningSide(row.kind)) === "Cr" ? amount.negated() : amount;
+    const signed = (side ?? defaultOpeningSide(row.kind, row.account_type)) === "Cr" ? amount.negated() : amount;
     rows.set(key(row.kind, row.id), {
       kind: row.kind,
       id: row.id,

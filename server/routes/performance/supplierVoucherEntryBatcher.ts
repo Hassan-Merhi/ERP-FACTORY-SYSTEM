@@ -1,4 +1,6 @@
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import { getPartyBalances, type PartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
 
 type EntryRow = {
   __supplierId: number;
@@ -22,126 +24,149 @@ type EntryRow = {
 
 type PublicEntryRow = Omit<EntryRow, "__supplierId">;
 
-type Resolver = {
-  resolve: (rows: PublicEntryRow[]) => void;
+type Resolver<T> = {
+  resolve: (value: T) => void;
   reject: (error: unknown) => void;
 };
 
-type PendingBatch = {
+type PendingBatch<T> = {
   supplierIds: Set<number>;
-  resolvers: Map<number, Resolver[]>;
-  scheduled: boolean;
+  resolvers: Map<number, Resolver<T>[]>;
 };
 
-const pendingByCompany = new Map<string, PendingBatch>();
+/**
+ * Coalesces concurrent per-supplier reads that share a key into one load.
+ * Accounts, payables and the supplier summary request balances with
+ * Promise.all, so one query serves every supplier of the page.
+ */
+function createSupplierBatcher<T>(load: (key: string, supplierIds: number[]) => Promise<Map<number, T>>, empty: T) {
+  const pending = new Map<string, PendingBatch<T>>();
 
-function companyKey(companyId?: number): string {
-  return companyId ? `company:${companyId}` : "all-companies";
+  async function flush(key: string, batch: PendingBatch<T>): Promise<void> {
+    pending.delete(key);
+    const supplierIds = [...batch.supplierIds];
+    try {
+      const loaded = supplierIds.length === 0 ? new Map<number, T>() : await load(key, supplierIds);
+      for (const [supplierId, resolvers] of batch.resolvers) {
+        const value = loaded.get(supplierId) ?? empty;
+        for (const resolver of resolvers) resolver.resolve(value);
+      }
+    } catch (error) {
+      for (const resolvers of batch.resolvers.values()) {
+        for (const resolver of resolvers) resolver.reject(error);
+      }
+    }
+  }
+
+  return (key: string, supplierId: number): Promise<T> => {
+    let batch = pending.get(key);
+    if (!batch) {
+      const created: PendingBatch<T> = { supplierIds: new Set<number>(), resolvers: new Map() };
+      pending.set(key, created);
+      batch = created;
+      queueMicrotask(() => {
+        void flush(key, created);
+      });
+    }
+    batch.supplierIds.add(supplierId);
+    const target = batch;
+    return new Promise<T>((resolve, reject) => {
+      const resolvers = target.resolvers.get(supplierId) || [];
+      resolvers.push({ resolve, reject });
+      target.resolvers.set(supplierId, resolvers);
+    });
+  };
 }
 
-function stripInternalSupplierId(row: EntryRow) {
+function stripInternalSupplierId(row: EntryRow): PublicEntryRow {
   const { __supplierId: _supplierId, ...entry } = row;
   return entry;
 }
 
-async function flushBatch(key: string, companyId: number | undefined, batch: PendingBatch): Promise<void> {
-  pendingByCompany.delete(key);
-  const supplierIds = [...batch.supplierIds];
+/** The supplier's own lines (engine attribution): not on a ledger account, bank or fixed asset. */
+const SUPPLIER_OWNED_LINE = higherPriorityTargetsAbsent("ve", "supplier_id");
 
-  if (supplierIds.length === 0) {
-    for (const resolvers of batch.resolvers.values()) {
-      for (const resolver of resolvers) resolver.resolve([]);
-    }
-    return;
+const entryBatcher = createSupplierBatcher<PublicEntryRow[]>(async (key, supplierIds) => {
+  const companyId = Number(key);
+  const result = await pool.query(
+    `SELECT
+       ve.supplier_id                                               AS "__supplierId",
+       ve.id                                                        AS "entryId",
+       ve.voucher_id                                                AS "voucherId",
+       ve.debit_amount                                              AS "debitAmount",
+       ve.credit_amount                                             AS "creditAmount",
+       ve.narration,
+       ve.transaction_currency                                      AS "transactionCurrency",
+       ve.transaction_debit_amount                                  AS "transactionDebitAmount",
+       ve.transaction_credit_amount                                 AS "transactionCreditAmount",
+       ve.base_debit_amount                                         AS "baseDebitAmount",
+       ve.base_credit_amount                                        AS "baseCreditAmount",
+       v.voucher_number                                             AS "voucherNumber",
+       v.voucher_type                                               AS "voucherType",
+       COALESCE(v.effective_date::date, v.voucher_date::date)       AS "voucherDate",
+       v.description                                                AS "voucherDescription",
+       v.company_id                                                 AS "companyId",
+       v.currency
+     FROM voucher_entries ve
+     JOIN vouchers v ON ve.voucher_id = v.id
+     WHERE ve.supplier_id = ANY($1::int[])
+       AND ${SUPPLIER_OWNED_LINE}
+       AND v.optional = false
+       AND v.deleted_at IS NULL
+       AND v.company_id = $2
+     ORDER BY ve.supplier_id, COALESCE(v.effective_date::date, v.voucher_date::date) DESC, v.id DESC`,
+    [supplierIds, companyId]
+  );
+  const rowsBySupplier = new Map<number, PublicEntryRow[]>();
+  for (const row of result.rows as EntryRow[]) {
+    const supplierId = Number(row.__supplierId);
+    const list = rowsBySupplier.get(supplierId) ?? [];
+    list.push(stripInternalSupplierId(row));
+    rowsBySupplier.set(supplierId, list);
   }
-
-  try {
-    const params: unknown[] = [supplierIds];
-    let companyFilter = "";
-    if (companyId) {
-      params.push(companyId);
-      companyFilter = ` AND v.company_id = $${params.length}`;
-    }
-
-    const result = await pool.query(
-      `SELECT
-         ve.supplier_id                                               AS "__supplierId",
-         ve.id                                                        AS "entryId",
-         ve.voucher_id                                                AS "voucherId",
-         ve.debit_amount                                              AS "debitAmount",
-         ve.credit_amount                                             AS "creditAmount",
-         ve.narration,
-         ve.transaction_currency                                      AS "transactionCurrency",
-         ve.transaction_debit_amount                                  AS "transactionDebitAmount",
-         ve.transaction_credit_amount                                 AS "transactionCreditAmount",
-         ve.base_debit_amount                                         AS "baseDebitAmount",
-         ve.base_credit_amount                                        AS "baseCreditAmount",
-         v.voucher_number                                             AS "voucherNumber",
-         v.voucher_type                                               AS "voucherType",
-         COALESCE(v.effective_date::date, v.voucher_date::date)       AS "voucherDate",
-         v.description                                                AS "voucherDescription",
-         v.company_id                                                 AS "companyId",
-         v.currency
-       FROM voucher_entries ve
-       JOIN vouchers v ON ve.voucher_id = v.id
-       WHERE ve.supplier_id = ANY($1::int[])
-         AND v.optional = false
-         AND v.deleted_at IS NULL
-         ${companyFilter}
-       ORDER BY ve.supplier_id, COALESCE(v.effective_date::date, v.voucher_date::date) DESC, v.id DESC`,
-      params
-    );
-
-    const rowsBySupplier = new Map<number, PublicEntryRow[]>();
-    for (const row of result.rows as EntryRow[]) {
-      const supplierId = Number(row.__supplierId);
-      if (!rowsBySupplier.has(supplierId)) rowsBySupplier.set(supplierId, []);
-      rowsBySupplier.get(supplierId)!.push(stripInternalSupplierId(row));
-    }
-
-    for (const [supplierId, resolvers] of batch.resolvers) {
-      const rows = rowsBySupplier.get(supplierId) || [];
-      for (const resolver of resolvers) resolver.resolve(rows);
-    }
-  } catch (error) {
-    for (const resolvers of batch.resolvers.values()) {
-      for (const resolver of resolvers) resolver.reject(error);
-    }
-  }
-}
+  return rowsBySupplier;
+}, []);
 
 /**
- * Coalesces concurrent supplier-balance reads for the same company into one SQL
- * query. Accounts, payables, and supplier summary endpoints already request
- * balances with Promise.all, so the previous one-query-per-supplier pattern is
- * reduced to one bounded query without changing the returned entry contract.
+ * The supplier's posted lines in the voucher company, exactly the lines the
+ * balance engine attributes to it (a supplier-tagged line on a ledger account,
+ * bank or fixed asset belongs to that account). The company filter is always
+ * applied: a line belongs to its voucher's company.
  */
-export function getVoucherEntriesBySupplierBatched(supplierId: number, companyId?: number) {
-  const key = companyKey(companyId);
-  let batch = pendingByCompany.get(key);
-  if (!batch) {
-    batch = {
-      supplierIds: new Set<number>(),
-      resolvers: new Map<number, Resolver[]>(),
-      scheduled: false,
-    };
-    pendingByCompany.set(key, batch);
-  }
+export function getVoucherEntriesBySupplierBatched(supplierId: number, companyId: number) {
+  return entryBatcher(String(companyId), supplierId);
+}
 
-  batch.supplierIds.add(supplierId);
+export interface SupplierEngineWindow {
+  /** Inclusive end; omitted for everything posted. */
+  asOf?: string | null;
+  /** Inclusive start; earlier movements are carried into the opening. */
+  from?: string | null;
+}
 
-  const promise = new Promise<PublicEntryRow[]>((resolve, reject) => {
-    const resolvers = batch!.resolvers.get(supplierId) || [];
-    resolvers.push({ resolve, reject });
-    batch!.resolvers.set(supplierId, resolvers);
+const balanceBatcher = createSupplierBatcher<PartyBalance | null>(async (key, supplierIds) => {
+  const [company, asOf, from] = key.split("|");
+  const result = await getPartyBalances(db, {
+    companyId: Number(company),
+    kind: "supplier",
+    ids: supplierIds,
+    asOf: asOf || null,
+    from: from || null,
   });
+  const byId = new Map<number, PartyBalance | null>();
+  for (const party of result.parties) if (party.id !== null) byId.set(party.id, party);
+  return byId;
+}, null);
 
-  if (!batch.scheduled) {
-    batch.scheduled = true;
-    queueMicrotask(() => {
-      void flushBatch(key, companyId, batch!);
-    });
-  }
-
-  return promise;
+/**
+ * The supplier's balance from the one balance engine (kind "supplier") in the
+ * voucher company, batched like the entries above. Null when the supplier has
+ * neither a master record nor lines in the company.
+ */
+export function getSupplierEngineBalanceBatched(
+  supplierId: number,
+  companyId: number,
+  window: SupplierEngineWindow = {}
+): Promise<PartyBalance | null> {
+  return balanceBatcher(`${companyId}|${window.asOf ?? ""}|${window.from ?? ""}`, supplierId);
 }

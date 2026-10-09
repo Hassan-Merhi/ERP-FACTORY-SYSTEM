@@ -16,10 +16,13 @@ describe("Group Net Position Excel", () => {
         netAdjustments: 0,
         netPosition: 110,
       },
+      // Wave 13: paired elimination (the snapshot type gained pairs and differences).
       intercompany: {
-        mode: "already-excluded",
+        mode: "paired-elimination",
         additionalElimination: 0,
-        note: "Normal Intercompany ledger accounts are already excluded.",
+        pairs: [],
+        differences: [],
+        note: "Intercompany balances are eliminated in pairs.",
       },
       companies: [
         {

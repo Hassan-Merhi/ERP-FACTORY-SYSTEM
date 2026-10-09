@@ -25,6 +25,12 @@ import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { isSupplierPaidFreight } from "./_supplierStatementHelpers";
 import { buildLinkedSupplierGroups } from "./linkedSupplierGroups";
 import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerLines,
+  loadFactorySupplierLedgerViews,
+} from "./balance/factorySupplierLedger";
+import {
   entryNativeAmounts,
   entryStoredUsdAmounts,
   voucherEntryCurrencyColumns,
@@ -731,8 +737,26 @@ export function registerSupplierStatementRoutes(app: Express) {
       });
       // ─────────────────────────────────────────────────────────────────────────
 
+      // Primary balance (wave 13, owner decision 3): the ledger from the balance
+      // engine with its lines, the native balance per currency, and the
+      // container amounts not yet in the ledger. The container statement above
+      // and its netPayable are the operational view, kept as a labelled memo.
+      const ledgerView =
+        (await loadFactorySupplierLedgerViews(db, companyId, { ids: [supplierId] })).get(supplierId) ??
+        emptyFactorySupplierLedgerView(supplierId);
+      const ledgerLines = await loadFactorySupplierLedgerLines(
+        db,
+        companyId,
+        supplierId,
+        toMoney(ledgerView.openingBalanceUsd)
+      );
+
       res.json({
         supplier,
+        balanceBasis: ledgerView.balanceBasis,
+        // `ledger` below is the operational unified list (kept for the page); this is the ledger.
+        ledgerView: { ...ledgerView, lines: ledgerLines },
+        operationalMemoLabel: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
         statement: enrichedStatement,
         currencyGroups,
         obCommissions,
@@ -752,7 +776,11 @@ export function registerSupplierStatementRoutes(app: Express) {
           totalObCommissions: totalObCommissions.toFixed(2),
           totalPayments: totalPayments.toFixed(2),
           totalBrokerCommission: totalBrokerCommission.toFixed(2),
-          netPayable: totalNetPayableUsd.toFixed(2),
+          // The ledger balance (USD base, Cr positive); the operational figure beside it.
+          netPayable: ledgerView.ledgerBalanceUsd,
+          ledgerBalance: ledgerView.ledgerBalanceUsd,
+          notInLedgerTotal: ledgerView.notInLedger.total,
+          operationalNetPayable: totalNetPayableUsd.toFixed(2),
           totalOwed: totalValue.plus(totalDirectCommissions).toFixed(2),
         },
       });

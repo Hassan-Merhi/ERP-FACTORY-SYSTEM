@@ -438,8 +438,12 @@ describe("supplier rules", () => {
     expect(result).toMatchObject({ balance: -240, openingBalance: 500, openingBalanceSide: "Dr" });
   });
 
+  // Wave 13: the balance is the balance engine's, which nets every line in SQL
+  // (voucher_entries_single_side refuses new mixed lines, so the engine's
+  // netting is covered by wave10-party-balance-engine); the per-currency view
+  // still nets the supplier's own lines. This test used to drive the balance
+  // from mocked entries.
   it("nets a legacy line that carries both a debit and a credit", async () => {
-    // voucher_entries_single_side refuses new mixed lines; legacy rows predate it.
     vi.mocked(getVoucherEntriesBySupplierBatched).mockResolvedValueOnce([
       { debitAmount: "60.00", creditAmount: "20.00" },
       { debitAmount: "0", creditAmount: "100.00" },
@@ -449,8 +453,9 @@ describe("supplier rules", () => {
       erpCompanyId
     );
     // 100 − (60 − 20); the pure-side rule dropped the mixed line and said 100.
-    expect(result.balance).toBe(60);
-    expect(result.historicalBaseBalance).toBe(60);
+    expect(result.balancesByCurrency.USD.net).toBe(60);
+    // The balance itself is the engine's: −500 Dr opening + 200 + 60 credits.
+    expect(result.balance).toBe(-240);
   });
 });
 

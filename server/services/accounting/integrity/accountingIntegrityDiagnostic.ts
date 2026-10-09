@@ -15,7 +15,7 @@ import { sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-import { CANONICAL_ACCOUNT_TYPES } from "../accountClassification";
+import { CANONICAL_ACCOUNT_TYPES, classifyAccountType } from "../accountClassification";
 import { LEDGER_GUARD_CONSTRAINTS } from "../ledgerIntegrityGuard";
 import {
   VOUCHER_BALANCE_GUARD_TRIGGERS,
@@ -431,16 +431,27 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
   );
 
   // 8. Chart of accounts classification.
-  const accounts = await rows<{ id: number; code: string; name: string; account_type: string }>(sql`
-    SELECT id, code, name, account_type FROM ledger_accounts WHERE company_id = ${companyId} AND deleted_at IS NULL
+  // Wave 13: flagged only when the shared classifier cannot class the type
+  // (sub type included), so legacy spellings every engine reads (COGS,
+  // Revenue, Current Asset, mis-cased types) are no longer reported.
+  const accounts = await rows<{
+    id: number;
+    code: string;
+    name: string;
+    account_type: string;
+    sub_type: string | null;
+  }>(sql`
+    SELECT id, code, name, account_type, sub_type FROM ledger_accounts WHERE company_id = ${companyId} AND deleted_at IS NULL
   `);
-  const nonCanonical = accounts.filter((account) => !CANONICAL_ACCOUNT_TYPES.has(account.account_type));
+  const nonCanonical = accounts.filter(
+    (account) => classifyAccountType(account.account_type, account.sub_type) === "unknown"
+  );
   checks.push(
     check(
       "non_canonical_account_types",
       nonCanonical.length ? "fail" : "pass",
       nonCanonical.length,
-      "Accounts whose type is not one the reports recognise (for example 'EXPENSE' or 'LIABILITY'); they are missed or misclassified by every balance engine.",
+      "Accounts whose type the shared account classifier does not know (neither the type nor the sub type is an asset, liability, equity, income, expense or party type); every balance engine leaves them unclassified.",
       nonCanonical
     )
   );

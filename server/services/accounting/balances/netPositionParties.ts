@@ -38,7 +38,7 @@
  * `notInLedger` section: shown, labelled, never added to What We Have / What
  * We Owe.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { employees } from "@shared/schema";
 
 import { db } from "../../../db";
@@ -79,6 +79,17 @@ export interface NotInLedgerSection {
 
 export const NET_POSITION_NOT_IN_LEDGER_LABEL =
   "Not yet in the ledger — operational amounts shown for information, not included in the net position";
+
+/**
+ * One supplier-inclusion rule for every net position (wave 13, owner decision
+ * 2): ERP supplier payables always count in the company whose vouchers posted
+ * them (the voucher-company rule of wave 10). A subsidiary's live, Excel,
+ * monthly and dated net positions carry the supplier lines it posted, including
+ * lines on a parent's shared supplier, and the group sums each company once.
+ * Neither companies.parent_company_id nor the global parentCompanyId setting
+ * removes them any more. (The factory net position uses factory suppliers.)
+ */
+export const ERP_NET_POSITION_INCLUDES_SUPPLIERS = true;
 
 export interface NetPositionPartyOptions {
   /** As-of date (inclusive); null for everything posted. */
@@ -229,10 +240,31 @@ export async function loadNetPositionParties(
   }
 
   if (supplierResult) {
+    // A supplier of another company this company posted to (owner decision 2)
+    // has no master row here: show it under its own name and code.
+    const sharedIds = supplierResult.parties
+      .filter((party) => party.id !== null && party.code === null)
+      .map((party) => party.id as number);
+    const sharedMasters = new Map<number, { name: string; code: string }>();
+    if (sharedIds.length > 0) {
+      const rows = await db.execute<{ id: number; legal_name: string; code: string }>(
+        sql`SELECT id, legal_name, code FROM suppliers WHERE id IN (${sql.join(
+          sharedIds.map((id) => sql`${id}`),
+          sql`, `
+        )})`
+      );
+      for (const row of rows.rows) sharedMasters.set(Number(row.id), { name: row.legal_name, code: row.code });
+    }
     for (const party of supplierResult.parties) {
       const owed = round2(-netPositionPartyValue(party));
       if (Math.abs(owed) < 0.01) continue;
-      const base = { name: party.name, code: party.code ?? "", partyKind: "supplier" as const, partyId: party.id };
+      const shared = party.id !== null ? sharedMasters.get(party.id) : undefined;
+      const base = {
+        name: shared?.name ?? party.name,
+        code: shared?.code ?? party.code ?? "",
+        partyKind: "supplier" as const,
+        partyId: party.id,
+      };
       if (owed > 0) onUs.push({ ...base, value: owed, category: "Supplier" });
       else forUs.push({ ...base, value: -owed, category: "Supplier Overpayment" });
     }

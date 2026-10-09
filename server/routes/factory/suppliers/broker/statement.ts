@@ -13,6 +13,12 @@ import { buildSafeFilename, contentDisposition } from "../../../../lib/contentDi
 import { requireAuth } from "../../../../auth";
 import {} from "@shared/schema";
 import { buildBrokerStatement } from "./_helpers";
+import { db } from "../../../../db";
+import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerViews,
+} from "../balance/factorySupplierLedger";
 import { MoneyDecimal, toMoney, type MoneyInput } from "../../../../lib/money";
 
 /** A statement amount as a number for a worksheet cell. */
@@ -30,7 +36,20 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
       const includeOtw = req.query.includeOtw === "true";
       const data = await buildBrokerStatement(brokerId, companyId, includeOtw);
       if (!data) return res.status(404).json({ message: "Supplier not found" });
-      return res.json(data);
+      // Ledger balances (wave 13, owner decision 3) of the broker and its linked
+      // suppliers beside the operational currency ledgers, which stay a memo.
+      const ids = [data.supplier.id, ...data.linkedSuppliers.map((linked) => linked.id)];
+      const views = await loadFactorySupplierLedgerViews(db, companyId, { ids });
+      const viewOf = (id: number) => views.get(id) ?? emptyFactorySupplierLedgerView(id);
+      return res.json({
+        ...data,
+        balanceBasis: "ledger",
+        ledgerView: {
+          broker: viewOf(data.supplier.id),
+          linkedSuppliers: data.linkedSuppliers.map((linked) => ({ name: linked.name, ...viewOf(linked.id) })),
+        },
+        operationalMemoLabel: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+      });
     } catch (err: unknown) {
       logger.error("Broker statement error:", { error: err });
       return res.status(500).json({ message: getErrorMessage(err) });

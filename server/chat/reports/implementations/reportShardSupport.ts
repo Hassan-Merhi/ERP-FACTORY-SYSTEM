@@ -32,3 +32,14 @@ export function profitAndLossAccountTypesSql() {
     sql`, `
   );
 }
+
+/**
+ * A list for `LOWER(TRIM(la.account_type)) IN (...)`: every type of the given
+ * classifier classes (wave 13: no exact-string type filters in the shards).
+ */
+export function accountTypesOfClassSql(...classes: Parameters<typeof accountTypeNamesOf>) {
+  return sql.join(
+    accountTypeNamesOf(...classes).map((name) => sql`${name}`),
+    sql`, `
+  );
+}

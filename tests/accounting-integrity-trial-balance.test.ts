@@ -65,9 +65,10 @@ beforeAll(async () => {
     [assetId, "40.00", "0"],
     [null, "0", "40.00"],
   ]);
-  // Lower-case type the reports do not recognise.
+  // A type the shared classifier does not know (wave 13: a mis-cased 'EXPENSE'
+  // is classified as an expense and is no longer flagged).
   await pool.query(
-    `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, $3, 'EXPENSE')`,
+    `INSERT INTO ledger_accounts (company_id, code, name, account_type) VALUES ($1, $2, $3, 'Suspense Bucket')`,
     [ctx.companyId, `${TEST_PREFIX}-BADTYPE`, `${TEST_PREFIX} Bad Type`]
   );
 }, 120000);

@@ -7,8 +7,10 @@
 import type { Express } from "express";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
-import { inventory, stockItems, purchaseOrders, customers, customerBalances, users, aiActionLog } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { inventory, stockItems, purchaseOrders, users, aiActionLog } from "@shared/schema";
+import { sumMoney, toMoney } from "../../lib/money";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { eq, and } from "drizzle-orm";
 import { requireAIActionPermission } from "../../lib/aiActionPermission";
 
 export function registerChatbotAlertRoutes(app: Express) {
@@ -59,30 +61,29 @@ export function registerChatbotAlertRoutes(app: Express) {
         .from(purchaseOrders)
         .where(and(eq(purchaseOrders.companyId, companyId), eq(purchaseOrders.status, "Open")));
 
-      // Customer receivables (overdue balances > 0)
-      const customerBalanceRows = await db
-        .select({
-          customerId: customerBalances.customerId,
-          totalDebit: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS NUMERIC)), 0)`,
-          totalCredit: sql<string>`COALESCE(SUM(CAST(${customerBalances.creditAmount} AS NUMERIC)), 0)`,
-        })
-        .from(customerBalances)
-        .where(eq(customerBalances.companyId, companyId))
-        .groupBy(customerBalances.customerId);
-
-      const customerRows = await db
-        .select({ id: customers.id, legalName: customers.legalName })
-        .from(customers)
-        .where(eq(customers.companyId, companyId));
-      const custMap = new Map(customerRows.map((c) => [c.id, c.legalName]));
-
-      const overdueCustomers = customerBalanceRows
-        .map((cb) => {
-          const balance = parseFloat(cb.totalDebit) - parseFloat(cb.totalCredit);
-          return { customerId: cb.customerId, name: custMap.get(cb.customerId) || "Unknown", balance };
-        })
-        .filter((c) => c.balance > 0.01)
-        .slice(0, 10);
+      // Customer receivables from the one balance engine (wave 13, A4): the
+      // ledger balance of each customer of this company; amounts not yet in the
+      // ledger are reported beside it, never added in.
+      const { parties: customerParties } = await getPartyBalances(db, { companyId, kind: "customer", memo: true });
+      const receivables = customerParties
+        .filter((party) => party.id !== null && !party.deleted)
+        .map((party) => ({
+          customerId: party.id!,
+          name: party.name || "Unknown",
+          exact: toMoney(party.closing),
+          notInLedger: toMoney(party.memoTotal),
+        }));
+      const overdueCustomers = receivables
+        .filter((customer) => customer.exact.greaterThan(0.01))
+        .sort((a, b) => b.exact.comparedTo(a.exact))
+        .slice(0, 10)
+        .map((customer) => ({
+          customerId: customer.customerId,
+          name: customer.name,
+          balance: customer.exact.toNumber(),
+          notInLedger: customer.notInLedger.toNumber(),
+        }));
+      const receivablesNotInLedger = sumMoney(receivables.map((customer) => customer.notInLedger)).toNumber();
 
       // Pending payrolls (DRAFT status in factory_payrolls)
       let pendingPayrolls: unknown[] = [];
@@ -106,6 +107,7 @@ export function registerChatbotAlertRoutes(app: Express) {
         lowStock: lowStock.slice(0, 10),
         openPOs: openPOs.slice(0, 10),
         overdueCustomers,
+        receivablesNotInLedger,
         pendingPayrolls,
       });
     } catch (_error: unknown) {

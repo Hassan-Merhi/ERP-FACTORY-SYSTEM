@@ -4,6 +4,7 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { getCustomersWithBalances } from "../customers/customerBalanceQuery";
+import { loadCustomerLedgerEntryRows } from "../../services/accounting/balances/customerLedgerStatement";
 import { userCompanyRoles, insertCustomerSchema, ledgerAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
@@ -144,22 +145,15 @@ export function registerPosCustomerRoutes(app: Express): void {
       if (!customer) return res.status(404).json({ message: "Customer not found" });
       if (customer.companyId !== companyId) return res.status(403).json({ message: "Access denied" });
 
+      // The customer's lines on the balance engine (wave 13, A3), this company
+      // only, so the statement foots to the balance the POS customer list shows.
       const { startDate, endDate } = req.query;
-      let transactions = [];
-      if (customer.ledgerAccountId) {
-        transactions = await storage.getVoucherEntriesByLedger(
-          customer.ledgerAccountId,
-          startDate as string | undefined,
-          endDate as string | undefined,
-          companyId
-        );
-      } else {
-        transactions = await storage.getVoucherEntriesByCustomer(
-          customerId,
-          startDate as string | undefined,
-          endDate as string | undefined
-        );
-      }
+      const transactions = await loadCustomerLedgerEntryRows(db, {
+        companyId,
+        customerId,
+        from: typeof startDate === "string" ? startDate : null,
+        to: typeof endDate === "string" ? endDate : null,
+      });
 
       res.json(transactions);
     } catch (error: unknown) {
