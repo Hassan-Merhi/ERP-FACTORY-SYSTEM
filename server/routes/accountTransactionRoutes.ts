@@ -266,10 +266,8 @@ export function registerAccountTransactionRoutes(app: Express) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
   };
-  app.get(
-    "/api/accounts/fixed-asset/:id/transactions",
-    requireAuth,
-    (req, res) => readAgentAssetTransactions(req, res)
+  app.get("/api/accounts/fixed-asset/:id/transactions", requireAuth, (req, res) =>
+    readAgentAssetTransactions(req, res)
   );
   app.get(
     "/api/factory/agents/fixed-asset/:id/transactions",
