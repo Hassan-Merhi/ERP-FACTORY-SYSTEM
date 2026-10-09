@@ -51,7 +51,11 @@ export function useAgentLedger(
     enabled: !!selectedCompany,
   });
 
-  const accountTypeUrl = selectedAccount ? (selectedAccount.type || "").toLowerCase().replace(" ", "-") : null;
+  const accountTypeUrl = selectedAccount
+    ? selectedAccount.type === "fixedAsset"
+      ? "fixed-asset"
+      : (selectedAccount.type || "").toLowerCase().replace(/[\s_]+/g, "-")
+    : null;
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: selectedAccount
       ? [
