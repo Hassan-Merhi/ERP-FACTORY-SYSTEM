@@ -549,7 +549,7 @@ export function StockEntryTab({ showHistory = false, onOpenHistory }: StockEntry
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
       toast({ title: "Stock Entry Recorded", description: `${totalQty} bale(s) added to inventory.` });
-      printLabels(data.bales, cart, baleProducts, selectedLogoId, modeApiRequest, toast, preOpenedWindowsRef);
+      printLabels(data.bales, cart, baleProducts, selectedLogoId, modeApiRequest, toast, preOpenedWindowsRef, data.autoPriorityAllocations ?? []);
       setCart([]);
       setProductionPositionByProduct({});
       setConfirmDialogOpen(false);
