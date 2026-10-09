@@ -7,7 +7,7 @@
  * uses, and writes `stock_count` movements that reference the session. Nothing writes
  * inventory without a movement.
  */
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   locations,
   retailBrands,
@@ -16,6 +16,7 @@ import {
   retailStockCountEvents,
   retailStockCountLines,
   retailStockCountSessions,
+  retailStockMovements,
   retailVariantInventory,
   users,
 } from "@shared/schema";
@@ -728,6 +729,34 @@ export async function finalizeRetailStockCount(input: {
       const countedQuantity = toNumber(line.countedQuantity);
       const expectedQuantity = toNumber(line.expectedQuantity);
       const stock = await lockInventoryRow(tx, input.companyId, line.variantId, session.locationId);
+      // A post-count sale, transfer or return must never be undone by writing the
+      // stale physical quantity. Stock writers take this same inventory row lock.
+      if (!line.countedAt) {
+        throw new RetailStockCountConflictError(
+          "Count timestamp is missing. Recount this line before finalizing.",
+          "STOCK_COUNT_RECOUNT_REQUIRED",
+          { lineId: line.id }
+        );
+      }
+      const [laterMovement] = await tx
+        .select({ id: retailStockMovements.id })
+        .from(retailStockMovements)
+        .where(
+          and(
+            eq(retailStockMovements.companyId, input.companyId),
+            eq(retailStockMovements.locationId, session.locationId),
+            eq(retailStockMovements.variantId, line.variantId),
+            gte(retailStockMovements.createdAt, line.countedAt)
+          )
+        )
+        .limit(1);
+      if (laterMovement) {
+        throw new RetailStockCountConflictError(
+          "Stock moved after this line was counted. Recount the line before finalizing.",
+          "STOCK_COUNT_RECOUNT_REQUIRED",
+          { lineId: line.id, variantId: line.variantId }
+        );
+      }
       const outcome = finalizeRetailStockCountLine({
         expectedQuantity,
         countedQuantity,
