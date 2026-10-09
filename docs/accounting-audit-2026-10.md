@@ -705,3 +705,59 @@ HIGH:
 - **Wave 14, factory and currency completeness:** factory POS at a confirmed rate with full credit-sale revenue; commission and legacy container payables journalled; date-aware factory FX; normalization trigger installer; exchange-rate route restricted and audited; reviewed run of the wave 6 FX repair.
 - **Wave 15, perpetual readiness:** close the before-cut-over container and voucher-restore gaps, conserve value on every transfer path, bale-mirror refusals, complete the as-of replay; on production, decide the orphaned-location stock (21.4M) and zero-quantity values, run the reviewed bale re-cost, then the opening plan and reconciliation — only then consider setting `PERPETUAL_INVENTORY_POSTING_READY = true`.
 - **Deployment, independent of the waves:** none of waves 1–11 run in production. The live plug writer and automatic FX revaluation stop only when this branch (or its wave 1 and wave 9 parts) is merged and deployed.
+
+## 9. Production readiness for the perpetual cut-over (read-only, 2026-10-09)
+
+Measured read-only, one company scope per query, aggregates only. Production runs a build without this branch's waves, so these figures are the starting point. `gl_inventory_cutovers` does not exist in production yet (the branch creates it at boot).
+
+### Blockers by company
+
+| Company | Blocker | Figure | Resolved by |
+|---|---|---|---|
+| 1 COMP001 | Stock at 66 location ids that no longer exist (55 offloads still point at them) | 13,493 rows, 20,109,842.66 | Readiness resolution tool (restore as archived, or write off) |
+| 1 | Value at zero quantity | 877 rows, 374,329.67 | Same tool |
+| 8 HMDKIN | Stock at 5 missing location ids (nothing references them) | 939 rows, 1,288,190.03 | Same tool |
+| 8 | Value at zero quantity | 20 rows, 1,056.88 | Same tool |
+| 9 MALI | Value at zero quantity | 1 row, 75.34 | Same tool |
+| 17 JNAH | Value at zero quantity | 2 rows, 111.93 | Same tool |
+| 12 HMDINTT (factory) | Finished goods at catalogue price × kg, no bale linked to a mix | about 9.99M (4,889 held + 3,127 sold not invoiced) | Reviewed bale re-cost (preview, then Owner apply) |
+| 12 | Legacy EUR/AUD lines (native amount in USD columns) | 462 lines; 112 have a dated factory rate on or before their voucher date, 350 do not | Wave 6 repair with dated rates — **dated EUR/AUD rates back to February 2026 must be entered first** |
+| 12 | Vouchers dated in the future | 2 EUR journals (2026-10-13) | Re-date, or set the cut-over after them |
+| All | Plug writer and missing guards still live | equity_adjustment_* rewritten 2026-10-08/09 (company 1: −6,375,220.83) | Deploying this branch |
+
+No company has negative-quantity or negative-value rows, and no stock voucher lacks its stock document.
+
+### Warnings
+
+- Two-sided unbalanced Mixed vouchers (history, cannot be re-saved without balancing): company 1: 94, 8: 26, 9: 8, 17: 2. One-sided stock vouchers: 1: 22, 8: 6, 9: 5.
+- Duplicated customer openings on linked ledger accounts: 1: 493,972.42 (3), 8: 52,230 (1), 9: 384.26 (1), 10: 4,400 (1).
+- Lines to another company's or hard-deleted accounts: company 1: 8 into company 13 accounts, 11 to hard-deleted accounts; company 8: 4 (account 918); company 12: 2, plus 13 with no target.
+- Vouchers with no lines: 1: 434, 8: 50, 10: 32, 9: 17, 12: 3.
+- Company 1: 201 items with unit "BL" share codes with the factory catalogue but are not bale-mirror items (the predicate needs unit BALE) — ordinary stock.
+- Company 1: 55 POs with no voucher (2,217,099.10), all on offloaded containers.
+- Company 9: automatic FX revaluation still posting (8 active vouchers, latest 2026-09-16) until the branch is deployed.
+- Company 12: 48 containers carry 45,500 USD commission with no FACTORY-COMM journal (legacy, listed only); 39 containers have no FACTORY-IMPORT journal; 5 PENDING containers.
+- No closed fiscal periods in any company.
+
+### Opening figures today (before any resolution)
+
+| Company | Inventory (non-deleted locations, total_value) | Goods in transit (POs before 2026-11-01, container not offloaded) |
+|---|---|---|
+| 1 | 2,855,050.33 (about 22.96M if every missing location is restored) | 3,982,413.39 (89 POs) |
+| 8 | 480,101.06 | 1,132,160.92 (22) |
+| 9 | 124,120.98 | 487,466.37 (12) |
+| 17 | 125,091.11 | 0 |
+| 7 | 1,930.51 | 143,941.88 (3) |
+| 19 | 0 | 114,430.58 (3) |
+| 12 factory | Raw material 654,451.34; WIP 89,611.05 (27 open mixes, all with USD rates); finished goods about 9.99M before re-cost | — |
+
+Company 10 (supplier partner) and 13 (properties) have no perpetual stock cut-over.
+
+### Order of operations before turning the switch on
+
+1. Merge and deploy the branch (stops the plug writer and FX revaluation; installs the guards and the cut-over table).
+2. Factory: enter dated EUR/AUD rates back to February 2026; run the wave 6 repair plan, review, apply; run the bale re-cost preview, review, apply; re-date or account for the two future-dated journals.
+3. ERP companies: run the readiness resolution preview per company; choose restore or write-off per missing location; write off anomalous values; apply.
+4. Run GET /api/accounting/perpetual-inventory/readiness — no blockers listed.
+5. Opening plan per company, review, apply (cut-over date on the first of a month with no later-dated documents).
+6. Run the reconciliation; only then set `PERPETUAL_INVENTORY_POSTING_READY = true`.
