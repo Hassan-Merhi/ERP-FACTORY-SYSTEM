@@ -382,7 +382,7 @@ export function RemoveFromStockTab() {
 
   const removeMutation = useMutation({
     mutationFn: async () => {
-      const res = await modeApiRequest("POST", "/api/factory/bales/bulk-remove", {
+      const res = await modeApiRequest("POST", "/api/factory/stock-entry/remove", {
         baleIds: Array.from(selectedBaleIds),
         supervisorUsername,
         supervisorPassword,
@@ -395,7 +395,7 @@ export function RemoveFromStockTab() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({ title: "Success", description: `Removed ${data.removedCount} bale(s) from stock.` });
+      toast({ title: "Success", description: `Removed ${data.removed} bale(s) from stock.` });
       setSelectedBaleIds(new Set());
       setRemoveDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
