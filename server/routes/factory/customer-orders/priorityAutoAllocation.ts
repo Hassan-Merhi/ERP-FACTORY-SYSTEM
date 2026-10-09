@@ -16,6 +16,7 @@ import {
 import { recalculateOrderTotals } from "../_helpers";
 import { recalculateOrderTotalsForScannedArticle } from "./bale-scanning/incrementalTotals";
 import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy";
+import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import {
@@ -129,8 +130,13 @@ export async function allocateAutomaticPriorityBaleTx(
   const snapshot = await getProformaCapacitySnapshot(tx, {
     companyId, proformaId: target.proformaId, currentOrderId: target.orderId,
   });
-  const article = snapshot?.articles.find((a) => a.normalizedArticleCode === normalizeLoadingArticleCode(articleCode));
-  if (!article?.isOnProforma || article.remainingQty < 1) return null;
+  // Use the same authoritative per-loading decision as the manual scanner.
+  // Never fall back to a proforma's global capacity or bypass a full article.
+  if (!snapshot) return null;
+  const finalCapacityDecision = evaluateProformaArticleCapacity(
+    snapshot, articleCode, 1, "per_loading"
+  );
+  if (!finalCapacityDecision.allowed) return null;
   const duplicate = firstRow(await tx.execute(sql`
     SELECT cob.id FROM customer_order_bales cob
       JOIN customer_orders co ON co.id = cob.order_id
