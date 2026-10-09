@@ -159,7 +159,7 @@ export default function FactoryBaleRelabeling() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!applyResult) return;
     const labels: LabelData[] = applyResult.items.map((item) => ({
       referenceNumber: item.newRef,
@@ -168,6 +168,27 @@ export default function FactoryBaleRelabeling() {
       approxWeightKg: item.weightKg || "0",
       productName: item.productName || "",
     }));
+
+    try {
+      for (const label of labels) {
+        const response = await factoryApiRequest(
+          "POST", "/api/factory/customer-orders/loading-list/automatic-print-preflight",
+          { referenceNumber: label.referenceNumber }
+        );
+        if (!response.ok) throw new Error("Could not prepare priority label");
+        const result = (await response.json()) as {
+          priorityAllocation?: { color: string; orderId: number; priority: number } | null;
+        };
+        if (result.priorityAllocation) {
+          label.priorityColor = result.priorityAllocation.color;
+          label.priorityOrderId = result.priorityAllocation.orderId;
+          label.priorityNumber = result.priorityAllocation.priority;
+        }
+      }
+    } catch (error) {
+      toast({ title: "Priority printing failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
+    }
 
     prefetchBannersForPrint();
     let opened = 0;
