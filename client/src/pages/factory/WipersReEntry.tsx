@@ -48,6 +48,7 @@ import type { CartItem, CreatedBale } from "./wipersreentry/types";
 import { exportCreatedBalesWorkbook } from "./wipersreentry/exportWorkbook";
 import { isWipers, isWipersBale } from "./wipersreentry/utils";
 import { buildLabelData, printLabelsInBrowser } from "./wipersreentry/printUtils";
+import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { productMatchesSearch } from "@shared/factoryProductSearch";
 import type { FactoryMyAccess } from "@shared/apiTypes";
 export default function WipersReEntry() {
@@ -244,25 +245,12 @@ export default function WipersReEntry() {
     setDesignPickerOpen(true);
   };
 
-  const preparePriorityLabels = async (): Promise<LabelData[]> => {
-    const labels = buildLabelData(createdBales || []);
-    for (const label of labels) {
-      const response = await modeApiRequest(
-        "POST", "/api/factory/customer-orders/loading-list/automatic-print-preflight",
-        { referenceNumber: label.referenceNumber }
-      );
-      if (!response.ok) throw new Error("Could not verify priority before printing");
-      const result = (await response.json()) as {
-        priorityAllocation?: { color: string; orderId: number; priority: number } | null;
-      };
-      if (result.priorityAllocation) {
-        label.priorityColor = result.priorityAllocation.color;
-        label.priorityOrderId = result.priorityAllocation.orderId;
-        label.priorityNumber = result.priorityAllocation.priority;
-      }
-    }
-    return labels;
-  };
+  const preparePriorityLabels = (): Promise<LabelData[]> =>
+    preparePriorityPrintLabels(
+      buildLabelData(createdBales || []),
+      modeApiRequest,
+      (createdBales || []).map((bale) => bale.id)
+    );
 
   const handlePrint = async (format: "A4" | "A5" | "sticker") => {
     if (!createdBales || createdBales.length === 0) return;
@@ -305,7 +293,7 @@ export default function WipersReEntry() {
       setPendingLabels(labels);
       setDesignPickerOpen(true);
     } else {
-      openBrowserPrint(labels, paperFormat === "A4" ? "A4" : "sticker");
+      openBrowserPrint(labels, paperFormat === "A4" ? "A4" : "A5");
     }
   };
 
