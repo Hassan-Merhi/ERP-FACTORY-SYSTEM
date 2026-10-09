@@ -589,11 +589,22 @@ export default function ItemMarketAnalysis() {
         <div className="flex items-center gap-2 border-b px-4 py-3">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <div className="font-medium">Item performance</div>
-          <div className="ml-auto text-xs text-muted-foreground">
+          <div className="ml-auto hidden text-xs text-muted-foreground lg:block">
             {multiCompany
               ? "Items are matched by code · expand Companies to compare each company"
               : "Historical item performance for this company"}
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="ml-auto shrink-0 lg:ml-0"
+            onClick={handleExportExcel}
+            disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+            data-testid="button-item-market-export-excel-table"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {isExporting ? "Exporting..." : "Export Excel"}
+          </Button>
         </div>
         <div className="overflow-x-auto">
           <Table>
