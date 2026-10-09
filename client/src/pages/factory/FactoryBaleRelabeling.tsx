@@ -37,6 +37,7 @@ import {
   type LabelData,
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
+import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 
 import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
@@ -169,22 +170,9 @@ export default function FactoryBaleRelabeling() {
       productName: item.productName || "",
     }));
 
+    let preparedLabels: LabelData[];
     try {
-      for (const label of labels) {
-        const response = await factoryApiRequest(
-          "POST", "/api/factory/customer-orders/loading-list/automatic-print-preflight",
-          { referenceNumber: label.referenceNumber }
-        );
-        if (!response.ok) throw new Error("Could not prepare priority label");
-        const result = (await response.json()) as {
-          priorityAllocation?: { color: string; orderId: number; priority: number } | null;
-        };
-        if (result.priorityAllocation) {
-          label.priorityColor = result.priorityAllocation.color;
-          label.priorityOrderId = result.priorityAllocation.orderId;
-          label.priorityNumber = result.priorityAllocation.priority;
-        }
-      }
+      preparedLabels = await preparePriorityPrintLabels(labels, factoryApiRequest);
     } catch (error) {
       toast({ title: "Priority printing failed", description: getErrorDetails(error).message, variant: "destructive" });
       return;
@@ -195,9 +183,9 @@ export default function FactoryBaleRelabeling() {
     const formatsToOpen = Array.from(printFormats);
     for (const fmt of formatsToOpen) {
       let html: string;
-      if (fmt === "A4") html = generateCombinedLabelsHtml(labels, designColor);
-      else if (fmt === "A5") html = generateA5LabelsHtml(labels);
-      else html = generateStickerLabelsHtml(labels);
+      if (fmt === "A4") html = generateCombinedLabelsHtml(preparedLabels, designColor);
+      else if (fmt === "A5") html = generateA5LabelsHtml(preparedLabels);
+      else html = generateStickerLabelsHtml(preparedLabels);
 
       const win = window.open("", "_blank");
       if (!win) {
