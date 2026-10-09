@@ -219,6 +219,17 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect((await baleStatus(unusedBale.id)).status).toBe("DELETED");
   });
 
+  it("generic restore refuses to recreate physical stock after a canonical debit", async () => {
+    const restore = await agent.post(
+      `/api/deleted-items/factoryBale/${unusedBale.id}/restore`
+    );
+    expect(restore.status).toBe(409);
+    expect(String(restore.body.message)).toMatch(/inventory|stock re-entry/i);
+    expect((await baleStatus(unusedBale.id)).status).toBe("DELETED");
+    expect(await inventoryQty()).toBe(0);
+    expect(await removedMovements()).toBe(2);
+  });
+
   it("cannot resurrect a physically deleted bale or bypass reversal through REMOVED", async () => {
     const revive = await agent.patch(`/api/factory/bales/${allocatedBale.id}/status`)
       .send({ status: "IN_STOCK" });
