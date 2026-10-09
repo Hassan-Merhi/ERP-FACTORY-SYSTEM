@@ -1,3 +1,4 @@
+import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState } from "react";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { getApiRequest } from "@/lib/factoryApi";
@@ -117,7 +118,7 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
 
   const handleDoPrint = async () => {
     if (reprintBales.length === 0) return;
-    const labels: LabelData[] = reprintBales.map((row) => ({
+    let labels: LabelData[] = reprintBales.map((row) => ({
       referenceNumber: row.bale.referenceNumber || row.bale.baleCode || "",
       articleCode: row.product?.articleCode || row.bale.articleCode || row.bale.category || "",
       pieces: row.bale.quantity || 1,
@@ -125,22 +126,17 @@ export function useFactoryLocationReprint(selectedLocation: Location | null) {
       productName: row.bale.productName || row.product?.name || row.bale.category || "",
     }));
 
-    for (const [index, row] of reprintBales.entries()) {
-      try {
+    try {
+      labels = await preparePriorityPrintLabels(
+        labels, modeApiRequest, reprintBales.map((row) => row.bale.id)
+      );
+      for (const row of reprintBales) {
         const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-        if (!response.ok) throw new Error("Could not prepare reprint");
-        const result = (await response.json()) as {
-          priorityAllocation?: { color: string; orderId: number; priority: number } | null;
-        };
-        if (result.priorityAllocation) {
-          labels[index].priorityColor = result.priorityAllocation.color;
-          labels[index].priorityOrderId = result.priorityAllocation.orderId;
-          labels[index].priorityNumber = result.priorityAllocation.priority;
-        }
-      } catch (error) {
-        toast({ title: "Reprint preparation failed", description: errorMessage(error), variant: "destructive" });
-        return;
+        if (!response.ok) throw new Error("Could not record label reprint");
       }
+    } catch (error) {
+      toast({ title: "Reprint preparation failed", description: errorMessage(error), variant: "destructive" });
+      return;
     }
 
     setReprintDialogOpen(false);
