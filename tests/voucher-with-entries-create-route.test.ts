@@ -449,9 +449,12 @@ describe("POST /api/vouchers/with-entries", () => {
         voucherNumber: number,
         voucherType: "Journal",
         voucherDate: "2026-03-12",
-        currency: "EUR",
-        exchangeRate: "0.9",
+        currency: "GBP",
+        exchangeRate: "1.3",
       },
+      // Both lines carry their GBP amount in transaction_* and the USD base the
+      // caller computed: the normalized shape the currency trigger accepts for
+      // every currency (wave 17 D). A line with no native amount is refused.
       entries: [
         {
           ledgerAccountId: ctx.cashAccountId,
@@ -465,7 +468,18 @@ describe("POST /api/vouchers/with-entries", () => {
           historicalExchangeRate: "1.3",
           rateConvention: "BASE_PER_TRANSACTION",
         },
-        { ledgerAccountId: ctx.salesAccountId, debitAmount: "0", creditAmount: "90.00" },
+        {
+          ledgerAccountId: ctx.salesAccountId,
+          debitAmount: "0",
+          creditAmount: "90.00",
+          transactionCurrency: "GBP",
+          transactionDebitAmount: "0",
+          transactionCreditAmount: "90.00",
+          baseDebitAmount: "0",
+          baseCreditAmount: "117.00",
+          historicalExchangeRate: "1.3",
+          rateConvention: "BASE_PER_TRANSACTION",
+        },
       ],
     });
 
