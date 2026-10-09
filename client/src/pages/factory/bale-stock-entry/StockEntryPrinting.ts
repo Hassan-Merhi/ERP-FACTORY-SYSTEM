@@ -30,6 +30,12 @@ interface PrintCartItem {
 
 type RequestDelegate = (method: string, url: string, data?: unknown) => Promise<Response>;
 type ToastFn = ReturnType<typeof useToast>["toast"];
+type AutoAssignment = {
+  baleId: number;
+  orderId: number;
+  color: string;
+  priority: number;
+};
 
 export const openBrowserPrint = (
   labels: LabelData[],
@@ -40,9 +46,9 @@ export const openBrowserPrint = (
   // are ready by the time the print window tries to render them.
   prefetchBannersForPrint();
   const paperFormat = getPaperFormat();
-  const hasPerLabelColors = labels.some((l) => l.designColor);
+  const hasPerLabelColors = labels.some((l) => l.designColor || l.priorityColor);
   const hasPerLabelLogos = labels.some((l) => l.customerLogoUrl);
-  const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.customerLogoUrl);
+  const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.customerLogoUrl || l.priorityColor);
 
   const preOpened = preOpenedWindowsRef.current;
   preOpenedWindowsRef.current = null;
@@ -107,7 +113,8 @@ export const printLabels = async (
   selectedLogoId: number | null,
   modeApiRequest: RequestDelegate,
   toast: ToastFn,
-  preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>
+  preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>,
+  autoAllocations: AutoAssignment[] = []
 ) => {
   try {
     modeApiRequest("POST", "/api/bale-label-prints", {
@@ -123,10 +130,12 @@ export const printLabels = async (
       }),
     }).catch(() => {});
 
+    const assignmentMap = new Map(autoAllocations.map((row) => [row.baleId, row]));
     const labels: LabelData[] = bales.map((bale) => {
       const product = baleProducts?.find((p) => p.id === bale.productId);
       const cartItem = cart.find((c) => c.productId === bale.productId);
       const hasLogo = cartItem?.overrideLogoId || selectedLogoId;
+      const assignment = assignmentMap.get(bale.id);
       const effectiveColor: A4DesignColor | null = hasLogo
         ? null
         : (product?.labelDesignColor as A4DesignColor | null | undefined) || null;
@@ -136,11 +145,13 @@ export const printLabels = async (
         pieces: 1,
         approxWeightKg: bale.weightKg || "0",
         productName: bale.productName || "",
+        ...(assignment ? { priorityColor: assignment.color, priorityOrderId: assignment.orderId, priorityNumber: assignment.priority } : {}),
         ...(effectiveColor ? { designColor: effectiveColor } : {}),
       };
     });
 
-    if (isZebraMode()) {
+    // Color HMD lettering requires color printing; monochrome Zebra ZPL cannot reproduce it.
+    if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
       try {
         await printRawZpl(buildZplBatch(labels, true));
         toast({ title: "Labels sent to Zebra printer" });
