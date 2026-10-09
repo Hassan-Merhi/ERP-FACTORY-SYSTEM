@@ -391,11 +391,11 @@ export function registerContainerCostingRoutes(app: Express) {
               const svResult = await syncIntercoParentVoucher(
                 db,
                 po.poNumber,
-                grossTotal.toNumber(),
+                grossTotal,
                 cNum,
                 hasParentFreight
                   ? {
-                      freightAmount: poFreight.toNumber(),
+                      freightAmount: poFreight,
                       freightParentAccountId: poFreightParentAccountId!,
                       subsidiaryCompanyId: po.companyId,
                     }

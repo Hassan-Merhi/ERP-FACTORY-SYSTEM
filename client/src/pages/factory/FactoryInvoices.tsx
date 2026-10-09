@@ -17,7 +17,7 @@ import { queryClient, keyStartsWith, invalidateCustomerBalances } from "@/lib/qu
 import { InvoiceSummaryBar } from "@/components/InvoiceSummaryBar";
 
 import type { Customer, CustomerOrder, StatusFilter } from "./factoryinvoices/types";
-import type { FactoryMyAccess } from "@shared/apiTypes";
+import type { FactoryMyAccess, AuthMe } from "@shared/apiTypes";
 import {
   applyCustomGroupOrder,
   filterOrdersByStatus,
@@ -29,6 +29,7 @@ import {
 } from "./factoryinvoices/invoiceCalculations";
 import { InvoiceGroupRow } from "./factoryinvoices/InvoiceGroupRow";
 import { InvoiceOrderRow } from "./factoryinvoices/InvoiceOrderRow";
+import { ShippingAvailabilityTable } from "./factoryshippingcontainers/components/ShippingAvailabilityTable";
 
 export default function FactoryInvoices() {
   const { toast } = useToast();
@@ -104,6 +105,10 @@ export default function FactoryInvoices() {
 
   const { data: myAccess } = useQuery<FactoryMyAccess>({ queryKey: ["/api/factory/my-access"], staleTime: 5 * 60000 });
   const isAdmin = myAccess?.fullAccess === true;
+  const { data: authUser } = useQuery<AuthMe>({ queryKey: ["/api/auth/me"], staleTime: 5 * 60000 });
+  const showBookingInfo = ["admin", "owner", "developer"].includes(
+    String(authUser?.currentRole || authUser?.role || "").toLowerCase()
+  );
   const hidden: string[] = myAccess?.hiddenCostFields ?? [];
   const hideProformaCol = !isAdmin || hidden.includes("hide_invoicing_proforma_col");
   const hideTotalsUsd = hidden.includes("hide_invoicing_totals_usd");
@@ -232,7 +237,7 @@ export default function FactoryInvoices() {
 
   // Column count for colspan calculations
   // +1 for the drag-handle column
-  const colCount = 12 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0);
+  const colCount = 16 - (hideProformaCol ? 1 : 0) - (hideTotalsUsd ? 1 : 0) - (showBookingInfo ? 0 : 1);
 
   // Group orders by customer, preserving first-appearance order
   const customerGroups = groupOrdersByCustomer(filteredOrders);
@@ -270,6 +275,7 @@ export default function FactoryInvoices() {
 
   const orderRowContext = {
     hideProformaCol,
+    showBookingInfo,
     hideTotalsUsd,
     formatDisplayDate,
     getStatusBadge,
@@ -390,6 +396,11 @@ export default function FactoryInvoices() {
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Container
                   </TableHead>
+                  {showBookingInfo && (
+                    <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Booking Info
+                    </TableHead>
+                  )}
                   <TableHead className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                     Destination
                   </TableHead>
@@ -484,6 +495,11 @@ export default function FactoryInvoices() {
             </Table>
           </div>
         )}
+
+        {/* Shared container availability — below the container loading list */}
+        <div className="border-t px-4 py-4">
+          <ShippingAvailabilityTable />
+        </div>
       </div>
     </div>
   );

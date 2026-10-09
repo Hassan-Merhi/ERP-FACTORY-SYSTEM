@@ -14,16 +14,27 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
-import { adjustInventory } from "../../inventoryHelper";
-import { nextCanonicalSourceRevision } from "../../services/inventory/canonicalSourceRevision";
-import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import type Decimal from "decimal.js";
+import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
 
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+/**
+ * Each line's quantity and rate as exact Decimals, read as parseFloat reads
+ * them; null when any line does not parse, which used to be written as NaN.
+ */
+function parseItemAmounts(items: Array<{ quantity: unknown; rate: unknown }>) {
+  const parsed: Array<{ quantity: Decimal; rate: Decimal }> = [];
+  for (const item of items) {
+    const quantity = parseMoneyInput(item.quantity);
+    const rate = parseMoneyInput(item.rate);
+    if (!quantity || !rate) return null;
+    parsed.push({ quantity, rate });
+  }
+  return parsed;
+}
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -70,13 +81,13 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
 
       const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.voucherId, id)).limit(1);
       if (!po) return res.status(404).json({ message: "Associated purchase order not found" });
-      const oldPOTotal = parseFloat(po.itemsTotal || "0");
-      let totalAmount = 0;
-      const poItemsData = items.map((item) => {
-        const quantity = parseFloat(item.quantity);
-        const rate = parseFloat(item.rate);
-        const lineTotal = quantity * rate;
-        totalAmount += lineTotal;
+      const amounts = parseItemAmounts(items);
+      if (!amounts) return res.status(400).json({ message: "Invalid amount" });
+      const oldPOTotal = toMoney(po.itemsTotal);
+      const lineTotals = amounts.map(({ quantity, rate }) => quantity.times(rate));
+      const totalAmount = sumMoney(lineTotals);
+      const poItemsData = items.map((item, index) => {
+        const lineTotal = lineTotals[index];
         return {
           poId: po.id,
           stockItemId: item.stockItemId || 0,
@@ -97,11 +108,9 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
 
       const [container] = await db.select().from(containers).where(eq(containers.id, po.containerId)).limit(1);
       if (container) {
-        const containerItemsTotal = parseFloat(container.itemsTotal || "0");
-        const containerChargesTotal = parseFloat(container.chargesTotal || "0");
-        const difference = totalAmount - oldPOTotal;
-        const newContainerItemsTotal = containerItemsTotal + difference;
-        const newContainerGrandTotal = newContainerItemsTotal + containerChargesTotal;
+        const difference = totalAmount.minus(oldPOTotal);
+        const newContainerItemsTotal = toMoney(container.itemsTotal).plus(difference);
+        const newContainerGrandTotal = newContainerItemsTotal.plus(toMoney(container.chargesTotal));
         await db
           .update(containers)
           .set({ itemsTotal: newContainerItemsTotal.toFixed(2), grandTotal: newContainerGrandTotal.toFixed(2) })
@@ -165,6 +174,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         return res.status(400).json({ message: "At least one item is required" });
       }
       if (!locationId) return res.status(400).json({ message: "Location ID is required" });
+      if (!parseItemAmounts(items)) return res.status(400).json({ message: "Invalid amount" });
 
       const existingVoucher = await storage.getVoucherById(id);
       if (!existingVoucher) return res.status(404).json({ message: "Voucher not found" });
@@ -196,138 +206,51 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         }
       }
 
-      let adjustmentVoucher = await db
+      const adjustmentVoucher = await db
         .select()
         .from(stockAdjustmentVouchers)
         .where(eq(stockAdjustmentVouchers.voucherId, id))
         .limit(1)
         .then((rows) => rows[0]);
-      const _oldAdjItems = adjustmentVoucher
+      const oldAdjustmentItems = adjustmentVoucher
         ? await db
             .select()
             .from(stockAdjustmentItems)
             .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id))
         : [];
-      if (!adjustmentVoucher) {
-        let adjustmentType = "production";
-        if (existingVoucher.voucherType === "Consumption") adjustmentType = "consumption";
-        else if (existingVoucher.voucherType === "Mixed") adjustmentType = "mixed";
-        const [newAdjustment] = await db
-          .insert(stockAdjustmentVouchers)
-          .values({ voucherId: id, locationId: parseInt(locationId), adjustmentType, notes: description || "" })
-          .returning();
-        adjustmentVoucher = newAdjustment;
-      }
 
-      let signedTotal = 0;
-      const adjustmentItemsData = items.map((item) => {
-        const quantity = parseFloat(item.quantity);
-        const rate = parseFloat(item.rate);
-        const absItemTotal = Math.abs(quantity) * rate;
-        signedTotal += quantity * rate;
-        return {
-          adjustmentId: adjustmentVoucher.id,
-          stockItemId: item.stockItemId,
-          quantity: item.quantity,
-          rate: item.rate,
-          totalAmount: absItemTotal.toFixed(2),
-        };
-      });
-      const totalAmount = existingVoucher.voucherType === "Mixed" ? signedTotal : Math.abs(signedTotal);
+      const parsedLocationId = parseInt(locationId);
+      const adjustmentType = existingVoucher.voucherType as "Consumption" | "Production" | "Mixed";
+      const normalizedItems = items.map((item) => ({
+        stockItemId: Number(item.stockItemId),
+        quantity: String(item.quantity),
+        rate: String(item.rate),
+      }));
+      const voucherHeader = {
+        ...(voucherDate !== undefined ? { voucherDate } : {}),
+        ...(description !== undefined ? { description } : {}),
+      };
 
-      const updated = await db.transaction(async (tx) => {
-        const oldAdjustmentItems = await tx
-          .select()
-          .from(stockAdjustmentItems)
-          .where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id));
-        const oldLocationId = adjustmentVoucher.locationId;
-        const revision = await nextCanonicalSourceRevision(
-          tx,
-          existingVoucher.companyId,
-          "voucher-adjustment-edit",
-          String(id)
-        );
-        const occurredAt = new Date().toISOString();
-        const actor = {
-          userId: req.session.userId,
-          username: req.session.username,
-          reason: `Edit adjustment voucher ${existingVoucher.voucherNumber}`,
-        };
-
-        for (const oldItem of oldAdjustmentItems) {
-          const quantity = parseFloat(oldItem.quantity);
-          const rate = parseFloat(oldItem.rate);
-          await adjustInventory(tx, oldLocationId, oldItem.stockItemId, -quantity, existingVoucher.companyId);
-          const reversalDelta = -quantity;
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: existingVoucher.companyId,
-              stockItemId: oldItem.stockItemId,
-              kind: "adjustment",
-              quantity: String(Math.abs(quantity)),
-              unitCost: String(Math.max(rate || 0, 0)),
-              fromLocationId: reversalDelta < 0 ? oldLocationId : undefined,
-              toLocationId: reversalDelta > 0 ? oldLocationId : undefined,
-              occurredAt,
-              source: {
-                sourceType: "voucher-adjustment-edit-reverse",
-                sourceId: String(id),
-                idempotencyKey: `voucher-adjustment-edit:rev${revision}:reverse:${oldItem.id}`,
-              },
-              actor,
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
+      const result = adjustmentVoucher
+        ? await storage.updateStockAdjustment(
+            adjustmentVoucher.id,
+            parsedLocationId,
+            adjustmentVoucher.adjustmentType,
+            description || "",
+            normalizedItems,
+            voucherHeader
+          )
+        : await storage.createStockAdjustment(
+            id,
+            parsedLocationId,
+            adjustmentType,
+            description || "",
+            normalizedItems,
+            undefined,
+            voucherHeader,
+            adjustmentType.toLowerCase()
           );
-        }
-
-        await tx.delete(stockAdjustmentItems).where(eq(stockAdjustmentItems.adjustmentId, adjustmentVoucher.id));
-        const newLocationId = parseInt(locationId);
-
-        for (let index = 0; index < adjustmentItemsData.length; index += 1) {
-          const newItem = adjustmentItemsData[index];
-          const quantity = parseFloat(newItem.quantity);
-          const rate = parseFloat(newItem.rate);
-          await adjustInventory(tx, newLocationId, newItem.stockItemId, quantity, existingVoucher.companyId, rate);
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: existingVoucher.companyId,
-              stockItemId: newItem.stockItemId,
-              kind: "adjustment",
-              quantity: String(Math.abs(quantity)),
-              unitCost: String(Math.max(rate || 0, 0)),
-              fromLocationId: quantity < 0 ? newLocationId : undefined,
-              toLocationId: quantity > 0 ? newLocationId : undefined,
-              occurredAt,
-              source: {
-                sourceType: "voucher-adjustment-edit-apply",
-                sourceId: String(id),
-                idempotencyKey: `voucher-adjustment-edit:rev${revision}:apply:${index}:${newItem.stockItemId}`,
-              },
-              actor,
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
-
-        await tx.insert(stockAdjustmentItems).values(adjustmentItemsData);
-        await tx
-          .update(stockAdjustmentVouchers)
-          .set({ locationId: newLocationId, notes: description || "" })
-          .where(eq(stockAdjustmentVouchers.id, adjustmentVoucher.id));
-
-        const parsedLocationId = newLocationId;
-        const voucherUpdates: VoucherUpdate = { totalAmount: totalAmount.toFixed(2), locationId: parsedLocationId };
-        const location = await storage.getLocationById(parsedLocationId);
-        if (location) voucherUpdates.locationName = location.name;
-        if (voucherDate !== undefined) voucherUpdates.voucherDate = voucherDate;
-        if (description !== undefined) voucherUpdates.description = description;
-        const [updatedVoucher] = await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id)).returning();
-        return updatedVoucher;
-      });
+      const updated = result.voucher;
 
       try {
         const _adjChanges: Record<string, { old: unknown; new: unknown }> = {};
@@ -342,17 +265,17 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         const _resolveAdjName = async (itemId: number) =>
           (await storage.getStockItemById(itemId))?.name ?? `Item #${itemId}`;
         const _adjItemDiff = await buildItemLevelChanges(
-          _oldAdjItems.map((it) => ({
-            stockItemId: it.stockItemId,
-            quantity: it.quantity,
-            rate: it.rate,
-            totalAmount: it.totalAmount,
+          oldAdjustmentItems.map((item) => ({
+            stockItemId: item.stockItemId,
+            quantity: item.quantity,
+            rate: item.rate,
+            totalAmount: item.totalAmount,
           })),
-          adjustmentItemsData.map((it) => ({
-            stockItemId: it.stockItemId,
-            quantity: it.quantity,
-            rate: it.rate,
-            totalAmount: it.totalAmount,
+          result.items.map((item) => ({
+            stockItemId: item.stockItemId,
+            quantity: item.quantity,
+            rate: item.rate,
+            totalAmount: item.totalAmount,
           })),
           _resolveAdjName
         );
@@ -369,6 +292,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
       } catch {
         /* non-fatal */
       }
+
       res.json(updated);
     } catch (error: unknown) {
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });

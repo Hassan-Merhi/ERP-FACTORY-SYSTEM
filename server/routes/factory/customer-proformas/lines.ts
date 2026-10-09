@@ -22,6 +22,17 @@ import {
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { autoSavePriceToPriceList } from "./_helpers";
+import { toMoney } from "../../../lib/money";
+
+/** Whether the proforma belongs to the company; lines carry no company of their own. */
+async function proformaInCompany(proformaId: number, companyId: number): Promise<boolean> {
+  const [row] = await db
+    .select({ id: customerProformas.id })
+    .from(customerProformas)
+    .where(and(eq(customerProformas.id, proformaId), eq(customerProformas.companyId, companyId)))
+    .limit(1);
+  return Boolean(row);
+}
 
 export function registerFactoryCustomerProformaLineRoutes(app: Express) {
   app.post("/api/factory/customer-proforma-lines", requireAuth, async (req: Request, res: Response) => {
@@ -29,6 +40,9 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const parsed = insertCustomerProformaLineSchema.parse(req.body);
+      if (!(await proformaInCompany(parsed.proformaId, companyId))) {
+        return res.status(404).json({ message: "Proforma not found" });
+      }
 
       const [existingLine] = await db
         .select()
@@ -86,7 +100,9 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
         .from(customerProformaLines)
         .where(eq(customerProformaLines.id, id))
         .limit(1);
-      if (!existingLine) return res.status(404).json({ message: "Proforma line not found" });
+      if (!existingLine || !(await proformaInCompany(existingLine.proformaId, companyId))) {
+        return res.status(404).json({ message: "Proforma line not found" });
+      }
 
       const updateData: Partial<
         Pick<
@@ -171,8 +187,8 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
           const effectivePricingMode = updateData.pricingMode ?? updated.pricingMode ?? "per_bale";
           const effectivePricePerKg = updateData.pricePerKg ?? updated.pricePerKg ?? null;
           if (effectivePricingMode === "per_kg" && effectivePricePerKg) {
-            const pkgRate = parseFloat(String(effectivePricePerKg));
-            if (pkgRate > 0) {
+            const pkgRate = toMoney(String(effectivePricePerKg));
+            if (pkgRate.greaterThan(0)) {
               // Find active orders that use this proforma
               const activeOrders = await db
                 .select({ id: customerOrders.id })
@@ -195,11 +211,11 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
                     )
                   );
                 for (const bale of bales) {
-                  const wt = parseFloat(String(bale.weight || "0"));
-                  if (!isNaN(wt) && wt > 0) {
+                  const wt = toMoney(bale.weight);
+                  if (wt.greaterThan(0)) {
                     await db
                       .update(customerOrderBales)
-                      .set({ priceUsed: (wt * pkgRate).toFixed(2) })
+                      .set({ priceUsed: wt.times(pkgRate).toFixed(2) })
                       .where(eq(customerOrderBales.id, bale.id));
                   }
                 }
@@ -232,7 +248,9 @@ export function registerFactoryCustomerProformaLineRoutes(app: Express) {
         .from(customerProformaLines)
         .where(eq(customerProformaLines.id, id))
         .limit(1);
-      if (!lineToDelete) return res.status(404).json({ message: "Proforma line not found" });
+      if (!lineToDelete || !(await proformaInCompany(lineToDelete.proformaId, companyId))) {
+        return res.status(404).json({ message: "Proforma line not found" });
+      }
 
       const [deleted] = await db.delete(customerProformaLines).where(eq(customerProformaLines.id, id)).returning();
       if (!deleted) return res.status(404).json({ message: "Proforma line not found" });

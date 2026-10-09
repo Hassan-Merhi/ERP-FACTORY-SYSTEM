@@ -204,6 +204,7 @@ export const posExportsAndDispatch: string[] = [
       order_date date NOT NULL,
       container_arrived_date date,
       note text,
+      anything text,
       is_done boolean NOT NULL DEFAULT false,
       done_at timestamp,
       done_by text,
@@ -274,6 +275,7 @@ export const posExportsAndDispatch: string[] = [
   `ALTER TABLE containers ADD COLUMN IF NOT EXISTS bl_docs text`,
   // Shipping company invoice columns on shipping container rows (May 2026)
   `ALTER TABLE customer_order_bales ADD COLUMN IF NOT EXISTS scanned_by text`,
+  `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS anything text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS ci_number text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS shipping_invoice_file_name text`,
   `ALTER TABLE factory_shipping_container_rows ADD COLUMN IF NOT EXISTS shipping_invoice_original_name text`,
@@ -300,6 +302,7 @@ export const posExportsAndDispatch: string[] = [
       created_at timestamptz NOT NULL DEFAULT now()
     )`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS note text`,
+  `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS details text`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS is_archived boolean NOT NULL DEFAULT false`,
   `ALTER TABLE factory_shipping_availability ADD COLUMN IF NOT EXISTS archived_at timestamp`,
   // One-time cleanup: remove ghost rows from factory_shipping_container_documents.

@@ -17,6 +17,8 @@ import { DEFAULT_RETAIL_SELLING_SETTINGS, type RetailSellingSettings } from "./r
 import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
 import { nextRetailReturnQuantity, nextRetailSaleQuantity, validateRetailReturnQuantity } from "./retailStockMath";
 import { db } from "../../db";
+import { settleRetailSaleTx, type RetailPaymentInput } from "./retailFinancialService";
+import { loadRetailSalePayments } from "./retailFinancialQueries";
 
 function toNumber(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
@@ -73,8 +75,10 @@ export async function loadSaleResponse(companyId: number, saleId: number) {
     .innerJoin(retailProducts, eq(retailProducts.id, retailProductVariants.productId))
     .leftJoin(retailBrands, eq(retailBrands.id, retailProducts.brandId))
     .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
+  const payments = await loadRetailSalePayments(companyId, saleId);
   return {
     ...sale,
+    payments,
     customerId: sale.customerId ?? null,
     customerName: sale.customerName ?? "Walk-in",
     listSubtotal: toNumber(sale.listSubtotal),
@@ -166,7 +170,10 @@ export interface RetailSaleInput {
   notes?: string | null;
   items: RetailSaleLineRequest[];
   userId: string;
+  username?: string | null;
   canSellNegativeStock: boolean;
+  shiftId?: number | null;
+  payments?: RetailPaymentInput[];
   customer?: { id: number | null; name: string } | null;
   orderDiscount?: RetailOrderDiscountInput | null;
   /** Company selling settings snapshot (tax + policy). Defaults to Wave 1 behaviour. */
@@ -292,6 +299,7 @@ export async function createRetailSaleInTx(
       totalAmount: "0",
       createdBy: input.userId,
       notes: input.notes ?? null,
+      shiftId: input.shiftId ?? null,
       customerId: input.customer?.id ?? null,
       customerName: input.customer?.name?.trim() ? input.customer.name.trim().slice(0, 191) : "Walk-in",
     })
@@ -310,6 +318,7 @@ export async function createRetailSaleInTx(
 
   const settings = input.settings ?? DEFAULT_RETAIL_SELLING_SETTINGS;
   const approval = input.approval ?? null;
+  let totalCost = 0;
 
   // ── Price the cart from the database ──────────────────────────────────────
   const { priced, variantsById } = await prepareRetailSalePricing(tx, {
@@ -371,6 +380,7 @@ export async function createRetailSaleInTx(
       createdBy: input.userId,
       metadata: { saleItemId: saleItem.id },
     });
+    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * line.quantity;
   }
 
   await tx
@@ -412,6 +422,18 @@ export async function createRetailSaleInTx(
       .returning({ id: retailDiscountApprovals.id });
     if (!consumed.length) throw new RetailApprovalReuseError();
   }
+  await settleRetailSaleTx(tx, {
+    companyId,
+    locationId: input.locationId,
+    saleId: createdSale.id,
+    saleIdempotencyKey: input.idempotencyKey,
+    totalAmount: priced.totalAmount,
+    totalCost,
+    userId: input.userId,
+    username: input.username ?? null,
+    shiftId: input.shiftId ?? null,
+    payments: input.payments,
+  });
   return { saleId: createdSale.id, replayed: false };
 }
 
@@ -434,7 +456,7 @@ export interface RetailReturnInput {
 export async function createRetailReturnInTx(
   tx: RetailTransaction,
   input: RetailReturnInput
-): Promise<{ returnId: number; replayed: boolean; refundAmount: number; refundTaxAmount: number }> {
+): Promise<{ returnId: number; replayed: boolean; refundAmount: number; refundTaxAmount: number; refundValue: number; costValue: number }> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
     .insert(retailPosReturns)
@@ -463,6 +485,8 @@ export async function createRetailReturnInTx(
       replayed: true,
       refundAmount: toNumber(existing.refundAmount),
       refundTaxAmount: toNumber(existing.refundTaxAmount),
+      refundValue: toNumber(existing.refundAmount),
+      costValue: 0,
     };
   }
 
@@ -491,6 +515,7 @@ export async function createRetailReturnInTx(
       unitPrice: retailPosSaleItems.unitPrice,
       grossUnitPrice: retailPosSaleItems.grossUnitPrice,
       taxAmount: retailPosSaleItems.taxAmount,
+      unitCost: retailPosSaleItems.unitCost,
     })
     .from(retailPosSaleItems)
     .where(
@@ -506,6 +531,7 @@ export async function createRetailReturnInTx(
 
   let refundAmount = 0;
   let refundTaxAmount = 0;
+  let costValue = 0;
   for (const [saleItemId, quantity] of aggregate) {
     const saleItem = saleItemsById.get(saleItemId);
     if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
@@ -529,6 +555,7 @@ export async function createRetailReturnInTx(
     const lineRefundTax = roundRetailMoney(taxPerUnit * quantity, 6);
     refundAmount += lineRefund;
     refundTaxAmount += lineRefundTax;
+    costValue += quantity * toNumber(saleItem.unitCost);
 
     const [returnItem] = await tx
       .insert(retailPosReturnItems)
@@ -540,6 +567,7 @@ export async function createRetailReturnInTx(
         locationId: sale.locationId,
         quantity: String(quantity),
         unitPrice: saleItem.unitPrice,
+        unitCost: saleItem.unitCost,
         grossUnitPrice: String(grossPerUnit),
         taxAmount: String(lineRefundTax),
       })
@@ -565,5 +593,5 @@ export async function createRetailReturnInTx(
     .update(retailPosReturns)
     .set({ refundAmount: String(refundAmount), refundTaxAmount: String(refundTaxAmount) })
     .where(eq(retailPosReturns.id, createdReturn.id));
-  return { returnId: createdReturn.id, replayed: false, refundAmount, refundTaxAmount };
+  return { returnId: createdReturn.id, replayed: false, refundAmount, refundTaxAmount, refundValue: refundAmount, costValue };
 }

@@ -6,11 +6,12 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "../../db";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { employees, voucherEntries, vouchers } from "@shared/schema";
+import { bankAccounts, employees, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerPayrollWithdrawalRoutes(app: Express) {
   // Payroll - Employee Withdrawal
@@ -32,18 +33,36 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
         });
       }
 
-      const withdrawalAmount = parseFloat(amount);
-      if (isNaN(withdrawalAmount) || withdrawalAmount <= 0) {
+      const withdrawalAmount = parseMoneyInput(amount)?.toDecimalPlaces(2) ?? null;
+      if (!withdrawalAmount || withdrawalAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
 
       // Get employee
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
 
-      const _currentBalance = parseFloat(employee.currentBalance);
+      // The credited cash or bank account must belong to this company.
+      if (accountType === "cash") {
+        const [cash] = await db
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(
+            and(eq(ledgerAccounts.id, Number(accountId)), eq(ledgerAccounts.companyId, req.session.currentCompanyId))
+          );
+        if (!cash) return res.status(404).json({ message: "Cash account not found" });
+      } else {
+        const [bank] = await db
+          .select({ id: bankAccounts.id })
+          .from(bankAccounts)
+          .where(and(eq(bankAccounts.id, Number(accountId)), eq(bankAccounts.companyId, req.session.currentCompanyId)));
+        if (!bank) return res.status(404).json({ message: "Payment account not found" });
+      }
 
       // Create voucher
       const voucherNumber = `SAL-WD-${Date.now()}`;
@@ -107,7 +126,7 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
       );
 
       // Get updated employee balance
-      const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
 
       res.json({
         voucher,

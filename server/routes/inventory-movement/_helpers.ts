@@ -17,6 +17,7 @@ import {
   creditNoteItems,
   containers,
 } from "@shared/schema";
+import { toMoney } from "../../lib/money";
 
 /**
  * Inventory movement, reconciliation & import routes.
@@ -118,8 +119,10 @@ export async function fetchStockMovements(
     );
 
   for (const r of salesRows) {
-    const qty = parseFloat(r.qty || "0");
-    const value = parseFloat(r.totalCost || "0");
+    const qtyExact = toMoney(r.qty);
+    const valueExact = toMoney(r.totalCost);
+    const qty = qtyExact.toNumber();
+    const value = valueExact.toNumber();
     const vt = r.voucherType || "Sales";
     results.push({
       date: r.date,
@@ -131,11 +134,11 @@ export async function fetchStockMovements(
       inwardRate: 0,
       inwardValue: 0,
       outwardQty: qty,
-      outwardRate: qty > 0 ? value / qty : 0,
+      outwardRate: qty > 0 ? valueExact.dividedBy(qtyExact).toNumber() : 0,
       outwardValue: value,
       isPOS: vt.toLowerCase().includes("pos"),
-      posSellingRate: parseFloat(r.sellingPrice || "0"),
-      posSellingValue: parseFloat(r.totalSales || "0"),
+      posSellingRate: toMoney(r.sellingPrice).toNumber(),
+      posSellingValue: toMoney(r.totalSales).toNumber(),
     });
   }
 
@@ -163,8 +166,10 @@ export async function fetchStockMovements(
     );
 
   for (const r of cnRows) {
-    const qty = parseFloat(r.qty || "0");
-    const value = parseFloat(r.totalValue || "0");
+    const qtyExact = toMoney(r.qty);
+    const valueExact = toMoney(r.totalValue);
+    const qty = qtyExact.toNumber();
+    const value = valueExact.toNumber();
     results.push({
       date: r.date,
       particulars: r.voucherNumber,
@@ -172,7 +177,7 @@ export async function fetchStockMovements(
       voucherId: r.voucherId,
       poId: null,
       inwardQty: qty,
-      inwardRate: qty > 0 ? value / qty : 0,
+      inwardRate: qty > 0 ? valueExact.dividedBy(qtyExact).toNumber() : 0,
       inwardValue: value,
       outwardQty: 0,
       outwardRate: 0,
@@ -208,8 +213,10 @@ export async function fetchStockMovements(
     );
 
   for (const r of adjRows) {
-    const qty = parseFloat(r.qty || "0");
-    const rate = parseFloat(r.rate || "0");
+    const qtyExact = toMoney(r.qty);
+    const rateExact = toMoney(r.rate);
+    const qty = qtyExact.toNumber();
+    const rate = rateExact.toNumber();
     if (qty > 0) {
       results.push({
         date: r.date,
@@ -219,7 +226,7 @@ export async function fetchStockMovements(
         poId: null,
         inwardQty: qty,
         inwardRate: rate,
-        inwardValue: qty * rate,
+        inwardValue: qtyExact.times(rateExact).toNumber(),
         outwardQty: 0,
         outwardRate: 0,
         outwardValue: 0,
@@ -228,7 +235,7 @@ export async function fetchStockMovements(
         posSellingValue: 0,
       });
     } else if (qty < 0) {
-      const absQty = Math.abs(qty);
+      const absQty = qtyExact.abs().toNumber();
       results.push({
         date: r.date,
         particulars: r.voucherNumber,
@@ -240,7 +247,7 @@ export async function fetchStockMovements(
         inwardValue: 0,
         outwardQty: absQty,
         outwardRate: rate,
-        outwardValue: absQty * rate,
+        outwardValue: qtyExact.abs().times(rateExact).toNumber(),
         isPOS: false,
         posSellingRate: 0,
         posSellingValue: 0,
@@ -279,9 +286,9 @@ export async function fetchStockMovements(
       );
 
     for (const r of tfRows) {
-      const qty = parseFloat(r.qty || "0");
-      const rate = parseFloat(r.rate || "0");
-      const amount = parseFloat(r.totalAmount || "0");
+      const qty = toMoney(r.qty).toNumber();
+      const rate = toMoney(r.rate).toNumber();
+      const amount = toMoney(r.totalAmount).toNumber();
       if (r.sourceLocId === locationId) {
         results.push({
           date: r.date,
@@ -349,9 +356,9 @@ export async function fetchStockMovements(
     );
 
   for (const r of poRows) {
-    const qty = parseFloat(r.qty || "0");
-    const rate = parseFloat(r.rate || "0");
-    const lineTotal = parseFloat(r.lineTotal || "0");
+    const qty = toMoney(r.qty).toNumber();
+    const rate = toMoney(r.rate).toNumber();
+    const lineTotal = toMoney(r.lineTotal).toNumber();
     results.push({
       date: r.date,
       particulars: r.containerNumber || r.voucherNumber,

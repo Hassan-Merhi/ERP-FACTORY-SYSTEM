@@ -29,6 +29,7 @@ export interface BaleDetail {
   finalizedAt: string | null;
   stockEntryDate: string;
   locationName: string;
+  workerId: number | null;
   workerName: string | null;
   productName: string | null;
   articleCode: string | null;

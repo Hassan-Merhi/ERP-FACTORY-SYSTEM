@@ -1,8 +1,9 @@
-import Decimal from "decimal.js";
+import type Decimal from "decimal.js";
 import { eq } from "drizzle-orm";
 import { propertyContracts, propertyMonthlyLedger } from "@shared/schema";
 
 import { db, pool } from "../../db";
+import { MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
 import { clampRentalPeriodToContractStart, getRentalPeriodDueDate } from "./rentalPeriodService";
 
 /**
@@ -51,9 +52,9 @@ export async function findEarliestOutstandingMonth(
     [contractId]
   );
 
-  const postedByMonth = new Map<string, number>();
+  const postedByMonth = new Map<string, Decimal>();
   for (const r of postedRows) {
-    postedByMonth.set(`${r.for_year}-${r.for_month}`, parseFloat(r.paid_total));
+    postedByMonth.set(`${r.for_year}-${r.for_month}`, toMoney(r.paid_total));
   }
 
   for (const row of ledgerRows) {
@@ -64,9 +65,9 @@ export async function findEarliestOutstandingMonth(
 
     const billingDate = getRentalPeriodDueDate(row.year, row.month, billingDay);
     if (billingDate > paymentDate) continue;
-    const posted = postedByMonth.get(`${row.year}-${row.month}`) ?? 0;
-    const expected = parseFloat(row.expectedAmount as string) || 0;
-    if (expected - posted > 0.005) {
+    const posted = postedByMonth.get(`${row.year}-${row.month}`) ?? new MoneyDecimal(0);
+    const expected = toMoney(row.expectedAmount as string);
+    if (expected.minus(posted).gt("0.005")) {
       return { year: row.year, month: row.month };
     }
   }
@@ -87,8 +88,8 @@ export async function buildAllocationsForPayment(
   contractId: number,
   startYear: number,
   startMonth: number,
-  totalAmount: number,
-  rentalAmount: number,
+  totalAmount: MoneyInput,
+  rentalAmountInput: MoneyInput,
   billingDay: number,
   paymentDate: string
 ): Promise<Array<{ year: number; month: number; chunk: string }>> {
@@ -101,9 +102,13 @@ export async function buildAllocationsForPayment(
     .from(propertyMonthlyLedger)
     .where(eq(propertyMonthlyLedger.contractId, contractId));
 
-  const ledgerMap = new Map<string, number>();
+  // Exact decimals at cents: each chunk is stored, and the chunks add up to the
+  // payment exactly.
+  const rentalAmount = toMoney(rentalAmountInput);
+  const ledgerMap = new Map<string, Decimal>();
   for (const r of ledgerRows) {
-    ledgerMap.set(`${r.year}-${r.month}`, parseFloat(r.expectedAmount as string) || rentalAmount);
+    const expected = toMoney(r.expectedAmount as string);
+    ledgerMap.set(`${r.year}-${r.month}`, expected.isZero() ? rentalAmount : expected);
   }
 
   const { rows: postedRows } = await pool.query<{
@@ -117,13 +122,13 @@ export async function buildAllocationsForPayment(
      GROUP BY for_year, for_month`,
     [contractId]
   );
-  const postedByMonth = new Map<string, number>();
+  const postedByMonth = new Map<string, Decimal>();
   for (const r of postedRows) {
-    postedByMonth.set(`${r.for_year}-${r.for_month}`, parseFloat(r.paid_total));
+    postedByMonth.set(`${r.for_year}-${r.for_month}`, toMoney(r.paid_total));
   }
 
   const allocations: Array<{ year: number; month: number; chunk: string }> = [];
-  let remaining = new Decimal(totalAmount);
+  let remaining = toMoney(totalAmount).toDecimalPlaces(2);
   let ay = startYear,
     am = startMonth;
   let skipped = 0;
@@ -132,10 +137,10 @@ export async function buildAllocationsForPayment(
     const billingDate = getRentalPeriodDueDate(ay, am, billingDay);
     const isDue = billingDate <= paymentDate;
     const expected = ledgerMap.get(`${ay}-${am}`) ?? rentalAmount;
-    const posted = postedByMonth.get(`${ay}-${am}`) ?? 0;
-    const capacity = isDue ? Math.max(0, expected - posted) : Math.max(0, rentalAmount - posted);
+    const posted = postedByMonth.get(`${ay}-${am}`) ?? new MoneyDecimal(0);
+    const capacity = MoneyDecimal.max(0, (isDue ? expected : rentalAmount).minus(posted));
 
-    if (capacity <= 0.005) {
+    if (capacity.lte("0.005")) {
       ay = am === 12 ? ay + 1 : ay;
       am = am === 12 ? 1 : am + 1;
       skipped++;
@@ -144,7 +149,7 @@ export async function buildAllocationsForPayment(
     }
 
     skipped = 0;
-    const chunk = new Decimal(Math.min(remaining.toNumber(), capacity));
+    const chunk = MoneyDecimal.min(remaining, capacity).toDecimalPlaces(2);
     allocations.push({ year: ay, month: am, chunk: chunk.toFixed(2) });
     remaining = remaining.minus(chunk);
     ay = am === 12 ? ay + 1 : ay;

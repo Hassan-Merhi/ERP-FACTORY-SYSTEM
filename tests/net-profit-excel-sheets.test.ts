@@ -244,7 +244,9 @@ describe("net profit statistics", () => {
 
 describe("net profit formatting", () => {
   it("rounds money to two decimal places", () => {
-    expect(fmt(1.005)).toBe(1.0);
+    // Half a cent rounds away from zero, as Postgres numeric does; the old
+    // float rounding turned 1.005 into 1.00.
+    expect(fmt(1.005)).toBe(1.01);
     expect(fmt(2.346)).toBe(2.35);
     expect(fmt(-0.004)).toBe(-0);
   });

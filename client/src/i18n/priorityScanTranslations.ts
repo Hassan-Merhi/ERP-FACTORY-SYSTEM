@@ -67,7 +67,7 @@ const priorityScanTranslations = {
   },
   scanned: { en: "scanned", ar: "ممسوح", fr: "scannées" },
   active: { en: "Active", ar: "نشط", fr: "Active" },
-  thisSession: { en: "This scan session", ar: "جلسة المسح الحالية", fr: "Cette session de scan" },
+  thisSession: { en: "Today's priority scans", ar: "مسح الأولوية اليوم", fr: "Scans prioritaires du jour" },
   referenceProductOnly: {
     en: "Reference and product only.",
     ar: "المرجع والمنتج فقط.",
@@ -116,6 +116,13 @@ const priorityScanTranslations = {
     fr: "Le chargement #{orderId} est satisfait. La file de priorités est terminée.",
   },
   setPriority: { en: "Set Priority", ar: "تحديد الأولوية", fr: "Définir la priorité" },
+  setColor: { en: "Set Color", ar: "تحديد اللون", fr: "Définir la couleur" },
+  editColor: { en: "Edit Color", ar: "تعديل اللون", fr: "Modifier la couleur" },
+  editColorTitle: {
+    en: "Edit Priority Scan color",
+    ar: "تعديل لون المسح حسب الأولوية",
+    fr: "Modifier la couleur du scan prioritaire",
+  },
   editPriorityTitle: {
     en: "Edit Priority Scan color and position",
     ar: "تعديل لون وموقع المسح حسب الأولوية",
@@ -145,6 +152,11 @@ const priorityScanTranslations = {
     en: "Choose the color and queue position for {customer}. Moving this loading into an occupied position automatically shifts the other priorities.",
     ar: "اختر اللون وموقع القائمة للعميل {customer}. نقل هذا التحميل إلى موقع مشغول يزيح الأولويات الأخرى تلقائيًا.",
     fr: "Choisissez la couleur et la position dans la file pour {customer}. Déplacer ce chargement vers une position occupée décale automatiquement les autres priorités.",
+  },
+  colorOnlyDialogDescription: {
+    en: "Choose the Priority Scan color for {customer}. Only Admin, Developer and Owner users can set the queue position.",
+    ar: "اختر لون المسح حسب الأولوية للعميل {customer}. يمكن فقط للمشرف والمطور والمالك تحديد موقع الأولوية.",
+    fr: "Choisissez la couleur du scan prioritaire pour {customer}. Seuls les utilisateurs Admin, Developer et Owner peuvent définir la position dans la file.",
   },
   linkProformaWarning: {
     en: "Link a proforma to this loading before enabling Priority Scan.",
@@ -178,7 +190,9 @@ const priorityScanTranslations = {
   cancel: { en: "Cancel", ar: "إلغاء", fr: "Annuler" },
   saving: { en: "Saving…", ar: "جارٍ الحفظ…", fr: "Enregistrement…" },
   savePriority: { en: "Save Priority", ar: "حفظ الأولوية", fr: "Enregistrer la priorité" },
+  saveColor: { en: "Save Color", ar: "حفظ اللون", fr: "Enregistrer la couleur" },
   addToQueue: { en: "Add to Queue", ar: "إضافة إلى القائمة", fr: "Ajouter à la file" },
+  colorSaved: { en: "Color saved", ar: "تم حفظ اللون", fr: "Couleur enregistrée" },
   prioritySaved: {
     en: "Priority #{priority} saved",
     ar: "تم حفظ الأولوية #{priority}",

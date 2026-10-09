@@ -6,6 +6,7 @@ import { requireAuth } from "../../../auth";
 import { eq, and, desc } from "drizzle-orm";
 import { employees, factoryWorkers, factoryWorkerDeductions } from "@shared/schema";
 import { getFactoryCompanyId, getErpCompanyId } from "./helpers";
+import { moneyString, parseMoneyInput } from "../../../lib/money";
 
 export function registerWorkerDeductionsRoutes(app: Express) {
   app.get("/api/payroll/worker-deductions", requireAuth, async (req: Request, res: Response) => {
@@ -51,7 +52,8 @@ export function registerWorkerDeductionsRoutes(app: Express) {
       const workerId = parseId(req.params.id);
       if (workerId === null) return res.status(400).json({ message: "Invalid id" });
       const { amount, reason, deductionDate } = req.body;
-      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0)
+      const exactAmount = parseMoneyInput(amount);
+      if (!amount || !exactAmount || exactAmount.lte(0))
         return res.status(400).json({ message: "Amount must be a positive number" });
       if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
       const [deduction] = await db
@@ -59,7 +61,7 @@ export function registerWorkerDeductionsRoutes(app: Express) {
         .values({
           companyId,
           workerId,
-          amount: parseFloat(amount).toFixed(2),
+          amount: moneyString(exactAmount),
           reason: reason || null,
           deductionDate,
           applied: false,
@@ -146,7 +148,8 @@ export function registerWorkerDeductionsRoutes(app: Express) {
       const workerId = parseId(req.params.id);
       if (workerId === null) return res.status(400).json({ message: "Invalid id" });
       const { amount, reason, deductionDate } = req.body;
-      if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+      const exactAmount = parseMoneyInput(amount);
+      if (!amount || !exactAmount || exactAmount.lte(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
       if (!deductionDate) return res.status(400).json({ message: "Deduction date is required" });
@@ -155,7 +158,7 @@ export function registerWorkerDeductionsRoutes(app: Express) {
         .values({
           companyId,
           workerId,
-          amount: parseFloat(amount).toFixed(2),
+          amount: moneyString(exactAmount),
           reason: reason || null,
           deductionDate,
           applied: false,

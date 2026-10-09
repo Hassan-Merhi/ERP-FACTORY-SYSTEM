@@ -78,13 +78,36 @@ export interface SaleItem {
   brand: string;
 }
 
+export type RetailPaymentMethod = "cash" | "card" | "bank" | "mobile" | "other";
+
+export interface RetailPaymentDraft {
+  method: RetailPaymentMethod;
+  amount: number;
+  tenderedAmount?: number | null;
+  reference?: string | null;
+}
+
+export interface RetailPayment {
+  id: number;
+  method: RetailPaymentMethod;
+  paymentType: "payment" | "refund" | string;
+  amount: number;
+  tenderedAmount: number | null;
+  changeAmount: number;
+  reference: string | null;
+  shiftId: number | null;
+}
+
 export interface RetailSale {
   id: number;
   locationId: number;
   status: string;
+  shiftId?: number | null;
+  accountingVoucherId?: number | null;
   totalAmount: number;
   createdAt: string;
   notes?: string | null;
+  payments?: RetailPayment[];
   customerId?: number | null;
   customerName?: string | null;
   listSubtotal?: number;

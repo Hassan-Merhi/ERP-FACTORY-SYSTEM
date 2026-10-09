@@ -11,6 +11,7 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
   PostingValidationError,
   postBalancedVoucherTx,
@@ -45,12 +46,12 @@ async function syncJournalToOrderCharge(
   if (!customerEntry) return;
 
   const ledgerCreditEntries = savedEntries.filter(
-    (entry) => entry.ledgerAccountId !== null && entry.customerId === null && Number(entry.creditAmount || 0) > 0
+    (entry) => entry.ledgerAccountId !== null && entry.customerId === null && toMoney(entry.creditAmount).greaterThan(0)
   );
 
   for (const ledgerEntry of ledgerCreditEntries) {
-    const newAmount = Number(ledgerEntry.creditAmount || 0);
-    if (newAmount <= 0) continue;
+    const newAmount = toMoney(ledgerEntry.creditAmount);
+    if (newAmount.lessThanOrEqualTo(0)) continue;
 
     let matchingCharges: Array<{
       id: number;
@@ -105,7 +106,7 @@ async function syncJournalToOrderCharge(
 
     if (matchingCharges.length === 0) continue;
     const charge = matchingCharges[0];
-    const amountChanged = Math.abs(Number(charge.amount || 0) - newAmount) >= 0.01;
+    const amountChanged = toMoney(charge.amount).minus(newAmount).abs().greaterThanOrEqualTo(0.01);
 
     await db.transaction(async (tx) => {
       await tx
@@ -146,9 +147,11 @@ async function writeFactoryDaybook(result: PersistedPostingResult, companyId: nu
   if (!settings) return;
 
   const currency = result.voucher.currency || "USD";
-  const baseTotal = Number(result.voucher.totalAmount || 0);
-  const rate = result.voucher.exchangeRate ? Number(result.voucher.exchangeRate) : 1;
-  const transactionTotal = currency !== "USD" && rate > 0 ? baseTotal * rate : baseTotal;
+  // Taken exactly: the float product of 1.13 x 1.5 was 1.6949999999999998,
+  // which the cents column stored as 1.69 instead of 1.70.
+  const baseTotal = toMoney(result.voucher.totalAmount);
+  const rate = result.voucher.exchangeRate ? toMoney(result.voucher.exchangeRate) : new MoneyDecimal(1);
+  const transactionTotal = currency !== "USD" && rate.greaterThan(0) ? baseTotal.times(rate) : baseTotal;
 
   await db.insert(factoryDaybookEntries).values({
     companyId,
@@ -158,9 +161,9 @@ async function writeFactoryDaybook(result: PersistedPostingResult, companyId: nu
     referenceTable: "vouchers",
     description: result.voucher.description || `Journal voucher #${result.voucher.voucherNumber}`,
     currencyCode: currency,
-    amountCurrency: String(transactionTotal),
+    amountCurrency: transactionTotal.toFixed(),
     fxRateToUsd: erpRateToDaybookFxRateToUsd(currency, "USD", result.voucher.exchangeRate),
-    amountUsd: String(baseTotal),
+    amountUsd: baseTotal.toFixed(),
     createdBy: null,
   });
 }

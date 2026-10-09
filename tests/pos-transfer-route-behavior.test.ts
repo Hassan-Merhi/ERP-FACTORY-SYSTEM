@@ -95,6 +95,12 @@ vi.mock("../server/storage/stock-ops/transfers-create", () => {
     StockTransferPolicyError,
   };
 });
+// Body-id ownership has database-backed coverage in tests/body-id-tenant-scope.test.ts;
+// here the company owns every location and stock item the request names.
+vi.mock("../server/routes/helpers/companyOwnership", () => ({
+  ownLocationIds: async (_companyId: number, ids: unknown[]) => new Set(ids.map(Number)),
+  allStockItemsOwned: async () => true,
+}));
 vi.mock("../server/storage/inventoryRowLock", () => ({
   lockInventoryRow: harness.lockInventoryRow,
 }));

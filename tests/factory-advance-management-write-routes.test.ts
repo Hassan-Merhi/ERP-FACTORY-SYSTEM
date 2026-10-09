@@ -209,6 +209,22 @@ describe("POST /api/factory/advances/reconcile", () => {
     expect(Number((await advanceRow(advanceId)).remaining_balance)).toBeCloseTo(300, 2);
   });
 
+  it("settles an advance exactly when cents of repayments and deductions add up to it", async () => {
+    const settled = await createAdvance({ amount: "0.70", advanceDate: "2026-01-10", remaining: "0.70" });
+    const next = await createAdvance({ amount: "5.00", advanceDate: "2026-02-10", remaining: "5.00" });
+    await addManualRepayment(settled, "0.10");
+    await createPayrollWithDeduction("0.20", "2026-04-01");
+    await createPayrollWithDeduction("0.40", "2026-05-01");
+
+    const response = await agent.post("/api/factory/advances/reconcile").send({});
+    expect(response.status).toBe(200);
+
+    expect(await advanceRow(settled)).toMatchObject({ remaining_balance: "0.00", fully_paid: true });
+    // Nothing is left over to spill into the next advance.
+    expect(await advanceRow(next)).toMatchObject({ remaining_balance: "5.00", fully_paid: false });
+    expect(response.body.message).toBe("Reconciliation complete — 1 advance record(s) updated");
+  });
+
   it("leaves manual-repayment advances out of the payroll sweep", async () => {
     const advanceId = await createAdvance({
       amount: "100.00",

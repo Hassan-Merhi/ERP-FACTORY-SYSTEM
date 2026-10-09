@@ -8,6 +8,7 @@ import type { Express } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
+import { ownLocationIds } from "../../helpers/companyOwnership";
 import {} from "@shared/schema";
 import {} from "drizzle-orm";
 
@@ -52,6 +53,10 @@ export function registerStockGroupArchiveRoutes(app: Express) {
       const { locationId, stockGroupId, notes } = req.body;
       if (!locationId) {
         return res.status(400).json({ message: "Location ID is required" });
+      }
+      // The location is a body id, outside the path-based company scope.
+      if (!(await ownLocationIds(req.session.currentCompanyId, [locationId])).has(Number(locationId))) {
+        return res.status(400).json({ message: "Location not found" });
       }
       const archive = await storage.archiveStockGroupAtLocation(
         req.session.currentCompanyId,

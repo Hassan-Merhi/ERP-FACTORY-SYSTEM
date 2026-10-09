@@ -113,6 +113,34 @@ export function RetailReceipt({
         <span>TOTAL</span>
         <span>{money(sale.totalAmount)}</span>
       </div>
+      {sale.payments?.length ? (
+        <>
+          <div className="rr-rule" />
+          {sale.payments.map((payment) => (
+            <div className="rr-line" key={payment.id}>
+              <span>
+                {payment.paymentType === "refund"
+                  ? `REFUND ${payment.method.toUpperCase()}`
+                  : payment.method.toUpperCase()}
+              </span>
+              <span>
+                {payment.paymentType === "refund" ? "-" : ""}
+                {money(payment.amount)}
+              </span>
+            </div>
+          ))}
+          {sale.payments
+            .filter(
+              (payment) => payment.paymentType === "payment" && payment.method === "cash" && payment.changeAmount > 0
+            )
+            .map((payment) => (
+              <div className="rr-line" key={`change-${payment.id}`}>
+                <span>CHANGE</span>
+                <span>{money(payment.changeAmount)}</span>
+              </div>
+            ))}
+        </>
+      ) : null}
       {sale.approvedByName && <div className="rr-center rr-muted">Discount approved by {sale.approvedByName}</div>}
       {sale.status !== "completed" && <div className="rr-center">*** {sale.status.toUpperCase()} ***</div>}
       <div className="rr-rule" />

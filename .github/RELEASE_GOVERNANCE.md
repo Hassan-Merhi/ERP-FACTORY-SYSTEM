@@ -20,29 +20,24 @@ The repository does not require an arbitrary approval count solely to satisfy th
 
 ## Status checks required by the main ruleset
 
-These contexts are permanent merge requirements and are machine-verified by Release Governance:
+The authoritative list lives in `config/pr-protection-policy.json` and is enforced by `scripts/verify-pr-protection-policy.mjs`. Every required context must be produced by a workflow that runs on `pull_request`, otherwise no PR can ever satisfy it:
 
-### GitHub Actions
-
-- `Protect main and release path`
 - `Check / Build / Lint / Test`
 - `Secret scan`
 - `Dependency audit`
 - `Focused security readiness`
 - `Analyze JavaScript / TypeScript`
 - `Semgrep CE new-findings gate`
-- `Dependency Review`
 - `actionlint`
 - `zizmor`
 - `Classified untranslated-text audit`
 
-### CircleCI
+`Dependency Review` is retired from the required set in the policy file. It still runs on PRs, so leaving it in the ruleset does not block merges.
 
-- `ci/circleci: static-build`
-- `ci/circleci: postgres-regression`
-- `ci/circleci: backend-core-regression`
-- `ci/circleci: frontend-regression`
-- `ci/circleci: security-readiness`
+Do **not** add these to the ruleset; they never report on a PR head and would block every merge:
+
+- `Protect main and release path` and `Main Certification` run only after merge on `main` (post-merge audits).
+- `ci/circleci: *` contexts are retired; CircleCI no longer reports on this repository.
 
 A check from an older SHA never satisfies the gate for a newer PR head.
 
@@ -55,7 +50,6 @@ Other permanent workflows that are conditional by path or event—such as RTL an
 - `main` reports as protected through the GitHub API;
 - active rules on `main` include `pull_request`, `required_status_checks`, `non_fast_forward`, and `deletion`;
 - required status checks use strict/current-branch mode;
-- every permanent context listed above is present in the active ruleset;
 - PR heads targeting `main` are not behind current `main`;
 - a force push to `main` fails the audit;
 - a new `main` SHA without an associated merged pull request fails the audit.

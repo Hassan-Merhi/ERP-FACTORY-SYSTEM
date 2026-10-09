@@ -20,6 +20,8 @@ import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { getClientDate } from "../../lib/dateUtils";
 import { resultRows } from "../../lib/queryResult";
 import { isSystemOnlyLedgerAccount } from "../../lib/systemOnlyLedgerAccounts";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 
 export async function serveAccountListForCompany(req: Request, res: Response, companyId: number) {
   try {
@@ -139,25 +141,28 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             .groupBy(voucherEntries.customerId),
         ]);
 
-        const salesMap = new Map(salesRows.map((r) => [r.customerId!, parseFloat(r.total || "0")]));
-        const nonInvMap = new Map(cbRows.map((r) => [r.customerId!, parseFloat(r.net || "0")]));
+        const salesMap = new Map(salesRows.map((r) => [r.customerId!, toMoney(r.total)]));
+        const nonInvMap = new Map(cbRows.map((r) => [r.customerId!, toMoney(r.net)]));
         const vNetByLedger = new Map(
-          lVoucherRows.filter((r) => r.ledgerAccountId).map((r) => [r.ledgerAccountId!, parseFloat(r.net || "0")])
+          lVoucherRows.filter((r) => r.ledgerAccountId).map((r) => [r.ledgerAccountId!, toMoney(r.net)])
         );
         const vNetByCustomer = new Map(
-          cVoucherRows.filter((r) => r.customerId).map((r) => [r.customerId!, parseFloat(r.net || "0")])
+          cVoucherRows.filter((r) => r.customerId).map((r) => [r.customerId!, toMoney(r.net)])
         );
+        const NONE = new MoneyDecimal(0);
 
         for (const cust of linkedCustomers) {
-          const salesTotal = salesMap.get(cust.id) ?? 0;
-          const nonInvNet = nonInvMap.get(cust.id) ?? 0;
-          const voucherNet = (vNetByLedger.get(cust.ledgerAccountId!) ?? 0) + (vNetByCustomer.get(cust.id) ?? 0);
-          const ob = parseFloat(cust.openingBalance || "0");
+          const salesTotal = salesMap.get(cust.id) ?? NONE;
+          const nonInvNet = nonInvMap.get(cust.id) ?? NONE;
+          const voucherNet = (vNetByLedger.get(cust.ledgerAccountId!) ?? NONE).plus(
+            vNetByCustomer.get(cust.id) ?? NONE
+          );
+          const ob = toMoney(cust.openingBalance);
           const obSide = cust.openingBalanceSide || "Dr";
-          const total = (obSide === "Dr" ? ob : -ob) + salesTotal + nonInvNet + voucherNet;
+          const total = (obSide === "Dr" ? ob : ob.negated()).plus(salesTotal).plus(nonInvNet).plus(voucherNet);
           customerLedgerOverrides.set(cust.ledgerAccountId!, {
-            balance: Math.abs(total).toFixed(2),
-            balanceSide: total >= 0 ? "Dr" : "Cr",
+            balance: total.abs().toFixed(2),
+            balanceSide: total.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
           });
         }
       }
@@ -175,7 +180,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
               AND remaining_balance > 0
           `);
         const workerAdvRow = resultRows(workerAdvRes)[0] ?? {};
-        const workerAdvancesValue = parseFloat(String(workerAdvRow.total ?? "0")) || 0;
+        const workerAdvancesValue = toMoney(String(workerAdvRow.total ?? "0"));
         customerLedgerOverrides.set(workerAdvLedger.id, {
           balance: workerAdvancesValue.toFixed(2),
           balanceSide: "Dr",
@@ -225,28 +230,30 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         voucherEntries.employeeId
       );
 
-    const ledgerBalances = new Map<number, { debits: number; credits: number }>();
-    const bankBalances = new Map<number, { debits: number; credits: number }>();
-    const assetBalances = new Map<number, { debits: number; credits: number }>();
-    const employeeBalances = new Map<number, { debits: number; credits: number }>();
+    type Movement = { debits: Decimal; credits: Decimal };
+    const NO_MOVEMENT: Movement = { debits: new MoneyDecimal(0), credits: new MoneyDecimal(0) };
+    const ledgerBalances = new Map<number, Movement>();
+    const bankBalances = new Map<number, Movement>();
+    const assetBalances = new Map<number, Movement>();
+    const employeeBalances = new Map<number, Movement>();
 
     const addMovement = (
-      target: Map<number, { debits: number; credits: number }>,
+      target: Map<number, Movement>,
       id: number | null | undefined,
-      debits: number,
-      credits: number
+      debits: Decimal,
+      credits: Decimal
     ) => {
       if (!id) return;
-      const existing = target.get(id) || { debits: 0, credits: 0 };
+      const existing = target.get(id) || NO_MOVEMENT;
       target.set(id, {
-        debits: existing.debits + debits,
-        credits: existing.credits + credits,
+        debits: existing.debits.plus(debits),
+        credits: existing.credits.plus(credits),
       });
     };
 
     for (const row of movementRows) {
-      const debits = parseFloat(row.debits || "0");
-      const credits = parseFloat(row.credits || "0");
+      const debits = toMoney(row.debits);
+      const credits = toMoney(row.credits);
       if (row.ledgerAccountId && ledgerIdSet.has(row.ledgerAccountId)) {
         addMovement(ledgerBalances, row.ledgerAccountId, debits, credits);
       }
@@ -258,19 +265,19 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     const calculateBalance = (
       openingBalance: string,
       openingBalanceSide: string | null,
-      debits: number,
-      credits: number
+      debits: Decimal,
+      credits: Decimal
     ) => {
-      let balance = parseFloat(openingBalance || "0");
-      if (openingBalanceSide === "Cr") balance = -balance;
-      balance += debits - credits;
-      const balanceSide = balance >= 0 ? "Dr" : "Cr";
-      return { balance: Math.abs(balance), balanceSide };
+      let balance = toMoney(openingBalance);
+      if (openingBalanceSide === "Cr") balance = balance.negated();
+      balance = balance.plus(debits).minus(credits);
+      const balanceSide = balance.greaterThanOrEqualTo(0) ? "Dr" : "Cr";
+      return { balance: balance.abs(), balanceSide };
     };
 
     const accounts = [
       ...ledgers.map((account) => {
-        const movements = ledgerBalances.get(account.id) || { debits: 0, credits: 0 };
+        const movements = ledgerBalances.get(account.id) || NO_MOVEMENT;
         const custOb = customerObMap.get(account.id);
         const effectiveOB = custOb?.openingBalance ?? account.openingBalance ?? "0";
         const effectiveOBSide = custOb?.openingBalanceSide ?? account.openingBalanceSide;
@@ -287,7 +294,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
             subType: account.subType,
             balance: override.balance,
             balanceSide: override.balanceSide,
-            openingBalance: parseFloat(effectiveOB),
+            openingBalance: toMoney(effectiveOB).toNumber(),
             openingBalanceSide: effectiveOBSide || "Dr",
             active: account.active,
             parentId: account.parentId,
@@ -310,14 +317,14 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           subType: account.subType,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: parseFloat(effectiveOB),
+          openingBalance: toMoney(effectiveOB).toNumber(),
           openingBalanceSide: effectiveOBSide || "Dr",
           active: account.active,
           parentId: account.parentId,
         };
       }),
       ...banks.map((account) => {
-        const movements = bankBalances.get(account.id) || { debits: 0, credits: 0 };
+        const movements = bankBalances.get(account.id) || NO_MOVEMENT;
         const { balance, balanceSide } = calculateBalance(
           account.openingBalance || "0",
           account.openingBalanceSide,
@@ -332,14 +339,14 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           name: `${account.name} (${account.bankName})`,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: parseFloat(account.openingBalance || "0"),
+          openingBalance: toMoney(account.openingBalance).toNumber(),
           openingBalanceSide: account.openingBalanceSide || "Dr",
           active: account.active,
           parentId: null,
         };
       }),
       ...assets.map((asset) => {
-        const movements = assetBalances.get(asset.id) || { debits: 0, credits: 0 };
+        const movements = assetBalances.get(asset.id) || NO_MOVEMENT;
         const { balance, balanceSide } = calculateBalance(
           asset.openingBalance || "0",
           "Dr",
@@ -354,24 +361,25 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           name: asset.name,
           balance: balance.toFixed(2),
           balanceSide,
-          openingBalance: parseFloat(asset.openingBalance || "0"),
+          openingBalance: toMoney(asset.openingBalance).toNumber(),
           openingBalanceSide: "Dr",
           active: asset.active,
           parentId: null,
         };
       }),
       ...employees.map((employee) => {
-        const movements = employeeBalances.get(employee.id) || { debits: 0, credits: 0 };
-        const openingBalance = parseFloat(employee.openingBalance || "0");
-        const netBalance = openingBalance + movements.credits - movements.debits;
-        const balanceSide = netBalance >= 0 ? "Cr" : "Dr";
+        const movements = employeeBalances.get(employee.id) || NO_MOVEMENT;
+        const openingBalanceExact = toMoney(employee.openingBalance);
+        const openingBalance = openingBalanceExact.toNumber();
+        const netBalance = openingBalanceExact.plus(movements.credits).minus(movements.debits);
+        const balanceSide = netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr";
         return {
           id: `employee-${employee.id}`,
           accountId: employee.id,
           type: "employee",
           code: employee.code,
           name: `${employee.firstName} ${employee.lastName}`,
-          balance: Math.abs(netBalance).toFixed(2),
+          balance: netBalance.abs().toFixed(2),
           balanceSide,
           openingBalance,
           openingBalanceSide: "Cr",

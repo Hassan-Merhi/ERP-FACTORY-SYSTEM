@@ -10,11 +10,14 @@ import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
+import { allStockItemsOwned, ownLocationIds } from "../../helpers/companyOwnership";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import { logAudit, buildItemLevelChanges } from "../../_helpers";
 import { stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
@@ -61,6 +64,27 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
         return res.status(403).json({
           message: "Access denied: Voucher belongs to a different company",
         });
+      }
+
+      // Body locations and items are outside the path-based company scope.
+      const ownedLocations = await ownLocationIds(existingVoucher.companyId, [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
+      ]);
+      const foreignLocation = [
+        sourceLocationId,
+        destinationLocationId,
+        ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId).filter(Boolean),
+      ].some((locationId) => !ownedLocations.has(Number(locationId)));
+      if (foreignLocation) return res.status(400).json({ message: "Location not found" });
+      if (
+        !(await allStockItemsOwned(
+          existingVoucher.companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+        ))
+      ) {
+        return res.status(400).json({ message: "Stock item not found" });
       }
 
       const blockedVoucherReason = voucherMutationBlockReason(existingVoucher);
@@ -131,14 +155,14 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
           }
 
           // Calculate totals and prepare items data
-          let totalAmount = 0;
+          // Each line is quantity × rate at cents, exact; the voucher total is
+          // the sum of those lines, so the two always agree.
+          let totalAmount: Decimal = new MoneyDecimal(0);
 
           const transferItemsData = items.map((item) => {
-            const quantity = parseFloat(item.quantity);
-            const rate = parseFloat(item.rate);
-            const itemTotal = quantity * rate;
+            const itemTotal = toMoney(item.quantity).times(toMoney(item.rate)).toDecimalPlaces(2);
 
-            totalAmount += itemTotal;
+            totalAmount = totalAmount.plus(itemTotal);
 
             return {
               transferId: transferVoucher.id,
@@ -163,17 +187,17 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
           }
 
           for (const oldItem of oldTransferItems) {
-            const quantity = parseFloat(oldItem.quantity);
-            const rate = parseFloat(oldItem.rate);
+            const quantity = toMoney(oldItem.quantity);
+            const rate = toMoney(oldItem.rate);
 
             // Add back to source location (reverse the subtraction)
             await adjustInventory(
               tx,
               oldSourceLocationId,
               oldItem.stockItemId,
-              quantity,
+              quantity.toNumber(),
               existingVoucher.companyId!,
-              rate
+              rate.toNumber()
             );
 
             // Subtract from destination location (reverse the addition)
@@ -181,7 +205,7 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
               tx,
               oldDestinationLocationId,
               oldItem.stockItemId,
-              -quantity,
+              -quantity.toNumber(),
               existingVoucher.companyId!
             );
 
@@ -191,8 +215,8 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
                 companyId: existingVoucher.companyId!,
                 stockItemId: oldItem.stockItemId,
                 kind: "transfer",
-                quantity: String(quantity),
-                unitCost: String(Math.max(rate || 0, 0)),
+                quantity: quantity.toFixed(),
+                unitCost: MoneyDecimal.max(rate, 0).toFixed(),
                 fromLocationId: oldDestinationLocationId,
                 toLocationId: oldSourceLocationId,
                 occurredAt,
@@ -221,20 +245,26 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
 
           for (let index = 0; index < transferItemsData.length; index++) {
             const newItem = transferItemsData[index];
-            const quantity = parseFloat(newItem.quantity);
-            const rate = parseFloat(newItem.rate);
+            const quantity = toMoney(newItem.quantity);
+            const rate = toMoney(newItem.rate);
 
             // Subtract from new source location
-            await adjustInventory(tx, newSourceLocationId, newItem.stockItemId, -quantity, existingVoucher.companyId);
+            await adjustInventory(
+              tx,
+              newSourceLocationId,
+              newItem.stockItemId,
+              -quantity.toNumber(),
+              existingVoucher.companyId
+            );
 
             // Add to new destination location
             await adjustInventory(
               tx,
               newDestinationLocationId,
               newItem.stockItemId,
-              quantity,
+              quantity.toNumber(),
               existingVoucher.companyId,
-              rate
+              rate.toNumber()
             );
 
             await postStockMovementTx(
@@ -243,8 +273,8 @@ export function registerVoucherTransferOnlyRoutes(app: Express) {
                 companyId: existingVoucher.companyId!,
                 stockItemId: newItem.stockItemId,
                 kind: "transfer",
-                quantity: String(quantity),
-                unitCost: String(Math.max(rate || 0, 0)),
+                quantity: quantity.toFixed(),
+                unitCost: MoneyDecimal.max(rate, 0).toFixed(),
                 fromLocationId: newSourceLocationId,
                 toLocationId: newDestinationLocationId,
                 occurredAt,

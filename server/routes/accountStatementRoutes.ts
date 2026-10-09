@@ -20,6 +20,7 @@ import fs from "fs";
 import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
+import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
@@ -121,7 +122,7 @@ export function registerAccountStatementRoutes(app: Express) {
       const entryColumn = typeToColumn[accountType];
       if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
 
-      let rawOB = 0;
+      let rawOB = new MoneyDecimal(0);
       let obSide = "Dr";
       if (accountType === "ledger") {
         const [acct] = await db
@@ -133,7 +134,7 @@ export function registerAccountStatementRoutes(app: Express) {
           .from(customers)
           .where(eq(customers.ledgerAccountId, accountId))
           .limit(1);
-        rawOB = parseFloat(linkedCust?.ob ?? acct?.ob ?? "0") || 0;
+        rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
         obSide = linkedCust?.side ?? acct?.side ?? "Dr";
 
         if (linkedCust) {
@@ -202,13 +203,12 @@ export function registerAccountStatementRoutes(app: Express) {
                 ),
             ]);
 
-            const salesTotal = parseFloat(salesRows[0]?.total || "0");
-            const nonInvNet = parseFloat(cbRows[0]?.net || "0");
-            const vNet = parseFloat(lVRows[0]?.net || "0") + parseFloat(cVRows[0]?.net || "0");
-            const ob = parseFloat(linkedCust.ob || "0");
+            const ob = toMoney(linkedCust.ob);
             const side = linkedCust.side || "Dr";
-            const prePeriodBalance = (side === "Dr" ? ob : -ob) + salesTotal + nonInvNet + vNet;
-            return res.json({ balance: prePeriodBalance });
+            const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
+              sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVRows[0]?.net, cVRows[0]?.net])
+            );
+            return res.json({ balance: prePeriodBalance.toNumber() });
           }
         }
       } else if (accountType === "bank") {
@@ -216,7 +216,7 @@ export function registerAccountStatementRoutes(app: Express) {
           .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
           .from(bankAccounts)
           .where(eq(bankAccounts.id, accountId));
-        rawOB = parseFloat(acct?.ob ?? "0") || 0;
+        rawOB = toMoney(acct?.ob);
         obSide = acct?.side ?? "Dr";
       } else if (accountType === "supplier") {
         const isParentForSupplier = await isParentCompanyContext(companyId);
@@ -225,9 +225,9 @@ export function registerAccountStatementRoutes(app: Express) {
             .select({ ob: suppliers.openingBalance })
             .from(suppliers)
             .where(eq(suppliers.id, accountId));
-          rawOB = parseFloat(acct?.ob ?? "0") || 0;
+          rawOB = toMoney(acct?.ob);
         } else {
-          rawOB = 0;
+          rawOB = new MoneyDecimal(0);
         }
         obSide = "Cr";
       } else if (accountType === "employee") {
@@ -235,26 +235,26 @@ export function registerAccountStatementRoutes(app: Express) {
           .select({ ob: employees.openingBalance })
           .from(employees)
           .where(eq(employees.id, accountId));
-        rawOB = parseFloat(acct?.ob ?? "0") || 0;
+        rawOB = toMoney(acct?.ob);
         obSide = "Cr";
       } else if (accountType === "customer") {
         const [acct] = await db
           .select({ ob: customers.openingBalance })
           .from(customers)
           .where(eq(customers.id, accountId));
-        rawOB = parseFloat(acct?.ob ?? "0") || 0;
+        rawOB = toMoney(acct?.ob);
         obSide = "Dr";
       } else if (accountType === "fixed-asset") {
         const [acct] = await db
           .select({ ob: fixedAssets.openingBalance })
           .from(fixedAssets)
           .where(eq(fixedAssets.id, accountId));
-        rawOB = parseFloat(acct?.ob ?? "0") || 0;
+        rawOB = toMoney(acct?.ob);
         obSide = "Dr";
       }
 
       const isSupplier = accountType === "supplier";
-      let balance = isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB;
+      let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
 
       if (endDate) {
         const conditions = [
@@ -273,12 +273,11 @@ export function registerAccountStatementRoutes(app: Express) {
           .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
           .where(and(...conditions));
 
-        const sumDebit = parseFloat(totals?.totalDebit ?? "0") || 0;
-        const sumCredit = parseFloat(totals?.totalCredit ?? "0") || 0;
-        balance += isSupplier ? sumCredit - sumDebit : sumDebit - sumCredit;
+        const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
+        balance = balance.plus(isSupplier ? net.negated() : net);
       }
 
-      res.json({ balance });
+      res.json({ balance: balance.toNumber() });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -401,7 +400,7 @@ export function registerAccountStatementRoutes(app: Express) {
       if (!dateRange.ok) return res.status(400).json({ message: dateRange.message });
 
       let accountName = "Account";
-      let openingBalance = 0;
+      let openingBalanceExact = new MoneyDecimal(0);
       let openingBalanceSide = "Dr";
 
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
@@ -417,7 +416,7 @@ export function registerAccountStatementRoutes(app: Express) {
           .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
         if (!acct) return res.status(404).json({ message: "Account not found" });
         accountName = acct.name;
-        openingBalance = parseFloat(acct.openingBalance || "0");
+        openingBalanceExact = toMoney(acct.openingBalance);
         openingBalanceSide = acct.openingBalanceSide || "Dr";
       } else if (accountType === "bank") {
         const [acct] = await db
@@ -457,29 +456,39 @@ export function registerAccountStatementRoutes(app: Express) {
       if (startDate && accountType === "ledger") {
         allTxForBF = await storage.getVoucherEntriesByLedger(accountId, undefined, undefined, companyId);
       }
-      let bfBalance = openingBalanceSide === "Dr" ? openingBalance : -openingBalance;
+      // Balances are kept exact and become numbers only for the worksheet cells.
+      const openingBalance = openingBalanceExact.toNumber();
+      const signedOpening = openingBalanceSide === "Dr" ? openingBalanceExact : openingBalanceExact.negated();
+      let bfExact = signedOpening;
       if (startDate && allTxForBF.length > 0) {
         for (const r of allTxForBF) {
           const rDate = statementDateKey(r.voucherDate);
           if (rDate && rDate < startDate) {
             const projected = projectExportCurrencyRow(r as Record<string, unknown>);
-            bfBalance += parseFloat(projected.historicalBaseDebit) - parseFloat(projected.historicalBaseCredit);
+            bfExact = bfExact
+              .plus(toMoney(projected.historicalBaseDebit))
+              .minus(toMoney(projected.historicalBaseCredit));
           }
         }
       }
+      const bfBalance = bfExact.toNumber();
 
-      let runBal = startDate ? bfBalance : openingBalanceSide === "Dr" ? openingBalance : -openingBalance;
+      let runExact = startDate ? bfExact : signedOpening;
+      let totalDrExact = new MoneyDecimal(0);
+      let totalCrExact = new MoneyDecimal(0);
       const enrichedRows = txRows.map((r) => {
         const projected = projectExportCurrencyRow(r as Record<string, unknown>);
-        const dr = parseFloat(projected.historicalBaseDebit || "0");
-        const cr = parseFloat(projected.historicalBaseCredit || "0");
-        runBal += dr - cr;
-        return { ...r, dr, cr, runBal, projected };
+        const drExact = toMoney(projected.historicalBaseDebit);
+        const crExact = toMoney(projected.historicalBaseCredit);
+        runExact = runExact.plus(drExact).minus(crExact);
+        totalDrExact = totalDrExact.plus(drExact);
+        totalCrExact = totalCrExact.plus(crExact);
+        return { ...r, dr: drExact.toNumber(), cr: crExact.toNumber(), runBal: runExact.toNumber(), projected };
       });
 
-      const totalDr = enrichedRows.reduce((s: number, r) => s + r.dr, 0);
-      const totalCr = enrichedRows.reduce((s: number, r) => s + r.cr, 0);
-      const closingRaw = runBal;
+      const totalDr = totalDrExact.toNumber();
+      const totalCr = totalCrExact.toNumber();
+      const closingRaw = runExact.toNumber();
       const closingBalance2 = Math.abs(closingRaw);
       const closingBalanceSide2 = closingRaw >= 0 ? "Dr" : "Cr";
 

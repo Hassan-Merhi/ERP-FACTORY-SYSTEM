@@ -13,6 +13,12 @@ import { buildSafeFilename, contentDisposition } from "../../../../lib/contentDi
 import { requireAuth } from "../../../../auth";
 import {} from "@shared/schema";
 import { buildBrokerStatement } from "./_helpers";
+import { MoneyDecimal, toMoney, type MoneyInput } from "../../../../lib/money";
+
+/** A statement amount as a number for a worksheet cell. */
+const cell = (value: MoneyInput) => toMoney(value).toNumber();
+/** Cents for a worksheet cell, rounded half up from the amount's decimal value. */
+const cents = (value: MoneyInput) => toMoney(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP).toNumber();
 
 export function registerSupplierBrokerStatementRoutes(app: Express) {
   app.get("/api/factory/suppliers/:id/broker-statement", requireAuth, async (req: Request, res: Response) => {
@@ -108,10 +114,10 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
             row.date || "",
             typeLabel[row.type] || row.type,
             row.description,
-            parseFloat(row.amount.toFixed(2)),
-            row.commissionAmount != null ? parseFloat(row.commissionAmount.toFixed(2)) : "",
+            cents(row.amount),
+            row.commissionAmount != null ? cents(row.commissionAmount) : "",
             row.commissionCurrency || "",
-            parseFloat(row.runningBalance.toFixed(2)),
+            cents(row.runningBalance),
           ]);
           dr.getCell("D").numFmt = "#,##0.00";
           dr.getCell("E").numFmt = "#,##0.00";
@@ -133,10 +139,10 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
           "",
           "",
           `Containers: ${section.totalContainers}  |  Freight: ${section.totalFreight}  |  Paid: ${section.totalPaid}  |  FX Out: ${section.totalFxOut}`,
-          parseFloat(section.totalValue),
-          parseFloat(section.totalCommission),
+          cell(section.totalValue),
+          cell(section.totalCommission),
           "",
-          parseFloat(section.netBalance),
+          cell(section.netBalance),
         ]);
         totalsData.font = { bold: true };
         totalsData.getCell("D").numFmt = "#,##0.00";
@@ -172,22 +178,22 @@ export function registerSupplierBrokerStatementRoutes(app: Express) {
         const dr = sumWs.addRow([
           section.currencyCode,
           section.totalContainers,
-          parseFloat(section.totalValue),
-          parseFloat(section.totalCommission),
-          parseFloat(section.totalFreight || "0"),
-          parseFloat(section.totalFxOut),
-          parseFloat(section.totalFxIn),
-          parseFloat(section.totalPaid),
-          parseFloat(section.netBalance),
+          cell(section.totalValue),
+          cell(section.totalCommission),
+          cell(section.totalFreight),
+          cell(section.totalFxOut),
+          cell(section.totalFxIn),
+          cell(section.totalPaid),
+          cell(section.netBalance),
         ]);
         // Colour FX Out red, FX In green for clarity
         ["C", "D", "E", "F", "G", "H", "I"].forEach((col) => {
           dr.getCell(col).numFmt = "#,##0.00";
           dr.getCell(col).alignment = { horizontal: "right" };
         });
-        const fxOutVal = parseFloat(section.totalFxOut);
-        const fxInVal = parseFloat(section.totalFxIn);
-        const freightVal = parseFloat(section.totalFreight || "0");
+        const fxOutVal = cell(section.totalFxOut);
+        const fxInVal = cell(section.totalFxIn);
+        const freightVal = cell(section.totalFreight);
         if (fxOutVal > 0) {
           dr.getCell("F").font = { color: { argb: "FFCC0000" } };
         }

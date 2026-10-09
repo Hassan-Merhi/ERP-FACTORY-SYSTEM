@@ -15,6 +15,7 @@ import {
   getEstimatedPrice,
   getOverloadedBales,
   getRemainingBales,
+  getLoadedBalesColorClass,
   groupOrdersByCustomer,
   statusFilterCounts,
 } from "./invoiceCalculations";
@@ -56,6 +57,23 @@ describe("getRemainingBales / getOverloadedBales", () => {
     expect(getOverloadedBales({ proformaExpectedBales: "20", totalQtyBales: 25 })).toBe(5);
     expect(getOverloadedBales({ proformaExpectedBales: "40", totalQtyBales: 25 })).toBe(0);
     expect(getOverloadedBales({ totalQtyBales: 25 })).toBe(0);
+  });
+});
+
+describe("getLoadedBalesColorClass", () => {
+  it("does not highlight counts below 450, uses light green at 450–499, and dark green at 500+", () => {
+    expect(getLoadedBalesColorClass(0)).toBe("");
+    expect(getLoadedBalesColorClass(449)).toBe("");
+    expect(getLoadedBalesColorClass(450)).toContain("bg-lime-100");
+    expect(getLoadedBalesColorClass(499)).toContain("bg-lime-100");
+    expect(getLoadedBalesColorClass(500)).toContain("bg-emerald-700");
+    expect(getLoadedBalesColorClass(618)).toContain("bg-emerald-700");
+  });
+
+  it("keeps both highlight levels readable in light and dark themes", () => {
+    expect(getLoadedBalesColorClass(450)).toContain("dark:text-lime-200");
+    expect(getLoadedBalesColorClass(500)).toContain("text-white");
+    expect(getLoadedBalesColorClass(500)).toContain("dark:bg-emerald-700");
   });
 });
 

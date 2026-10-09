@@ -9,6 +9,7 @@ import { registerRetailRoutes } from "./retailRoutes";
 import { registerRetailCatalogRoutes } from "./retailCatalogRoutes";
 import { registerRetailReportingRoutes } from "./retailReportingRoutes";
 import { registerRetailFashionRoutes } from "./retailFashionRoutes";
+import { registerRetailFinancialRoutes } from "./retailFinancialRoutes";
 import { registerRetailSettingsRoutes } from "./retailSettingsRoutes";
 
 export function registerStockRoutes(app: Express) {
@@ -23,5 +24,6 @@ export function registerStockRoutes(app: Express) {
   registerRetailCatalogRoutes(app);
   registerRetailReportingRoutes(app);
   registerRetailFashionRoutes(app);
+  registerRetailFinancialRoutes(app);
   registerRetailSettingsRoutes(app);
 }

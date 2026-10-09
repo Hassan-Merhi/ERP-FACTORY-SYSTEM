@@ -2,6 +2,8 @@ import { db } from "../../../db";
 import { getDuePeriods, getRentalBillingDay, getUtcTodayString } from "../../../services/rental/rentalPeriodService";
 import { propertyContracts, propertyMonthlyLedger } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney, type MoneyInput } from "../../../lib/money";
 
 export async function ensureMonthlyLedgerRows(contractId: number, asOfDate?: string) {
   const [contract] = await db.select().from(propertyContracts).where(eq(propertyContracts.id, contractId));
@@ -66,8 +68,8 @@ export async function findEarliestOutstandingMonth(
     const isPastOrCurrent = row.year < nowYear || (row.year === nowYear && row.month <= nowMonth);
     if (!isPastOrCurrent) continue;
 
-    const outstanding = Math.max(0, parseFloat(row.expectedAmount as string) - parseFloat(row.paidAmount as string));
-    if (outstanding > 0.005) {
+    const outstanding = toMoney(row.expectedAmount as string).minus(toMoney(row.paidAmount as string));
+    if (outstanding.gt("0.005")) {
       return { year: row.year, month: row.month };
     }
   }
@@ -87,8 +89,8 @@ export async function buildAllocations(
   contractId: number,
   startYear: number,
   startMonth: number,
-  totalAmount: number,
-  rentalAmount: number
+  totalAmount: MoneyInput,
+  rentalAmount: MoneyInput
 ): Promise<Array<{ year: number; month: number; chunk: string }>> {
   // Load all existing ledger rows for this contract so we can check balances
   const existingRows = await db
@@ -101,11 +103,11 @@ export async function buildAllocations(
     .from(propertyMonthlyLedger)
     .where(eq(propertyMonthlyLedger.contractId, contractId));
 
-  const ledgerMap = new Map<string, { paid: number; expected: number }>();
+  const ledgerMap = new Map<string, { paid: Decimal; expected: Decimal }>();
   for (const row of existingRows) {
     ledgerMap.set(`${row.year}-${row.month}`, {
-      paid: parseFloat(row.paidAmount as string),
-      expected: parseFloat(row.expectedAmount as string),
+      paid: toMoney(row.paidAmount as string),
+      expected: toMoney(row.expectedAmount as string),
     });
   }
 
@@ -114,30 +116,33 @@ export async function buildAllocations(
   const nowMonth = now.getUTCMonth() + 1;
 
   const allocations: Array<{ year: number; month: number; chunk: string }> = [];
-  let remaining = totalAmount;
+  // Exact decimals at cents: each chunk is stored, and the chunks must add up
+  // to the payment exactly.
+  const rental = toMoney(rentalAmount);
+  let remaining = toMoney(totalAmount).toDecimalPlaces(2);
   let ay = startYear,
     am = startMonth;
   let skipped = 0; // guard against infinite loops of already-paid months
 
-  while (remaining > 0.005) {
+  while (remaining.gt("0.005")) {
     const isFuture = ay > nowYear || (ay === nowYear && am > nowMonth);
     const existing = ledgerMap.get(`${ay}-${am}`);
 
-    let outstanding: number;
+    let outstanding: Decimal;
     if (existing) {
       if (isFuture) {
         // Future prepaid month: compare against contract rental amount
-        outstanding = Math.max(0, rentalAmount - existing.paid);
+        outstanding = MoneyDecimal.max(0, rental.minus(existing.paid));
       } else {
         // Current / past due month: compare against its expected amount
-        outstanding = Math.max(0, existing.expected - existing.paid);
+        outstanding = MoneyDecimal.max(0, existing.expected.minus(existing.paid));
       }
     } else {
       // No ledger row yet — full capacity available
-      outstanding = rentalAmount > 0 ? rentalAmount : remaining;
+      outstanding = rental.gt(0) ? rental : remaining;
     }
 
-    if (outstanding <= 0.005) {
+    if (outstanding.lte("0.005")) {
       // Already fully paid — skip this month and try the next
       am++;
       if (am > 12) {
@@ -150,9 +155,9 @@ export async function buildAllocations(
     }
 
     skipped = 0; // reset skip counter once we found an allocatable month
-    const chunk = Math.min(remaining, outstanding);
+    const chunk = MoneyDecimal.min(remaining, outstanding).toDecimalPlaces(2);
     allocations.push({ year: ay, month: am, chunk: chunk.toFixed(2) });
-    remaining = Math.round((remaining - chunk) * 100) / 100;
+    remaining = remaining.minus(chunk);
     am++;
     if (am > 12) {
       am = 1;

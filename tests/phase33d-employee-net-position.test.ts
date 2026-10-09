@@ -166,9 +166,7 @@ describe("Phase 33D employee/factory net position", () => {
       expect.objectContaining({ code: "INVENTORY", value: 0 }),
       expect.objectContaining({ code: "RAW_MATERIAL", value: 0 }),
     ]);
-    expect(res.body.onUs.accounts).toEqual([
-      expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 }),
-    ]);
+    expect(res.body.onUs.accounts).toEqual([expect.objectContaining({ code: "EMPLOYEE_PAYROLL_PAYABLE", value: 0 })]);
   });
 
   it("uses authoritative factory sources, strips duplicate ledger categories, and separates employee payables from receivables", async () => {
@@ -214,9 +212,33 @@ describe("Phase 33D employee/factory net position", () => {
       [],
       [],
       [
-        { id: 1, status: "PENDING_VERIFICATION", orderDate: "2026-09-10", grandTotal: "60", totalQtyBales: 1, customerId: 1, customerName: "Pending Customer" },
-        { id: 2, status: "VERIFIED", orderDate: "2026-09-11", grandTotal: "70", totalQtyBales: 2, customerId: 2, customerName: "Verified Customer" },
-        { id: 3, status: "LOADING", orderDate: "2026-09-12", grandTotal: "80", totalQtyBales: 3, customerId: 3, customerName: "Loading Customer" },
+        {
+          id: 1,
+          status: "PENDING_VERIFICATION",
+          orderDate: "2026-09-10",
+          grandTotal: "60",
+          totalQtyBales: 1,
+          customerId: 1,
+          customerName: "Pending Customer",
+        },
+        {
+          id: 2,
+          status: "VERIFIED",
+          orderDate: "2026-09-11",
+          grandTotal: "70",
+          totalQtyBales: 2,
+          customerId: 2,
+          customerName: "Verified Customer",
+        },
+        {
+          id: 3,
+          status: "LOADING",
+          orderDate: "2026-09-12",
+          grandTotal: "80",
+          totalQtyBales: 3,
+          customerId: 3,
+          customerName: "Loading Customer",
+        },
       ],
       [],
       [
@@ -249,19 +271,21 @@ describe("Phase 33D employee/factory net position", () => {
     });
 
     const forUsCodes = res.body.forUs.accounts.map((account: any) => account.code);
-    expect(forUsCodes).toEqual(expect.arrayContaining([
-      "INVENTORY",
-      "RAW_MATERIAL",
-      "BALANCE_ON_TABLE",
-      "STOCK_OTW",
-      "CASH",
-      "SUPPLIER_OVERPAID",
-      "PENDING_ORDERS",
-      "VERIFIED_ORDERS",
-      "LOADING_ORDERS",
-      "EMPLOYEE_RECEIVABLE",
-      "WORKER_ADVANCES",
-    ]));
+    expect(forUsCodes).toEqual(
+      expect.arrayContaining([
+        "INVENTORY",
+        "RAW_MATERIAL",
+        "BALANCE_ON_TABLE",
+        "STOCK_OTW",
+        "CASH",
+        "SUPPLIER_OVERPAID",
+        "PENDING_ORDERS",
+        "VERIFIED_ORDERS",
+        "LOADING_ORDERS",
+        "EMPLOYEE_RECEIVABLE",
+        "WORKER_ADVANCES",
+      ])
+    );
     expect(forUsCodes).not.toEqual(expect.arrayContaining(["LEGACY_INV", "ADV", "RENT", "INS"]));
 
     const onUsCodes = res.body.onUs.accounts.map((account: any) => account.code);
@@ -273,6 +297,35 @@ describe("Phase 33D employee/factory net position", () => {
     expect(supplierArgs.asOf).toBe("2026-09-15");
     expect(supplierArgs.getConfigFx("CDF")).toBe(0.00035);
     expect(supplierArgs.getConfigFx("USD")).toBe(1);
+  });
+
+  it("sums ledger movements and customer balances exactly", async () => {
+    harness.executeResults.push({ rows: [] }, { rows: [] });
+    harness.selectResults.push(
+      [{ id: 1, name: "Cash", code: "CASH", accountType: "Cash" }],
+      [{ id: 9 }],
+      [
+        { ledgerAccountId: 1, debitAmount: "0.1", creditAmount: "0" },
+        { ledgerAccountId: 1, debitAmount: "0.2", creditAmount: "0" },
+      ],
+      [{ id: 4, legalName: "Tiny Customer", openingBalance: "0.1", openingBalanceSide: "Dr", ledgerAccountId: null }],
+      [{ customerId: 4, net: "-0.09" }],
+      [],
+      [],
+      [],
+      [],
+      []
+    );
+    const res = resHarness();
+
+    await routes.get("GET /api/factory/net-position")!(req(), res);
+
+    expect(res.statusCode).toBe(200);
+    // 0.1 + 0.2 reaches the classifier as 0.3, not 0.30000000000000004.
+    expect(harness.classifyNetPositionAccounts.mock.calls[0][1].get(1)).toEqual({ debit: 0.3, credit: 0 });
+    // 0.1 - 0.09 is exactly the 0.01 threshold, so the customer is not listed;
+    // the float path saw 0.010000000000000009 and listed it.
+    expect(JSON.stringify(res.body)).not.toContain("Tiny Customer");
   });
 
   it("falls back to the client date when asOf is malformed", async () => {

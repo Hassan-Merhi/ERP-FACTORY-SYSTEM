@@ -82,6 +82,7 @@ const compatibilityTranslationFiles = [
   "client/src/i18n/retailWave1Translations.ts",
   "client/src/i18n/retailWave2Translations.ts",
   "client/src/i18n/retailWave3Translations.ts",
+  "client/src/i18n/retailFinancialTranslations.ts",
   "client/src/i18n/retailFashionTranslations.ts",
   "client/src/i18n/wave8ReleaseTranslations.part1.ts",
   "client/src/i18n/wave8ReleaseTranslations.part2.ts",

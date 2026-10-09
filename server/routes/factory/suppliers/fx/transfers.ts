@@ -15,14 +15,14 @@ import { writeDaybookEntry } from "../../_helpers";
 import {
   factorySuppliers,
   factoryContainers,
-  factoryContainerCommissions,
   factoryDaybookEntries,
-  factorySupplierPayments,
   factorySupplierFxTransfers,
   insertFactorySupplierFxTransferSchema,
   factoryFxAllocations,
 } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../../lib/money";
 
 export function registerSupplierFxTransferRoutes(app: Express) {
   app.get("/api/factory/supplier-fx-transfers", requireAuth, async (req: Request, res: Response) => {
@@ -61,137 +61,8 @@ export function registerSupplierFxTransferRoutes(app: Express) {
         .where(and(eq(factorySuppliers.id, parsed.toSupplierId), eq(factorySuppliers.companyId, companyId)));
       if (!toSupplier) return res.status(404).json({ message: "To-supplier not found" });
 
-      // ── Balance validation (Phase 3) ─────────────────────────────────────────
       const currCode = parsed.fromCurrencyCode;
       const fromSupId = parsed.fromSupplierId;
-      const sourceType = parsed.sourceType || "supplier";
-
-      // 1a. Containers for this supplier in this currency (for supplier-bucket validation)
-      const contRowsInCurrency = await db
-        .select({
-          finalPayableAmount: factoryContainers.finalPayableAmount,
-          actualReceivedKg: factoryContainers.actualReceivedKg,
-          totalKg: factoryContainers.totalKg,
-          ratePerKg: factoryContainers.ratePerKg,
-          freight: factoryContainers.freight,
-          id: factoryContainers.id,
-        })
-        .from(factoryContainers)
-        .where(
-          and(
-            eq(factoryContainers.companyId, companyId),
-            eq(factoryContainers.supplierId, fromSupId),
-            eq(factoryContainers.currencyCode, currCode)
-          )
-        );
-
-      const containerIds = contRowsInCurrency.map((c) => c.id);
-      const totalValue = contRowsInCurrency.reduce((s: number, c) => {
-        const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-        const rate = parseFloat(c.ratePerKg || "0");
-        const freight = parseFloat(c.freight || "0");
-        return s + (kg * rate + freight);
-      }, 0);
-
-      // 1b. For commission validation: ALL containers for this supplier (commission may be in a
-      //     different currency than the container, e.g. EUR container with USD commission).
-      const allContainerIds: number[] = containerIds.slice(); // start with same-currency containers
-      if (sourceType === "commission" || sourceType === "both") {
-        const allContRows = await db
-          .select({ id: factoryContainers.id })
-          .from(factoryContainers)
-          .where(and(eq(factoryContainers.companyId, companyId), eq(factoryContainers.supplierId, fromSupId)));
-        for (const c of allContRows) {
-          if (!allContainerIds.includes(c.id)) allContainerIds.push(c.id);
-        }
-      }
-
-      // 2. Commissions from factoryContainerCommissions for relevant containers,
-      //    filtered by commission currency code (handles cross-currency commissions).
-      let totalCommission = 0;
-      if (allContainerIds.length > 0) {
-        const commRows = await db
-          .select({
-            commissionTotal: factoryContainerCommissions.commissionTotal,
-            currencyCode: factoryContainerCommissions.currencyCode,
-          })
-          .from(factoryContainerCommissions)
-          .where(
-            and(
-              eq(factoryContainerCommissions.companyId, companyId),
-              inArray(factoryContainerCommissions.containerId, allContainerIds)
-            )
-          );
-        // Only count commissions denominated in the transfer currency
-        totalCommission = commRows
-          .filter((cm) => (cm.currencyCode || "USD") === currCode)
-          .reduce((s: number, cm) => s + parseFloat(cm.commissionTotal || "0"), 0);
-
-        // Also include direct commissions from containers (commissionAmount / commissionCurrencyCode)
-        if (sourceType === "commission" || sourceType === "both") {
-          const directRows = await db
-            .select({
-              commissionAmount: factoryContainers.commissionAmount,
-              commissionCurrencyCode: factoryContainers.commissionCurrencyCode,
-            })
-            .from(factoryContainers)
-            .where(and(eq(factoryContainers.companyId, companyId), eq(factoryContainers.supplierId, fromSupId)));
-          const directAmt = directRows
-            .filter((r) => (r.commissionCurrencyCode || "USD") === currCode)
-            .reduce((s: number, r) => s + parseFloat(r.commissionAmount || "0"), 0);
-          // Use whichever is larger (factoryContainerCommissions may supersede commissionAmount)
-          if (directAmt > totalCommission) totalCommission = directAmt;
-        }
-      }
-
-      // 3. Payments in this currency
-      const payRows = await db
-        .select({ amount: factorySupplierPayments.amount })
-        .from(factorySupplierPayments)
-        .where(
-          and(
-            eq(factorySupplierPayments.companyId, companyId),
-            eq(factorySupplierPayments.supplierId, fromSupId),
-            eq(factorySupplierPayments.currencyCode, currCode)
-          )
-        );
-      const totalPaid = payRows.reduce((s: number, p) => s + parseFloat(p.amount || "0"), 0);
-
-      // 4. Existing FX transfers out for this supplier + currency
-      const fxRows = await db
-        .select({
-          fromAmount: factorySupplierFxTransfers.fromAmount,
-          sourceType: factorySupplierFxTransfers.sourceType,
-        })
-        .from(factorySupplierFxTransfers)
-        .where(
-          and(
-            eq(factorySupplierFxTransfers.companyId, companyId),
-            eq(factorySupplierFxTransfers.fromSupplierId, fromSupId),
-            eq(factorySupplierFxTransfers.fromCurrencyCode, currCode)
-          )
-        );
-
-      // FX deducted from supplier bucket (source = supplier or both)
-      const fxSupplierOut = fxRows
-        .filter((t) => !t.sourceType || t.sourceType === "supplier" || t.sourceType === "both")
-        .reduce((s: number, t) => s + parseFloat(t.fromAmount || "0"), 0);
-      // FX deducted from commission bucket (source = commission or both)
-      const fxCommOut = fxRows
-        .filter((t) => t.sourceType === "commission" || t.sourceType === "both")
-        .reduce((s: number, t) => s + parseFloat(t.fromAmount || "0"), 0);
-
-      const supplierAvail = totalValue - totalCommission - totalPaid - fxSupplierOut;
-      const commAvail = totalCommission - fxCommOut;
-
-      let _available: number;
-      if (sourceType === "commission") {
-        _available = commAvail;
-      } else if (sourceType === "both") {
-        _available = supplierAvail + commAvail;
-      } else {
-        _available = supplierAvail; // "supplier" (default)
-      }
 
       // ─────────────────────────────────────────────────────────────────────────
       // Overpayments are allowed — the remaining balance will go negative (CR),
@@ -235,24 +106,23 @@ export function registerSupplierFxTransferRoutes(app: Express) {
                 )
             : [];
 
-        const allocatedPerContainer: Record<number, number> = {};
+        const allocatedPerContainer = new Map<number, Decimal>();
         for (const a of prevAllocs)
-          allocatedPerContainer[a.containerId] =
-            (allocatedPerContainer[a.containerId] || 0) + parseFloat(a.allocatedAmount || "0");
+          allocatedPerContainer.set(
+            a.containerId,
+            (allocatedPerContainer.get(a.containerId) ?? new MoneyDecimal(0)).plus(toMoney(a.allocatedAmount))
+          );
 
-        let rem = parseFloat(created.fromAmount);
+        let rem = toMoney(created.fromAmount);
         const rows = [];
         for (const c of allContainers) {
-          if (rem <= 0.001) break;
+          if (rem.lessThanOrEqualTo(0.001)) break;
           // Use totalKg (agreed weight) for FX allocation ceiling — same as supplier balance.
-          const kg = parseFloat(c.totalKg || "0");
-          const rate = parseFloat(c.ratePerKg || "0");
-          const freight = parseFloat(c.freight || "0");
-          const val = kg * rate + freight;
-          const used = allocatedPerContainer[c.id] || 0;
-          const avail = Math.max(0, val - used);
-          if (avail <= 0.001) continue;
-          const toAlloc = Math.min(rem, avail);
+          const val = toMoney(c.totalKg).times(toMoney(c.ratePerKg)).plus(toMoney(c.freight));
+          const used = allocatedPerContainer.get(c.id) ?? new MoneyDecimal(0);
+          const avail = MoneyDecimal.max(0, val.minus(used));
+          if (avail.lessThanOrEqualTo(0.001)) continue;
+          const toAlloc = MoneyDecimal.min(rem, avail);
           rows.push({
             companyId,
             fxTransferId: created.id,
@@ -261,7 +131,7 @@ export function registerSupplierFxTransferRoutes(app: Express) {
             allocatedAmount: toAlloc.toFixed(4),
             currencyCode: currCode,
           });
-          rem -= toAlloc;
+          rem = rem.minus(toAlloc);
         }
         if (rows.length > 0) await db.insert(factoryFxAllocations).values(rows);
       } catch (allocErr) {
@@ -277,8 +147,8 @@ export function registerSupplierFxTransferRoutes(app: Express) {
         referenceId: created.id,
         referenceTable: "factory_supplier_fx_transfers",
         description: `${transferKind}: ${fromSupplier.name} ${created.fromCurrencyCode} ${parseFloat(created.fromAmount).toFixed(2)} → ${toSupplier.name} USD ${parseFloat(created.toAmountUsd).toFixed(2)}`,
-        amountCurrency: parseFloat(created.fromAmount),
-        amountUsd: parseFloat(created.toAmountUsd),
+        amountCurrency: toMoney(created.fromAmount).toNumber(),
+        amountUsd: toMoney(created.toAmountUsd).toNumber(),
         currencyCode: created.fromCurrencyCode,
         effectiveDate: (req.body.effectiveDate as string) || null,
       });

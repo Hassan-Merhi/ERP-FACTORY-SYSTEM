@@ -47,9 +47,17 @@ import {
   type RetailSaleLineRequest,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems, nextRetailTransferQuantities } from "../../services/retail/retailStockMath";
+import { postRetailRefundAccountingTx, refundRetailPaymentsTx, validateRetailShiftTx } from "../../services/retail/retailFinancialService";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
+
+const paymentSchema = z.object({
+  method: z.enum(["cash", "card", "bank", "mobile", "other"]),
+  amount: z.coerce.number().finite().positive(),
+  tenderedAmount: z.coerce.number().finite().positive().optional(),
+  reference: z.string().trim().max(191).optional(),
+});
 
 const saleItemSchema = z.object({
   variantId: z.coerce.number().int().positive(),
@@ -64,6 +72,8 @@ const saleSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
+  shiftId: z.coerce.number().int().positive().optional(),
+  payments: z.array(paymentSchema).min(1).max(8).optional(),
   customerId: z.coerce.number().int().positive().nullable().optional(),
   customerName: z.string().trim().max(191).nullable().optional(),
   orderDiscount: z
@@ -92,6 +102,7 @@ const cartPreviewSchema = z.object({
 const returnSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
+  shiftId: z.coerce.number().int().positive().optional(),
   notes: z.string().trim().max(2000).optional(),
   items: z
     .array(
@@ -540,7 +551,10 @@ export function registerRetailPosRoutes(app: Express): void {
           notes: body.notes ?? null,
           items: requestedLines,
           userId,
+          username: req.user?.username ?? null,
           canSellNegativeStock,
+          shiftId: body.shiftId ?? null,
+          payments: body.payments,
           customer,
           orderDiscount,
           settings,
@@ -595,8 +609,8 @@ export function registerRetailPosRoutes(app: Express): void {
       await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
 
-      const result = await db.transaction((tx) =>
-        createRetailReturnInTx(tx, {
+      const result = await db.transaction(async (tx) => {
+        const returned = await createRetailReturnInTx(tx, {
           companyId,
           saleId,
           locationId: body.locationId,
@@ -604,8 +618,39 @@ export function registerRetailPosRoutes(app: Express): void {
           notes: body.notes ?? null,
           items: body.items,
           userId,
-        })
-      );
+        });
+        if (!returned.replayed) {
+          const shift = await validateRetailShiftTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            userId,
+            shiftId: body.shiftId ?? null,
+          });
+          const refunds = await refundRetailPaymentsTx(tx, {
+            companyId,
+            saleId,
+            locationId: body.locationId,
+            shiftId: shift?.id ?? null,
+            refundAmount: returned.refundAmount,
+            idempotencyKey: body.idempotencyKey,
+            userId,
+          });
+          await postRetailRefundAccountingTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            saleId,
+            sourceType: "retail-pos-return",
+            sourceId: String(returned.returnId),
+            idempotencyKey: `retail-pos-return:${returned.returnId}`,
+            refundAmount: returned.refundAmount,
+            restoredCost: returned.costValue,
+            refunds,
+            userId,
+            username: req.user?.username ?? null,
+          });
+        }
+        return returned;
+      });
 
       res.status(result.replayed ? 200 : 201).json({
         ...result,

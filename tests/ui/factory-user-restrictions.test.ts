@@ -105,8 +105,8 @@ describe("Factory restriction settings wiring", () => {
   it("shows stored Factory tab visibility with checked meaning visible", () => {
     const restrictions = readFileSync("client/src/pages/settings/users/AdvancedRestrictions.tsx", "utf8");
     expect(restrictions).toContain("Checked tabs are <strong>shown</strong> to this user.");
-    expect(restrictions).toContain("checked={!hiddenCostFields.includes(tab.key)}");
-    expect(restrictions).toContain("setFactoryTabVisible(tab.key, checked === true)");
+    expect(restrictions).toContain("checked={isFactoryTabVisibleInProfile(tab, hiddenCostFields)}");
+    expect(restrictions).toContain("setFactoryTabsVisible([tab], checked === true)");
   });
 
   it("exposes the expanded Factory page and tab catalogs", () => {

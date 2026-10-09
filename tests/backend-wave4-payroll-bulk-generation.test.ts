@@ -274,4 +274,30 @@ describe("bulk payroll generation", () => {
     );
     expect(Number(remaining.rows[0].total)).toBeCloseTo(50, 2);
   });
+
+  it("stores pay components at cents that add up to the stored net", async () => {
+    const workerId = await insertWorker({
+      full_name: `${PREFIX} Cents`,
+      salary_type: "Monthly",
+      pay_frequency: "Weekly",
+      base_salary: "0",
+      weekly_salary: "100.00",
+      active: true,
+    });
+    const response = await agent.post("/api/factory/payrolls/generate-bulk").send({
+      companyId: ctx.companyId,
+      periodStart: "2026-10-01",
+      periodEnd: "2026-10-31",
+      workerIds: [workerId],
+      transportOverrides: { [String(workerId)]: "0.336" },
+    });
+    expect(response.status, response.text).toBe(200);
+
+    const [row] = await payrollFor(workerId);
+    // 31/7 weeks at 100 is 442.857…, stored 442.86; transport 0.336 is stored 0.34.
+    expect(row.base_salary).toBe("442.86");
+    expect(row.transport).toBe("0.34");
+    // The net used to be rounded from the unrounded parts (443.19), a cent short of its own components.
+    expect(row.net_salary).toBe("443.20");
+  });
 });

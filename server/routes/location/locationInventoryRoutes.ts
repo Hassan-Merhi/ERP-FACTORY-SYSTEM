@@ -251,7 +251,7 @@ export function registerLocationInventoryRoutes(app: Express) {
       });
 
       // Use XLSX to create workbook (via ExcelJS if available, else JSON export)
-      const XLSX = await import("xlsx-js-style");
+      const XLSX = (await import("xlsx-js-style")).default;
       const worksheet = XLSX.utils.json_to_sheet(workbookData);
 
       // Set column widths

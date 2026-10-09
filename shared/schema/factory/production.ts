@@ -16,16 +16,7 @@ import { z } from "zod";
 import { companies, locations } from "../common";
 import { customers } from "../erp";
 import { containers } from "../containers";
-
-/**
- * Whether a string is a number as a numeric column reads it (so "5kg", which
- * Postgres would reject, fails here instead of at insert) and passes `test`.
- * Only the sign is checked, so no money arithmetic happens here.
- */
-const numericStringWhere = (test: (value: number) => boolean) => (val: string) =>
-  val.trim() !== "" && Number.isFinite(Number(val)) && test(Number(val));
-const isPositiveNumeric = numericStringWhere((value) => value > 0);
-const isNonNegativeNumeric = numericStringWhere((value) => value >= 0);
+import { isNonNegativeNumeric, isPositiveNumeric } from "../../numericString";
 
 // ─── Bales ───────────────────────────────────────────────────────────────────
 export const bales = pgTable(

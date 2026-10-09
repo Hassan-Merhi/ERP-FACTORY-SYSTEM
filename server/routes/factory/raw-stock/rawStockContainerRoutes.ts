@@ -1,4 +1,6 @@
 import { parseId } from "../../../lib/parseId";
+import type Decimal from "decimal.js";
+import { parseMoneyInput, toMoney } from "../../../lib/money";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
@@ -63,13 +65,23 @@ async function resolvePostOffloadChargeFx(opts: {
   }
   // Third currency — fetch independently
   const fetched = await getOrFetchFxRateToUsd(companyId, chargeCcy, txDate);
-  const rate = parseFloat(fetched);
+  const rate = toMoney(fetched).toNumber();
   if (!rate || rate <= 0) {
     throw new Error(
       `Cannot resolve FX rate for charge currency ${chargeCcy} on ${txDate}. Add an FX rate for this currency first.`
     );
   }
   return { fxRateToUsd: rate, fxRateConfirmed: true, fxRateDate: txDate };
+}
+
+/**
+ * A request amount that must be a positive number, read the way parseFloat
+ * read it; null when it is missing, does not parse or is not above zero. The
+ * old "not above zero" checks on a float let a non-numeric value through as NaN.
+ */
+function positiveRequestAmount(value: unknown): Decimal | null {
+  const parsed = value ? parseMoneyInput(value) : null;
+  return parsed && parsed.greaterThan(0) ? parsed : null;
 }
 
 export function registerRawStockContainerRoutes(app: Express) {
@@ -84,7 +96,8 @@ export function registerRawStockContainerRoutes(app: Express) {
       const { dutyAmount, dutyNotes } = req.body;
       const userId = String(req.session.userId || req.user?.id || "system");
 
-      if (!dutyAmount || parseFloat(dutyAmount) <= 0) {
+      const dutyAmountExact = positiveRequestAmount(dutyAmount);
+      if (!dutyAmountExact) {
         return res.status(400).json({ message: "Valid duty amount is required" });
       }
 
@@ -98,7 +111,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         return res.status(400).json({ message: "Only containers with PENDING duty can be confirmed" });
       }
 
-      const newDutyAmount = parseFloat(dutyAmount);
+      const newDutyAmount = dutyAmountExact;
       let resultCostPerKg: number | null = null;
 
       // ── Single atomic transaction: all reads + writes happen together ─────────
@@ -145,7 +158,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         //    correct, complete cost picture without a second round-trip.
         const containerSnapshot = {
           ...lockedContainer,
-          dutyAmount: String(newDutyAmount),
+          dutyAmount: newDutyAmount.toFixed(),
           dutyStatus: "CONFIRMED" as string,
           dutyNotes: dutyNotes || lockedContainer.dutyNotes,
         };
@@ -165,7 +178,7 @@ export function registerRawStockContainerRoutes(app: Express) {
           companyId,
           containerId,
           oldDutyAmount: lockedContainer.dutyAmount || "0",
-          newDutyAmount: String(newDutyAmount),
+          newDutyAmount: newDutyAmount.toFixed(),
           oldDutyStatus: lockedContainer.dutyStatus,
           newDutyStatus: "CONFIRMED",
           notes: dutyNotes || null,
@@ -176,7 +189,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         await tx
           .update(factoryContainers)
           .set({
-            dutyAmount: String(newDutyAmount),
+            dutyAmount: newDutyAmount.toFixed(),
             dutyStatus: "CONFIRMED",
             dutyNotes: dutyNotes || lockedContainer.dutyNotes,
             finalPayableAmount: String(next.totalCost),
@@ -209,7 +222,7 @@ export function registerRawStockContainerRoutes(app: Express) {
           referenceTable: "factory_containers",
           description: `Duty confirmed for container ${lockedContainer.containerNumber}: ${newDutyAmount.toFixed(2)}`,
           currencyCode: lockedContainer.currencyCode || "USD",
-          amountCurrency: newDutyAmount,
+          amountCurrency: newDutyAmount.toNumber(),
           fxRateToUsd: fxRate,
         });
       });
@@ -234,7 +247,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         return res.status(400).json({ message: "At least one charge is required" });
       }
 
-      const validCharges = charges.filter((c) => parseFloat(c.amount || "0") > 0);
+      const validCharges = charges.filter((c) => positiveRequestAmount(c.amount));
       if (validCharges.length === 0) {
         return res.status(400).json({ message: "All charge amounts are zero" });
       }
@@ -258,7 +271,7 @@ export function registerRawStockContainerRoutes(app: Express) {
       if (!pocFxLooksSet) {
         return res.status(400).json({ message: new UnresolvedExchangeRateError(containerCcy).message });
       }
-      if (parseFloat(container.actualReceivedKg || "0") <= 0) {
+      if (toMoney(container.actualReceivedKg).lessThanOrEqualTo(0)) {
         return res.status(400).json({ message: "Container has no received weight" });
       }
 
@@ -326,8 +339,8 @@ export function registerRawStockContainerRoutes(app: Express) {
         resolvedChargeInputs.push({ ...fxResolved, accountingCtx: acctCtx });
       }
 
-      const oldContainerCostPerKgUsd = parseFloat(container.ratePerKgUsd || "0");
-      const oldContainerTotalUsd = parseFloat(container.finalPayableAmountUsd || "0");
+      const oldContainerCostPerKgUsd = toMoney(container.ratePerKgUsd).toNumber();
+      const oldContainerTotalUsd = toMoney(container.finalPayableAmountUsd).toNumber();
 
       let lastResult = null;
       const allCascadeResults: CascadeResult[] = [];
@@ -345,7 +358,7 @@ export function registerRawStockContainerRoutes(app: Express) {
             userId,
             chargeData: {
               description: charge.description || "Post-offload charge",
-              amount: parseFloat(charge.amount),
+              amount: positiveRequestAmount(charge.amount)!.toNumber(),
               currencyCode: charge.currencyCode || "USD",
               fxRateToUsd,
               fxRateConfirmed,
@@ -376,7 +389,7 @@ export function registerRawStockContainerRoutes(app: Express) {
         oldContainerCostPerKgUsd,
         newContainerCostPerKgUsd: r.newContainerCostPerKgUsd,
         oldContainerTotalUsd,
-        newContainerTotalUsd: parseFloat(
+        newContainerTotalUsd: toMoney(
           String(
             (
               await db
@@ -385,14 +398,14 @@ export function registerRawStockContainerRoutes(app: Express) {
                 .where(eq(factoryContainers.id, containerId))
             )[0]?.v || "0"
           )
-        ),
+        ).toNumber(),
         rawStockRowsUpdated: cascadeResult?.rawStockRowsUpdated ?? 0,
-        supplierLockedRateOld: r.supplierLockedRateBefore ? parseFloat(r.supplierLockedRateBefore) : null,
-        supplierLockedRateNew: r.supplierLockedRateAfter ? parseFloat(r.supplierLockedRateAfter) : null,
+        supplierLockedRateOld: r.supplierLockedRateBefore ? toMoney(r.supplierLockedRateBefore).toNumber() : null,
+        supplierLockedRateNew: r.supplierLockedRateAfter ? toMoney(r.supplierLockedRateAfter).toNumber() : null,
         supplierRemainingKg: r.supplierRemainingKg,
         containerReceivedKg: r.containerReceivedKg,
         containerRemainingKg: r.containerRemainingKg,
-        remainingFraction: parseFloat(r.remainingFraction),
+        remainingFraction: toMoney(r.remainingFraction).toNumber(),
         fullContainerValueDeltaUsd: r.fullContainerValueDeltaUsd,
         supplierInventoryValueDeltaUsd: r.supplierInventoryValueDeltaUsd,
         supplierValueBeforeUsd: r.supplierValueBeforeUsd,
@@ -470,7 +483,8 @@ export function registerRawStockContainerRoutes(app: Express) {
           legacyBaselineRate,
         } = req.body;
 
-        if (!amount || parseFloat(amount) <= 0) {
+        const amountExact = positiveRequestAmount(amount);
+        if (!amountExact) {
           return res.status(400).json({ message: "amount must be > 0" });
         }
 
@@ -546,10 +560,11 @@ export function registerRawStockContainerRoutes(app: Express) {
               txDate,
               userId,
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
-              legacyBaselineRate: legacyBaselineRate !== undefined ? parseFloat(legacyBaselineRate) : undefined,
+              legacyBaselineRate:
+                legacyBaselineRate !== undefined ? (parseMoneyInput(legacyBaselineRate)?.toNumber() ?? NaN) : undefined,
               chargeData: {
                 description: description || "Post-offload charge",
-                amount: parseFloat(amount),
+                amount: amountExact.toNumber(),
                 currencyCode: chargeCcy,
                 fxRateToUsd: fxResolved.fxRateToUsd,
                 fxRateConfirmed: fxResolved.fxRateConfirmed,
@@ -627,7 +642,8 @@ export function registerRawStockContainerRoutes(app: Express) {
               txDate,
               userId,
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
-              legacyBaselineRate: legacyBaselineRate !== undefined ? parseFloat(legacyBaselineRate) : undefined,
+              legacyBaselineRate:
+                legacyBaselineRate !== undefined ? (parseMoneyInput(legacyBaselineRate)?.toNumber() ?? NaN) : undefined,
             })
           );
         } catch (err: unknown) {
@@ -678,7 +694,8 @@ export function registerRawStockContainerRoutes(app: Express) {
         if (containerId === null || chargeId === null) return res.status(400).json({ message: "Invalid id" });
 
         const { legacyBaselineRate, expectedVersion } = req.body || {};
-        if (!legacyBaselineRate || parseFloat(legacyBaselineRate) <= 0) {
+        const legacyBaselineRateExact = positiveRequestAmount(legacyBaselineRate);
+        if (!legacyBaselineRateExact) {
           return res.status(400).json({ message: "legacyBaselineRate is required and must be > 0" });
         }
 
@@ -702,7 +719,7 @@ export function registerRawStockContainerRoutes(app: Express) {
               chargeId,
               txDate: getClientDate(req),
               userId,
-              legacyBaselineRate: parseFloat(legacyBaselineRate),
+              legacyBaselineRate: legacyBaselineRateExact.toNumber(),
               expectedVersion: expectedVersion !== undefined ? parseInt(expectedVersion) : undefined,
             })
           );

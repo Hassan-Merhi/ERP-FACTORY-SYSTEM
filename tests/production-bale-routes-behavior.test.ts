@@ -203,6 +203,47 @@ describe("production bale route behavior", () => {
     expect(res.body).toEqual({ message: "Product not found" });
   });
 
+  it("costs each bale and draws the mix batch exactly", async () => {
+    harness.selectResults.push([{ id: 7, companyId: 4, code: "HMD01" }]);
+    harness.storage.getMixBatchById.mockResolvedValue({
+      id: 5,
+      totalWeightKg: "10",
+      usedKg: "0.1",
+      costPerKg: "4.35",
+    });
+    const inserted: Record<string, unknown>[] = [];
+    const updates: Record<string, unknown>[] = [];
+    const tx: any = {
+      select: () => ({ from: () => ({ where: () => ({ for: async () => [{ id: 1, nextNumber: 12 }] }) }) }),
+      insert: () => ({
+        values: (values: Record<string, unknown>) => {
+          inserted.push(values);
+          return { returning: async () => [values] };
+        },
+      }),
+      update: () => ({
+        set: (values: Record<string, unknown>) => {
+          updates.push(values);
+          return { where: async () => undefined };
+        },
+      }),
+    };
+    harness.db.transaction.mockImplementation(async (callback: (t: unknown) => unknown) => callback(tx));
+
+    const res = responseHarness();
+    await routes.get("POST /api/production-bales/create-batch")!(
+      request({
+        body: { mixBatchId: 5, productId: 7, locationId: 2, quantity: "1", weightPerBale: "0.5", mode: "counting" },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    // 0.5 kg at 4.35 is 2.175, which rounds to 2.18; the float product rounded to 2.17.
+    expect(inserted[0]).toMatchObject({ weightKg: "0.5", costPerKg: "4.35", totalCost: "2.18" });
+    expect(updates.find((u) => "usedKg" in u)).toMatchObject({ usedKg: "0.600" });
+  });
+
   it("looks up a bale by trimmed barcode and returns the first scoped match", async () => {
     harness.selectResults.push([{ bale: { id: 8 }, product: { id: 7 }, mixBatch: { id: 5 } }]);
     const res = responseHarness();
