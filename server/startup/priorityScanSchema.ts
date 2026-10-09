@@ -70,8 +70,8 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS factory_priority_auto_allocations (
       id BIGSERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
-      bale_id INTEGER NOT NULL REFERENCES factory_bales(id),
-      order_id INTEGER NOT NULL REFERENCES customer_orders(id),
+      bale_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL,
       reference_number VARCHAR(100) NOT NULL,
       priority INTEGER NOT NULL,
       color VARCHAR(64) NOT NULL,
@@ -86,6 +86,13 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
       assigned_by_name TEXT,
       history_id BIGINT
     )`,
+  // History must outlive its physical/order records. Earlier branch versions
+  // created FKs which would block hard deletion of a bale/order; drop them for
+  // new deployments as well as databases that ran an earlier startup ensure.
+  `ALTER TABLE factory_priority_auto_allocations
+     DROP CONSTRAINT IF EXISTS factory_priority_auto_allocations_bale_id_fkey`,
+  `ALTER TABLE factory_priority_auto_allocations
+     DROP CONSTRAINT IF EXISTS factory_priority_auto_allocations_order_id_fkey`,
   `ALTER TABLE factory_priority_auto_allocations
      ADD COLUMN IF NOT EXISTS proforma_id INTEGER`,
   `ALTER TABLE factory_priority_auto_allocations
