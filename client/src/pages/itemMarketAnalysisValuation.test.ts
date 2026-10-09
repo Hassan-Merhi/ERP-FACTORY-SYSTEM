@@ -60,6 +60,25 @@ describe("Item Market Analysis purchase cost modes", () => {
     expect(valueMarketRow(row, true).profit).toBeCloseTo(64, 4);
   });
 
+  it("revalues net-negative return periods using either selected purchase rate", () => {
+    const row = makeRow({
+      soldQty: -4,
+      revenue: -160,
+      weightedPurchaseCost: 10,
+      weightedPurchaseCostWithOffloading: 12,
+    });
+
+    const base = valueMarketRow(row, false);
+    const landed = valueMarketRow(row, true);
+    expect(base.profit).toBeCloseTo(-120, 4);
+    expect(landed.profit).toBeCloseTo(-112, 4);
+    expect(base.profitPerUnit).toBeCloseTo(30, 4);
+    expect(landed.profitPerUnit).toBeCloseTo(28, 4);
+    expect(base.marketStatus).toBe("losing");
+    expect(landed.marketStatus).toBe("losing");
+    expect(row.profit).toBe(316.47);
+  });
+
   it("changes losing and gaining classifications when offloading crosses break-even", () => {
     const row = makeRow({
       soldQty: 10,
