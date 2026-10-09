@@ -14,6 +14,7 @@ import {
   factoryBaleProducts,
   factoryBales,
   factoryDailyBaleScans,
+  factoryPhysicalBaleDeletions,
   inventory,
   stockItems,
 } from "@shared/schema";
@@ -160,6 +161,17 @@ export async function deletePhysicalFactoryBalesTx(
       eq(factoryDailyBaleScans.companyId, String(companyId)),
       eq(factoryDailyBaleScans.referenceNumber, locked.referenceNumber),
     ));
+
+    await tx.insert(factoryPhysicalBaleDeletions).values({
+      companyId,
+      baleId,
+      referenceNumber: locked.referenceNumber,
+      previousStatus: locked.status,
+      originalLocationId: locked.erpLocationId,
+      removedByUserId: actorId,
+      removedByName: actorName,
+      reason,
+    });
 
     const now = new Date();
     const [updated] = await tx.update(factoryBales)
