@@ -5,6 +5,7 @@
  */
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
+import { useAppMode } from "@/contexts/AppModeContext";
 import { selectAccountsArray, type AccountsAllPayload } from "@/lib/accountsAllPayload";
 import type { PeriodFilterValue } from "@/components/ui/period-filter";
 import type { Account, Transaction } from "./agentStatementMath";
@@ -29,7 +30,7 @@ export function useAgentLedger(
 ) {
   // Factory routes resolve their own pinned company; shared ERP routes follow
   // currentCompanyId, which may differ when another browser tab switches ERP.
-  const isFactory = typeof window !== "undefined" && window.location.pathname.startsWith("/factory/");
+  const isFactory = useAppMode() === "factory";
   const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all";
   const pinnedUrl = isFactory ? "/api/factory/agents/pinned" : "/api/agent-accounts";
   const statementPrefix = isFactory ? "/api/factory/agents" : "/api/accounts";
