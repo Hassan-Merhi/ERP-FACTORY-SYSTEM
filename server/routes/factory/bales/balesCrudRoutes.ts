@@ -10,6 +10,7 @@ import { logAudit } from "../../helpers/auditHelpers";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
+import { firstRow } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { reversePriorityAllocationForDeletedBaleTx } from "../customer-orders/priorityAutoAllocation";
@@ -374,14 +375,11 @@ export function registerBalesCrudRoutes(app: Express) {
         const [bale] = await tx.select().from(factoryBales)
           .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId))).limit(1);
         if (!bale || bale.deletedAt || bale.status === "DELETED") return null;
-        const [autoRow] = await tx.execute(sql`
+        const autoRow = firstRow(await tx.execute(sql`
           SELECT id FROM factory_priority_auto_allocations
            WHERE company_id = ${companyId} AND bale_id = ${id} AND reversed_at IS NULL
            LIMIT 1
-        `).then((r) => {
-          const result = r as unknown as { rows?: Array<{ id: number }> };
-          return result.rows || [];
-        });
+        `));
         if (autoRow) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
             companyId, baleId: id, actor: String(req.session.username || req.session.userId || "unknown"),
