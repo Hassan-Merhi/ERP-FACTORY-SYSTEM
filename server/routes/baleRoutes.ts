@@ -337,7 +337,7 @@ export function registerBaleRoutes(app: Express) {
   // Bale Label Prints - create label print records with unique reference numbers
   app.post("/api/bale-label-prints", requireAuth, async (req, res) => {
     try {
-      const companyId = req.session.currentCompanyId;
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) {
         return res.status(400).json({ message: "No company selected" });
       }
@@ -375,15 +375,18 @@ export function registerBaleRoutes(app: Express) {
             const [existingBale] = await tx
               .select({ referenceNumber: factoryBales.referenceNumber })
               .from(factoryBales)
-              .where(eq(factoryBales.id, bale.productionBaleId));
+              .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, companyId)));
 
             if (existingBale?.referenceNumber) {
               // Bale already has a reference (e.g. assigned by stock-entry) — reuse it
               referenceNumber = existingBale.referenceNumber;
-            } else {
-              // Bale has no ref yet (e.g. pressing batch bale) — generate one safely
+            } else if (existingBale) {
+              // Bale exists in this company but has no reference yet.
               referenceNumber = await generateSafeRef(tx, companyId);
-              await tx.update(factoryBales).set({ referenceNumber }).where(eq(factoryBales.id, bale.productionBaleId));
+              await tx.update(factoryBales).set({ referenceNumber })
+                .where(and(eq(factoryBales.id, bale.productionBaleId), eq(factoryBales.companyId, companyId)));
+            } else {
+              throw new Error("Cannot print a physical bale belonging to another company or not found");
             }
           } else if (bale.referenceNumber) {
             // Pre-allocated offline ref — use it directly (sequence was already advanced)
@@ -422,7 +425,7 @@ export function registerBaleRoutes(app: Express) {
 
   app.post("/api/bale-label-prints/reprint", requireAuth, async (req, res) => {
     try {
-      const companyId = req.session.currentCompanyId;
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { baleId } = req.body;
       if (!baleId) return res.status(400).json({ message: "baleId required" });
@@ -447,7 +450,7 @@ export function registerBaleRoutes(app: Express) {
         const [bale] = await db.select().from(factoryBales).where(and(eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId)));
         if (bale) {
           const product = bale.productId
-            ? (await db.select().from(factoryBaleProducts).where(eq(factoryBaleProducts.id, bale.productId)))[0]
+            ? (await db.select().from(factoryBaleProducts).where(and(eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, companyId))))[0]
             : null;
           const refNum = bale.referenceNumber || `REPRINT-${baleId}`;
           await db.insert(baleLabelPrints).values({
