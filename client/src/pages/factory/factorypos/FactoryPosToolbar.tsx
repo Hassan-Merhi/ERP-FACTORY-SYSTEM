@@ -75,6 +75,15 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
                 {a.name}
               </SelectItem>
             ))}
+            {model.cashAccounts.length === 0 && (
+              <div className="px-2 py-2 text-sm text-muted-foreground" role="status">
+                {model.accountOptionsLoading
+                  ? "Loading cash accounts…"
+                  : model.accountOptionsError
+                    ? "Unable to load cash accounts. Please refresh."
+                    : "No active cash accounts for this company."}
+              </div>
+            )}
           </SelectContent>
         </Select>
       </div>
