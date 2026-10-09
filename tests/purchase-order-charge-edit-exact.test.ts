@@ -54,10 +54,15 @@ vi.mock("../server/db", async () => {
       { id: 2, ledgerAccountId: 20, debitAmount: "0", creditAmount: "100.00" },
     ],
     containers: [{ containerNumber: "C3" }],
+    // Wave 7: the edit locks and re-reads the PO inside its one transaction
+    // (a getter: the mock factory runs before `po` is initialised).
+    get purchase_orders() {
+      return [po];
+    },
   };
   const chain = (value: unknown) => {
     const q: Record<string, unknown> = {};
-    for (const step of ["where", "limit", "returning"]) q[step] = () => q;
+    for (const step of ["where", "limit", "returning", "for"]) q[step] = () => q;
     q.then = (resolve: (v: unknown) => unknown, reject: (r: unknown) => unknown) =>
       Promise.resolve(value).then(resolve, reject);
     return q;

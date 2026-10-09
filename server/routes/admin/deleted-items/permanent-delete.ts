@@ -36,14 +36,9 @@ import {
   stockItemLocationPrices,
   stockTransferVouchers,
   stockTransferItems,
-  stockTransferRevisionItems,
-  stockGroupLocationArchiveItems,
-  stockAdjustmentItems,
-  containerOffloadItems,
   containerSales,
   bankAccounts,
   purchaseOrders,
-  poLineItems,
   vouchers,
   voucherEntries,
   salesItems,
@@ -55,8 +50,6 @@ import {
   ledgerAccounts,
   fiscalPeriodClosures,
   wasteDispatches,
-  wasteDispatchItems,
-  creditNoteItems,
   salaryAdvances,
   employeeGroupMembers,
   employeeBaleRates,
@@ -67,6 +60,7 @@ import {
   factoryTransporterTransactions,
 } from "@shared/schema";
 import { eq, and, inArray, sql, type SQL } from "drizzle-orm";
+import { STOCK_ITEM_HAS_HISTORY_MESSAGE, stockItemHasHistory } from "../../../services/inventory/stockItemHistory";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 type DeletedItemRow = { id: AnyPgColumn; companyId: AnyPgColumn | null; deletedAt: AnyPgColumn };
@@ -222,20 +216,36 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           await db.delete(locations).where(and(eq(locations.id, itemId), eq(locations.companyId, companyId)));
           break;
         case "stockItem":
-          // Delete all FK-dependent rows before removing the stock item itself
-          await db.delete(salesItems).where(eq(salesItems.stockItemId, itemId));
-          await db.delete(stockAdjustmentItems).where(eq(stockAdjustmentItems.stockItemId, itemId));
-          await db.delete(stockTransferItems).where(eq(stockTransferItems.stockItemId, itemId));
-          await db.delete(stockTransferRevisionItems).where(eq(stockTransferRevisionItems.stockItemId, itemId));
-          await db.delete(poLineItems).where(eq(poLineItems.stockItemId, itemId));
-          await db.delete(containerOffloadItems).where(eq(containerOffloadItems.stockItemId, itemId));
-          await db.delete(creditNoteItems).where(eq(creditNoteItems.stockItemId, itemId));
-          await db.delete(inventory).where(eq(inventory.stockItemId, itemId));
-          await db.delete(wasteDispatchItems).where(eq(wasteDispatchItems.stockItemId, itemId));
-          await db.delete(stockGroupLocationArchiveItems).where(eq(stockGroupLocationArchiveItems.stockItemId, itemId));
-          await db.delete(stockItemCodeAliases).where(eq(stockItemCodeAliases.stockItemId, itemId));
-          await db.delete(stockItemLocationPrices).where(eq(stockItemLocationPrices.stockItemId, itemId));
-          await db.delete(stockItems).where(and(eq(stockItems.id, itemId), eq(stockItems.companyId, companyId)));
+          // Wave 15 (M9): an item with stock history (document lines, stock
+          // movements, shortage layers, valuation records, stock on hand) is
+          // refused; its lines used to be deleted with it, so the documents
+          // that moved it could no longer be reversed exactly. An item with
+          // no history is removed in one transaction, audited.
+          await db.transaction(async (tx) => {
+            if (await stockItemHasHistory(tx, companyId, itemId))
+              throw new PermanentDeleteRefused(STOCK_ITEM_HAS_HISTORY_MESSAGE);
+            const [item] = await tx
+              .select()
+              .from(stockItems)
+              .where(and(eq(stockItems.id, itemId), eq(stockItems.companyId, companyId)));
+            await tx.delete(inventory).where(eq(inventory.stockItemId, itemId));
+            await tx.delete(stockItemCodeAliases).where(eq(stockItemCodeAliases.stockItemId, itemId));
+            await tx.delete(stockItemLocationPrices).where(eq(stockItemLocationPrices.stockItemId, itemId));
+            await tx.delete(stockItems).where(and(eq(stockItems.id, itemId), eq(stockItems.companyId, companyId)));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "stock_items",
+                recordId: itemId,
+                recordIdentifier: item?.code ?? null,
+                changes: { permanentDelete: { new: true }, stockItem: { old: item ?? null } },
+              },
+              tx
+            );
+          });
           break;
         case "stockGroup":
           await db.delete(stockGroups).where(and(eq(stockGroups.id, itemId), eq(stockGroups.companyId, companyId)));

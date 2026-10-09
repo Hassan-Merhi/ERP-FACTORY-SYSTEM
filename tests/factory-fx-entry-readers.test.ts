@@ -23,6 +23,14 @@ vi.mock("../server/db", () => {
   return { db: { select: () => query(harness.queue.shift() ?? []) } };
 });
 
+// The ledger balance comes from the balance engine (wave 13); these tests read
+// the operational memo, which is where the voucher payment conversion lives.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../server/routes/factory/suppliers/balance/factorySupplierLedger")>();
+  return { ...actual, loadFactorySupplierLedgerViews: async () => new Map() };
+});
+
 import { registerSupplierBalanceSingleRoutes } from "../server/routes/factory/suppliers/balance/single";
 import {
   entryNativeAmounts,
@@ -86,15 +94,15 @@ async function balanceWithVoucherPayment(row: Record<string, unknown>) {
   const supplier = { id: 5, companyId: 7, name: "FX", parentId: null, openingBalance: "0" };
   // suppliers, containers, payments, voucher payments, FX transfers, post-offload charges
   harness.queue = [[supplier], [], [], [{ factorySupplierId: 5, optional: false, ...row }], [], []];
-  let body: { balance: number } | undefined;
+  let body: { operationalMemo: { outstandingUsd: string } } | undefined;
   await balanceHandler()(
     { session: { factoryCompanyId: 7 }, params: { id: "5" } },
     { set: () => undefined, status: () => ({ json: () => undefined }), json: (b: typeof body) => (body = b) }
   );
-  return body!.balance;
+  return Number(body!.operationalMemo.outstandingUsd);
 }
 
-describe("factory supplier balance voucher payments", () => {
+describe("factory supplier balance voucher payments (operational memo)", () => {
   it("uses a normalized CFA payment's stored USD base instead of converting it again", async () => {
     // Converting the stored 1000 USD again at 655.957 gave 1.52.
     expect(await balanceWithVoucherPayment({ ...normalizedCfa, exchangeRate: "655.957" })).toBe(-1000);

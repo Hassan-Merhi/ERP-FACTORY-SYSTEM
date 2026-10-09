@@ -18,6 +18,7 @@ import {
   UnresolvedExchangeRateError,
 } from "../../../../services/factory/currencyConversion";
 import { writeDaybookEntry } from "../../_helpers";
+import { syncContainerCommissionJournalTx } from "../../../../services/factory/containerCommissionJournal";
 import { factorySuppliers, factoryContainers, factoryRawStock, factoryMixBatchSources } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { parseMoneyInput, toMoney } from "../../../../lib/money";
@@ -255,6 +256,9 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
               : {}),
           })
           .returning();
+        // Wave 14: the commission held on the opening-balance row posts
+        // FACTORY-COMM-{container} in this transaction (or stays listed).
+        if (hasCommission) await syncContainerCommissionJournalTx(tx, companyId, container.id);
 
         const today = req.body.txDate || getClientDate(req);
         await writeDaybookEntry(tx, {
@@ -515,6 +519,18 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
             .set(containerUpdates)
             .where(eq(factoryContainers.id, rawStockRow.containerId));
         }
+        // Wave 14: the commission journal follows the edited row (amount,
+        // currency, rate, or the container's supplier/currency/rate it reads).
+        const commissionInputsChanged =
+          commissionAmount !== undefined ||
+          commissionCurrencyCode !== undefined ||
+          commissionFxRateToUsd !== undefined ||
+          "supplierId" in containerUpdates ||
+          "currencyCode" in containerUpdates ||
+          "fxRateToUsd" in containerUpdates;
+        if (commissionInputsChanged) {
+          await syncContainerCommissionJournalTx(tx, companyId, rawStockRow.containerId);
+        }
       });
 
       res.json({ message: "Opening balance updated successfully" });
@@ -568,6 +584,8 @@ export function registerRawStockOpeningBalanceRoutes(app: Express) {
           .update(factoryContainers)
           .set({ status: "DELETED" })
           .where(eq(factoryContainers.id, rawStockRow.containerId));
+        // Wave 14: its commission journal goes with the row.
+        await syncContainerCommissionJournalTx(tx, companyId, rawStockRow.containerId);
       });
 
       res.json({ message: "Opening balance deleted. Linked bales remain intact." });

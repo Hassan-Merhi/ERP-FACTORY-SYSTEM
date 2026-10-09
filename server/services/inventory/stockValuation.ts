@@ -34,7 +34,16 @@
  *
  * The as-of variant replays the movements after the date backwards from the
  * stored `total_value` (calculateHistoricalLocationInventory) and applies the
- * same policy to the replayed rows.
+ * same policy to the replayed rows. Movements that leave no document line are
+ * replayed from their dated evidence (inventory_value_movements, wave 15); an
+ * evidenced movement that names no stock item (a transfer's settlement
+ * residual, a reversal difference, a pre-cut-over container movement) cannot
+ * be placed on a row, so it is reversed from `subLedgerTotal` and reported as
+ * `excluded.unitemizedMovementValue`.
+ *
+ * Stock on rows whose location no longer exists (orphaned locations) is in no
+ * total; the readiness resolution (inventoryReadinessResolution.ts) lists it
+ * and restores or writes it off.
  *
  * All amounts are decimal text at 2dp (server/lib/money.ts arithmetic).
  */
@@ -43,7 +52,10 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
-import { calculateHistoricalLocationInventory } from "../../routes/helpers/inventoryHistoryHelpers";
+import {
+  calculateHistoricalLocationInventory,
+  unitemizedInventoryMovementsAfter,
+} from "../../routes/helpers/inventoryHistoryHelpers";
 import { factoryBaleMirrorStockItemIds } from "../accounting/perpetualInventory/factoryValuation";
 
 export const STOCK_VALUATION_LOCATION_SCOPE = "ALL_NON_DELETED_LOCATIONS" as const;
@@ -73,6 +85,12 @@ export interface StockValuationExclusions {
   negativeValue: string;
   /** Number of rows behind shortRowValue and negativeValue (shortage rows are not anomalous). */
   anomalousRows: number;
+  /**
+   * As of a past date only ("0.00" live): the value of evidenced movements
+   * after the date that name no stock item, reversed (wave 15). Part of
+   * `subLedgerTotal`, not of `total`.
+   */
+  unitemizedMovementValue: string;
 }
 
 export interface CompanyStockValuation {
@@ -104,6 +122,7 @@ type Accumulator = {
   shortRow: Decimal;
   negative: Decimal;
   anomalousRows: number;
+  unitemized: Decimal;
 };
 
 function emptyAccumulator(): Accumulator {
@@ -118,6 +137,7 @@ function emptyAccumulator(): Accumulator {
     shortRow: zero,
     negative: zero,
     anomalousRows: 0,
+    unitemized: zero,
   };
 }
 
@@ -134,7 +154,7 @@ function finish(
     asOf,
     scope: STOCK_VALUATION_LOCATION_SCOPE,
     total: money(acc.total),
-    subLedgerTotal: money(acc.total.plus(acc.shortage).plus(acc.shortRow).plus(acc.negative)),
+    subLedgerTotal: money(acc.total.plus(acc.shortage).plus(acc.shortRow).plus(acc.negative).plus(acc.unitemized)),
     activeLocationValue: money(acc.active),
     inactiveLocationValue: money(acc.inactive),
     locations,
@@ -145,6 +165,7 @@ function finish(
       shortRowValue: money(acc.shortRow),
       negativeValue: money(acc.negative),
       anomalousRows: acc.anomalousRows,
+      unitemizedMovementValue: money(acc.unitemized),
     },
   };
 }
@@ -303,6 +324,11 @@ export async function companyStockValuationAsOf(
 
   const acc = emptyAccumulator();
   const locations: LocationStockValue[] = [];
+  const liveLocationIds = new Set(locationRows.filter((row) => !row.deleted).map((row) => row.id));
+  for (const [locationId, value] of await unitemizedInventoryMovementsAfter(executor, companyId, asOf)) {
+    // Reversed: the sub-ledger as of the date did not hold what moved after it.
+    if (locationId === null || liveLocationIds.has(locationId)) acc.unitemized = acc.unitemized.minus(value);
+  }
   for (const location of locationRows) {
     if (location.deleted) continue;
     let value: Decimal = new MoneyDecimal(0);

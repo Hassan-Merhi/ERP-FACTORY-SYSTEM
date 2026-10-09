@@ -18,7 +18,7 @@
  * reversal-difference journal (a no-op before the cut-over).
  */
 import type Decimal from "decimal.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import {
   creditNoteItems,
@@ -35,9 +35,11 @@ import { MoneyDecimal, toMoney } from "../../lib/money";
 import { removeSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
 import { STOCK_ADJUSTMENT_VOUCHER_TYPES } from "../accounting/perpetualInventory/stockAdjustments";
 import { reverseTransferLegExactTx } from "./conservedStockTransfer";
+import { isStockAdjustmentVoucherType } from "../accounting/stockVoucherTypes";
 import { createDatabaseStockMovementAdapter } from "./databaseStockMovementAdapter";
 import { reverseNoteLineInventoryTx } from "./creditNoteInventory";
 import { postStockMovementTx } from "./stockMovementIntegrityService";
+import { firstRow } from "../../lib/queryResult";
 import {
   inventoryLedgerNetTx,
   postReversalResidualTx,
@@ -309,4 +311,73 @@ export async function reverseVoucherStockTx(
     locationId: voucher.locationId,
   });
   return { subLedgerDelta, ledgerDelta };
+}
+
+// ── Restoring a deleted stock document (wave 15, C2) ─────────────────────────
+//
+// Deleting a stock document deletes its document rows (above) after moving
+// its stock back. Restoring the voucher alone would put its ledger lines back
+// (revenue, the stock adjustment line, a credit note's lines) with no stock
+// movement and no COGS: the sub-ledger and the ledger would disagree, and the
+// stock it moved would be gone from the document. Choice (owner rule "never
+// change stored history", the safer of the two options): such a voucher is
+// not restorable; it is refused with 409 STOCK_DOCUMENT_NOT_RESTORABLE and the
+// user re-enters the document. Keeping the rows on delete and replaying them
+// on restore was rejected: every stock reader would have to learn to skip the
+// rows of a deleted voucher, and a replay at today's costs is not the
+// original movement.
+//
+// A stock document is recognised by its type: a transfer or stock adjustment
+// voucher always has its header row, so a missing header means it was
+// deleted; a sale (Receipt/Sales) or credit/debit note with no lines is refused
+// when the canonical stock journal shows its delete moved stock back (a sale
+// or note that never had stock lines stays restorable). A legacy delete made
+// before the canonical journal existed leaves no such evidence and is not
+// detected.
+
+export const STOCK_DOCUMENT_NOT_RESTORABLE = "STOCK_DOCUMENT_NOT_RESTORABLE" as const;
+export const STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE =
+  "This stock document cannot be restored: its stock lines were reversed and removed when it was deleted. Enter the document again instead.";
+
+const DELETE_SOURCE_PREFIXES = ["voucher_delete", "bulk_voucher_delete", "storage_voucher_delete"];
+const DELETE_SOURCE_SUFFIXES = ["pos_sale", "credit_note", "debit_note", "stock_transfer", "stock_adjustment"];
+const DELETE_SOURCE_TYPES = DELETE_SOURCE_PREFIXES.flatMap((prefix) =>
+  DELETE_SOURCE_SUFFIXES.map((suffix) => `${prefix}_${suffix}`)
+);
+
+async function exists(tx: DbTransaction, query: ReturnType<typeof sql>): Promise<boolean> {
+  return firstRow<{ found: boolean }>(await tx.execute(sql`SELECT EXISTS (${query}) AS found`))?.found === true;
+}
+
+/**
+ * True when the deleted voucher is a stock document whose rows its delete
+ * removed (see above), so restoring it is refused.
+ */
+export async function isUnrestorableStockDocumentTx(
+  tx: DbTransaction,
+  companyId: number,
+  voucher: { id: number; voucherType: string }
+): Promise<boolean> {
+  if (TRANSFER_TYPES.has(voucher.voucherType)) {
+    return !(await exists(tx, sql`SELECT 1 FROM stock_transfer_vouchers WHERE voucher_id = ${voucher.id}`));
+  }
+  if (isStockAdjustmentVoucherType(voucher.voucherType)) {
+    return !(await exists(tx, sql`SELECT 1 FROM stock_adjustment_vouchers WHERE voucher_id = ${voucher.id}`));
+  }
+  const sale = voucher.voucherType === "Receipt" || voucher.voucherType === "Sales";
+  const note = voucher.voucherType === "Credit Note" || voucher.voucherType === "Debit Note";
+  if (!sale && !note) return false;
+  const lines = sale
+    ? sql`SELECT 1 FROM sales_items WHERE voucher_id = ${voucher.id}`
+    : sql`SELECT 1 FROM credit_note_items WHERE voucher_id = ${voucher.id}`;
+  if (await exists(tx, lines)) return false;
+  return exists(
+    tx,
+    sql`SELECT 1 FROM canonical_stock_movements
+         WHERE company_id = ${companyId} AND source_id = ${String(voucher.id)}
+           AND source_type IN (${sql.join(
+             DELETE_SOURCE_TYPES.map((type) => sql`${type}`),
+             sql`, `
+           )})`
+  );
 }

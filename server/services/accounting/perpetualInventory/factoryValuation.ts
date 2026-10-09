@@ -12,6 +12,15 @@
  *                    finalized, dispatched or sold order is not stock: its
  *                    invoice took its cost (wave 11).
  *
+ * Order statuses (wave 15, M8): an order is invoiced (its bales are not
+ * stock) when FINALIZED, or in a legacy closed status written before the
+ * finalize flow (DISPATCHED, SOLD, INVOICED, COMPLETED, see
+ * INVOICED_ORDER_STATUSES); it is open (its bales are stock) when DRAFT,
+ * LOADING, PENDING_VERIFICATION or VERIFIED. The valuation used to treat a
+ * bale marked SOLD on a legacy DISPATCHED/SOLD/INVOICED/COMPLETED order as
+ * sold-not-invoiced stock, and an IN_STOCK bale on an INVOICED/COMPLETED
+ * order as stock.
+ *
  * Bale cost is USD material cost (wave 11, services/factory/baleCostBasis.ts).
  * An open mix recorded unvalued (a source with no USD rate before the
  * cut-over: cost 0) is listed with the rows that carry no cost.
@@ -25,6 +34,11 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+
+/** Order statuses whose bales left stock with the order (the SQL below lists them inline). */
+export const INVOICED_ORDER_STATUSES = ["FINALIZED", "DISPATCHED", "SOLD", "INVOICED", "COMPLETED"] as const;
+/** Order statuses whose bales are still stock at cost (reserved for the order). */
+export const OPEN_ORDER_STATUSES = ["DRAFT", "LOADING", "PENDING_VERIFICATION", "VERIFIED"] as const;
 
 export interface UnvaluedRow {
   source: "factory_raw_stock" | "factory_mix_batches" | "factory_bales";
@@ -40,7 +54,7 @@ export interface FactoryStockValuation {
   /** Bales marked sold on orders that are not invoiced yet; included in finished goods. */
   soldNotInvoiced: { bales: number; cost: string };
   /**
-   * Bales on unfinalized orders (pending verification, verified, loading),
+   * Bales on open orders (draft, loading, pending verification, verified),
    * whatever their status; included in finished goods at cost (wave 11).
    */
   reservedForOrders: { bales: number; cost: string };
@@ -100,7 +114,7 @@ export async function factoryStockValuation(
            SELECT 1 FROM customer_order_bales cob
              JOIN customer_orders co ON co.id = cob.order_id
             WHERE cob.bale_id = factory_bales.id AND co.company_id = ${companyId} AND co.deleted_at IS NULL
-              AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD')
+              AND co.status IN ('FINALIZED', 'DISPATCHED', 'SOLD', 'INVOICED', 'COMPLETED')
          ))
        GROUP BY status
     `
@@ -122,7 +136,7 @@ export async function factoryStockValuation(
            SELECT 1 FROM customer_order_bales cob
              JOIN customer_orders co ON co.id = cob.order_id
             WHERE cob.bale_id = b.id AND co.company_id = ${companyId} AND co.deleted_at IS NULL
-              AND co.status NOT IN ('FINALIZED', 'CANCELLED')
+              AND co.status NOT IN ('FINALIZED', 'DISPATCHED', 'SOLD', 'INVOICED', 'COMPLETED', 'CANCELLED')
          )
     `
   );
@@ -141,7 +155,7 @@ export async function factoryStockValuation(
            SELECT 1 FROM customer_order_bales cob
              JOIN customer_orders co ON co.id = cob.order_id
             WHERE cob.bale_id = b.id AND co.company_id = ${companyId} AND co.deleted_at IS NULL
-              AND co.status IN ('PENDING_VERIFICATION', 'VERIFIED', 'LOADING')
+              AND co.status IN ('DRAFT', 'LOADING', 'PENDING_VERIFICATION', 'VERIFIED')
          )
     `
   );

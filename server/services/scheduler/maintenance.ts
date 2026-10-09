@@ -2,7 +2,8 @@ import type { PoolClient } from "pg";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { fetchAllCompanies } from "../export-data";
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import { presentStockItemHistoryTables, stockItemHistorySqlText } from "../inventory/stockItemHistory";
 import {} from "../whatsappService";
 import { buildFullExportZip } from "../../helpers/buildFullExportZip";
 import { retryAsync, isWaConfigError } from "../../helpers/retryAsync";
@@ -218,49 +219,35 @@ export async function purgeOldSoftDeletes(): Promise<void> {
     await runIsolatedPurgeUnit(client, "stock_items", async () => {
       // Wave 11: a deleted item that still holds stock (any quantity or value at
       // any location) is kept: purging it would drop that stock value from the
-      // sub-ledger with no journal. It is reported for review instead.
+      // sub-ledger with no journal. Wave 15 (M9): so is an item with any stock
+      // history (document lines, stock movements, shortage layers, valuation
+      // records): the purge used to delete its document lines, so the documents
+      // that moved it (a merged item's in particular) could no longer be
+      // reversed or replayed exactly. Both are reported for review instead.
+      const history = stockItemHistorySqlText(await presentStockItemHistoryTables(db), "si.id");
       const oldStockItems = await client.query<{ id: number }>(
         `SELECT si.id FROM stock_items si
           WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
-            AND NOT EXISTS (
-              SELECT 1 FROM inventory inv
-               WHERE inv.stock_item_id = si.id
-                 AND (ABS(COALESCE(inv.quantity, 0)) > 0 OR ABS(COALESCE(inv.total_value, 0)) > 0)
-            )`,
+            AND NOT EXISTS (${history})`,
         [cutoff]
       );
       const retained = await client.query<{ count: number }>(
         `SELECT COUNT(*)::int AS count FROM stock_items si
           WHERE si.deleted_at IS NOT NULL AND si.deleted_at < $1
-            AND EXISTS (
-              SELECT 1 FROM inventory inv
-               WHERE inv.stock_item_id = si.id
-                 AND (ABS(COALESCE(inv.quantity, 0)) > 0 OR ABS(COALESCE(inv.total_value, 0)) > 0)
-            )`,
+            AND EXISTS (${history})`,
         [cutoff]
       );
       if (Number(retained.rows[0]?.count ?? 0) > 0) {
-        logger.warn("[Purge] Deleted stock items that still hold stock were retained.", {
+        logger.warn("[Purge] Deleted stock items that still hold stock or stock history were retained.", {
           retained: Number(retained.rows[0]?.count ?? 0),
         });
       }
       if (oldStockItems.rows.length === 0) return;
 
+      // No history: only the item's own empty stock rows, aliases and prices remain.
       const ids = oldStockItems.rows.map((r) => r.id);
       const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
-      await client.query(`DELETE FROM sales_items                       WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM stock_adjustment_items            WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM stock_transfer_items              WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM stock_transfer_revision_items     WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM po_line_items                     WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM container_offload_items           WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM credit_note_items                 WHERE stock_item_id IN (${placeholders})`, ids);
       await client.query(`DELETE FROM inventory                         WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM waste_dispatch_items              WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(
-        `DELETE FROM stock_group_location_archive_items WHERE stock_item_id IN (${placeholders})`,
-        ids
-      );
       await client.query(`DELETE FROM stock_item_code_aliases           WHERE stock_item_id IN (${placeholders})`, ids);
       await client.query(`DELETE FROM stock_item_location_prices        WHERE stock_item_id IN (${placeholders})`, ids);
       await client.query(`DELETE FROM stock_items WHERE id IN (${placeholders})`, ids);

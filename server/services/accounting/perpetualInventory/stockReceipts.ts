@@ -32,7 +32,38 @@
  * replaced whole by syncPurchaseOrderGitTx / syncContainerStockInTx, which the
  * create, edit, offload and reverse paths call. Nothing is posted for a
  * supplier-partner company or a document dated before the company's cut-over.
+ *
+ * Containers offloaded before the cut-over (wave 15, re-audit C1). The opening
+ * journal carried their stock in Inventory (the sub-ledger as of the eve) and
+ * left their purchase cost in Purchases, where the periodic book had expensed
+ * it; no STOCK-IN journal exists for them, and none is posted while their
+ * offload date stays before the cut-over. When such an offload is reversed,
+ * replaced, suspended, restored or re-priced once the cut-over applies, the
+ * measured change of the stock sub-ledger is posted by
+ * postPreCutoverOffloadMovementTx, dated the day of the change:
+ *   - back in transit (reverse, suspend: the container is OTW again, so the
+ *     reconciliation counts its POs as goods in transit): Dr Goods in Transit
+ *     for the purchase cost of its POs (INV-MOVE-...-offload-to-transit-...),
+ *     the rest of the change against Purchases (INV-MOVE-...-offload-precutover-...);
+ *   - out of transit again (restore of a suspended offload dated before the
+ *     cut-over): Cr Goods in Transit for what the earlier journal put there,
+ *     the rest against Purchases;
+ *   - in place (a replace that keeps a date before the cut-over, a charge
+ *     re-pricing): the change against Purchases, where the cost sat.
+ * A container moved back into transit this way is not carried by the opening
+ * as goods in transit; when it is offloaded again (on or after the cut-over:
+ * an offload dated before the cut-over is refused once it applies), STOCK-IN
+ * credits Goods in Transit for the balance those journals left there.
+ *
+ * carriedByOpening: a PO is carried by the opening as goods in transit only
+ * when the opening plan lists it (`goodsInTransitPurchaseOrderIds`: dated
+ * before the cut-over and its container not offloaded before it). A plan
+ * applied before the list existed falls back to the PO date, and to the
+ * offload having been dated on or after the cut-over with no pre-cut-over
+ * movement journal for the container.
  */
+import { randomUUID } from "node:crypto";
+
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
@@ -40,6 +71,7 @@ import type { DbTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { getOrCreateInventoryControlAccount } from "../inventoryControlAccount";
 import { getInventoryCutover, isPerpetualInventoryActive } from "./cutover";
+import { postInventoryMovementJournalTx } from "./inventoryMovementJournal";
 import {
   isSupplierPartnerCompany,
   postLinkedJournalTx,
@@ -184,14 +216,22 @@ export async function syncContainerStockInTx(
   const inventoryValue = toMoney(received?.inventory ?? 0).toDecimalPlaces(2);
   const cogsValue = value.minus(inventoryValue);
 
-  // In transit: POs with their own GIT journal, and POs dated before the
-  // cut-over, which the opening journal carried as goods in transit.
+  // In transit: POs with their own GIT journal, POs the opening journal
+  // carried as goods in transit, and what a pre-cut-over offload's reversal
+  // moved back into transit (wave 15).
   const cutover = await getInventoryCutover(tx, companyId);
+  const openingTransit = cutover ? await openingTransitPurchaseOrderIdsTx(tx, companyId) : null;
+  const movedToTransit = await preCutoverTransitBalanceTx(tx, companyId, containerId);
   const pos = await purchaseOrderCosts(tx, companyId, sql`po.container_id = ${containerId}`);
-  let inTransit: Decimal = zero();
+  let inTransit: Decimal = movedToTransit.balance;
   for (const po of pos) {
     if (!po.voucherDate) continue;
-    const carriedByOpening = cutover !== null && po.voucherDate < cutover.effectiveFrom;
+    const carriedByOpening =
+      cutover !== null &&
+      po.voucherDate < cutover.effectiveFrom &&
+      (openingTransit !== null
+        ? openingTransit.has(po.purchaseOrderId)
+        : container.offload_date >= cutover.effectiveFrom && !movedToTransit.exists);
     const [git] = await rows<{ id: number }>(
       tx,
       sql`SELECT id FROM vouchers WHERE company_id = ${companyId}
@@ -303,4 +343,140 @@ export async function syncPurchaseOrderGitForVoucherTx(
     );
     if (stockIn) await syncContainerStockInTx(tx, companyId, containerId);
   }
+}
+
+// ─── Containers offloaded before the cut-over (wave 15, C1) ───────────────────
+
+export const PRE_CUTOVER_TRANSIT_SOURCE = "offload-to-transit";
+export const PRE_CUTOVER_OFFLOAD_SOURCE = "offload-precutover";
+
+/** The POs the applied opening plan carried as goods in transit, or null for a plan without the list. */
+async function openingTransitPurchaseOrderIdsTx(tx: DbTransaction, companyId: number): Promise<Set<number> | null> {
+  const [row] = await rows<{ ids: unknown }>(
+    tx,
+    sql`SELECT opening_plan -> 'goodsInTransitPurchaseOrderIds' AS ids FROM gl_inventory_cutovers
+         WHERE company_id = ${companyId}`
+  );
+  if (!row || !Array.isArray(row.ids)) return null;
+  return new Set(row.ids.map(Number));
+}
+
+/**
+ * What the pre-cut-over movement journals of a container hold on Goods in
+ * Transit (debit positive), and whether any exists.
+ */
+async function preCutoverTransitBalanceTx(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number
+): Promise<{ balance: Decimal; exists: boolean }> {
+  const [row] = await rows<{ balance: string; journals: number }>(
+    tx,
+    sql`
+      SELECT COALESCE(SUM(ve.debit_amount - ve.credit_amount) FILTER (WHERE la.code = 'GOODS_IN_TRANSIT'), 0)::text
+               AS balance,
+             COUNT(DISTINCT v.id)::int AS journals
+        FROM vouchers v
+        JOIN voucher_entries ve ON ve.voucher_id = v.id
+        LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+       WHERE v.company_id = ${companyId} AND v.deleted_at IS NULL
+         AND v.voucher_number LIKE ${`INV-MOVE-${companyId}-${PRE_CUTOVER_TRANSIT_SOURCE}-${containerId}:%`}
+    `
+  );
+  return { balance: toMoney(row?.balance ?? 0).toDecimalPlaces(2), exists: (row?.journals ?? 0) > 0 };
+}
+
+/**
+ * Whether a change to an offload dated `offloadDate` is a pre-cut-over
+ * container change (C1): the company's cut-over applies today, the offload is
+ * dated before it, and the company is not a supplier partner.
+ */
+export async function isPreCutoverOffloadChangeTx(
+  tx: DbTransaction,
+  companyId: number,
+  offloadDate: string | null | undefined
+): Promise<boolean> {
+  if (!offloadDate) return false;
+  const cutover = await getInventoryCutover(tx, companyId);
+  if (!cutover || cutover.status !== "ACTIVE") return false;
+  const today = new Date().toISOString().slice(0, 10);
+  if (today < cutover.effectiveFrom || offloadDate >= cutover.effectiveFrom) return false;
+  return !(await isSupplierPartnerCompany(tx, companyId));
+}
+
+/**
+ * Posts the measured sub-ledger change of a pre-cut-over container's offload
+ * (see the module comment). `valueDelta` is the signed change of the stock
+ * sub-ledger the operation made (the sum of the inventory helpers'
+ * valueDelta). Nothing is posted unless isPreCutoverOffloadChangeTx holds.
+ * Returns the journal numbers posted.
+ */
+export async function postPreCutoverOffloadMovementTx(
+  tx: DbTransaction,
+  params: {
+    companyId: number;
+    containerId: number;
+    containerNumber: string;
+    /** The date of the offload being changed (before the change). */
+    offloadDate: string | null | undefined;
+    locationId: number | null;
+    valueDelta: Decimal;
+    mode: "toTransit" | "fromTransit" | "inPlace";
+    reason: string;
+    actor?: { userId: string; username: string } | null;
+  }
+): Promise<string[]> {
+  if (!(await isPreCutoverOffloadChangeTx(tx, params.companyId, params.offloadDate))) return [];
+  const date = new Date().toISOString().slice(0, 10);
+  const operation = `${params.containerId}:${randomUUID().slice(0, 8)}`;
+  const reference = `Container ${params.containerNumber}`;
+  // The Inventory side of the Goods in Transit move (debit positive): what
+  // the ledger holds in transit for the container now (the opening's POs and
+  // earlier pre-cut-over journals) less what it should hold after the change
+  // (the POs' purchase cost back in transit, or nothing once received).
+  let transit: Decimal = zero();
+  if (params.mode !== "inPlace") {
+    const pos = await purchaseOrderCosts(tx, params.companyId, sql`po.container_id = ${params.containerId}`);
+    const opening = (await openingTransitPurchaseOrderIdsTx(tx, params.companyId)) ?? new Set<number>();
+    const held = pos
+      .filter((po) => opening.has(po.purchaseOrderId))
+      .reduce(
+        (sum, po) => sum.plus(po.purchases),
+        (await preCutoverTransitBalanceTx(tx, params.companyId, params.containerId)).balance
+      );
+    const target = params.mode === "toTransit" ? pos.reduce((sum, po) => sum.plus(po.purchases), zero()) : zero();
+    transit = held.minus(target).toDecimalPlaces(2);
+  }
+  const posted: string[] = [];
+  const common = {
+    companyId: params.companyId,
+    date,
+    reference,
+    actor: params.actor ?? null,
+    locationId: params.locationId,
+  };
+  if (!transit.isZero()) {
+    const journal = await postInventoryMovementJournalTx(tx, {
+      ...common,
+      sourceType: PRE_CUTOVER_TRANSIT_SOURCE,
+      sourceId: operation,
+      lines: [{ locationId: params.locationId, valueDelta: transit.toFixed(2) }],
+      offsetAccountCode: "GOODS_IN_TRANSIT",
+      narration: `${params.reason}: purchase cost back in transit`,
+    });
+    if (journal) posted.push(journal.voucherNumber);
+  }
+  const rest = params.valueDelta.minus(transit).toDecimalPlaces(2);
+  if (!rest.isZero()) {
+    const journal = await postInventoryMovementJournalTx(tx, {
+      ...common,
+      sourceType: PRE_CUTOVER_OFFLOAD_SOURCE,
+      sourceId: operation,
+      lines: [{ locationId: params.locationId, valueDelta: rest.toFixed(2) }],
+      offsetAccountCode: "PURCHASES",
+      narration: `${params.reason}: stock of a container offloaded before the cut-over`,
+    });
+    if (journal) posted.push(journal.voucherNumber);
+  }
+  return posted;
 }

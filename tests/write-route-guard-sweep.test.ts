@@ -67,6 +67,7 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/bales/:id",
   "DELETE /api/containers/:id",
   "DELETE /api/deleted-items/:type/:id/permanent",
+  "DELETE /api/factory/advance-repayments/:id",
   "DELETE /api/factory/advances/:id",
   "DELETE /api/factory/bale-products/:id",
   "DELETE /api/factory/bales/:id",
@@ -81,7 +82,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/factory/employee-advances/:id",
   "DELETE /api/factory/employee-bonuses/:id",
   "DELETE /api/factory/mix-batches/:id",
-  "DELETE /api/factory/payroll/:id",
   "DELETE /api/factory/pos/sales/:id",
   "DELETE /api/factory/raw-stock/adjustments/:id",
   "DELETE /api/factory/raw-stock/batch-source",
@@ -129,7 +129,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/factory/daybook/:entryId/cost-edit",
   "PATCH /api/factory/dispatch-batches/:id",
   "PATCH /api/factory/mix-batches/:id",
-  "PATCH /api/factory/payroll/:id",
   "PATCH /api/factory/payrolls/:id/fix-accounting",
   "PATCH /api/factory/payrolls/:id/mark-paid",
   "PATCH /api/factory/raw-stock/opening-balance/:id",
@@ -282,7 +281,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/mix-batches/:id/assign-bales",
   "POST /api/factory/mix-batches/:id/finalize",
   "POST /api/factory/mix-batches/:id/top-up",
-  "POST /api/factory/payroll/:id/undo",
   "POST /api/factory/payroll/migrate-city-split",
   "POST /api/factory/payroll/migrate-salary-groups",
   "POST /api/factory/payroll/migrate-worker-names",
@@ -465,8 +463,17 @@ afterAll(() => {
  * POST /api/sales-report/recalculate-costs left the sensitive list outright, as
  * the stock-transfer-revision routes did: historical sale costs are immutable,
  * and the route now answers 409 HISTORICAL_SALE_COST_IMMUTABLE without writing.
+ *
+ * PATCH and DELETE /api/factory/payroll/:id and POST /api/factory/payroll/:id/undo
+ * joined them in wave 7 (2026-10-09):
+ * the payment voucher of a payroll marked PAID, and its removal on un-mark or
+ * undo, moved to services/payroll/factoryPayrollPaymentVoucher.ts, so the route
+ * file no longer names the voucher tables itself; the routes still post them.
  */
 const DELEGATED_WRITE_ROUTES = [
+  "DELETE /api/factory/payroll/:id",
+  "PATCH /api/factory/payroll/:id",
+  "POST /api/factory/payroll/:id/undo",
   "DELETE /api/waste-dispatches/:id",
   "POST /api/factory/customer-orders/:id/auto-recover-bales",
   "POST /api/factory/customer-orders/:id/recover-bales",

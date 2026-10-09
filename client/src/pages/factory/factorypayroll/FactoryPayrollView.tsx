@@ -63,6 +63,9 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     setShowPayDialog,
     paySource,
     setPaySource,
+    payCashAccountId,
+    setPayCashAccountId,
+    payCashAccounts,
     payDate,
     setPayDate,
     payReference,
@@ -456,6 +459,24 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                         </Select>
                       </div>
                       <div className="space-y-1">
+                        <Label>Paying Cash or Bank Account</Label>
+                        <Select value={payCashAccountId} onValueChange={setPayCashAccountId}>
+                          <SelectTrigger data-testid="select-pay-cash-account">
+                            <SelectValue placeholder="Choose the account that pays" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {payCashAccounts.map((account) => (
+                              <SelectItem key={account.id} value={String(account.id)}>
+                                {account.code ? `${account.code} — ${account.name}` : account.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Posts Dr Payroll Payable / Cr this account for the net salary.
+                        </p>
+                      </div>
+                      <div className="space-y-1">
                         <Label>Payment Date</Label>
                         <Input
                           type="date"
@@ -499,7 +520,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                     </Button>
                     <Button
                       onClick={handleConfirmPayment}
-                      disabled={adjustMutation.isPending || !payDate}
+                      disabled={adjustMutation.isPending || !payDate || !payCashAccountId}
                       data-testid="button-confirm-payment"
                     >
                       {adjustMutation.isPending ? (

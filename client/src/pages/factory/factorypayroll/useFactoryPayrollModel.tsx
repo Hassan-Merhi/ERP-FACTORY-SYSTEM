@@ -12,6 +12,12 @@ import type { Company, PayrollRecord } from "./types";
 import { amount } from "./utils";
 import { confirmAction } from "@/components/ConfirmHost";
 
+interface PayCashAccount {
+  id: number;
+  name: string;
+  code: string | null;
+}
+
 interface PayrollSettings {
   payrollTabWorkerMasterEnabled?: boolean;
 }
@@ -88,6 +94,8 @@ export function useFactoryPayrollModel() {
   const [payDate, setPayDate] = useState(today);
   const [payReference, setPayReference] = useState("");
   const [payEffectiveDate, setPayEffectiveDate] = useState("");
+  // Wave 7: marking PAID posts Dr Payroll Payable / Cr this account, so it is required.
+  const [payCashAccountId, setPayCashAccountId] = useState("");
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
@@ -104,6 +112,18 @@ export function useFactoryPayrollModel() {
   useEffect(() => {
     if (companies.length === 1 && companyId === null) setCompanyId(companies[0].id);
   }, [companies, companyId]);
+
+  const { data: payCashAccounts = [] } = useQuery<PayCashAccount[]>({
+    queryKey: ["/api/factory/cash-accounts", selectedCompanyId],
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/cash-accounts?companyId=${selectedCompanyId}`, {
+        credentials: "include",
+      });
+      return response.ok ? ((await response.json()) as PayCashAccount[]) : [];
+    },
+    enabled: !!selectedCompanyId && showPayDialog,
+    staleTime: 60000,
+  });
 
   const payrollQueryParams = new URLSearchParams();
   if (selectedCompanyId) payrollQueryParams.set("companyId", String(selectedCompanyId));
@@ -213,6 +233,7 @@ export function useFactoryPayrollModel() {
       setPaySource("Cash");
       setPayReference("");
       setPayEffectiveDate("");
+      setPayCashAccountId("");
       setShowPayDialog(true);
       return;
     }
@@ -230,7 +251,7 @@ export function useFactoryPayrollModel() {
   };
 
   const handleConfirmPayment = () => {
-    if (!editRecord) return;
+    if (!editRecord || !payCashAccountId) return;
     adjustMutation.mutate({
       id: editRecord.id,
       data: {
@@ -241,6 +262,7 @@ export function useFactoryPayrollModel() {
         notes: editNotes,
         status: "PAID",
         paymentSource: paySource,
+        cashAccountId: Number(payCashAccountId),
         paymentDate: payDate,
         paymentReference: payReference,
         effectiveDate: payEffectiveDate || null,
@@ -435,6 +457,9 @@ export function useFactoryPayrollModel() {
     setPayReference,
     payEffectiveDate,
     setPayEffectiveDate,
+    payCashAccountId,
+    setPayCashAccountId,
+    payCashAccounts,
     exportingPdf,
     exportingExcel,
     migrating,

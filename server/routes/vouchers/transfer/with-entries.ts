@@ -31,6 +31,11 @@ import {
 } from "../../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { stockVoucherTypeRefusal } from "../../../services/accounting/stockVoucherTypes";
+import {
+  assertSaleRedateAllowed,
+  redateSaleCogsTx,
+  SaleDateCrossesCutoverError,
+} from "../../../services/accounting/perpetualInventory/saleCogs";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -123,6 +128,22 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
       const newLocationId = voucher.locationId !== undefined ? voucher.locationId : oldLocationId;
       const locationChanged = oldLocationId !== newLocationId;
 
+      // Wave 15 (M5): refused before anything moves (the location move below commits on its own).
+      try {
+        await assertSaleRedateAllowed(db, {
+          companyId: existingVoucher.companyId,
+          saleVoucherId: id,
+          voucherType: existingVoucher.voucherType,
+          oldDate: existingVoucher.voucherDate,
+          newDate: voucher.voucherDate,
+        });
+      } catch (redateError: unknown) {
+        if (!(redateError instanceof SaleDateCrossesCutoverError)) throw redateError;
+        return res
+          .status(409)
+          .json({ code: redateError.code, message: redateError.message, effectiveFrom: redateError.effectiveFrom });
+      }
+
       if (existingVoucher.voucherType === "Sales" && locationChanged && oldLocationId && newLocationId) {
         await db.transaction(async (tx) => {
           await moveSalesVoucherInventoryLocation(tx, existingVoucher, oldLocationId, newLocationId, {
@@ -161,6 +182,14 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
             .update(fde)
             .set({ txDate: voucher.voucherDate })
             .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, id)));
+          // Wave 15 (M5): a re-dated sale's COGS journal takes the new date.
+          await redateSaleCogsTx(tx, {
+            companyId: existingVoucher.companyId,
+            saleVoucherId: id,
+            voucherType: existingVoucher.voucherType,
+            oldDate: existingVoucher.voucherDate,
+            newDate: voucher.voucherDate,
+          });
         }
 
         const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);

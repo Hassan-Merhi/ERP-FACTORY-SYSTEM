@@ -12,11 +12,12 @@ import {
   stockTransferItems,
   stockTransferVouchers,
   creditNoteItems,
+  inventoryValueMovements,
   stockItems as stockItemsTable,
   stockGroups as stockGroupsTable,
   stockCategories as stockCategoriesTable,
 } from "@shared/schema";
-import { eq, and, sql, gt, inArray, isNull } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 
@@ -103,7 +104,6 @@ export async function calculateHistoricalLocationInventory(
   executor: DatabaseOrTransaction = db
 ): Promise<HistoricalLocationInventoryRow[]> {
   const cutoffDateStr = asOfDate;
-  const cutoffTimestamp = new Date(asOfDate + "T23:59:59.999");
 
   const seedStockItemIds = new Set<number>();
 
@@ -195,6 +195,30 @@ export async function calculateHistoricalLocationInventory(
     .execute();
   for (const item of creditDebitNoteStockItems) seedStockItemIds.add(item.stockItemId);
 
+  // Movements that leave no document line (quick adjustments, archive and
+  // restore, location imports, cost corrections, readiness write-offs): their
+  // dated evidence (inventory_value_movements, wave 15) is replayed like a
+  // document line.
+  const evidenceAfterDate = await executor
+    .select({
+      stockItemId: inventoryValueMovements.stockItemId,
+      quantityDelta: inventoryValueMovements.quantityDelta,
+      valueDelta: inventoryValueMovements.valueDelta,
+    })
+    .from(inventoryValueMovements)
+    .where(
+      and(
+        eq(inventoryValueMovements.companyId, companyId),
+        eq(inventoryValueMovements.locationId, locationId),
+        sql`${inventoryValueMovements.stockItemId} IS NOT NULL`,
+        sql`${inventoryValueMovements.movementDate} > ${cutoffDateStr}::date`
+      )
+    )
+    .execute();
+  for (const movement of evidenceAfterDate) {
+    if (movement.stockItemId !== null) seedStockItemIds.add(movement.stockItemId);
+  }
+
   if (seedStockItemIds.size === 0) return [];
 
   const inventoryMap = new Map<number, HistoricalStock>();
@@ -235,7 +259,7 @@ export async function calculateHistoricalLocationInventory(
         eq(vouchers.locationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
@@ -264,7 +288,7 @@ export async function calculateHistoricalLocationInventory(
         eq(stockAdjustmentVouchers.locationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
@@ -318,7 +342,7 @@ export async function calculateHistoricalLocationInventory(
         eq(stockTransferVouchers.destinationLocationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
@@ -346,7 +370,7 @@ export async function calculateHistoricalLocationInventory(
         eq(stockTransferItems.sourceLocationId, locationId),
         eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
@@ -374,7 +398,9 @@ export async function calculateHistoricalLocationInventory(
         eq(containerOffloads.locationId, locationId),
         // A suspended (optional) offload's stock is already out of inventory.
         eq(containerOffloads.optional, false),
-        gt(containerOffloads.offloadedAt, cutoffTimestamp)
+        // Dated as the stock-in journal dates it: the container's offload date,
+        // else the offload's own timestamp (wave 15).
+        sql`COALESCE(${containers.offloadDate}, (${containerOffloads.offloadedAt})::date) > ${cutoffDateStr}::date`
       )
     )
     .execute();
@@ -407,8 +433,10 @@ export async function calculateHistoricalLocationInventory(
       and(
         eq(vouchers.companyId, companyId),
         eq(creditNoteItems.locationId, locationId),
+        // An optional note is not in the ledger (wave 15).
+        eq(vouchers.optional, false),
         isNull(vouchers.deletedAt),
-        sql`${vouchers.voucherDate} > ${cutoffDateStr}`
+        sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate}) > ${cutoffDateStr}`
       )
     )
     .execute();
@@ -421,6 +449,18 @@ export async function calculateHistoricalLocationInventory(
     } else {
       applyHistoricalMovement(inventoryMap, note.stockItemId, qty, value);
     }
+  }
+
+  // Reverse the evidenced movements after the date: each line is the signed
+  // change it made to the row.
+  for (const movement of evidenceAfterDate) {
+    if (movement.stockItemId === null) continue;
+    applyHistoricalMovement(
+      inventoryMap,
+      movement.stockItemId,
+      toMoney(movement.quantityDelta ?? 0).negated(),
+      toMoney(movement.valueDelta).negated()
+    );
   }
 
   const stockItemIdList = Array.from(inventoryMap.keys());
@@ -466,4 +506,29 @@ export async function calculateHistoricalLocationInventory(
     });
   }
   return results;
+}
+
+/**
+ * Evidenced movements after `asOfDate` that name no stock item (a transfer's
+ * settlement residual, a reversal difference, a container's pre-cut-over
+ * offload movement): the signed value they changed, by location (null when the
+ * line names none). The as-of company valuation reverses them from the
+ * sub-ledger total; they cannot be placed on an item row.
+ */
+export async function unitemizedInventoryMovementsAfter(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  asOfDate: string
+): Promise<Map<number | null, Decimal>> {
+  const result = await executor.execute(sql`
+    SELECT location_id, SUM(value_delta)::text AS value
+      FROM inventory_value_movements
+     WHERE company_id = ${companyId} AND stock_item_id IS NULL AND movement_date > ${asOfDate}::date
+     GROUP BY location_id
+  `);
+  const byLocation = new Map<number | null, Decimal>();
+  for (const row of result.rows as unknown as { location_id: number | null; value: string }[]) {
+    byLocation.set(row.location_id === null ? null : Number(row.location_id), toMoney(row.value));
+  }
+  return byLocation;
 }

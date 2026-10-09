@@ -11,6 +11,8 @@ import { requireAuth, requireNonPOS } from "../../../auth";
 import { logAudit } from "../../_helpers";
 import { inventory, stockItems, stockItemCodeAliases, stockItemMergeLogs } from "@shared/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { inventoryCutoverRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
+import { restoreRepointedLinesTx } from "./repointDocumentLines";
 
 export function registerStockMergeLogRoutes(app: Express) {
   // ── Merge Logs: GET /api/stock-items/merge-logs ──────────────────────────
@@ -164,7 +166,12 @@ export function registerStockMergeLogRoutes(app: Express) {
           .where(and(eq(stockItemMergeLogs.id, logId), eq(stockItemMergeLogs.companyId, companyId)));
         if (!log) return res.status(404).json({ message: "Merge log not found" });
 
-        const { keptItemId, mergedItemId, mergedItemName, mergedItemCode, snapshotBefore } = log;
+        const { keptItemId, mergedItemId, mergedItemName, mergedItemCode, snapshotBefore, snapshotAfter } = log;
+
+        // Wave 15: an unmerge rewrites both items' inventory rows from the
+        // snapshot with no journal, so it is refused after the cut-over.
+        const refusal = await inventoryCutoverRefusal(db, companyId, "stock-item-unmerge");
+        if (refusal) return res.status(refusal.status).json(refusal.body);
 
         // Verify the merged item still exists and is soft-deleted (i.e. still unmerge-able)
         const [mergedItem] = await db
@@ -261,6 +268,14 @@ export function registerStockMergeLogRoutes(app: Express) {
               });
             }
           }
+
+          // Wave 15 (M9): the document lines the merge repointed go back to the merged item.
+          await restoreRepointedLinesTx(
+            tx,
+            keptItemId,
+            mergedItemId,
+            (snapshotAfter as Record<string, unknown> | null)?.repointedLines
+          );
 
           // Step 3 — Delete the code alias created during merge (mergedItemCode → keptItemId)
           await tx

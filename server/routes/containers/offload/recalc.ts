@@ -15,12 +15,15 @@ import { containers, containerOffloads, containerOffloadItems, vouchers, voucher
 import { eq, and, sql } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
-import { toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { buildItemMap } from "../../../services/containers/offload-lifecycle/types";
 import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../../services/accounting/infrastructureVoucherIdentity";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
-import { syncContainerStockInTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
+import {
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -57,7 +60,13 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
           return res.json({ message: "Container status reversed to OTW (no offload record to clean up)" });
         }
 
+        // The date the offload is booked at, before the reversal clears it (wave 15, C1).
+        const bookedOffloadDate =
+          container.offloadDate ??
+          (offloadRecord.offloadedAt ? new Date(offloadRecord.offloadedAt).toISOString().slice(0, 10) : null);
+
         await db.transaction(async (tx) => {
+          let subLedgerDelta: Decimal = new MoneyDecimal(0);
           const storedOffloadItems = await tx
             .select()
             .from(containerOffloadItems)
@@ -77,7 +86,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             for (const offloadItem of storedOffloadItems) {
               const quantity = toMoney(offloadItem.quantity);
               const totalValue = toMoney(offloadItem.valueMoved ?? offloadItem.totalValue);
-              await reverseInventoryByExactValue(
+              const reversed = await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,
                 offloadItem.stockItemId,
@@ -86,6 +95,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
                 container.companyId,
                 `container-reverse-offload:${offloadRecord.id}`
               );
+              if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
               await postStockMovementTx(
                 tx,
                 {
@@ -129,7 +139,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
               const estimatedValue = data.weightedRateSum
                 .plus(data.totalQuantity.times(additionalCostPerBale))
                 .toDecimalPlaces(2);
-              await reverseInventoryByExactValue(
+              const reversed = await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,
                 stockItemId,
@@ -138,6 +148,7 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
                 container.companyId,
                 `container-reverse-offload:${offloadRecord.id}`
               );
+              if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
               await postStockMovementTx(
                 tx,
                 {
@@ -219,6 +230,19 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
           await tx.update(containers).set({ status: "OTW", offloadDate: null }).where(eq(containers.id, containerId));
           // Perpetual inventory (wave 8.2): nothing is received any more, so the stock-in journal goes.
           await syncContainerStockInTx(tx, container.companyId, containerId);
+          // Wave 15 (C1): a container offloaded before the cut-over had no
+          // stock-in journal; the stock it takes out is journalled now.
+          await postPreCutoverOffloadMovementTx(tx, {
+            companyId: container.companyId,
+            containerId,
+            containerNumber: container.containerNumber,
+            offloadDate: bookedOffloadDate,
+            locationId: offloadRecord.locationId,
+            valueDelta: subLedgerDelta,
+            mode: "toTransit",
+            reason: "Offload reversed",
+            actor: { userId: String(req.session.userId ?? "unknown"), username: req.session.username || "unknown" },
+          });
         });
 
         res.json({ success: true, message: "Container offload reversed successfully" });

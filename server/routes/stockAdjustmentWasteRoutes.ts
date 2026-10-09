@@ -25,6 +25,7 @@ import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
 import { requireActionAccess } from "../lib/permissionMiddleware";
 import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
 import { parseMoneyInput, sumMoney, toMoney } from "../lib/money";
+import { createStockAdjustmentWithVoucherTx } from "../storage/stock-ops/transfers-create";
 
 export function registerStockAdjustmentWasteRoutes(app: Express) {
   // Stock Adjustments - GET endpoint
@@ -242,59 +243,57 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
         rate: "0", // rate will be determined from inventory by createStockAdjustment
       }));
 
-      // Create voucher with type "Consumption"
-      const voucher = await storage.createVoucher({
-        companyId,
-        postingSource: infrastructurePostingIdentity("waste-dispatch", `${companyId}:${dispatchNumber}`, "consumption"),
-        voucherType: "Consumption",
-        voucherNumber: dispatchNumber,
-        voucherDate: dispatchDate,
-        description: `Waste dispatch from ${location.name}`,
-        totalAmount: "0",
-        currency: "USD",
-        sourceModule: "ERP",
-        optional: false,
-        locationId,
-      });
-
-      // Create stock adjustment (uses WASTE_EXPENSE account instead of CONSUMPTION_EXPENSE)
-      const adjResult = await storage.createStockAdjustment(
-        voucher.id,
-        locationId,
-        "Consumption",
-        notes || "",
-        itemsForAdj,
-        { code: "WASTE_EXPENSE", name: "Waste Expense" }
-      );
-
-      // Calculate total from actual rates used
-      const totalAmount = sumMoney(adjResult.items.map((item: { totalAmount: string }) => item.totalAmount));
-
-      // Create waste dispatch record
-      const [dispatch] = await db
-        .insert(wasteDispatches)
-        .values({
-          companyId,
+      // Wave 15: the voucher, its adjustment and the dispatch rows commit
+      // together (they were separate transactions, so a failure could leave a
+      // consumption voucher with no dispatch, or a dispatch with no stock).
+      const dispatch = await db.transaction(async (tx) => {
+        const adjResult = await createStockAdjustmentWithVoucherTx(
+          tx,
+          {
+            companyId,
+            voucherType: "Consumption",
+            voucherNumber: dispatchNumber,
+            voucherDate: dispatchDate,
+            description: `Waste dispatch from ${location.name}`,
+            totalAmount: "0",
+            currency: "USD",
+            sourceModule: "ERP",
+            optional: false,
+            locationId,
+          },
+          infrastructurePostingIdentity("waste-dispatch", `${companyId}:${dispatchNumber}`, "consumption"),
           locationId,
-          voucherId: voucher.id,
-          dispatchNumber,
-          dispatchDate,
-          notes: notes || null,
-          totalAmount: totalAmount.toFixed(2),
-        })
-        .returning();
+          notes || "",
+          itemsForAdj
+        );
 
-      // Create waste dispatch items
-      for (let i = 0; i < adjResult.items.length; i++) {
-        const adjItem = adjResult.items[i];
-        await db.insert(wasteDispatchItems).values({
-          dispatchId: dispatch.id,
-          stockItemId: adjItem.stockItemId,
-          quantity: toMoney(adjItem.quantity).abs().toFixed(3),
-          rate: adjItem.rate,
-          totalAmount: adjItem.totalAmount,
-        });
-      }
+        // Calculate total from actual rates used
+        const totalAmount = sumMoney(adjResult.items.map((item: { totalAmount: string }) => item.totalAmount));
+
+        const [created] = await tx
+          .insert(wasteDispatches)
+          .values({
+            companyId,
+            locationId,
+            voucherId: adjResult.voucher.id,
+            dispatchNumber,
+            dispatchDate,
+            notes: notes || null,
+            totalAmount: totalAmount.toFixed(2),
+          })
+          .returning();
+
+        for (const adjItem of adjResult.items) {
+          await tx.insert(wasteDispatchItems).values({
+            dispatchId: created.id,
+            stockItemId: adjItem.stockItemId,
+            quantity: toMoney(adjItem.quantity).abs().toFixed(3),
+            rate: adjItem.rate,
+            totalAmount: adjItem.totalAmount,
+          });
+        }
+        return created;
+      });
 
       res.json({ ...dispatch, voucherNumber: dispatchNumber });
     } catch (error: unknown) {

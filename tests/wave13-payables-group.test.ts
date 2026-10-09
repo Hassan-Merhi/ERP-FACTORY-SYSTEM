@@ -45,6 +45,7 @@ import { calculateNetPositionAsOf } from "../server/helpers/calculateNetPosition
 import { loadCompanyIntercompanyAccounts } from "../server/helpers/groupIntercompany";
 import { calculateGroupNetPosition, pairIntercompanyBalances } from "../server/helpers/groupNetPosition";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { normalizedLineFields } from "./helpers/normalizedVoucherLine";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 
 const PREFIX = "w13pg";
@@ -120,12 +121,21 @@ async function voucher(companyId: number, lines: Line[], voucherDate: string, nu
     );
     for (const line of lines) {
       const normalized = line.currency !== undefined;
+      const isDebit = Number(line.debit) > 0;
+      // Fully normalized (rate and convention too): the currency trigger keeps it as given.
+      const dual = normalized
+        ? normalizedLineFields(
+            isDebit ? line.debit : line.credit,
+            (isDebit ? line.nativeDebit : line.nativeCredit) ?? "0",
+            isDebit ? "debit" : "credit"
+          )
+        : null;
       await client.query(
         `INSERT INTO voucher_entries (voucher_id, ledger_account_id, bank_account_id, customer_id, supplier_id,
                                       factory_supplier_id, debit_amount, credit_amount, transaction_currency,
                                       transaction_debit_amount, transaction_credit_amount, base_debit_amount,
-                                      base_credit_amount)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+                                      base_credit_amount, historical_exchange_rate, rate_convention)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
         [
           created.rows[0].id,
           line.ledger ?? null,
@@ -136,10 +146,12 @@ async function voucher(companyId: number, lines: Line[], voucherDate: string, nu
           line.debit,
           line.credit,
           normalized ? line.currency : null,
-          normalized ? (line.nativeDebit ?? "0") : null,
-          normalized ? (line.nativeCredit ?? "0") : null,
-          normalized ? line.debit : null,
-          normalized ? line.credit : null,
+          dual?.transactionDebit ?? null,
+          dual?.transactionCredit ?? null,
+          dual?.baseDebit ?? null,
+          dual?.baseCredit ?? null,
+          dual?.rate ?? null,
+          dual?.convention ?? null,
         ]
       );
     }

@@ -20,6 +20,7 @@ import { postOptionalToggleResidualTx, toggleVoucherStockTx, voucherInventoryLed
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
   assertStoredVoucherLinesValidTx,
   replacementErrorStatus,
@@ -168,6 +169,7 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
       const updated = await storage.getVoucherById(id);
       res.json(updated);
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       if ((error as { name?: string }).name === "ValidationError") {
         return res.status(400).json({ message: getErrorMessage(error) });
       }

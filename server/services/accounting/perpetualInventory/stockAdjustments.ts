@@ -53,6 +53,7 @@ export const STOCK_ADJUSTMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set([
 
 export const STOCK_ADJUSTMENT_INVENTORY_NARRATION = "Inventory - stock adjustment";
 export const STOCK_ADJUSTMENT_VALUATION_NARRATION = "Inventory - stock adjustment valuation difference";
+export const STOCK_ADJUSTMENT_SETTLEMENT_NARRATION = "Inventory - stock adjustment shortage settlement";
 
 /**
  * Replaces the inventory line (and valuation-difference line) of a stock
@@ -80,7 +81,8 @@ export async function syncStockAdjustmentInventoryTx(
      WHERE ve.voucher_id = ${voucherId} AND v.id = ve.voucher_id AND v.company_id = ${companyId}
        AND la.id = ve.ledger_account_id AND la.company_id = ${companyId}
        AND ((la.code = 'INVENTORY' AND ve.narration = ${STOCK_ADJUSTMENT_INVENTORY_NARRATION})
-         OR (la.code = 'INVENTORY_ADJUSTMENT' AND ve.narration = ${STOCK_ADJUSTMENT_VALUATION_NARRATION}))
+         OR (la.code = 'INVENTORY_ADJUSTMENT' AND ve.narration = ${STOCK_ADJUSTMENT_VALUATION_NARRATION})
+         OR (la.code = 'COGS' AND ve.narration = ${STOCK_ADJUSTMENT_SETTLEMENT_NARRATION}))
   `);
 
   if (voucher.optional === true || voucher.deleted_at !== null) return null;
@@ -99,27 +101,44 @@ export async function syncStockAdjustmentInventoryTx(
     .minus(toMoney(totals?.debit ?? 0))
     .toDecimalPlaces(2);
 
-  // What the sub-ledger moved, when every line recorded it.
+  // What the sub-ledger moved, when every line recorded it, and (wave 15) the
+  // part of the difference that is a receipt's shortage settlement: a
+  // production line is received at its document value (total_amount) and the
+  // sub-ledger keeps only what it moved, so total_amount − value_moved on a
+  // receipt line is the settlement variance (a short row taking back its
+  // provisional value, an empty row's residual flushed), which owner decision
+  // 2 (wave 11) sends to COGS. The rest of the difference (a consumption
+  // issued at the location's average instead of the typed rate, hand-edited
+  // lines) stays on INVENTORY_ADJUSTMENT.
   const [moved] = (
     await tx.execute(sql`
-      SELECT COUNT(sai.id)::int AS lines,
-             COUNT(sai.value_moved)::int AS recorded,
-             COALESCE(SUM(CASE
-               WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'production' THEN ABS(sai.value_moved)
-               WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'consumption' THEN -ABS(sai.value_moved)
-               WHEN sai.quantity < 0 THEN -ABS(sai.value_moved)
-               ELSE ABS(sai.value_moved)
-             END), 0)::text AS value
-        FROM stock_adjustment_vouchers sav
-        JOIN stock_adjustment_items sai ON sai.adjustment_id = sav.id
-        JOIN vouchers v ON v.id = sav.voucher_id AND v.company_id = ${companyId}
-       WHERE sav.voucher_id = ${voucherId}
+      WITH lines AS (
+        SELECT sai.value_moved, sai.total_amount,
+               CASE
+                 WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'production' THEN true
+                 WHEN LOWER(BTRIM(COALESCE(sav.adjustment_type, ''))) = 'consumption' THEN false
+                 ELSE sai.quantity >= 0
+               END AS receipt
+          FROM stock_adjustment_vouchers sav
+          JOIN stock_adjustment_items sai ON sai.adjustment_id = sav.id
+          JOIN vouchers v ON v.id = sav.voucher_id AND v.company_id = ${companyId}
+         WHERE sav.voucher_id = ${voucherId}
+      )
+      SELECT COUNT(*)::int AS lines,
+             COUNT(value_moved)::int AS recorded,
+             COALESCE(SUM(CASE WHEN receipt THEN ABS(value_moved) ELSE -ABS(value_moved) END), 0)::text AS value,
+             COALESCE(SUM(CASE WHEN receipt THEN ABS(total_amount) - ABS(value_moved) ELSE 0 END), 0)::text
+               AS settlement
+        FROM lines
     `)
-  ).rows as { lines: number; recorded: number; value: string }[];
+  ).rows as { lines: number; recorded: number; value: string; settlement: string }[];
   const exact = moved !== undefined && moved.lines > 0 && moved.recorded === moved.lines;
   const inventory = exact ? toMoney(moved.value).toDecimalPlaces(2) : net;
-  const difference = net.minus(inventory);
-  if (inventory.isZero() && difference.isZero()) return null;
+  const settlement = exact ? toMoney(moved.settlement).toDecimalPlaces(2) : new MoneyDecimal(0);
+  // Debit positive, like `difference`: a receipt that moved less than its
+  // document value (settlement > 0) debits COGS.
+  const difference = net.minus(inventory).minus(settlement);
+  if (inventory.isZero() && difference.isZero() && settlement.isZero()) return null;
 
   const { id: inventoryAccountId } = await getOrCreateInventoryControlAccount(tx, companyId);
   const zero = new MoneyDecimal(0);
@@ -131,6 +150,16 @@ export async function syncStockAdjustmentInventoryTx(
       debitAmount: (inventory.isPositive() ? inventory : zero).toFixed(2),
       creditAmount: (inventory.isNegative() ? inventory.negated() : zero).toFixed(2),
       narration: STOCK_ADJUSTMENT_INVENTORY_NARRATION,
+    });
+  }
+  if (!settlement.isZero()) {
+    const cogsAccountId = (await systemAccountIdsTx(tx, companyId, ["COGS"])).get("COGS")!;
+    entries.push({
+      voucherId,
+      ledgerAccountId: cogsAccountId,
+      debitAmount: (settlement.isPositive() ? settlement : zero).toFixed(2),
+      creditAmount: (settlement.isNegative() ? settlement.negated() : zero).toFixed(2),
+      narration: STOCK_ADJUSTMENT_SETTLEMENT_NARRATION,
     });
   }
   if (!difference.isZero()) {

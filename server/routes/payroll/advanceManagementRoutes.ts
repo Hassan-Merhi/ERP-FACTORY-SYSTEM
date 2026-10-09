@@ -1,5 +1,10 @@
 import { parseId, parseOptionalId } from "../../lib/parseId";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError, sendHttpError } from "../../lib/httpHandlers";
+import { logAudit } from "../helpers/auditHelpers";
+import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../services/accounting/infrastructureVoucherIdentity";
+
+export const ADVANCE_HAS_REPAYMENTS_MESSAGE =
+  "This advance has repayments. Reverse the repayments first, then delete the advance.";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
 import type { Express, Request, Response } from "express";
@@ -301,26 +306,24 @@ export function registerAdvanceManagementRoutes(app: Express) {
 
       const today = getClientDate(req);
 
+      // Owner decision (wave 7): an advance with a live repayment is not deleted
+      // (its repayment vouchers would be left behind); the repayments are
+      // reversed first. An advance with none goes with its PAYMENT-ADV voucher,
+      // its daybook rows and an audit row, in one transaction.
       await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
+        const [locked] = await tx
+          .select({ id: factoryWorkerAdvances.id })
+          .from(factoryWorkerAdvances)
+          .where(and(eq(factoryWorkerAdvances.id, id), eq(factoryWorkerAdvances.companyId, companyId)))
+          .for("update");
+        if (!locked) throw new HttpError(404, "Advance not found");
+
         const repayments = await tx
-          .select()
+          .select({ id: factoryAdvanceRepayments.id })
           .from(factoryAdvanceRepayments)
           .where(eq(factoryAdvanceRepayments.advanceId, id));
-
         if (repayments.length > 0) {
-          // Delete ADVANCE_REPAYMENT daybook entries for these repayments before
-          // removing the repayment records so orphaned daybook rows don't linger.
-          const repaymentIds = repayments.map((r) => r.id);
-          await tx
-            .delete(factoryDaybookEntries)
-            .where(
-              and(
-                eq(factoryDaybookEntries.companyId, companyId),
-                eq(factoryDaybookEntries.referenceTable, "factory_advance_repayments"),
-                inArray(factoryDaybookEntries.referenceId, repaymentIds)
-              )
-            );
-          await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.advanceId, id));
+          throw new HttpError(409, ADVANCE_HAS_REPAYMENTS_MESSAGE);
         }
 
         // Delete the advance payment voucher (PAYMENT-ADV-{id}-*) and its entries.
@@ -334,6 +337,7 @@ export function registerAdvanceManagementRoutes(app: Express) {
           );
         if (advanceVouchers.length > 0) {
           const vIds = advanceVouchers.map((v) => v.id);
+          for (const voucherId of vIds) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
           await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
           await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
         }
@@ -355,7 +359,6 @@ export function registerAdvanceManagementRoutes(app: Express) {
             )
           );
 
-        const repayNote = repayments.length > 0 ? ` (${repayments.length} repayment(s) also removed)` : "";
         const voucherNote = advanceVouchers.length > 0 ? "; voucher reversed" : "";
         await writeDaybookEntry(tx, {
           companyId,
@@ -363,15 +366,35 @@ export function registerAdvanceManagementRoutes(app: Express) {
           txType: "ADVANCE_DELETED",
           referenceId: id,
           referenceTable: "factory_worker_advances",
-          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${repayNote}${voucherNote}`,
+          description: `Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${voucherNote}`,
           createdBy: req.session.userId ?? undefined,
         });
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "delete",
+            tableName: "factory_worker_advances",
+            recordId: id,
+            recordIdentifier: `Advance #${id} (${worker?.fullName || `Worker #${advance.workerId}`})`,
+            changes: {
+              amount: { old: advance.amount, new: null },
+              remainingBalance: { old: advance.remainingBalance, new: null },
+              vouchersRemoved: { old: advanceVouchers.map((v) => v.id).join(", ") || null, new: null },
+            },
+          },
+          tx
+        );
       });
 
       res.json({ message: "Advance deleted" });
     } catch (error: unknown) {
-      logger.error("Error deleting advance:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+      if (error instanceof HttpError && error.message === ADVANCE_HAS_REPAYMENTS_MESSAGE) {
+        return res.status(409).json({ message: error.message, code: "ADVANCE_HAS_REPAYMENTS" });
+      }
+      if (!(error instanceof HttpError)) logger.error("Error deleting advance:", { error: error });
+      sendHttpError(res, error);
     }
   });
 
@@ -408,6 +431,25 @@ export function registerAdvanceManagementRoutes(app: Express) {
           .where(eq(factoryAdvanceRepayments.advanceId, id));
 
         if (repayments.length > 0) {
+          // Wave 7: each repayment's receipt voucher (RECEIPT-REPAY-{id}-* /
+          // REPAY-SAL-{id}-*) goes with it, so reversing repayments leaves no
+          // credit on Factory Worker Advances behind.
+          for (const repayment of repayments) {
+            const receiptVouchers = await tx
+              .select({ id: vouchers.id })
+              .from(vouchers)
+              .where(
+                and(
+                  eq(vouchers.companyId, companyId),
+                  sql`(${vouchers.voucherNumber} LIKE ${"RECEIPT-REPAY-" + repayment.id + "-%"} OR ${vouchers.voucherNumber} LIKE ${"REPAY-SAL-" + repayment.id + "-%"})`
+                )
+              );
+            const receiptIds = receiptVouchers.map((v) => v.id);
+            if (receiptIds.length === 0) continue;
+            for (const voucherId of receiptIds) await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
+            await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, receiptIds));
+            await tx.delete(vouchers).where(inArray(vouchers.id, receiptIds));
+          }
           await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.advanceId, id));
         }
 
@@ -426,6 +468,22 @@ export function registerAdvanceManagementRoutes(app: Express) {
           description: `Advance reversed for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)} restored to outstanding (${repayments.length} repayment(s) removed)`,
           createdBy: req.session.userId ?? undefined,
         });
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "update",
+            tableName: "factory_worker_advances",
+            recordId: id,
+            recordIdentifier: `Advance #${id} reversed`,
+            changes: {
+              remainingBalance: { old: advance.remainingBalance, new: advance.amount },
+              repaymentsRemoved: { old: repayments.map((r) => r.id).join(", ") || null, new: null },
+            },
+          },
+          tx
+        );
       });
 
       res.json({ message: "Advance reversed and restored to outstanding" });

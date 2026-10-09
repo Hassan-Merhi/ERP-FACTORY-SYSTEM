@@ -10,10 +10,14 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "../../db";
-import { requireAuth } from "../../auth";
+import { requireAuth, requireRole } from "../../auth";
 import { getClientDate } from "../../lib/dateUtils";
 import { getOrFetchFxRateToUsd } from "./_helpers";
 import { factoryFxRates, insertFactoryFxRateSchema } from "@shared/schema";
+import { deleteFactoryFxRates, saveFactoryFxRate } from "../../services/accounting/exchangeRateWrites";
+
+/** Saving or removing a rate (wave 14, owner decision 2); Developer passes requireRole too. */
+const RATE_EDITOR_ROLES = ["Admin", "Owner"] as const;
 
 export function registerFactoryFxRatesRoutes(app: Express) {
   app.get("/api/factory/fx-rates", requireAuth, async (req: Request, res: Response) => {
@@ -78,36 +82,57 @@ export function registerFactoryFxRatesRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/fx-rates", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const today = getClientDate(req);
-      const parsed = insertFactoryFxRateSchema.parse({
-        effectiveDate: today,
-        ...req.body,
-        companyId,
-        source: "manual",
-      });
-      const [rate] = await db.insert(factoryFxRates).values(parsed).returning();
-      res.json(rate);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+  // Adds a manual rate effective from its date; the save and its audit (the rate it
+  // supersedes on that date, and the new one) commit together.
+  app.post(
+    "/api/factory/fx-rates",
+    requireAuth,
+    requireRole(...RATE_EDITOR_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const today = getClientDate(req);
+        const parsed = insertFactoryFxRateSchema.parse({
+          effectiveDate: today,
+          ...req.body,
+          companyId,
+          source: "manual",
+        });
+        const rate = await saveFactoryFxRate(
+          { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+          {
+            currencyCode: parsed.currencyCode.trim().toUpperCase(),
+            rateToUsd: parsed.rateToUsd,
+            effectiveDate: parsed.effectiveDate,
+          }
+        );
+        res.json(rate);
+      } catch (error: unknown) {
+        res.status(400).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
-  // DELETE by currency code — removes all rows (manual + auto) for that currency
-  app.delete("/api/factory/fx-rates/:currency", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const currency = req.params.currency.toUpperCase();
-      await db
-        .delete(factoryFxRates)
-        .where(and(eq(factoryFxRates.companyId, companyId), eq(factoryFxRates.currencyCode, currency)));
-      res.json({ ok: true });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+  // DELETE by currency code — removes all rows (manual + auto) for that currency,
+  // audited with the removed rows in the same transaction.
+  app.delete(
+    "/api/factory/fx-rates/:currency",
+    requireAuth,
+    requireRole(...RATE_EDITOR_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const currency = req.params.currency.toUpperCase();
+        await deleteFactoryFxRates(
+          { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+          currency
+        );
+        res.json({ ok: true });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 }

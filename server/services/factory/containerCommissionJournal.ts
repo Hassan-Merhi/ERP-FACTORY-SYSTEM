@@ -31,6 +31,25 @@
  * payee) nothing is posted, and the not-in-ledger memo and the integrity
  * diagnostic keep listing the commission. Legacy containers are not
  * back-filled.
+ *
+ * Commission held elsewhere (accounting audit wave 14):
+ *   - On the container's raw-stock row (factory_raw_stock.commission_*,
+ *     written by an opening-balance entry): when the container carries no
+ *     commission of its own, the journal posts the raw-stock commission
+ *     instead, with the same rules: rate = the row's own stored rate (that
+ *     table has no "confirmed" flag, so a non-USD rate must be positive and
+ *     not the unset default 1, as resolveStoredFxRate reads it), else the
+ *     container's confirmed rate for a commission in the container's
+ *     currency; payee = the row's commission supplier, else the container's
+ *     supplier, else the row's commission ledger account. When the container
+ *     has a commission too, only the container's is posted (one journal per
+ *     container, never both), and the raw-stock amount is listed for review.
+ *   - In factory_container_commissions (the offload's commission record):
+ *     the offload copies it onto the container, whose commission this
+ *     journal posts, so a record is never journalled on its own (that would
+ *     count it twice). A record its container no longer carries is listed:
+ *     by the not-in-ledger memo when the container has no commission at
+ *     all, by the integrity diagnostic in every case.
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
@@ -44,6 +63,7 @@ import {
   insertInfrastructureVoucherTx,
 } from "../accounting/infrastructureVoucherIdentity";
 import { systemAccountIdsTx } from "../accounting/perpetualInventory/linkedJournal";
+import { resolveStoredFxRate } from "./currencyConversion";
 import { normFactoryEntry } from "./factoryVoucherEntryAmounts";
 
 export const CONTAINER_COMMISSION_SOURCE = "factory-container-commission";
@@ -55,6 +75,16 @@ export type ContainerCommissionJournalSkip = "missing" | "deleted" | "no-commiss
 export interface ContainerCommissionJournalResult {
   voucherId: number | null;
   skipped?: ContainerCommissionJournalSkip;
+  /** Where the posted commission was read from: the container, or its raw-stock row. */
+  source?: "container" | "rawStock";
+}
+
+interface RawStockCommissionRow {
+  commission_amount: string | null;
+  commission_currency_code: string | null;
+  commission_fx_rate_to_usd: string | null;
+  commission_supplier_id: number | null;
+  commission_ledger_account_id: number | null;
 }
 
 interface CommissionRow {
@@ -99,6 +129,28 @@ export function containerCommissionRate(row: {
   const rate =
     confirmedRate(currency, row.commission_fx_rate_to_usd, row.commission_fx_rate_confirmed) ??
     (currency === containerCcy ? confirmedRate(containerCcy, row.fx_rate_to_usd, row.fx_rate_confirmed) : null);
+  return { currency, rate };
+}
+
+/**
+ * A raw-stock commission's rate: the row's own stored rate (no confirmed flag
+ * on that table: positive and not the unset default 1), else the container's
+ * confirmed rate for a commission in the container's currency.
+ */
+export function rawStockCommissionRate(
+  container: { currency_code: string | null; fx_rate_to_usd: string | null; fx_rate_confirmed: boolean | null },
+  row: { commission_currency_code: string | null; commission_fx_rate_to_usd: string | null }
+): { currency: string; rate: Decimal | null } {
+  const containerCcy = (container.currency_code || "USD").toUpperCase();
+  const currency = (row.commission_currency_code || containerCcy).toUpperCase();
+  const own = resolveStoredFxRate(currency, row.commission_fx_rate_to_usd);
+  const rate = own.looksSet
+    ? currency === "USD"
+      ? new MoneyDecimal(1)
+      : toMoney(row.commission_fx_rate_to_usd)
+    : currency === containerCcy
+      ? confirmedRate(containerCcy, container.fx_rate_to_usd, container.fx_rate_confirmed)
+      : null;
   return { currency, rate };
 }
 
@@ -160,12 +212,35 @@ export async function syncContainerCommissionJournalTx(
   );
   if (!row) return { voucherId: null, skipped: "missing" };
   if (row.deleted_at !== null) return { voucherId: null, skipped: "deleted" };
-  const amount = toMoney(row.commission_amount ?? 0).toDecimalPlaces(2);
+
+  // The container's own commission; else (wave 14) the commission held on its
+  // live raw-stock row (an opening-balance entry). Never both.
+  let source: "container" | "rawStock" = "container";
+  let amount = toMoney(row.commission_amount ?? 0).toDecimalPlaces(2);
+  let { currency, rate } = containerCommissionRate(row);
+  let payeeSupplierId = row.commission_supplier_id ?? row.supplier_id;
+  let payeeAccountId = row.commission_account_id;
+  if (!amount.greaterThan(0)) {
+    const [held] = await rowsOf<RawStockCommissionRow>(
+      tx,
+      sql`SELECT commission_amount::text AS commission_amount, commission_currency_code,
+                 commission_fx_rate_to_usd::text AS commission_fx_rate_to_usd,
+                 commission_supplier_id, commission_ledger_account_id
+            FROM factory_raw_stock
+           WHERE company_id = ${companyId} AND container_id = ${containerId} AND deleted_at IS NULL
+             AND COALESCE(commission_amount, 0) > 0
+           ORDER BY id LIMIT 1`
+    );
+    if (!held) return { voucherId: null, skipped: "no-commission" };
+    source = "rawStock";
+    amount = toMoney(held.commission_amount).toDecimalPlaces(2);
+    ({ currency, rate } = rawStockCommissionRate(row, held));
+    payeeSupplierId = held.commission_supplier_id ?? row.supplier_id;
+    payeeAccountId = held.commission_ledger_account_id;
+  }
   if (!amount.greaterThan(0)) return { voucherId: null, skipped: "no-commission" };
-  const { currency, rate } = containerCommissionRate(row);
   if (!rate) return { voucherId: null, skipped: "no-rate" };
-  const payeeSupplierId = row.commission_supplier_id ?? row.supplier_id;
-  if (!payeeSupplierId && !row.commission_account_id) return { voucherId: null, skipped: "no-payee" };
+  if (!payeeSupplierId && !payeeAccountId) return { voucherId: null, skipped: "no-payee" };
 
   const debitAccountId = await importCostAccountIdTx(tx, companyId, containerId);
   const rateText = rate.toFixed();
@@ -193,12 +268,10 @@ export async function syncContainerCommissionJournalTx(
     },
     {
       voucherId: voucher.id,
-      ...(payeeSupplierId
-        ? { factorySupplierId: payeeSupplierId }
-        : { ledgerAccountId: Number(row.commission_account_id) }),
+      ...(payeeSupplierId ? { factorySupplierId: payeeSupplierId } : { ledgerAccountId: Number(payeeAccountId) }),
       ...normFactoryEntry(currency, "0", amount.toFixed(2), rateText),
       narration: `Commission payable - container ${row.container_number}`,
     },
   ]);
-  return { voucherId: voucher.id };
+  return { voucherId: voucher.id, source };
 }

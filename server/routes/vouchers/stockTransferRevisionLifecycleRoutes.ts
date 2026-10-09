@@ -13,6 +13,7 @@ import {
   approvePendingStockTransferRevision,
   savePendingStockTransferRevision,
 } from "../../services/stockTransferRevisionLifecycle";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 
 const pendingRevisionSchema = z.object({
   note: z.string().optional().nullable(),
@@ -54,6 +55,8 @@ function errorStatus(error: unknown): number {
 }
 
 function sendError(res: Response, error: unknown, context: string) {
+  // Wave 15: a factory bale-mirror item after the cut-over (409, translated).
+  if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = errorStatus(error);
   if (status === 500) logger.error(`[StockTransferRevisionLifecycle ${context}]`, { error: error });
   const payload: Record<string, unknown> = {

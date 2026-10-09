@@ -17,6 +17,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { normalizedLineFields } from "./helpers/normalizedVoucherLine";
 import {
   ensureVoucherBalanceGuard,
   VOUCHER_BALANCE_GUARD_TRIGGERS,
@@ -80,18 +81,27 @@ async function voucher(
   }
   for (const [debit, credit, currency, native] of lines) {
     const isDebit = Number(debit) > 0;
+    // Fully normalized (rate and convention too): the currency trigger keeps it as given.
+    const dual = currency
+      ? normalizedLineFields(isDebit ? debit : credit, native ?? "0", isDebit ? "debit" : "credit")
+      : null;
     await q(
       `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount,
-                                    transaction_currency, transaction_debit_amount, transaction_credit_amount)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                                    transaction_currency, transaction_debit_amount, transaction_credit_amount,
+                                    base_debit_amount, base_credit_amount, historical_exchange_rate, rate_convention)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         id,
         isDebit ? accounts.get(company)!.debit : accounts.get(company)!.credit,
         debit,
         credit,
         currency ?? null,
-        currency ? (isDebit ? native : "0") : null,
-        currency ? (isDebit ? "0" : native) : null,
+        dual?.transactionDebit ?? null,
+        dual?.transactionCredit ?? null,
+        dual?.baseDebit ?? null,
+        dual?.baseCredit ?? null,
+        dual?.rate ?? null,
+        dual?.convention ?? null,
       ]
     );
   }

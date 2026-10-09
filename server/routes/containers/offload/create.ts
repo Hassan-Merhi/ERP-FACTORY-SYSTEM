@@ -57,6 +57,8 @@ export function registerContainerOffloadCreateRoutes(app: Express) {
         additionalCharges: input.additionalCharges,
         inventoryCostCorrections: input.inventoryCostCorrections,
         agentChargeLines: input.agentChargeLines,
+        // Wave 15 (M10): cost corrections need Admin/Owner.
+        actorRole: req.session.currentRole ?? null,
       });
 
       logger.info("Container offload succeeded", {

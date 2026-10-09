@@ -233,6 +233,16 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     fr: "Commission de conteneur pas encore au grand livre",
   },
   {
+    en: "Opening-balance raw stock commission not yet in the ledger",
+    ar: "عمولة مخزون المواد الخام الافتتاحي غير مُرحَّلة بعد",
+    fr: "Commission sur le stock de matière première d'ouverture pas encore au grand livre",
+  },
+  {
+    en: "Offload commission record not carried by its container, not in the ledger",
+    ar: "سجل عمولة التفريغ غير مُدرج في حاويته وغير مُرحَّل إلى الدفتر",
+    fr: "Enregistrement de commission de déchargement non repris par son conteneur, absent du grand livre",
+  },
+  {
     en: "Salary advances: advances-table remaining balance differs from the ledger",
     ar: "سلف الرواتب: الرصيد المتبقي في جدول السلف يختلف عن الدفتر",
     fr: "Avances sur salaire : le solde restant du tableau des avances diffère du grand livre",
@@ -496,5 +506,143 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     en: "Intercompany difference",
     ar: "فرق بين الشركات",
     fr: "Écart intersociétés",
+  },
+  {
+    en: "The repair plan changed since it was reviewed; review it again before applying",
+    ar: "تغيّرت خطة الإصلاح منذ مراجعتها؛ راجعها مرة أخرى قبل التطبيق",
+    fr: "Le plan de réparation a changé depuis sa revue ; revoyez-le avant de l’appliquer",
+  },
+  // Wave 15 (B): stock path refusals.
+  {
+    en: "A stock transfer from a location that holds no stock of the item cannot be imported after the company's perpetual inventory cut-over: there is no cost to move.",
+    ar: "لا يمكن استيراد تحويل مخزون من موقع لا يحتوي على مخزون من هذا الصنف بعد بدء الجرد المستمر للشركة: لا توجد تكلفة لنقلها.",
+    fr: "Un transfert de stock depuis un emplacement qui ne détient pas cet article ne peut pas être importé après le passage de la société à l’inventaire permanent : il n’y a aucun coût à transférer.",
+  },
+  {
+    en: "This stock document cannot be restored: its stock lines were reversed and removed when it was deleted. Enter the document again instead.",
+    ar: "لا يمكن استعادة مستند المخزون هذا: تم عكس بنود المخزون الخاصة به وحذفها عند حذفه. أدخل المستند مرة أخرى بدلاً من ذلك.",
+    fr: "Ce document de stock ne peut pas être restauré : ses lignes de stock ont été contre-passées et supprimées lors de sa suppression. Saisissez à nouveau le document.",
+  },
+  {
+    en: "This sale moved stock: its date cannot be moved across the company's perpetual inventory cut-over date, because its cost of goods sold would leave or enter the ledger without the stock moving.",
+    ar: "حرّكت هذه المبيعة المخزون: لا يمكن نقل تاريخها عبر تاريخ بدء الجرد المستمر للشركة، لأن تكلفة البضاعة المباعة ستخرج من الدفتر أو تدخله دون أن يتحرك المخزون.",
+    fr: "Cette vente a mouvementé du stock : sa date ne peut pas franchir la date de passage de la société à l’inventaire permanent, car son coût des ventes sortirait de la comptabilité ou y entrerait sans mouvement de stock.",
+  },
+  {
+    en: "This stock item is named on stock documents, stock movements or valuation records, so it cannot be permanently deleted. Keep it in Deleted Items.",
+    ar: "هذا الصنف مذكور في مستندات المخزون أو حركاته أو سجلات التقييم، لذلك لا يمكن حذفه نهائياً. أبقِه في العناصر المحذوفة.",
+    fr: "Cet article figure sur des documents de stock, des mouvements de stock ou des enregistrements de valorisation : il ne peut pas être supprimé définitivement. Conservez-le dans les éléments supprimés.",
+  },
+  {
+    en: "Only an Admin or Owner can correct the cost of stock already on hand during an offload.",
+    ar: "يمكن للمسؤول أو المالك فقط تصحيح تكلفة المخزون الموجود أثناء التفريغ.",
+    fr: "Seul un administrateur ou le propriétaire peut corriger le coût du stock déjà en place lors d’un déchargement.",
+  },
+  // Wave 15 (A): perpetual inventory readiness (services/inventory/inventoryReadinessResolution.ts,
+  // offload-lifecycle/execute.ts, routes/accounting-integrity/perpetualReadinessRoutes.ts).
+  {
+    en: "The perpetual inventory cut-over is applied: an offload cannot be dated before the cut-over date unless it edits an offload already dated before it. Date the offload on or after the cut-over date.",
+    ar: "تم تطبيق بدء الجرد المستمر: لا يمكن تأريخ التفريغ قبل تاريخ البدء إلا إذا كان تعديلاً لتفريغ مؤرخ قبله بالفعل. أرّخ التفريغ في تاريخ البدء أو بعده.",
+    fr: "Le passage à l’inventaire permanent est appliqué : un déchargement ne peut pas être daté avant la date de passage, sauf s’il modifie un déchargement déjà daté avant elle. Datez le déchargement à la date de passage ou après.",
+  },
+  {
+    en: "The inventory readiness plan changed since it was reviewed; review the preview again",
+    ar: "تغيّرت خطة جاهزية المخزون منذ مراجعتها؛ راجع المعاينة مرة أخرى",
+    fr: "Le plan de préparation de l’inventaire a changé depuis sa revue ; examinez à nouveau l’aperçu",
+  },
+  {
+    en: "Nothing to apply: choose a location action or the anomaly write-off",
+    ar: "لا شيء لتطبيقه: اختر إجراءً لموقع أو شطب القيم الشاذة",
+    fr: "Rien à appliquer : choisissez une action sur un emplacement ou la radiation des anomalies",
+  },
+  {
+    en: "Each action must name an orphaned location of the plan once, with the action restore or writeOff",
+    ar: "يجب أن يذكر كل إجراء موقعاً يتيماً من الخطة مرة واحدة، مع الإجراء استعادة أو شطب",
+    fr: "Chaque action doit désigner une seule fois un emplacement orphelin du plan, avec l’action restaurer ou radier",
+  },
+  {
+    en: "Another company's stock also references this missing location; it cannot be resolved for one company",
+    ar: "يشير مخزون شركة أخرى أيضاً إلى هذا الموقع المفقود؛ لا يمكن معالجته لشركة واحدة",
+    fr: "Le stock d’une autre société fait aussi référence à cet emplacement manquant ; il ne peut pas être résolu pour une seule société",
+  },
+  {
+    en: "Each action needs a locationId and the action restore or writeOff",
+    ar: "يحتاج كل إجراء إلى معرّف الموقع والإجراء استعادة أو شطب",
+    fr: "Chaque action nécessite un identifiant d’emplacement et l’action restaurer ou radier",
+  },
+  {
+    en: "An inventory row of the plan is missing",
+    ar: "أحد صفوف المخزون في الخطة مفقود",
+    fr: "Une ligne de stock du plan est introuvable",
+  },
+  {
+    en: "Paying Cash or Bank Account",
+    ar: "حساب النقد أو البنك الدافع",
+    fr: "Compte de caisse ou de banque payeur",
+  },
+  {
+    en: "Choose the account that pays",
+    ar: "اختر الحساب الذي يدفع",
+    fr: "Choisissez le compte qui paie",
+  },
+  {
+    en: "Posts Dr Payroll Payable / Cr this account for the net salary.",
+    ar: "يقيّد مدين رواتب مستحقة الدفع / دائن هذا الحساب بصافي الراتب.",
+    fr: "Comptabilise Débit Salaires à payer / Crédit ce compte pour le salaire net.",
+  },
+  {
+    en: "Choose the cash or bank account that pays this payroll before marking it paid",
+    ar: "اختر حساب النقد أو البنك الذي يدفع هذا الراتب قبل تعليمه كمدفوع",
+    fr: "Choisissez le compte de caisse ou de banque qui paie cette paie avant de la marquer payée",
+  },
+  {
+    en: "The paying account does not belong to this company",
+    ar: "الحساب الدافع لا يخص هذه الشركة",
+    fr: "Le compte payeur n’appartient pas à cette société",
+  },
+  {
+    en: "The paying account cannot be the Payroll Payable account",
+    ar: "لا يمكن أن يكون الحساب الدافع هو حساب الرواتب المستحقة الدفع",
+    fr: "Le compte payeur ne peut pas être le compte Salaires à payer",
+  },
+  {
+    en: "This payroll is paid. Un-mark the payment before changing its amounts.",
+    ar: "هذا الراتب مدفوع. ألغِ تعليم الدفع قبل تغيير مبالغه.",
+    fr: "Cette paie est payée. Annulez le paiement avant de modifier ses montants.",
+  },
+  {
+    en: "Payroll changed concurrently. Reload and try again.",
+    ar: "تم تغيير الراتب في الوقت نفسه. أعد التحميل وحاول مرة أخرى.",
+    fr: "La paie a été modifiée en même temps. Rechargez et réessayez.",
+  },
+  {
+    en: "This advance has repayments. Reverse the repayments first, then delete the advance.",
+    ar: "لهذه السلفة سدادات. ألغِ السدادات أولاً، ثم احذف السلفة.",
+    fr: "Cette avance a des remboursements. Annulez d’abord les remboursements, puis supprimez l’avance.",
+  },
+  {
+    en: "Purchase order changed concurrently. Reload and try again.",
+    ar: "تم تغيير أمر الشراء في الوقت نفسه. أعد التحميل وحاول مرة أخرى.",
+    fr: "Le bon de commande a été modifié en même temps. Rechargez et réessayez.",
+  },
+  {
+    en: "The purchase voucher has no goods lines to adjust; edit the purchase order instead.",
+    ar: "لا يحتوي سند الشراء على بنود بضائع لتعديلها؛ عدّل أمر الشراء بدلاً من ذلك.",
+    fr: "La pièce d’achat n’a pas de lignes de marchandises à ajuster ; modifiez plutôt le bon de commande.",
+  },
+  {
+    en: "The new items total is below the purchase voucher's other lines",
+    ar: "إجمالي البنود الجديد أقل من البنود الأخرى في سند الشراء",
+    fr: "Le nouveau total des articles est inférieur aux autres lignes de la pièce d’achat",
+  },
+  {
+    en: "Freight needs a purchase supplier or an own account to credit",
+    ar: "يحتاج الشحن إلى مورد شراء أو حساب خاص لقيده دائناً",
+    fr: "Le fret nécessite un fournisseur d’achat ou un compte propre à créditer",
+  },
+  {
+    en: 'Advance deleted for ${worker?.fullName || "Unknown"}: $${toMoney(advance.amount).toFixed(2)}${voucherNote}',
+    ar: "السلفة المحذوفة لـ{{0}}: ${{1}}{{2}}",
+    fr: "Avance supprimée pour {{0}} : ${{1}}{{2}}",
   },
 ];

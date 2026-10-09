@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   jsonb,
+  bigserial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -324,3 +325,32 @@ export const glInventoryCutovers = pgTable("gl_inventory_cutovers", {
   appliedBy: text("applied_by"),
   appliedAt: timestamp("applied_at").notNull().defaultNow(),
 });
+
+/**
+ * Dated evidence of stock sub-ledger movements that leave no document line
+ * (wave 15): the lines of every INV-MOVE source (quick adjustments, archive and
+ * restore, location imports, cost corrections, readiness resolutions, ...),
+ * recorded before and after the cut-over and replaced whole with their source.
+ * The as-of stock valuation replays them by movement date. Also created at
+ * boot by ensureInventoryCutoverSchema (same names, no foreign keys).
+ */
+export const inventoryValueMovements = pgTable(
+  "inventory_value_movements",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    companyId: integer("company_id").notNull(),
+    sourceNumber: text("source_number").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    movementDate: date("movement_date").notNull(),
+    stockItemId: integer("stock_item_id"),
+    locationId: integer("location_id"),
+    quantityDelta: decimal("quantity_delta", { precision: 18, scale: 3 }),
+    valueDelta: decimal("value_delta", { precision: 20, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyDateIdx: index("inventory_value_movements_company_date_idx").on(t.companyId, t.movementDate),
+    companySourceIdx: index("inventory_value_movements_company_source_idx").on(t.companyId, t.sourceNumber),
+  })
+);

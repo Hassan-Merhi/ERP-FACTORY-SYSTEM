@@ -19,7 +19,6 @@ import {
   vouchers,
   voucherEntries,
   salesItems,
-  suppliers,
   employees,
   salaryAdvances,
 } from "@shared/schema";
@@ -27,6 +26,7 @@ import { eq, and, sql, isNull, isNotNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { getAccountNetBalanceExact } from "../../netPositionHelper";
 import { classifyAccountType } from "../../services/accounting/accountClassification";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { MoneyDecimal, debitMinusCredit, sumMoney, toMoney } from "../../lib/money";
 
 import { _getCached, _setCached } from "./_helpers";
@@ -45,10 +45,10 @@ export function registerImportCycleBalanceRoutes(app: Express) {
 
       // Aggregate voucher entries in PostgreSQL instead of materialising every row
       // into Node. Company 1 currently has ~19k matching entry rows; the grouped
-      // result is only a few hundred rows and preserves the exact ledger and
-      // pure-side supplier semantics used by this endpoint.
+      // result is only a few hundred rows. Suppliers come from the balance
+      // engine below (wave 14).
       const groupedBalanceRows = await pool.query<{
-        kind: "ledger" | "supplier";
+        kind: "ledger";
         entity_id: number;
         total_debit: string;
         total_credit: string;
@@ -56,7 +56,6 @@ export function registerImportCycleBalanceRoutes(app: Express) {
         `WITH entries AS MATERIALIZED (
            SELECT
              ve.ledger_account_id,
-             ve.supplier_id,
              ve.debit_amount::numeric AS debit_amount,
              ve.credit_amount::numeric AS credit_amount
            FROM voucher_entries ve
@@ -72,40 +71,29 @@ export function registerImportCycleBalanceRoutes(app: Express) {
            COALESCE(SUM(credit_amount), 0)::text AS total_credit
          FROM entries
          WHERE ledger_account_id IS NOT NULL
-         GROUP BY ledger_account_id
-
-         UNION ALL
-
-         SELECT
-           'supplier'::text AS kind,
-           supplier_id AS entity_id,
-           COALESCE(SUM(CASE
-             WHEN debit_amount > 0 AND credit_amount = 0 THEN debit_amount
-             ELSE 0
-           END), 0)::text AS total_debit,
-           COALESCE(SUM(CASE
-             WHEN credit_amount > 0 AND debit_amount = 0 THEN credit_amount
-             ELSE 0
-           END), 0)::text AS total_credit
-         FROM entries
-         WHERE supplier_id IS NOT NULL
-         GROUP BY supplier_id`,
+         GROUP BY ledger_account_id`,
         [companyId]
       );
 
       const accountBalances = new Map<number, { debit: Decimal; credit: Decimal }>();
-      const supplierBalancesMap = new Map<number, { debit: Decimal; credit: Decimal }>();
-
       for (const row of groupedBalanceRows.rows) {
-        const balance = { debit: toMoney(row.total_debit), credit: toMoney(row.total_credit) };
-        if (row.kind === "ledger") accountBalances.set(Number(row.entity_id), balance);
-        else supplierBalancesMap.set(Number(row.entity_id), balance);
+        accountBalances.set(Number(row.entity_id), {
+          debit: toMoney(row.total_debit),
+          credit: toMoney(row.total_credit),
+        });
       }
 
-      // The account list and parent-company lookup are independent.
-      const [companyAccounts, parentCompanyId] = await Promise.all([
+      // Wave 14, one supplier rule (wave 13 owner decision 2): ERP supplier
+      // payables count in the company whose vouchers posted them — the
+      // engine's suppliers of this company (the opening with its side in the
+      // supplier's own company, the lines the engine attributes to the
+      // supplier, mixed lines netted). It used to be gated on the global
+      // parentCompanyId setting (a subsidiary showed none), to add every
+      // company's suppliers' unsided openings, to count supplier-tagged
+      // ledger lines a second time and to drop mixed lines.
+      const [companyAccounts, supplierParties] = await Promise.all([
         storage.getAllLedgerAccounts(companyId, true),
-        storage.getParentCompanyId(),
+        getPartyBalances(db, { companyId, kind: "supplier" }),
       ]);
 
       // Signed net balance for a single account (mirrors getAccountNetBalance from netPositionHelper)
@@ -117,16 +105,10 @@ export function registerImportCycleBalanceRoutes(app: Express) {
       const ZERO = new MoneyDecimal(0);
       const atLeastZero = (value: Decimal) => MoneyDecimal.max(ZERO, value);
 
-      // 1. Supplier Balance — same pure-debit/credit logic as /api/stats/net-profit
-      const shouldIncludeSuppliers = parentCompanyId === null || companyId === parentCompanyId;
-
       // These reads are independent. Keep the batch small so one analytics
       // request cannot monopolise the application pool while still eliminating
       // four sequential network/database round trips.
-      const [allSuppliers, otwContainers, standaloneBankAccountEntries, standaloneBankAccounts] = await Promise.all([
-        shouldIncludeSuppliers
-          ? db.select().from(suppliers).where(isNull(suppliers.deletedAt)).execute()
-          : Promise.resolve([]),
+      const [otwContainers, standaloneBankAccountEntries, standaloneBankAccounts] = await Promise.all([
         db
           .select()
           .from(containers)
@@ -164,16 +146,13 @@ export function registerImportCycleBalanceRoutes(app: Express) {
           ),
       ]);
 
+      // 1. Supplier Balance (Cr positive: what we owe), from the engine above.
       let supplierLiabilities = ZERO;
       let supplierAssets = ZERO;
-      if (shouldIncludeSuppliers) {
-        for (const sup of allSuppliers) {
-          const bal = supplierBalancesMap.get(sup.id);
-          if (!bal) continue;
-          const netBalance = toMoney(sup.openingBalance).plus(bal.credit).minus(bal.debit);
-          if (netBalance.greaterThan(0)) supplierLiabilities = supplierLiabilities.plus(netBalance);
-          else if (netBalance.lessThan(0)) supplierAssets = supplierAssets.plus(netBalance.abs());
-        }
+      for (const party of supplierParties.parties) {
+        const netBalance = toMoney(party.closing).negated();
+        if (netBalance.greaterThan(0)) supplierLiabilities = supplierLiabilities.plus(netBalance);
+        else if (netBalance.lessThan(0)) supplierAssets = supplierAssets.plus(netBalance.abs());
       }
       const supplierBalance = supplierLiabilities.minus(supplierAssets);
 

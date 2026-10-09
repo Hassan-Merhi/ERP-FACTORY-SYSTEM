@@ -19,6 +19,10 @@ vi.mock("../server/storage", () => ({
 // SUM(total_value)), no longer quantity × average_rate from the inventory rows.
 // It is mocked at 0.555 (1.5 units worth 0.37 each) to keep exercising the
 // single rounding of the exact total.
+// Wave 14: suppliers come from the balance engine (none here).
+vi.mock("../server/services/accounting/balances/ledgerBalanceEngine", () => ({
+  getPartyBalances: async () => ({ parties: [] }),
+}));
 vi.mock("../server/services/inventory/stockValuation", () => ({ companyStockValue: async () => "0.555" }));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");

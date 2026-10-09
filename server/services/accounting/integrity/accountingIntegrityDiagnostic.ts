@@ -23,9 +23,15 @@ import {
   VOUCHER_HISTORY_MARKER_COLUMN,
 } from "../voucherBalanceGuard";
 import { OPENING_BALANCE_LOCK_TABLES, openingBalanceLockTriggerName } from "../openingBalanceLock";
+import {
+  CURRENCY_NORMALIZATION_FUNCTION,
+  CURRENCY_NORMALIZATION_GUARD_VERSION,
+  CURRENCY_NORMALIZATION_TRIGGER,
+} from "../currencyNormalizationGuard";
 import { SYSTEM_ACCOUNTS, diagnoseSystemAccounts } from "../systemAccounts";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
+import { payrollAdvancePostingChecks } from "./payrollAdvancePostingChecks";
 import { getPartyBalances, liveVouchersOf } from "../balances/ledgerBalanceEngine";
 
 export type IntegrityStatus = "pass" | "warn" | "fail";
@@ -79,6 +85,8 @@ const LIVE = sql`v.deleted_at IS NULL AND v.optional = false`;
 const LEDGER_INTEGRITY_WAVE12_TRIGGERS: readonly string[] = [
   ...VOUCHER_BALANCE_GUARD_TRIGGERS.map(([, name]) => name),
   ...OPENING_BALANCE_LOCK_TABLES.map(openingBalanceLockTriggerName),
+  // Wave 14 (A): the voucher-entry currency normalization trigger (migrations/20260720_005).
+  CURRENCY_NORMALIZATION_TRIGGER,
 ];
 
 export async function runAccountingIntegrityDiagnostic(companyId: number): Promise<AccountingIntegrityReport> {
@@ -537,12 +545,19 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     missingGuards.push(`erp_voucher_balance_check ${VOUCHER_BALANCE_GUARD_VERSION}`);
   }
   if (!guardState?.marker) missingGuards.push(`vouchers.${VOUCHER_HISTORY_MARKER_COLUMN}`);
+  // Wave 14 (A): the currency normalization trigger at its installer's version.
+  const [currencyGuard] = await rows<{ version: string | null }>(sql`
+    SELECT obj_description(to_regprocedure(${`${CURRENCY_NORMALIZATION_FUNCTION}()`}), 'pg_proc') AS version
+  `);
+  if (currencyGuard?.version !== CURRENCY_NORMALIZATION_GUARD_VERSION) {
+    missingGuards.push(`${CURRENCY_NORMALIZATION_FUNCTION} ${CURRENCY_NORMALIZATION_GUARD_VERSION}`);
+  }
   checks.push(
     check(
       "database_guards_installed",
       missingGuards.length ? "fail" : "pass",
       missingGuards.length,
-      "Ledger integrity, closed-period, balance (current version, with its history marker) and opening-balance lock guards that must exist on the ledger tables.",
+      "Ledger integrity, closed-period, balance (current version, with its history marker), opening-balance lock and currency normalization (current version) guards that must exist on the ledger tables.",
       missingGuards.map((name) => ({ missing: name }))
     )
   );
@@ -613,6 +628,62 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       unjournalledCommission
     )
   );
+
+  // 13. Commission held outside the container (wave 14): on a raw-stock row
+  // (opening-balance entries) or in factory_container_commissions (the
+  // offload's record). The container journal posts the raw-stock commission
+  // when the container has none of its own; a record is posted through its
+  // container (the offload copies it there). Listed: a raw-stock commission
+  // with no journal (legacy, no rate or no payee) or beside a container
+  // commission of its own; a record its container does not carry.
+  const outsideContainerCommission = await rows<{
+    source: string;
+    id: number;
+    container_id: number;
+    container_number: string;
+    amount: string;
+    currency: string;
+    reason: string;
+  }>(sql`
+    SELECT 'rawStock' AS source, rs.id, fc.id AS container_id, fc.container_number,
+           rs.commission_amount::text AS amount,
+           UPPER(COALESCE(rs.commission_currency_code, fc.currency_code, 'USD')) AS currency,
+           CASE WHEN COALESCE(fc.commission_amount, 0) > 0 THEN 'container-has-own-commission'
+                ELSE 'no-journal' END AS reason
+      FROM factory_raw_stock rs
+      JOIN factory_containers fc ON fc.id = rs.container_id AND fc.company_id = rs.company_id
+     WHERE rs.company_id = ${companyId} AND rs.deleted_at IS NULL AND fc.deleted_at IS NULL
+       AND COALESCE(rs.commission_amount, 0) > 0
+       AND (COALESCE(fc.commission_amount, 0) > 0 OR NOT EXISTS (
+             SELECT 1 FROM vouchers v
+              WHERE v.company_id = fc.company_id AND ${LIVE}
+                AND v.voucher_number = 'FACTORY-COMM-' || fc.id::text))
+    UNION ALL
+    SELECT 'commissionRecord' AS source, MIN(cc.id) AS id, fc.id AS container_id, fc.container_number,
+           SUM(cc.commission_total)::text AS amount, UPPER(cc.currency_code) AS currency,
+           CASE WHEN COALESCE(fc.commission_amount, 0) > 0 THEN 'differs-from-container-commission'
+                ELSE 'container-has-no-commission' END AS reason
+      FROM factory_container_commissions cc
+      JOIN factory_containers fc ON fc.id = cc.container_id AND fc.company_id = cc.company_id
+     WHERE cc.company_id = ${companyId} AND fc.deleted_at IS NULL
+     GROUP BY fc.id, fc.container_number, UPPER(cc.currency_code)
+    HAVING NOT (COALESCE(MAX(fc.commission_amount), 0) > 0
+                AND UPPER(COALESCE(MAX(fc.commission_currency_code), MAX(fc.currency_code), 'USD')) = UPPER(cc.currency_code)
+                AND ROUND(MAX(fc.commission_amount), 2) = ROUND(SUM(cc.commission_total), 2))
+     ORDER BY container_id, source
+  `);
+  checks.push(
+    check(
+      "factory_commission_outside_container_journal",
+      outsideContainerCommission.length ? "warn" : "pass",
+      outsideContainerCommission.length,
+      "Commission held on a raw-stock row or in a container commission record that no FACTORY-COMM journal carries: a raw-stock commission with no journal (legacy, no rate or no payee) or beside the container's own commission, or a commission record its container does not carry (none, or another amount or currency). The memo lists those with no other commission on the container; none is back-filled.",
+      outsideContainerCommission
+    )
+  );
+
+  // 14. Payroll and advance postings missing from before wave 7 (listed, not back-filled).
+  checks.push(...(await payrollAdvancePostingChecks(companyId)));
 
   const status: IntegrityStatus = checks.some((c) => c.status === "fail")
     ? "fail"

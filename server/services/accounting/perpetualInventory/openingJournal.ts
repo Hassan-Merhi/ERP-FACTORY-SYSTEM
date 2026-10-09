@@ -32,14 +32,31 @@
  * read, after taking the company's cut-over lock), so the journal posts the
  * figures of one consistent snapshot, and records the cut-over in the same
  * transaction, once per company.
+ *
+ * Wave 15 apply guards (owner decision 2, re-audit M3). The apply is refused
+ * (409) while, for the company:
+ *   - any stock sits on a location that no longer exists, or any row holds a
+ *     value outside the valuation policy (READINESS_BLOCKERS): the opening
+ *     would leave the first out and capitalise the second. They are resolved
+ *     through the reviewed readiness resolution first. A supplier-partner
+ *     company's ERP stock is not capitalised, so it is not checked.
+ *   - any document is dated on or after the cut-over date: a voucher, an
+ *     offload (the container's offload date, else the offload's own date), a
+ *     factory container receipt, or a stock movement that leaves no document
+ *     line (inventory_value_movements). Each would carry none of its
+ *     perpetual-inventory postings.
+ * The plan lists the purchase orders the Goods in Transit line carries
+ * (`goodsInTransitPurchaseOrderIds`), so a later stock-in journal credits Goods
+ * in Transit only for what the opening put there (carriedByOpening).
  */
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
 import { voucherEntries } from "@shared/schema";
 
-import { db, type DatabaseOrTransaction } from "../../../db";
+import { db, type DatabaseOrTransaction, type DbTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { planReadinessResolutionTx } from "../../inventory/inventoryReadinessResolution";
 import { companyStockValuationAsOf } from "../../inventory/stockValuation";
 import { infrastructurePostingIdentity, insertInfrastructureVoucherTx } from "../infrastructureVoucherIdentity";
 import { ensureSystemAccounts } from "../systemAccounts";
@@ -79,6 +96,8 @@ export interface OpeningInventoryPlan {
   erpStock: { stockInHand: string; shortageValue: string; otherValues: string; subLedgerTotal: string } | null;
   /** Supplier-partner company: ERP stock is carried in sp_stock and not capitalised here. */
   supplierPartner: boolean;
+  /** The purchase orders the Goods in Transit line carries (dated before the cut-over, not offloaded by then). */
+  goodsInTransitPurchaseOrderIds: number[];
   alreadyApplied: boolean;
   postingReady: boolean;
 }
@@ -86,7 +105,12 @@ export interface OpeningInventoryPlan {
 export class OpeningJournalRefusal extends Error {
   constructor(
     readonly code:
-      "POSTING_NOT_READY" | "ALREADY_APPLIED" | "CUTOVER_IN_FUTURE" | "DOCUMENTS_ON_OR_AFTER_CUTOVER" | "INVALID_DATE",
+      | "POSTING_NOT_READY"
+      | "ALREADY_APPLIED"
+      | "CUTOVER_IN_FUTURE"
+      | "DOCUMENTS_ON_OR_AFTER_CUTOVER"
+      | "READINESS_BLOCKERS"
+      | "INVALID_DATE",
     message: string
   ) {
     super(message);
@@ -153,10 +177,11 @@ export async function planOpeningInventoryJournal(
   // arrives after the cut-over, and STOCK-IN credits goods in transit for them.
   const transit = supplierPartner
     ? []
-    : await rows<{ purchases: string }>(
+    : await rows<{ purchases: string; purchase_order_ids: number[] | null }>(
         executor,
         sql`
-        SELECT COALESCE(SUM(ve.debit_amount), 0)::text AS purchases
+        SELECT COALESCE(SUM(ve.debit_amount), 0)::text AS purchases,
+               array_agg(DISTINCT po.id ORDER BY po.id) AS purchase_order_ids
           FROM purchase_orders po
           JOIN containers c ON c.id = po.container_id AND c.company_id = po.company_id
           JOIN vouchers v ON v.id = po.voucher_id AND v.company_id = po.company_id AND v.deleted_at IS NULL
@@ -168,6 +193,7 @@ export async function planOpeningInventoryJournal(
       `
       );
   const goodsInTransit = toMoney(transit[0]?.purchases ?? 0).toDecimalPlaces(2);
+  const goodsInTransitPurchaseOrderIds = (transit[0]?.purchase_order_ids ?? []).map(Number);
 
   const targets: Array<{ accountCode: string; target: Decimal; basis: string }> = [
     // A supplier-partner company's ERP inventory accounts are left as they are.
@@ -236,9 +262,88 @@ export async function planOpeningInventoryJournal(
     soldNotInvoiced: factory.soldNotInvoiced,
     erpStock: erpStockDetail,
     supplierPartner,
+    goodsInTransitPurchaseOrderIds,
     alreadyApplied: (await getInventoryCutover(executor, companyId)) !== null,
     postingReady: PERPETUAL_INVENTORY_POSTING_READY,
   };
+}
+
+/**
+ * Refuses the cut-over while a document is dated on or after it (see the
+ * module comment), listing what was found.
+ */
+export interface DocumentsOnOrAfterCutover {
+  vouchers: number;
+  offloads: number;
+  factoryReceipts: number;
+  stockMovements: number;
+}
+
+/** Read-only: what is already dated on or after a cut-over date (see the module comment). */
+export async function documentsOnOrAfterCutover(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  effectiveFrom: string
+): Promise<DocumentsOnOrAfterCutover> {
+  const [found] = await rows<{ vouchers: number; offloads: number; receipts: number; movements: number }>(
+    executor,
+    sql`
+      SELECT
+        (SELECT COUNT(*) FROM vouchers
+          WHERE company_id = ${companyId} AND voucher_date >= ${effectiveFrom}::date AND deleted_at IS NULL)::int
+          AS vouchers,
+        (SELECT COUNT(*) FROM container_offloads co JOIN containers c ON c.id = co.container_id
+          WHERE c.company_id = ${companyId}
+            AND COALESCE(c.offload_date, co.offloaded_at::date) >= ${effectiveFrom}::date)::int AS offloads,
+        (SELECT COUNT(*) FROM factory_container_receipts
+          WHERE company_id = ${companyId} AND deleted_at IS NULL AND receipt_date >= ${effectiveFrom}::date)::int
+          AS receipts,
+        (SELECT COUNT(*) FROM inventory_value_movements
+          WHERE company_id = ${companyId} AND movement_date >= ${effectiveFrom}::date)::int AS movements
+    `
+  );
+  return {
+    vouchers: found?.vouchers ?? 0,
+    offloads: found?.offloads ?? 0,
+    factoryReceipts: found?.receipts ?? 0,
+    stockMovements: found?.movements ?? 0,
+  };
+}
+
+async function assertNoDocumentsOnOrAfterTx(tx: DbTransaction, companyId: number, effectiveFrom: string) {
+  const found = await documentsOnOrAfterCutover(tx, companyId, effectiveFrom);
+  const counts = [
+    ["vouchers", found.vouchers],
+    ["offloads", found.offloads],
+    ["factory container receipts", found.factoryReceipts],
+    ["stock movements", found.stockMovements],
+  ] as const;
+  const present = counts.filter(([, count]) => count > 0);
+  if (present.length > 0) {
+    throw new OpeningJournalRefusal(
+      "DOCUMENTS_ON_OR_AFTER_CUTOVER",
+      `Documents are already posted on or after the cut-over date (${present
+        .map(([label, count]) => `${count} ${label}`)
+        .join(", ")}); choose a later date`
+    );
+  }
+}
+
+/**
+ * Refuses the cut-over while stock sits on locations that no longer exist or
+ * any row holds a value outside the valuation policy (owner decision 2).
+ */
+async function assertInventoryReadyTx(tx: DbTransaction, companyId: number) {
+  const readiness = await planReadinessResolutionTx(tx, companyId);
+  const { totals } = readiness;
+  if (totals.orphanedRows > 0 || totals.anomalousRows > 0) {
+    throw new OpeningJournalRefusal(
+      "READINESS_BLOCKERS",
+      `Inventory is not ready for the cut-over: ${totals.orphanedRows} rows (value ${totals.orphanedValue}) on ` +
+        `${totals.orphanedLocations} locations that no longer exist and ${totals.anomalousRows} rows with ` +
+        `anomalous values (${totals.anomalousValue}); resolve them with the inventory readiness resolution first`
+    );
+  }
 }
 
 /**
@@ -281,16 +386,8 @@ export async function applyOpeningInventoryJournal(
         // A document dated on or after the cut-over that was posted before it was
         // applied carries none of its perpetual-inventory postings; the cut-over is
         // applied before the first document of its date (or moved to a later date).
-        const posted = await tx.execute(sql`
-      SELECT 1 FROM vouchers WHERE company_id = ${companyId} AND voucher_date >= ${effectiveFrom}::date
-         AND deleted_at IS NULL LIMIT 1
-    `);
-        if (posted.rows.length > 0) {
-          throw new OpeningJournalRefusal(
-            "DOCUMENTS_ON_OR_AFTER_CUTOVER",
-            "Documents are already posted on or after the cut-over date; choose a later date"
-          );
-        }
+        await assertNoDocumentsOnOrAfterTx(tx, companyId, effectiveFrom);
+        if (!plan.supplierPartner) await assertInventoryReadyTx(tx, companyId);
         let id: number | null = null;
         if (plan.lines.length > 0) {
           const codes = [...plan.lines.map((line) => line.accountCode), "OPENING_BALANCE_EQUITY"];

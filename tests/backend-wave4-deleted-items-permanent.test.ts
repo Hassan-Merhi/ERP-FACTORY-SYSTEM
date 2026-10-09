@@ -26,7 +26,7 @@ async function count(sql: string, params: unknown[]) {
   return result.rows[0].n;
 }
 
-async function softDeletedStockItem(ctx: TestContext, code: string) {
+async function softDeletedStockItem(ctx: TestContext, code: string, quantity = "5", value = "10") {
   const item = await pool.query<{ id: number }>(
     `INSERT INTO stock_items (company_id, code, name, uom, stock_group_id, active, deleted_at)
      VALUES ($1, $2, $3, 'PCS', $4, false, NOW()) RETURNING id`,
@@ -35,8 +35,8 @@ async function softDeletedStockItem(ctx: TestContext, code: string) {
   const id = item.rows[0].id;
   await pool.query(
     `INSERT INTO inventory (company_id, location_id, stock_item_id, quantity, average_rate, total_value)
-     VALUES ($1, $2, $3, '5', '2', '10')`,
-    [ctx.companyId, ctx.locationId, id]
+     VALUES ($1, $2, $3, $4, '2', $5)`,
+    [ctx.companyId, ctx.locationId, id, quantity, value]
   );
   return id;
 }
@@ -80,14 +80,24 @@ describe("deleted items", () => {
     expect(row.rows[0].deleted_at).toBeNull();
   });
 
-  it("permanently deletes a stock item together with its inventory rows", async () => {
-    const id = await softDeletedStockItem(a, "W4DEL-PERM");
+  it("permanently deletes a stock item together with its empty inventory rows", async () => {
+    const id = await softDeletedStockItem(a, "W4DEL-PERM", "0", "0");
     expect(await count(`inventory WHERE stock_item_id = $1`, [id])).toBe(1);
 
     const response = await agent.delete(`/api/deleted-items/stockItem/${id}/permanent`);
     expect(response.status, response.text).toBe(200);
     expect(await count(`stock_items WHERE id = $1`, [id])).toBe(0);
     expect(await count(`inventory WHERE stock_item_id = $1`, [id])).toBe(0);
+  });
+
+  // Wave 15 (M9): an item that still holds stock is history; deleting it
+  // would drop the stock value with no journal. It used to be deleted here.
+  it("refuses a stock item that still holds stock", async () => {
+    const id = await softDeletedStockItem(a, "W4DEL-HELD");
+    const response = await agent.delete(`/api/deleted-items/stockItem/${id}/permanent`);
+    expect(response.status, response.text).toBe(409);
+    expect(await count(`stock_items WHERE id = $1`, [id])).toBe(1);
+    expect(await count(`inventory WHERE stock_item_id = $1`, [id])).toBe(1);
   });
 
   it("refuses another company's item and leaves its dependent rows untouched", async () => {

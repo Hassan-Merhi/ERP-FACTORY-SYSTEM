@@ -285,9 +285,10 @@ describe("factory POS sale in the ledger", () => {
     expect(posted).toMatchObject({ voucher_type: "Receipt", currency: "XOF", balanced: true });
     expect(Number(posted!.exchange_rate)).toBe(0.0016);
     // 100,000 XOF at 0.0016 (January) = 160.00 USD; the June rate (0.0020) is not used.
+    // The currency normalization trigger (installed at boot, wave 14) stores XOF lines as CFA.
     expect(posted!.lines.map((l) => [l.code, l.d, l.c, l.ccy, l.td, l.tc, Number(l.rate)])).toEqual([
-      [`${PREFIX}-CASH`, "160.00", "0.00", "XOF", "100000.00", "0.00", 0.0016],
-      ["FACTORY_BALE_SALES_INCOME", "0.00", "160.00", "XOF", "0.00", "100000.00", 0.0016],
+      [`${PREFIX}-CASH`, "160.00", "0.00", "CFA", "100000.00", "0.00", 0.0016],
+      ["FACTORY_BALE_SALES_INCOME", "0.00", "160.00", "CFA", "0.00", "100000.00", 0.0016],
     ]);
     const daybook = await one(
       `SELECT fx_rate_to_usd::text AS rate, amount_usd::text AS usd FROM factory_daybook_entries

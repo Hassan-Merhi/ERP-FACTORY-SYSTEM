@@ -262,7 +262,7 @@ describe("POST /api/factory/advances/:id/reverse", () => {
 });
 
 describe("DELETE /api/factory/advances/:id", () => {
-  it("removes the advance, its repayments and the voucher behind it", async () => {
+  it("refuses an advance that still has a repayment and leaves it whole (wave 7)", async () => {
     const advance = await giveAdvance("300.00");
     await pool.query(
       `INSERT INTO factory_advance_repayments (company_id, advance_id, worker_id, repayment_date, amount)
@@ -271,13 +271,27 @@ describe("DELETE /api/factory/advances/:id", () => {
     );
     expect(await advanceLegs(advance.id)).toHaveLength(2);
 
+    // Owner decision: the repayments are reversed first; deleting the advance
+    // under them used to leave their receipt vouchers behind.
+    const response = await agent.delete(`/api/factory/advances/${advance.id}`);
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe("ADVANCE_HAS_REPAYMENTS");
+
+    expect(await advanceRow(advance.id)).not.toBeNull();
+    expect(
+      (await pool.query(`SELECT id FROM factory_advance_repayments WHERE advance_id = $1`, [advance.id])).rowCount
+    ).toBe(1);
+    expect(await advanceLegs(advance.id)).toHaveLength(2);
+  });
+
+  it("removes an advance with no repayment and the voucher behind it", async () => {
+    const advance = await giveAdvance("300.00");
+    expect(await advanceLegs(advance.id)).toHaveLength(2);
+
     const response = await agent.delete(`/api/factory/advances/${advance.id}`);
     expect(response.status).toBe(200);
 
     expect(await advanceRow(advance.id)).toBeNull();
-    expect(
-      (await pool.query(`SELECT id FROM factory_advance_repayments WHERE advance_id = $1`, [advance.id])).rowCount
-    ).toBe(0);
     // The posting has to go with it. Entries left behind are a permanent
     // one-sided amount in the trial balance.
     expect(await advanceLegs(advance.id)).toHaveLength(0);

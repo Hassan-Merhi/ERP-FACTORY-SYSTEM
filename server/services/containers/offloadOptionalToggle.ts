@@ -45,10 +45,13 @@ import { containerOffloadItems, containerOffloads, containers, vouchers } from "
 import type { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { adjustInventory, receiveInventoryAtValue, reverseInventoryByExactValue } from "../../inventoryHelper";
-import { toMoney } from "../../lib/money";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
-import { syncContainerStockInTx } from "../accounting/perpetualInventory/stockReceipts";
+import {
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../accounting/perpetualInventory/stockReceipts";
 
 /** The transaction handle drizzle passes to a `db.transaction` callback. */
 export type OffloadOptionalToggleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -166,7 +169,12 @@ export async function applyOffloadOptionalToggleTx(
   // a concurrent offload, reversal, or toggle for the same container queues here
   // instead of interleaving its writes with this one.
   const [lockedContainer] = await tx
-    .select({ id: containers.id, containerNumber: containers.containerNumber, status: containers.status })
+    .select({
+      id: containers.id,
+      containerNumber: containers.containerNumber,
+      status: containers.status,
+      offloadDate: containers.offloadDate,
+    })
     .from(containers)
     .where(and(eq(containers.id, requested.containerId), eq(containers.companyId, companyId)))
     .for("update");
@@ -219,6 +227,12 @@ export async function applyOffloadOptionalToggleTx(
   // safe, and each genuine transition still journals separately.
   const operationId = input.requestId?.trim() || randomUUID();
   const occurredAt = new Date().toISOString();
+  // The date the offload is booked at (wave 15, C1): the container's offload
+  // date while it is active, the offload's own date while it is suspended.
+  const offloadOwnDate =
+    lockedOffload.offloadedAt instanceof Date ? lockedOffload.offloadedAt.toISOString().slice(0, 10) : null;
+  const bookedOffloadDate = (targetOptional ? lockedContainer.offloadDate : null) ?? offloadOwnDate;
+  let subLedgerDelta: Decimal = new MoneyDecimal(0);
 
   for (const item of offloadItems) {
     const qty = toMoney(item.quantity);
@@ -231,7 +245,7 @@ export async function applyOffloadOptionalToggleTx(
       // Suspending: remove exactly the value the offload put into the
       // sub-ledger; the stock-in journal (which only counts active offloads)
       // takes the same value out of Inventory.
-      await reverseInventoryByExactValue(
+      const reversed = await reverseInventoryByExactValue(
         tx,
         lockedOffload.locationId,
         item.stockItemId,
@@ -240,6 +254,7 @@ export async function applyOffloadOptionalToggleTx(
         companyId,
         `offload-optional-suspend:${offloadId}`
       );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
     } else {
       // Restoring: receive the line again at its stored value (not its 2dp
       // rate). Into negative stock the receipt settles the shortage first, so
@@ -265,6 +280,7 @@ export async function applyOffloadOptionalToggleTx(
             `offload-optional-restore:${offloadId}`
           );
       const valueMoved = toMoney(received.valueDelta);
+      subLedgerDelta = subLedgerDelta.plus(valueMoved);
       await tx
         .update(containerOffloadItems)
         .set({ valueMoved: valueMoved.toFixed(2), cogsVariance: lineValue.minus(valueMoved).toFixed(2) })
@@ -327,6 +343,7 @@ export async function applyOffloadOptionalToggleTx(
 
   await tx.update(containerOffloads).set({ optional: targetOptional }).where(eq(containerOffloads.id, offloadId));
 
+  let backInTransit = false;
   if (targetOptional) {
     // Suspending: the container returns to OTW only when no active offload is
     // left on it, so a second offload keeps the container marked as arrived.
@@ -336,6 +353,7 @@ export async function applyOffloadOptionalToggleTx(
       .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)));
 
     if (remainingActive.length === 0) {
+      backInTransit = true;
       await tx
         .update(containers)
         .set({ status: "OTW", offloadDate: null })
@@ -355,6 +373,19 @@ export async function applyOffloadOptionalToggleTx(
 
   // Perpetual inventory (wave 8.2): the stock-in journal follows the active offloads.
   await syncContainerStockInTx(tx, companyId, lockedContainer.id);
+  // Wave 15 (C1): an offload dated before the cut-over has no stock-in
+  // journal; its suspension or restore is journalled now.
+  await postPreCutoverOffloadMovementTx(tx, {
+    companyId,
+    containerId: lockedContainer.id,
+    containerNumber: lockedContainer.containerNumber,
+    offloadDate: bookedOffloadDate,
+    locationId: lockedOffload.locationId,
+    valueDelta: subLedgerDelta,
+    mode: targetOptional ? (backInTransit ? "toTransit" : "inPlace") : "fromTransit",
+    reason: targetOptional ? "Offload suspended" : "Offload restored",
+    actor: input.actorUserId ? { userId: String(input.actorUserId), username: input.actorUsername ?? "unknown" } : null,
+  });
 
   return {
     optional: targetOptional,

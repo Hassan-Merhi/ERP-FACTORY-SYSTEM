@@ -24,7 +24,11 @@ import {
   postInventoryMovementJournalTx,
   type InventoryMovementLine,
 } from "../../accounting/perpetualInventory/inventoryMovementJournal";
-import { syncContainerStockInTx } from "../../accounting/perpetualInventory/stockReceipts";
+import {
+  isPreCutoverOffloadChangeTx,
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../../accounting/perpetualInventory/stockReceipts";
 import { isPerpetualInventoryActive } from "../../accounting/perpetualInventory/cutover";
 import { isSupplierPartnerCompany } from "../../accounting/perpetualInventory/linkedJournal";
 
@@ -69,8 +73,38 @@ async function assertOffloadCurrencyValuedTx(
   );
 }
 
+export const OFFLOAD_BEFORE_CUTOVER_CODE = "CONTAINER_OFFLOAD_BEFORE_CUTOVER" as const;
+export const OFFLOAD_BEFORE_CUTOVER_MESSAGE =
+  "The perpetual inventory cut-over is applied: an offload cannot be dated before the cut-over date unless it edits an offload already dated before it. Date the offload on or after the cut-over date.";
+
+/** The date an existing offload is booked at: the container's offload date, else the offload's own. */
+function offloadBookedDate(
+  container: { offloadDate: string | null },
+  offload: { offloadedAt: Date | string | null } | null
+): string | null {
+  if (container.offloadDate) return container.offloadDate;
+  if (!offload?.offloadedAt) return null;
+  return new Date(offload.offloadedAt).toISOString().slice(0, 10);
+}
+
+/**
+ * Wave 15 (M10): an inventory cost correction rewrites the cost of stock
+ * already on hand (a revaluation), so only Admin or Owner (Developer passes,
+ * as with requireRole) may send one; the offload itself keeps its own access.
+ * The route passes the session's company role.
+ */
+export const OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE = "CONTAINER_OFFLOAD_COST_CORRECTION_FORBIDDEN" as const;
+export const OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE =
+  "Only an Admin or Owner can correct the cost of stock already on hand during an offload.";
+const OFFLOAD_COST_CORRECTION_ROLES = new Set(["Admin", "Owner", "Developer"]);
+
+export interface OffloadCostCorrectionApprover {
+  /** The caller's company role; cost corrections need Admin or Owner. */
+  actorRole?: string | null;
+}
+
 export async function executeContainerOffloadLifecycle(
-  input: ContainerOffloadLifecycleInput
+  input: ContainerOffloadLifecycleInput & OffloadCostCorrectionApprover
 ): Promise<ContainerOffloadLifecycleResult> {
   return db.transaction(async (tx) => {
     // The container row is the offload's ownership token and it is taken FOR
@@ -203,8 +237,19 @@ export async function executeContainerOffloadLifecycle(
       );
     }
 
+    // Wave 15 (C1): once the cut-over applies, an offload dated before it posts
+    // no stock-in journal. Only an edit of an offload already dated before the
+    // cut-over may keep such a date (its change is journalled below); any other
+    // offload dated before the cut-over is refused.
+    const previousOffloadDate = existingOffload ? offloadBookedDate(container, existingOffload) : null;
+    const previousBeforeCutover = await isPreCutoverOffloadChangeTx(tx, input.companyId, previousOffloadDate);
+    if (!previousBeforeCutover && (await isPreCutoverOffloadChangeTx(tx, input.companyId, input.offloadDate))) {
+      throw new ContainerOffloadLifecycleError(OFFLOAD_BEFORE_CUTOVER_MESSAGE, 409, OFFLOAD_BEFORE_CUTOVER_CODE);
+    }
+
+    let reversalDelta: Decimal = new MoneyDecimal(0);
     if (existingOffload) {
-      await reverseExistingOffload(tx, container, existingOffload, lineItems);
+      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
     }
 
     const itemMap = buildItemMap(lineItems);
@@ -248,6 +293,16 @@ export async function executeContainerOffloadLifecycle(
     // Revaluation by an INV-MOVE journal once the offload record exists.
     const validCorrectionIds = new Set(itemMap.keys());
     const correctionLines: InventoryMovementLine[] = [];
+    const requestsCorrection = (input.inventoryCostCorrections ?? []).some(
+      (correction) => correction.correctRate > 0 && validCorrectionIds.has(correction.stockItemId)
+    );
+    if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
+      throw new ContainerOffloadLifecycleError(
+        OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE,
+        403,
+        OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE
+      );
+    }
     for (const correction of input.inventoryCostCorrections ?? []) {
       if (!(correction.correctRate > 0) || !validCorrectionIds.has(correction.stockItemId)) continue;
       const correctionRows = await tx.execute(
@@ -437,6 +492,24 @@ export async function executeContainerOffloadLifecycle(
     await postSupplierPartnerJournals(tx, container, purchaseOrders, input);
     // Perpetual inventory (wave 8.2): the received stock moves to the ledger.
     await syncContainerStockInTx(tx, input.companyId, input.containerId);
+    if (previousBeforeCutover) {
+      // Wave 15 (C1): the edit of an offload dated before the cut-over. A new
+      // date before it keeps the stock out of STOCK-IN, so the whole change is
+      // journalled; a new date on or after it is STOCK-IN's, so only the
+      // reversal of the old receipt is.
+      const newBeforeCutover = await isPreCutoverOffloadChangeTx(tx, input.companyId, input.offloadDate);
+      const received = storedItems.reduce<Decimal>((sum, item) => sum.plus(item.valueMoved), new MoneyDecimal(0));
+      await postPreCutoverOffloadMovementTx(tx, {
+        companyId: input.companyId,
+        containerId: input.containerId,
+        containerNumber: container.containerNumber,
+        offloadDate: previousOffloadDate,
+        locationId: input.locationId,
+        valueDelta: newBeforeCutover ? reversalDelta.plus(received) : reversalDelta,
+        mode: "inPlace",
+        reason: "Offload edited",
+      });
+    }
 
     return {
       offload,

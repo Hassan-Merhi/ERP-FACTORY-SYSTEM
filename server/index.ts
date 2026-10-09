@@ -42,6 +42,7 @@ import { ensureFactoryCostBasisSchema } from "./services/factory/factoryCostBasi
 import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
 import { ensureAuditLogAppendOnlyGuard } from "./services/audit/auditLogAppendOnlyGuard";
 import { ensureOpeningBalanceLock } from "./services/accounting/openingBalanceLock";
+import { ensureCurrencyNormalizationGuard } from "./services/accounting/currencyNormalizationGuard";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
@@ -267,6 +268,9 @@ let migrationsDone = false;
       // Opening balances locked once a fiscal period is closed (wave 12); fatal on failure.
       await ensureOpeningBalanceLock(pool);
       await ensureLedgerIntegrityGuard(pool);
+      // Voucher-entry currency normalization (migrations/20260720_005, as production has it;
+      // wave 14). Fatal on failure; skipped with a warning only if a column is missing.
+      await ensureCurrencyNormalizationGuard(pool);
       await ensureInventoryCutoverSchema(pool);
       // Wave 11 columns read by full-row selects of sales and stock lines (fatal on failure);
       // the average_rate widening is retried on the next boot if it cannot get its lock.

@@ -20,7 +20,8 @@
  *     never touched the customer. A sale with a live FPOS-RCPT-{sale} voucher
  *     is not listed: that voucher carries the full revenue and the unpaid part
  *     on the customer's ledger (accounting/factoryPosReceipt.ts). A voided sale
- *     is not listed either (its cache rows are left in place by the void).
+ *     is not listed either: since wave 14 the void removes its cache rows (as
+ *     an edit does); a sale voided before keeps them, and they stay unlisted.
  *   - customerBalanceCache: any other customer_balances row with no ledger
  *     counterpart, e.g. a legacy payment recorded against an invoice, or a
  *     credit-sale import row whose voucher was deleted.
@@ -40,6 +41,19 @@
  *     journalled since wave 8.4 continuation, factory/containerCommissionJournal.ts),
  *     listed under the party that journal credits: the commission supplier
  *     (broker) when the container names one, else the container's supplier.
+ *   - factoryRawStockCommission: commission held on a container's raw-stock
+ *     row (an opening-balance entry) with no live FACTORY-COMM-{container}
+ *     journal, on a container with no commission of its own (wave 14: the
+ *     journal posts it; legacy rows, or no rate or no payee, stay here),
+ *     listed under the row's commission supplier, else the container's
+ *     supplier, at the row's own stored rate (positive, not the unset 1) or
+ *     the container's confirmed rate for the container's currency.
+ *   - factoryCommissionRecord: an offload commission record
+ *     (factory_container_commissions) on a container that carries no
+ *     commission (the journal posts the container's commission, which the
+ *     offload copies from the record), at the record's confirmed rate, under
+ *     the container's commission party. A record that differs from its
+ *     container's commission is listed by the integrity diagnostic only.
  *   Amounts in another currency are converted at the container's stored,
  *   confirmed rate; with no such rate `amount` is null (the line is listed
  *   with its native amount and left out of the memo total).
@@ -52,6 +66,7 @@ import type Decimal from "decimal.js";
 
 import type { DatabaseOrTransaction } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { resolveStoredFxRate } from "../../factory/currencyConversion";
 
 export type MemoPartyKind = "customer" | "factorySupplier";
 
@@ -62,7 +77,9 @@ export type MemoSource =
   | "customerBalanceCache"
   | "factoryContainerGoods"
   | "factoryContainerFreight"
-  | "factoryContainerCommission";
+  | "factoryContainerCommission"
+  | "factoryRawStockCommission"
+  | "factoryCommissionRecord";
 
 /** What each source is, as shown next to a balance (the reference names the document). */
 export const MEMO_SOURCE_LABELS: Record<MemoSource, string> = {
@@ -73,6 +90,8 @@ export const MEMO_SOURCE_LABELS: Record<MemoSource, string> = {
   factoryContainerGoods: "Container goods not yet in the ledger (legacy containers)",
   factoryContainerFreight: "Supplier-paid container freight not yet in the ledger",
   factoryContainerCommission: "Container commission not yet in the ledger",
+  factoryRawStockCommission: "Opening-balance raw stock commission not yet in the ledger",
+  factoryCommissionRecord: "Offload commission record not carried by its container, not in the ledger",
 };
 
 /** A container amount in a currency with no confirmed rate (listed, not totalled). */
@@ -267,6 +286,61 @@ function supplierPaidFreight(row: ContainerMemoRow): boolean {
   return offloaded ? row.freight_supplier_id !== null : true;
 }
 
+interface HeldCommissionRow {
+  source: "factoryRawStockCommission" | "factoryCommissionRecord";
+  source_id: number;
+  party_id: number;
+  container_number: string;
+  date: string;
+  currency_code: string | null;
+  fx_rate_to_usd: string | null;
+  fx_rate_confirmed: boolean | null;
+  commission_amount: string | null;
+  commission_currency: string | null;
+  commission_rate: string | null;
+  commission_rate_confirmed: boolean | null;
+}
+
+/** Commission held on raw-stock rows or commission records that no journal carries (wave 14). */
+function heldCommissionRows(executor: Executor, query: MemoQuery) {
+  const { companyId, ids, asOf } = query;
+  const day = sql`COALESCE(fc.arrival_date, fc.created_at::date)`;
+  return rowsOf<HeldCommissionRow>(
+    executor,
+    sql`
+      SELECT 'factoryRawStockCommission' AS source, rs.id AS source_id,
+             COALESCE(rs.commission_supplier_id, fc.supplier_id) AS party_id,
+             fc.container_number, ${day}::text AS date,
+             fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
+             rs.commission_amount::text AS commission_amount, rs.commission_currency_code AS commission_currency,
+             rs.commission_fx_rate_to_usd::text AS commission_rate, NULL::boolean AS commission_rate_confirmed
+        FROM factory_raw_stock rs
+        JOIN factory_containers fc ON fc.id = rs.container_id AND fc.company_id = rs.company_id
+       WHERE rs.company_id = ${companyId} AND rs.deleted_at IS NULL AND fc.deleted_at IS NULL
+         AND COALESCE(rs.commission_amount, 0) > 0 AND COALESCE(fc.commission_amount, 0) <= 0
+         AND COALESCE(rs.commission_supplier_id, fc.supplier_id) IN (${idList(ids)})
+         AND NOT ${liveVoucherExists(
+           sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
+           sql`fc.company_id`
+         )}
+         ${dateCut(day, asOf)}
+      UNION ALL
+      SELECT 'factoryCommissionRecord' AS source, cc.id AS source_id,
+             COALESCE(fc.commission_supplier_id, fc.supplier_id) AS party_id,
+             fc.container_number, ${day}::text AS date,
+             fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
+             cc.commission_total::text AS commission_amount, cc.currency_code AS commission_currency,
+             cc.fx_rate_to_usd::text AS commission_rate, cc.fx_rate_confirmed AS commission_rate_confirmed
+        FROM factory_container_commissions cc
+        JOIN factory_containers fc ON fc.id = cc.container_id AND fc.company_id = cc.company_id
+       WHERE cc.company_id = ${companyId} AND fc.deleted_at IS NULL
+         AND COALESCE(fc.commission_amount, 0) <= 0
+         AND COALESCE(fc.commission_supplier_id, fc.supplier_id) IN (${idList(ids)})
+         ${dateCut(day, asOf)}
+    `
+  );
+}
+
 async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
   const { companyId, ids, asOf } = query;
   const day = sql`COALESCE(fc.arrival_date, fc.created_at::date)`;
@@ -319,6 +393,43 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
       },
     });
   };
+
+  for (const row of await heldCommissionRows(executor, query)) {
+    const ccy = (row.currency_code || "USD").toUpperCase();
+    const cccy = (row.commission_currency || ccy).toUpperCase();
+    const containerRate = confirmedRate(ccy, row.fx_rate_to_usd, row.fx_rate_confirmed);
+    let rate: Decimal | null;
+    if (row.source === "factoryRawStockCommission") {
+      // No confirmed flag on factory_raw_stock: the stored rate when it looks set.
+      const own = resolveStoredFxRate(cccy, row.commission_rate);
+      rate = own.looksSet
+        ? cccy === "USD"
+          ? new MoneyDecimal(1)
+          : toMoney(row.commission_rate)
+        : cccy === ccy
+          ? containerRate
+          : null;
+    } else {
+      rate = confirmedRate(cccy, row.commission_rate, row.commission_rate_confirmed);
+    }
+    const native = toMoney(row.commission_amount);
+    if (!wanted.has(row.party_id) || !native.greaterThan(0)) continue;
+    const owed = native.negated();
+    out.push({
+      partyId: row.party_id,
+      line: {
+        source: row.source,
+        reference: row.container_number,
+        sourceId: row.source_id,
+        date: row.date,
+        amount: rate ? owed.times(rate).toFixed(2) : null,
+        nativeAmount: owed.toFixed(2),
+        currency: cccy,
+        label: rate ? MEMO_SOURCE_LABELS[row.source] : MEMO_NO_RATE_LABEL,
+        notInLedger: true,
+      },
+    });
+  }
 
   for (const row of containers) {
     const ccy = (row.currency_code || "USD").toUpperCase();

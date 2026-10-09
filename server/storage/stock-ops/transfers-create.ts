@@ -250,22 +250,11 @@ export async function applyStockTransferInventoryTx(
     });
     relievedByGroup.set(`${item.sourceLocationId}:${item.stockItemId}`, moved.relieved);
     deltas.push(moved.sourceDelta, moved.destinationDelta);
-    if (sourceWasMissing) {
-      await tx
-        .update(schema.inventory)
-        .set({
-          averageRate: inventoryUnitCost(rate),
-          totalValue: inventoryMoney(toInventoryDecimal(0)),
-          lastUpdated: new Date(),
-        })
-        .where(
-          and(
-            eq(schema.inventory.companyId, input.companyId),
-            eq(schema.inventory.locationId, item.sourceLocationId),
-            eq(schema.inventory.stockItemId, item.stockItemId)
-          )
-        );
-    }
+    // Wave 15 (H3): a source with no row goes short at the transfer's rate
+    // and keeps that negative value (negative-stock policy), exactly what the
+    // destination received. It used to be reset to zero after the move, which
+    // left the destination's value standing on nothing: value created from a
+    // transfer, with no journal.
 
     await postStockMovementTx(
       tx,
@@ -446,20 +435,37 @@ export async function createStockAdjustmentWithVoucher(
   items: StockAdjustmentInputItem[],
   voucherHeader?: { currency?: string }
 ) {
-  return await db.transaction(async (tx) => {
-    const { voucher: created } = await insertInfrastructureVoucherTx(tx, voucher, postingSource, voucher);
-    const result = await createStockAdjustmentTx(
-      tx,
-      created.id,
-      locationId,
-      voucher.voucherType,
-      notes,
-      items,
-      voucherHeader
-    );
-    const [stored] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, created.id));
-    return { voucher: stored ?? created, ...result };
-  });
+  return await db.transaction((tx) =>
+    createStockAdjustmentWithVoucherTx(tx, voucher, postingSource, locationId, notes, items, voucherHeader)
+  );
+}
+
+/**
+ * createStockAdjustmentWithVoucher in the caller's transaction (wave 15): the
+ * waste dispatch writes its dispatch rows in the same transaction as the
+ * voucher and its adjustment.
+ */
+export async function createStockAdjustmentWithVoucherTx(
+  tx: DbTransaction,
+  voucher: Omit<schema.InsertVoucher, "voucherType"> & { voucherType: StockAdjustmentType },
+  postingSource: PostingSourceIdentity,
+  locationId: number,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string }
+) {
+  const { voucher: created } = await insertInfrastructureVoucherTx(tx, voucher, postingSource, voucher);
+  const result = await createStockAdjustmentTx(
+    tx,
+    created.id,
+    locationId,
+    voucher.voucherType,
+    notes,
+    items,
+    voucherHeader
+  );
+  const [stored] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, created.id));
+  return { voucher: stored ?? created, ...result };
 }
 
 async function createStockAdjustmentTx(

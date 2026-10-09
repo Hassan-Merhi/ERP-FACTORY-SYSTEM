@@ -3,7 +3,8 @@ import {
   insertInfrastructureVoucherTx,
 } from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
-import { voucherEntries } from "@shared/schema";
+import { purchaseOrders, voucherEntries } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 import { requireAuth } from "../../auth";
 import { db } from "../../db";
@@ -64,7 +65,7 @@ export function registerPoImportBackfillRoute(app: Express) {
         const backfillSupplier = po.supplierId ? await storage.getSupplierById(po.supplierId) : null;
 
         // Create voucher for this PO with double-entry bookkeeping
-        const voucher = await db.transaction(async (tx) => {
+        await db.transaction(async (tx) => {
           const voucherFields = {
             companyId: req.session.currentCompanyId!,
             currency: "USD",
@@ -105,12 +106,8 @@ export function registerPoImportBackfillRoute(app: Express) {
             creditAmount: po.itemsTotal || "0",
             narration: `PO ${po.poNumber} - Container ${container.containerNumber} (Backfilled)`,
           });
-          return created;
-        });
-
-        // Update PO with voucher ID
-        await storage.updatePurchaseOrder(po.id, {
-          voucherId: voucher.id,
+          // The PO's voucher link commits with the voucher (wave 7).
+          await tx.update(purchaseOrders).set({ voucherId: created.id }).where(eq(purchaseOrders.id, po.id));
         });
 
         backfilledCount++;

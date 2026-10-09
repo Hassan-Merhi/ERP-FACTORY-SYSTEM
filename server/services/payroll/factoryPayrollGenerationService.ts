@@ -1,6 +1,8 @@
 import { and, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { writeDaybookEntry } from "../../routes/factory/_helpers";
+import { rebuildPayrollGenVoucher } from "../../routes/payroll/_payrollAccountingHelper";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import {
   factoryAttendance,
   factoryBales,
@@ -185,15 +187,17 @@ export async function generateFactoryPayrollBatch(
       const [finalRecord] = await tx.select().from(factoryPayrolls).where(eq(factoryPayrolls.id, record.id));
       const finalNetSalary = Number(finalRecord?.netSalary ?? calculation.netSalary);
 
-      let toSettle = calculation.advances;
+      // Settle exactly the cents persisted on the payroll (Decimal, wave 7).
+      let toSettle = toMoney(calculation.advances.toFixed(2));
       for (const advance of workerAdvances) {
-        if (toSettle <= 0) break;
-        const currentBalance = Number(advance.remainingBalance ?? 0);
-        const repayment = Math.min(currentBalance, toSettle);
-        const newBalance = currentBalance - repayment;
+        if (toSettle.lte(0)) break;
+        const currentBalance = toMoney(advance.remainingBalance);
+        const repayment = MoneyDecimal.min(currentBalance, toSettle);
+        if (repayment.lte(0)) continue;
+        const newBalance = currentBalance.minus(repayment);
         await tx
           .update(factoryWorkerAdvances)
-          .set({ remainingBalance: newBalance.toFixed(2), fullyPaid: newBalance <= 0 })
+          .set({ remainingBalance: newBalance.toFixed(2), fullyPaid: newBalance.lte(0) })
           .where(eq(factoryWorkerAdvances.id, advance.id));
         await tx.insert(factoryAdvanceRepayments).values({
           companyId,
@@ -204,7 +208,7 @@ export async function generateFactoryPayrollBatch(
           amount: repayment.toFixed(2),
           notes: `Payroll deduction for ${input.startDate} – ${input.endDate}`,
         });
-        toSettle -= repayment;
+        toSettle = toSettle.minus(repayment);
       }
 
       await writeDaybookEntry(tx, {
@@ -221,6 +225,14 @@ export async function generateFactoryPayrollBatch(
 
       createdPayrolls.push(finalRecord ?? record);
     }
+
+    // Owner decision (wave 7): generation posts the period's accrual in this
+    // transaction — Dr salary/bonus expense per worker / Cr Payroll Payable (net)
+    // / Cr Factory Worker Advances (deductions) — as the bulk generator does.
+    // The PAYROLL-GEN voucher of the period is rebuilt from every payroll of
+    // the period, so generating more workers replaces it, and deleting a
+    // payroll (which rebuilds it without that payroll) removes its share.
+    await rebuildPayrollGenVoucher(tx, companyId, input.startDate, input.endDate);
 
     const payrolls = [...existingPayrolls, ...createdPayrolls].sort((a, b) => a.workerId - b.workerId);
     return { payrolls, createdCount: createdPayrolls.length, replayed: false };

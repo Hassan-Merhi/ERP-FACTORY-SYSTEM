@@ -30,6 +30,7 @@ import {
 import type { DbTransaction } from "../../../db";
 import { adjustInventory } from "../../../inventoryHelper";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { assertNoBaleMirrorMovementTx } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
   postSaleCogsTx,
   relievedValue,
@@ -128,6 +129,21 @@ export async function toggleVoucherStockTx(tx: DbTransaction, context: ToggleCon
     .from(stockTransferVouchers)
     .where(eq(stockTransferVouchers.voucherId, voucher.id))
     .limit(1);
+  if (!willBeOptional) {
+    // Wave 15 (wave 11 follow-up): activating a sale or transfer moves its
+    // stock, so a factory bale-mirror item is refused after the cut-over like
+    // every other ERP sale and transfer path.
+    const transferItemIds = transfer
+      ? (await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transfer.id))).map(
+          (item) => item.stockItemId
+        )
+      : [];
+    const saleItemIds = (await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id))).map(
+      (item) => item.stockItemId
+    );
+    await assertNoBaleMirrorMovementTx(tx, companyId, transferItemIds, "stock-transfer-activate");
+    await assertNoBaleMirrorMovementTx(tx, companyId, saleItemIds, "optional-sale-activate");
+  }
   if (transfer) {
     const items = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transfer.id));
     const relievedByGroup = new Map<string, Decimal>();

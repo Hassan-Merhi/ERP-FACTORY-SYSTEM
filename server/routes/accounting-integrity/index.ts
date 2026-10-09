@@ -42,7 +42,11 @@ import {
 } from "../../services/accounting/systemAccounts";
 import { runAccountingIntegrityDiagnostic } from "../../services/accounting/integrity/accountingIntegrityDiagnostic";
 import { buildTrialBalance } from "../../services/accounting/integrity/trialBalance";
-import { applyFactoryFxLegacyRepair, planFactoryFxLegacyRepair } from "../../services/factory/factoryFxLegacyRepair";
+import {
+  FactoryFxRepairPlanChangedError,
+  applyFactoryFxLegacyRepair,
+  planFactoryFxLegacyRepair,
+} from "../../services/factory/factoryFxLegacyRepair";
 import {
   OpeningJournalRefusal,
   applyOpeningInventoryJournal,
@@ -199,39 +203,23 @@ export function registerAccountingIntegrityRoutes(app: Express) {
     }
   });
 
+  // The apply re-derives the plan in its transaction and audits it there (wave 14);
+  // with the reviewed `planHash` it refuses a plan that changed since (409).
   app.post("/api/accounting/factory-fx-repair/apply", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
-      const plan = await applyFactoryFxLegacyRepair(companyId);
-      if (plan.repairableLines > 0) {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "update",
-          tableName: "voucher_entries",
-          recordIdentifier: "factory-fx-legacy-repair",
-          changes: {
-            lines: {
-              old: plan.lines
-                .filter((line) => !line.skipReason)
-                .map((line) => ({ id: line.entryId, amount: line.storedAmount })),
-              new: plan.lines
-                .filter((line) => !line.skipReason)
-                .map((line) => ({
-                  id: line.entryId,
-                  amount: line.newStoredAmount,
-                  native: `${line.currency} ${line.transactionAmount}`,
-                  rate: line.rate,
-                })),
-            },
-          },
-        });
-      }
+      const expectedPlanHash = typeof req.body?.planHash === "string" ? req.body.planHash : undefined;
+      const plan = await applyFactoryFxLegacyRepair(companyId, {
+        actor: { userId: req.session.userId!, username: req.session.username || "unknown" },
+        expectedPlanHash,
+      });
       res.json(plan);
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRepairPlanChangedError) {
+        return res.status(409).json({ message: error.message, code: error.code });
+      }
       res.status(500).json({ message: getErrorMessage(error) });
     }
   });

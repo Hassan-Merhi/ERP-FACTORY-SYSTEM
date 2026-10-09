@@ -14,26 +14,44 @@
  *     is reported and left alone, and so is every other line of that voucher,
  *     so no voucher is ever half-converted;
  *   - the conversion uses the voucher's own stored rate (USD per unit, as the
- *     factory writers store it), never a current rate;
- *   - the plan is read-only; applying it requires an explicit confirmation,
- *     re-derives the plan inside the transaction, changes only lines that are
- *     still legacy, and is audited. The voucher-entry trigger validates every
- *     converted line, and the closed-period guard is not bypassed.
+ *     factory writers store it), never a current rate. A voucher whose own
+ *     rate was never set is rated, per line, at the factory's confirmed rate
+ *     for its currency ON OR BEFORE the voucher date (wave 14, owner decision
+ *     1: findFactoryFxRateOnOrBefore, a manual rate first, else a recorded
+ *     auto rate; never a rate dated after the voucher). Such a line is only
+ *     repaired when it holds the native amount (the voucher total): with an
+ *     unset rate the writers stored native amounts on every leg. Each line
+ *     shows its rate and the rate's source ("line", "dated-manual",
+ *     "dated-auto"); a line with no rate at all stays listed and untouched;
+ *   - the plan is read-only and carries a hash of what it would change;
+ *     applying it requires an explicit confirmation (and, when the caller
+ *     sends the reviewed hash, refuses a plan that no longer matches it, for
+ *     example after a rate was added), re-derives the plan inside the
+ *     transaction, changes only lines that are still legacy, and writes its
+ *     audit in that transaction. The voucher-entry currency trigger validates
+ *     every converted line, and the closed-period guard is not bypassed.
  *
  * Factory supplier balances are not affected: they are computed from the
  * container, charge and payment tables, and their voucher-payment readers
  * exclude FACTORY-PAY vouchers. What changes is the USD figure of these lines
  * in the general ledger (expense, payable and cash accounts, trial balance).
  */
+import { createHash } from "node:crypto";
+
 import type Decimal from "decimal.js";
 import { sql } from "drizzle-orm";
 
 import { db, type DbTransaction } from "../../db";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { writeAuditEvent, type AuditActor } from "../audit";
+import { findFactoryFxRateOnOrBefore, type FactoryFxRateOnDate } from "./factoryFxRateOnDate";
 
 type Executor = typeof db | DbTransaction;
 
 export type LegacyLineKind = "native" | "usd";
+
+/** Where a line's rate comes from: its voucher, or the factory rate on or before the voucher date. */
+export type LegacyRateSource = "line" | "dated-manual" | "dated-auto";
 
 export type LegacySkipReason =
   "RATE_NOT_SET" | "PERIOD_CLOSED" | "AMOUNT_NOT_RECOGNISED" | "AMOUNT_AMBIGUOUS" | "OTHER_LINE_NOT_REPAIRABLE";
@@ -44,7 +62,11 @@ export interface LegacyLinePlan {
   voucherNumber: string;
   voucherDate: string;
   currency: string;
+  /** The rate the line is converted at (USD per unit, 10 places); the voucher's own when there is none. */
   rate: string;
+  rateSource: LegacyRateSource | null;
+  /** For a dated factory rate, the date it applies from. */
+  rateEffectiveDate: string | null;
   target: string;
   side: "debit" | "credit";
   storedAmount: string;
@@ -69,7 +91,19 @@ export interface LegacyRepairPlan {
   skippedByReason: Record<string, number>;
   /** Net change of the ledger's USD figures by target, debit-positive. */
   usdChangeByTarget: Record<string, string>;
+  /** Lines converted at a dated factory rate (their voucher had no rate of its own). */
+  datedRateLines: number;
+  /** sha256 of what the apply would change; the apply refuses a different plan when given it. */
+  planHash: string;
   lines: LegacyLinePlan[];
+}
+
+/** The plan re-derived inside the apply no longer matches the reviewed one. */
+export class FactoryFxRepairPlanChangedError extends Error {
+  readonly code = "FACTORY_FX_REPAIR_PLAN_CHANGED";
+  constructor() {
+    super("The repair plan changed since it was reviewed; review it again before applying");
+  }
 }
 
 interface LegacyRow {
@@ -130,12 +164,22 @@ function targetOf(row: LegacyRow): string {
 const cents = (value: Decimal) => value.toDecimalPlaces(2);
 const base6 = (value: Decimal) => value.toDecimalPlaces(6);
 
-function classify(row: LegacyRow): LegacyLinePlan {
+/** A usable rate stored on the voucher itself: positive and not the column default 1. */
+function ownRate(row: LegacyRow): Decimal | null {
+  const rate = toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
+  // Factory currencies are never pegged 1:1 to USD; a stored 1 is the
+  // column default, i.e. a rate nobody set.
+  return rate.gt(0) && !rate.eq(1) ? rate : null;
+}
+
+function classify(row: LegacyRow, dated: FactoryFxRateOnDate | null): LegacyLinePlan {
   const debit = toMoney(row.debit_amount ?? 0);
   const credit = toMoney(row.credit_amount ?? 0);
   const side: "debit" | "credit" = debit.gt(0) ? "debit" : "credit";
   const amount = side === "debit" ? debit : credit;
-  const rate = toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
+  const own = ownRate(row);
+  const datedRate = !own && dated && toMoney(dated.rate).gt(0) ? toMoney(dated.rate).toDecimalPlaces(10) : null;
+  const rate = own ?? datedRate ?? toMoney(row.exchange_rate ?? 0).toDecimalPlaces(10);
   const total = toMoney(row.total_amount ?? 0);
   const plan: LegacyLinePlan = {
     entryId: row.id,
@@ -144,6 +188,8 @@ function classify(row: LegacyRow): LegacyLinePlan {
     voucherDate: row.voucher_date,
     currency: row.currency,
     rate: rate.toFixed(10),
+    rateSource: own ? "line" : datedRate ? (dated!.source === "manual" ? "dated-manual" : "dated-auto") : null,
+    rateEffectiveDate: datedRate ? dated!.effectiveDate : null,
     target: targetOf(row),
     side,
     storedAmount: amount.toFixed(2),
@@ -154,14 +200,14 @@ function classify(row: LegacyRow): LegacyLinePlan {
     newStoredAmount: null,
     usdChange: null,
   };
-  // Factory currencies are never pegged 1:1 to USD; a stored 1 is the
-  // column default, i.e. a rate nobody set.
-  if (!rate.gt(0) || rate.eq(1)) return { ...plan, skipReason: "RATE_NOT_SET" };
+  if (!own && !datedRate) return { ...plan, skipReason: "RATE_NOT_SET" };
   if (row.period_closed) return { ...plan, skipReason: "PERIOD_CLOSED" };
 
-  const totalUsd = cents(total.times(rate));
   const isNative = amount.eq(total);
-  const isUsd = amount.eq(totalUsd);
+  // With no rate of its own, a writer stored the native amount on every leg
+  // (an own-account leg's "USD" was native × 1), so only the native shape is
+  // recognised at a dated rate.
+  const isUsd = own ? amount.eq(cents(total.times(rate))) : false;
   if (isNative && isUsd) return { ...plan, skipReason: "AMOUNT_AMBIGUOUS" };
   if (!isNative && !isUsd) return { ...plan, skipReason: "AMOUNT_NOT_RECOGNISED" };
 
@@ -179,22 +225,53 @@ function classify(row: LegacyRow): LegacyLinePlan {
   };
 }
 
-function buildPlan(companyId: number, rows: LegacyRow[]): LegacyRepairPlan {
-  const lines = rows.map(classify);
-  // A voucher is repaired whole or not at all.
-  const blockedVouchers = new Set(lines.filter((line) => line.skipReason).map((line) => line.voucherId));
-  for (const line of lines) {
-    if (!line.skipReason && blockedVouchers.has(line.voucherId)) {
-      Object.assign(line, {
-        kind: null,
-        skipReason: "OTHER_LINE_NOT_REPAIRABLE",
-        transactionAmount: null,
-        baseAmount: null,
-        newStoredAmount: null,
-        usdChange: null,
-      });
-    }
+/**
+ * The dated factory rate for every (currency, voucher date) whose voucher has
+ * no usable rate of its own, read with the plan's executor.
+ */
+async function datedRatesFor(
+  executor: Executor,
+  companyId: number,
+  rows: LegacyRow[]
+): Promise<Map<string, FactoryFxRateOnDate | null>> {
+  const rates = new Map<string, FactoryFxRateOnDate | null>();
+  for (const row of rows) {
+    if (ownRate(row)) continue;
+    const key = `${row.currency}|${row.voucher_date}`;
+    if (rates.has(key)) continue;
+    rates.set(key, await findFactoryFxRateOnOrBefore(executor, companyId, row.currency, row.voucher_date));
   }
+  return rates;
+}
+
+function planHashOf(lines: LegacyLinePlan[]): string {
+  const changes = lines
+    .filter((line) => !line.skipReason)
+    .map((line) => [line.entryId, line.side, line.rate, line.rateSource, line.transactionAmount, line.baseAmount]);
+  return createHash("sha256").update(JSON.stringify(changes)).digest("hex");
+}
+
+function buildPlan(
+  companyId: number,
+  rows: LegacyRow[],
+  datedRates: Map<string, FactoryFxRateOnDate | null>
+): LegacyRepairPlan {
+  const classified = rows.map((row) => classify(row, datedRates.get(`${row.currency}|${row.voucher_date}`) ?? null));
+  // A voucher is repaired whole or not at all.
+  const blockedVouchers = new Set(classified.filter((line) => line.skipReason).map((line) => line.voucherId));
+  const lines = classified.map((line): LegacyLinePlan =>
+    !line.skipReason && blockedVouchers.has(line.voucherId)
+      ? {
+          ...line,
+          kind: null,
+          skipReason: "OTHER_LINE_NOT_REPAIRABLE",
+          transactionAmount: null,
+          baseAmount: null,
+          newStoredAmount: null,
+          usdChange: null,
+        }
+      : line
+  );
   const skippedByReason: Record<string, number> = {};
   const usdChange = new Map<string, Decimal>();
   for (const line of lines) {
@@ -215,24 +292,44 @@ function buildPlan(companyId: number, rows: LegacyRow[]): LegacyRepairPlan {
     usdChangeByTarget: Object.fromEntries(
       [...usdChange.entries()].filter(([, value]) => !value.isZero()).map(([key, value]) => [key, value.toFixed(2)])
     ),
+    datedRateLines: repairable.filter((line) => line.rateSource !== "line").length,
+    planHash: planHashOf(lines),
     lines,
   };
 }
 
+async function derivePlan(executor: Executor, companyId: number, lock: boolean): Promise<LegacyRepairPlan> {
+  const rows = await loadLegacyRows(executor, companyId, lock);
+  return buildPlan(companyId, rows, await datedRatesFor(executor, companyId, rows));
+}
+
 /** Read-only: what the repair would do for one company. */
 export async function planFactoryFxLegacyRepair(companyId: number, executor: Executor = db): Promise<LegacyRepairPlan> {
-  return buildPlan(companyId, await loadLegacyRows(executor, companyId, false));
+  return derivePlan(executor, companyId, false);
+}
+
+export interface ApplyFactoryFxRepairOptions {
+  /** Who applies it; the audit row is written in the apply transaction. */
+  actor?: AuditActor & { userId: string | number };
+  /** The reviewed plan's hash: the apply refuses a plan that no longer matches it. */
+  expectedPlanHash?: string;
 }
 
 /**
  * Converts the repairable lines in one transaction, from a plan re-derived
- * under row locks. Returns that plan.
+ * under row locks, and audits them in that transaction. Returns that plan.
  */
-export async function applyFactoryFxLegacyRepair(companyId: number): Promise<LegacyRepairPlan> {
+export async function applyFactoryFxLegacyRepair(
+  companyId: number,
+  options: ApplyFactoryFxRepairOptions = {}
+): Promise<LegacyRepairPlan> {
   return db.transaction(async (tx) => {
-    const plan = buildPlan(companyId, await loadLegacyRows(tx, companyId, true));
-    for (const line of plan.lines) {
-      if (line.skipReason || !line.transactionAmount || !line.baseAmount) continue;
+    const plan = await derivePlan(tx, companyId, true);
+    if (options.expectedPlanHash && options.expectedPlanHash !== plan.planHash) {
+      throw new FactoryFxRepairPlanChangedError();
+    }
+    const repaired = plan.lines.filter((line) => !line.skipReason && line.transactionAmount && line.baseAmount);
+    for (const line of repaired) {
       const debit = line.side === "debit";
       const updated = await tx.execute(sql`
         UPDATE voucher_entries
@@ -248,6 +345,32 @@ export async function applyFactoryFxLegacyRepair(companyId: number): Promise<Leg
          WHERE id = ${line.entryId} AND transaction_currency IS NULL
       `);
       if (updated.rowCount !== 1) throw new Error("A legacy line changed during the repair; nothing was applied");
+    }
+    if (options.actor && repaired.length > 0) {
+      await writeAuditEvent(
+        {
+          ...options.actor,
+          companyId,
+          action: "update",
+          tableName: "voucher_entries",
+          recordIdentifier: "factory-fx-legacy-repair",
+          changes: {
+            lines: {
+              old: repaired.map((line) => ({ id: line.entryId, amount: line.storedAmount })),
+              new: repaired.map((line) => ({
+                id: line.entryId,
+                amount: line.newStoredAmount,
+                native: `${line.currency} ${line.transactionAmount}`,
+                rate: line.rate,
+                rateSource: line.rateSource,
+                rateEffectiveDate: line.rateEffectiveDate,
+              })),
+            },
+          },
+          metadata: { planHash: plan.planHash, usdChangeByTarget: plan.usdChangeByTarget },
+        },
+        tx
+      );
     }
     return plan;
   });

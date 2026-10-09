@@ -34,7 +34,8 @@
  * with no deposit and no deductions needs no cash account and posts the
  * receivable only (a Journal); a sale with a cash leg is a Receipt.
  *
- * customer_balances keeps its operational rows; the not-in-ledger memo
+ * customer_balances keeps its operational rows while the sale is live (an
+ * edit re-writes them, a void removes them, wave 14); the not-in-ledger memo
  * (balances/unpostedMemo.ts) no longer lists a sale with a live FPOS-RCPT
  * voucher, which carries its receivable. Sales posted before (FPOS-{sale}-…,
  * deposit only) stay listed until they are edited, which replaces their

@@ -22,6 +22,7 @@ import { eq, and, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 import { factoryEntryAmountsOrLegacy } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 
 const ZERO = new MoneyDecimal(0);
 
@@ -603,6 +604,10 @@ export function registerRawStockAdjRoutes(app: Express) {
           .update(factoryRawStock)
           .set({ deletedAt: new Date() })
           .where(and(eq(factoryRawStock.id, rawStockId), eq(factoryRawStock.companyId, companyId)));
+        // Wave 14: a commission held on this row leaves the ledger with it.
+        if (toMoney(row.commissionAmount ?? 0).greaterThan(0)) {
+          await syncContainerCommissionJournalTx(tx, companyId, row.containerId);
+        }
 
         // Delete linked OFFLOAD_RAW_STOCK daybook entry
         await tx

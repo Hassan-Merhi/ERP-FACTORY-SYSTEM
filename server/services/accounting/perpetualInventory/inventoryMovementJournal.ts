@@ -23,7 +23,16 @@
  * transaction. Nothing is posted for a supplier-partner company, a movement
  * dated before the cut-over or a zero net; any earlier journal of the source
  * is still removed then.
+ *
+ * Wave 15 (M1): every call also records its lines, dated with the movement,
+ * in `inventory_value_movements`, before and after the cut-over and whether a
+ * journal is posted or not, replacing the source's earlier evidence like the
+ * journal. These movements leave no document line, so the as-of stock
+ * valuation (calculateHistoricalLocationInventory, companyStockValuationAsOf)
+ * replays them from this evidence.
  */
+import { sql } from "drizzle-orm";
+
 import { auditLog } from "@shared/schema";
 
 import type { DbTransaction } from "../../../db";
@@ -44,6 +53,8 @@ export interface InventoryMovementLine {
   locationId?: number | null;
   /** Signed change of the sub-ledger value (positive = stock value received). */
   valueDelta: MoneyInput;
+  /** Signed change of the row's quantity, when the movement moved quantity (evidence for the as-of replay). */
+  quantityDelta?: MoneyInput | null;
 }
 
 export interface InventoryMovementSource {
@@ -101,10 +112,19 @@ const identitySourceType = (sourceType: string) => `perpetual-inventory-movement
 
 /** A movement line from an adjustInventory result. */
 export function inventoryMovementLine(
-  result: Pick<AdjustInventoryResult, "valueDelta">,
+  result: Pick<AdjustInventoryResult, "valueDelta"> & { previousQuantity?: MoneyInput; newQuantity?: MoneyInput },
   ids: { stockItemId?: number | null; locationId?: number | null } = {}
 ): InventoryMovementLine {
-  return { stockItemId: ids.stockItemId ?? null, locationId: ids.locationId ?? null, valueDelta: result.valueDelta };
+  const quantityDelta =
+    result.previousQuantity === undefined || result.newQuantity === undefined
+      ? null
+      : toMoney(result.newQuantity).minus(toMoney(result.previousQuantity)).toDecimalPlaces(3).toFixed(3);
+  return {
+    stockItemId: ids.stockItemId ?? null,
+    locationId: ids.locationId ?? null,
+    valueDelta: result.valueDelta,
+    quantityDelta,
+  };
 }
 
 /** The net value of movement lines, 2dp. */
@@ -121,8 +141,40 @@ export async function removeInventoryMovementJournalTx(
 }
 
 /**
+ * Records (replacing any earlier evidence of the source) the movement's lines,
+ * dated with the movement, for the as-of replay. Lines that move neither value
+ * nor quantity are not recorded.
+ */
+async function recordInventoryValueMovementsTx(
+  tx: DbTransaction,
+  params: InventoryMovementJournalParams,
+  voucherNumber: string
+): Promise<void> {
+  await tx.execute(sql`
+    DELETE FROM inventory_value_movements WHERE company_id = ${params.companyId} AND source_number = ${voucherNumber}
+  `);
+  for (const line of params.lines) {
+    const value = toMoney(line.valueDelta).toDecimalPlaces(2);
+    const quantity =
+      line.quantityDelta === null || line.quantityDelta === undefined
+        ? null
+        : toMoney(line.quantityDelta).toDecimalPlaces(3);
+    if (value.isZero() && (quantity === null || quantity.isZero())) continue;
+    await tx.execute(sql`
+      INSERT INTO inventory_value_movements
+        (company_id, source_number, source_type, source_id, movement_date, stock_item_id, location_id,
+         quantity_delta, value_delta)
+      VALUES (${params.companyId}, ${voucherNumber}, ${params.sourceType}, ${String(params.sourceId)},
+              ${params.date}::date, ${line.stockItemId ?? null}, ${line.locationId ?? null},
+              ${quantity === null ? null : quantity.toFixed(3)}, ${value.toFixed(2)})
+    `);
+  }
+}
+
+/**
  * Posts (replacing any earlier one) the linked journal of a stock movement.
- * Returns null when nothing is posted (see the module comment).
+ * Returns null when nothing is posted (see the module comment). The movement's
+ * evidence is recorded in every case.
  */
 export async function postInventoryMovementJournalTx(
   tx: DbTransaction,
@@ -133,6 +185,7 @@ export async function postInventoryMovementJournalTx(
     throw new Error(INVALID_OFFSET_MESSAGE);
   }
   await removeLinkedJournalTx(tx, params.companyId, voucherNumber);
+  await recordInventoryValueMovementsTx(tx, params, voucherNumber);
   if (!(await isPerpetualInventoryActive(tx, params.companyId, params.date))) return null;
   if (await isSupplierPartnerCompany(tx, params.companyId)) return null;
   const net = inventoryMovementNet(params.lines);

@@ -120,6 +120,64 @@ export async function reverseTransferLegExactTx(
   return { sourceDelta, destinationDelta };
 }
 
+export interface TransferRevisionDeltaParams {
+  companyId: number;
+  sourceLocationId: number;
+  destinationLocationId: number;
+  stockItemId: number;
+  /** The line's quantity before and after the revision. */
+  oldQuantity: MoneyInput;
+  newQuantity: MoneyInput;
+  /** What the line moved so far (lineValueMoved), 0 for a new line. */
+  lineValue: MoneyInput;
+  /** Cost memory for a source with no row (never values the destination). */
+  fallbackRate?: MoneyInput;
+  sourceVoucherType?: string;
+  sourceVoucherId?: number;
+}
+
+/**
+ * Applies a transfer revision's quantity change to one applied (source, item)
+ * line (wave 15). An increase moves the extra quantity conserved (the
+ * destination receives what the source relieved); a decrease moves back the
+ * line's share of its value moved exactly (the whole value when the line goes
+ * to zero), so revising a line and then deleting the transfer returns every
+ * cent. Returns the line's new value_moved and the signed sub-ledger changes.
+ */
+export async function applyTransferRevisionDeltaTx(
+  tx: DbTransaction,
+  params: TransferRevisionDeltaParams
+): Promise<{ valueMoved: Decimal; deltas: Decimal[] }> {
+  const oldQuantity = toMoney(params.oldQuantity).abs();
+  const newQuantity = toMoney(params.newQuantity);
+  const lineValue = toMoney(params.lineValue).abs().toDecimalPlaces(2);
+  const delta = newQuantity.minus(oldQuantity);
+  const leg = {
+    companyId: params.companyId,
+    sourceLocationId: params.sourceLocationId,
+    destinationLocationId: params.destinationLocationId,
+    stockItemId: params.stockItemId,
+    sourceVoucherType: params.sourceVoucherType,
+    sourceVoucherId: params.sourceVoucherId,
+  };
+  if (delta.isZero()) return { valueMoved: lineValue, deltas: [] };
+  if (delta.isPositive()) {
+    const moved = await moveTransferLegConservedTx(tx, {
+      ...leg,
+      quantity: delta,
+      fallbackRate: params.fallbackRate,
+    });
+    return { valueMoved: lineValue.plus(moved.relieved), deltas: [moved.sourceDelta, moved.destinationDelta] };
+  }
+  const back = delta.abs();
+  const share =
+    !newQuantity.gt(0) || !oldQuantity.gt(0)
+      ? lineValue
+      : MoneyDecimal.min(lineValue, lineValue.times(back).dividedBy(oldQuantity).toDecimalPlaces(2));
+  const reversed = await reverseTransferLegExactTx(tx, { ...leg, quantity: back, value: share });
+  return { valueMoved: lineValue.minus(share), deltas: [reversed.sourceDelta, reversed.destinationDelta] };
+}
+
 /**
  * Records value_moved on a transfer's lines from the value each
  * (source, item) group relieved, spread over the group's lines by quantity

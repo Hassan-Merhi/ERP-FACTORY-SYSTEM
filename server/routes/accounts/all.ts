@@ -9,14 +9,10 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import {
-  ParentCompanyNotConfiguredError,
-  resolveParentCompanyId,
-  getSupplierBalanceForContext,
-  isSupplierVisibleToCompany,
-} from "../helpers/supplierBalanceHelpers";
+import { getSupplierBalanceForContext, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
 import { vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, sql, isNull, lt } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { eq, and, sql, isNull, lt, inArray } from "drizzle-orm";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
@@ -48,10 +44,30 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
     // getAllSuppliers() is not company-scoped, so foreign tenants' rows have to
     // be dropped here rather than left to the child-company activity filter
     // below, which a company resolving to itself never applies.
-    const suppliers =
+    const ownSuppliers =
       isFactoryCompany || isPropertiesCompany
         ? []
         : allSuppliers.filter((supplier) => isSupplierVisibleToCompany(supplier, companyId));
+    // Wave 14, one supplier rule (the posting company): a supplier of another
+    // company this company posted to is this company's payable too (as on the
+    // Suppliers page, wave 13). The engine lists it with no code here.
+    const postedElsewhereIds =
+      isFactoryCompany || isPropertiesCompany || analyticsProfile
+        ? []
+        : (await getPartyBalances(db, { companyId, kind: "supplier" })).parties
+            .filter((party) => party.id !== null && party.code === null)
+            .map((party) => party.id as number)
+            .filter((id) => !ownSuppliers.some((supplier) => supplier.id === id));
+    const postedElsewhere =
+      postedElsewhereIds.length === 0
+        ? []
+        : await db
+            .select()
+            .from(companyScopedSuppliers)
+            .where(
+              and(inArray(companyScopedSuppliers.id, postedElsewhereIds), isNull(companyScopedSuppliers.deletedAt))
+            );
+    const suppliers = [...ownSuppliers, ...postedElsewhere];
 
     const [employeeOpeningSides, supplierOpeningSides] = await Promise.all([
       loadPartyOpeningSides(
@@ -334,21 +350,14 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
       }),
     ];
 
-    // Factory and Properties companies never expose supplier accounts here, so
-    // do not perform legacy parent-company resolution for an empty supplier set.
+    // Factory and Properties companies never expose supplier accounts here.
+    // Wave 14: every supplier the company owns is listed, with or without
+    // activity; a child company (companies.parent_company_id) used to hide its
+    // own suppliers that had no lines and no opening.
     const supplierAccountsList =
       suppliers.length === 0
         ? []
         : await (async () => {
-            let isChildCompany = false;
-            try {
-              const parentCompanyId = await resolveParentCompanyId(companyId);
-              isChildCompany = companyId !== parentCompanyId;
-            } catch (error) {
-              if (!(error instanceof ParentCompanyNotConfiguredError)) throw error;
-              isChildCompany = true;
-            }
-
             return (
               await Promise.all(
                 suppliers.map(async (supplier) => {
@@ -360,14 +369,12 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
                     openingBalance: storedOpening,
                     openingBalanceSide: storedOpeningSide,
                     periodOpeningBalance,
-                    hasActivity,
                   } = await getSupplierBalanceForContext(
                     { ...supplier, openingBalanceSide: supplierOpeningSides.get(supplier.id) ?? "Cr" },
                     companyId,
                     { allowUnconfiguredLegacyScope: true, endDate: effectiveEndDate, startDate: balStartDate }
                   );
 
-                  if (isChildCompany && !hasActivity) return null;
                   const balanceSide = calculatedBalance >= 0 ? "Cr" : "Dr";
                   const openingBalance = balStartDate ? Math.abs(periodOpeningBalance) : storedOpening;
                   const openingBalanceSide = balStartDate
@@ -388,6 +395,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
                     openingBalanceSide,
                     active: supplier.active,
                     parentId: null,
+                    ...(supplier.companyId !== companyId ? { postedFromOtherCompany: true } : {}),
                   };
                 })
               )

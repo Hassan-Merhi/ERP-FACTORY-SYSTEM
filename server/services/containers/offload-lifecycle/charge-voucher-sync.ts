@@ -11,7 +11,10 @@ import {
   subtractInventoryValues,
   toInventoryDecimal,
 } from "../../../lib/inventoryMath";
-import { syncContainerStockInTx } from "../../accounting/perpetualInventory/stockReceipts";
+import {
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../../accounting/perpetualInventory/stockReceipts";
 
 /**
  * Container offload charge vouchers are numbered `<PREFIX>-<containerNumber>-<timestamp>`
@@ -161,6 +164,8 @@ export async function applyContainerChargeDeltaTx(
   const lineQuantity = addInventoryValues(...lines.map((item) => item.quantity));
 
   let allocated = toInventoryDecimal(0);
+  // What the re-pricing changed in the stock sub-ledger (wave 15, C1).
+  let subLedgerDelta = toInventoryDecimal(0);
   for (let index = 0; index < lines.length; index += 1) {
     const item = lines[index];
     const quantity = toInventoryDecimal(item.quantity);
@@ -204,6 +209,7 @@ export async function applyContainerChargeDeltaTx(
         const currentValue = toInventoryDecimal(stock.totalValue);
         if (addInventoryValues(currentValue, onHandShare).isNegative()) onHandShare = currentValue.negated();
         const nextValue = addInventoryValues(currentValue, onHandShare);
+        subLedgerDelta = addInventoryValues(subLedgerDelta, onHandShare);
         await tx
           .update(schema.inventory)
           .set({
@@ -231,6 +237,18 @@ export async function applyContainerChargeDeltaTx(
 
   // Perpetual inventory (wave 8.2): the stock-in journal follows the re-priced offload.
   await syncContainerStockInTx(tx, change.companyId, container.id);
+  // Wave 15 (C1): a container offloaded before the cut-over has no stock-in
+  // journal; the re-priced stock on hand is journalled against Purchases.
+  await postPreCutoverOffloadMovementTx(tx, {
+    companyId: change.companyId,
+    containerId: container.id,
+    containerNumber: container.containerNumber,
+    offloadDate: container.offloadDate,
+    locationId: offload.locationId,
+    valueDelta: roundInventoryValue(subLedgerDelta, 2),
+    mode: "inPlace",
+    reason: "Offload charge re-priced",
+  });
 
   return {
     offloadId: offload.id,

@@ -7,7 +7,7 @@ import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../accountin
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
 
-import { toMoney } from "../../../lib/money";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 import { buildItemMap } from "./types";
 
@@ -23,12 +23,18 @@ async function deleteVoucherWithEntries(tx: DbTransaction, voucherId: number): P
   await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, voucherId));
 }
 
+/**
+ * Reverses an offload's stock and removes its vouchers and record. Returns the
+ * signed change of the stock sub-ledger it made (the sum of the reversals'
+ * valueDelta), for the pre-cut-over movement journal (wave 15, C1).
+ */
 export async function reverseExistingOffload(
   tx: DbTransaction,
   container: typeof schema.containers.$inferSelect,
   existingOffload: typeof schema.containerOffloads.$inferSelect,
   lineItems: Array<{ stockItemId: number; quantity: string; rate: string }>
-): Promise<void> {
+): Promise<Decimal> {
+  let subLedgerDelta: Decimal = new MoneyDecimal(0);
   const storedItems = await tx
     .select()
     .from(schema.containerOffloadItems)
@@ -44,7 +50,7 @@ export async function reverseExistingOffload(
     for (const item of storedItems) {
       const quantity = toMoney(item.quantity);
       const totalValue = toMoney(item.valueMoved ?? item.totalValue);
-      await reverseInventoryByExactValue(
+      const reversed = await reverseInventoryByExactValue(
         tx,
         existingOffload.locationId,
         item.stockItemId,
@@ -53,6 +59,7 @@ export async function reverseExistingOffload(
         container.companyId,
         `container-offload-reverse:${existingOffload.id}`
       );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
       await postStockMovementTx(
         tx,
         {
@@ -80,7 +87,7 @@ export async function reverseExistingOffload(
       const estimatedValue = item.weightedRateSum
         .plus(item.totalQuantity.times(legacyAdditionalCost))
         .toDecimalPlaces(2);
-      await reverseInventoryByExactValue(
+      const reversed = await reverseInventoryByExactValue(
         tx,
         existingOffload.locationId,
         stockItemId,
@@ -89,6 +96,7 @@ export async function reverseExistingOffload(
         container.companyId,
         `container-offload-reverse:${existingOffload.id}`
       );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
       await postStockMovementTx(
         tx,
         {
@@ -158,4 +166,5 @@ export async function reverseExistingOffload(
   }
 
   await tx.delete(schema.containerOffloads).where(eq(schema.containerOffloads.id, existingOffload.id));
+  return subLedgerDelta;
 }

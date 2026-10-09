@@ -220,14 +220,15 @@ describe("as-of reconciliation", () => {
       (await reconcilePerpetualInventory(db, ctx.companyId, asOf)).lines.find(
         (line) => line.accountCode === "INVENTORY"
       )!;
-    // Booked on its effective date (two days ago) on the ledger side; replayed
-    // by its voucher date (three days ago) on the sub-ledger side.
+    // Booked on its effective date (two days ago) on both sides: the ledger
+    // books the voucher on it, and since wave 15 (M1) the sub-ledger replay
+    // dates a document line by its voucher's effective date too.
     expect(await inventoryLine(today)).toMatchObject({ ledger: "10.00", subLedger: "10.00", difference: "0.00" });
     expect(await inventoryLine(day(-2))).toMatchObject({ ledger: "10.00", subLedger: "10.00", difference: "0.00" });
     expect(await inventoryLine(day(-4))).toMatchObject({ ledger: "0.00", subLedger: "0.00", difference: "0.00" });
-    // Between the voucher date and the effective date the two disagree by the
-    // posting, and the report shows it rather than hiding it.
-    expect(await inventoryLine(day(-3))).toMatchObject({ ledger: "0.00", subLedger: "10.00", difference: "-10.00" });
+    // Between the voucher date and the effective date neither side holds it yet
+    // (before wave 15 the replay used the voucher date and showed -10.00 here).
+    expect(await inventoryLine(day(-3))).toMatchObject({ ledger: "0.00", subLedger: "0.00", difference: "0.00" });
     expect((await companyStockValuationAsOf(db, ctx.companyId, day(-4))).subLedgerTotal).toBe("0.00");
   }, 120_000);
 });

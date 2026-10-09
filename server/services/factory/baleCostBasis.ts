@@ -91,7 +91,16 @@ export async function supplierLockedUsdRate(
   return rate && rate.gt(0) ? rate : null;
 }
 
-/** The container's landed USD cost per kg, when it has one. */
+/**
+ * The container's landed USD cost per kg, when it has one.
+ *
+ * Wave 15 (M7): read from the container's live raw-stock rows only (a
+ * soft-deleted receipt no longer prices anything), received-kg weighted when
+ * the rows carry different USD costs; it used to take whichever row came
+ * first, deleted or not, even one with no USD cost while another row had one.
+ * A USD container's own cost per kg is its USD rate; any other currency's
+ * native cost is never read as dollars.
+ */
 export async function containerUsdRate(
   executor: DatabaseOrTransaction,
   companyId: number,
@@ -99,16 +108,30 @@ export async function containerUsdRate(
 ): Promise<Decimal | null> {
   const row = await firstRow<{ usd: string | null; native: string | null; currency: string | null }>(
     executor,
-    sql`SELECT frs.cost_per_kg_usd::text AS usd, frs.cost_per_kg::text AS native, fc.currency_code AS currency
-          FROM factory_raw_stock frs
-          JOIN factory_containers fc ON fc.id = frs.container_id
-         WHERE frs.company_id = ${companyId} AND frs.container_id = ${containerId}
-         ORDER BY frs.id LIMIT 1`
+    sql`WITH scope AS (SELECT ${companyId}::int AS company_id, ${containerId}::int AS container_id),
+        live AS (
+          SELECT frs.id, frs.received_kg, frs.cost_per_kg_usd, frs.cost_per_kg
+            FROM factory_raw_stock frs JOIN scope ON frs.company_id = scope.company_id
+             AND frs.container_id = scope.container_id
+           WHERE frs.deleted_at IS NULL
+        )
+        SELECT (SELECT CASE WHEN SUM(received_kg) FILTER (WHERE cost_per_kg_usd > 0) > 0
+                            THEN SUM(received_kg * cost_per_kg_usd) FILTER (WHERE cost_per_kg_usd > 0)
+                                 / SUM(received_kg) FILTER (WHERE cost_per_kg_usd > 0)
+                            ELSE (SELECT cost_per_kg_usd FROM live WHERE cost_per_kg_usd > 0 ORDER BY id LIMIT 1)
+                       END FROM live)::text AS usd,
+               (SELECT CASE WHEN SUM(received_kg) FILTER (WHERE cost_per_kg > 0) > 0
+                            THEN SUM(received_kg * cost_per_kg) FILTER (WHERE cost_per_kg > 0)
+                                 / SUM(received_kg) FILTER (WHERE cost_per_kg > 0)
+                            ELSE (SELECT cost_per_kg FROM live WHERE cost_per_kg > 0 ORDER BY id LIMIT 1)
+                       END FROM live)::text AS native,
+               fc.currency_code AS currency
+          FROM factory_containers fc JOIN scope ON fc.id = scope.container_id AND fc.company_id = scope.company_id
+         WHERE EXISTS (SELECT 1 FROM live)`
   );
   if (!row) return null;
   const usd = row.usd == null ? null : toMoney(row.usd);
   if (usd && usd.gt(0)) return usd;
-  // A USD container's own cost per kg is its USD rate.
   const native = row.native == null ? null : toMoney(row.native);
   if ((row.currency || "USD").toUpperCase() === "USD" && native && native.gt(0)) return native;
   return null;

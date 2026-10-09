@@ -358,7 +358,9 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             await tx
               .update(factoryContainerCommissions)
               .set({ commissionTotal: amountText })
-              .where(eq(factoryContainerCommissions.id, commId));
+              .where(
+                and(eq(factoryContainerCommissions.id, commId), eq(factoryContainerCommissions.companyId, companyId))
+              );
           }
           // Also sync the commissionAmount summary on the container
           await tx

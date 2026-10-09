@@ -46,10 +46,44 @@ export const INVENTORY_CUTOVER_DDL = `
     applied_at timestamp NOT NULL DEFAULT now()
   )`;
 
-/** Creates the cut-over table. Runs on every boot (production skips startup-schema). */
+/**
+ * Dated evidence of the stock sub-ledger movements that leave no document line
+ * (wave 15, M1): every postInventoryMovementJournalTx call records its lines
+ * here, before and after the cut-over, so the as-of stock valuation can replay
+ * quick adjustments, archive/restore, location imports, cost corrections and
+ * the other INV-MOVE sources by their movement date. Same columns and index
+ * names as inventoryValueMovements in shared/schema. No foreign keys: the
+ * table must be creatable on a fresh schema and never blocks a fixture delete.
+ */
+export const INVENTORY_VALUE_MOVEMENTS_DDL: readonly string[] = [
+  `CREATE TABLE IF NOT EXISTS inventory_value_movements (
+     id bigserial PRIMARY KEY,
+     company_id integer NOT NULL,
+     source_number text NOT NULL,
+     source_type text NOT NULL,
+     source_id text NOT NULL,
+     movement_date date NOT NULL,
+     stock_item_id integer,
+     location_id integer,
+     quantity_delta numeric(18,3),
+     value_delta numeric(20,2) NOT NULL,
+     created_at timestamp NOT NULL DEFAULT now()
+   )`,
+  `CREATE INDEX IF NOT EXISTS inventory_value_movements_company_date_idx
+     ON inventory_value_movements (company_id, movement_date)`,
+  `CREATE INDEX IF NOT EXISTS inventory_value_movements_company_source_idx
+     ON inventory_value_movements (company_id, source_number)`,
+];
+
+/**
+ * Creates the cut-over table and the movement evidence table. Runs on every
+ * boot (production skips startup-schema); a failure is logged and reported
+ * (false), never fatal.
+ */
 export async function ensureInventoryCutoverSchema(pool: Pool): Promise<boolean> {
   try {
     await pool.query(INVENTORY_CUTOVER_DDL);
+    for (const statement of INVENTORY_VALUE_MOVEMENTS_DDL) await pool.query(statement);
     return true;
   } catch (error) {
     logger.error("[startup] ✗ Inventory cut-over table could not be ensured", { error: getErrorMessage(error) });

@@ -7,6 +7,7 @@
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
+import { toMoney } from "../../../lib/money";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
 import { writeAuditEvent } from "../../../services/audit";
 import { requireAuth, requireNonPOS } from "../../../auth";
@@ -36,6 +37,12 @@ import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
+import {
+  isUnrestorableStockDocumentTx,
+  STOCK_DOCUMENT_NOT_RESTORABLE,
+  STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE,
+} from "../../../services/inventory/voucherStockReversal";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 
 /**
  * Wave 9 (ledger safety): restoring a voucher puts it back into every balance,
@@ -122,7 +129,14 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
           }
           // The closed-period trigger refuses clearing deleted_at on a voucher
           // dated inside closed books; that error rolls this back and answers 409.
+          let notRestorable = false;
           await db.transaction(async (tx) => {
+            // Wave 15 (C2): a stock document whose delete reversed and removed
+            // its stock lines is not restorable (voucherStockReversal.ts).
+            if (await isUnrestorableStockDocumentTx(tx, companyId, voucher)) {
+              notRestorable = true;
+              return;
+            }
             await tx
               .update(vouchers)
               .set({ deletedAt: null })
@@ -165,6 +179,11 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
               tx
             );
           });
+          if (notRestorable) {
+            return res
+              .status(409)
+              .json({ code: STOCK_DOCUMENT_NOT_RESTORABLE, message: STOCK_DOCUMENT_NOT_RESTORABLE_MESSAGE });
+          }
           break;
         }
         // === Wave 1 restores ===
@@ -187,10 +206,18 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(factoryContainers.id, itemId), eq(factoryContainers.companyId, companyId)));
           break;
         case "factoryRawStock":
-          await db
-            .update(factoryRawStock)
-            .set({ deletedAt: null })
-            .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)));
+          // Wave 14: a commission held on the row comes back into the ledger
+          // (FACTORY-COMM-{container}) in the same transaction.
+          await db.transaction(async (tx) => {
+            const [restored] = await tx
+              .update(factoryRawStock)
+              .set({ deletedAt: null })
+              .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)))
+              .returning({ containerId: factoryRawStock.containerId, commission: factoryRawStock.commissionAmount });
+            if (restored && !toMoney(restored.commission ?? 0).isZero()) {
+              await syncContainerCommissionJournalTx(tx, companyId, restored.containerId);
+            }
+          });
           break;
         case "factoryRawMaterialAdjustment":
           await db

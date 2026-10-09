@@ -13,6 +13,8 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { RefreshCw, TrendingUp, Clock } from "lucide-react";
 import { useCompany } from "@/contexts/CompanyContext";
 import { format } from "date-fns";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
+import { canEditExchangeRates } from "@/lib/exchangeRateEditors";
 
 const rateFormSchema = z.object({
   rate: z
@@ -77,6 +79,9 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   const { toast } = useToast();
   const { selectedCompany: _selectedCompany } = useCompany();
   const [isOpen, setIsOpen] = useState(false);
+  // Only a user who may save a rate (Admin/Owner/Developer, wave 14) is prompted for it.
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const canEditRate = canEditExchangeRates(currentUser?.role);
 
   const form = useForm<RateFormData>({
     resolver: zodResolver(rateFormSchema),
@@ -103,7 +108,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       if (!res.ok) throw new Error("Failed to check rate");
       return res.json();
     },
-    enabled: !!companyId && !!company?.displayCurrency && company.displayCurrency !== "none",
+    enabled: canEditRate && !!companyId && !!company?.displayCurrency && company.displayCurrency !== "none",
     // The backend is the single source of truth for whether today's rate has been set
     // company-wide.  Always refetch on focus so multi-user saves propagate promptly.
     staleTime: 0,
@@ -131,7 +136,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
   // successful save).
   // -------------------------------------------------------------------------
   useEffect(() => {
-    if (isCheckingRate || !todayRateCheck || !company) return;
+    if (!canEditRate || isCheckingRate || !todayRateCheck || !company) return;
 
     const today = todayRateCheck.today;
 
@@ -153,7 +158,7 @@ export function DailyRateModal({ companyId }: DailyRateModalProps) {
       }
       setIsOpen(true);
     }
-  }, [todayRateCheck, isCheckingRate, company, companyId, previousRateValue, form]);
+  }, [canEditRate, todayRateCheck, isCheckingRate, company, companyId, previousRateValue, form]);
 
   const createRateMutation = useMutation({
     mutationFn: async (data: RateFormData) => {

@@ -8,9 +8,10 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { storage } from "../storage";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
 import { insertExchangeRateSchema } from "@shared/schema";
+import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
 
 export function registerExchangeRateRoutes(app: Express) {
   // Check if today's exchange rate exists
@@ -84,8 +85,9 @@ export function registerExchangeRateRoutes(app: Express) {
     }
   });
 
-  // Create a new exchange rate
-  app.post("/api/exchange-rates", requireAuth, async (req, res) => {
+  // Save the company rate for a date (wave 14, owner decision 2): Admin/Owner
+  // (and Developer) only; the save and its audit (old and new rate) commit together.
+  app.post("/api/exchange-rates", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -105,10 +107,14 @@ export function registerExchangeRateRoutes(app: Express) {
         });
       }
 
-      // Atomic upsert — relies on the exchange_rates_company_date_pair_unique DB
-      // constraint so two users saving the same company/date/pair concurrently can
-      // never create duplicate rows; the second save simply updates the first's row.
-      const rate = await storage.upsertExchangeRate(validationResult.data);
+      // One row per company/date/pair: a second save on the same date replaces the
+      // first's rate (serialised in the transaction, so two concurrent saves never
+      // create duplicates and the audit's old value is the one replaced).
+      const { fromCurrency, toCurrency, rate: rateValue, effectiveDate } = validationResult.data;
+      const rate = await saveCompanyExchangeRate(
+        { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+        { fromCurrency, toCurrency, rate: rateValue, effectiveDate }
+      );
 
       // Saving a rate only saves the rate. An automatic "FX-REVAL" journal used to be
       // posted here (wave 9 ledger-safety audit, docs/accounting-audit-2026-10.md §7):

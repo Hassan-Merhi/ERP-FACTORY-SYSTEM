@@ -27,6 +27,11 @@ import {
 } from "../../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { stockVoucherTypeRefusal } from "../../../services/accounting/stockVoucherTypes";
+import {
+  redateSaleCogsTx,
+  SaleDateCrossesCutoverError,
+} from "../../../services/accounting/perpetualInventory/saleCogs";
+import { sendBaleMirrorMovementRefusal } from "../../../services/accounting/perpetualInventory/cutoverRefusal";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -140,6 +145,16 @@ export function registerVoucherUpdateRoutes(app: Express) {
         if (Object.keys(voucherUpdates).length > 0) {
           await tx.update(vouchers).set(voucherUpdates).where(eq(vouchers.id, id));
         }
+        // Wave 15 (M5): a re-dated sale's COGS journal takes the new date.
+        if (req.body.voucherDate !== undefined) {
+          await redateSaleCogsTx(tx, {
+            companyId: existingVoucher.companyId,
+            saleVoucherId: id,
+            voucherType: existingVoucher.voucherType,
+            oldDate: existingVoucher.voucherDate,
+            newDate: req.body.voucherDate,
+          });
+        }
 
         if (replacesEntries) {
           const targets = await linkCustomerLedgerTargets(tx, existingVoucher.companyId, replacementTargets);
@@ -188,6 +203,10 @@ export function registerVoucherUpdateRoutes(app: Express) {
 
       res.json({ ...updated, entries: newEntries });
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
+      if (error instanceof SaleDateCrossesCutoverError) {
+        return res.status(409).json({ code: error.code, message: error.message, effectiveFrom: error.effectiveFrom });
+      }
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });

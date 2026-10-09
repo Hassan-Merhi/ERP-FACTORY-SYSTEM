@@ -167,10 +167,14 @@ describe("legacy existing-voucher stock transfer source/destination integrity", 
     expect(source).not.toBeNull();
     expect(Number(source!.quantity)).toBe(-4);
     expect(Number(source!.average_rate)).toBeCloseTo(12.34, 2);
-    expect(Number(source!.total_value)).toBe(0);
+    // Wave 15 (H3): the short source keeps the negative value of the shortage
+    // (negative-stock policy), exactly what the destination received; it used
+    // to be reset to 0, which created 49.36 of stock value from nothing.
+    expect(source!.total_value).toBe("-49.36");
     expect(destination).not.toBeNull();
     expect(Number(destination!.quantity)).toBe(4);
     expect(Number(destination!.average_rate)).toBeCloseTo(12.34, 2);
+    expect(destination!.total_value).toBe("49.36");
 
     const { rows } = await pool.query<{ qty: string; provisional_rate: string }>(
       `SELECT COALESCE(SUM(qty), 0)::text AS qty, MAX(provisional_rate)::text AS provisional_rate

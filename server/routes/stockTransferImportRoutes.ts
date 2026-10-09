@@ -5,7 +5,7 @@
  * multi-source variants and their template downloads. Extracted from
  * importRoutes.ts as a sub-registrar; behaviour is unchanged.
  */
-import type { Express } from "express";
+import type { Express, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { and, eq, desc } from "drizzle-orm";
@@ -13,19 +13,24 @@ import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireNonPOS } from "../auth";
 import { upload } from "./_helpers";
-import { adjustInventory } from "../inventoryHelper";
-import { createDatabaseStockMovementAdapter } from "../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../services/inventory/stockMovementIntegrityService";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../excelHelper";
 import { getClientDate } from "../lib/dateUtils";
 import { sendTransferWhatsApp } from "../helpers/sendTransferWhatsApp";
-import { inventory, stockTransferVouchers, stockTransferItems, vouchers } from "@shared/schema";
+import { inventory, stockTransferVouchers, vouchers } from "@shared/schema";
 import { MoneyDecimal, toMoney } from "../lib/money";
 import { resolveTransferLocations } from "./helpers/transferLocations";
 import type { ParsedStockTransferItem, SpreadsheetRow, ValidatedStockTransferItem } from "./stockTransferImportTypes";
 import { requestQuantity, rowQuantity, type Decimal } from "./stockTransferImportQuantity";
+import { postImportedTransferLinesTx, StockTransferImportSourceMissingError } from "./stockTransferImportPosting";
+import { sendBaleMirrorMovementRefusal } from "../services/accounting/perpetualInventory/cutoverRefusal";
 
-const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
+/** Sends a wave 11/15 refusal (bale mirror, missing source after the cut-over); returns whether it did. */
+function sendStockTransferImportRefusal(res: Response, error: unknown): boolean {
+  if (sendBaleMirrorMovementRefusal(res, error)) return true;
+  if (!(error instanceof StockTransferImportSourceMissingError)) return false;
+  res.status(409).json({ code: error.code, message: error.message, lines: error.lines });
+  return true;
+}
 
 export function registerStockTransferImportRoutes(app: Express) {
   // ============= Stock Transfer Import Endpoints =============
@@ -199,7 +204,7 @@ export function registerStockTransferImportRoutes(app: Express) {
   });
 
   // Stock Transfer Import - Create stock transfer
-  app.post("/api/stock-transfer-import/import", requireAuth, async (req, res) => {
+  app.post("/api/stock-transfer-import/import", requireAuth, requireNonPOS, async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -241,14 +246,15 @@ export function registerStockTransferImportRoutes(app: Express) {
           return res.status(400).json({ message: `Stock item not found: ${item.barcode}` });
         }
 
-        // Get rate from source inventory
+        // Get rate from source inventory (the header source, where the line is moved from)
         const [inventoryItem] = await db
           .select()
           .from(inventory)
           .where(
             and(
+              eq(inventory.companyId, req.session.currentCompanyId!),
               eq(inventory.stockItemId, stockItem.id),
-              eq(inventory.locationId, item.sourceLocationId || sourceLocationId)
+              eq(inventory.locationId, sourceLocationId)
             )
           )
           .limit(1);
@@ -288,71 +294,26 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: sourceLocationId,
             destinationLocationId,
+            inventoryApplied: true,
           })
           .returning();
 
-        // Process each item
-        for (const item of transferItems) {
-          const itemTotal = item.quantity.times(item.rate);
-
-          // Create stock transfer item
-          const [transferItem] = await tx
-            .insert(stockTransferItems)
-            .values({
-              transferId: transferRecord.id,
-              stockItemId: item.stockItemId,
-              sourceLocationId,
-              quantity: item.quantity.toFixed(),
-              rate: item.rate.toFixed(),
-              totalAmount: itemTotal.toFixed(),
-            })
-            .returning({ id: stockTransferItems.id });
-
-          // Reduce source inventory
-          await adjustInventory(
-            tx,
-            sourceLocationId,
-            item.stockItemId,
-            -item.quantity.toNumber(),
-            req.session.currentCompanyId!
-          );
-
-          // Add to destination inventory
-          await adjustInventory(
-            tx,
-            destinationLocationId,
-            item.stockItemId,
-            item.quantity.toNumber(),
-            req.session.currentCompanyId!,
-            item.rate.toNumber()
-          );
-
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: req.session.currentCompanyId!,
-              stockItemId: item.stockItemId,
-              kind: "transfer",
-              quantity: item.quantity.toFixed(),
-              unitCost: (item.rate.greaterThan(0) ? item.rate : new MoneyDecimal(0)).toFixed(),
-              fromLocationId: sourceLocationId,
-              toLocationId: destinationLocationId,
-              occurredAt: new Date(`${transferDate}T00:00:00.000Z`).toISOString(),
-              source: {
-                sourceType: "stock-transfer-import",
-                sourceId: String(voucher.id),
-                idempotencyKey: `stock-transfer-import:${voucher.id}:${transferItem.id}`,
-              },
-              actor: {
-                userId: req.session.userId,
-                username: req.session.username,
-                reason: notes || `Excel stock transfer ${voucherNumber}`,
-              },
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
+        // Wave 15: lines move value conserved (stockTransferImportPosting).
+        await postImportedTransferLinesTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          voucherId: voucher.id,
+          transferId: transferRecord.id,
+          destinationLocationId,
+          date: transferDate,
+          lines: transferItems.map((item) => ({ ...item, sourceLocationId })),
+          movementSourceType: "stock-transfer-import",
+          idempotencyPrefix: "stock-transfer-import",
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            reason: notes || `Excel stock transfer ${voucherNumber}`,
+          },
+        });
       });
 
       res.json({
@@ -386,6 +347,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         }
       });
     } catch (error: unknown) {
+      if (sendStockTransferImportRefusal(res, error)) return;
       logger.error("Stock Transfer Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }
@@ -746,7 +708,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         totalValue = totalValue.plus(item.rate.times(item.quantity));
       }
 
-      // Create voucher and update inventory in a transaction
+      // Create the voucher and move the stock in one transaction
       let multiSourceVoucherNumber = "";
       await db.transaction(async (tx) => {
         // Get next voucher number
@@ -791,69 +753,26 @@ export function registerStockTransferImportRoutes(app: Express) {
             voucherId: voucher.id,
             sourceLocationId: firstSourceId,
             destinationLocationId,
+            inventoryApplied: true,
           })
           .returning();
 
-        // Process each item - re-fetch inventory inside transaction and update
-        for (const item of processedItems) {
-          const sourceLocationId = item.sourceLocationId;
-          const qty = item.quantity;
-          const rate = item.rate;
-          const itemTotal = qty.times(rate);
-
-          // Create stock transfer item with individual sourceLocationId
-          const [transferItem] = await tx
-            .insert(stockTransferItems)
-            .values({
-              transferId: transferRecord.id,
-              stockItemId: item.stockItemId,
-              sourceLocationId,
-              quantity: qty.toFixed(),
-              rate: rate.toFixed(),
-              totalAmount: itemTotal.toFixed(),
-            })
-            .returning({ id: stockTransferItems.id });
-
-          // Reduce source inventory
-          await adjustInventory(tx, sourceLocationId, item.stockItemId, -qty.toNumber(), req.session.currentCompanyId!);
-
-          // Add to destination inventory
-          await adjustInventory(
-            tx,
-            destinationLocationId,
-            item.stockItemId,
-            qty.toNumber(),
-            req.session.currentCompanyId!,
-            rate.toNumber()
-          );
-
-          const movementDate = transferDate || getClientDate(req);
-          await postStockMovementTx(
-            tx,
-            {
-              companyId: req.session.currentCompanyId!,
-              stockItemId: item.stockItemId,
-              kind: "transfer",
-              quantity: qty.toFixed(),
-              unitCost: (rate.greaterThan(0) ? rate : new MoneyDecimal(0)).toFixed(),
-              fromLocationId: sourceLocationId,
-              toLocationId: destinationLocationId,
-              occurredAt: new Date(`${movementDate}T00:00:00.000Z`).toISOString(),
-              source: {
-                sourceType: "stock-transfer-import-multi-source",
-                sourceId: String(voucher.id),
-                idempotencyKey: `stock-transfer-import-multi:${voucher.id}:${transferItem.id}`,
-              },
-              actor: {
-                userId: req.session.userId,
-                username: req.session.username,
-                reason: notes || `Multi-source stock transfer ${voucherNumber}`,
-              },
-              allowNegativeStock: true,
-            },
-            canonicalStockMovementAdapter
-          );
-        }
+        // Wave 15: lines move value conserved (stockTransferImportPosting).
+        await postImportedTransferLinesTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          voucherId: voucher.id,
+          transferId: transferRecord.id,
+          destinationLocationId,
+          date: transferDate || getClientDate(req),
+          lines: processedItems,
+          movementSourceType: "stock-transfer-import-multi-source",
+          idempotencyPrefix: "stock-transfer-import-multi",
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            reason: notes || `Multi-source stock transfer ${voucherNumber}`,
+          },
+        });
       });
 
       res.json({
@@ -888,6 +807,7 @@ export function registerStockTransferImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendStockTransferImportRefusal(res, error)) return;
       logger.error("Stock Transfer Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

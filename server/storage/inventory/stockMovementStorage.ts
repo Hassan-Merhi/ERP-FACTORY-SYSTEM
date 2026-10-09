@@ -167,6 +167,7 @@ export async function archiveStockGroupAtLocation(
         stockItemId: inv.stockItemId,
         locationId,
         valueDelta: toMoney(inv.totalValue).negated().toFixed(2),
+        quantityDelta: toMoney(inv.quantity).negated().toFixed(3),
       });
 
       await postStockMovementTx(
@@ -307,6 +308,7 @@ export async function restoreStockGroupLocationArchive(
           stockItemId: item.stockItemId,
           locationId: archive.locationId,
           valueDelta: newValue.minus(toMoney(existing.totalValue)).toFixed(2),
+          quantityDelta: toMoney(item.quantity).toFixed(3),
         });
       } else {
         await tx.insert(schema.inventory).values({
@@ -317,7 +319,12 @@ export async function restoreStockGroupLocationArchive(
           averageRate: item.averageRate,
           totalValue: item.totalValue,
         });
-        lines.push({ stockItemId: item.stockItemId, locationId: archive.locationId, valueDelta: item.totalValue });
+        lines.push({
+          stockItemId: item.stockItemId,
+          locationId: archive.locationId,
+          valueDelta: item.totalValue,
+          quantityDelta: item.quantity,
+        });
       }
 
       await postStockMovementTx(

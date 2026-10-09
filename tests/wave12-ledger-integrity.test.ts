@@ -36,6 +36,7 @@ import {
   VOUCHER_BALANCE_GUARD_VERSION,
 } from "../server/services/accounting/voucherBalanceGuard";
 import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { normalizedLineFields } from "./helpers/normalizedVoucherLine";
 import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
@@ -80,18 +81,28 @@ async function insertVoucher(
     );
   }
   for (const line of lines) {
+    // Fully normalized (rate and convention too): the currency trigger keeps it as given.
+    const isDebit = Number(line.debit) > 0;
+    const dual = line.currency
+      ? normalizedLineFields(isDebit ? line.debit : line.credit, line.native ?? "0", isDebit ? "debit" : "credit")
+      : null;
     await client.query(
       `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount,
-                                    transaction_currency, transaction_debit_amount, transaction_credit_amount)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+                                    transaction_currency, transaction_debit_amount, transaction_credit_amount,
+                                    base_debit_amount, base_credit_amount, historical_exchange_rate, rate_convention)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [
         id,
         line.account,
         line.debit,
         line.credit,
         line.currency ?? null,
-        line.currency ? (Number(line.debit) > 0 ? line.native : "0") : null,
-        line.currency ? (Number(line.debit) > 0 ? "0" : line.native) : null,
+        dual?.transactionDebit ?? null,
+        dual?.transactionCredit ?? null,
+        dual?.baseDebit ?? null,
+        dual?.baseCredit ?? null,
+        dual?.rate ?? null,
+        dual?.convention ?? null,
       ]
     );
   }

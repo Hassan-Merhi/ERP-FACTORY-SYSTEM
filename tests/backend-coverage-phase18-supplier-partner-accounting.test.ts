@@ -297,9 +297,18 @@ describe("Phase 18 Supplier Partner accounting controls", () => {
       .query({ companyId: fixture.plainCompanyId });
     expect(statement.status, statement.text).toBe(200);
     const rows = statement.body as Array<{ type: string; companyId: number | null; balance: number }>;
-    expect(rows.some((row) => row.type === "opening")).toBe(false);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ type: "voucher", companyId: fixture.plainCompanyId, balance: 75 });
+    // Wave 14 (one supplier rule): the supplier's 125 Cr opening belongs to its
+    // own company, which is the company read, so it opens the statement; it no
+    // longer depends on the global parent setting (it used to be hidden here).
+    // The SP payable evidence line is still listed and counted.
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({ type: "opening", balance: 125 });
+    expect(rows[1]).toMatchObject({
+      type: "voucher",
+      companyId: fixture.plainCompanyId,
+      balance: 200,
+      spPayableEvidence: true,
+    });
 
     const reconciliation = await fixture.agent.get("/api/sp/reconciliation/full");
     expect(reconciliation.status, reconciliation.text).toBe(200);
