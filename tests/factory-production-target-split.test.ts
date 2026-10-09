@@ -19,6 +19,7 @@ describe("unlinking shared factory production targets", () => {
       { workerId: 2, targetBales: 5 },
       { workerId: 3, targetBales: 5 },
     ]);
+    expect(evenSplitBales(1, [3, 1, 2]).map((share) => share.targetBales)).toEqual([1, 0, 0]);
   });
 
   it("accepts a custom allocation if and only if the sum equals the group target", () => {
