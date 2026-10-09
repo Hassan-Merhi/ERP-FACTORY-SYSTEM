@@ -383,6 +383,7 @@ export function registerBalesCrudRoutes(app: Express) {
         if (autoRow) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
             companyId, baleId: id, actor: String(req.session.username || req.session.userId || "unknown"),
+            actorId: req.session.userId == null ? null : String(req.session.userId),
             reason: "Factory bale deleted",
           });
           // A V5 loaded bale is still IN_STOCK, so the original inventory receipt
