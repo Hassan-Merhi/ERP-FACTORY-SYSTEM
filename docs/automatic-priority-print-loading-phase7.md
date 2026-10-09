@@ -81,6 +81,7 @@ On automatic recovery:
 - `client/src/pages/factory/bale-stock-entry/RemoveFromStockTab.tsx`, `client/src/pages/factory/baleshistory/useBalesHistoryModel.tsx`, `client/src/pages/factory/FactoryLocationInventoryModel.tsx` — immediately invalidate queue/loading query caches on physical deletion.
 - `tests/setup.ts` — Phase 7 factory test fixture.
 - `tests/automatic-priority-queue-recovery-phase7.test.ts` — **authored, not executed** integration regression suite.
+- `tests/automatic-priority-loading-progress-phase7.test.ts` — **authored, not executed** pure per-loading capacity regression suite.
 
 ## Claude's required checks (deferred)
 
