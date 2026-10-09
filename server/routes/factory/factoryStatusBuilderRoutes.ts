@@ -40,6 +40,30 @@ async function fetchLinkedValue(
   };
 }
 
+// Templates and runs carry a company; metrics and values hang off them. Every
+// route below resolves its target through these so an id from another
+// company answers 404 instead of being read or written.
+async function ownTemplate(templateId: number, companyId: number) {
+  const [template] = await db
+    .select()
+    .from(statusReportTemplates)
+    .where(and(eq(statusReportTemplates.id, templateId), eq(statusReportTemplates.companyId, companyId)));
+  return template;
+}
+
+async function ownMetric(metricId: number, companyId: number) {
+  const [metric] = await db.select().from(statusMetrics).where(eq(statusMetrics.id, metricId));
+  return metric && (await ownTemplate(metric.templateId, companyId)) ? metric : undefined;
+}
+
+async function ownRun(runId: number, companyId: number) {
+  const [run] = await db
+    .select()
+    .from(statusReportRuns)
+    .where(and(eq(statusReportRuns.id, runId), eq(statusReportRuns.companyId, companyId)));
+  return run;
+}
+
 export function registerFactoryStatusBuilderRoutes(app: Express) {
   // ── GET /api/factory/status-builder/template?companyId=X ──────────────────
   // Returns (or creates) the default template + seed metrics for a company.
@@ -107,6 +131,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      if (!(await ownTemplate(id, companyId))) return res.status(404).json({ error: "Template not found" });
       const { name } = req.body;
       const [updated] = await db
         .update(statusReportTemplates)
@@ -124,6 +151,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const templateId = parseId(req.params.id);
       if (templateId === null) return res.status(400).json({ message: "Invalid id" });
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      if (!(await ownTemplate(templateId, companyId))) return res.status(404).json({ error: "Template not found" });
       const metrics = await db
         .select()
         .from(statusMetrics)
@@ -148,6 +178,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       if (typeof name !== "string" || name.trim() === "") {
         return res.status(400).json({ error: "name is required" });
       }
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      if (!(await ownTemplate(templateId, companyId))) return res.status(404).json({ error: "Template not found" });
       const [metric] = await db
         .insert(statusMetrics)
         .values({
@@ -187,6 +220,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       if (Object.keys(updates).length === 0) {
         return res.status(400).json({ message: "No fields to update" });
       }
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
       const [updated] = await db.update(statusMetrics).set(updates).where(eq(statusMetrics.id, id)).returning();
       if (!updated) return res.status(404).json({ message: "Not found" });
       res.json(updated);
@@ -200,6 +236,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const id = parseId(req.params.id);
       if (id === null) return res.status(400).json({ message: "Invalid id" });
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      if (!(await ownMetric(id, companyId))) return res.status(404).json({ message: "Not found" });
       // Remove any stored values for this metric before deleting
       await db.delete(statusMetricValues).where(eq(statusMetricValues.metricId, id));
       await db.delete(statusMetrics).where(eq(statusMetrics.id, id));
@@ -217,7 +256,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
       const runDate = req.query.date as string;
       if (!templateId || !runDate) return res.status(400).json({ error: "templateId and date required" });
 
-      const [template] = await db.select().from(statusReportTemplates).where(eq(statusReportTemplates.id, templateId));
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      const template = await ownTemplate(templateId, companyId);
       if (!template) return res.status(404).json({ error: "Template not found" });
 
       let [run] = await db
@@ -273,7 +314,9 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
     try {
       const runId = parseId(req.params.id);
       if (runId === null) return res.status(400).json({ message: "Invalid id" });
-      const [run] = await db.select().from(statusReportRuns).where(eq(statusReportRuns.id, runId));
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      const run = await ownRun(runId, companyId);
       if (!run) return res.status(404).json({ error: "Run not found" });
 
       const metrics = await db
@@ -352,6 +395,21 @@ export function registerFactoryStatusBuilderRoutes(app: Express) {
         return res.status(400).json({ message: "entries must be an array" });
       }
       if (entries.some((entry) => !Number.isInteger(entry?.metricId))) {
+        return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
+      }
+      const companyId = resolveRequestCompanyId(req);
+      if (!companyId) return res.status(400).json({ error: "companyId required" });
+      const run = await ownRun(runId, companyId);
+      if (!run) return res.status(404).json({ error: "Run not found" });
+      const runMetricIds = new Set(
+        (
+          await db
+            .select({ id: statusMetrics.id })
+            .from(statusMetrics)
+            .where(eq(statusMetrics.templateId, run.templateId))
+        ).map((metric) => metric.id)
+      );
+      if (entries.some((entry) => !runMetricIds.has(entry.metricId))) {
         return res.status(400).json({ message: "Invalid request data", field: "entries.metricId" });
       }
       const now = new Date();

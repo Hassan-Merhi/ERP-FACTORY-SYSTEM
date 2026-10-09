@@ -20,6 +20,8 @@ import {
   getCompanyId,
   sectionHeader,
 } from "./_helpers";
+import { sumMoney, toMoney } from "../../../lib/money";
+import { renderInvoiceLoadingReportHtml } from "./reportHtml";
 
 export function registerInvoiceLoadingReportRoutes(app: Express) {
   // GET /api/factory/invoices/:invoiceId/loading-report/export/excel
@@ -218,7 +220,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
           dataCell(row.getCell(2), b.baleReference, { fill });
           dataCell(row.getCell(3), b.articleCode || "", { fill });
           dataCell(row.getCell(4), b.productName || "", { fill });
-          dataCell(row.getCell(5), parseFloat(b.weightKg || "0").toFixed(3), { align: "right", fill });
+          dataCell(row.getCell(5), toMoney(b.weightKg).toFixed(3), { align: "right", fill });
           dataCell(row.getCell(6), b.loadedSessionId ? `#${b.loadedSessionId}` : "", { align: "center", fill });
           dataCell(row.getCell(7), b.loadedAt ? new Date(b.loadedAt).toLocaleString() : "", { fill });
           row.height = 15;
@@ -228,7 +230,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
           const tr = ws2.getRow(loadedBales.length + 3);
           ws2.mergeCells(loadedBales.length + 3, 1, loadedBales.length + 3, 4);
           dataCell(tr.getCell(1), `Total: ${loadedBales.length} bales`, { bold: true, fill: "FFDBEAFE" });
-          dataCell(tr.getCell(5), loadedBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3), {
+          dataCell(tr.getCell(5), sumMoney(loadedBales.map((b) => b.weightKg)).toFixed(3), {
             bold: true,
             align: "right",
             fill: "FFDBEAFE",
@@ -257,14 +259,14 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
             dataCell(row.getCell(2), b.baleReference, { bold: true, fill });
             dataCell(row.getCell(3), b.articleCode || "", { fill });
             dataCell(row.getCell(4), b.productName || "", { fill });
-            dataCell(row.getCell(5), parseFloat(b.weightKg || "0").toFixed(3), { align: "right", fill });
+            dataCell(row.getCell(5), toMoney(b.weightKg).toFixed(3), { align: "right", fill });
             row.height = 15;
           });
           // Total row
           const tr = ws3.getRow(remainingBales.length + 3);
           ws3.mergeCells(remainingBales.length + 3, 1, remainingBales.length + 3, 4);
           dataCell(tr.getCell(1), `Total: ${remainingBales.length} bales remaining`, { bold: true, fill: "FFFEF3C7" });
-          dataCell(tr.getCell(5), remainingBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3), {
+          dataCell(tr.getCell(5), sumMoney(remainingBales.map((b) => b.weightKg)).toFixed(3), {
             bold: true,
             align: "right",
             fill: "FFFEF3C7",
@@ -303,103 +305,7 @@ export function registerInvoiceLoadingReportRoutes(app: Express) {
         const summary = await buildLoadingSummary(invoiceId, companyId);
         if (!summary) return res.status(404).json({ message: "Invoice not found" });
 
-        const inv = summary.invoice;
-        const remainingBales = summary.invoiceBales.filter((b) => !b.loaded);
-        const loadedBales = summary.invoiceBales.filter((b) => b.loaded);
-
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-<title>Loading Report - ${inv.invoiceNumber || "#" + inv.id}</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: Arial, sans-serif; font-size: 11px; padding: 20px 24px; color: #111827; background: #fff; }
-  .header { background: #1e3a5f; color: #fff; padding: 12px 16px; border-radius: 4px; margin-bottom: 14px; }
-  .header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.5px; }
-  .header p { font-size: 10px; opacity: 0.75; margin-top: 2px; }
-  .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 14px; }
-  .meta-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 3px; padding: 6px 10px; }
-  .meta-box .lbl { font-size: 9px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
-  .meta-box .val { font-weight: 700; font-size: 11px; margin-top: 2px; }
-  .totals { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
-  .total-box { border-radius: 4px; padding: 10px; text-align: center; }
-  .total-box .num { font-size: 28px; font-weight: 800; line-height: 1; }
-  .total-box .lbl { font-size: 9px; text-transform: uppercase; letter-spacing: 0.4px; margin-top: 3px; }
-  .total-all { background: #e0e7ff; color: #3730a3; }
-  .total-loaded { background: #d1fae5; color: #065f46; }
-  .total-remaining { background: #fef3c7; color: #b45309; }
-  .total-remaining.done { background: #d1fae5; color: #065f46; }
-  .section-title { background: #1e3a5f; color: #fff; font-size: 10px; font-weight: 700; padding: 5px 8px; letter-spacing: 0.5px; margin-top: 12px; margin-bottom: 0; border-radius: 3px 3px 0 0; }
-  table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-  th { background: #dbeafe; color: #1e40af; font-size: 9px; font-weight: 700; padding: 5px 7px; border: 1px solid #bfdbfe; text-align: left; }
-  th.r { text-align: right; }
-  td { padding: 4px 7px; border: 1px solid #e5e7eb; font-size: 10px; }
-  td.r { text-align: right; }
-  tr:nth-child(even) td { background: #f8fafc; }
-  .loaded-row td { background: #f0fdf4; }
-  .remaining-row td { background: #fffbeb; }
-  .total-row td { background: #dbeafe; font-weight: 700; }
-  .status-completed { color: #065f46; font-weight: 700; }
-  .status-open { color: #1d4ed8; font-weight: 700; }
-  .status-cancelled { color: #6b7280; }
-  .badge-loaded { color: #065f46; font-weight: 700; }
-  .badge-pending { color: #b45309; font-weight: 700; }
-  .all-done { background: #d1fae5; color: #065f46; padding: 8px 12px; border-radius: 3px; font-weight: 700; text-align: center; margin-bottom: 12px; }
-  @media print { @page { margin: 12mm; } .section-title { break-after: avoid; } }
-</style></head><body>
-
-<div class="header">
-  <h1>INVOICE LOADING REPORT</h1>
-  <p>Generated ${new Date().toLocaleString()}</p>
-</div>
-
-<div class="meta-grid">
-  <div class="meta-box"><div class="lbl">Invoice</div><div class="val">${inv.invoiceNumber || "#" + inv.id}</div></div>
-  <div class="meta-box"><div class="lbl">Customer</div><div class="val">${inv.customerName || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Date</div><div class="val">${inv.orderDate || "—"}</div></div>
-  <div class="meta-box"><div class="lbl">Status</div><div class="val">${inv.status || "—"}</div></div>
-</div>
-
-<div class="totals">
-  <div class="total-box total-all"><div class="num">${summary.totals.invoiceBales}</div><div class="lbl">Invoice Bales</div></div>
-  <div class="total-box total-loaded"><div class="num">${summary.totals.alreadyLoaded}</div><div class="lbl">Loaded</div></div>
-  <div class="total-box total-remaining${summary.totals.remaining === 0 ? " done" : ""}"><div class="num">${summary.totals.remaining}</div><div class="lbl">Remaining</div></div>
-</div>
-
-<div class="section-title">SUMMARY BY ARTICLE</div>
-<table>
-  <tr><th>Article Code</th><th>Product Name</th><th class="r">Invoice Qty</th><th class="r">Loaded</th><th class="r">Remaining</th><th class="r">Progress</th></tr>
-  ${summary.lines
-    .map((l) => {
-      const pct = l.invoiceQty > 0 ? Math.round((l.alreadyLoaded / l.invoiceQty) * 100) : 0;
-      return `<tr${l.remaining === 0 ? ' class="loaded-row"' : ""}><td>${l.articleCode}</td><td>${l.productName || ""}</td><td class="r">${l.invoiceQty}</td><td class="r">${l.alreadyLoaded}</td><td class="r ${l.remaining === 0 ? "badge-loaded" : "badge-pending"}">${l.remaining}</td><td class="r">${pct}%</td></tr>`;
-    })
-    .join("")}
-</table>
-
-<div class="section-title">LOADING SESSIONS (${summary.sessions.length})</div>
-<table>
-  <tr><th>#</th><th>Status</th><th>Truck</th><th>Driver</th><th>Started</th><th>Completed</th><th class="r">Bales</th></tr>
-  ${summary.sessions.map((s, i) => `<tr><td>${i + 1}</td><td class="status-${s.status.toLowerCase()}">${s.status}</td><td>${s.truckNo || "—"}</td><td>${s.driverName || "—"}</td><td>${s.startedAt ? new Date(s.startedAt).toLocaleString() : ""}</td><td>${s.completedAt ? new Date(s.completedAt).toLocaleString() : "—"}</td><td class="r">${s.totalBales}</td></tr>`).join("")}
-</table>
-
-<div class="section-title">LOADED BALES (${loadedBales.length})</div>
-<table>
-  <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th><th class="r">Session</th></tr>
-  ${loadedBales.map((b, i) => `<tr class="loaded-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${parseFloat(b.weightKg || "0").toFixed(3)}</td><td class="r">${b.loadedSessionId ? "#" + b.loadedSessionId : ""}</td></tr>`).join("")}
-  <tr class="total-row"><td colspan="4">Total loaded</td><td class="r">${loadedBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3)}</td><td class="r">${loadedBales.length} bales</td></tr>
-</table>
-
-<div class="section-title">REMAINING BALES TO LOAD (${remainingBales.length})</div>
-${
-  remainingBales.length === 0
-    ? `<div class="all-done">All bales have been loaded.</div>`
-    : `<table>
-  <tr><th>#</th><th>Bale Reference</th><th>Article Code</th><th>Product Name</th><th class="r">Weight (kg)</th></tr>
-  ${remainingBales.map((b, i) => `<tr class="remaining-row"><td>${i + 1}</td><td>${b.baleReference}</td><td>${b.articleCode || ""}</td><td>${b.productName || ""}</td><td class="r">${parseFloat(b.weightKg || "0").toFixed(3)}</td></tr>`).join("")}
-  <tr class="total-row"><td colspan="4">Total remaining</td><td class="r">${remainingBales.reduce((s, b) => s + parseFloat(b.weightKg || "0"), 0).toFixed(3)} kg · ${remainingBales.length} bales</td></tr>
-</table>`
-}
-
-</body></html>`;
+        const html = renderInvoiceLoadingReportHtml(summary);
 
         res.setHeader("Content-Type", "text/html");
         res.send(html);

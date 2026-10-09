@@ -115,4 +115,18 @@ describe("canonical journal for factory stock entry", () => {
     const keys = new Set(after.map((row) => row.idempotency_key));
     expect(keys.size).toBe(after.length);
   }, 60000);
+
+  it("totals the entry's weight exactly", async () => {
+    const res = await agent.post("/api/factory/stock-entry").send({
+      erpLocationId: ctx.locationId,
+      entryDate: new Date().toISOString().split("T")[0],
+      items: [
+        { productId, quantity: 1, weightPerBale: "0.1" },
+        { productId, quantity: 1, weightPerBale: "0.2" },
+      ],
+    });
+    expect(res.status).toBeLessThan(300);
+    // The float sum was 0.30000000000000004.
+    expect(res.body.totalWeight).toBe(0.3);
+  }, 60000);
 });

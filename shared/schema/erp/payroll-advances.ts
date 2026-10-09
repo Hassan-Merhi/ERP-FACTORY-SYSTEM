@@ -3,6 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { employees } from "./parties";
 import { vouchers } from "./vouchers";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../../numericString";
 
 export const salaryAdvances = pgTable(
   "salary_advances",
@@ -35,10 +36,8 @@ export const insertSalaryAdvanceSchema = createInsertSchema(salaryAdvances)
     companyId: z.number().min(1, "Company is required"),
     employeeId: z.number().min(1, "Employee is required"),
     advanceDate: z.string().min(1, "Advance date is required"),
-    amount: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Amount must be positive"),
-    remainingBalance: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Remaining balance must be non-negative"),
+    amount: z.string().refine(isPositiveNumeric, "Amount must be positive"),
+    remainingBalance: z.string().refine(isNonNegativeNumeric, "Remaining balance must be non-negative"),
     isOpeningBalance: z.boolean().optional().default(false),
   });
 
@@ -63,9 +62,7 @@ export const insertSalaryAdvanceDeductionSchema = createInsertSchema(salaryAdvan
   .extend({
     salaryAdvanceId: z.number().min(1, "Salary advance is required"),
     payrollMonth: z.string().min(1, "Payroll month is required"),
-    deductionAmount: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Deduction amount must be positive"),
+    deductionAmount: z.string().refine(isPositiveNumeric, "Deduction amount must be positive"),
   });
 
 export type InsertSalaryAdvanceDeduction = z.infer<typeof insertSalaryAdvanceDeductionSchema>;

@@ -11,7 +11,10 @@ import {
   CompanyAccessError,
   sendCompanyAccessError,
 } from "../../security/companyAccessBoundary";
-import { getItemMarketAnalysis } from "../../services/reports/itemMarketAnalysisService";
+import {
+  getItemMarketAnalysis,
+  getItemMarketSalePriceBreakdown,
+} from "../../services/reports/itemMarketAnalysisService";
 import {
   resolveStockInSalesLocationIds,
   StockInSalesLocationAccessError,
@@ -39,6 +42,13 @@ const querySchema = z.object({
   stockGroupName: z.string().trim().max(100).optional(),
   stockGroupNames: z.string().trim().max(2000).optional(),
   companyIds: z.string().trim().max(500).optional(),
+});
+
+const salePriceQuerySchema = z.object({
+  companyId: z.coerce.number().int().positive(),
+  stockItemId: z.coerce.number().int().positive(),
+  startDate: dateSchema.optional(),
+  endDate: dateSchema.optional(),
 });
 
 const first = (value: unknown): string | undefined =>
@@ -69,7 +79,14 @@ function parseCompanyIds(value: string | undefined, activeCompanyId: number): nu
 function parseStockGroupNames(value: string | undefined): string[] | undefined {
   if (!value) return undefined;
 
-  const names = [...new Set(value.split(",").map((name) => name.trim()).filter(Boolean))];
+  const names = [
+    ...new Set(
+      value
+        .split(",")
+        .map((name) => name.trim())
+        .filter(Boolean)
+    ),
+  ];
   if (names.length === 0) return undefined;
   if (names.length > 50 || names.some((name) => name.length > 100)) {
     throw new CompanyAccessError(
@@ -88,6 +105,124 @@ function marginPct(profit: number, revenue: number): number {
 
 export function registerItemMarketAnalysisRoutes(app: Express) {
   const reportPageAccess = requirePageAccess("page_sales_report");
+
+  app.get(
+    "/api/reports/item-market-analysis/sale-prices",
+    requireAuth,
+    requireNonPOS,
+    reportPageAccess,
+    async (req, res) => {
+      const activeCompanyId = req.session.currentCompanyId;
+      const userId = req.session.userId;
+      const activeRole = req.session.currentRole;
+      if (!activeCompanyId || !userId || !activeRole) {
+        return res.status(400).json({ message: "An active company session is required" });
+      }
+
+      const parsed = salePriceQuerySchema.safeParse({
+        companyId: first(req.query.companyId),
+        stockItemId: first(req.query.stockItemId),
+        startDate: first(req.query.startDate),
+        endDate: first(req.query.endDate),
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Invalid item sale price filters", errors: parsed.error.flatten() });
+      }
+      if (parsed.data.startDate && parsed.data.endDate && parsed.data.startDate > parsed.data.endDate) {
+        return res.status(400).json({ message: "Start date cannot be after end date" });
+      }
+
+      try {
+        const companyId = parsed.data.companyId;
+        await assertCompaniesAccess(userId, [companyId]);
+
+        const companyResult = await pool.query<{
+          id: number;
+          name: string;
+          company_type: string | null;
+        }>(
+          `SELECT id, name, company_type
+             FROM companies
+            WHERE id = $1
+              AND active = true
+            LIMIT 1`,
+          [companyId]
+        );
+        const company = companyResult.rows[0];
+        if (!company) {
+          return res.status(404).json({ message: "Selected company could not be found" });
+        }
+        if (String(company.company_type || "erp") !== "erp") {
+          return res.status(403).json({ message: "Item Market Analysis is available for ERP companies only" });
+        }
+
+        const assignment =
+          companyId === activeCompanyId ? undefined : await storage.getUserCompanyRole(userId, companyId);
+        const role =
+          companyId === activeCompanyId
+            ? activeRole
+            : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
+
+        if (!role || role === "POS") {
+          throw new CompanyAccessError(
+            403,
+            `You do not have report access to ${company.name}`,
+            "COMPANY_REPORT_ACCESS_DENIED"
+          );
+        }
+
+        if (role !== "Developer" && role !== "Admin") {
+          const permissionRows = await storage.getRoleFeaturePermissions(companyId);
+          const permissionMap = buildPermissionMap(permissionRows, role);
+          if (!canAccess(role, "page_sales_report", permissionMap)) {
+            throw new CompanyAccessError(
+              403,
+              `You do not have Sales Report access in ${company.name}`,
+              "COMPANY_REPORT_ACCESS_DENIED"
+            );
+          }
+        }
+
+        const locationIds = await resolveStockInSalesLocationIds({
+          companyId,
+          userId,
+          role,
+          currentLocationId:
+            companyId === activeCompanyId ? req.session.currentLocationId : (assignment?.assignedLocationId ?? null),
+          requestedLocationIds: [],
+        });
+
+        const breakdown = await runWithDatabaseScopeRuntimeContext(
+          createTenantDatabaseScope(activeCompanyId, [companyId], "authorized-companies"),
+          () =>
+            getItemMarketSalePriceBreakdown({
+              companyId,
+              stockItemId: parsed.data.stockItemId,
+              locationIds,
+              startDate: parsed.data.startDate,
+              endDate: parsed.data.endDate,
+            })
+        );
+
+        res.setHeader("Cache-Control", "private, no-store");
+        return res.json(breakdown);
+      } catch (error: unknown) {
+        if (error instanceof CompanyAccessError) {
+          return sendCompanyAccessError(res, error);
+        }
+        if (error instanceof StockInSalesLocationAccessError) {
+          return res.status(error.statusCode).json({ message: error.message });
+        }
+        logger.error("Item market sale price breakdown error", {
+          module: "reports",
+          action: "item-market-sale-price-breakdown",
+          companyId: activeCompanyId,
+          error,
+        });
+        return res.status(500).json({ message: "Failed to load item sale price breakdown" });
+      }
+    }
+  );
 
   app.get("/api/reports/item-market-analysis", requireAuth, requireNonPOS, reportPageAccess, async (req, res) => {
     const activeCompanyId = req.session.currentCompanyId;

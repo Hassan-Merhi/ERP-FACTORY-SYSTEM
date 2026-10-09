@@ -21,6 +21,8 @@ import {
   factorySupplierFxTransfers,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
+import { MoneyDecimal, toMoney } from "../../../../lib/money";
+import type Decimal from "decimal.js";
 
 export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
   // ── Broker Visual Statement (container-centric view for the new dedicated page) ──
@@ -62,19 +64,19 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
 
       // Build container rows
       const containerRows = containers.map((c) => {
-        const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-        const rate = parseFloat(c.ratePerKg || "0");
+        const kg = toMoney(c.actualReceivedKg || c.totalKg || "0");
+        const rate = toMoney(c.ratePerKg);
         return {
           id: c.id,
           supplierName: nameOf(c.supplierId),
           containerNumber: c.containerNumber,
-          weight: kg,
-          ratePerKg: rate,
-          goodsAmount: kg * rate,
+          weight: kg.toNumber(),
+          ratePerKg: rate.toNumber(),
+          goodsAmount: kg.times(rate).toNumber(),
           goodsCurrency: c.currencyCode || "USD",
-          freightAmount: parseFloat(c.freight || "0"),
+          freightAmount: toMoney(c.freight).toNumber(),
           freightCurrency: c.freightCurrencyCode || "USD",
-          commissionAmount: parseFloat(c.commissionAmount || "0"),
+          commissionAmount: toMoney(c.commissionAmount).toNumber(),
           commissionCurrency: c.commissionCurrencyCode || "USD",
           arrivalDate: c.arrivalDate ? String(c.arrivalDate) : null,
           status: c.status,
@@ -167,13 +169,13 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       const paymentRows: PayRow[] = [];
 
       for (const p of payments) {
-        const amt = parseFloat(p.amount || "0");
+        const amt = toMoney(p.amount).toNumber();
         const cc = p.currencyCode || "USD";
         // factory_supplier_payments has no fxRateConfirmed column yet — legacy heuristic stopgap.
         // usdAmount always uses the actually-persisted amountUsd (never recomputed here); this
         // rate is purely a display hint, and is shown as null (not a guessed 1) when unresolved.
         const { fxRate: rate, looksSet } = resolveStoredFxRate(cc, p.fxRateToUsd);
-        const usd = parseFloat(p.amountUsd || String(amt));
+        const usd = p.amountUsd ? toMoney(p.amountUsd).toNumber() : amt;
         paymentRows.push({
           id: `pay-${p.id}`,
           date: p.date ? String(p.date) : null,
@@ -188,7 +190,7 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       }
 
       for (const v of vpayRows) {
-        const amt = parseFloat(v.debitAmount || "0");
+        const amt = toMoney(v.debitAmount).toNumber();
         paymentRows.push({
           id: `vpay-${v.id}`,
           date: v.voucherDate ? String(v.voucherDate) : null,
@@ -207,9 +209,10 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
         if (seenFx.has(t.id)) continue;
         seenFx.add(t.id);
         const fromCc = t.fromCurrencyCode || "USD";
-        const fromAmt = parseFloat(t.fromAmount || "0");
-        const toUsd = parseFloat(t.toAmountUsd || "0");
-        const rate = fromAmt > 0 ? toUsd / fromAmt : 1;
+        const fromAmount = toMoney(t.fromAmount);
+        const fromAmt = fromAmount.toNumber();
+        const toUsd = toMoney(t.toAmountUsd).toNumber();
+        const rate = fromAmount.gt(0) ? toMoney(t.toAmountUsd).div(fromAmount) : new MoneyDecimal(1);
         const dateVal = t.date ? String(t.date) : null;
 
         if (t.toSupplierId === brokerId) {
@@ -220,7 +223,7 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
             type: "fx_in",
             fromCurrency: fromCc,
             fromAmount: fromAmt,
-            fxRate: fromCc !== "USD" ? parseFloat(rate.toFixed(6)) : null,
+            fxRate: fromCc !== "USD" ? rate.toDecimalPlaces(6).toNumber() : null,
             usdAmount: toUsd,
             notes: t.notes || null,
             supplierName: nameMap[t.fromSupplierId],
@@ -252,18 +255,21 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
       });
 
       // Summary: credit (containers owed) and paid, per currency
-      const creditByCurrency: Record<string, number> = {};
+      // Summed exactly per currency, reported as numbers.
+      const exactTotals = (totals: Record<string, Decimal>) =>
+        Object.fromEntries(Object.entries(totals).map(([cc, total]) => [cc, total.toNumber()]));
+      const credits: Record<string, Decimal> = {};
       const addCredit = (cc: string, amt: number) => {
-        creditByCurrency[cc] = (creditByCurrency[cc] || 0) + amt;
+        credits[cc] = (credits[cc] ?? new MoneyDecimal(0)).plus(amt);
       };
       for (const c of containerRows) {
         if (c.goodsAmount > 0) addCredit(c.goodsCurrency, c.goodsAmount);
         if (c.freightAmount > 0) addCredit(c.freightCurrency, c.freightAmount);
         if (c.commissionAmount > 0) addCredit(c.commissionCurrency, c.commissionAmount);
       }
-      const paidByCurrency: Record<string, number> = {};
+      const paid: Record<string, Decimal> = {};
       const addPaid = (cc: string, amt: number) => {
-        paidByCurrency[cc] = (paidByCurrency[cc] || 0) + amt;
+        paid[cc] = (paid[cc] ?? new MoneyDecimal(0)).plus(amt);
       };
       for (const p of paymentRows) {
         addPaid(p.fromCurrency, p.fromAmount);
@@ -274,8 +280,8 @@ export function registerSupplierBrokerVisualStatementRoutes(app: Express) {
         linkedSuppliers: linked.map((s) => ({ id: s.id, name: s.name })),
         containers: containerRows,
         payments: paymentRows,
-        creditByCurrency,
-        paidByCurrency,
+        creditByCurrency: exactTotals(credits),
+        paidByCurrency: exactTotals(paid),
       });
     } catch (err: unknown) {
       logger.error("Broker visual statement error:", { error: err });

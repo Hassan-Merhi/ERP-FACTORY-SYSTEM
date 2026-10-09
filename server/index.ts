@@ -43,6 +43,7 @@ import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrat
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
 import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
+import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
@@ -261,6 +262,12 @@ let migrationsDone = false;
       logger.info("[startup] ✓ Priority Scan schema ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
+      try {
+        await ensureFactorySheetsSacksSchema(pool);
+        logger.info("[startup] ✓ Sheets & Sacks schema ensured");
+      } catch (err: unknown) {
+        logger.error("[startup] Sheets & Sacks schema ensure failed", { error: String(err) });
+      }
       await bootstrapRecurringJournalFromEnvironment();
       try {
         // Factory Production Targets and Attendance Register must be available

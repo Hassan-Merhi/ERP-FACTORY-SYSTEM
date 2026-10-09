@@ -14,6 +14,7 @@ export interface ShippingRow {
   eta: string | null;
   containerArrivedDate: string | null;
   note: string | null;
+  anything: string | null;
   ciNumber: string | null;
   isDone: boolean;
   doneAt: string | null;
@@ -100,6 +101,7 @@ export interface AvailRow {
   shippingCompany: string;
   availableContainers: number;
   note: string | null;
+  details: string | null;
   isArchived: boolean;
   archivedAt: string | null;
 }
@@ -110,4 +112,5 @@ export interface EditingAvail {
   shippingCompany: string;
   availableContainers: string;
   note: string;
+  details: string;
 }

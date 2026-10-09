@@ -5,6 +5,7 @@ import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { userLocations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { parseMoneyInput } from "../../lib/money";
 
 export function registerPosShiftRoutes(app: Express): void {
   // POS Shift Management Routes
@@ -185,6 +186,7 @@ export function registerPosShiftRoutes(app: Express): void {
       if (closingCash === undefined || closingCash === null) {
         return res.status(400).json({ message: "Closing cash amount is required" });
       }
+      if (!parseMoneyInput(closingCash)) return res.status(400).json({ message: "Invalid amount" });
 
       const closedShift = await storage.closeShift(shiftId, closingCash.toString(), notes);
       res.json(closedShift);

@@ -1,6 +1,8 @@
 import ExcelJS from "exceljs";
+import type Decimal from "decimal.js";
 import type { LedgerAccount } from "@shared/schema";
 import { isInventoryValuationOnlyAccount } from "../lib/inventoryPnlAccounts";
+import { MoneyDecimal, toMoney } from "../lib/money";
 /**
  * Statistics and ExcelJS sheet rendering for the net-profit workbook.
  *
@@ -23,7 +25,7 @@ export interface NetProfitSheetContext {
   companyName: string;
 }
 
-export const fmt = (n: number) => parseFloat(n.toFixed(2));
+export const fmt = (n: number) => (Number.isFinite(n) ? new MoneyDecimal(n).toDecimalPlaces(2).toNumber() : n);
 
 export type NetProfitBalanceEntry = {
   ledgerAccountId?: number | null;
@@ -34,15 +36,18 @@ export type NetProfitBalanceEntry = {
 export function computeBalancesFromEntries(
   entries: NetProfitBalanceEntry[]
 ): Map<number, { debit: number; credit: number }> {
-  const bal = new Map<number, { debit: number; credit: number }>();
+  const exact = new Map<number, { debit: Decimal; credit: Decimal }>();
   for (const e of entries) {
     if (e.ledgerAccountId) {
-      const d = parseFloat(e.debitAmount || "0"),
-        c = parseFloat(e.creditAmount || "0");
-      const cur = bal.get(e.ledgerAccountId) || { debit: 0, credit: 0 };
-      bal.set(e.ledgerAccountId, { debit: cur.debit + d, credit: cur.credit + c });
+      const cur = exact.get(e.ledgerAccountId);
+      exact.set(e.ledgerAccountId, {
+        debit: toMoney(e.debitAmount).plus(cur?.debit ?? 0),
+        credit: toMoney(e.creditAmount).plus(cur?.credit ?? 0),
+      });
     }
   }
+  const bal = new Map<number, { debit: number; credit: number }>();
+  for (const [id, { debit, credit }] of exact) bal.set(id, { debit: debit.toNumber(), credit: credit.toNumber() });
   return bal;
 }
 

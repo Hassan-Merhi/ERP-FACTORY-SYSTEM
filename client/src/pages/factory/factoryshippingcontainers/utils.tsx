@@ -72,6 +72,7 @@ const SHIPPING_COLS = [
   { id: "containerCost", label: "Container Cost" },
   { id: "ciNumber", label: "CI No." },
   { id: "note", label: "Note" },
+  { id: "anything", label: "Anything" },
   { id: "whatsapp", label: "WhatsApp" },
   { id: "done", label: "Done" },
 ] as const;

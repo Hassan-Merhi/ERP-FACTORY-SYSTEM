@@ -9,8 +9,11 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db, type RawQueryRow } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
-import { toFiniteNumber } from "@shared/typeGuards";
+import { eq, and, sql, inArray } from "drizzle-orm";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+
+/** A request amount at cents, read as parseFloat reads it; unparsable input is zero, as it always was here. */
+const requestCents = (value: unknown) => (parseMoneyInput(value) ?? new MoneyDecimal(0)).toDecimalPlaces(2);
 
 /**
  * One unpaid employee advance, read under the payroll transaction for FIFO
@@ -35,19 +38,36 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
       }
       if (!date) return res.status(400).json({ message: "Date is required" });
 
-      // Validate: at least amount or deduction must be > 0
-      const validDeposits = deposits.filter((d) => {
-        const a = parseFloat(d.amount) || 0;
-        const ded = parseFloat(d.deduction) || 0;
-        return d.employeeId && (a > 0 || ded > 0);
+      // Validate: at least amount or deduction must be > 0. Amounts are taken at
+      // cents, and only employees of this company post: the totals and the
+      // expense/recovery legs are built from exactly the rows that get employee
+      // legs, so the voucher balances.
+      const candidates = deposits.flatMap((d) => {
+        const amount = requestCents(d.amount);
+        const deduction = requestCents(d.deduction);
+        return d.employeeId && (amount.gt(0) || deduction.gt(0))
+          ? [{ empId: parseInt(d.employeeId), amount, deduction }]
+          : [];
       });
+      const candidateIds = Array.from(new Set(candidates.map((d) => d.empId).filter(Number.isInteger)));
+      const companyEmployees =
+        candidateIds.length > 0
+          ? await db
+              .select({ id: employees.id })
+              .from(employees)
+              .where(and(inArray(employees.id, candidateIds), eq(employees.companyId, companyId)))
+          : [];
+      const companyEmployeeIds = new Set(companyEmployees.map((e) => e.id));
+      const validDeposits = candidates.filter((d) => companyEmployeeIds.has(d.empId));
       if (validDeposits.length === 0) {
         return res.status(400).json({ message: "No valid deposit amounts provided" });
       }
 
-      const totalSalary = validDeposits.reduce((sum: number, d) => sum + (parseFloat(d.amount) || 0), 0);
-      const totalDeduction = validDeposits.reduce((sum: number, d) => sum + (parseFloat(d.deduction) || 0), 0);
-      const totalNet = totalSalary - totalDeduction;
+      const totalSalaryExact = sumMoney(validDeposits.map((d) => d.amount));
+      const totalDeductionExact = sumMoney(validDeposits.map((d) => d.deduction));
+      const totalSalary = totalSalaryExact.toNumber();
+      const totalDeduction = totalDeductionExact.toNumber();
+      const totalNet = totalSalaryExact.minus(totalDeductionExact).toNumber();
       const voucherNumber = `EMP-PAY-${Date.now()}`;
 
       const txResult = await db.transaction(async (tx) => {
@@ -99,7 +119,7 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
             voucherDate: date,
             effectiveDate: (effectiveDate as string) || null,
             description: notes || `Bulk payroll - ${validDeposits.length} employees`,
-            totalAmount: Math.abs(totalNet).toFixed(2),
+            totalAmount: totalSalaryExact.minus(totalDeductionExact).abs().toFixed(2),
           })
           .returning();
 
@@ -108,7 +128,7 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: bulkVoucher.id,
             ledgerAccountId: payrollExpenseAccount.id,
-            debitAmount: totalSalary.toFixed(2),
+            debitAmount: totalSalaryExact.toFixed(2),
             creditAmount: "0",
             narration: notes || `Bulk payroll gross - ${validDeposits.length} employees - ${voucherNumber}`,
           });
@@ -120,7 +140,7 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
             voucherId: bulkVoucher.id,
             ledgerAccountId: deductionAccount.id,
             debitAmount: "0",
-            creditAmount: totalDeduction.toFixed(2),
+            creditAmount: totalDeductionExact.toFixed(2),
             narration: `Payroll deductions - ${voucherNumber}`,
           });
         }
@@ -128,10 +148,10 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
         // Per-employee: credit salary, debit deduction → net balance change
         const results = [];
         for (const dep of validDeposits) {
-          const empId = parseInt(dep.employeeId);
-          const amount = parseFloat(dep.amount) || 0;
-          const deduction = parseFloat(dep.deduction) || 0;
-          const net = amount - deduction;
+          const { empId } = dep;
+          const amount = dep.amount.toNumber();
+          const deduction = dep.deduction.toNumber();
+          const net = dep.amount.minus(dep.deduction).toNumber();
 
           const [emp] = await tx
             .select()
@@ -170,14 +190,14 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
               WHERE company_id = ${companyId} AND employee_id = ${empId} AND fully_paid = false
               ORDER BY advance_date ASC, id ASC
             `);
-            let remaining = deduction;
+            let remaining = dep.deduction;
             for (const adv of outstanding.rows) {
-              if (remaining <= 0.001) break;
-              const bal = toFiniteNumber(adv.remaining_balance) ?? 0;
-              if (bal <= 0) continue;
-              const toDeduct = Math.min(remaining, bal);
-              const newBal = Math.max(0, bal - toDeduct);
-              const fullyPaid = newBal <= 0.01;
+              if (remaining.lte(0.001)) break;
+              const bal = toMoney(adv.remaining_balance);
+              if (bal.lte(0)) continue;
+              const toDeduct = MoneyDecimal.min(remaining, bal);
+              const newBal = MoneyDecimal.max(0, bal.minus(toDeduct));
+              const fullyPaid = newBal.lte(0.01);
 
               await tx.execute(sql`
                 INSERT INTO employee_advance_repayments (company_id, advance_id, employee_id, repayment_date, amount, cash_account_id, notes)
@@ -188,15 +208,14 @@ export function registerFactoryEmployeeBulkPayrollRoutes(app: Express) {
                 SET remaining_balance = ${newBal.toFixed(2)}, fully_paid = ${fullyPaid}
                 WHERE id = ${adv.id}
               `);
-              remaining -= toDeduct;
+              remaining = remaining.minus(toDeduct);
             }
           }
 
           // Update employee balance: net = salary - deduction (can go negative)
-          const currentBal = parseFloat(emp.currentBalance || "0");
-          const newBalance = currentBal + net;
-          const newDeposits = parseFloat(emp.totalDeposits || "0") + amount;
-          const newWithdrawals = parseFloat(emp.totalWithdrawals || "0") + deduction;
+          const newBalance = toMoney(emp.currentBalance).plus(dep.amount).minus(dep.deduction);
+          const newDeposits = toMoney(emp.totalDeposits).plus(dep.amount);
+          const newWithdrawals = toMoney(emp.totalWithdrawals).plus(dep.deduction);
           await tx
             .update(employees)
             .set({

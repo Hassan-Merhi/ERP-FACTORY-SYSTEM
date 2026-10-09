@@ -614,7 +614,7 @@ export const phase3RemainingTranslationsPart20: readonly Phase3SharedUiEntry[] =
     fr: "Paiement fournisseur – voir paiement usine #{{0}}",
   },
   {
-    en: 'Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${parseFloat(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})',
+    en: 'Supplier payment deleted: ${spDelSupplier?.name || "Unknown"} – ${toMoney(payment.amount).toFixed(2)} ${payment.currencyCode} (dated ${payment.date})',
     ar: "حذفت مدفوعات الموردين:{{0}} – {{1}} {{2}}(مؤرخة){{3}})",
     fr: "Paiement du fournisseur supprimé:{{0}} – {{1}} {{2}}(date{{3}})",
   },

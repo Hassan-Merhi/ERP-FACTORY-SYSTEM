@@ -22,6 +22,8 @@ import {
 } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 export function registerAdvanceBulkRepayRoutes(app: Express) {
   app.post("/api/factory/workers/:id/bulk-repay-advances", requireAuth, async (req: Request, res: Response) => {
@@ -68,7 +70,7 @@ export function registerAdvanceBulkRepayRoutes(app: Express) {
           )
         );
 
-      const toRepay = outstandingAdvances.filter((a) => parseFloat(a.remainingBalance || "0") > 0.001);
+      const toRepay = outstandingAdvances.filter((a) => toMoney(a.remainingBalance).gt("0.001"));
       if (toRepay.length === 0) {
         return res.status(400).json({ message: "No outstanding manual repayment advances found for this worker" });
       }
@@ -102,11 +104,11 @@ export function registerAdvanceBulkRepayRoutes(app: Express) {
         }
 
         const repaymentResults = [];
-        let totalRepaid = 0;
+        let totalRepaid: Decimal = new MoneyDecimal(0);
 
         for (const advance of toRepay) {
-          const effectiveAmount = parseFloat(advance.remainingBalance || "0");
-          if (effectiveAmount <= 0) continue;
+          const effectiveAmount = toMoney(advance.remainingBalance).toDecimalPlaces(2);
+          if (effectiveAmount.lte(0)) continue;
 
           // Use per-advance date if provided (each loan on its own month), else fall back to global date
           const effectiveRepaymentDate = perAdvanceDates[advance.id] || repaymentDate;
@@ -174,17 +176,17 @@ export function registerAdvanceBulkRepayRoutes(app: Express) {
             referenceId: repayment.id,
             referenceTable: "factory_advance_repayments",
             description: `Bulk advance repayment from ${worker.fullName}: $${effectiveAmount.toFixed(2)} (advance #${advance.id})`,
-            amountCurrency: effectiveAmount,
+            amountCurrency: effectiveAmount.toNumber(),
             currencyCode: "USD",
-            amountUsd: effectiveAmount,
+            amountUsd: effectiveAmount.toNumber(),
             createdBy: req.session.userId ?? undefined,
           });
 
           repaymentResults.push(repayment);
-          totalRepaid += effectiveAmount;
+          totalRepaid = totalRepaid.plus(effectiveAmount);
         }
 
-        return { count: repaymentResults.length, totalRepaid, repayments: repaymentResults };
+        return { count: repaymentResults.length, totalRepaid: totalRepaid.toNumber(), repayments: repaymentResults };
       });
 
       res.json(result);

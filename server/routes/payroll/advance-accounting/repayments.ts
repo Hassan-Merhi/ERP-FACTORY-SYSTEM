@@ -22,6 +22,7 @@ import {
 } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerAdvanceRepaymentRoutes(app: Express) {
   app.get("/api/factory/advances/:id/repayments", requireAuth, async (req: Request, res: Response) => {
@@ -71,16 +72,17 @@ export function registerAdvanceRepaymentRoutes(app: Express) {
         return res.status(400).json({ message: "This advance is already fully paid" });
       }
 
-      const amount = parseFloat(req.body.amount);
-      if (!amount || amount <= 0) return res.status(400).json({ message: "Amount must be positive" });
+      const amount = parseMoneyInput(req.body.amount);
+      if (!amount || amount.lte(0)) return res.status(400).json({ message: "Amount must be positive" });
 
-      const bal = parseFloat(advance.remainingBalance || "0");
-      if (amount > bal + 0.01) {
+      const bal = toMoney(advance.remainingBalance);
+      if (amount.gt(bal.plus("0.01"))) {
         return res
           .status(400)
           .json({ message: `Repayment ($${amount.toFixed(2)}) exceeds remaining balance ($${bal.toFixed(2)})` });
       }
-      const effectiveAmount = Math.min(amount, bal);
+      // At cents, so the repayment, the voucher and the new balance agree exactly.
+      const effectiveAmount = MoneyDecimal.min(amount, bal).toDecimalPlaces(2);
 
       const repaymentDate = req.body.repaymentDate || getClientDate(req);
       const cashAccountId = req.body.cashAccountId ? parseInt(req.body.cashAccountId) : null;
@@ -112,13 +114,13 @@ export function registerAdvanceRepaymentRoutes(app: Express) {
           })
           .returning();
 
-        const newBalance = bal - effectiveAmount;
-        const isFullyPaid = newBalance <= 0.005;
+        const newBalance = bal.minus(effectiveAmount);
+        const isFullyPaid = newBalance.lte("0.005");
 
         await tx
           .update(factoryWorkerAdvances)
           .set({
-            remainingBalance: Math.max(0, newBalance).toFixed(2),
+            remainingBalance: moneyString(MoneyDecimal.max(0, newBalance)),
             fullyPaid: isFullyPaid,
           })
           .where(eq(factoryWorkerAdvances.id, advanceId));
@@ -191,9 +193,9 @@ export function registerAdvanceRepaymentRoutes(app: Express) {
           referenceId: repayment.id,
           referenceTable: "factory_advance_repayments",
           description: `Advance repayment from ${worker?.fullName || "Worker"}: $${effectiveAmount.toFixed(2)} (advance #${advanceId})`,
-          amountCurrency: effectiveAmount,
+          amountCurrency: effectiveAmount.toNumber(),
           currencyCode: "USD",
-          amountUsd: effectiveAmount,
+          amountUsd: effectiveAmount.toNumber(),
           createdBy: req.session.userId ?? undefined,
         });
 

@@ -201,6 +201,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
     "POST /api/sales-report/recalculate-costs",
     "POST /api/admin/fix-orphaned-charge-vouchers",
     "POST /api/admin/backfill-postoffload-vouchers",
+    "POST /api/admin/offload-charge-voucher-repair",
     "POST /api/admin/recalculate-factory-order-totals",
     "POST /api/admin/cleanup-legacy-employee-accounts",
     "POST /api/fix-old-po-credits",

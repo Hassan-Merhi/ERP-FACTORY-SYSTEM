@@ -33,6 +33,22 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
      WHERE enabled = TRUE`,
   `CREATE INDEX IF NOT EXISTS copsc_company_enabled_priority_idx
      ON customer_order_priority_scan_configs(company_id, enabled, priority)`,
+  `CREATE TABLE IF NOT EXISTS factory_priority_scan_history (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL,
+      bale_id INTEGER NOT NULL,
+      reference_number VARCHAR(100) NOT NULL,
+      product_name TEXT,
+      article_code VARCHAR(50),
+      priority INTEGER NOT NULL,
+      color VARCHAR(64) NOT NULL,
+      business_date DATE NOT NULL,
+      scanned_by TEXT,
+      scanned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`,
+  `CREATE INDEX IF NOT EXISTS fpsh_company_date_scanned_idx
+     ON factory_priority_scan_history(company_id, business_date, scanned_at DESC, id DESC)`,
 ] as const;
 
 type StartupQueryable = {

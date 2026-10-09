@@ -2,6 +2,7 @@ import { eq, and, asc, isNull, sql } from "drizzle-orm";
 import { db } from "../db";
 import * as schema from "@shared/schema";
 import type { Employee, InsertEmployee } from "@shared/schema";
+import { MoneyDecimal, toMoney } from "../lib/money";
 
 // Employees
 
@@ -127,10 +128,9 @@ export async function getEmployeesWithBalances(
 ): Promise<Array<Employee & { calculatedBalance: string }>> {
   const employees = await getAllEmployees(companyId);
   return employees.map((employee) => {
-    const calculatedBalance = parseFloat(employee.currentBalance || "0");
     return {
       ...employee,
-      calculatedBalance: calculatedBalance.toFixed(2),
+      calculatedBalance: toMoney(employee.currentBalance).toFixed(2),
     };
   });
 }
@@ -195,7 +195,7 @@ export async function deleteEmployee(
       };
     }
 
-    const employeeBalance = parseFloat(employee.currentBalance || "0");
+    const employeeBalance = toMoney(employee.currentBalance);
 
     const [linkedAccount] = await tx
       .select()
@@ -204,7 +204,7 @@ export async function deleteEmployee(
         and(eq(schema.ledgerAccounts.code, employee.code), eq(schema.ledgerAccounts.companyId, employee.companyId))
       );
 
-    let ledgerBalance = 0;
+    let ledgerBalance = new MoneyDecimal(0);
 
     if (linkedAccount) {
       const voucherEntries = await tx
@@ -220,17 +220,20 @@ export async function deleteEmployee(
         };
       }
 
-      const openingBalance = parseFloat(linkedAccount.openingBalance || "0");
+      const openingBalance = toMoney(linkedAccount.openingBalance);
       const openingSide = linkedAccount.openingBalanceSide || "Dr";
-      ledgerBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
+      ledgerBalance = openingSide === "Dr" ? openingBalance : openingBalance.negated();
     }
 
-    if (!forceDelete && (Math.abs(employeeBalance) > 0.01 || Math.abs(ledgerBalance) > 0.01)) {
+    // Any balance that is not zero at cents needs confirmation: the old "> 0.01"
+    // test let a one-cent balance through as if it were zero.
+    const nonZero = (value: InstanceType<typeof MoneyDecimal>) => !value.toDecimalPlaces(2).isZero();
+    if (!forceDelete && (nonZero(employeeBalance) || nonZero(ledgerBalance))) {
       return {
         success: false,
         message: "Employee or linked account has a non-zero balance. Admin confirmation required.",
-        employeeBalance: employeeBalance,
-        ledgerBalance: ledgerBalance,
+        employeeBalance: employeeBalance.toNumber(),
+        ledgerBalance: ledgerBalance.toNumber(),
       };
     }
 
@@ -419,11 +422,14 @@ export async function getSalaryAdvanceById(id: number): Promise<schema.SalaryAdv
   return advance;
 }
 
-export async function getSalaryAdvancesByEmployee(employeeId: number): Promise<schema.SalaryAdvance[]> {
+export async function getSalaryAdvancesByEmployee(
+  employeeId: number,
+  companyId: number
+): Promise<schema.SalaryAdvance[]> {
   return await db
     .select()
     .from(schema.salaryAdvances)
-    .where(eq(schema.salaryAdvances.employeeId, employeeId))
+    .where(and(eq(schema.salaryAdvances.employeeId, employeeId), eq(schema.salaryAdvances.companyId, companyId)))
     .orderBy(sql`${schema.salaryAdvances.advanceDate} DESC`);
 }
 

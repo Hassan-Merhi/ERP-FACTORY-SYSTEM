@@ -300,3 +300,47 @@ describe("POST /api/factory/customer-orders/:id/charges/relink-vouchers", () => 
     expect(response.status).toBe(404);
   });
 });
+
+describe("PATCH charge amounts at the cents the charge stores", () => {
+  async function orderWithCharge(): Promise<{ orderId: number; chargeId: number }> {
+    const orderId = await createOrder();
+    await agent
+      .post(`/api/factory/customer-orders/${orderId}/charges`)
+      .send({ name: "Freight", amount: "10.00", chargeType: "FREIGHT" });
+    const chargeId = (
+      await pool.query<{ id: number }>(`SELECT id FROM customer_order_charges WHERE order_id = $1`, [orderId])
+    ).rows[0].id;
+    return { orderId, chargeId };
+  }
+
+  it("rounds a half-cent amount half up, as the charge's voucher does", async () => {
+    const { orderId, chargeId } = await orderWithCharge();
+
+    const response = await agent
+      .patch(`/api/factory/customer-orders/${orderId}/charges/${chargeId}`)
+      .send({ amount: "1.005" });
+    expect(response.status).toBe(200);
+
+    // The float path wrote parseFloat("1.005").toFixed(2) = "1.00", while a
+    // linked voucher's numeric(…, 2) column kept 1.01.
+    const charge = await pool.query<{ amount: string }>(`SELECT amount FROM customer_order_charges WHERE id = $1`, [
+      chargeId,
+    ]);
+    expect(charge.rows[0].amount).toBe("1.01");
+    expect((await expectTotalsConsistent(orderId)).grand_total).toBe("1.01");
+  });
+
+  it("refuses an amount that is not a number instead of storing NaN", async () => {
+    const { orderId, chargeId } = await orderWithCharge();
+
+    const response = await agent
+      .patch(`/api/factory/customer-orders/${orderId}/charges/${chargeId}`)
+      .send({ amount: "abc" });
+    expect(response.status).toBe(400);
+
+    const charge = await pool.query<{ amount: string }>(`SELECT amount FROM customer_order_charges WHERE id = $1`, [
+      chargeId,
+    ]);
+    expect(charge.rows[0].amount).toBe("10.00");
+  });
+});

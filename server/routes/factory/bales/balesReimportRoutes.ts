@@ -463,7 +463,7 @@ export function registerBalesReimportRoutes(app: Express) {
         const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
         if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const { read: readXlsx, utils } = await import("xlsx-js-style");
+        const { read: readXlsx, utils } = (await import("xlsx-js-style")).default;
         const wb = readXlsx(req.file.buffer, { type: "buffer" });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const rows = utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });

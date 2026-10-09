@@ -8,7 +8,7 @@ const harness = vi.hoisted(() => {
   const updated: Array<{ table: unknown; values: any }> = [];
   const deleted: Array<{ table: unknown }> = [];
 
-  const selectBuilder = (result: unknown[], lockTerminal = false) => {
+  const selectBuilder = (result: unknown[], _lockTerminal = false) => {
     const builder: any = {
       from: vi.fn(() => builder),
       where: vi.fn(() => builder),
@@ -89,6 +89,12 @@ vi.mock("../server/services/accounting/financialOperationRequest", () => ({
   financialOperationRequestPayload: harness.financialOperationRequestPayload,
   resolveFinancialOperationKey: harness.resolveFinancialOperationKey,
 }));
+// Body-id ownership has database-backed coverage in tests/ledger-account-body-scope.test.ts;
+// here the company owns every location and account the sale names.
+vi.mock("../server/routes/helpers/companyOwnership", () => ({
+  allLedgerAccountsOwned: async () => true,
+  isFactorySessionLocation: async () => true,
+}));
 vi.mock("../server/lib/dateUtils", () => ({ getClientDate: () => "2026-09-17" }));
 vi.mock("../server/lib/httpHandlers", () => ({ getErrorMessage: (error: any) => error?.message || String(error) }));
 vi.mock("../server/lib/logger", () => ({ logger: { error: harness.loggerError } }));
@@ -153,7 +159,10 @@ describe("Phase 33D factory POS sale writes", () => {
 
   it("rejects requests without a selected company or sale lines before any financial write", async () => {
     const noCompany = resHarness();
-    await routes.get("POST /api/factory/pos/sale")!(req({ session: {}, body: { items: [{ productName: "Bale", quantity: 1 }] } }), noCompany);
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({ session: {}, body: { items: [{ productName: "Bale", quantity: 1 }] } }),
+      noCompany
+    );
     expect(noCompany.statusCode).toBe(400);
     expect(noCompany.body).toEqual({ message: "No company selected" });
 
@@ -166,7 +175,10 @@ describe("Phase 33D factory POS sale writes", () => {
 
   it("rejects lines without a product and non-positive quantities", async () => {
     const noProduct = resHarness();
-    await routes.get("POST /api/factory/pos/sale")!(req({ body: { items: [{ quantity: 1, unitPrice: 10 }] } }), noProduct);
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({ body: { items: [{ quantity: 1, unitPrice: 10 }] } }),
+      noProduct
+    );
     expect(noProduct.statusCode).toBe(400);
     expect(noProduct.body).toEqual({ message: "Each item needs a product" });
 
@@ -193,7 +205,10 @@ describe("Phase 33D factory POS sale writes", () => {
           cashAccountId: 12,
           paymentType: "CASH",
           items: [{ productName: "Loose Bale", quantity: 2, unitPrice: "10" }],
-          expenses: [{ accountId: 30, description: "Loading", amount: "2" }, { accountId: 31, amount: "0" }],
+          expenses: [
+            { accountId: 30, description: "Loading", amount: "2" },
+            { accountId: 31, amount: "0" },
+          ],
         },
       }),
       res
@@ -202,7 +217,11 @@ describe("Phase 33D factory POS sale writes", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatchObject({ id: 101, saleNumber: "FPOS-0001" });
     expect(harness.withDurableFinancialOperation).toHaveBeenCalledWith(
-      expect.objectContaining({ companyId: 7, operationName: "factory.pos-sale.create", idempotencyKey: "phase33d-key" }),
+      expect.objectContaining({
+        companyId: 7,
+        operationName: "factory.pos-sale.create",
+        idempotencyKey: "phase33d-key",
+      }),
       expect.any(Function)
     );
 
@@ -213,17 +232,74 @@ describe("Phase 33D factory POS sale writes", () => {
       paymentType: "CASH",
       createdBy: "55",
     });
-    expect(harness.inserted.some((entry) => entry.values?.txType === "BALE_SALE" && entry.values.amountUsd === "20.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.txType === "POS_EXPENSE" && entry.values.amountUsd === "2.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.ledgerAccountId === 12 && entry.values.debitAmount === "18.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.ledgerAccountId === 30 && entry.values.debitAmount === "2.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.ledgerAccountId === 900 && entry.values.creditAmount === "20.00")).toBe(true);
+    expect(
+      harness.inserted.some((entry) => entry.values?.txType === "BALE_SALE" && entry.values.amountUsd === "20.00")
+    ).toBe(true);
+    expect(
+      harness.inserted.some((entry) => entry.values?.txType === "POS_EXPENSE" && entry.values.amountUsd === "2.00")
+    ).toBe(true);
+    expect(
+      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 12 && entry.values.debitAmount === "18.00")
+    ).toBe(true);
+    expect(
+      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 30 && entry.values.debitAmount === "2.00")
+    ).toBe(true);
+    expect(
+      harness.inserted.some((entry) => entry.values?.ledgerAccountId === 900 && entry.values.creditAmount === "20.00")
+    ).toBe(true);
     expect(harness.getOrCreateLedgerAccount).toHaveBeenCalledWith(
       7,
       "FACTORY_BALE_SALES_INCOME",
       "Factory Bale Sales Income",
       "Revenue"
     );
+  });
+
+  it("rounds a half-cent expense before netting it, so the receipt voucher still balances", async () => {
+    harness.dbSelectResults.push([{ count: 0 }]);
+    harness.returningResults.push([{ id: 102, saleNumber: "FPOS-0001" }], [{ id: 502 }]);
+    const res = resHarness();
+
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({
+        body: {
+          cashAccountId: 12,
+          paymentType: "CASH",
+          items: [{ productName: "Loose Bale", quantity: 1, unitPrice: "10" }],
+          expenses: [{ accountId: 30, description: "Loading", amount: "0.105" }],
+        },
+      }),
+      res
+    );
+
+    expect(res.statusCode).toBe(200);
+    // 0.105 is 0.11 at cents, leaving 9.89 cash. In floats the expense leg was
+    // 0.10 and the cash leg 9.89 against a 10.00 credit.
+    const legs = harness.inserted
+      .filter((entry) => entry.values?.voucherId !== undefined && entry.values?.debitAmount !== undefined)
+      .map((entry) => entry.values);
+    expect(legs.map((leg) => [leg.ledgerAccountId, leg.debitAmount, leg.creditAmount])).toEqual([
+      [12, "9.89", "0"],
+      [30, "0.11", "0"],
+      [900, "0", "10.00"],
+    ]);
+  });
+
+  it("refuses an amount that does not parse before any write", async () => {
+    const res = resHarness();
+    await routes.get("POST /api/factory/pos/sale")!(
+      req({
+        body: {
+          paymentType: "CREDIT",
+          depositAmount: "abc",
+          items: [{ productName: "Bale", quantity: 1, unitPrice: "1" }],
+        },
+      }),
+      res
+    );
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ message: "Invalid amount" });
+    expect(harness.inserted).toHaveLength(0);
   });
 
   it("records a credit sale and deposit against the customer running balance", async () => {
@@ -246,9 +322,21 @@ describe("Phase 33D factory POS sale writes", () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(harness.inserted.some((entry) => entry.values?.referenceType === "FACTORY_POS_SALE" && entry.values.balance === "30.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.referenceType === "FACTORY_POS_DEPOSIT" && entry.values.balance === "25.00")).toBe(true);
-    expect(harness.inserted.some((entry) => entry.values?.txType === "BALE_SALE" && String(entry.values.description).includes("[CREDIT]"))).toBe(true);
+    expect(
+      harness.inserted.some(
+        (entry) => entry.values?.referenceType === "FACTORY_POS_SALE" && entry.values.balance === "30.00"
+      )
+    ).toBe(true);
+    expect(
+      harness.inserted.some(
+        (entry) => entry.values?.referenceType === "FACTORY_POS_DEPOSIT" && entry.values.balance === "25.00"
+      )
+    ).toBe(true);
+    expect(
+      harness.inserted.some(
+        (entry) => entry.values?.txType === "BALE_SALE" && String(entry.values.description).includes("[CREDIT]")
+      )
+    ).toBe(true);
   });
 
   it("locks physical bales and aborts the whole sale when requested stock is short", async () => {

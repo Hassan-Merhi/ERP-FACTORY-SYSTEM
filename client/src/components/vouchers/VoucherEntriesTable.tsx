@@ -78,9 +78,20 @@ export function VoucherEntriesTable({
   const [mobileNarration, setMobileNarration] = useState("");
   const mobileAmountInputRef = useRef<HTMLInputElement>(null);
   const mobileSearchInputRef = useRef<HTMLInputElement>(null);
+  const initializedMobileEditIndexRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!mobileEditOpen || mobileEditIndex === null) return;
+    if (!mobileEditOpen || mobileEditIndex === null) {
+      initializedMobileEditIndexRef.current = null;
+      return;
+    }
+
+    // PaymentReceiptTab passes onRowFocus inline, so its identity changes whenever
+    // sidebar search state changes. Do not re-initialize this sheet on those
+    // rerenders or every keystroke in the mobile search box gets cleared.
+    if (initializedMobileEditIndexRef.current === mobileEditIndex) return;
+    initializedMobileEditIndexRef.current = mobileEditIndex;
+
     const current = form.getValues(`entries.${mobileEditIndex}.amount`) || "";
     setMobileAmountStr(current);
     setMobileNarration(form.getValues(`entries.${mobileEditIndex}.narration`) || "");

@@ -10,6 +10,8 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { getClientDate } from "../../lib/dateUtils";
 import { sqlArray } from "../../lib/sqlArray";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 import { eq, and, sql, desc } from "drizzle-orm";
 import {
   factorySuppliers,
@@ -145,11 +147,10 @@ export function registerFactorySupplierUsageReportRoutes(app: Express, requireAu
 
         const sRawStock = relevantRawStock.filter((rs) => sContainerIds.includes(rs.containerId));
 
-        let openingReceivedKg = 0;
-        let openingUsedKg = 0;
-        let periodPurchasedKg = 0;
-        let totalCostPerKg = 0;
-        let costCount = 0;
+        const openingReceived: Decimal[] = [];
+        const openingUsed: Decimal[] = [];
+        const periodPurchased: Decimal[] = [];
+        const costsPerKg: Decimal[] = [];
 
         for (const rs of sRawStock) {
           const rsDate = rs.offloadedAt
@@ -158,34 +159,32 @@ export function registerFactorySupplierUsageReportRoutes(app: Express, requireAu
               ? new Date(rs.createdAt).toISOString().split("T")[0]
               : startDate;
 
-          const receivedKg = parseFloat(rs.receivedKg || "0");
-          const usedKg = parseFloat(rs.usedKg || "0");
-          const cpk = parseFloat(rs.costPerKgUsd || "0") || parseFloat(rs.costPerKg || "0") || 0;
+          const receivedKg = toMoney(rs.receivedKg);
+          const usedKg = toMoney(rs.usedKg);
+          const usdCostPerKg = toMoney(rs.costPerKgUsd);
+          const cpk = usdCostPerKg.isZero() ? toMoney(rs.costPerKg) : usdCostPerKg;
 
           if (rsDate < startDate) {
-            openingReceivedKg += receivedKg;
-            openingUsedKg += usedKg;
+            openingReceived.push(receivedKg);
+            openingUsed.push(usedKg);
           } else if (rsDate >= startDate && rsDate <= endDate) {
-            periodPurchasedKg += receivedKg;
+            periodPurchased.push(receivedKg);
           }
 
-          if (cpk > 0) {
-            totalCostPerKg += cpk;
-            costCount++;
-          }
+          if (cpk.gt(0)) costsPerKg.push(cpk);
         }
 
         const sMixSources = allMixSources.filter(
           (ms) => ms.containerId !== null && sContainerIds.includes(ms.containerId)
         );
 
-        let periodUsedKg = 0;
+        const periodUsed: string[] = [];
         for (const ms of sMixSources) {
           const mb = mixBatchMap.get(ms.mixBatchId);
           if (mb) {
             const mbDate = mb.createdAt ? new Date(mb.createdAt).toISOString().split("T")[0] : "";
             if (mbDate >= startDate && mbDate <= endDate) {
-              periodUsedKg += parseFloat(ms.weightKg || "0");
+              periodUsed.push(ms.weightKg || "0");
             }
           }
         }
@@ -210,23 +209,25 @@ export function registerFactorySupplierUsageReportRoutes(app: Express, requireAu
         });
 
         const totalBales = periodBales.length;
-        const openingBalance = openingReceivedKg - openingUsedKg;
-        const remaining = openingBalance + periodPurchasedKg - periodUsedKg;
-        const avgCostPerKg = costCount > 0 ? totalCostPerKg / costCount : 0;
-        const totalCost = periodPurchasedKg * avgCostPerKg;
-        const costPerBale = totalBales > 0 ? totalCost / totalBales : 0;
+        const periodPurchasedKg = sumMoney(periodPurchased);
+        const periodUsedKg = sumMoney(periodUsed);
+        const openingBalance = sumMoney(openingReceived).minus(sumMoney(openingUsed));
+        const remaining = openingBalance.plus(periodPurchasedKg).minus(periodUsedKg);
+        const avgCostPerKg = costsPerKg.length > 0 ? sumMoney(costsPerKg).div(costsPerKg.length) : new MoneyDecimal(0);
+        const totalCost = periodPurchasedKg.times(avgCostPerKg);
+        const costPerBale = totalBales > 0 ? totalCost.div(totalBales) : new MoneyDecimal(0);
 
         supplierSummaries.push({
           supplierId: sid,
           supplierName,
-          openingBalance,
-          totalPurchasedKg: periodPurchasedKg,
-          totalUsedKg: periodUsedKg,
-          remaining,
-          avgCostPerKg,
-          costPerBale,
+          openingBalance: openingBalance.toNumber(),
+          totalPurchasedKg: periodPurchasedKg.toNumber(),
+          totalUsedKg: periodUsedKg.toNumber(),
+          remaining: remaining.toNumber(),
+          avgCostPerKg: avgCostPerKg.toNumber(),
+          costPerBale: costPerBale.toNumber(),
           totalBales,
-          totalCost,
+          totalCost: totalCost.toNumber(),
           bales: periodBales,
         });
       }
@@ -240,9 +241,9 @@ export function registerFactorySupplierUsageReportRoutes(app: Express, requireAu
             return {
               containerId: ms.containerId,
               containerNumber: container ? container.containerNumber : `C-${ms.containerId}`,
-              weightKg: parseFloat(ms.weightKg || "0"),
-              costPerKg: parseFloat(ms.costPerKg || "0"),
-              totalCost: parseFloat(ms.totalCost || "0"),
+              weightKg: toMoney(ms.weightKg).toNumber(),
+              costPerKg: toMoney(ms.costPerKg).toNumber(),
+              totalCost: toMoney(ms.totalCost).toNumber(),
             };
           });
 
@@ -252,9 +253,9 @@ export function registerFactorySupplierUsageReportRoutes(app: Express, requireAu
             referenceNumber: bale.referenceNumber,
             productName: bale.productName || bale.baleCode,
             supplierName: summary.supplierName,
-            weightKg: parseFloat(bale.weightKg || "0"),
-            costPerKg: parseFloat(bale.costPerKg || "0"),
-            totalCost: parseFloat(bale.totalCost || "0"),
+            weightKg: toMoney(bale.weightKg).toNumber(),
+            costPerKg: toMoney(bale.costPerKg).toNumber(),
+            totalCost: toMoney(bale.totalCost).toNumber(),
             date: bale.finalizedAt
               ? new Date(bale.finalizedAt).toISOString().split("T")[0]
               : bale.createdAt

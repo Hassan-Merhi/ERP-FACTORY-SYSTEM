@@ -14,6 +14,7 @@ import { requireAuth } from "../../../auth";
 import { writeDaybookEntry } from "../_helpers";
 import { factoryCategories, factoryBaleProducts, factoryBales, factoryBaleSequences } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 
 export function registerFactoryProductImportRoutes(app: Express) {
   app.post("/api/factory/bale-products/import-excel", requireAuth, async (req: Request, res: Response) => {
@@ -33,7 +34,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
           const {
             read: readExcel,
             utils: { sheet_to_json: sheetToJson },
-          } = await import("xlsx-js-style");
+          } = (await import("xlsx-js-style")).default;
           const workbook = readExcel(req.file.buffer, { type: "buffer" });
           const sheetName = workbook.SheetNames[0];
           const rows = sheetToJson<Record<string, unknown>>(workbook.Sheets[sheetName]);
@@ -235,7 +236,7 @@ export function registerFactoryProductImportRoutes(app: Express) {
 
           if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-          const XLSX = await import("xlsx-js-style");
+          const XLSX = (await import("xlsx-js-style")).default;
           const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
           const sheetName = workbook.SheetNames[0];
           const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName]);
@@ -377,8 +378,11 @@ export function registerFactoryProductImportRoutes(app: Express) {
           if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
           const locationId = req.body.locationId ? (parseId(req.body.locationId) ?? -1) : null;
+          if (locationId !== null && !(await isFactorySessionLocation(req.session, locationId))) {
+            return res.status(400).json({ message: "Location not found" });
+          }
 
-          const XLSX = await import("xlsx-js-style");
+          const XLSX = (await import("xlsx-js-style")).default;
           const workbook = XLSX.read(req.file.buffer, { type: "buffer", cellDates: true });
           const sheetName = workbook.SheetNames[0];
           const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName]);

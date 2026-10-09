@@ -18,6 +18,18 @@ import { readExcel, sheetToJson } from "../excelHelper";
 import { requireAIActionPermission, logAIAction } from "../lib/aiActionPermission";
 import { poLineItems, purchaseOrders, supplierProformas } from "@shared/schema";
 import { supplierService } from "./suppliers/supplierService";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, moneyString, parseMoneyInput } from "../lib/money";
+
+/** An amount read the way parseFloat read it, 0 when it does not parse (the old `|| 0`). */
+function amountOrZero(value: unknown): Decimal {
+  return parseMoneyInput(value) ?? new MoneyDecimal(0);
+}
+
+/** Exact sum of preview line totals. */
+function sumLineTotals(lines: Array<{ lineTotal: string }>): Decimal {
+  return lines.reduce((sum, line) => sum.plus(amountOrZero(line.lineTotal)), new MoneyDecimal(0));
+}
 
 export function registerChatbotPoImportRoutes(app: Express) {
   // ── PO File Parse (AI-powered) ────────────────────────────────────
@@ -87,19 +99,18 @@ export function registerChatbotPoImportRoutes(app: Express) {
             stockItemId: matched?.id ?? null,
             stockItemName: matched?.name ?? "",
             qty: item.quantity.toString(),
-            rate: (item.rate || 0).toFixed(2),
-            lineTotal: (item.quantity * (item.rate || 0)).toFixed(2),
+            rate: moneyString(item.rate || 0),
+            lineTotal: moneyString(amountOrZero(item.quantity).times(amountOrZero(item.rate || 0))),
           });
         }
-        const itemsTotal = lines.reduce((s, l) => s + parseFloat(l.lineTotal), 0);
-        const chargesNet =
-          extracted.freight +
-          extracted.surcharge +
-          extracted.fumigation +
-          extracted.documentCharges -
-          extracted.discount +
-          extracted.otherCharges;
-        const grandTotal = itemsTotal + chargesNet;
+        const itemsTotal = sumLineTotals(lines);
+        const chargesNet = amountOrZero(extracted.freight)
+          .plus(amountOrZero(extracted.surcharge))
+          .plus(amountOrZero(extracted.fumigation))
+          .plus(amountOrZero(extracted.documentCharges))
+          .minus(amountOrZero(extracted.discount))
+          .plus(amountOrZero(extracted.otherCharges));
+        const grandTotal = itemsTotal.plus(chargesNet);
         const unresolvedItems = lines
           .map((l, i) => (l.stockItemId ? null : { index: i, rawName: l.rawName, rawCode: l.rawCode }))
           .filter(Boolean);
@@ -121,8 +132,8 @@ export function registerChatbotPoImportRoutes(app: Express) {
             discount: extracted.discount,
             otherCharges: extracted.otherCharges,
           },
-          itemsTotal: itemsTotal.toFixed(2),
-          grandTotal: grandTotal.toFixed(2),
+          itemsTotal: moneyString(itemsTotal),
+          grandTotal: moneyString(grandTotal),
           unresolvedSupplier: !supplier,
           unresolvedItems,
           allSuppliers: allSuppliers.map((s) => ({ id: s.id, name: s.legalName, code: s.code || "" })),
@@ -242,15 +253,14 @@ export function registerChatbotPoImportRoutes(app: Express) {
         "Invoice_Date"
       );
       const importDate = importDateRaw || new Date().toISOString().split("T")[0];
-      const freight = parseFloat(col(first, "Freight", "freight") || "0") || 0;
-      const surcharge = parseFloat(col(first, "Surcharge", "surcharge") || "0") || 0;
-      const fumigation = parseFloat(col(first, "Fumigation", "fumigation") || "0") || 0;
-      const documentCharges =
-        parseFloat(
-          col(first, "Document_Charges", "DocumentCharges", "Doc Charges", "DocCharges", "Document Charges") || "0"
-        ) || 0;
-      const discount = parseFloat(col(first, "Discount", "discount") || "0") || 0;
-      const otherCharges = parseFloat(col(first, "Other_Charges", "OtherCharges", "Other Charges") || "0") || 0;
+      const freight = amountOrZero(col(first, "Freight", "freight")).toNumber();
+      const surcharge = amountOrZero(col(first, "Surcharge", "surcharge")).toNumber();
+      const fumigation = amountOrZero(col(first, "Fumigation", "fumigation")).toNumber();
+      const documentCharges = amountOrZero(
+        col(first, "Document_Charges", "DocumentCharges", "Doc Charges", "DocCharges", "Document Charges")
+      ).toNumber();
+      const discount = amountOrZero(col(first, "Discount", "discount")).toNumber();
+      const otherCharges = amountOrZero(col(first, "Other_Charges", "OtherCharges", "Other Charges")).toNumber();
 
       const mappedLines = [];
       for (const row of rows) {
@@ -277,11 +287,13 @@ export function registerChatbotPoImportRoutes(app: Express) {
           "Product",
           "Item Description"
         );
-        const qty = parseFloat(col(row, "Quantity", "Qty", "quantity", "qty", "Units", "units") || "0");
-        const rate = parseFloat(
-          col(row, "Rate", "Price", "Unit_Price", "UnitPrice", "Unit Price", "rate", "price", "Unit Cost") || "0"
+        // A quantity that does not parse is skipped like a zero one; it used to
+        // pass the "<= 0" check as NaN.
+        const qty = amountOrZero(col(row, "Quantity", "Qty", "quantity", "qty", "Units", "units"));
+        const rate = amountOrZero(
+          col(row, "Rate", "Price", "Unit_Price", "UnitPrice", "Unit Price", "rate", "price", "Unit Cost")
         );
-        if ((!itemName && !itemCode) || qty <= 0) continue;
+        if ((!itemName && !itemCode) || qty.lessThanOrEqualTo(0)) continue;
         const matched = await tryMatchItem(itemCode, itemName);
         mappedLines.push({
           rawName: itemName || itemCode,
@@ -289,16 +301,21 @@ export function registerChatbotPoImportRoutes(app: Express) {
           stockItemId: matched?.id ?? null,
           stockItemName: matched?.name ?? "",
           qty: qty.toString(),
-          rate: rate.toFixed(2),
-          lineTotal: (qty * rate).toFixed(2),
+          rate: moneyString(rate),
+          lineTotal: moneyString(qty.times(rate)),
         });
       }
 
       // If standard mapping found items — use them directly
       if (mappedLines.length > 0) {
         const supplier = tryMatchSupplier(supplierCode) || tryMatchSupplier(supplierName);
-        const itemsTotal = mappedLines.reduce((s, l) => s + parseFloat(l.lineTotal), 0);
-        const chargesNet = freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+        const itemsTotal = sumLineTotals(mappedLines);
+        const chargesNet = amountOrZero(freight)
+          .plus(amountOrZero(surcharge))
+          .plus(amountOrZero(fumigation))
+          .plus(amountOrZero(documentCharges))
+          .minus(amountOrZero(discount))
+          .plus(amountOrZero(otherCharges));
         const unresolvedItems = mappedLines
           .map((l, i) => (l.stockItemId ? null : { index: i, rawName: l.rawName, rawCode: l.rawCode }))
           .filter(Boolean);
@@ -312,8 +329,8 @@ export function registerChatbotPoImportRoutes(app: Express) {
           supplierRaw: supplierCode || supplierName || "",
           lines: mappedLines,
           charges: { freight, surcharge, fumigation, documentCharges, discount, otherCharges },
-          itemsTotal: itemsTotal.toFixed(2),
-          grandTotal: (itemsTotal + chargesNet).toFixed(2),
+          itemsTotal: moneyString(itemsTotal),
+          grandTotal: moneyString(itemsTotal.plus(chargesNet)),
           unresolvedSupplier: !supplier,
           unresolvedItems,
           allSuppliers: allSuppliers.map((s) => ({ id: s.id, name: s.legalName, code: s.code || "" })),
@@ -372,6 +389,16 @@ export function registerChatbotPoImportRoutes(app: Express) {
         return res.status(400).json({ message: "Supplier not found" });
       }
 
+      // Every line must carry a quantity and rate that parse; one that did not
+      // used to be written as 'NaN', which Postgres numeric accepts.
+      const parsedLines = (lines as Array<{ qty?: unknown; rate?: unknown }>).map((line) => ({
+        qty: parseMoneyInput(line.qty),
+        rate: parseMoneyInput(line.rate),
+      }));
+      if (parsedLines.some((line) => !line.qty || !line.rate)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
       const unresolved = lines.filter((l: { stockItemId?: unknown }) => !l.stockItemId);
       if (unresolved.length > 0) {
         return res.status(400).json({
@@ -416,18 +443,27 @@ export function registerChatbotPoImportRoutes(app: Express) {
         }
       }
 
-      const itemsTotal = lines.reduce(
-        (s: number, l: { qty: string; rate: string }) => s + parseFloat(l.qty) * parseFloat(l.rate),
-        0
-      );
-      const freightAmt = parseFloat(charges?.freight || "0") || 0;
-      const surchargeAmt = parseFloat(charges?.surcharge || "0") || 0;
-      const fumigationAmt = parseFloat(charges?.fumigation || "0") || 0;
-      const docChargesAmt = parseFloat(charges?.documentCharges || "0") || 0;
-      const discountAmt = parseFloat(charges?.discount || "0") || 0;
-      const otherChargesAmt = parseFloat(charges?.otherCharges || "0") || 0;
-      const grandTotal =
-        itemsTotal + freightAmt + surchargeAmt + fumigationAmt + docChargesAmt - discountAmt + otherChargesAmt;
+      // Each line total is qty x rate rounded half up to cents, and the PO's
+      // items total is the sum of those line totals, so the two always agree.
+      const storedLines = parsedLines.map((line) => ({
+        qty: line.qty!,
+        rate: line.rate!,
+        lineTotal: line.qty!.times(line.rate!).toDecimalPlaces(2),
+      }));
+      const itemsTotal = storedLines.reduce((sum, line) => sum.plus(line.lineTotal), new MoneyDecimal(0));
+      const freightAmt = amountOrZero(charges?.freight);
+      const surchargeAmt = amountOrZero(charges?.surcharge);
+      const fumigationAmt = amountOrZero(charges?.fumigation);
+      const docChargesAmt = amountOrZero(charges?.documentCharges);
+      const discountAmt = amountOrZero(charges?.discount);
+      const otherChargesAmt = amountOrZero(charges?.otherCharges);
+      const grandTotal = itemsTotal
+        .plus(freightAmt)
+        .plus(surchargeAmt)
+        .plus(fumigationAmt)
+        .plus(docChargesAmt)
+        .minus(discountAmt)
+        .plus(otherChargesAmt);
 
       const po = await storage.createPurchaseOrder(
         {
@@ -436,35 +472,30 @@ export function registerChatbotPoImportRoutes(app: Express) {
           containerId: container.id,
           supplierId: Number(supplierId),
           currency: currency || "USD",
-          itemsTotal: itemsTotal.toFixed(2),
-          freight: freightAmt.toFixed(2),
-          surcharge: surchargeAmt.toFixed(2),
-          fumigation: fumigationAmt.toFixed(2),
-          documentCharges: docChargesAmt.toFixed(2),
-          discount: discountAmt.toFixed(2),
-          otherCharges: otherChargesAmt.toFixed(2),
+          itemsTotal: moneyString(itemsTotal),
+          freight: moneyString(freightAmt),
+          surcharge: moneyString(surchargeAmt),
+          fumigation: moneyString(fumigationAmt),
+          documentCharges: moneyString(docChargesAmt),
+          discount: moneyString(discountAmt),
+          otherCharges: moneyString(otherChargesAmt),
           status: "Open",
-          chargesEdited:
-            freightAmt > 0 ||
-            surchargeAmt > 0 ||
-            fumigationAmt > 0 ||
-            docChargesAmt > 0 ||
-            discountAmt > 0 ||
-            otherChargesAmt > 0,
+          chargesEdited: [freightAmt, surchargeAmt, fumigationAmt, docChargesAmt, discountAmt, otherChargesAmt].some(
+            (amount) => amount.greaterThan(0)
+          ),
         },
         importDate
       );
 
-      for (const line of lines) {
-        const q = parseFloat(line.qty);
-        const r = parseFloat(line.rate);
+      for (const [index, line] of lines.entries()) {
+        const stored = storedLines[index];
         await db.insert(poLineItems).values({
           poId: po.id,
           stockItemId: Number(line.stockItemId),
           itemName: line.itemName || line.rawName || "Unknown Item",
-          quantity: q.toFixed(3),
-          rate: r.toFixed(2),
-          lineTotal: (q * r).toFixed(2),
+          quantity: stored.qty.toFixed(3),
+          rate: stored.rate.toFixed(2),
+          lineTotal: stored.lineTotal.toFixed(2),
         });
       }
 

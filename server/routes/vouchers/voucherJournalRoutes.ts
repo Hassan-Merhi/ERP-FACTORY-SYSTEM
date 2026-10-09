@@ -24,6 +24,36 @@ import {
 } from "@shared/schema";
 import { normalizeVoucherEntryAmounts, erpRateToDaybookFxRateToUsd } from "../../services/accounting/currencyAmounts";
 import { isVoucherAccountType, voucherEntryAccountLink } from "../../services/accounting/voucherEntryAccountLink";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
+
+/**
+ * Transaction-currency debit and credit totals of a journal request. Amounts
+ * are read the way the float path read them (a leading number, else 0) but
+ * summed exactly.
+ */
+function journalTotals(entries: Array<{ type?: unknown; amount?: unknown }>): { debits: Decimal; credits: Decimal } {
+  let debits = new MoneyDecimal(0);
+  let credits = new MoneyDecimal(0);
+  for (const entry of entries) {
+    const amount = parseMoneyInput(entry.amount || "0") ?? new MoneyDecimal(0);
+    if (entry.type === "DR") debits = debits.plus(amount);
+    else if (entry.type === "CR") credits = credits.plus(amount);
+  }
+  return { debits, credits };
+}
+
+/** The voucher's CFA-per-USD rate as the float path read it; NaN when unreadable. */
+function journalRate(currency: string, rateRaw: string | number | null): Decimal {
+  if (currency === "USD" || !rateRaw) return new MoneyDecimal(1);
+  return parseMoneyInput(String(rateRaw)) ?? new MoneyDecimal(NaN);
+}
+
+/** The historical base (USD) total: the larger side, divided by a positive rate. */
+function journalBaseTotal(currency: string, totals: { debits: Decimal; credits: Decimal }, rate: Decimal): Decimal {
+  const larger = MoneyDecimal.max(totals.debits, totals.credits);
+  return currency !== "USD" && rate.greaterThan(0) ? larger.dividedBy(rate) : larger;
+}
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -45,13 +75,13 @@ async function syncJournalToOrderCharge(
   if (!customerEntry) return;
 
   const ledgerCrEntries = savedEntries.filter(
-    (e) => e.ledgerAccountId !== null && e.customerId === null && parseFloat(e.creditAmount || "0") > 0
+    (e) => e.ledgerAccountId !== null && e.customerId === null && toMoney(e.creditAmount).greaterThan(0)
   );
   if (ledgerCrEntries.length === 0) return;
 
   for (const ledgerEntry of ledgerCrEntries) {
-    const newAmount = parseFloat(ledgerEntry.creditAmount || "0");
-    if (newAmount <= 0) continue;
+    const newAmount = toMoney(ledgerEntry.creditAmount);
+    if (newAmount.lessThanOrEqualTo(0)) continue;
 
     let matchingCharges: { id: number; orderId: number; amount: string; chargeType: string }[] = [];
 
@@ -110,8 +140,7 @@ async function syncJournalToOrderCharge(
     if (matchingCharges.length === 0) continue;
 
     const charge = matchingCharges[0];
-    const oldAmount = parseFloat(charge.amount || "0");
-    const amountChanged = Math.abs(oldAmount - newAmount) >= 0.01;
+    const amountChanged = toMoney(charge.amount).minus(newAmount).abs().greaterThanOrEqualTo(0.01);
 
     // Atomically: update charge amount, recalc order totals, sync customerBalances.
     // Without a transaction a crash between the three writes leaves the order's grand
@@ -190,29 +219,19 @@ export function registerVoucherJournalRoutes(app: Express) {
       // totalDebits/totalCredits below are in the voucher's transaction currency (e.g. CFA).
       const vCurrency = (currency as string | undefined) || "USD";
       const vRateRaw = (exchangeRate as string | number | undefined) || null;
-      const cfaPerUsd = vCurrency !== "USD" && vRateRaw ? parseFloat(String(vRateRaw)) : 1;
+      const cfaPerUsd = journalRate(vCurrency, vRateRaw);
 
       // Calculate total debits and credits in transaction currency
-      let totalDebits = 0;
-      let totalCredits = 0;
-      entries.forEach((entry) => {
-        const amount = parseFloat(entry.amount || "0");
-        if (entry.type === "DR") {
-          totalDebits += amount;
-        } else if (entry.type === "CR") {
-          totalCredits += amount;
-        }
-      });
+      const totals = journalTotals(entries);
 
       // Validate debits equal credits (for non-optional vouchers)
-      if (!optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
+      if (!optional && totals.debits.minus(totals.credits).abs().greaterThanOrEqualTo(0.01)) {
         return res.status(400).json({ message: "Total debits must equal total credits" });
       }
 
       // vouchers.totalAmount stores the historical base (USD) amount.
       // For CFA: baseTotalMax = max(totalDebits, totalCredits) / cfaPerUsd
-      const baseTxMax = Math.max(totalDebits, totalCredits);
-      const baseTotalMax = vCurrency !== "USD" && cfaPerUsd > 0 ? baseTxMax / cfaPerUsd : baseTxMax;
+      const baseTotalMax = journalBaseTotal(vCurrency, totals, cfaPerUsd);
 
       // Generate voucher number
       const voucherNumber = `JOURNAL-${Date.now()}`;
@@ -305,11 +324,13 @@ export function registerVoucherJournalRoutes(app: Express) {
         if (fSetting) {
           const daybookCurrencyJ = result.voucher.currency || "USD";
           // vouchers.totalAmount now stores the historical base (USD) amount.
-          const daybookBaseTotalJ = parseFloat(result.voucher.totalAmount || "0");
-          const daybookRateJ = result.voucher.exchangeRate ? parseFloat(result.voucher.exchangeRate) : 1;
+          const daybookBaseTotalJ = toMoney(result.voucher.totalAmount);
+          const daybookRateJ = result.voucher.exchangeRate ? toMoney(result.voucher.exchangeRate) : new MoneyDecimal(1);
           // Reconstruct the original CFA total: base × rate (TRANSACTION_PER_BASE).
           const daybookAmtCurrencyJ =
-            daybookCurrencyJ !== "USD" && daybookRateJ > 0 ? daybookBaseTotalJ * daybookRateJ : daybookBaseTotalJ;
+            daybookCurrencyJ !== "USD" && daybookRateJ.greaterThan(0)
+              ? daybookBaseTotalJ.times(daybookRateJ)
+              : daybookBaseTotalJ;
           // factory_daybook_entries.fx_rate_to_usd expects USD-per-foreign-unit.
           // The ERP voucher stores CFA-per-USD, so we store the inverse.
           const daybookFxRateToUsdJ = erpRateToDaybookFxRateToUsd(daybookCurrencyJ, "USD", result.voucher.exchangeRate);
@@ -321,9 +342,9 @@ export function registerVoucherJournalRoutes(app: Express) {
             referenceTable: "vouchers",
             description: result.voucher.description || `Journal voucher #${result.voucher.voucherNumber}`,
             currencyCode: daybookCurrencyJ,
-            amountCurrency: String(daybookAmtCurrencyJ),
+            amountCurrency: daybookAmtCurrencyJ.toFixed(),
             fxRateToUsd: daybookFxRateToUsdJ,
-            amountUsd: String(daybookBaseTotalJ),
+            amountUsd: daybookBaseTotalJ.toFixed(),
             createdBy: null,
           });
         }
@@ -442,29 +463,18 @@ export function registerVoucherJournalRoutes(app: Express) {
       // currency/exchangeRate may not be sent on a PATCH (preserve existing values).
       const vCurrencyPatch = (currency as string | undefined) || "USD";
       const vRateRawPatch = (exchangeRate as string | number | undefined) || null;
-      const cfaPerUsdPatch = vCurrencyPatch !== "USD" && vRateRawPatch ? parseFloat(String(vRateRawPatch)) : 1;
+      const cfaPerUsdPatch = journalRate(vCurrencyPatch, vRateRawPatch);
 
       // Calculate total debits and credits in transaction currency
-      let totalDebits = 0;
-      let totalCredits = 0;
-      entries.forEach((entry) => {
-        const amount = parseFloat(entry.amount || "0");
-        if (entry.type === "DR") {
-          totalDebits += amount;
-        } else if (entry.type === "CR") {
-          totalCredits += amount;
-        }
-      });
+      const totals = journalTotals(entries);
 
       // Validate debits equal credits (for non-optional vouchers)
-      if (!optional && Math.abs(totalDebits - totalCredits) >= 0.01) {
+      if (!optional && totals.debits.minus(totals.credits).abs().greaterThanOrEqualTo(0.01)) {
         return res.status(400).json({ message: "Total debits must equal total credits" });
       }
 
       // vouchers.totalAmount stores the historical base (USD) amount.
-      const baseTxMaxPatch = Math.max(totalDebits, totalCredits);
-      const baseTotalMaxPatch =
-        vCurrencyPatch !== "USD" && cfaPerUsdPatch > 0 ? baseTxMaxPatch / cfaPerUsdPatch : baseTxMaxPatch;
+      const baseTotalMaxPatch = journalBaseTotal(vCurrencyPatch, totals, cfaPerUsdPatch);
 
       // Use database transaction for atomic operation
       const result = await db.transaction(async (tx) => {
@@ -597,11 +607,11 @@ export function registerVoucherJournalRoutes(app: Express) {
         if (ict) {
           const otherVoucherId = ict.fromVoucherId === voucherId ? ict.toVoucherId : ict.fromVoucherId;
           if (otherVoucherId) {
-            const newTotal = parseFloat(result.voucher.totalAmount || "0");
+            const newTotal = toMoney(result.voucher.totalAmount);
             const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
             if (otherVoucher) {
-              const oldTotal = parseFloat(otherVoucher.totalAmount || "0");
-              const ratio = oldTotal > 0 ? newTotal / oldTotal : 1;
+              const oldTotal = toMoney(otherVoucher.totalAmount);
+              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
               const otherEntries = await db
                 .select()
                 .from(voucherEntries)
@@ -610,8 +620,8 @@ export function registerVoucherJournalRoutes(app: Express) {
                 await db
                   .update(voucherEntries)
                   .set({
-                    debitAmount: (parseFloat(e.debitAmount || "0") * ratio).toFixed(2),
-                    creditAmount: (parseFloat(e.creditAmount || "0") * ratio).toFixed(2),
+                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
+                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
                   })
                   .where(eq(voucherEntries.id, e.id));
               }

@@ -15,6 +15,7 @@ import { z } from "zod";
 import { locations } from "../common";
 import { stockItems } from "../inventory";
 import { vouchers } from "./vouchers";
+import { isNonNegativeNumeric, isNonZeroNumeric, isPositiveNumeric } from "../../numericString";
 
 export const stockTransferVouchers = pgTable("stock_transfer_vouchers", {
   id: serial("id").primaryKey(),
@@ -68,8 +69,8 @@ export const insertStockTransferItemSchema = createInsertSchema(stockTransferIte
   .extend({
     transferId: z.number().min(1, "Transfer is required"),
     stockItemId: z.number().min(1, "Stock item is required"),
-    quantity: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Quantity must be positive"),
-    rate: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Rate must be non-negative"),
+    quantity: z.string().refine(isPositiveNumeric, "Quantity must be positive"),
+    rate: z.string().refine(isNonNegativeNumeric, "Rate must be non-negative"),
   });
 
 export type InsertStockTransferItem = z.infer<typeof insertStockTransferItemSchema>;
@@ -125,8 +126,8 @@ export const insertStockAdjustmentItemSchema = createInsertSchema(stockAdjustmen
   .extend({
     adjustmentId: z.number().min(1, "Adjustment is required"),
     stockItemId: z.number().min(1, "Stock item is required"),
-    quantity: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) !== 0, "Quantity cannot be zero"),
-    rate: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Rate must be non-negative"),
+    quantity: z.string().refine(isNonZeroNumeric, "Quantity cannot be zero"),
+    rate: z.string().refine(isNonNegativeNumeric, "Rate must be non-negative"),
   });
 
 export type InsertStockAdjustmentItem = z.infer<typeof insertStockAdjustmentItemSchema>;
@@ -248,13 +249,9 @@ export const insertSalesItemSchema = createInsertSchema(salesItems)
   .extend({
     voucherId: z.number().min(1, "Voucher is required"),
     stockItemId: z.number().min(1, "Stock item is required"),
-    quantity: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Quantity must be positive"),
-    sellingPrice: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Selling price must be non-negative"),
-    costPrice: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Cost price must be non-negative"),
+    quantity: z.string().refine(isPositiveNumeric, "Quantity must be positive"),
+    sellingPrice: z.string().refine(isNonNegativeNumeric, "Selling price must be non-negative"),
+    costPrice: z.string().refine(isNonNegativeNumeric, "Cost price must be non-negative"),
     totalSales: z.string(),
     totalCost: z.string(),
     profit: z.string(),

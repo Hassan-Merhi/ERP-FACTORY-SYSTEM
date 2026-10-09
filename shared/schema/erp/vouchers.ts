@@ -20,6 +20,7 @@ import { stockItems } from "../inventory";
 import { users } from "../users";
 
 import { employees, suppliers } from "./parties";
+import { isNonNegativeNumeric, isPositiveNumeric } from "../../numericString";
 
 export const vouchers = pgTable(
   "vouchers",
@@ -233,8 +234,8 @@ export const insertCreditNoteItemSchema = createInsertSchema(creditNoteItems)
     voucherId: z.number().min(1, "Voucher is required"),
     stockItemId: z.number().min(1, "Stock item is required"),
     locationId: z.number().min(1, "Location is required"),
-    quantity: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) > 0, "Quantity must be positive"),
-    rate: z.string().refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Rate must be non-negative"),
+    quantity: z.string().refine(isPositiveNumeric, "Quantity must be positive"),
+    rate: z.string().refine(isNonNegativeNumeric, "Rate must be non-negative"),
     totalValue: z.string(),
   });
 

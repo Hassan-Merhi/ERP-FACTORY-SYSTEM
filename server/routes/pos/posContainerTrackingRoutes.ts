@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { locations, poLineItems, stockItems } from "@shared/schema";
+import { locations, poLineItems, stockItems, userCompanyRoles } from "@shared/schema";
 import { requireAuth, requireRole } from "../../auth";
 import { db } from "../../db";
 import { fetchActiveContainers, type RawContainerRow } from "../../lib/gitHelpers";
@@ -24,14 +24,35 @@ function normalizeLocationLabel(value: string | null | undefined): string {
 
 function containerMatchesAssignedLocation(
   container: Pick<RawContainerRow, "shopName">,
-  context: PosTrackingContext
+  context: PosTrackingContext,
+  includeUnassigned = false
 ): boolean {
   const shop = normalizeLocationLabel(container.shopName);
-  if (!shop) return false;
+  if (!shop) return includeUnassigned;
 
   const assignedLabels = [context.location.name, context.location.code].map(normalizeLocationLabel).filter(Boolean);
 
   return assignedLabels.some((label) => label === shop);
+}
+
+/**
+ * A blank shop cannot normally be exposed to a POS user because the destination
+ * is unknown. The one safe exception is a company that currently has exactly
+ * one distinct POS-assigned location. In that case an unassigned active
+ * container cannot belong to a different POS location, so the sole POS location
+ * may see it instead of silently losing the container from the list.
+ */
+async function canShowUnassignedContainers(context: PosTrackingContext): Promise<boolean> {
+  const rows = await db
+    .select({ assignedLocationId: userCompanyRoles.assignedLocationId })
+    .from(userCompanyRoles)
+    .where(and(eq(userCompanyRoles.companyId, context.companyId), eq(userCompanyRoles.role, "POS")));
+
+  const assignedLocationIds = new Set(
+    rows.map((row) => Number(row.assignedLocationId)).filter((id) => Number.isInteger(id) && id > 0)
+  );
+
+  return assignedLocationIds.size === 1 && assignedLocationIds.has(context.location.id);
 }
 
 async function resolvePosTrackingContext(req: Request, res: Response): Promise<PosTrackingContext | null> {
@@ -75,9 +96,12 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
       const context = await resolvePosTrackingContext(req, res);
       if (!context) return;
 
-      const rows = await fetchActiveContainers([context.companyId]);
+      const [rows, includeUnassigned] = await Promise.all([
+        fetchActiveContainers([context.companyId]),
+        canShowUnassignedContainers(context),
+      ]);
       const containers = rows
-        .filter((row) => containerMatchesAssignedLocation(row, context))
+        .filter((row) => containerMatchesAssignedLocation(row, context, includeUnassigned))
         .map((row) => ({
           id: row.id,
           containerNumber: row.containerNumber,
@@ -116,8 +140,11 @@ export function registerPosContainerTrackingRoutes(app: Express): void {
         return res.status(400).json({ message: "Invalid container ID" });
       }
 
-      const [container] = await fetchActiveContainers([context.companyId], { containerId });
-      if (!container || !containerMatchesAssignedLocation(container, context)) {
+      const [[container], includeUnassigned] = await Promise.all([
+        fetchActiveContainers([context.companyId], { containerId }),
+        canShowUnassignedContainers(context),
+      ]);
+      if (!container || !containerMatchesAssignedLocation(container, context, includeUnassigned)) {
         return res.status(404).json({ message: "Container not found" });
       }
 

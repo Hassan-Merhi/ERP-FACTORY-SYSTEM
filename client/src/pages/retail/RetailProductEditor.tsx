@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { confirmAction } from "@/components/ConfirmHost";
 import { normalizeRetailImageUrl } from "@/lib/retailImageUrl";
 import {
   ALLOWED_IMAGE_TYPES,
@@ -453,11 +454,11 @@ export function ProductEditor({
                           type="button"
                           variant="ghost"
                           size="sm"
-                          onClick={() => {
+                          onClick={async () => {
                             if (
-                              window.confirm(
-                                "Printed labels with the old barcode will stop scanning. Change this barcode?"
-                              )
+                              await confirmAction({
+                                title: "Printed labels with the old barcode will stop scanning. Change this barcode?",
+                              })
                             ) {
                               setUnlockedBarcodes((current) => new Set(current).add(variantIndex));
                             }

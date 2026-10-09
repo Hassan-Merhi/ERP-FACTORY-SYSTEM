@@ -587,10 +587,12 @@ export const phase3RemainingTranslationsPart05: readonly Phase3SharedUiEntry[] =
     ar: "يلعق العامل لينظر إلى بياناته وبياناته وسُلفه ووثائقه",
     fr: "Cliquez sur un travailleur pour afficher son profil, son énoncé, ses avances et ses documents",
   },
+  { en: "Anything", ar: "أي شيء", fr: "N'importe quoi" },
+  { en: "Type anything", ar: "اكتب أي شيء", fr: "Écrivez n'importe quoi" },
   {
-    en: "Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Arrived) to edit inline.",
-    ar: "Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Arrived) to edit inline.",
-    fr: "Cliquez sur les cellules modifiables (Contient #, Destination, ETA, Shipping Co., Note, Arrivé) pour modifier en ligne.",
+    en: "Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Anything, Arrived) to edit inline.",
+    ar: "انقر على الخلايا القابلة للتعديل (رقم الحاوية، الوجهة، ETA، شركة الشحن، الملاحظة، أي شيء، الوصول) للتعديل مباشرة.",
+    fr: "Cliquez sur les cellules modifiables (N° conteneur, Destination, ETA, Compagnie maritime, Note, N'importe quoi, Arrivé) pour modifier directement.",
   },
   {
     en: "Click on quantities or use arrow keys + spacebar to add items",

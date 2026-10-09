@@ -24,6 +24,8 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import { writeDaybookEntry } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
 
 export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   app.patch("/api/factory/payroll/:id", requireAuth, async (req: Request, res: Response) => {
@@ -80,52 +82,50 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         });
       }
 
-      let updatedBonuses: number;
+      const approvedBonusExact = toMoney(approvedProductionBonus);
+      let updatedBonuses: Decimal | null;
       if (otherBonuses !== undefined) {
-        const parsedOther = parseFloat(otherBonuses);
-        if (!Number.isFinite(parsedOther) || parsedOther < 0) {
+        const parsedOther = parseMoneyInput(otherBonuses);
+        if (!parsedOther || parsedOther.lessThan(0)) {
           return res.status(400).json({ message: "Other bonus must be 0 or more" });
         }
-        updatedBonuses = approvedProductionBonus + parsedOther;
+        updatedBonuses = approvedBonusExact.plus(parsedOther);
       } else if (bonuses !== undefined) {
-        const parsedTotal = parseFloat(bonuses);
-        if (!Number.isFinite(parsedTotal) || parsedTotal < approvedProductionBonus - 0.001) {
+        const parsedTotal = parseMoneyInput(bonuses);
+        if (!parsedTotal || parsedTotal.lessThan(approvedBonusExact.minus(0.001))) {
           return res.status(400).json({
             message: `Total bonuses cannot be lower than the approved production bonus ($${approvedProductionBonus.toFixed(2)}).`,
           });
         }
         updatedBonuses = parsedTotal;
       } else {
-        updatedBonuses = parseFloat(current.bonuses || "0");
+        updatedBonuses = toMoney(current.bonuses);
       }
 
-      const oldBonuses = parseFloat(current.bonuses || "0");
-      const oldDeductions = parseFloat(current.deductions || "0");
-      const oldAdvances = parseFloat(current.advances || "0");
-      const oldOvertimePay = parseFloat(current.overtimePay || "0");
-      const updatedDeductions = deductions !== undefined ? parseFloat(deductions) : oldDeductions;
-      const updatedAdvances = advances !== undefined ? parseFloat(advances) : oldAdvances;
+      // Request values are read the way parseFloat reads them; null marks one
+      // that does not parse.
+      const oldBonuses = toMoney(current.bonuses);
+      const oldDeductions = toMoney(current.deductions);
+      const oldAdvances = toMoney(current.advances);
+      const oldOvertimePay = toMoney(current.overtimePay);
+      const updatedDeductions = deductions !== undefined ? parseMoneyInput(deductions) : oldDeductions;
+      const updatedAdvances = advances !== undefined ? parseMoneyInput(advances) : oldAdvances;
       const updatedOvertimeHours =
-        overtimeHours !== undefined ? parseFloat(overtimeHours) : parseFloat(current.overtimeHours || "0");
-      const updatedOvertimePay = overtimePay !== undefined ? parseFloat(overtimePay) : oldOvertimePay;
+        overtimeHours !== undefined ? parseMoneyInput(overtimeHours) : toMoney(current.overtimeHours);
+      const updatedOvertimePay = overtimePay !== undefined ? parseMoneyInput(overtimePay) : oldOvertimePay;
 
-      if (
-        ![updatedBonuses, updatedDeductions, updatedAdvances, updatedOvertimeHours, updatedOvertimePay].every(
-          Number.isFinite
-        )
-      ) {
+      if (!updatedBonuses || !updatedDeductions || !updatedAdvances || !updatedOvertimeHours || !updatedOvertimePay) {
         return res.status(400).json({ message: "Payroll numeric values are invalid" });
       }
 
-      const netSalary = Number(
-        (
-          parseFloat(current.netSalary || "0") +
-          (updatedBonuses - oldBonuses) -
-          (updatedDeductions - oldDeductions) -
-          (updatedAdvances - oldAdvances) +
-          (updatedOvertimePay - oldOvertimePay)
-        ).toFixed(2)
-      );
+      const netSalaryExact = toMoney(current.netSalary)
+        .plus(updatedBonuses.minus(oldBonuses))
+        .minus(updatedDeductions.minus(oldDeductions))
+        .minus(updatedAdvances.minus(oldAdvances))
+        .plus(updatedOvertimePay.minus(oldOvertimePay))
+        .toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
+      const netSalary = netSalaryExact.toNumber();
+      const otherBonusExact = MoneyDecimal.max(0, updatedBonuses.minus(approvedBonusExact));
 
       const updateData: Partial<typeof factoryPayrolls.$inferInsert> = {
         bonuses: updatedBonuses.toFixed(2),
@@ -133,7 +133,7 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         advances: updatedAdvances.toFixed(2),
         overtimeHours: updatedOvertimeHours.toFixed(2),
         overtimePay: updatedOvertimePay.toFixed(2),
-        netSalary: netSalary.toFixed(2),
+        netSalary: netSalaryExact.toFixed(2),
       };
       if (notes !== undefined) updateData.notes = notes;
       if (status !== undefined) updateData.status = status;
@@ -201,8 +201,8 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
             ...(bonuses !== undefined || otherBonuses !== undefined
               ? {
                   bonuses: { old: current.bonuses ?? null, new: updatedBonuses.toFixed(2) },
-                  productionBonus: { old: null, new: approvedProductionBonus.toFixed(2) },
-                  otherBonus: { old: null, new: Math.max(0, updatedBonuses - approvedProductionBonus).toFixed(2) },
+                  productionBonus: { old: null, new: approvedBonusExact.toFixed(2) },
+                  otherBonus: { old: null, new: otherBonusExact.toFixed(2) },
                 }
               : {}),
             ...(deductions !== undefined
@@ -220,9 +220,9 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
 
       res.json({
         ...updated,
-        productionBonus: approvedProductionBonus.toFixed(2),
+        productionBonus: approvedBonusExact.toFixed(2),
         pendingProductionBonus: productionTotals.pending.toFixed(2),
-        otherBonuses: Math.max(0, updatedBonuses - approvedProductionBonus).toFixed(2),
+        otherBonuses: otherBonusExact.toFixed(2),
       });
     } catch (error: unknown) {
       logger.error("Error updating payroll", { error });
@@ -251,8 +251,7 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
         // undo keeps the generated payroll as DRAFT, so its repayments must stay
         // applied. Restore them only when the generated payroll itself is removed.
         if (existing.status !== "PAID") {
-          const advDeducted = parseFloat(existing.advances || "0");
-          if (advDeducted > 0) {
+          if (toMoney(existing.advances).greaterThan(0)) {
             const repayments = await tx
               .select()
               .from(factoryAdvanceRepayments)
@@ -269,11 +268,10 @@ export function registerFactoryPayrollUpdateRoutes(app: Express, requireAuth: Re
                 .from(factoryWorkerAdvances)
                 .where(eq(factoryWorkerAdvances.id, repayment.advanceId));
               if (!advance) continue;
-              const currentBalance = parseFloat(advance.remainingBalance || "0");
-              const repaymentAmount = parseFloat(repayment.amount || "0");
+              const restoredBalance = toMoney(advance.remainingBalance).plus(toMoney(repayment.amount));
               await tx
                 .update(factoryWorkerAdvances)
-                .set({ remainingBalance: (currentBalance + repaymentAmount).toFixed(2), fullyPaid: false })
+                .set({ remainingBalance: restoredBalance.toFixed(2), fullyPaid: false })
                 .where(eq(factoryWorkerAdvances.id, advance.id));
             }
             await tx.delete(factoryAdvanceRepayments).where(eq(factoryAdvanceRepayments.payrollId, id));

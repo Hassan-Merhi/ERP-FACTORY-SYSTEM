@@ -268,6 +268,36 @@ describe("net position Excel behavior", () => {
     expect(res.body).toEqual(Buffer.from("net-position-xlsx"));
   });
 
+  it("sums account and supplier balances exactly before classifying", async () => {
+    harness.poolResults.push(
+      [
+        { ledger_account_id: "1", supplier_id: "7", debit_amount: "0.1", credit_amount: "0" },
+        { ledger_account_id: "1", supplier_id: "7", debit_amount: "0.2", credit_amount: "0" },
+      ],
+      [
+        { ledger_account_id: "1", debit_amount: "0.1", credit_amount: "0" },
+        { ledger_account_id: "1", debit_amount: "0.2", credit_amount: "0" },
+      ]
+    );
+    harness.selectResults.push(
+      [{ id: 11 }],
+      [{ quantity: "1.3", averageRate: "0.35" }],
+      [{ total: "0" }],
+      [{ id: 7, legalName: "Supplier A", code: "SUP-A", openingBalance: "0" }],
+      []
+    );
+
+    const res = responseHarness();
+    await route()({ session: { currentCompanyId: 4, userId: "admin-1" }, query: {} }, res);
+
+    const balances = harness.classifyNetPositionAccounts.mock.calls[0][1] as Map<number, unknown>;
+    expect(balances.get(1)).toEqual({ debit: 0.3, credit: 0 });
+    const assets = harness.workbooks[0].sheets.find((sheet) => sheet.name.includes("Assets"));
+    const values = assets?.rows.map((row) => row.getCell("value").value) ?? [];
+    expect(values).toContain(0.3);
+    expect(values).toContain(0.46);
+  });
+
   it("rejects exports when no company is selected", async () => {
     const res = responseHarness();
     await route()({ session: {}, query: {} }, res);

@@ -29,6 +29,81 @@ import {
   factoryPosSaleItems,
 } from "@shared/schema";
 import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import { allLedgerAccountsOwned, isFactorySessionLocation } from "../../../helpers/companyOwnership";
+
+/** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
+function requestCents(value: unknown) {
+  if (value === undefined || value === null || value === "") return new MoneyDecimal(0);
+  return parseMoneyInput(value)?.toDecimalPlaces(2) ?? null;
+}
+
+/**
+ * A POS sale's amounts at cents. Unit prices, the deposit and each expense are
+ * rounded first and everything else is derived from them, so the stored lines
+ * add up to the sale total and the receipt voucher's legs balance. Null when
+ * an amount does not parse (it used to be written as NaN).
+ */
+function saleAmounts(body: {
+  paymentType?: string;
+  depositAmount?: unknown;
+  items: Array<{ unitPrice?: unknown; quantity?: unknown }>;
+  expenses?: unknown;
+}) {
+  const isCredit = (body.paymentType || "CASH") === "CREDIT";
+  const deposit = isCredit ? requestCents(body.depositAmount) : new MoneyDecimal(0);
+  if (!deposit) return null;
+  const lines = [];
+  for (const item of body.items) {
+    const price = requestCents(item.unitPrice);
+    if (!price) return null;
+    lines.push({ qty: parseInt(String(item.quantity || "1")), price });
+  }
+  const expenseRows: Array<{ accountId: number; description: string; amount: number }> = [];
+  if (Array.isArray(body.expenses)) {
+    for (const exp of body.expenses) {
+      const amt = requestCents(exp.amount);
+      if (!amt) return null;
+      if (amt.gt(0) && exp.accountId) {
+        expenseRows.push({
+          accountId: parseInt(exp.accountId),
+          description: exp.description || "",
+          amount: amt.toNumber(),
+        });
+      }
+    }
+  }
+  const depositAmt = MoneyDecimal.max(0, deposit);
+  const totalAmount = sumMoney(lines.map((line) => line.price.times(line.qty)));
+  const totalExpenses = sumMoney(expenseRows.map((e) => e.amount));
+  // For cash: netCash = total - expenses. For credit: deposit may come in as cash.
+  const netCash = (isCredit ? depositAmt : totalAmount).minus(totalExpenses);
+  return {
+    isCredit,
+    depositAmt: depositAmt.toNumber(),
+    lines,
+    totalAmount: totalAmount.toNumber(),
+    expenseRows,
+    netCash: netCash.toNumber(),
+  };
+}
+
+/**
+ * The sale's location, cash account and expense accounts are body ids the
+ * path-based company scope never sees: each must be the user's own.
+ */
+async function refusedSaleBodyId(
+  session: Request["session"],
+  companyId: number,
+  locationId: unknown,
+  cashAccountId: unknown,
+  expenseRows: readonly { accountId: number }[]
+): Promise<string | null> {
+  if (locationId && !(await isFactorySessionLocation(session, locationId))) return "Location not found";
+  const accountIds = [cashAccountId, ...expenseRows.map((row) => row.accountId)];
+  if (!(await allLedgerAccountsOwned(companyId, accountIds))) return "Account not found";
+  return null;
+}
 
 export function registerPosSaleWriteRoutes(app: Express) {
   // POST /api/factory/pos/sale — create a factory POS sale
@@ -62,28 +137,13 @@ export function registerPosSaleWriteRoutes(app: Express) {
         if (!item.quantity || item.quantity <= 0) return res.status(400).json({ message: "Quantity must be positive" });
       }
 
-      const isCredit = (paymentType || "CASH") === "CREDIT";
       const parsedCustomerId = customerId ? parseInt(customerId) : null;
-      const depositAmt = isCredit ? Math.max(0, parseFloat(depositAmount || "0")) : 0;
-
-      const totalAmount = items.reduce(
-        (s: number, it) => s + parseFloat(it.unitPrice || "0") * parseInt(it.quantity || "1"),
-        0
-      );
-
       // Expense deductions (optional array of {accountId, description, amount})
-      const expenseRows: Array<{ accountId: number; description: string; amount: number }> = [];
-      if (Array.isArray(expenses)) {
-        for (const exp of expenses) {
-          const amt = parseFloat(exp.amount || "0");
-          if (amt > 0 && exp.accountId) {
-            expenseRows.push({ accountId: parseInt(exp.accountId), description: exp.description || "", amount: amt });
-          }
-        }
-      }
-      const totalExpenses = expenseRows.reduce((s, e) => s + e.amount, 0);
-      // For cash: netCash = total - expenses. For credit: deposit may come in as cash.
-      const netCash = isCredit ? depositAmt - totalExpenses : totalAmount - totalExpenses;
+      const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
+      if (!amounts) return res.status(400).json({ message: "Invalid amount" });
+      const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
+      if (refused) return res.status(400).json({ message: refused });
 
       // Generate sale number
       const [seqRow] = await db
@@ -130,9 +190,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
             .returning();
 
           // 2. Create sale items
-          for (const item of items) {
-            const qty = parseInt(item.quantity || "1");
-            const price = parseFloat(item.unitPrice || "0");
+          for (const [index, item] of items.entries()) {
+            const { qty, price } = lines[index];
             await tx.insert(factoryPosSaleItems).values({
               saleId: sale.id,
               companyId,
@@ -141,7 +200,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               articleCode: item.articleCode || null,
               quantity: qty,
               unitPrice: price.toFixed(2),
-              totalAmount: (price * qty).toFixed(2),
+              totalAmount: price.times(qty).toFixed(2),
               currencyCode: currencyCode || "USD",
             });
 
@@ -220,10 +279,10 @@ export function registerPosSaleWriteRoutes(app: Express) {
               .select({ net: sql<string>`COALESCE(SUM(debit_amount::numeric - credit_amount::numeric), 0)` })
               .from(customerBalances)
               .where(and(eq(customerBalances.customerId, parsedCustomerId), eq(customerBalances.companyId, companyId)));
-            const runningBefore = parseFloat(balRow?.net || "0");
+            const runningBefore = toMoney(balRow?.net);
 
             // DR customer for full sale amount
-            const balAfterSale = runningBefore + totalAmount;
+            const balAfterSale = runningBefore.plus(totalAmount);
             await tx.insert(customerBalances).values({
               companyId,
               customerId: parsedCustomerId,
@@ -240,7 +299,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
 
             // CR customer for any deposit received
             if (depositAmt > 0) {
-              const balAfterDeposit = balAfterSale - depositAmt;
+              const balAfterDeposit = balAfterSale.minus(depositAmt);
               await tx.insert(customerBalances).values({
                 companyId,
                 customerId: parsedCustomerId,
@@ -357,25 +416,12 @@ export function registerPosSaleWriteRoutes(app: Express) {
         return res.status(400).json({ message: "At least one item is required" });
       }
 
-      const isCredit = (paymentType || "CASH") === "CREDIT";
       const parsedCustomerId = customerId ? parseInt(customerId) : null;
-      const depositAmt = isCredit ? Math.max(0, parseFloat(depositAmount || "0")) : 0;
-      const totalAmount = items.reduce(
-        (s: number, it) => s + parseFloat(it.unitPrice || "0") * parseInt(it.quantity || "1"),
-        0
-      );
-
-      const expenseRows: Array<{ accountId: number; description: string; amount: number }> = [];
-      if (Array.isArray(expenses)) {
-        for (const exp of expenses) {
-          const amt = parseFloat(exp.amount || "0");
-          if (amt > 0 && exp.accountId) {
-            expenseRows.push({ accountId: parseInt(exp.accountId), description: exp.description || "", amount: amt });
-          }
-        }
-      }
-      const totalExpenses = expenseRows.reduce((s, e) => s + e.amount, 0);
-      const netCash = isCredit ? depositAmt - totalExpenses : totalAmount - totalExpenses;
+      const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
+      if (!amounts) return res.status(400).json({ message: "Invalid amount" });
+      const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
+      if (refused) return res.status(400).json({ message: refused });
 
       const result = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
         // Step 1: Restore bales for old items
@@ -429,9 +475,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
           .returning();
 
         // Step 4: Insert new items and mark bales as SOLD
-        for (const item of items) {
-          const qty = parseInt(item.quantity || "1");
-          const price = parseFloat(item.unitPrice || "0");
+        for (const [index, item] of items.entries()) {
+          const { qty, price } = lines[index];
           await tx.insert(factoryPosSaleItems).values({
             saleId,
             companyId,
@@ -440,7 +485,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
             articleCode: item.articleCode || null,
             quantity: qty,
             unitPrice: price.toFixed(2),
-            totalAmount: (price * qty).toFixed(2),
+            totalAmount: price.times(qty).toFixed(2),
             currencyCode: currencyCode || "USD",
           });
 
@@ -535,8 +580,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
             .select({ net: sql<string>`COALESCE(SUM(debit_amount::numeric - credit_amount::numeric), 0)` })
             .from(customerBalances)
             .where(and(eq(customerBalances.customerId, parsedCustomerId), eq(customerBalances.companyId, companyId)));
-          const runningBefore = parseFloat(balRow?.net || "0");
-          const balAfterSale = runningBefore + totalAmount;
+          const runningBefore = toMoney(balRow?.net);
+          const balAfterSale = runningBefore.plus(totalAmount);
           await tx.insert(customerBalances).values({
             companyId,
             customerId: parsedCustomerId,
@@ -551,7 +596,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
             description: `POS Sale ${existingSale.saleNumber} (edited)`,
           });
           if (depositAmt > 0) {
-            const balAfterDeposit = balAfterSale - depositAmt;
+            const balAfterDeposit = balAfterSale.minus(depositAmt);
             await tx.insert(customerBalances).values({
               companyId,
               customerId: parsedCustomerId,

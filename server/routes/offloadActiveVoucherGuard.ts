@@ -5,6 +5,7 @@ import { requireAuth } from "../auth";
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import { getErrorMessage } from "../lib/httpHandlers";
+import { sumMoney, toMoney } from "../lib/money";
 
 type OffloadDetailResponse = {
   liveCharges?: unknown;
@@ -62,33 +63,39 @@ export function registerOffloadActiveVoucherGuard(app: Express) {
         );
 
       const sumByPrefix = (prefix: string) =>
-        activeVouchers
-          .filter((voucher) => voucher.voucherNumber.startsWith(`${prefix}-${cn}-`))
-          .reduce((sum, voucher) => sum + Number(voucher.totalAmount || 0), 0);
+        sumMoney(
+          activeVouchers
+            .filter((voucher) => voucher.voucherNumber.startsWith(`${prefix}-${cn}-`))
+            .map((voucher) => voucher.totalAmount)
+        );
 
       const duties = sumByPrefix("DUTY");
       const officeCharges = sumByPrefix("OFFICE");
       const transportFees = sumByPrefix("TRANS");
       const transferCharges = sumByPrefix("XFER");
       const additionalCharges = sumByPrefix("CHG");
-      const totalOffloadCharges = duties + officeCharges + transportFees + transferCharges + additionalCharges;
-      const totalBales = Number(offload.totalBales || 0);
+      const totalOffloadCharges = sumMoney([duties, officeCharges, transportFees, transferCharges, additionalCharges]);
+      const totalBales = toMoney(offload.totalBales);
 
       const originalJson = res.json.bind(res);
       res.json = ((body: unknown) => {
         if (body && typeof body === "object" && "liveCharges" in body) {
           const responseBody = body as OffloadDetailResponse;
-          const poTotal = Number(responseBody.poCharges?.total || 0);
-          const totalAllCharges = totalOffloadCharges + poTotal;
+          const poTotal = toMoney(responseBody.poCharges?.total ?? 0);
+          const totalAllCharges = totalOffloadCharges.plus(poTotal);
+          // Exact, rounded half up to cents: 2.01 over 2 bales is 1.01, where
+          // Math.round on the float 100.49999999999999 gave 1.00.
           responseBody.liveCharges = {
-            duties,
-            officeCharges,
-            transportFees,
-            transferCharges,
-            additionalCharges,
-            totalOffloadCharges,
-            totalAllCharges,
-            additionalCostPerBale: totalBales > 0 ? Math.round((totalAllCharges / totalBales) * 100) / 100 : 0,
+            duties: duties.toNumber(),
+            officeCharges: officeCharges.toNumber(),
+            transportFees: transportFees.toNumber(),
+            transferCharges: transferCharges.toNumber(),
+            additionalCharges: additionalCharges.toNumber(),
+            totalOffloadCharges: totalOffloadCharges.toNumber(),
+            totalAllCharges: totalAllCharges.toNumber(),
+            additionalCostPerBale: totalBales.greaterThan(0)
+              ? totalAllCharges.dividedBy(totalBales).toDecimalPlaces(2).toNumber()
+              : 0,
             hasVouchers: activeVouchers.length > 0,
           };
         }

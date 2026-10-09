@@ -6,6 +6,7 @@ import { db } from "../../../db";
 import { getClientDate } from "../../../lib/dateUtils";
 import { resultRows } from "../../../lib/queryResult";
 import { logger } from "../../../lib/logger";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 type NetPositionAccount = {
   name: string;
@@ -54,7 +55,12 @@ function replaceAccountValue(accounts: NetPositionAccount[], code: string, value
   if (account) account.value = round2(value);
 }
 
-async function computeHistoricalOperationalValues(
+/**
+ * Historical inventory, raw-material and balance-on-table values, computed as
+ * decimals and rounded half up to cents once at the end: 6.7 kg left on the
+ * table at 0.35/kg is 2.35 (the float product 2.3449999... rounded to 2.34).
+ */
+export async function computeHistoricalOperationalValues(
   companyId: number,
   asOf: string,
   currentRawMaterialValue: number,
@@ -74,8 +80,9 @@ async function computeHistoricalOperationalValues(
       AND b.status <> 'PENDING_PRESSING'
   `);
   const stockRow = resultRows(stockResult)[0] ?? {};
-  const inventoryCostValue = round2(parseFloat(String(stockRow.total_cost ?? "0")) || 0);
-  const inventorySellingValue = round2(parseFloat(String(stockRow.total_selling ?? "0")) || 0);
+  const cents = (value: InstanceType<typeof MoneyDecimal>) => value.toDecimalPlaces(2).toNumber();
+  const inventoryCostValue = cents(toMoney(stockRow.total_cost as string));
+  const inventorySellingValue = cents(toMoney(stockRow.total_selling as string));
   const inventoryValue = valuationMode === "selling" ? inventorySellingValue : inventoryCostValue;
 
   const mixResult = await db.execute(sql`
@@ -89,9 +96,9 @@ async function computeHistoricalOperationalValues(
       AND COALESCE(batch_date, created_at::date) <= ${asOf}::date
   `);
   const mixRow = resultRows(mixResult)[0] ?? {};
-  const totalMixKg = parseFloat(String(mixRow.total_mix_kg ?? "0")) || 0;
-  const totalMixCost = parseFloat(String(mixRow.total_mix_cost ?? "0")) || 0;
-  const blendedCpk = totalMixKg > 0 ? totalMixCost / totalMixKg : 0;
+  const totalMixKg = toMoney(mixRow.total_mix_kg as string);
+  const totalMixCost = toMoney(mixRow.total_mix_cost as string);
+  const blendedCpk = totalMixKg.greaterThan(0) ? totalMixCost.dividedBy(totalMixKg) : new MoneyDecimal(0);
 
   const baleResult = await db.execute(sql`
     SELECT COALESCE(SUM(b.weight_kg::numeric), 0) AS total_bale_kg
@@ -102,10 +109,10 @@ async function computeHistoricalOperationalValues(
       AND b.status <> 'PENDING_PRESSING'
   `);
   const baleRow = resultRows(baleResult)[0] ?? {};
-  const totalBaleKg = parseFloat(String(baleRow.total_bale_kg ?? "0")) || 0;
-  const botWeightKg = Math.max(totalMixKg - totalBaleKg, 0);
+  const totalBaleKg = toMoney(baleRow.total_bale_kg as string);
+  const botWeightKg = MoneyDecimal.max(totalMixKg.minus(totalBaleKg), 0);
   // Balance on Table always uses the original blended raw-material cost basis.
-  const balanceOnTableValue = round2(botWeightKg * blendedCpk);
+  const balanceOnTableValue = cents(botWeightKg.times(blendedCpk));
 
   const consumedAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(fms.total_cost::numeric), 0) AS value_after
@@ -116,7 +123,7 @@ async function computeHistoricalOperationalValues(
       AND fmb.deleted_at IS NULL
   `);
   const consumedAfterRow = resultRows(consumedAfterResult)[0] ?? {};
-  const consumedAfter = parseFloat(String(consumedAfterRow.value_after ?? "0")) || 0;
+  const consumedAfter = toMoney(consumedAfterRow.value_after as string);
 
   const receiptsAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(
@@ -128,7 +135,7 @@ async function computeHistoricalOperationalValues(
       AND frs.deleted_at IS NULL
   `);
   const receiptsAfterRow = resultRows(receiptsAfterResult)[0] ?? {};
-  const receiptsAfter = parseFloat(String(receiptsAfterRow.value_after ?? "0")) || 0;
+  const receiptsAfter = toMoney(receiptsAfterRow.value_after as string);
 
   const adjustmentsAfterResult = await db.execute(sql`
     SELECT COALESCE(SUM(
@@ -144,10 +151,13 @@ async function computeHistoricalOperationalValues(
       AND deleted_at IS NULL
   `);
   const adjustmentsAfterRow = resultRows(adjustmentsAfterResult)[0] ?? {};
-  const adjustmentsAfter = parseFloat(String(adjustmentsAfterRow.value_after ?? "0")) || 0;
+  const adjustmentsAfter = toMoney(adjustmentsAfterRow.value_after as string);
 
-  const rawMaterialValue = round2(
-    Math.max(currentRawMaterialValue + consumedAfter - receiptsAfter - adjustmentsAfter, 0)
+  const rawMaterialValue = cents(
+    MoneyDecimal.max(
+      toMoney(currentRawMaterialValue).plus(consumedAfter).minus(receiptsAfter).minus(adjustmentsAfter),
+      0
+    )
   );
 
   return { inventoryValue, rawMaterialValue, balanceOnTableValue };

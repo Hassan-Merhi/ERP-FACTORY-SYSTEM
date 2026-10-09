@@ -67,9 +67,7 @@ describe("Performance Wave 1 request-churn policy", () => {
 
   it("does not poll carrier tracking progress from the container workbook", () => {
     const text = source("client/src/pages/git-containers/useGITContainersData.ts");
-    expect(text).not.toContain("/api/container-tracking/bulk-progress");
-    expect(text).not.toContain("/api/container-tracking/bulk-track-now");
-    expect(text).not.toContain("/api/container-tracking/bulk-settings");
+    expect(text).not.toMatch(/\/api\/container-tracking\/bulk-(progress|track-now|settings)/);
   });
 
   it("keeps the shared visible-tab helper as the single background-polling gate", () => {

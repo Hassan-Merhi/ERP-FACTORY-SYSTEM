@@ -9,6 +9,8 @@
  * which extra sources of assets/liabilities) differs between modes.
  */
 
+import type Decimal from "decimal.js";
+import { toMoney, type MoneyInput } from "./lib/money";
 import { isAccountMigrationClearingAccount } from "./lib/systemOnlyLedgerAccounts";
 
 export interface AccountLike {
@@ -129,6 +131,20 @@ export function getAccountNetBalance(acc: AccountLike, balanceMap: Map<number, A
   const signedOpening = opening * openingSide;
   const balance = balanceMap.get(acc.id) || { debit: 0, credit: 0 };
   return signedOpening + balance.debit - balance.credit;
+}
+
+/** getAccountNetBalance in exact decimals, for balances kept as decimal strings or Decimals. */
+export function getAccountNetBalanceExact(
+  acc: AccountLike,
+  balanceMap: Map<number, { debit: MoneyInput; credit: MoneyInput }>
+): Decimal {
+  const opening = toMoney(acc.openingBalance);
+  const defaultSide = assetDefaultDrTypes.includes(acc.accountType || "") ? 1 : -1;
+  const openingSide = acc.openingBalanceSide === "Dr" ? 1 : acc.openingBalanceSide === "Cr" ? -1 : defaultSide;
+  const balance = balanceMap.get(acc.id);
+  return (openingSide === 1 ? opening : opening.negated())
+    .plus(toMoney(balance?.debit))
+    .minus(toMoney(balance?.credit));
 }
 
 /** Classifies equity accounts for display without including them in Assets/Liabilities totals. */

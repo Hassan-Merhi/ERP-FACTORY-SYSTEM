@@ -19,7 +19,8 @@ import {
   stockItemMergeLogs,
 } from "@shared/schema";
 import { eq, and, asc, inArray, like } from "drizzle-orm";
-import { calcPoAmounts, syncIntercoParentVoucher } from "./containerHelpers";
+import { calcPoAmountsExact, isCreditOnlyEntry, isDebitOnlyEntry, syncIntercoParentVoucher } from "./containerHelpers";
+import { toMoney } from "../../lib/money";
 
 export function registerContainerFreightReadRoutes(app: Express) {
   app.get("/api/purchase-orders/next-po-number", requireAuth, requireNonPOS, async (req, res) => {
@@ -90,7 +91,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
       const parentCompanyId = await storage.getParentCompanyId();
       const isSameCompanySync = !parentCompanyId || po.companyId === parentCompanyId;
 
-      const { grossTotal: poGrossTotal, intercoTotal: poSupplierTotal } = calcPoAmounts({
+      const { grossTotal: poGrossTotal, intercoTotal: poSupplierTotal } = calcPoAmountsExact({
         itemsTotal: po.itemsTotal,
         freight: po.freight,
         surcharge: po.surcharge,
@@ -101,9 +102,9 @@ export function registerContainerFreightReadRoutes(app: Express) {
         freightPaidBy: po.freightPaidBy,
       });
       const poFreightPaidBy: string = po.freightPaidBy || "supplier";
-      const poFreightAmt = parseFloat(po.freight || "0");
+      const poFreightAmt = toMoney(po.freight);
       const poFreightParentAcctId: number | null = po.freightParentAccountId ? Number(po.freightParentAccountId) : null;
-      const poHasParentFreight = poFreightPaidBy === "parent" && poFreightAmt > 0 && !!poFreightParentAcctId;
+      const poHasParentFreight = poFreightPaidBy === "parent" && poFreightAmt.greaterThan(0) && !!poFreightParentAcctId;
 
       // Fetch container number up-front — used in both the same-company and interco paths.
       // Must be declared before isSameCompanySync block to avoid Temporal Dead Zone crash.
@@ -138,8 +139,8 @@ export function registerContainerFreightReadRoutes(app: Express) {
         const freightCrCandidates: number[] = [];
         for (const entry of existingEntries) {
           const acctId = entry.ledgerAccountId as number | null;
-          const isDebit = parseFloat(entry.debitAmount || "0") > 0 && parseFloat(entry.creditAmount || "0") === 0;
-          const isCredit = parseFloat(entry.creditAmount || "0") > 0 && parseFloat(entry.debitAmount || "0") === 0;
+          const isDebit = isDebitOnlyEntry(entry);
+          const isCredit = isCreditOnlyEntry(entry);
           if (isCredit && acctId === poFreightParentAcctId) {
             freightCrCandidates.push(entry.id);
           } else if (isDebit && purchasesEntryId === null) {
@@ -238,8 +239,8 @@ export function registerContainerFreightReadRoutes(app: Express) {
         const freightCrCandidates2: number[] = [];
         for (const entry of existingEntries) {
           const acctId = entry.ledgerAccountId as number | null;
-          const isDebit = parseFloat(entry.debitAmount || "0") > 0 && parseFloat(entry.creditAmount || "0") === 0;
-          const isCredit = parseFloat(entry.creditAmount || "0") > 0 && parseFloat(entry.debitAmount || "0") === 0;
+          const isDebit = isDebitOnlyEntry(entry);
+          const isCredit = isCreditOnlyEntry(entry);
           if (isCredit && acctId === poFreightParentAcctId) {
             freightCrCandidates2.push(entry.id);
           } else if (isDebit && purchasesEntryId === null) {
@@ -535,12 +536,12 @@ export function registerContainerFreightReadRoutes(app: Express) {
       });
 
       // Check if PO has no charges stored - if so, fetch from containerCharges table
-      const poFreight = parseFloat(po.freight?.toString() || "0");
-      const poSurcharge = parseFloat(po.surcharge?.toString() || "0");
-      const poFumigation = parseFloat(po.fumigation?.toString() || "0");
-      const poDocCharges = parseFloat(po.documentCharges?.toString() || "0");
-      const poDiscount = parseFloat(po.discount?.toString() || "0");
-      const poOtherCharges = parseFloat(po.otherCharges?.toString() || "0");
+      const poFreight = toMoney(po.freight).toNumber();
+      const poSurcharge = toMoney(po.surcharge).toNumber();
+      const poFumigation = toMoney(po.fumigation).toNumber();
+      const poDocCharges = toMoney(po.documentCharges).toNumber();
+      const poDiscount = toMoney(po.discount).toNumber();
+      const poOtherCharges = toMoney(po.otherCharges).toNumber();
 
       const finalCharges = {
         freight: poFreight.toString(),
@@ -567,7 +568,7 @@ export function registerContainerFreightReadRoutes(app: Express) {
         });
 
         for (const charge of containerChargesData) {
-          const amount = parseFloat(charge.amount?.toString() || "0");
+          const amount = toMoney(charge.amount).toNumber();
           switch (charge.chargeType) {
             case "Freight":
               finalCharges.freight = Math.abs(amount).toString();

@@ -51,8 +51,8 @@ export async function applyVoucherOptionalInventoryChange(
       if (sourceLocId == null || destinationLocId == null) {
         throw new Error("Stock transfer is missing source or destination location");
       }
-      const quantity = parseFloat(item.quantity);
-      const rate = parseFloat(item.rate);
+      const quantity = Number(item.quantity);
+      const rate = Number(item.rate);
       if (willBeOptional && transfer.inventoryApplied) {
         await adjustInventory(tx, sourceLocId, item.stockItemId, quantity, voucher.companyId, rate);
         await adjustInventory(tx, destinationLocId, item.stockItemId, -quantity, voucher.companyId);
@@ -120,9 +120,9 @@ export async function applyVoucherOptionalInventoryChange(
       .from(stockAdjustmentItems)
       .where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));
     for (const item of items) {
-      const rawQuantity = parseFloat(item.quantity);
+      const rawQuantity = Number(item.quantity);
       const quantity = Math.abs(rawQuantity);
-      const rate = parseFloat(item.rate);
+      const rate = Number(item.rate);
       const isProduction =
         adjustment.adjustmentType === "Production" || (adjustment.adjustmentType === "Mixed" && rawQuantity > 0);
       const outgoing = willBeOptional ? isProduction : !isProduction;
@@ -162,8 +162,8 @@ export async function applyVoucherOptionalInventoryChange(
   const saleLines = await tx.select().from(salesItems).where(eq(salesItems.voucherId, voucher.id));
   if (saleLines.length > 0 && voucher.locationId) {
     for (const item of saleLines) {
-      const quantity = parseFloat(item.quantity);
-      const costPrice = parseFloat(item.costPrice);
+      const quantity = Number(item.quantity);
+      const costPrice = Number(item.costPrice);
       const outgoing = !willBeOptional;
       await adjustInventory(
         tx,
@@ -199,8 +199,8 @@ export async function applyVoucherOptionalInventoryChange(
 
   const creditLines = await tx.select().from(creditNoteItems).where(eq(creditNoteItems.voucherId, voucher.id));
   for (const item of creditLines) {
-    const quantity = parseFloat(item.quantity);
-    const rate = parseFloat(item.rate);
+    const quantity = Number(item.quantity);
+    const rate = Number(item.rate);
     const outgoing = willBeOptional;
     await adjustInventory(
       tx,

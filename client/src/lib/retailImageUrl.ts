@@ -9,7 +9,7 @@ export function normalizeRetailImageUrl(value?: string | null): string {
   const raw = String(value ?? "").trim();
   if (!raw) return "";
 
-  let path = raw;
+  let path: string;
   try {
     if (/^https?:\/\//i.test(raw)) path = new URL(raw).pathname;
     else path = raw.split(/[?#]/, 1)[0];

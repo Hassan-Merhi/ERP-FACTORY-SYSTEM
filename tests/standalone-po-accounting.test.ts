@@ -178,4 +178,57 @@ describe("standalone purchase-order accounting", () => {
       );
     expect(parentCredit).toHaveLength(0);
   });
+
+  it("posts the PO voucher at the cents the PO row stores", async () => {
+    // purchase_orders.items_total is numeric(20, 2), so "1.005" is stored as 1.01;
+    // the voucher used to be built from parseFloat("1.005").toFixed(2), which is "1.00".
+    const po = await storage.createPurchaseOrder(
+      {
+        companyId: ctx.companyId,
+        poNumber: `${TEST_PREFIX.toUpperCase()}-PO-2`,
+        containerId,
+        supplierId,
+        currency: "USD",
+        itemsTotal: "1.005",
+        freight: "0",
+        surcharge: "0",
+        fumigation: "0",
+        documentCharges: "0",
+        discount: "0",
+        otherCharges: "0",
+        status: "Open",
+      },
+      "2026-09-02"
+    );
+    const [stored] = await db
+      .select({ itemsTotal: schema.purchaseOrders.itemsTotal, voucherId: schema.purchaseOrders.voucherId })
+      .from(schema.purchaseOrders)
+      .where(eq(schema.purchaseOrders.id, po.id));
+    const voucherId = stored.voucherId!;
+    try {
+      expect(stored.itemsTotal).toBe("1.01");
+      const [voucher] = await db
+        .select({ totalAmount: schema.vouchers.totalAmount })
+        .from(schema.vouchers)
+        .where(eq(schema.vouchers.id, voucherId));
+      expect(voucher.totalAmount).toBe("1.01");
+      const entries = await db
+        .select({ debitAmount: schema.voucherEntries.debitAmount, creditAmount: schema.voucherEntries.creditAmount })
+        .from(schema.voucherEntries)
+        .where(eq(schema.voucherEntries.voucherId, voucherId));
+      expect(entries).toEqual(
+        expect.arrayContaining([
+          { debitAmount: "1.01", creditAmount: "0.00" },
+          { debitAmount: "0.00", creditAmount: "1.01" },
+        ])
+      );
+    } finally {
+      await db.delete(schema.purchaseOrders).where(eq(schema.purchaseOrders.id, po.id));
+      if (voucherId) {
+        await pool.query("DELETE FROM accounting_posting_requests WHERE voucher_id = $1", [voucherId]);
+        await db.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, voucherId));
+        await db.delete(schema.vouchers).where(eq(schema.vouchers.id, voucherId));
+      }
+    }
+  });
 });

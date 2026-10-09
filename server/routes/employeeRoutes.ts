@@ -7,6 +7,7 @@ import { employees, insertEmployeeSchema } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { registerEmployeeGroupRoutes } from "./employeeGroupRoutes";
 import { registerPayrollRoutes } from "./erp-payroll";
+import { parseMoneyInput, toMoney } from "../lib/money";
 
 export function registerEmployeeRoutes(app: Express) {
   app.get("/api/employees", requireAuth, async (req, res) => {
@@ -21,7 +22,7 @@ export function registerEmployeeRoutes(app: Express) {
       const transformedEmployees = employees.map((emp) => {
         // Use stored currentBalance which is kept in sync by payroll operations and journal vouchers
         // The syncEmployeePayrollBalance function updates currentBalance when vouchers are created/edited/deleted
-        const currentBalance = parseFloat(emp.currentBalance || "0");
+        const currentBalance = toMoney(emp.currentBalance).toNumber();
 
         return {
           ...emp,
@@ -106,7 +107,7 @@ export function registerEmployeeRoutes(app: Express) {
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
-      const balance = parseFloat(employee.currentBalance || "0").toFixed(2);
+      const balance = toMoney(employee.currentBalance).toFixed(2);
       res.json({ balance });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
@@ -150,7 +151,7 @@ export function registerEmployeeRoutes(app: Express) {
       let employee = await storage.createEmployee({ ...parsed, code: resolvedCode });
 
       // Initialize currentBalance to opening balance if provided
-      if (parsed.openingBalance && parseFloat(parsed.openingBalance) > 0) {
+      if (parsed.openingBalance && (parseMoneyInput(parsed.openingBalance)?.gt(0) ?? false)) {
         await db
           .update(employees)
           .set({
@@ -191,10 +192,10 @@ export function registerEmployeeRoutes(app: Express) {
       const { rates } = req.body;
       if (!Array.isArray(rates)) return res.status(400).json({ message: "rates must be an array" });
       const valid = rates
-        .filter((r) => r.locationId && parseFloat(r.rate) > 0)
+        .filter((r) => r.locationId && (parseMoneyInput(r.rate)?.gt(0) ?? false))
         .map((r) => ({
           locationId: parseInt(r.locationId),
-          rate: String(parseFloat(r.rate)),
+          rate: parseMoneyInput(r.rate)!.toFixed(),
           sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
         }));
       await storage.setEmployeeBaleRates(employeeId, companyId, valid);
@@ -224,10 +225,10 @@ export function registerEmployeeRoutes(app: Express) {
       const { rates } = req.body;
       if (!Array.isArray(rates)) return res.status(400).json({ message: "rates must be an array" });
       const valid = rates
-        .filter((r) => r.locationId && parseFloat(r.pct) > 0)
+        .filter((r) => r.locationId && (parseMoneyInput(r.pct)?.gt(0) ?? false))
         .map((r) => ({
           locationId: parseInt(r.locationId),
-          pct: String(parseFloat(r.pct)),
+          pct: parseMoneyInput(r.pct)!.toFixed(),
           sourceCompanyId: r.sourceCompanyId ? parseInt(r.sourceCompanyId) : null,
         }));
       await storage.setEmployeeBalePctRates(employeeId, companyId, valid);

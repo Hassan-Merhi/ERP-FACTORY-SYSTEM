@@ -20,6 +20,16 @@ import {
 } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { isPayableContainer } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../../lib/money";
+
+const ZERO = new MoneyDecimal(0);
+const TOLERANCE = new MoneyDecimal("0.001");
+
+/** Adds an amount to a per-key running total. */
+function addTo(totals: Map<number, Decimal>, key: number, amount: Decimal) {
+  totals.set(key, (totals.get(key) ?? ZERO).plus(amount));
+}
 
 export function registerSupplierBulkFxSettlementRoutes(app: Express) {
   // ── Bulk FX Settlement for Broker ────────────────────────────────────────
@@ -39,9 +49,11 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
       if (!fromCurrencyCode || !totalAmount || !fxRateToUsd)
         return res.status(400).json({ message: "fromCurrencyCode, totalAmount, and fxRateToUsd are required" });
 
-      const total = parseFloat(totalAmount);
-      const fxRate = parseFloat(fxRateToUsd);
-      if (total <= 0 || fxRate <= 0)
+      // Read as parseFloat read them; one that does not parse is refused (it
+      // used to pass the "<= 0" check as NaN).
+      const total = parseMoneyInput(totalAmount) ?? ZERO;
+      const fxRate = parseMoneyInput(fxRateToUsd) ?? ZERO;
+      if (total.lessThanOrEqualTo(0) || fxRate.lessThanOrEqualTo(0))
         return res.status(400).json({ message: "Amount and rate must be greater than zero" });
 
       // Verify broker exists
@@ -127,13 +139,11 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
         );
 
       // Aggregate payment and FX-out totals per supplier
-      const paymentsBySupplier: Record<number, number> = {};
-      for (const p of allPayments)
-        paymentsBySupplier[p.supplierId] = (paymentsBySupplier[p.supplierId] || 0) + parseFloat(p.amount || "0");
+      const paymentsBySupplier = new Map<number, Decimal>();
+      for (const p of allPayments) addTo(paymentsBySupplier, p.supplierId, toMoney(p.amount));
 
-      const fxOutBySupplier: Record<number, number> = {};
-      for (const f of allFxOut)
-        fxOutBySupplier[f.fromSupplierId] = (fxOutBySupplier[f.fromSupplierId] || 0) + parseFloat(f.fromAmount || "0");
+      const fxOutBySupplier = new Map<number, Decimal>();
+      for (const f of allFxOut) addTo(fxOutBySupplier, f.fromSupplierId, toMoney(f.fromAmount));
 
       // Previous container-level allocations (to avoid over-allocating)
       const allContainerIds = allContainers.map((c) => c.id);
@@ -153,39 +163,36 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
               )
           : [];
 
-      const prevAllocByContainer: Record<number, number> = {};
-      for (const a of prevAllocs)
-        prevAllocByContainer[a.containerId] =
-          (prevAllocByContainer[a.containerId] || 0) + parseFloat(a.allocatedAmount || "0");
+      const prevAllocByContainer = new Map<number, Decimal>();
+      for (const a of prevAllocs) addTo(prevAllocByContainer, a.containerId, toMoney(a.allocatedAmount));
 
       // Build per-supplier data: available balance + their containers
       const supplierData: Array<{
         supplierId: number;
         name: string;
-        available: number;
+        available: Decimal;
         containers: (typeof allContainers)[number][];
       }> = [];
       for (const sup of linkedSuppliers) {
         const supContainers = allContainers.filter((c) => c.supplierId === sup.id);
-        const totalValue = supContainers.reduce((s: number, c) => {
-          const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-          const rate = parseFloat(c.ratePerKg || "0");
-          const freight = parseFloat(c.freight || "0");
+        const totalValue = supContainers.reduce((s, c) => {
+          const kg = toMoney(c.actualReceivedKg || c.totalKg);
+          const freight = toMoney(c.freight);
           // Use freightCurrencyCode directly (DB default is "USD", so AUD containers correctly separate USD freight)
           const containerCcy = c.currencyCode || fromCurrencyCode;
           const freightCc = c.freightCurrencyCode || containerCcy;
           // Commission accumulates under supplier (true broker balance model) — include in available for settlement
-          const commAmt = parseFloat(c.commissionAmount || "0");
+          const commAmt = toMoney(c.commissionAmount);
           const commCc = c.commissionCurrencyCode || containerCcy;
-          return (
-            s +
-            (kg * rate + (freightCc === fromCurrencyCode ? freight : 0) + (commCc === fromCurrencyCode ? commAmt : 0))
-          );
-        }, 0);
-        const paid = paymentsBySupplier[sup.id] || 0;
-        const fxOut = fxOutBySupplier[sup.id] || 0;
-        const available = Math.max(0, totalValue - paid - fxOut);
-        if (available > 0.001 && supContainers.length > 0) {
+          return s
+            .plus(kg.times(toMoney(c.ratePerKg)))
+            .plus(freightCc === fromCurrencyCode ? freight : ZERO)
+            .plus(commCc === fromCurrencyCode ? commAmt : ZERO);
+        }, ZERO);
+        const paid = paymentsBySupplier.get(sup.id) ?? ZERO;
+        const fxOut = fxOutBySupplier.get(sup.id) ?? ZERO;
+        const available = MoneyDecimal.max(ZERO, totalValue.minus(paid).minus(fxOut));
+        if (available.greaterThan(TOLERANCE) && supContainers.length > 0) {
           supplierData.push({ supplierId: sup.id, name: sup.name, available, containers: supContainers });
         }
       }
@@ -223,47 +230,47 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
       const allocations: Array<{
         supplierId: number;
         name: string;
-        allocated: number;
-        toAmountUsd: number;
-        overpayment: number;
+        allocated: Decimal;
+        toAmountUsd: Decimal;
+        overpayment: Decimal;
         containers: (typeof allContainers)[number][];
       }> = [];
       for (const sd of supplierData) {
-        if (rem <= 0.001) break;
-        const toAllocate = Math.min(rem, sd.available);
-        if (toAllocate < 0.001) continue;
+        if (rem.lessThanOrEqualTo(TOLERANCE)) break;
+        const toAllocate = MoneyDecimal.min(rem, sd.available);
+        if (toAllocate.lessThan(TOLERANCE)) continue;
         allocations.push({
           supplierId: sd.supplierId,
           name: sd.name,
           allocated: toAllocate,
-          toAmountUsd: toAllocate * fxRate,
-          overpayment: 0,
+          toAmountUsd: toAllocate.times(fxRate),
+          overpayment: ZERO,
           containers: sd.containers,
         });
-        rem -= toAllocate;
+        rem = rem.minus(toAllocate);
       }
 
       if (allocations.length === 0) return res.status(400).json({ message: "Could not allocate any amount" });
 
       // Any remaining after all suppliers are filled goes to the last supplier as an overpayment
       // (creates a CR balance — the supplier owes the company that amount back)
-      if (rem > 0.001) {
+      if (rem.greaterThan(TOLERANCE)) {
         const last = allocations[allocations.length - 1];
         last.overpayment = rem;
-        last.allocated += rem;
-        last.toAmountUsd += rem * fxRate;
-        rem = 0;
+        last.allocated = last.allocated.plus(rem);
+        last.toAmountUsd = last.toAmountUsd.plus(rem.times(fxRate));
+        rem = ZERO;
       }
 
       // Dry-run: return preview without saving
       if (dryRun) {
-        const totalAllocated = allocations.reduce((s, a) => s + a.allocated, 0);
-        const totalUsd = allocations.reduce((s, a) => s + a.toAmountUsd, 0);
+        const totalAllocated = allocations.reduce((s, a) => s.plus(a.allocated), ZERO);
+        const totalUsd = allocations.reduce((s, a) => s.plus(a.toAmountUsd), ZERO);
         return res.json({
           dryRun: true,
           totalRequested: total.toFixed(4),
           totalAllocated: totalAllocated.toFixed(4),
-          remaining: (total - totalAllocated).toFixed(4),
+          remaining: total.minus(totalAllocated).toFixed(4),
           totalUsd: totalUsd.toFixed(4),
           transfers: allocations.map((a) => ({
             supplierId: a.supplierId,
@@ -288,7 +295,7 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
               toSupplierId: brokerId,
               fromCurrencyCode,
               fromAmount: alloc.allocated.toFixed(4),
-              fxRateToUsd: fxRate.toString(),
+              fxRateToUsd: fxRate.toFixed(),
               toAmountUsd: alloc.toAmountUsd.toFixed(4),
               date: settlementDate,
               notes: notes || null,
@@ -305,15 +312,14 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
           let allocRem = alloc.allocated;
           const allocRows = [];
           for (const c of sortedCont) {
-            if (allocRem <= 0.001) break;
-            const kg = parseFloat(c.actualReceivedKg || c.totalKg || "0");
-            const rate = parseFloat(c.ratePerKg || "0");
-            const freight = parseFloat(c.freight || "0");
-            const val = kg * rate + freight;
-            const used = prevAllocByContainer[c.id] || 0;
-            const avail = Math.max(0, val - used);
-            if (avail <= 0.001) continue;
-            const toAlloc2 = Math.min(allocRem, avail);
+            if (allocRem.lessThanOrEqualTo(TOLERANCE)) break;
+            const val = toMoney(c.actualReceivedKg || c.totalKg)
+              .times(toMoney(c.ratePerKg))
+              .plus(toMoney(c.freight));
+            const used = prevAllocByContainer.get(c.id) ?? ZERO;
+            const avail = MoneyDecimal.max(ZERO, val.minus(used));
+            if (avail.lessThanOrEqualTo(TOLERANCE)) continue;
+            const toAlloc2 = MoneyDecimal.min(allocRem, avail);
             allocRows.push({
               companyId,
               fxTransferId: fxTransfer.id,
@@ -322,7 +328,7 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
               allocatedAmount: toAlloc2.toFixed(4),
               currencyCode: fromCurrencyCode,
             });
-            allocRem -= toAlloc2;
+            allocRem = allocRem.minus(toAlloc2);
           }
           if (allocRows.length > 0) await tx.insert(factoryFxAllocations).values(allocRows);
 
@@ -340,7 +346,7 @@ export function registerSupplierBulkFxSettlementRoutes(app: Express) {
       res.json({
         success: true,
         totalRequested: total.toFixed(4),
-        totalAllocated: (total - rem).toFixed(4),
+        totalAllocated: total.minus(rem).toFixed(4),
         remaining: rem.toFixed(4),
         transfers: results,
       });

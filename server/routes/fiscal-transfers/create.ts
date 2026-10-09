@@ -13,6 +13,8 @@ import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
 import {
@@ -116,10 +118,34 @@ export function registerStockTransferCreateRoutes(app: Express) {
           return res.status(400).json({ message: "Source and destination must be different" });
         }
 
-        // Validate destination location exists
-        const destLocation = await storage.getLocationById(destinationLocationId);
+        // Every location is a body id, outside the path-based company scope:
+        // the destination and every source must be locations of this company.
+        const ownedLocations = await ownLocationIds(companyId, [
+          destinationLocationId,
+          sourceLocationId,
+          ...items.map((item: { sourceLocationId?: unknown }) => item?.sourceLocationId),
+        ]);
+        const destLocation = ownedLocations.has(Number(destinationLocationId))
+          ? await storage.getLocationById(destinationLocationId)
+          : undefined;
         if (!destLocation) {
           return res.status(404).json({ message: "Destination location not found" });
+        }
+        if (
+          items.some(
+            (item: { sourceLocationId?: unknown }) =>
+              !ownedLocations.has(Number(item?.sourceLocationId || sourceLocationId))
+          )
+        ) {
+          return res.status(404).json({ message: "Source location not found" });
+        }
+        if (
+          !(await allStockItemsOwned(
+            companyId,
+            items.map((item: { stockItemId?: unknown }) => item?.stockItemId)
+          ))
+        ) {
+          return res.status(400).json({ message: "Stock item not found" });
         }
 
         // Validate each item has a valid source location
@@ -215,16 +241,18 @@ export function registerStockTransferCreateRoutes(app: Express) {
             })
             .returning();
 
-          let totalAmount = 0;
+          // Line totals are taken at cents and the voucher total is their sum,
+          // so the header always equals the lines it carries.
+          let totalAmount = new MoneyDecimal(0);
           const transferItems = [];
 
           for (const item of normalizedMovementItems) {
-            const quantity = parseFloat(item.quantity);
+            const quantity = toMoney(item.quantity);
             const sourceInv = await lockInventoryRow(tx, item.sourceLocationId, item.stockItemId);
             const rateText = sourceInv?.average_rate ?? item.rate ?? "0";
-            const rate = parseFloat(String(rateText || "0"));
-            const totalItemAmount = quantity * rate;
-            totalAmount += totalItemAmount;
+            const rate = toMoney(String(rateText || "0"));
+            const totalItemAmount = quantity.times(rate).toDecimalPlaces(2);
+            totalAmount = totalAmount.plus(totalItemAmount);
 
             const [insertedItem] = await tx
               .insert(stockTransferItems)
