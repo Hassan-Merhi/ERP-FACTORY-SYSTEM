@@ -9,7 +9,8 @@ import type { AppDb, AuthMiddleware } from "../routeBoundaryTypes";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { cache } from "../../lib/simpleCache";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../factory/customer-orders/priorityScanQueue";
 import { factorySettings } from "@shared/schema";
 
 export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
@@ -61,6 +62,43 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
     }
   });
 
+  // Dedicated, company-scoped operational switch. Unlike ordinary UI visibility
+  // flags, changing this one affects allocation and must be serialized with
+  // Priority Scan writers. OFF never reverses allocations already recorded.
+  app.get("/api/factory/automatic-priority-mode", requireAuth, async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    const [row] = await db.select({ extraSettings: factorySettings.extraSettings })
+      .from(factorySettings).where(eq(factorySettings.companyId, companyId));
+    const flags = (row?.extraSettings || {}) as Record<string, unknown>;
+    res.set("Cache-Control", "private, no-store");
+    return res.json({ enabled: flags.automaticPriorityPrintingEnabled === true });
+  });
+
+  app.put("/api/factory/automatic-priority-mode", requireAuth, async (req: Request, res: Response) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    const role = String(req.session.currentRole || req.session.role || req.user?.role || "").toLowerCase();
+    if (!["admin", "owner", "developer"].includes(role)) return res.status(403).json({ message: "Access denied" });
+    if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ message: "enabled must be boolean" });
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        const [row] = await tx.select({ extraSettings: factorySettings.extraSettings })
+          .from(factorySettings).where(eq(factorySettings.companyId, companyId)).for("update");
+        const extraSettings = { ...((row?.extraSettings || {}) as Record<string, unknown>),
+          automaticPriorityPrintingEnabled: req.body.enabled };
+        await tx.insert(factorySettings).values({ companyId, extraSettings, updatedAt: new Date() })
+          .onConflictDoUpdate({ target: factorySettings.companyId, set: { extraSettings, updatedAt: new Date() } });
+      });
+      cache.del(`factory_settings:${companyId}`);
+      return res.json({ enabled: req.body.enabled });
+    } catch (error) {
+      logger.error("Error updating automatic priority mode:", { error });
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   // Known DB columns — everything else goes into extraSettings JSONB
   const KNOWN_SETTINGS_COLUMNS = new Set([
     "companyId",
@@ -87,7 +125,10 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
 
   app.put("/api/factory/settings", requireAuth, async (req: Request, res: Response) => {
     try {
-      const companyId = req.body.companyId || req.session.factoryCompanyId || req.session.currentCompanyId;
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (Object.prototype.hasOwnProperty.call(req.body ?? {}, "automaticPriorityPrintingEnabled")) {
+        return res.status(403).json({ message: "Use the protected Automatic Priority Mode endpoint." });
+      }
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const {
