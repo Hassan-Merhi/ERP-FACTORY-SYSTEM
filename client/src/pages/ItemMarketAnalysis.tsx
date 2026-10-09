@@ -476,8 +476,8 @@ export default function ItemMarketAnalysis() {
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        Profit, margin, company totals and profit filters use the selected purchase cost. Where USD purchase
-        rates are unavailable, posted historical profit is retained. No accounting entries are changed.
+        Profit, margin, company totals and profit filters use the selected purchase cost. Where USD purchase rates are
+        unavailable, posted historical profit is retained. No accounting entries are changed.
       </p>
 
       {multiCompany && companySummaries.length > 0 && (
