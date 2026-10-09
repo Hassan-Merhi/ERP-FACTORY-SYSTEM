@@ -4,17 +4,30 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
-import type { Express } from "express";
+import type { Express, Request, RequestHandler } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { requireFactoryPageAccess } from "../../../lib/factoryAccessControl";
 import { agentAccounts, freightAccounts } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 export function registerAgentFreightAccountRoutes(app: Express) {
-  app.get("/api/agent-accounts", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  const factoryAgentGuard = requireFactoryPageAccess("factory/agents");
+  const requireFactoryAgentIfNeeded: RequestHandler = (req, res, next) => {
+    if (req.path.toLowerCase().startsWith("/api/factory/agents/")) {
+      return factoryAgentGuard(req, res, next);
+    }
+    next();
+  };
+  const agentCompanyId = (req: Request) =>
+    req.path.toLowerCase().startsWith("/api/factory/agents/")
+      ? (req.session.factoryCompanyId || req.session.currentCompanyId)
+      : (req.session.currentCompanyId || req.session.factoryCompanyId);
+
+  app.get(["/api/agent-accounts", "/api/factory/agents/pinned"], requireAuth, requireFactoryAgentIfNeeded, async (req: import("express").Request, res: import("express").Response) => {
     try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+      const companyId = agentCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const rows = await db.select().from(agentAccounts).where(eq(agentAccounts.companyId, companyId));
       res.json(rows);
@@ -23,9 +36,9 @@ export function registerAgentFreightAccountRoutes(app: Express) {
     }
   });
 
-  app.post("/api/agent-accounts", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.post(["/api/agent-accounts", "/api/factory/agents/pinned"], requireAuth, requireFactoryAgentIfNeeded, async (req: import("express").Request, res: import("express").Response) => {
     try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+      const companyId = agentCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const { accountId, accountType, accountName } = req.body;
       if (!accountId || !accountType || !accountName)
@@ -44,9 +57,9 @@ export function registerAgentFreightAccountRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/agent-accounts/:accountId", requireAuth, async (req: import("express").Request, res: import("express").Response) => {
+  app.delete(["/api/agent-accounts/:accountId", "/api/factory/agents/pinned/:accountId"], requireAuth, requireFactoryAgentIfNeeded, async (req: import("express").Request, res: import("express").Response) => {
     try {
-      const companyId = req.session.currentCompanyId || req.session.factoryCompanyId;
+      const companyId = agentCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const accountId = decodeURIComponent(req.params.accountId);
       await db
