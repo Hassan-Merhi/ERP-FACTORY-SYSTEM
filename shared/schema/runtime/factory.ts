@@ -510,6 +510,33 @@ export const factoryReplayConsumedTokens = pgTable(
   ]
 );
 
+/**
+ * Permanent original assignment of an automatically allocated physical bale.
+ * A reversal marks reversedAt; the row is never deleted and cannot allocate again.
+ */
+export const factoryPriorityAutoAllocations = pgTable(
+  "factory_priority_auto_allocations",
+  {
+    id: bigserial({ mode: "number" }).primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    baleId: integer("bale_id").notNull(),
+    orderId: integer("order_id").notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    priority: integer().notNull(),
+    color: varchar({ length: 64 }).notNull(),
+    allocationSource: varchar("allocation_source", { length: 32 }).notNull(),
+    allocatedAt: timestamp("allocated_at", { withTimezone: true }).defaultNow().notNull(),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: text("reversed_by"),
+    reversalReason: text("reversal_reason"),
+  },
+  (table) => [
+    uniqueIndex("fpaa_company_bale_unique").on(table.companyId, table.baleId),
+    index("fpaa_company_order_active_idx").on(table.companyId, table.orderId)
+      .where(sql`${table.reversedAt} IS NULL`),
+  ]
+);
+
 /** One Priority Scan per row: which bale was scanned into which loading, at which priority, on which day. */
 export const factoryPriorityScanHistory = pgTable(
   "factory_priority_scan_history",
@@ -525,6 +552,8 @@ export const factoryPriorityScanHistory = pgTable(
     color: varchar({ length: 64 }).notNull(),
     businessDate: date("business_date").notNull(),
     scannedBy: text("scanned_by"),
+    allocationSource: varchar("allocation_source", { length: 32 }).default("manual").notNull(),
+    reversedAt: timestamp("reversed_at", { withTimezone: true }),
     scannedAt: timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
