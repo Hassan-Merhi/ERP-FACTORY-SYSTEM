@@ -32,11 +32,11 @@ export function registerAccountTransactionRoutes(app: Express) {
     async (req, res) => {
       try {
         const ledgerAccountId = parseInt(req.params.id);
-  
+
         if (isNaN(ledgerAccountId)) {
           return res.status(400).json({ message: "Invalid ledger account ID" });
         }
-  
+
         const asOfDate = getClientDate(req);
         const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
         const rawStart =
@@ -45,7 +45,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
         // Cap the end date at today so future-dated vouchers are never shown
         const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
-  
+
         // 1. Load the ledger account to get its authoritative company scope.
         //    Using ledgerAccount.companyId (not req.session.currentCompanyId) so the
         //    correct company is used even when the caller is in factory mode.
@@ -53,7 +53,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           .select()
           .from(ledgerAccounts)
           .where(and(eq(ledgerAccounts.id, ledgerAccountId), isNull(ledgerAccounts.deletedAt)));
-  
+
         if (!ledgerAccount) {
           return res.status(404).json({ message: "Ledger account not found" });
         }
@@ -62,7 +62,7 @@ export function registerAccountTransactionRoutes(app: Express) {
         if (authorizedCompanyId === null) {
           return res.status(403).json({ message: "No access to this account's company" });
         }
-  
+
         // 2. If this ledger is linked to a factory customer, return the unified
         //    factory-customer ledger view (plain array — frontend handles both shapes).
         try {
@@ -85,7 +85,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           // the regular ledger entries so the page never breaks.
           logger.error("[ledger transactions] factory-customer lookup failed:", { error: e });
         }
-  
+
         // 3. Main query: period transactions capped at today
         const transactions = await storage.getVoucherEntriesByLedger(
           ledgerAccountId,
@@ -93,7 +93,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           effectiveEndDate,
           companyId
         );
-  
+
         // 4. Brought-forward balance: sum of entries strictly before the period start.
         //    For All Time (no rawStart), preNetBalance = 0 — the stored opening balance suffices.
         let preNetBalance = 0;
@@ -117,7 +117,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           );
           preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
         }
-  
+
         return res.json(
           statementResponse(transactions, {
             preNetBalance,
@@ -143,7 +143,7 @@ export function registerAccountTransactionRoutes(app: Express) {
         if (isNaN(bankAccountId)) {
           return res.status(400).json({ message: "Invalid bank account ID" });
         }
-  
+
         const asOfDate = getClientDate(req);
         const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
         const rawStart =
@@ -151,25 +151,25 @@ export function registerAccountTransactionRoutes(app: Express) {
         const rawEnd =
           typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
         const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
-  
+
         // Load account to get authoritative company scope
         const [bankAccount] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, bankAccountId));
         if (!bankAccount) return res.status(404).json({ message: "Bank account not found" });
         const companyId = bankAccount.companyId;
-  
+
         // Authorize: confirm the logged-in user can access this company
         const authorizedCompanyId = await authorizeCompanyIdParam(req, companyId);
         if (authorizedCompanyId === null) {
           return res.status(403).json({ message: "No access to this account's company" });
         }
-  
+
         const transactions = await storage.getVoucherEntriesByBankAccount(
           bankAccountId,
           rawStart,
           effectiveEndDate,
           companyId
         );
-  
+
         let preNetBalance = 0;
         if (rawStart) {
           const bfResult = await pool.query(
@@ -185,7 +185,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           );
           preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
         }
-  
+
         return res.json(
           statementResponse(transactions, {
             preNetBalance,
@@ -211,7 +211,7 @@ export function registerAccountTransactionRoutes(app: Express) {
         if (isNaN(fixedAssetId)) {
           return res.status(400).json({ message: "Invalid fixed asset ID" });
         }
-  
+
         const asOfDate = getClientDate(req);
         const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
         const rawStart =
@@ -219,25 +219,25 @@ export function registerAccountTransactionRoutes(app: Express) {
         const rawEnd =
           typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
         const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
-  
+
         // Load account to get authoritative company scope
         const [fixedAsset] = await db.select().from(fixedAssets).where(eq(fixedAssets.id, fixedAssetId));
         if (!fixedAsset) return res.status(404).json({ message: "Fixed asset not found" });
         const companyId = fixedAsset.companyId;
-  
+
         // Authorize: confirm the logged-in user can access this company
         const authorizedCompanyId = await authorizeCompanyIdParam(req, companyId);
         if (authorizedCompanyId === null) {
           return res.status(403).json({ message: "No access to this account's company" });
         }
-  
+
         const transactions = await storage.getVoucherEntriesByFixedAsset(
           fixedAssetId,
           rawStart,
           effectiveEndDate,
           companyId
         );
-  
+
         let preNetBalance = 0;
         if (rawStart) {
           const bfResult = await pool.query(
@@ -253,7 +253,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           );
           preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
         }
-  
+
         return res.json(
           statementResponse(transactions, {
             preNetBalance,
@@ -352,7 +352,7 @@ export function registerAccountTransactionRoutes(app: Express) {
         if (isNaN(employeeId)) {
           return res.status(400).json({ message: "Invalid employee ID" });
         }
-  
+
         const asOfDate = getClientDate(req);
         const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
         const rawStart =
@@ -360,20 +360,20 @@ export function registerAccountTransactionRoutes(app: Express) {
         const rawEnd =
           typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
         const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
-  
+
         // Load employee to get authoritative company scope
         const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
         if (!employee) return res.status(404).json({ message: "Employee not found" });
         const companyId = employee.companyId;
-  
+
         // Authorize: confirm the logged-in user can access this company
         const authorizedCompanyId = await authorizeCompanyIdParam(req, companyId);
         if (authorizedCompanyId === null) {
           return res.status(403).json({ message: "No access to this account's company" });
         }
-  
+
         const transactions = await storage.getVoucherEntriesByEmployee(employeeId, companyId, rawStart, effectiveEndDate);
-  
+
         let preNetBalance = 0;
         if (rawStart) {
           const bfResult = await pool.query(
@@ -389,7 +389,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           );
           preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
         }
-  
+
         return res.json(
           statementResponse(transactions, {
             preNetBalance,
