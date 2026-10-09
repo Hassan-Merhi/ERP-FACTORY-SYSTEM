@@ -323,6 +323,9 @@ export async function runAutomaticPriorityPrintBatch(
     for (const item of items) {
       if (!item || typeof item !== "object") throw new Error("Invalid print batch item");
       const baleId = item.baleId;
+      if (item.referenceNumber !== undefined && typeof item.referenceNumber !== "string") {
+        throw new Error("Invalid bale reference");
+      }
       const ref = item.referenceNumber?.trim();
       if (baleId === undefined && !ref) throw new Error("Each print requires a physical bale ID or exact reference");
       if (baleId !== undefined && (!Number.isSafeInteger(baleId) || baleId < 1)) {
