@@ -49,6 +49,28 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
     )`,
   `CREATE INDEX IF NOT EXISTS fpsh_company_date_scanned_idx
      ON factory_priority_scan_history(company_id, business_date, scanned_at DESC, id DESC)`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS allocation_source VARCHAR(32) NOT NULL DEFAULT 'manual'`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ`,
+  `CREATE TABLE IF NOT EXISTS factory_priority_auto_allocations (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      bale_id INTEGER NOT NULL REFERENCES factory_bales(id),
+      order_id INTEGER NOT NULL REFERENCES customer_orders(id),
+      reference_number VARCHAR(100) NOT NULL,
+      priority INTEGER NOT NULL,
+      color VARCHAR(64) NOT NULL,
+      allocation_source VARCHAR(32) NOT NULL,
+      allocated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      reversed_at TIMESTAMPTZ,
+      reversed_by TEXT,
+      reversal_reason TEXT,
+      CONSTRAINT fpaa_company_bale_unique UNIQUE (company_id, bale_id)
+    )`,
+  `CREATE INDEX IF NOT EXISTS fpaa_company_order_active_idx
+     ON factory_priority_auto_allocations(company_id, order_id)
+     WHERE reversed_at IS NULL`,
 ] as const;
 
 type StartupQueryable = {
