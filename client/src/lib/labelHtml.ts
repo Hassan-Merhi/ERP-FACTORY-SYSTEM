@@ -170,14 +170,14 @@ function buildDetailBlock(label: LabelData) {
       </div>
       <div class="info-section">
         <div class="info-row"><span class="info-key">PIECES:</span> <span class="info-val">${formatLabelNum(label.pieces)}</span></div>
-        <div class="info-row"><span class="info-key">ARTICLE:</span> <span class="info-val">${label.articleCode}</span></div>
+        <div class="info-row"><span class="info-key">ARTICLE:</span> <span class="info-val">${escapePriorityText(label.articleCode)}</span></div>
         <div class="info-row"><span class="info-key">APRX WEIGHT:</span> <span class="info-val">${formatLabelNum(label.approxWeightKg)} KGS</span></div>
       </div>
     </div>
     <div class="barcode-area">
       <img class="barcode-img" src="${label.barcodeDataUrl || `/api/barcode/${encodeURIComponent(label.referenceNumber)}`}" alt="Barcode" />
-      <div class="barcode-number">${label.referenceNumber}</div>
-      <div class="barcode-subtext">${label.productName}</div>
+      <div class="barcode-number">${escapePriorityText(label.referenceNumber)}</div>
+      <div class="barcode-subtext">${escapePriorityText(label.productName)}</div>
     </div>
   </div>`;
 }
@@ -190,14 +190,14 @@ function buildDetailBlockNoBanner(label: LabelData) {
       </div>
       <div class="info-section">
         <div class="info-row"><span class="info-key">PIECES:</span> <span class="info-val">${formatLabelNum(label.pieces)}</span></div>
-        <div class="info-row"><span class="info-key">ARTICLE:</span> <span class="info-val">${label.articleCode}</span></div>
+        <div class="info-row"><span class="info-key">ARTICLE:</span> <span class="info-val">${escapePriorityText(label.articleCode)}</span></div>
         <div class="info-row"><span class="info-key">APRX WEIGHT:</span> <span class="info-val">${formatLabelNum(label.approxWeightKg)} KGS</span></div>
       </div>
     </div>
     <div class="barcode-area">
       <img class="barcode-img" src="${label.barcodeDataUrl || `/api/barcode/${encodeURIComponent(label.referenceNumber)}`}" alt="Barcode" />
-      <div class="barcode-number">${label.referenceNumber}</div>
-      <div class="barcode-subtext">${label.productName}</div>
+      <div class="barcode-number">${escapePriorityText(label.referenceNumber)}</div>
+      <div class="barcode-subtext">${escapePriorityText(label.productName)}</div>
     </div>
   </div>`;
 }
@@ -354,8 +354,8 @@ export function generateCombinedLabelsHtml(labels: LabelData[], designColor?: A4
 ${detailBlockCss}
 
     /* Priority stock: existing half-sheet geometry, not a new paper size. */
-    .priority-print-a4 { display: block; text-align: center; }
-    .priority-a4-half { width: 210mm; height: 148.5mm; overflow: hidden; display: flex; flex-direction: column; }
+    .a4-page.priority-print-a4 { display: block; text-align: center; }
+    .priority-a4-half { width: 210mm; height: 148.5mm; overflow: hidden; display: flex; flex-direction: column; flex-shrink: 0; }
     .priority-a4-art { height: 90mm; min-height: 90mm; display: flex; align-items: center; justify-content: center; }
     .priority-a4-art img { height: 87mm; width: 100mm; max-width: 100%; object-fit: contain; }
     .priority-a4-row { height: 58.5mm; display: flex; gap: 6mm; align-items: stretch; padding: 0 10mm; }
@@ -457,7 +457,7 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     .barcode-number { font-size: 11pt; font-weight: 900; font-family: Arial, Helvetica, sans-serif; margin-top: 0.5mm; letter-spacing: 1.5px; text-transform: uppercase; -webkit-text-stroke: 0.5px #000; }
     .barcode-subtext { font-size: 7pt; font-weight: 900; margin-top: 0.5mm; text-transform: uppercase; letter-spacing: 1px; line-height: 1.1; word-break: break-word; -webkit-text-stroke: 0.4px #000; }
     .priority-print-a5 { padding: 0; }
-    .priority-a5-art { height: 145mm; min-height: 145mm; display: flex; align-items: center; justify-content: center; }
+    .priority-a5-art { height: 145mm; min-height: 145mm; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
     .priority-a5-art img { height: 115mm; width: 118mm; max-width: 100%; object-fit: contain; }
     .priority-a5-row { height: 65mm; display: flex; align-items: center; padding: 0 5mm; gap: 4mm; }
     .priority-a5-detail { width: 65mm; height: 58.5mm; flex-shrink: 0; border: .3mm solid #222; overflow: hidden; }
@@ -506,16 +506,16 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
               <div class="logo-section">${renderSmallHmdLogo(label, "sticker-logo")}</div>
               <div class="info-section">
                 <div><span class="info-label">PIECES:</span> <span class="info-value">${formatLabelNum(label.pieces)}</span></div>
-                <div><span class="info-label">ARTICLE:</span> <span class="info-value">${label.articleCode}</span></div>
+                <div><span class="info-label">ARTICLE:</span> <span class="info-value">${escapePriorityText(label.articleCode)}</span></div>
                 <div><span class="info-label">APRX WEIGHT:</span> <span class="info-value">${formatLabelNum(label.approxWeightKg)} KGS</span></div>
               </div>
             </div>
             <div class="ref-barcode-section">
               <img class="ref-barcode-img" src="${label.barcodeDataUrl || `/api/barcode/${encodeURIComponent(label.referenceNumber)}`}" alt="Barcode" />
-              <div class="ref-barcode-number">${label.referenceNumber}</div>
+              <div class="ref-barcode-number">${escapePriorityText(label.referenceNumber)}</div>
             </div>
             <div class="name-barcode-section">
-              <div class="ref-bale-name">${label.productName}</div>
+              <div class="ref-bale-name">${escapePriorityText(label.productName)}</div>
             </div>
           </div>
         </div>
