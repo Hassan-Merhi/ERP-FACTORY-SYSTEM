@@ -29,6 +29,7 @@ import {
   type ProfitDirectionFilter,
   SalePriceBreakdown,
 } from "./itemMarketAnalysisParts";
+import { valueMarketRow } from "./itemMarketAnalysisValuation";
 
 export default function ItemMarketAnalysis() {
   const { selectedCompany, companies } = useCompany();
@@ -109,19 +110,21 @@ export default function ItemMarketAnalysis() {
     setVisibleRowCount(250);
     setExpandedItemCode(null);
     setExpandedSalePriceKey(null);
-  }, [queryUrl, profitDirection, multiCompany]);
+  }, [queryUrl, profitDirection, multiCompany, includeOffloadingCost]);
 
   const rawRows = useMemo(() => data?.rows ?? [], [data?.rows]);
   const stockGroups = data?.stockGroups ?? [];
 
   const baseRows = useMemo(
     () =>
-      [...rawRows].sort(
-        (left, right) =>
-          normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
-          left.companyName.localeCompare(right.companyName)
-      ),
-    [rawRows]
+      rawRows
+        .map((row) => valueMarketRow(row, includeOffloadingCost))
+        .sort(
+          (left, right) =>
+            normalizeItemCode(left.code).localeCompare(normalizeItemCode(right.code)) ||
+            left.companyName.localeCompare(right.companyName)
+        ),
+    [rawRows, includeOffloadingCost]
   );
 
   // In multi-company mode, filter by the combined profit for the item code so
@@ -289,7 +292,7 @@ export default function ItemMarketAnalysis() {
         onBack={() => window.history.back()}
         meta={
           <span>
-            Imports, sales and historical profit by market
+            Imports, sales and modeled profit at the selected purchase cost
             {multiCompany
               ? ` · ${selectedCompanyIds.length} companies selected`
               : selectedCompanyNames[0]?.name
@@ -320,7 +323,9 @@ export default function ItemMarketAnalysis() {
         <MetricCard label="Sold Qty" value={formatNumber(summary.soldQty)} />
         <MetricCard label="Revenue" value={formatAmount(summary.revenue)} />
         <div className="rounded-xl border bg-card p-4">
-          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Historical Profit</div>
+          <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Profit ({includeOffloadingCost ? "Cost + Offloading" : "Cost Only"})
+          </div>
           <div className={`mt-1 text-xl font-semibold tabular-nums ${profitClass}`}>{formatAmount(summary.profit)}</div>
           <div className="text-xs text-muted-foreground">{summary.marginPct.toFixed(1)}% margin</div>
         </div>
@@ -439,6 +444,10 @@ export default function ItemMarketAnalysis() {
           {includeOffloadingCost ? "Cost + Offloading" : "Cost Only"}
         </Button>
       </div>
+      <p className="text-xs text-muted-foreground">
+        Profit, margin, company totals and profit filters use the selected purchase cost. Where USD purchase rates are
+        unavailable, posted historical profit is retained. No accounting entries are changed.
+      </p>
 
       {multiCompany && companySummaries.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
