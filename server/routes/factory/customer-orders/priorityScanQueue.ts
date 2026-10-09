@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { db } from "../../../db";
 import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema";
@@ -275,7 +275,7 @@ export async function reactivateAutoCompletedPriorityLoadingsLockedTx(
     .where(and(
       eq(customerOrderPriorityScanConfigs.companyId, companyId),
       eq(customerOrders.companyId, companyId),
-      sql`${customerOrderPriorityScanConfigs.orderId} IN (${sql.join(orderIds.map(id => sql`${id}`), sql`, `)})`,
+      inArray(customerOrderPriorityScanConfigs.orderId, orderIds),
       eq(customerOrderPriorityScanConfigs.enabled, false),
       eq(customerOrderPriorityScanConfigs.updatedByName, PRIORITY_AUTO_COMPLETED_MARKER),
       eq(customerOrders.status, "LOADING"),
@@ -300,9 +300,9 @@ export async function reactivateAutoCompletedPriorityLoadingsLockedTx(
     const snapshot = await getProformaCapacitySnapshot(tx, {
       companyId, proformaId: row.proformaId, currentOrderId: row.orderId,
     });
-    if (snapshot && getLoadingProformaProgress(snapshot).remainingQty > 0 &&
-        getLoadingProformaProgress(snapshot).requestedQty > 0) {
-      eligible.push(row);
+    if (snapshot) {
+      const progress = getLoadingProformaProgress(snapshot);
+      if (progress.requestedQty > 0 && progress.remainingQty > 0) eligible.push(row);
     }
   }
   if (!eligible.length) return [];
