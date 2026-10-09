@@ -85,8 +85,12 @@ const resilienceWorkflow = requireMarkers(".github/workflows/resilience-rehearsa
   "diff -u",
   "resilience-evidence.json",
   "Upload resilience evidence",
-  "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
 ]);
+
+// Renovate bumps the digest, so require a full-SHA pin rather than one specific SHA.
+if (!/actions\/upload-artifact@[0-9a-f]{40}\b/.test(resilienceWorkflow)) {
+  failures.push(".github/workflows/resilience-rehearsal.yml: actions/upload-artifact must be pinned to a full commit SHA.");
+}
 
 if (!/^  schedule:/m.test(resilienceWorkflow)) {
   failures.push("Resilience rehearsal must retain its scheduled trigger.");
