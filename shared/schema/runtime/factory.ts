@@ -24,6 +24,7 @@ import {
   uniqueIndex,
   date,
   bigserial,
+  bigint,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { companies } from "../common";
@@ -525,6 +526,11 @@ export const factoryPriorityAutoAllocations = pgTable(
     priority: integer().notNull(),
     color: varchar({ length: 64 }).notNull(),
     allocationSource: varchar("allocation_source", { length: 32 }).notNull(),
+    proformaId: integer("proforma_id"),
+    articleCode: varchar("article_code", { length: 50 }),
+    assignedByUserId: text("assigned_by_user_id"),
+    assignedByName: text("assigned_by_name"),
+    historyId: bigint("history_id", { mode: "number" }),
     allocatedAt: timestamp("allocated_at", { withTimezone: true }).defaultNow().notNull(),
     reversedAt: timestamp("reversed_at", { withTimezone: true }),
     reversedBy: text("reversed_by"),
@@ -553,8 +559,13 @@ export const factoryPriorityScanHistory = pgTable(
     color: varchar({ length: 64 }).notNull(),
     businessDate: date("business_date").notNull(),
     scannedBy: text("scanned_by"),
+    assignedByUserId: text("assigned_by_user_id"),
+    proformaId: integer("proforma_id"),
     allocationSource: varchar("allocation_source", { length: 32 }).default("manual").notNull(),
     reversedAt: timestamp("reversed_at", { withTimezone: true }),
+    reversedBy: text("reversed_by"),
+    reversedByUserId: text("reversed_by_user_id"),
+    reversalReason: text("reversal_reason"),
     scannedAt: timestamp("scanned_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -565,5 +576,7 @@ export const factoryPriorityScanHistory = pgTable(
       table.scannedAt.desc().nullsFirst(),
       table.id.desc().nullsFirst()
     ),
+    index("fpsh_company_bale_timeline_idx").on(table.companyId, table.baleId, table.id.desc()),
+    index("fpsh_company_order_timeline_idx").on(table.companyId, table.orderId, table.id.desc()),
   ]
 );
