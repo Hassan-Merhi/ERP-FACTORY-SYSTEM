@@ -1,8 +1,11 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Building2, ChevronDown, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { BarChart3, Building2, ChevronDown, ChevronRight, Download, RefreshCw, Search } from "lucide-react";
 
 import { PageHeader } from "@/components/PageHeader";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import type { SalePriceExportRow } from "./itemMarketAnalysisExport";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -31,6 +34,8 @@ import {
 export default function ItemMarketAnalysis() {
   const { selectedCompany, companies } = useCompany();
   const { formatAmount } = useCurrencyContext();
+  const { toast } = useToast();
+  const [isExporting, setIsExporting] = useState(false);
   const [period, setPeriod] = useState<PeriodFilterValue>(() => getDefaultPeriodValue("all_time"));
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -306,6 +311,65 @@ export default function ItemMarketAnalysis() {
       .sort((left, right) => left.name.localeCompare(right.name) || left.itemKey.localeCompare(right.itemKey));
   }, [rows]);
 
+
+  const handleExportExcel = async () => {
+    if (!data || isFetching || isExporting || search.trim() !== debouncedSearch) return;
+    setIsExporting(true);
+    try {
+      // Export the COMPLETE filtered arrays, not visibleRows/visibleGroupedRows
+      // which are deliberately capped at 250 items for screen performance.
+      const itemIdsByCompany = new Map<number, Set<number>>();
+      for (const row of rows) {
+        const ids = itemIdsByCompany.get(row.companyId) ?? new Set<number>();
+        ids.add(row.stockItemId);
+        itemIdsByCompany.set(row.companyId, ids);
+      }
+
+      let salePriceRows: SalePriceExportRow[] = [];
+      if (itemIdsByCompany.size > 0) {
+        const response = await apiRequest("POST", "/api/reports/item-market-analysis/export-sale-prices", {
+          startDate: period.fromDate || undefined,
+          endDate: period.toDate || undefined,
+          companyItems: [...itemIdsByCompany].map(([companyId, ids]) => ({
+            companyId,
+            stockItemIds: [...ids],
+          })),
+        });
+        const salePrices = (await response.json()) as { rows: SalePriceExportRow[] };
+        salePriceRows = salePrices.rows;
+      }
+
+      const { exportItemMarketAnalysisExcel } = await import("./itemMarketAnalysisExport");
+      await exportItemMarketAnalysisExcel({
+        groups: groupedRows,
+        rows,
+        companySummaries,
+        summary,
+        salePriceRows,
+        startDate: period.fromDate,
+        endDate: period.toDate,
+        search: debouncedSearch,
+        stockGroups: selectedStockGroupNames,
+        companyNames: selectedCompanyNames.map((company) => company.name),
+        profitDirection,
+        includeOffloadingCost,
+        generatedAt: data.generatedAt,
+      });
+      toast({
+        title: "Excel exported",
+        description: `Exported ${groupedRows.length} items and ${rows.length} company-item records with current filters.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Excel export failed",
+        description: error instanceof Error ? error.message : "Could not generate the workbook.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const visibleRows = rows.slice(0, visibleRowCount);
   const visibleGroupedRows = groupedRows.slice(0, visibleRowCount);
   const totalVisibleSourceRows = multiCompany ? groupedRows.length : rows.length;
@@ -339,6 +403,16 @@ export default function ItemMarketAnalysis() {
           </span>
         }
       >
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleExportExcel}
+          disabled={isLoading || isFetching || isExporting || !data || !!isError || search.trim() !== debouncedSearch}
+          data-testid="button-item-market-export-excel"
+        >
+          <Download className="mr-2 h-4 w-4" />
+          {isExporting ? "Exporting..." : "Export Excel"}
+        </Button>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
           <RefreshCw className={`mr-2 h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
           Refresh
