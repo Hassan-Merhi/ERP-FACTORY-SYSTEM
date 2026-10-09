@@ -513,7 +513,7 @@ export const factoryReplayConsumedTokens = pgTable(
 
 /**
  * Permanent original assignment of an automatically allocated physical bale.
- * A reversal marks reversedAt; the row is never deleted and cannot allocate again.
+ * Reversals annotate the old row without deleting it. If a still-physical bale\n * is later allocated again, that becomes a new timeline entry; at most one\n * active record exists per company/bale.
  */
 export const factoryPriorityAutoAllocations = pgTable(
   "factory_priority_auto_allocations",
