@@ -53,6 +53,20 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
      ADD COLUMN IF NOT EXISTS allocation_source VARCHAR(32) NOT NULL DEFAULT 'manual'`,
   `ALTER TABLE factory_priority_scan_history
      ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS assigned_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS proforma_id INTEGER`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_by TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversal_reason TEXT`,
+  `CREATE INDEX IF NOT EXISTS fpsh_company_bale_timeline_idx
+     ON factory_priority_scan_history(company_id, bale_id, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS fpsh_company_order_timeline_idx
+     ON factory_priority_scan_history(company_id, order_id, id DESC)`,
   `CREATE TABLE IF NOT EXISTS factory_priority_auto_allocations (
       id BIGSERIAL PRIMARY KEY,
       company_id INTEGER NOT NULL,
@@ -65,8 +79,23 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
       allocated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       reversed_at TIMESTAMPTZ,
       reversed_by TEXT,
-      reversal_reason TEXT
+      reversal_reason TEXT,
+      proforma_id INTEGER,
+      article_code VARCHAR(50),
+      assigned_by_user_id TEXT,
+      assigned_by_name TEXT,
+      history_id BIGINT
     )`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS proforma_id INTEGER`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS article_code VARCHAR(50)`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS assigned_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS assigned_by_name TEXT`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS history_id BIGINT`,
   `CREATE UNIQUE INDEX IF NOT EXISTS fpaa_company_bale_active_unique
      ON factory_priority_auto_allocations(company_id, bale_id)
      WHERE reversed_at IS NULL`,
