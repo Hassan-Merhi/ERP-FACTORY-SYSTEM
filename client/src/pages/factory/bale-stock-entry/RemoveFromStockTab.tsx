@@ -141,7 +141,7 @@ export function RemoveFromStockTab() {
   const openBrowserPrint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const paperFormat = getPaperFormat();
-    const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor);
+    const labelsForA4 = designColor ? labels : labels.filter((l) => l.designColor || l.priorityColor);
 
     if (labelsForA4.length > 0) {
       const labelHtml =
@@ -230,26 +230,31 @@ export function RemoveFromStockTab() {
         ],
       });
       if (!labelResponse.ok) throw new Error("Failed to create label");
-      const { labelPrints } = await labelResponse.json();
+      const { labelPrints, priorityAllocations = [] } = await labelResponse.json() as {
+        labelPrints: LabelPrintResult[];
+        priorityAllocations?: Array<{ baleId: number; color: string; orderId: number; priority: number }>;
+      };
+      const assignment = priorityAllocations.find((row) => row.baleId === bale.id);
       const labels: LabelData[] = labelPrints.map((lp: LabelPrintResult) => ({
         referenceNumber: lp.referenceNumber,
         articleCode: lp.articleCode || bale.articleCode || "",
         pieces: lp.pieces || 1,
         approxWeightKg: lp.approxWeightKg || bale.weightKg || "0",
         productName: bale.productName || "",
+        ...(assignment ? { priorityColor: assignment.color, priorityOrderId: assignment.orderId, priorityNumber: assignment.priority } : {}),
       }));
       const product = baleProducts?.find((p) => p.id === bale.productId);
       const assignedColor = product?.labelDesignColor as A4DesignColor | null | undefined;
-      if (isZebraMode()) {
+      if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
         try {
           await printRawZpl(buildZplBatch(labels, true));
           toast({ title: "Label sent to Zebra printer" });
         } catch (_err) {
-          if (assignedColor) openBrowserPrint(labels, assignedColor);
+          if (assignedColor || labels.some((label) => label.priorityColor)) openBrowserPrint(labels, assignedColor);
           else printDirectNoDesign(labels);
         }
       } else {
-        if (assignedColor) openBrowserPrint(labels, assignedColor);
+        if (assignedColor || labels.some((label) => label.priorityColor)) openBrowserPrint(labels, assignedColor);
         else printDirectNoDesign(labels);
       }
     } catch (error) {
