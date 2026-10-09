@@ -114,10 +114,11 @@ export const printLabels = async (
   modeApiRequest: RequestDelegate,
   toast: ToastFn,
   preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>,
-  autoAllocations: AutoAssignment[] = []
+  autoAllocations: AutoAssignment[] = [],
+  autoModeEnabled = false
 ) => {
   try {
-    modeApiRequest("POST", "/api/bale-label-prints", {
+    const printPayload = {
       bales: bales.map((bale) => {
         const cartItem = cart.find((c) => c.productId === bale.productId);
         return {
@@ -128,9 +129,25 @@ export const printLabels = async (
           approxWeightKg: bale.weightKg || "0",
         };
       }),
-    }).catch(() => {});
-
+    };
+    // Stock Entry created its allocations transactionally. The print endpoint
+    // can see a newly enabled priority between stock creation and printing:
+    // wait for its definitive assignment snapshots BEFORE building the labels.
+    // This prevents a normal label from being printed for an allocated bale.
     const assignmentMap = new Map(autoAllocations.map((row) => [row.baleId, row]));
+    try {
+      const response = await modeApiRequest("POST", "/api/bale-label-prints", printPayload);
+      if (!response.ok) throw new Error("Could not prepare bale label print");
+      const result = (await response.json()) as { priorityAllocations?: AutoAssignment[] };
+      for (const allocation of result.priorityAllocations ?? []) {
+        assignmentMap.set(allocation.baleId, allocation);
+      }
+    } catch (error) {
+      // Preserve the old best-effort audit behavior while OFF; when the new
+      // workflow is ON, fail closed rather than print labels with stale colors.
+      if (autoModeEnabled) throw error;
+    }
+
     const labels: LabelData[] = bales.map((bale) => {
       const product = baleProducts?.find((p) => p.id === bale.productId);
       const cartItem = cart.find((c) => c.productId === bale.productId);
