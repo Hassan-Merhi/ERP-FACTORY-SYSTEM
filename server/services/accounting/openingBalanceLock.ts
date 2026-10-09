@@ -79,12 +79,28 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
      END IF;
      RETURN NEW;
    END $fn$`,
-  ...OPENING_BALANCE_LOCK_TABLES.flatMap((table) => [
-    `DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table}`,
-    `CREATE TRIGGER ${openingBalanceLockTriggerName(table)}
-       BEFORE INSERT OR UPDATE OF opening_balance, opening_balance_side, company_id ON ${table}
-       FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard()`,
-  ]),
+  // One trigger per table, installed only when the table has the columns the
+  // trigger reads. suppliers.company_id (and the opening side columns) come from
+  // the schema preload (server/schemaPreload.mjs), which `npm start` always
+  // runs; a bare `node dist/index.js` on a freshly pushed schema (CI's startup
+  // step) does not, so a missing column skips that table with a warning instead
+  // of refusing to start. The diagnostic's database_guards_installed lists any
+  // trigger that is missing.
+  ...OPENING_BALANCE_LOCK_TABLES.map(
+    (table) => `DO $lock$
+   BEGIN
+     IF (SELECT COUNT(*) FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = '${table}'
+            AND column_name IN ('opening_balance', 'opening_balance_side', 'company_id')) = 3 THEN
+       DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table};
+       CREATE TRIGGER ${openingBalanceLockTriggerName(table)}
+         BEFORE INSERT OR UPDATE OF opening_balance, opening_balance_side, company_id ON ${table}
+         FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard();
+     ELSE
+       RAISE WARNING 'Opening balance lock not installed on %: opening_balance, opening_balance_side or company_id is missing', '${table}';
+     END IF;
+   END $lock$`
+  ),
 ];
 
 const INSTALL_LOCK_KEY = 2026_10_120;
