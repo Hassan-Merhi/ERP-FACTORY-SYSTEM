@@ -78,6 +78,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "phase4cap",
   "autostk4",
   "autoprt5",
+  "autodel6",
   "ordfin",
 ]);
 
