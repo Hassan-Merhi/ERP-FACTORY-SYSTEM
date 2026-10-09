@@ -531,7 +531,8 @@ export const factoryPriorityAutoAllocations = pgTable(
     reversalReason: text("reversal_reason"),
   },
   (table) => [
-    uniqueIndex("fpaa_company_bale_unique").on(table.companyId, table.baleId),
+    uniqueIndex("fpaa_company_bale_active_unique").on(table.companyId, table.baleId)
+      .where(sql`${table.reversedAt} IS NULL`),
     index("fpaa_company_order_active_idx").on(table.companyId, table.orderId)
       .where(sql`${table.reversedAt} IS NULL`),
   ]
