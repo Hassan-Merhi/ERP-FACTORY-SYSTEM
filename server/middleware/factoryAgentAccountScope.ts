@@ -29,7 +29,7 @@ export async function requireFactoryAgentStatementAccount(
     const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
     const accountId = Number(req.params.id);
     if (!companyId || !Number.isSafeInteger(accountId) || accountId <= 0) {
-      res.status(400).json({ message: "Invalid Factory account context" });
+      res.status(400).json({ message: "Invalid account ID" });
       return;
     }
 
@@ -64,7 +64,7 @@ export async function requireFactoryAgentStatementAccount(
       }
     }
     if (ownerCompanyId !== companyId) {
-      res.status(404).json({ message: "Account not found in the Factory company" });
+      res.status(404).json({ message: "Account not found" });
       return;
     }
     next();
