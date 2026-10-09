@@ -97,18 +97,68 @@ function isBrandUrl(src: string): boolean {
   return src.startsWith("/labels/");
 }
 
-/** Only accept real CSS hex colors from server-side allocation snapshots. */
+/**
+ * Priority colors are historic server snapshots, not today's queue colors.
+ * The queue UI stores #RRGGBB; a few legacy configs use names like "Red".
+ * Never inject an arbitrary string into print HTML/CSS.
+ */
+const PRIORITY_NAMED_COLORS: Record<string, string> = {
+  red: "#dc2626",
+  blue: "#2563eb",
+  green: "#16a34a",
+  orange: "#f97316",
+  yellow: "#eab308",
+  purple: "#7c3aed",
+  pink: "#db2777",
+  black: "#111827",
+  white: "#ffffff",
+  gray: "#6b7280",
+  grey: "#6b7280",
+  cyan: "#0891b2",
+  gold: "#b8860b",
+  brown: "#92400e",
+};
+
+export function resolvePriorityLabelColor(value: string | null | undefined): string | null {
+  if (value == null || value.trim() === "") return null;
+  const color = value.trim();
+  if (/^#[0-9a-f]{6}$/i.test(color)) return color.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(color)) {
+    const [, r, g, b] = color.toLowerCase();
+    return `#${r}${r}${g}${g}${b}${b}`;
+  }
+  return PRIORITY_NAMED_COLORS[color.toLowerCase()] || null;
+}
+
+/** Invalid saved colors are a print error, never a silently wrong bale label. */
+export function validatePriorityLabelColor(label: LabelData): string | null {
+  const raw = label.priorityColor;
+  if (raw == null || raw.trim() === "") return null;
+  const color = resolvePriorityLabelColor(raw);
+  if (!color) {
+    throw new Error(`Unrecognized Priority Scan label color for ${label.referenceNumber}. Printing cancelled.`);
+  }
+  return color;
+}
+
+function escapePriorityText(value: string | number | null | undefined): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char] ?? char);
+}
+
+/**
+ * ONLY the small HMD wordmark changes to the original loading color.
+ * Large HMD globe artwork, subtitle, barcode and product text stay unchanged.
+ */
 function renderSmallHmdLogo(label: LabelData, cssClass = "logo-img"): string {
-  const color = typeof label.priorityColor === "string" && /^#[0-9a-f]{6}$/i.test(label.priorityColor)
-    ? label.priorityColor : null;
+  const color = validatePriorityLabelColor(label);
   if (!color) {
     return `<img class="${cssClass}" src="${label.customerLogoUrl || HMD_LOGO_BASE64}" alt="HMD International Group" />`;
   }
-  // Only the HMD lettering changes color. The subtitle remains black, while
-  // the large HMD globe artwork is unchanged.
   return `<div class="priority-small-logo" aria-label="HMD International Group">
-    <div class="priority-hmd-letters" style="color:${color} !important">HMD</div>
-    <div class="priority-hmd-subtitle">INTERNATIONAL GROUP</div>
+    <span class="priority-hmd-letters" style="color: ${color} !important; -webkit-print-color-adjust: exact; print-color-adjust: exact">HMD</span>
+    <span class="priority-hmd-subtitle">INTERNATIONAL GROUP</span>
   </div>`;
 }
 
@@ -245,16 +295,27 @@ function getDesignBannerUrl(design: string): string {
 export function generateCombinedLabelsHtml(labels: LabelData[], designColor?: A4DesignColor) {
   let labelsHtml = "";
   for (const label of labels) {
-    if (label.priorityColor) {
+    const priorityColor = validatePriorityLabelColor(label);
+    if (priorityColor) {
+      const productName = escapePriorityText(label.productName);
+      // Two exactly 148.5mm halves match the existing A4 label stock.
       labelsHtml += `
       <div class="a4-page priority-print-a4">
-        <div class="priority-globe-top"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
-        <div class="priority-main-row">
-          <div class="priority-detail-wrap">${buildDetailBlock(label)}</div>
-          <div class="priority-side-product">${label.productName}</div>
+        <div class="priority-a4-half">
+          <div class="priority-a4-art">
+            <img class="priority-large-hmd" src="${HMD_LOGO_BASE64}" alt="HMD International Group" />
+          </div>
+          <div class="priority-a4-row">
+            <div class="priority-detail-wrap">${buildDetailBlock(label)}</div>
+            <div class="priority-a4-side-product">${productName}</div>
+          </div>
         </div>
-        <div class="priority-main-product">${label.productName}</div>
-        <div class="priority-globe-bottom"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+        <div class="priority-a4-half">
+          <div class="priority-a4-art">
+            <img class="priority-large-hmd" src="${HMD_LOGO_BASE64}" alt="HMD International Group" />
+          </div>
+          <div class="priority-a4-main-product">${productName}</div>
+        </div>
       </div>`;
       continue;
     }
@@ -292,16 +353,18 @@ export function generateCombinedLabelsHtml(labels: LabelData[], designColor?: A4
     body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; }
 ${detailBlockCss}
 
-    .priority-print-a4 { padding: 6mm 10mm; text-align: center; }
-    .priority-globe-top { height: 116mm; display: flex; align-items: center; justify-content: center; }
-    .priority-globe-top img { width: 116mm; max-height: 113mm; object-fit: contain; }
-    .priority-main-row { height: 58.5mm; display: flex; align-items: center; gap: 5mm; }
-    .priority-detail-wrap { border: .3mm solid #222; flex-shrink: 0; width: 76mm; height: 58.5mm; overflow: hidden; text-align: left; }
-    .priority-side-product { flex: 1; font-size: 22pt; line-height: 1.06; font-weight: 900; text-align: center; overflow-wrap: anywhere; }
-    .priority-main-product { min-height: 49mm; display: flex; align-items: center; justify-content: center; font-size: 35pt; line-height: 1.05; font-weight: 900; overflow-wrap: anywhere; text-transform: uppercase; }
-    .priority-globe-bottom { flex: 1; display: flex; align-items: center; justify-content: center; }
-    .priority-globe-bottom img { width: 78mm; height: 62mm; object-fit: contain; }
-        .a4-page { width: 210mm; height: 297mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+    /* Priority stock: existing half-sheet geometry, not a new paper size. */
+    .priority-print-a4 { display: block; text-align: center; }
+    .priority-a4-half { width: 210mm; height: 148.5mm; overflow: hidden; display: flex; flex-direction: column; }
+    .priority-a4-art { height: 90mm; min-height: 90mm; display: flex; align-items: center; justify-content: center; }
+    .priority-a4-art img { height: 87mm; width: 100mm; max-width: 100%; object-fit: contain; }
+    .priority-a4-row { height: 58.5mm; display: flex; gap: 6mm; align-items: stretch; padding: 0 10mm; }
+    .priority-detail-wrap { width: 76mm; height: 58.5mm; flex-shrink: 0; border: .3mm solid #222; overflow: hidden; text-align: left; }
+    .priority-a4-side-product { min-width: 0; flex: 1; display: flex; align-items: center; justify-content: center;
+      font-size: 29pt; line-height: 1.1; font-weight: 900; text-transform: uppercase; overflow-wrap: anywhere; }
+    .priority-a4-main-product { height: 58.5mm; display: flex; align-items: center; justify-content: center;
+      padding: 0 12mm; font-size: 43pt; line-height: 1.1; font-weight: 900; text-transform: uppercase; overflow-wrap: anywhere; }
+    .a4-page { width: 210mm; height: 297mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
     .a4-page:last-child { page-break-after: auto; }
 
     .a4-top-half { height: 148.5mm; flex-shrink: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -320,11 +383,12 @@ ${detailBlockCss}
     @media print {
       .print-note { display: none !important; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      * { color: #000 !important; }
+      *:not(.priority-hmd-letters) { color: #000 !important; }
+      .priority-hmd-letters { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .info-key, .info-val, .barcode-number, .barcode-subtext { -webkit-text-stroke: 0.3px #000; }
       .a4-name-right-text, .a4-bottom-name-text { -webkit-text-stroke: 0.7px #000; text-shadow: 0 0 0.5px #000; }
-      img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
-      .header-banner-img, .a4-banner-img { filter: none; }
+      img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img):not(.priority-large-hmd) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
+      .header-banner-img, .a4-banner-img, .priority-large-hmd { filter: none; }
       .barcode-img { filter: none; image-rendering: pixelated; }
     }
   </style></head><body><div class="print-note">A4 Bale Labels. Set printer to BEST quality, max darkness. Disable "Headers and Footers".</div>${labelsHtml}</body></html>`;
@@ -333,16 +397,24 @@ ${detailBlockCss}
 export function generateA5LabelsHtml(labels: LabelData[]) {
   let labelsHtml = "";
   for (const label of labels) {
-    if (label.priorityColor) {
+    const priorityColor = validatePriorityLabelColor(label);
+    if (priorityColor) {
+      const productName = escapePriorityText(label.productName);
       labelsHtml += `
         <div class="a5-page priority-print-a5">
-          <div class="priority-a5-globe"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
-          <div class="priority-a5-detail">${buildDetailBlockNoBanner(label)}</div>
-          <div class="priority-a5-product">${label.productName}</div>
+          <div class="priority-a5-art">
+            <img class="priority-large-hmd" src="${HMD_LOGO_BASE64}" alt="HMD International Group" />
+          </div>
+          <div class="priority-a5-row">
+            <div class="priority-a5-detail">${buildDetailBlockNoBanner(label)}</div>
+            <div class="priority-a5-side-product">${productName}</div>
+          </div>
         </div>
         <div class="a5-page priority-print-a5">
-          <div class="priority-a5-product priority-a5-product-big">${label.productName}</div>
-          <div class="priority-a5-globe"><img src="${HMD_LOGO_BASE64}" alt="HMD International Group" /></div>
+          <div class="priority-a5-art">
+            <img class="priority-large-hmd" src="${HMD_LOGO_BASE64}" alt="HMD International Group" />
+          </div>
+          <div class="priority-a5-main-product">${productName}</div>
         </div>`;
       continue;
     }
@@ -384,13 +456,18 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     .barcode-img { width: 100%; height: 14mm; object-fit: fill; }
     .barcode-number { font-size: 11pt; font-weight: 900; font-family: Arial, Helvetica, sans-serif; margin-top: 0.5mm; letter-spacing: 1.5px; text-transform: uppercase; -webkit-text-stroke: 0.5px #000; }
     .barcode-subtext { font-size: 7pt; font-weight: 900; margin-top: 0.5mm; text-transform: uppercase; letter-spacing: 1px; line-height: 1.1; word-break: break-word; -webkit-text-stroke: 0.4px #000; }
-    .priority-print-a5 { padding: 7mm; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7mm; }
-    .priority-a5-globe { height: 65mm; width: 100%; display: flex; align-items: center; justify-content: center; }
-    .priority-a5-globe img { max-height: 65mm; max-width: 95mm; object-fit: contain; }
-    .priority-a5-detail { border: .3mm solid #333; width: 65mm; min-height: 49mm; }
-    .priority-a5-product { text-align: center; font-size: 25pt; line-height: 1.1; font-weight: 900; text-transform: uppercase; }
-    .priority-a5-product-big { font-size: 36pt; }
-        .a5-page { width: 148mm; height: 210mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
+    .priority-print-a5 { padding: 0; }
+    .priority-a5-art { height: 145mm; min-height: 145mm; display: flex; align-items: center; justify-content: center; }
+    .priority-a5-art img { height: 115mm; width: 118mm; max-width: 100%; object-fit: contain; }
+    .priority-a5-row { height: 65mm; display: flex; align-items: center; padding: 0 5mm; gap: 4mm; }
+    .priority-a5-detail { width: 65mm; height: 58.5mm; flex-shrink: 0; border: .3mm solid #222; overflow: hidden; }
+    .priority-a5-detail .code-label { height: 58mm; }
+    .priority-a5-side-product { flex: 1; min-width: 0; text-align: center; font-size: 19pt; line-height: 1.1;
+      font-weight: 900; text-transform: uppercase; overflow-wrap: anywhere; }
+    .priority-a5-main-product { height: 65mm; display: flex; align-items: center; justify-content: center;
+      padding: 0 8mm; text-align: center; font-size: 32pt; line-height: 1.1; font-weight: 900;
+      text-transform: uppercase; overflow-wrap: anywhere; }
+    .a5-page { width: 148mm; height: 210mm; page-break-after: always; page-break-inside: avoid; break-inside: avoid; overflow: hidden; display: flex; flex-direction: column; background: #fff; }
     .a5-page:last-child { page-break-after: auto; }
     .a5-page1 { padding-top: 80mm; }
     .a5-page2 { padding-top: 10mm; }
@@ -407,11 +484,12 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     @media print {
       .print-note { display: none !important; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      * { color: #000 !important; }
+      *:not(.priority-hmd-letters) { color: #000 !important; }
+      .priority-hmd-letters { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .info-key, .info-val, .barcode-number, .barcode-subtext { -webkit-text-stroke: 0.3px #000; }
       .a5-name-right-text, .a5-bottom-name-text { -webkit-text-stroke: 0.7px #000; text-shadow: 0 0 0.5px #000; }
-      img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
-      .header-banner-img, .a4-banner-img { filter: none; }
+      img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img):not(.priority-large-hmd) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
+      .header-banner-img, .a4-banner-img, .priority-large-hmd { filter: none; }
       .barcode-img { filter: none; image-rendering: pixelated; }
     }
   </style></head><body><div class="print-note">A5 Bale Labels (preprinted paper). Select A5 paper, Portrait, 100% scale. Set BEST quality, max darkness. Disable "Headers and Footers".</div>${labelsHtml}</body></html>`;
@@ -469,7 +547,8 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
     .print-note { text-align: center; font-size: 9pt; color: #666; padding: 4px; background: #fffbe6; border-bottom: 1px solid #eee; }
     @media print {
       .print-note { display: none !important; }
-      * { color: #000 !important; }
+      *:not(.priority-hmd-letters) { color: #000 !important; }
+      .priority-hmd-letters { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       .info-label, .info-value, .ref-barcode-number, .ref-bale-name { -webkit-text-stroke: 0.3px #000; }
       img { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
       .sticker-logo, .ref-barcode-img { filter: none; image-rendering: pixelated; }
