@@ -13,7 +13,7 @@ import { requireAuth, requireRole } from "../../../../auth";
 import { recalculateOrderTotals } from "../../_helpers";
 import { acquireProformaCapacityTransactionLock } from "../proformaCapacityConcurrency";
 import { reversePriorityAllocationForDeletedBaleTx } from "../priorityAutoAllocation";
-import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../priorityScanQueue";
+import { PRIORITY_SCAN_LOCK_NAMESPACE, reactivateAutoCompletedPriorityLoadingsLockedTx } from "../priorityScanQueue";
 import {
   factoryBales,
   customerOrders,
@@ -111,8 +111,10 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
             await reversePriorityAllocationForDeletedBaleTx(tx, {
               companyId, baleId: row.baleId, detachedOrderId: orderId,
               actor: String(username || userId || "unknown"), actorId: userId, reason: "Loading emptied",
+              deferQueueRecovery: true,
             });
           }
+          await reactivateAutoCompletedPriorityLoadingsLockedTx(tx, companyId, [orderId]);
           return removedLinks.length;
         });
 
