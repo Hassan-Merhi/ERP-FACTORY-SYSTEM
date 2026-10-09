@@ -266,7 +266,8 @@ export async function reversePriorityAllocationForDeletedBaleTx(
   }
   await tx.execute(sql`
     UPDATE factory_priority_auto_allocations SET reversed_at = now(),
-      reversed_by = ${actor}, reversal_reason = ${reason}
+      reversed_by = ${actor}, reversed_by_user_id = ${args.actorId ?? null},
+      reversal_reason = ${reason}
     WHERE company_id = ${companyId} AND bale_id = ${baleId} AND reversed_at IS NULL
   `);
   await tx.execute(sql`
