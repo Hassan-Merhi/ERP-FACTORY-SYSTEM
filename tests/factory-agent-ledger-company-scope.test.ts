@@ -87,7 +87,11 @@ describe("Factory Agent Ledger statement company scope", () => {
     mocks.authorize.mockResolvedValue({ allowed: false, code: "FACTORY_PAGE_ACCESS_DENIED", message: "Denied" });
     const next = vi.fn() as NextFunction;
     const { res, result } = makeResponse();
-    await requireFactoryAgentStatementAccount(makeRequest("/api/factory/agents/ledger/12/pre-period-balance"), res, next);
+    await requireFactoryAgentStatementAccount(
+      makeRequest("/api/factory/agents/ledger/12/pre-period-balance"),
+      res,
+      next
+    );
     expect(result.status).toBe(403);
     expect(mocks.lookup).not.toHaveBeenCalled();
     expect(next).not.toHaveBeenCalled();
@@ -115,7 +119,9 @@ describe("Factory Agent Ledger API wiring", () => {
   it("keeps catalog and pinned rows scoped by the Factory company", () => {
     const accounts = source("server/routes/accounts/all.ts");
     const pinned = source("server/routes/admin/import-export/accounts.ts");
-    expect(accounts).toContain('app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents")');
+    expect(accounts).toContain(
+      'app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents")'
+    );
     expect(accounts).toContain("req.session.factoryCompanyId || req.session.currentCompanyId");
     expect(pinned).toContain('"/api/factory/agents/pinned/:accountId"');
     expect(pinned).toContain("const companyId = agentCompanyId(req)");
