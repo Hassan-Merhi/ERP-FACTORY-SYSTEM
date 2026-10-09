@@ -12,6 +12,7 @@ import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
 import { getClientDate } from "../lib/dateUtils";
 import { buildFactoryCustomerLedgerEntries, getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
@@ -24,7 +25,7 @@ function statementResponse(transactions: unknown[], fields: Record<string, unkno
 
 export function registerAccountTransactionRoutes(app: Express) {
   // Get transactions for a specific ledger account with optional date filtering
-  app.get("/api/accounts/ledger/:id/transactions", requireAuth, async (req, res) => {
+  app.get(["/api/accounts/ledger/:id/transactions", "/api/factory/agents/ledger/:id/transactions"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
     try {
       const ledgerAccountId = parseInt(req.params.id);
 
@@ -127,7 +128,7 @@ export function registerAccountTransactionRoutes(app: Express) {
   });
 
   // Get transactions for a specific bank account with optional date filtering
-  app.get("/api/accounts/bank/:id/transactions", requireAuth, async (req, res) => {
+  app.get(["/api/accounts/bank/:id/transactions", "/api/factory/agents/bank/:id/transactions"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
     try {
       const bankAccountId = parseInt(req.params.id);
       if (isNaN(bankAccountId)) {
@@ -190,7 +191,7 @@ export function registerAccountTransactionRoutes(app: Express) {
   });
 
   // Get transactions for a specific fixed asset with optional date filtering
-  app.get("/api/accounts/fixed-asset/:id/transactions", requireAuth, async (req, res) => {
+  app.get(["/api/accounts/fixed-asset/:id/transactions", "/api/factory/agents/fixed-asset/:id/transactions"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
     try {
       const fixedAssetId = parseInt(req.params.id);
       if (isNaN(fixedAssetId)) {
@@ -326,7 +327,7 @@ export function registerAccountTransactionRoutes(app: Express) {
   });
 
   // Get transactions for a specific employee with optional date filtering
-  app.get("/api/accounts/employee/:id/transactions", requireAuth, async (req, res) => {
+  app.get(["/api/accounts/employee/:id/transactions", "/api/factory/agents/employee/:id/transactions"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
     try {
       const employeeId = parseInt(req.params.id);
       if (isNaN(employeeId)) {
