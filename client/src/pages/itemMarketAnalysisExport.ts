@@ -219,11 +219,21 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     { header: "Status", key: "status", width: 14 },
     { header: "Top Profit Company", key: "topProfitCompany", width: 30 },
   ], options.groups.map((group) => {
-    const mostProfitable = group.companyRows.filter((row) => row.revenue > 0 && row.profit > 0)
+    // Multiple stock IDs can share a normalized code inside a company.
+    // Match the on-screen comparison: aggregate by company before ranking.
+    const byCompany = new Map<number, { name: string; revenue: number; profit: number }>();
+    for (const row of group.companyRows) {
+      const total = byCompany.get(row.companyId) ?? { name: row.companyName, revenue: 0, profit: 0 };
+      total.revenue += row.revenue;
+      total.profit += row.profit;
+      byCompany.set(row.companyId, total);
+    }
+    const mostProfitable = [...byCompany.values()]
+      .filter((company) => company.revenue > 0 && company.profit > 0)
       .sort((a, b) => b.profit - a.profit);
     const winner = mostProfitable.length === 0 ? "None"
       : mostProfitable.length > 1 && Math.abs(mostProfitable[0].profit - mostProfitable[1].profit) < 0.005
-        ? "Equal" : mostProfitable[0].companyName;
+        ? "Equal" : mostProfitable[0].name;
     return {
       code: group.code,
       name: group.name,
