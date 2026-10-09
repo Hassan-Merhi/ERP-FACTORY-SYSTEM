@@ -13,9 +13,11 @@ import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
+import { reversePriorityAllocationForDeletedBaleTx } from "../customer-orders/priorityAutoAllocation";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { writeDaybookEntry, verifySupervisorPassword } from "../_helpers";
 import { factoryBaleProducts, factoryBales, inventory, stockItems, users, userCompanyRoles } from "@shared/schema";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -55,6 +57,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
       }
 
       const result = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
         const balesToRemove = await tx
           .select()
           .from(factoryBales)
@@ -76,10 +79,14 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
         const stockItemCache = new Map<string, number>();
 
         for (const bale of balesToRemove) {
+          await reversePriorityAllocationForDeletedBaleTx(tx, {
+            companyId, baleId: bale.id, actor: supervisorUsername, reason: reason || "Factory bale stock removal",
+          });
           const [updated] = await tx
             .update(factoryBales)
             .set({
               status: "DELETED",
+              deletedAt: now,
               updatedAt: now,
             })
             .where(eq(factoryBales.id, bale.id))
@@ -214,6 +221,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
       }
 
       const result = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
         const balesToRemove = await tx
           .select()
           .from(factoryBales)
@@ -248,9 +256,12 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
         }
 
         for (const bale of balesToRemove) {
+          await reversePriorityAllocationForDeletedBaleTx(tx, {
+            companyId, baleId: bale.id, actor: supervisorUsername, reason: reason || "Factory bale stock removal",
+          });
           const [updated] = await tx
             .update(factoryBales)
-            .set({ status: "DELETED", updatedAt: now })
+            .set({ status: "DELETED", deletedAt: now, updatedAt: now })
             .where(eq(factoryBales.id, bale.id))
             .returning();
           removedBales.push({
