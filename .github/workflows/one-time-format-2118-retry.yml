@@ -1,0 +1,34 @@
+name: Format Fixed Target split
+on:
+  push:
+    branches:
+      - fix/fixed-target-unlink-allocation-20261009
+    paths:
+      - .github/workflows/one-time-format-2118-retry.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.21.0'
+      - name: Install locked formatter
+        run: npm ci --ignore-scripts
+      - name: Format the failing source file
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write shared/factoryProductionTargetSplit.ts
+          node node_modules/prettier/bin/prettier.cjs --check shared/factoryProductionTargetSplit.ts
+      - name: Commit formatted source and remove this temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-format-2118-retry.yml
+          git add shared/factoryProductionTargetSplit.ts
+          git commit -m "style(factory): fix exact target split formatting"
+          git push origin HEAD:refs/heads/fix/fixed-target-unlink-allocation-20261009
