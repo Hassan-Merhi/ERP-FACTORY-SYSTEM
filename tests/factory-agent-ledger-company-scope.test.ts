@@ -25,6 +25,7 @@ vi.mock("../server/db", () => ({
 }));
 
 import { requireFactoryAgentStatementAccount } from "../server/middleware/factoryAgentAccountScope";
+import { resolveFactoryBackendAccessRequirement } from "../server/middleware/factoryBackendAccessBoundary";
 
 function makeRequest(path: string, id = "12", factoryCompanyId = 9): Request {
   return {
@@ -101,5 +102,17 @@ describe("Factory Agent Ledger statement company scope", () => {
     await requireFactoryAgentStatementAccount(makeRequest("/api/factory/agents/supplier/12/transactions"), res, next);
     expect(result.status).toBe(404);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  it("gives every Factory Agent Ledger API an owner at the /api/factory access boundary", () => {
+    for (const url of [
+      "/api/factory/agents/accounts",
+      "/api/factory/agents/pinned",
+      "/api/factory/agents/fixed-asset/12/transactions",
+      "/api/factory/agents/ledger/12/pre-period-balance?endDate=2026-01-01",
+    ]) {
+      const req = { originalUrl: url, path: url, method: "GET", query: {}, body: {} } as unknown as Request;
+      expect(resolveFactoryBackendAccessRequirement(req)).toEqual({ pageKey: "factory/agents" });
+    }
   });
 });
