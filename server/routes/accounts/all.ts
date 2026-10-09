@@ -468,7 +468,7 @@ export function registerAccountListRoutes(app: Express) {
   // company selected by another tab. The existing ERP endpoint is unchanged.
   app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents"), async (req, res) => {
     const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-    if (!companyId) return res.status(400).json({ message: "No Factory company selected" });
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
     return serveAccountListForCompany(req, res, companyId);
   });
 
