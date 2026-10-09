@@ -241,6 +241,19 @@ export async function reversePriorityAllocationForDeletedBaleTx(
     await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId: id });
   }
 
+  // Verification/finalization may be happening outside the priority queue
+  // lock. Lock the affected orders AFTER their proforma locks and recheck
+  // their current status before removing any active bale/order links.
+  for (const orderId of [...new Set(rows.map(r => r.orderId))].sort((a,b)=>a-b)) {
+    const [lockedOrder] = await tx.select({ status: customerOrders.status })
+      .from(customerOrders)
+      .where(and(eq(customerOrders.id, orderId), eq(customerOrders.companyId, companyId)))
+      .for("update");
+    if (!lockedOrder || !["DRAFT", "LOADING"].includes(lockedOrder.status)) {
+      throw new Error("Cannot delete a bale while its loading is verified, finalized or changing status.");
+    }
+  }
+
   if (rows.length) {
     await tx.delete(customerOrderBales).where(eq(customerOrderBales.baleId, baleId));
     for (const orderId of affected) await recalculateOrderTotals(tx, orderId);
