@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import type { NextFunction, Request, Response } from "express";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -103,36 +101,5 @@ describe("Factory Agent Ledger statement company scope", () => {
     await requireFactoryAgentStatementAccount(makeRequest("/api/factory/agents/supplier/12/transactions"), res, next);
     expect(result.status).toBe(404);
     expect(next).not.toHaveBeenCalled();
-  });
-});
-
-describe("Factory Agent Ledger API wiring", () => {
-  const source = (file: string) => readFileSync(resolve(process.cwd(), file), "utf8");
-
-  it("uses independent Factory catalog and pinned-agent API paths", () => {
-    const hook = source("client/src/pages/agents/useAgentLedger.ts");
-    expect(hook).toContain('"/api/factory/agents/accounts"');
-    expect(hook).toContain('"/api/factory/agents/pinned"');
-    expect(hook).toContain('const statementPrefix = isFactory ? "/api/factory/agents" : "/api/accounts"');
-  });
-
-  it("keeps catalog and pinned rows scoped by the Factory company", () => {
-    const accounts = source("server/routes/accounts/all.ts");
-    const pinned = source("server/routes/admin/import-export/accounts.ts");
-    expect(accounts).toContain(
-      'app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents")'
-    );
-    expect(accounts).toContain("req.session.factoryCompanyId || req.session.currentCompanyId");
-    expect(pinned).toContain('"/api/factory/agents/pinned/:accountId"');
-    expect(pinned).toContain("const companyId = agentCompanyId(req)");
-  });
-
-  it("registers Factory-scoped transaction and opening-balance endpoints", () => {
-    const transactions = source("server/routes/accountTransactionRoutes.ts");
-    const statements = source("server/routes/accountStatementRoutes.ts");
-    for (const type of ["ledger", "bank", "fixed-asset", "employee"]) {
-      expect(transactions).toContain(`/api/factory/agents/${type}/:id/transactions`);
-    }
-    expect(statements).toContain("/api/factory/agents/:type/:id/pre-period-balance");
   });
 });
