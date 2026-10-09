@@ -17,6 +17,7 @@ import { recalculateOrderTotals } from "../_helpers";
 import { recalculateOrderTotalsForScannedArticle } from "./bale-scanning/incrementalTotals";
 import { normalizeLoadingArticleCode } from "./bale-scanning/proformaScanPolicy";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
+import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
 import {
   PRIORITY_SCAN_LOCK_NAMESPACE,
   advanceSatisfiedPriorityScanConfigsLockedTx,
@@ -214,7 +215,7 @@ export async function reversePriorityAllocationForDeletedBaleTx(
   const affected = [...new Set(rows.map((r) => r.orderId))];
   // Respect the existing priority -> proforma lock order.
   for (const id of [...new Set(rows.map((r) => r.proformaIdUsed).filter((id): id is number => id != null))].sort((a,b)=>a-b)) {
-    await tx.execute(sql`SELECT pg_advisory_xact_lock(73203, ${id})`);
+    await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId: id });
   }
 
   if (rows.length) {
