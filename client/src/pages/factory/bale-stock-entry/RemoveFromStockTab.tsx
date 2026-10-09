@@ -400,6 +400,9 @@ export function RemoveFromStockTab() {
       setRemoveDialogOpen(false);
       queryClient.invalidateQueries({ queryKey: ["/api/factory/stock-entry/in-stock"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales/daily-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-route"] });
     },
     onError: (err: Error) => {
       setAuthError(err.message);
