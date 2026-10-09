@@ -1,0 +1,38 @@
+name: One-time format PR 2118
+on:
+  push:
+    branches:
+      - fix/fixed-target-unlink-allocation-20261009
+    paths:
+      - .github/workflows/one-time-format-2118.yml
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: '24.21.0'
+      - name: Install locked formatter
+        run: npm ci --ignore-scripts
+      - name: Format changed files
+        run: |
+          node node_modules/prettier/bin/prettier.cjs --write \
+            client/src/pages/factory/productiontargets/ProductionWorkerLinkControl.tsx \
+            server/routes/factory/factoryProductionWorkerLinkRoutes.ts \
+            server/services/factory/productionWorkerLinks.ts \
+            shared/factoryProductionTargetSplit.ts \
+            tests/factory-production-target-split.test.ts
+      - name: Commit formatting and remove temporary workflow
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-format-2118.yml
+          git add client/src/pages/factory/productiontargets/ProductionWorkerLinkControl.tsx server/routes/factory/factoryProductionWorkerLinkRoutes.ts server/services/factory/productionWorkerLinks.ts shared/factoryProductionTargetSplit.ts tests/factory-production-target-split.test.ts
+          git commit -m "style(factory): apply Prettier to unlink allocation fix"
+          git push origin HEAD:refs/heads/fix/fixed-target-unlink-allocation-20261009
