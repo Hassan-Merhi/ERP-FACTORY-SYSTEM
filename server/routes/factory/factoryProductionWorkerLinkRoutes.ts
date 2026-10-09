@@ -7,6 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
 import { factoryWorkers } from "@shared/schema";
+import { ProductionTargetSplitError } from "@shared/factoryProductionTargetSplit";
 import {
   createProductionWorkerLink,
   loadActiveProductionWorkerLinks,
@@ -187,6 +188,7 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
           linkId,
           effectiveTo,
           createdBy: req.session.userId || null,
+          allocations: req.body?.allocations,
         });
         if (!unlinked) return res.status(404).json({ message: "Worker link not found" });
 
@@ -195,6 +197,9 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
           links: await loadActiveProductionWorkerLinks(companyId, effectiveTo),
         });
       } catch (error: unknown) {
+        if (error instanceof ProductionTargetSplitError) {
+          return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }
