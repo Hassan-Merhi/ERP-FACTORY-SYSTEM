@@ -45,14 +45,18 @@ const querySchema = z.object({
   companyIds: z.string().trim().max(500).optional(),
 });
 
-
 const exportSalePricesSchema = z.object({
   startDate: dateSchema.optional(),
   endDate: dateSchema.optional(),
-  companyItems: z.array(z.object({
-    companyId: z.number().int().positive(),
-    stockItemIds: z.array(z.number().int().positive()).min(1).max(5000),
-  })).min(1).max(20),
+  companyItems: z
+    .array(
+      z.object({
+        companyId: z.number().int().positive(),
+        stockItemIds: z.array(z.number().int().positive()).min(1).max(5000),
+      })
+    )
+    .min(1)
+    .max(20),
 });
 
 const salePriceQuerySchema = z.object({
@@ -235,7 +239,6 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
     }
   );
 
-
   // Batched drill-down used only on user-initiated Excel export. Every company
   // and its allowed locations are verified exactly as in the report endpoint.
   app.post(
@@ -259,8 +262,10 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
         return res.status(400).json({ message: "Start date cannot be after end date" });
       }
       const companyIds = companyItems.map((entry) => entry.companyId);
-      if (new Set(companyIds).size !== companyIds.length ||
-          companyItems.reduce((count, entry) => count + entry.stockItemIds.length, 0) > 10000) {
+      if (
+        new Set(companyIds).size !== companyIds.length ||
+        companyItems.reduce((count, entry) => count + entry.stockItemIds.length, 0) > 10000
+      ) {
         return res.status(400).json({ message: "Invalid or repeated companies or too many item IDs" });
       }
 
@@ -285,21 +290,29 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
             const result = [];
             for (const entry of companyItems) {
               const company = byId.get(entry.companyId)!;
-              const assignment = entry.companyId === activeCompanyId
-                ? undefined : await storage.getUserCompanyRole(userId, entry.companyId);
-              const role = entry.companyId === activeCompanyId
-                ? activeRole : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
+              const assignment =
+                entry.companyId === activeCompanyId
+                  ? undefined
+                  : await storage.getUserCompanyRole(userId, entry.companyId);
+              const role =
+                entry.companyId === activeCompanyId
+                  ? activeRole
+                  : (assignment?.role ?? (activeRole === "Developer" ? "Developer" : null));
 
               if (!role || role === "POS") {
                 throw new CompanyAccessError(
-                  403, `You do not have report access to ${company.name}`, "COMPANY_REPORT_ACCESS_DENIED"
+                  403,
+                  `You do not have report access to ${company.name}`,
+                  "COMPANY_REPORT_ACCESS_DENIED"
                 );
               }
               if (role !== "Developer" && role !== "Admin") {
                 const permissions = await storage.getRoleFeaturePermissions(entry.companyId);
                 if (!canAccess(role, "page_sales_report", buildPermissionMap(permissions, role))) {
                   throw new CompanyAccessError(
-                    403, `You do not have Sales Report access in ${company.name}`, "COMPANY_REPORT_ACCESS_DENIED"
+                    403,
+                    `You do not have Sales Report access in ${company.name}`,
+                    "COMPANY_REPORT_ACCESS_DENIED"
                   );
                 }
               }
@@ -308,8 +321,10 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
                 companyId: entry.companyId,
                 userId,
                 role,
-                currentLocationId: entry.companyId === activeCompanyId
-                  ? req.session.currentLocationId : (assignment?.assignedLocationId ?? null),
+                currentLocationId:
+                  entry.companyId === activeCompanyId
+                    ? req.session.currentLocationId
+                    : (assignment?.assignedLocationId ?? null),
                 requestedLocationIds: [],
               });
               const breakdown = await getItemMarketBulkSalePrices({
@@ -332,7 +347,10 @@ export function registerItemMarketAnalysisRoutes(app: Express) {
           return res.status(error.statusCode).json({ message: error.message });
         }
         logger.error("Item market Excel sale-price export error", {
-          module: "reports", action: "item-market-export-sale-prices", companyId: activeCompanyId, error,
+          module: "reports",
+          action: "item-market-export-sale-prices",
+          companyId: activeCompanyId,
+          error,
         });
         return res.status(500).json({ message: "Failed to export item sale price breakdown" });
       }
