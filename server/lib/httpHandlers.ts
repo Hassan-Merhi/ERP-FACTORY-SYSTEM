@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { closedPeriodErrorResponse } from "./closedPeriodError";
+import { HttpError } from "./httpError";
 
 // Intersect with the globally-augmented `Request["user"]` shape (see the
 // Express namespace augmentation in server/index.ts) so this stays a valid
@@ -11,15 +12,7 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export class HttpError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    message: string
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+export { HttpError };
 
 export function getAuthenticatedUserId(request: AuthenticatedRequest): string {
   const userId = request.user?.id;
@@ -42,11 +35,13 @@ export function getErrorMessage(error: unknown): string {
 (globalThis as typeof globalThis & { getErrorMessage?: typeof getErrorMessage }).getErrorMessage = getErrorMessage;
 
 /**
- * HTTP status for an error caught by a route: 409 when the closed-period guard
- * refused the write (the request conflicts with closed books), otherwise the
- * route's fallback.
+ * HTTP status for an error caught by a route: the status an HttpError carries
+ * (for example 400 for a missing exchange rate), 409 when the closed-period
+ * guard refused the write (the request conflicts with closed books), otherwise
+ * the route's fallback.
  */
 export function errorStatus(error: unknown, fallback = 500): number {
+  if (error instanceof HttpError) return error.statusCode;
   return closedPeriodErrorResponse(error) ? 409 : fallback;
 }
 
