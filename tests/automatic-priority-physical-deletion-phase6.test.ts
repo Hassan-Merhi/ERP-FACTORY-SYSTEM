@@ -109,6 +109,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (ctx?.companyId) {
+    await pool.query("DELETE FROM factory_physical_bale_deletions WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_priority_auto_allocations WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM factory_priority_scan_history WHERE company_id = $1", [ctx.companyId]);
     await pool.query("DELETE FROM customer_order_priority_scan_configs WHERE company_id = $1", [ctx.companyId]);
@@ -145,6 +146,22 @@ describe("Phase 6: physical deletion is atomic and permanent-history safe", () =
     expect((await baleStatus(allocatedBale.id)).deleted_at).not.toBeNull();
     expect(await inventoryQty()).toBe(beforeQty - 1);
     expect(await removedMovements()).toBe(1);
+    const { rows: deletionEvents } = await pool.query<{
+      previous_status: string;
+      reference_number: string;
+      removed_by_name: string;
+      reason: string;
+    }>(
+      "SELECT previous_status, reference_number, removed_by_name, reason FROM factory_physical_bale_deletions WHERE company_id = $1 AND bale_id = $2",
+      [ctx.companyId, allocatedBale.id]
+    );
+    expect(deletionEvents).toHaveLength(1);
+    expect(deletionEvents[0]).toMatchObject({
+      previous_status: "IN_STOCK",
+      reference_number: allocatedBale.referenceNumber,
+      removed_by_name: `${PREFIX}_testuser`,
+      reason: "Production bale damaged",
+    });
 
     const { rows: links } = await pool.query(
       "SELECT id FROM customer_order_bales WHERE order_id = $1 AND bale_id = $2",
