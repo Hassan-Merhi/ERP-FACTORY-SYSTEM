@@ -456,7 +456,14 @@ export interface RetailReturnInput {
 export async function createRetailReturnInTx(
   tx: RetailTransaction,
   input: RetailReturnInput
-): Promise<{ returnId: number; replayed: boolean; refundAmount: number; refundTaxAmount: number; refundValue: number; costValue: number }> {
+): Promise<{
+  returnId: number;
+  replayed: boolean;
+  refundAmount: number;
+  refundTaxAmount: number;
+  refundValue: number;
+  costValue: number;
+}> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
     .insert(retailPosReturns)
@@ -593,5 +600,12 @@ export async function createRetailReturnInTx(
     .update(retailPosReturns)
     .set({ refundAmount: String(refundAmount), refundTaxAmount: String(refundTaxAmount) })
     .where(eq(retailPosReturns.id, createdReturn.id));
-  return { returnId: createdReturn.id, replayed: false, refundAmount, refundTaxAmount, refundValue: refundAmount, costValue };
+  return {
+    returnId: createdReturn.id,
+    replayed: false,
+    refundAmount,
+    refundTaxAmount,
+    refundValue: refundAmount,
+    costValue,
+  };
 }

@@ -315,9 +315,14 @@ export default function RetailPOS() {
       if (Math.abs(paymentTotal - preview.pricing.totalAmount) > 0.005) {
         throw new Error("Payments must equal the sale total");
       }
-      if (payments.some((payment) => payment.method === "cash" &&
-        payment.tenderedAmount != null &&
-        Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount))) {
+      if (
+        payments.some(
+          (payment) =>
+            payment.method === "cash" &&
+            payment.tenderedAmount != null &&
+            Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount)
+        )
+      ) {
         throw new Error("Cash tendered cannot be less than the cash payment");
       }
       if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {
@@ -485,13 +490,21 @@ export default function RetailPOS() {
   const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
   const paymentsValid =
     Math.abs(paymentTotal - total) <= 0.005 &&
-    payments.every((payment) =>
-      Number(payment.amount) > 0 &&
-      (payment.method !== "cash" || payment.tenderedAmount == null ||
-        Number(payment.tenderedAmount) + 0.000001 >= Number(payment.amount))
+    payments.every(
+      (payment) =>
+        Number(payment.amount) > 0 &&
+        (payment.method !== "cash" ||
+          payment.tenderedAmount == null ||
+          Number(payment.tenderedAmount) + 0.000001 >= Number(payment.amount))
     );
-  const canCompleteSale = Boolean(cart.length && preview && !previewQuery.isFetching &&
-    !saleMutation.isPending && paymentsValid && (!isPosRole || currentShift));
+  const canCompleteSale = Boolean(
+    cart.length &&
+    preview &&
+    !previewQuery.isFetching &&
+    !saleMutation.isPending &&
+    paymentsValid &&
+    (!isPosRole || currentShift)
+  );
 
   if (selectedCompany?.companyType !== "retail") return null;
 
@@ -1046,11 +1059,7 @@ export default function RetailPOS() {
               </div>
               <div className="text-lg font-semibold">{money(total)}</div>
             </button>
-            <Button
-              className="h-12 px-6 text-base"
-              disabled={!canCompleteSale}
-              onClick={() => saleMutation.mutate()}
-            >
+            <Button className="h-12 px-6 text-base" disabled={!canCompleteSale} onClick={() => saleMutation.mutate()}>
               {saleMutation.isPending ? "Completing sale…" : "Complete Sale"}
             </Button>
           </div>
