@@ -347,22 +347,22 @@ export function registerBaleRoutes(app: Express) {
         return res.status(400).json({ message: "No bales provided" });
       }
 
-      // Print of an existing physical bale is eligible for Priority Scan, just
-      // like Reprint. A fresh Stock Entry has already been allocated atomically.
-      const { runAutomaticPriorityReprint } = await import("./factory/customer-orders/priorityAutoAllocation");
-      const priorityAllocations = [];
-      const seenBales = new Set<number>();
-      for (const item of bales) {
-        const baleId = Number(item.productionBaleId);
-        if (!Number.isSafeInteger(baleId) || baleId <= 0 || seenBales.has(baleId)) continue;
-        seenBales.add(baleId);
-        const allocation = await runAutomaticPriorityReprint(
-          companyId, baleId,
-          String(req.session.username || req.session.userId || "automatic"),
-          req.session.userId == null ? null : String(req.session.userId)
-        );
-        if (allocation) priorityAllocations.push(allocation);
-      }
+      // All existing physical bales in this print request are routed under a
+      // single company queue lock + transaction. If one reference is invalid,
+      // the batch rolls back instead of partially allocating printed labels.
+      const { runAutomaticPriorityPrintBatch } = await import("./factory/customer-orders/priorityAutoAllocation");
+      const physicalBaleIds = [...new Set(bales.map((item: { productionBaleId?: unknown }) =>
+        Number(item.productionBaleId)).filter((id: number) => Number.isSafeInteger(id) && id > 0))];
+      const prepared = physicalBaleIds.length > 0
+        ? await runAutomaticPriorityPrintBatch(
+            companyId,
+            physicalBaleIds.map((baleId) => ({ baleId })),
+            String(req.session.username || req.session.userId || "automatic"),
+            req.session.userId == null ? null : String(req.session.userId)
+          )
+        : [];
+      const priorityAllocations = prepared.flatMap((item) =>
+        item.priorityAllocation ? [item.priorityAllocation] : []);
 
       const labelPrints = await db.transaction(async (tx) => {
         const results = [];
