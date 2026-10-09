@@ -241,6 +241,42 @@ describe("Phase 4: atomic new-stock priority routing", () => {
     expect(Number(inventory.rows[0].qty)).toBe(7);
   }, 60000);
 
+  it("serializes concurrent Stock Entry batches against the same remaining proforma capacity", async () => {
+    const thirdOrderId = await addLoading(1, "#16a34a", "9.00");
+    const [left, right] = await Promise.all([
+      createStock(matchingProductId, 2),
+      createStock(matchingProductId, 2),
+    ]);
+    expect(left.status).toBe(200);
+    expect(right.status).toBe(200);
+    const assignments = [
+      ...(left.body.autoPriorityAllocations || []),
+      ...(right.body.autoPriorityAllocations || []),
+    ] as Array<{ baleId: number; orderId: number }>;
+    const newlyCreatedIds = [
+      ...left.body.bales.map((b: { id: number }) => b.id),
+      ...right.body.bales.map((b: { id: number }) => b.id),
+    ];
+    expect(assignments).toHaveLength(2);
+    expect(assignments.every((a) => a.orderId === thirdOrderId)).toBe(true);
+    expect(new Set(assignments.map((a) => a.baleId)).size).toBe(2);
+
+    const linked = await pool.query<{ qty: string }>(
+      `SELECT COUNT(*)::text AS qty FROM customer_order_bales
+       WHERE order_id = $1 AND bale_id = ANY($2::int[])`,
+      [thirdOrderId, newlyCreatedIds]
+    );
+    expect(Number(linked.rows[0].qty)).toBe(2);
+
+    const inventoryReceipts = await pool.query<{ qty: string }>(
+      `SELECT COALESCE(SUM(quantity_delta), 0)::text AS qty
+       FROM canonical_stock_movements
+       WHERE company_id = $1 AND source_type = 'factory-stock-entry'`,
+      [ctx.companyId]
+    );
+    expect(Number(inventoryReceipts.rows[0].qty)).toBe(11);
+  }, 90000);
+
   it("switching OFF stops new automatic loading but does not reverse the old snapshots", async () => {
     const off = await agent.put(MODE).send({ enabled: false });
     expect(off.status).toBe(200);
