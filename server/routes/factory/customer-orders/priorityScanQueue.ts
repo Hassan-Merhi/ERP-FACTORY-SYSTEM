@@ -4,9 +4,11 @@ import { db } from "../../../db";
 import { customerOrderPriorityScanConfigs, customerOrders } from "@shared/schema";
 import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
-import { evaluateProformaArticleCapacity } from "./proformaCapacityEnforcement";
+import { evaluateProformaArticleCapacity, getLoadingProformaProgress } from "./proformaCapacityEnforcement";
 
 export const PRIORITY_SCAN_LOCK_NAMESPACE = 73202;
+export const PRIORITY_AUTO_COMPLETED_MARKER = "system:auto-completed";
+export const PRIORITY_REOPENED_MARKER = "system:reopened-after-deletion";
 
 export type PriorityScanTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -169,7 +171,7 @@ export async function advanceSatisfiedPriorityScanConfigsLockedTx(
       });
       if (!snapshot) continue;
 
-      const satisfied = snapshot.requestedTotalQty > 0 && snapshot.remainingTotalQty <= 0;
+      const satisfied = getLoadingProformaProgress(snapshot).satisfied;
       if (!satisfied) continue;
 
       completedIds.add(row.id);
@@ -180,7 +182,7 @@ export async function advanceSatisfiedPriorityScanConfigsLockedTx(
         .set({
           enabled: false,
           updatedBy: null,
-          updatedByName: "system:auto-completed",
+          updatedByName: PRIORITY_AUTO_COMPLETED_MARKER,
           updatedAt: sql`now()`,
         })
         .where(
@@ -206,6 +208,135 @@ export async function advanceSatisfiedPriorityScanConfigsLockedTx(
       activeOrderId,
       activePriority: activeOrderId == null ? null : 1,
     };
+}
+
+export interface PriorityReopenedLoading {
+  orderId: number;
+  priority: number;
+  color: string;
+  colorChanged: boolean;
+}
+
+// Use an existing factory-approved color when possible. A formerly completed
+// loading's color may have been given to a later loading; two simultaneously
+// active queue rows cannot share it. Old bale color snapshots NEVER change.
+const RECOVERY_COLOR_PRESETS = [
+  "#dc2626", "#2563eb", "#16a34a", "#f59e0b", "#7c3aed",
+  "#0891b2", "#db2777", "#111827", "#eab308", "#64748b",
+] as const;
+
+function recoveryColor(
+  original: string, used: Set<string>, configId: number
+): string {
+  if (!used.has(original.trim().toLowerCase())) return original;
+  const preset = RECOVERY_COLOR_PRESETS.find(color => !used.has(color.toLowerCase()));
+  if (preset) return preset;
+  // In unusual queues where every standard color is already used, generate
+  // a stable safe hex code instead of blocking an otherwise valid deletion.
+  for (let offset = 0; offset < 0x1000000; offset++) {
+    const value = (Math.imul(configId, 2654435761) + offset) & 0xffffff;
+    const color = `#${value.toString(16).padStart(6, "0")}`;
+    if (!used.has(color)) return color;
+  }
+  throw new Error("No unique Priority Scan colors remain");
+}
+
+/**
+ * Reopen only orders auto-completed by the system, still editable (LOADING)
+ * and again needing at least one bale according to THEIR own proforma usage.
+ *
+ * Caller holds the company Priority Scan lock. The queue is rewritten ONCE,
+ * with all affected candidates ordered by their original configuration
+ * creation sequence. Thus a batch deleting both Red and Blue does not make
+ * the last processed bale arbitrarily become #1.
+ *
+ * Manual OFF, manually cleared, cancelled, verified or finalized configs
+ * are never silently reactivated. No existing bale allocations are edited.
+ */
+export async function reactivateAutoCompletedPriorityLoadingsLockedTx(
+  tx: PriorityScanTransaction,
+  companyId: number,
+  affectedOrderIds: number[]
+): Promise<PriorityReopenedLoading[]> {
+  const orderIds = [...new Set(affectedOrderIds.filter(
+    id => Number.isSafeInteger(id) && id > 0
+  ))];
+  if (!orderIds.length) return [];
+
+  const candidates = await tx.select({
+    id: customerOrderPriorityScanConfigs.id,
+    orderId: customerOrderPriorityScanConfigs.orderId,
+    color: customerOrderPriorityScanConfigs.color,
+    colorKey: customerOrderPriorityScanConfigs.colorKey,
+    createdAt: customerOrderPriorityScanConfigs.createdAt,
+    proformaId: customerOrders.proformaIdUsed,
+  }).from(customerOrderPriorityScanConfigs)
+    .innerJoin(customerOrders, eq(customerOrders.id, customerOrderPriorityScanConfigs.orderId))
+    .where(and(
+      eq(customerOrderPriorityScanConfigs.companyId, companyId),
+      eq(customerOrders.companyId, companyId),
+      sql`${customerOrderPriorityScanConfigs.orderId} IN (${sql.join(orderIds.map(id => sql`${id}`), sql`, `)})`,
+      eq(customerOrderPriorityScanConfigs.enabled, false),
+      eq(customerOrderPriorityScanConfigs.updatedByName, PRIORITY_AUTO_COMPLETED_MARKER),
+      eq(customerOrders.status, "LOADING"),
+      isNull(customerOrders.deletedAt),
+      isNotNull(customerOrders.proformaIdUsed),
+    ));
+  if (!candidates.length) return [];
+
+  // Maintain queue -> proforma -> order locking discipline.
+  for (const proformaId of [...new Set(candidates.map(row => row.proformaId)
+    .filter((id): id is number => id != null))].sort((a,b) => a-b)) {
+    await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId });
+  }
+  const eligible: typeof candidates = [];
+  for (const row of candidates) {
+    if (!row.proformaId) continue;
+    const [lockedOrder] = await tx.select({ status: customerOrders.status })
+      .from(customerOrders)
+      .where(and(eq(customerOrders.id, row.orderId), eq(customerOrders.companyId, companyId),
+        isNull(customerOrders.deletedAt))).for("update");
+    if (lockedOrder?.status !== "LOADING") continue;
+    const snapshot = await getProformaCapacitySnapshot(tx, {
+      companyId, proformaId: row.proformaId, currentOrderId: row.orderId,
+    });
+    if (snapshot && getLoadingProformaProgress(snapshot).remainingQty > 0 &&
+        getLoadingProformaProgress(snapshot).requestedQty > 0) {
+      eligible.push(row);
+    }
+  }
+  if (!eligible.length) return [];
+  eligible.sort((a,b) =>
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.orderId - b.orderId
+  );
+
+  const active = await loadActivePriorityRows(tx, companyId);
+  const usedColors = new Set(active.map(row => row.colorKey.toLowerCase()));
+  const reopened: PriorityReopenedLoading[] = [];
+  for (const row of eligible) {
+    const color = recoveryColor(row.color, usedColors, row.id);
+    usedColors.add(color.toLowerCase());
+    if (color !== row.color) {
+      await tx.update(customerOrderPriorityScanConfigs).set({
+        color, colorKey: color.toLowerCase(), updatedAt: sql`now()`,
+      }).where(and(
+        eq(customerOrderPriorityScanConfigs.companyId, companyId),
+        eq(customerOrderPriorityScanConfigs.id, row.id),
+        eq(customerOrderPriorityScanConfigs.enabled, false),
+      ));
+    }
+    reopened.push({
+      orderId: row.orderId, priority: reopened.length + 1,
+      color, colorChanged: color !== row.color,
+    });
+  }
+  const freshActive = await loadActivePriorityRows(tx, companyId);
+  await rewriteActivePriorityQueue(tx, companyId, [
+    ...eligible.map(row => row.id),
+    ...freshActive.map(row => row.id),
+  ], null, PRIORITY_REOPENED_MARKER);
+
+  return reopened;
 }
 
 /** Existing standalone path for manual Priority Scan and queue reads. */
