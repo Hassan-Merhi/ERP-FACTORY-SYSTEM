@@ -303,7 +303,7 @@ export default function RetailPOS() {
         throw new Error("A reason is required for the whole-sale discount");
       }
       if (isPosRole && !currentShift) throw new Error("Open a cashier shift before completing a sale");
-      if (!preview) throw new Error("Wait for the server-priced cart to finish loading");
+      if (!preview) throw previewQuery.error ?? new Error();
       const fingerprint = JSON.stringify({
         locationId: selectedLocation.id,
         shiftId: currentShift?.id ?? null,
@@ -313,12 +313,12 @@ export default function RetailPOS() {
       });
       const paymentTotal = payments.reduce((sum, payment) => sum + (Number(payment.amount) || 0), 0);
       if (Math.abs(paymentTotal - preview.pricing.totalAmount) > 0.005) {
-        throw new Error("Payments must equal the server-priced sale total");
+        throw new Error("Payments must equal the sale total");
       }
-      if (payments.some((payment) => Number(payment.amount) <= 0 ||
-        (payment.method === "cash" && payment.tenderedAmount != null &&
-          Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount)))) {
-        throw new Error("Every payment must be positive and cash tendered must cover its payment");
+      if (payments.some((payment) => payment.method === "cash" &&
+        payment.tenderedAmount != null &&
+        Number(payment.tenderedAmount) + 0.000001 < Number(payment.amount))) {
+        throw new Error("Cash tendered cannot be less than the cash payment");
       }
       if (!saleAttemptRef.current || saleAttemptRef.current.fingerprint !== fingerprint) {
         saleAttemptRef.current = { fingerprint, key: makeKey("retail-sale") };
