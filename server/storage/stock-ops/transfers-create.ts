@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import { eq, and, inArray, isNull } from "drizzle-orm";
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import {
   addInventoryValues,
   inventoryMoney,
@@ -14,11 +14,13 @@ import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
-import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
+import { stockAdjustmentHeaderTotal, stockAdjustmentNetLine } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
 import { assertNoBaleMirrorMovementTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
+import { insertInfrastructureVoucherTx } from "../../services/accounting/infrastructureVoucherIdentity";
+import type { PostingSourceIdentity } from "../../services/accounting/centralPostingEngine";
 import {
   moveTransferLegConservedTx,
   postTransferResidualTx,
@@ -413,16 +415,63 @@ export async function createStockTransfer(
   });
 }
 
+type StockAdjustmentType = "Production" | "Consumption" | "Mixed";
+type StockAdjustmentInputItem = { stockItemId: number; quantity: string; rate: string };
+
 export async function createStockAdjustment(
   voucherId: number,
   locationId: number,
-  adjustmentType: "Production" | "Consumption" | "Mixed",
+  adjustmentType: StockAdjustmentType,
   notes: string,
-  items: Array<{ stockItemId: number; quantity: string; rate: string }>,
+  items: StockAdjustmentInputItem[],
   _consumptionAccountOverride?: { code: string; name: string },
   voucherHeader?: { currency?: string }
 ) {
+  return await db.transaction((tx) =>
+    createStockAdjustmentTx(tx, voucherId, locationId, adjustmentType, notes, items, voucherHeader)
+  );
+}
+
+/**
+ * Creates a stock adjustment voucher and its adjustment in one transaction
+ * (wave 12): the stock adjustment writers are the only creators of the stock
+ * voucher types, so the voucher, its stock document and its one-sided line
+ * commit together and the balance guard sees the stock document that exempts it.
+ */
+export async function createStockAdjustmentWithVoucher(
+  voucher: Omit<schema.InsertVoucher, "voucherType"> & { voucherType: StockAdjustmentType },
+  postingSource: PostingSourceIdentity,
+  locationId: number,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string }
+) {
   return await db.transaction(async (tx) => {
+    const { voucher: created } = await insertInfrastructureVoucherTx(tx, voucher, postingSource, voucher);
+    const result = await createStockAdjustmentTx(
+      tx,
+      created.id,
+      locationId,
+      voucher.voucherType,
+      notes,
+      items,
+      voucherHeader
+    );
+    const [stored] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, created.id));
+    return { voucher: stored ?? created, ...result };
+  });
+}
+
+async function createStockAdjustmentTx(
+  tx: DbTransaction,
+  voucherId: number,
+  locationId: number,
+  adjustmentType: StockAdjustmentType,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string }
+) {
+  {
     // Locking the voucher row serialises everyone who wants to adjust it, so the
     // duplicate check below cannot be overtaken between reading and inserting.
     const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, voucherId)).for("update");
@@ -506,18 +555,16 @@ export async function createStockAdjustment(
       return account.id;
     };
 
-    let productionAccountId: number | null = null;
-    let consumptionAccountId: number | null = null;
+    // Production and consumption both post to STOCK_ADJUSTMENT.
+    let adjustmentAccountId: number | null = null;
 
     if (!isOptional) {
-      const adjustmentAccountId = await findOrCreateAdjustmentAccount(
+      adjustmentAccountId = await findOrCreateAdjustmentAccount(
         "STOCK_ADJUSTMENT",
         "Stock Adjustment (Production/Consumption)",
         "Indirect Expense",
         "Dr"
       );
-      productionAccountId = adjustmentAccountId;
-      consumptionAccountId = adjustmentAccountId;
     }
 
     let totalProductionValue = toInventoryDecimal(0);
@@ -626,23 +673,11 @@ export async function createStockAdjustment(
     }
 
     if (!isOptional) {
-      if (shouldInsertAdjustmentVoucherEntry(totalProductionValue, productionAccountId)) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId,
-          ledgerAccountId: productionAccountId,
-          debitAmount: "0",
-          creditAmount: inventoryMoney(totalProductionValue),
-          narration: `Production adjustment - ${adjustmentType} voucher`,
-        });
-      }
-      if (shouldInsertAdjustmentVoucherEntry(totalConsumptionValue, consumptionAccountId)) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId,
-          ledgerAccountId: consumptionAccountId,
-          debitAmount: inventoryMoney(totalConsumptionValue),
-          creditAmount: "0",
-          narration: `Consumption expense - ${adjustmentType} voucher`,
-        });
+      // Production and consumption post to the same STOCK_ADJUSTMENT account: one net line.
+      const netLine = stockAdjustmentNetLine(totalProductionValue, totalConsumptionValue, adjustmentType);
+      const netValue = totalProductionValue.minus(totalConsumptionValue).abs();
+      if (netLine && shouldInsertAdjustmentVoucherEntry(netValue, adjustmentAccountId)) {
+        await tx.insert(schema.voucherEntries).values({ voucherId, ledgerAccountId: adjustmentAccountId, ...netLine });
       }
     }
 
@@ -660,5 +695,5 @@ export async function createStockAdjustment(
     await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucherId);
 
     return { adjustment, items: adjustmentItems };
-  });
+  }
 }

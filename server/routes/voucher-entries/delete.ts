@@ -12,12 +12,8 @@ import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
-import {
-  logAudit,
-  syncEmployeeBalancesFromEntries,
-  snapshotVoucherEntries,
-  buildVoucherChangesForDelete,
-} from "../_helpers";
+import { syncEmployeeBalancesFromEntries, buildVoucherChangesForDelete } from "../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
   vouchers,
   voucherEntries,
@@ -122,6 +118,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
 
       // Wrap balance sync and deletion in a transaction
       await db.transaction(async (tx) => {
+        const auditBefore = await readVoucherAuditState(tx, id);
         // Wave 11: every stock document moves back exactly the value its lines
         // moved, and a sale's COGS journal leaves with it (voucherStockReversal).
         await reverseVoucherStockTx(tx, {
@@ -140,7 +137,7 @@ export function registerVoucherDeleteRoutes(app: Express) {
         if (!voucher.optional) {
           const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, id));
 
-          // Reverse the entries' effect on employee balances
+          // Reverse the entries' effect on employee balances, in this transaction (wave 12).
           await syncEmployeeBalancesFromEntries(
             entries.map((e) => ({
               ledgerAccountId: e.ledgerAccountId,
@@ -149,7 +146,8 @@ export function registerVoucherDeleteRoutes(app: Express) {
               creditAmount: e.creditAmount,
             })),
             companyId,
-            true // reverse
+            true, // reverse
+            tx
           );
         }
 
@@ -202,20 +200,18 @@ export function registerVoucherDeleteRoutes(app: Express) {
         await syncPurchaseOrderGitForVoucherTx(tx, companyId, id);
         // Perpetual inventory (wave 8.4): an order whose charge this voucher carries re-syncs its invoice journal.
         await syncFactoryInvoiceForChargeVoucherTx(tx, companyId, id);
-      });
 
-      // Log the deletion to audit log (entries are soft-deleted so still fetchable)
-      const _delEntries = await storage.getVoucherEntriesByVoucher(id).catch(() => []);
-      const _delEntriesSnap = await snapshotVoucherEntries(_delEntries).catch(() => []);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "delete",
-        tableName: "vouchers",
-        recordId: id,
-        recordIdentifier: voucher.voucherNumber,
-        changes: buildVoucherChangesForDelete(voucher, _delEntriesSnap),
+        // Wave 12 (decision 2): the deletion is audited with every line, in this
+        // transaction; a failed audit write refuses the delete. (It used to be
+        // written after commit, with lines read through `.catch(() => [])`.)
+        await writeVoucherAuditTx(tx, {
+          actor: { userId: req.session.userId, username: req.session.username, companyId },
+          action: "delete",
+          voucherId: id,
+          before: auditBefore,
+          after: null,
+          extra: { softDelete: { new: true } },
+        });
       });
 
       // A deleted cash sale must leave the intercompany POS mirror for its date.

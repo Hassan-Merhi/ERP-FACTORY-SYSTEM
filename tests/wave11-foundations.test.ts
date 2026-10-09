@@ -16,6 +16,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { adjustInventory } from "../server/inventoryHelper";
 import { classifyAccountType } from "../server/services/accounting/accountClassification";
 import { ensureInventoryCutoverSchema } from "../server/services/accounting/perpetualInventory/cutover";
@@ -162,11 +163,12 @@ afterAll(async () => {
       await client.query(`DELETE FROM stock_items WHERE company_id = ANY($1)`, [ids]);
       await client.query(`DELETE FROM locations WHERE company_id = ANY($1)`, [ids]);
       await client.query(`DELETE FROM ledger_accounts WHERE company_id = ANY($1)`, [ids]);
-      await client.query(`DELETE FROM audit_log WHERE company_id = ANY($1)`, [ids]);
       await client.query(`DELETE FROM companies WHERE id = ANY($1)`, [ids]);
     },
     { legacyUnbalanced: true }
   );
+  // audit_log is append-only (wave 12); the test's own rows go through the cleanup helper.
+  await deleteAuditLogRowsForTests(pool, "company_id = ANY($1)", [[companyId, spCompanyId]]);
 }, 60000);
 
 describe("wave 11 registry accounts", () => {

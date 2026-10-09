@@ -21,6 +21,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 });
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { ensureFactoryCostBasisSchema } from "../server/services/factory/factoryCostBasisSchema";
 import { registerRawStockReceiptRoutes } from "../server/routes/factory/raw-stock/rawStockReceiptRoutes";
@@ -136,6 +137,8 @@ async function mix(totalKg: string, usedKg: string, costPerKg: string, sourceKg?
 }
 
 async function cleanup(id: number) {
+  // audit_log is append-only (wave 12): its rows go through the test-only helper.
+  await deleteAuditLogRowsForTests(pool, "company_id = $1", [id]);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -148,7 +151,6 @@ async function cleanup(id: number) {
       "factory_daily_usages",
       "factory_daybook_entries",
       "factory_raw_material_adjustments",
-      "audit_log",
     ]) {
       await q(`DELETE FROM ${table} WHERE company_id = $1`);
     }

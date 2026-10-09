@@ -63,6 +63,20 @@ const REDACTED = "[REDACTED]";
 const MAX_DEPTH = 6;
 const MAX_STRING_LENGTH = 2_000;
 const MAX_ARRAY_LENGTH = 100;
+/**
+ * Wave 12 (audit trail): change fields that hold a document's line snapshot.
+ * A voucher can carry more than MAX_ARRAY_LENGTH lines, and an edit or delete
+ * audit that kept only the first 100 could not show what the voucher held, so
+ * these fields keep every element (each element is still sanitized and
+ * bounded). Other arrays stay capped at MAX_ARRAY_LENGTH.
+ */
+export const FULL_SNAPSHOT_AUDIT_FIELDS: ReadonlySet<string> = new Set([
+  "entries",
+  "entryRows",
+  "lines",
+  "items",
+  "salesItems",
+]);
 const MAX_OBJECT_KEYS = 100;
 const SENSITIVE_KEY_PATTERN =
   /(^|_)(password|passcode|pin|secret|token|cookie|authorization|api[_-]?key|session|csrf|private[_-]?key|connection[_-]?string)($|_)/i;
@@ -71,7 +85,7 @@ function sanitizeString(value: string): string {
   return value.length > MAX_STRING_LENGTH ? `${value.slice(0, MAX_STRING_LENGTH)}…` : value;
 }
 
-export function sanitizeAuditValue(value: unknown, key?: string, depth = 0): unknown {
+export function sanitizeAuditValue(value: unknown, key?: string, depth = 0, keepAllElements = false): unknown {
   if (key && SENSITIVE_KEY_PATTERN.test(key)) return REDACTED;
   if (depth > MAX_DEPTH) return "[MAX_DEPTH]";
   if (value == null || typeof value === "boolean" || typeof value === "number") return value;
@@ -85,7 +99,8 @@ export function sanitizeAuditValue(value: unknown, key?: string, depth = 0): unk
     };
   }
   if (Array.isArray(value)) {
-    return value.slice(0, MAX_ARRAY_LENGTH).map((item) => sanitizeAuditValue(item, undefined, depth + 1));
+    const kept = keepAllElements ? value : value.slice(0, MAX_ARRAY_LENGTH);
+    return kept.map((item) => sanitizeAuditValue(item, undefined, depth + 1));
   }
   if (typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_OBJECT_KEYS);
@@ -102,8 +117,12 @@ export function sanitizeAuditChanges(changes?: AuditChanges | null): AuditChange
     Object.entries(changes).map(([field, change]) => [
       field,
       {
-        ...(Object.prototype.hasOwnProperty.call(change, "old") ? { old: sanitizeAuditValue(change.old, field) } : {}),
-        ...(Object.prototype.hasOwnProperty.call(change, "new") ? { new: sanitizeAuditValue(change.new, field) } : {}),
+        ...(Object.prototype.hasOwnProperty.call(change, "old")
+          ? { old: sanitizeAuditValue(change.old, field, 0, FULL_SNAPSHOT_AUDIT_FIELDS.has(field)) }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(change, "new")
+          ? { new: sanitizeAuditValue(change.new, field, 0, FULL_SNAPSHOT_AUDIT_FIELDS.has(field)) }
+          : {}),
       },
     ])
   );

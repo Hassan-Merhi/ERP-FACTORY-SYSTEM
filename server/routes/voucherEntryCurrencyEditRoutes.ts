@@ -63,9 +63,31 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
         if (req.body.narration === undefined) {
           return res.status(400).json({ message: "No supported updates supplied" });
         }
-        const [updated] = await db.transaction((tx) =>
-          tx.update(voucherEntries).set({ narration: req.body.narration }).where(eq(voucherEntries.id, id)).returning()
-        );
+        // Wave 12: a narration-only edit of a posted line is audited in its transaction (it was unaudited).
+        const updated = await db.transaction(async (tx) => {
+          const [written] = await tx
+            .update(voucherEntries)
+            .set({ narration: req.body.narration })
+            .where(eq(voucherEntries.id, id))
+            .returning();
+          await writeAuditEvent(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: row.voucher.companyId,
+              action: "update",
+              tableName: "voucher_entries",
+              recordId: id,
+              recordIdentifier: row.voucher.voucherNumber,
+              changes: {
+                narration: { old: row.entry.narration, new: written?.narration ?? null },
+                entryRows: { old: [row.entry], new: written ? [written] : [] },
+              },
+            },
+            tx
+          );
+          return written;
+        });
         return res.json(updated);
       }
 
@@ -162,6 +184,8 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
                   old: row.entry.historicalExchangeRate,
                   new: written.historicalExchangeRate,
                 },
+                // Wave 12: the whole line before and after.
+                entryRows: { old: [row.entry], new: [written] },
               },
             },
             tx

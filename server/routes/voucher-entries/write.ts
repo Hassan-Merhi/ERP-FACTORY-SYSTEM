@@ -21,6 +21,7 @@ import {
   storedEntriesAsAmountInput,
 } from "../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
+import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 
 /**
  * After a single-line write, the voucher's stored lines must still satisfy the
@@ -59,6 +60,9 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
       if (blockedVoucherReason) {
         return res.status(403).json({ message: blockedVoucherReason });
       }
+      // Wave 12: a stock adjustment voucher's lines are written only by the stock adjustment writers.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucher.voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
       // Check permissions based on role (same logic as voucher edit)
       const userRole = req.session.currentRole;
@@ -162,6 +166,9 @@ export function registerVoucherEntryWriteRoutes(app: Express) {
       if (blockedVoucherReason) {
         return res.status(403).json({ message: blockedVoucherReason });
       }
+      // Wave 12: a stock adjustment voucher's lines are written only by the stock adjustment writers.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucher.voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
       // Check edit permissions based on role (same logic as voucher edit)
       const userRole = req.session.currentRole;

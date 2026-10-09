@@ -456,21 +456,22 @@ export function registerPayrollBonusRoutes(app: Express) {
           creditAmount: bonusCents,
           narration: `Bonus payment - ${voucherNumber}`,
         });
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: "0",
+              creditAmount: bonusCents,
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
         return voucher;
       });
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: "0",
-            creditAmount: bonusCents,
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance
       const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));

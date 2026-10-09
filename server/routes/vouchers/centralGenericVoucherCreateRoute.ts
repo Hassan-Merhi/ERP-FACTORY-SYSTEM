@@ -13,6 +13,7 @@ import {
   buildGenericVoucherPostingRequest,
   supportsCentralGenericVoucher,
 } from "../../services/accounting/genericVoucherPosting";
+import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { buildVoucherChangesForCreate, getCurrentExchangeRate, logAudit, snapshotVoucherEntries } from "../_helpers";
 
@@ -69,6 +70,12 @@ function postingStatus(error: PostingValidationError): number {
 }
 
 async function createCentralGenericVoucher(req: Request, res: Response, next: NextFunction): Promise<void> {
+  // Wave 12: stock adjustment types come only from POST /api/stock-adjustments.
+  const stockTypeRefusal = stockVoucherTypeRefusal(req.body?.voucher?.voucherType);
+  if (stockTypeRefusal) {
+    res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
+    return;
+  }
   if (!supportsCentralGenericVoucher(req.body)) {
     next();
     return;

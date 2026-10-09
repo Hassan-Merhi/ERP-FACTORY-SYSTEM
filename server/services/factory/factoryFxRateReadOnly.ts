@@ -1,7 +1,6 @@
-import { and, desc, eq } from "drizzle-orm";
-import { factoryFxRates } from "@shared/schema";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { recordedFactoryFxRateForDate, storedFactoryFxRateOnOrBefore } from "./factoryFxRateOnDate";
 
 function buildValidatedFxUrl(dateISO: string, currencyCode: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateISO)) {
@@ -19,12 +18,16 @@ function buildValidatedFxUrl(dateISO: string, currencyCode: string): string {
 }
 
 /**
- * Read-only equivalent of the mutation route's FX lookup policy.
+ * Read-only equivalent of the mutation route's FX lookup policy
+ * (getOrFetchFxRateToUsd, routes/factory/_helpers.ts).
  *
- * It preserves the same precedence — latest manual rate, exact-date cached auto
- * rate, external historical rate, latest stored fallback — but never persists
- * an externally fetched rate. This keeps impact preview strictly read-only while
- * producing the same value the subsequent mutation will normally resolve.
+ * Same precedence, date-aware since wave 8.4 continuation — the latest manual
+ * rate dated on or before the date, the rate recorded for exactly that date,
+ * the external historical rate, then the latest recorded rate dated on or
+ * before the date — but it never persists an externally fetched rate and
+ * never uses a rate dated after the transaction. This keeps impact preview
+ * strictly read-only while producing the same value the subsequent mutation
+ * will normally resolve.
  */
 export async function getFxRateToUsdReadOnly(
   companyId: number,
@@ -34,33 +37,11 @@ export async function getFxRateToUsdReadOnly(
   const normalizedCurrency = currencyCode.trim().toUpperCase();
   if (normalizedCurrency === "USD") return "1";
 
-  const [manualRate] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, normalizedCurrency),
-        eq(factoryFxRates.source, "manual")
-      )
-    )
-    .orderBy(desc(factoryFxRates.effectiveDate))
-    .limit(1);
-  if (manualRate) return manualRate.rateToUsd;
+  const manualRate = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO, "manual");
+  if (manualRate) return manualRate.rate;
 
-  const [existingExactRate] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, normalizedCurrency),
-        eq(factoryFxRates.effectiveDate, dateISO),
-        eq(factoryFxRates.source, "auto")
-      )
-    )
-    .limit(1);
-  if (existingExactRate) return existingExactRate.rateToUsd;
+  const existingExactRate = await recordedFactoryFxRateForDate(db, companyId, normalizedCurrency, dateISO);
+  if (existingExactRate) return existingExactRate;
 
   try {
     const response = await fetch(buildValidatedFxUrl(dateISO, normalizedCurrency));
@@ -72,14 +53,8 @@ export async function getFxRateToUsdReadOnly(
     }
     return String(rate);
   } catch (error: unknown) {
-    const [fallback] = await db
-      .select()
-      .from(factoryFxRates)
-      .where(and(eq(factoryFxRates.companyId, companyId), eq(factoryFxRates.currencyCode, normalizedCurrency)))
-      .orderBy(desc(factoryFxRates.effectiveDate))
-      .limit(1);
-
-    if (fallback) return fallback.rateToUsd;
+    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, normalizedCurrency, dateISO);
+    if (fallback) return fallback.rate;
     throw new Error(
       `No FX rate available for ${dateISO}/${normalizedCurrency}. External API error: ${getErrorMessage(error)}`,
       { cause: error }

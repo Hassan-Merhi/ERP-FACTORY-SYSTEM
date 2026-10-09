@@ -12,6 +12,7 @@ import request from "supertest";
 import ExcelJS from "exceljs";
 
 import { pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const PREFIX = `p26exp-${Date.now().toString(36)}`;
@@ -103,7 +104,7 @@ afterAll(async () => {
     await pool
       .query(`DELETE FROM user_company_roles WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);
-    await pool.query(`DELETE FROM audit_log WHERE company_id = ANY($1::int[])`, [auxiliaryIds]).catch(() => undefined);
+    await deleteAuditLogRowsForTests(pool, "company_id = ANY($1::int[])", [auxiliaryIds]).catch(() => undefined);
     await pool
       .query(`DELETE FROM login_history WHERE company_id = ANY($1::int[])`, [auxiliaryIds])
       .catch(() => undefined);

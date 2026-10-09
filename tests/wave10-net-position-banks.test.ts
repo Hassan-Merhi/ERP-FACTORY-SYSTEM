@@ -27,6 +27,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 import ExcelJS from "exceljs";
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { getPartyBalances } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import { calculateNetPositionAsOf } from "../server/helpers/calculateNetPositionAsOf";
 import { calculateGroupNetPosition } from "../server/helpers/groupNetPosition";
@@ -153,7 +154,7 @@ async function cleanup() {
     await withFixtureTransaction(async (client) => {
       await client.query("DELETE FROM vouchers WHERE company_id = $1", [id]);
     });
-    await pool.query("DELETE FROM audit_log WHERE company_id = $1", [id]).catch(() => undefined);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [id]).catch(() => undefined);
     await pool.query("DELETE FROM bank_accounts WHERE company_id = $1", [id]);
     await pool.query("DELETE FROM ledger_accounts WHERE company_id = $1", [id]);
     await pool.query("DELETE FROM company_settings WHERE company_id = $1", [id]).catch(() => undefined);

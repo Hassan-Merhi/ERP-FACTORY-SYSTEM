@@ -3,15 +3,11 @@ import request from "supertest";
 import ExcelJS from "exceljs";
 import { and, desc, eq } from "drizzle-orm";
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import * as schema from "../shared/schema";
 import { ARABIC_TRANSLATION_TEMPLATE_HEADERS } from "../server/services/factoryArabicTranslationWorkbook";
 import { isXlsxCellLocked } from "./helpers/xlsxProtection";
-import {
-  cleanupTestData,
-  closeTestServer,
-  seedTestData,
-  type TestContext,
-} from "./setup";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "xlsexp";
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -31,9 +27,7 @@ async function login(): Promise<void> {
   });
   expect(loginResponse.status).toBe(200);
 
-  const companyResponse = await agent
-    .post("/api/auth/set-company")
-    .send({ companyId: ctx.companyId });
+  const companyResponse = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   expect(companyResponse.status).toBe(200);
 }
 
@@ -158,18 +152,13 @@ beforeAll(async () => {
 afterAll(async () => {
   await pool.query("DROP TRIGGER IF EXISTS reject_factory_arabic_audit ON audit_log");
   await pool.query("DROP FUNCTION IF EXISTS reject_factory_arabic_audit_fn() CASCADE");
-  await pool.query(
-    "DELETE FROM audit_log WHERE company_id = $1 AND table_name = 'factory_bale_products'",
-    [ctx?.companyId]
-  );
-  await pool.query(
-    "DELETE FROM factory_bale_products WHERE id = ANY($1::int[])",
-    [[productId, otherProductId].filter(Boolean)]
-  );
-  await pool.query(
-    "DELETE FROM factory_categories WHERE id = ANY($1::int[])",
-    [[categoryId, otherCategoryId].filter(Boolean)]
-  );
+  await deleteAuditLogRowsForTests(pool, "company_id = $1 AND table_name = 'factory_bale_products'", [ctx?.companyId]);
+  await pool.query("DELETE FROM factory_bale_products WHERE id = ANY($1::int[])", [
+    [productId, otherProductId].filter(Boolean),
+  ]);
+  await pool.query("DELETE FROM factory_categories WHERE id = ANY($1::int[])", [
+    [categoryId, otherCategoryId].filter(Boolean),
+  ]);
   if (otherCompanyId) {
     await db.delete(schema.companies).where(eq(schema.companies.id, otherCompanyId));
   }
@@ -179,14 +168,10 @@ afterAll(async () => {
 
 describe("Factory Arabic translation import routes", () => {
   it("keeps authentication in front of template and import endpoints", async () => {
-    const templateResponse = await request(ctx.app).get(
-      "/api/factory/bale-products/arabic-template"
-    );
+    const templateResponse = await request(ctx.app).get("/api/factory/bale-products/arabic-template");
     expect(templateResponse.status).toBe(401);
 
-    const workbook = await createWorkbook([
-      { articleCode: "000-AR-001", productNameAr: "منتج" },
-    ]);
+    const workbook = await createWorkbook([{ articleCode: "000-AR-001", productNameAr: "منتج" }]);
     const previewResponse = await request(ctx.app)
       .post("/api/factory/bale-products/arabic-import/preview")
       .field("mode", "replace-existing")
@@ -201,34 +186,25 @@ describe("Factory Arabic translation import routes", () => {
     const response = await agent.get("/api/factory/bale-products/arabic-template");
     expect(response.status).toBe(200);
     expect(response.headers["content-type"]).toContain(XLSX_MIME);
-    expect(response.headers["content-disposition"]).toContain(
-      "factory-arabic-names-template.xlsx"
-    );
+    expect(response.headers["content-disposition"]).toContain("factory-arabic-names-template.xlsx");
 
     const responseBuffer = response.body as Buffer;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(responseBuffer);
     const sheet = workbook.worksheets[0];
-    const productRowNumber = Array.from(
-      { length: sheet.rowCount },
-      (_, index) => index + 1
-    ).find(
+    const productRowNumber = Array.from({ length: sheet.rowCount }, (_, index) => index + 1).find(
       (rowNumber) => sheet.getRow(rowNumber).getCell(1).value === "000-AR-001"
     );
     expect(productRowNumber).toBeDefined();
     const productRow = productRowNumber ? sheet.getRow(productRowNumber) : undefined;
     expect(productRow?.getCell(1).value).toBe("000-AR-001");
     expect(productRow?.getCell(1).numFmt).toBe("@");
-    await expect(
-      isXlsxCellLocked(responseBuffer, `A${productRowNumber}`)
-    ).resolves.toBe(true);
+    await expect(isXlsxCellLocked(responseBuffer, `A${productRowNumber}`)).resolves.toBe(true);
     expect(productRow?.getCell(3).protection.locked).toBe(false);
   });
 
   it("requires a preview token before apply", async () => {
-    const workbook = await createWorkbook([
-      { articleCode: "000-AR-001", productNameAr: "منتج بلا معاينة" },
-    ]);
+    const workbook = await createWorkbook([{ articleCode: "000-AR-001", productNameAr: "منتج بلا معاينة" }]);
     const response = await applyWorkbook({ workbook });
     expect(response.status).toBe(400);
     expect(response.body.message).toContain("Preview");
@@ -335,9 +311,7 @@ describe("Factory Arabic translation import routes", () => {
   });
 
   it("rejects a stale preview after the catalog changes", async () => {
-    const workbook = await createWorkbook([
-      { articleCode: "000-AR-001", productNameAr: "قيمة من معاينة قديمة" },
-    ]);
+    const workbook = await createWorkbook([{ articleCode: "000-AR-001", productNameAr: "قيمة من معاينة قديمة" }]);
     const preview = await previewWorkbook(workbook);
     expect(preview.status).toBe(200);
 
@@ -414,11 +388,7 @@ describe("Factory Arabic translation import routes", () => {
           descriptionAr: "وصف لا يجب حفظه",
         },
       ]);
-      const preview = await previewWorkbook(
-        workbook,
-        "replace-existing",
-        "rollback.xlsx"
-      );
+      const preview = await previewWorkbook(workbook, "replace-existing", "rollback.xlsx");
       expect(preview.status).toBe(200);
 
       const response = await applyWorkbook({

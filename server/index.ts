@@ -40,6 +40,8 @@ import { ensureInventoryCutoverSchema } from "./services/accounting/perpetualInv
 import { ensureInventoryFidelitySchema } from "./services/inventory/inventoryFidelitySchema";
 import { ensureFactoryCostBasisSchema } from "./services/factory/factoryCostBasisSchema";
 import { ensureVoucherBalanceGuard } from "./services/accounting/voucherBalanceGuard";
+import { ensureAuditLogAppendOnlyGuard } from "./services/audit/auditLogAppendOnlyGuard";
+import { ensureOpeningBalanceLock } from "./services/accounting/openingBalanceLock";
 import { ensureRequiredSystemAccountsForAllCompanies } from "./services/accounting/systemAccounts";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
@@ -262,6 +264,8 @@ let migrationsDone = false;
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
       await ensureClosedPeriodGuard(pool);
+      // Opening balances locked once a fiscal period is closed (wave 12); fatal on failure.
+      await ensureOpeningBalanceLock(pool);
       await ensureLedgerIntegrityGuard(pool);
       await ensureInventoryCutoverSchema(pool);
       // Wave 11 columns read by full-row selects of sales and stock lines (fatal on failure);
@@ -269,8 +273,11 @@ let migrationsDone = false;
       await ensureInventoryFidelitySchema(pool);
       // Wave 11 factory cost basis tables (POS sale bales, stock value events, re-cost runs); fatal on failure.
       await ensureFactoryCostBasisSchema(pool);
-      // Needs gl_inventory_cutovers and the ledger guard's bypass function.
+      // Needs gl_inventory_cutovers and the ledger guard's bypass function. Fatal on
+      // failure (wave 12): serving writes without it would let unbalanced vouchers commit.
       await ensureVoucherBalanceGuard(pool);
+      // audit_log append-only (wave 12 B); fatal on failure.
+      await ensureAuditLogAppendOnlyGuard(pool);
       await ensureRequiredSystemAccountsForAllCompanies().catch((error: unknown) => {
         logger.error("[startup] ✗ System account provisioning failed", { error: getErrorMessage(error) });
       });

@@ -11,6 +11,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import {
   ensureInventoryCutoverSchema,
   isPerpetualInventoryActive,
@@ -118,7 +119,7 @@ afterAll(async () => {
       await q(`DELETE FROM ${table} WHERE company_id = $1`, [companyId]);
     }
     // Account creation and the apply route write audit rows for the company.
-    await q(`DELETE FROM audit_log WHERE company_id = $1`, [companyId]);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [companyId]);
     await q(`DELETE FROM companies WHERE id = $1`, [companyId]);
   });
 }, 60000);

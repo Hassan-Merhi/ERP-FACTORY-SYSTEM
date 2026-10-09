@@ -23,12 +23,7 @@ import { buildManualJournalPostingRequest } from "../../services/accounting/manu
 import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
-import {
-  buildVoucherChangesForDelete,
-  buildVoucherChangesForUpdate,
-  logAudit,
-  snapshotVoucherEntries,
-} from "../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -138,7 +133,11 @@ async function syncJournalToOrderCharge(
   }
 }
 
-async function syncIntercompanyCounterpart(voucherId: number, newTotal: number): Promise<void> {
+async function syncIntercompanyCounterpart(
+  voucherId: number,
+  newTotal: number,
+  actor: { userId?: string | null; username?: string | null }
+): Promise<void> {
   try {
     const [transfer] = await db
       .select()
@@ -158,6 +157,7 @@ async function syncIntercompanyCounterpart(voucherId: number, newTotal: number):
     const otherEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
 
     await db.transaction(async (tx) => {
+      const auditBefore = await readVoucherAuditState(tx, otherVoucherId);
       for (const entry of otherEntries) {
         await tx
           .update(voucherEntries)
@@ -172,6 +172,15 @@ async function syncIntercompanyCounterpart(voucherId: number, newTotal: number):
         .update(vouchers)
         .set({ totalAmount: newTotal.toFixed(2) })
         .where(eq(vouchers.id, otherVoucherId));
+      // Wave 12: the counterpart's rescaled lines are audited under its own company, in this transaction.
+      await writeVoucherAuditTx(tx, {
+        actor: { ...actor, companyId: otherVoucher.companyId },
+        action: "update",
+        voucherId: otherVoucherId,
+        before: auditBefore,
+        after: await readVoucherAuditState(tx, otherVoucherId),
+        extra: { interCompanyCounterpartOf: { new: { voucherId } } },
+      });
     });
     await db
       .update(factoryDaybookEntries)
@@ -279,6 +288,7 @@ async function updateActiveJournal(req: Request, res: Response, next: NextFuncti
       }
 
       const oldEntries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
+      const auditBefore = { voucher: lockedVoucher, entries: oldEntries };
 
       await postingDependencies.ownership.validateVoucherOwnership({
         tx,
@@ -323,6 +333,16 @@ async function updateActiveJournal(req: Request, res: Response, next: NextFuncti
         missingEmployeeBehavior: "throw",
       });
 
+      // Wave 12 (decision 2): full before/after snapshot in this transaction; a
+      // failed audit write refuses the edit.
+      await writeVoucherAuditTx(tx, {
+        actor: { userId, username: req.session.username, companyId },
+        action: "update",
+        voucherId,
+        before: auditBefore,
+        after: { voucher: updatedVoucher, entries: createdEntries },
+      });
+
       return {
         voucher: updatedVoucher,
         entries: createdEntries,
@@ -338,7 +358,10 @@ async function updateActiveJournal(req: Request, res: Response, next: NextFuncti
         error,
       })
     );
-    await syncIntercompanyCounterpart(voucherId, Number(result.voucher.totalAmount || 0));
+    await syncIntercompanyCounterpart(voucherId, Number(result.voucher.totalAmount || 0), {
+      userId,
+      username: req.session.username,
+    });
 
     let whatsapp: {
       prompt: boolean;
@@ -373,40 +396,6 @@ async function updateActiveJournal(req: Request, res: Response, next: NextFuncti
         voucherId,
         error,
       });
-    }
-
-    try {
-      const oldSnapshot = await snapshotVoucherEntries(result.oldEntries);
-      const newSnapshot = await snapshotVoucherEntries(result.entries);
-      await logAudit({
-        userId: userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "update",
-        tableName: "vouchers",
-        recordId: voucherId,
-        recordIdentifier: result.voucher.voucherNumber,
-        changes: buildVoucherChangesForUpdate(
-          {
-            voucherType: result.existingVoucher.voucherType,
-            voucherDate: result.existingVoucher.voucherDate,
-            totalAmount: result.existingVoucher.totalAmount,
-            description: result.existingVoucher.description,
-            optional: result.existingVoucher.optional,
-          },
-          {
-            voucherType: result.voucher.voucherType,
-            voucherDate: result.voucher.voucherDate,
-            totalAmount: result.voucher.totalAmount,
-            description: result.voucher.description,
-            optional: result.voucher.optional,
-          },
-          oldSnapshot,
-          newSnapshot
-        ),
-      });
-    } catch {
-      // The voucher and employee deltas are already transactionally consistent.
     }
 
     logger.info("central journal update succeeded", {
@@ -533,26 +522,18 @@ async function deleteActiveJournal(req: Request, res: Response, next: NextFuncti
         .set({ deletedAt: new Date() })
         .where(and(eq(vouchers.id, voucherId), eq(vouchers.companyId, companyId)));
 
+      // Wave 12 (decision 2): audited with every line in this transaction.
+      await writeVoucherAuditTx(tx, {
+        actor: { userId: req.session.userId, username: req.session.username, companyId },
+        action: "delete",
+        voucherId,
+        before: { voucher: lockedVoucher, entries },
+        after: null,
+        extra: { softDelete: { new: true } },
+      });
+
       return { replayed: false, voucher: lockedVoucher, entries };
     });
-
-    if (!deletion.replayed) {
-      try {
-        const entrySnapshot = await snapshotVoucherEntries(deletion.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "vouchers",
-          recordId: voucherId,
-          recordIdentifier: deletion.voucher.voucherNumber,
-          changes: buildVoucherChangesForDelete(deletion.voucher, entrySnapshot),
-        });
-      } catch {
-        // Deletion and employee reversal already committed atomically.
-      }
-    }
 
     res.json({
       message: "Voucher deleted successfully",

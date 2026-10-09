@@ -6,7 +6,7 @@
  */
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import { writeAuditEvent } from "../../../services/audit";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import {
@@ -158,6 +158,42 @@ async function isInDeletedItems(type: string, itemId: number, companyId: number)
 const VOUCHER_PERMANENT_DELETE_ROLES = new Set(["Admin", "Owner", "Developer"]);
 const CLOSING_VOUCHER_MESSAGE = "A fiscal-period closing voucher cannot be deleted";
 
+/**
+ * Wave 12 (audit trail). An orphaned POS sale is a live voucher whose location
+ * is gone. One with ledger lines or sold-item (stock) lines is posted, and
+ * erasing it would change the books and the stock with no reversal, so it is
+ * refused (delete it as a voucher instead: that soft-deletes it and reverses
+ * its stock). An empty one is removed, Admin/Owner only, in one transaction,
+ * audited with the header it held.
+ */
+export const ORPHANED_POS_POSTED_MESSAGE =
+  "This orphaned POS sale has ledger or stock lines, so it is posted and cannot be permanently deleted. Delete it as a voucher instead, which keeps its history.";
+/**
+ * Wave 12: a party named on any voucher line (live or deleted voucher) keeps
+ * its record, so the line still says who it was posted to; it used to be
+ * cleared from the posted lines.
+ */
+export const EMPLOYEE_HAS_HISTORY_MESSAGE =
+  "This employee is named on voucher lines, salary advances or payroll, so it cannot be permanently deleted. Keep it in Deleted Items.";
+export const CUSTOMER_HAS_HISTORY_MESSAGE =
+  "This customer is named on voucher lines or sales, so it cannot be permanently deleted. Keep it in Deleted Items.";
+
+async function firstFound(executor: DbTransaction, checks: SQL[]): Promise<boolean> {
+  for (const check of checks) {
+    const result = await executor.execute(sql`SELECT EXISTS (${check}) AS found`);
+    const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows;
+    if ((rows?.[0] as { found?: boolean } | undefined)?.found === true) return true;
+  }
+  return false;
+}
+
+class PermanentDeleteRefused extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermanentDeleteRefused";
+  }
+}
+
 export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
   // Permanently delete an item
   app.delete("/api/deleted-items/:type/:id/permanent", requireAuth, requireNonPOS, async (req, res) => {
@@ -210,26 +246,65 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
             .where(and(eq(ledgerAccounts.id, itemId), eq(ledgerAccounts.companyId, companyId)));
           break;
         case "employee":
-          // Delete all FK-dependent rows before removing the employee
-          await db.delete(employeeGroupMembers).where(eq(employeeGroupMembers.employeeId, itemId));
-          await db.delete(employeeBaleRates).where(eq(employeeBaleRates.employeeId, itemId));
-          await db.delete(employeeBalePctRates).where(eq(employeeBalePctRates.employeeId, itemId));
-          await db.delete(salaryAdvances).where(eq(salaryAdvances.employeeId, itemId));
-          await db.delete(erpWorkerDocs).where(eq(erpWorkerDocs.employeeId, itemId));
-          await db.delete(erpPayrollRunItems).where(eq(erpPayrollRunItems.employeeId, itemId));
-          // Null-out the optional employee FK on voucher entries (don't delete the vouchers)
-          await db.update(voucherEntries).set({ employeeId: null }).where(eq(voucherEntries.employeeId, itemId));
-          await db.delete(employees).where(and(eq(employees.id, itemId), eq(employees.companyId, companyId)));
+          // Wave 12: refused while any voucher line, advance or payroll item names
+          // the employee; otherwise one transaction, audited.
+          await db.transaction(async (tx) => {
+            if (
+              await firstFound(tx, [
+                sql`SELECT 1 FROM ${voucherEntries} WHERE ${voucherEntries.employeeId} = ${itemId}`,
+                sql`SELECT 1 FROM ${salaryAdvances} WHERE ${salaryAdvances.employeeId} = ${itemId}`,
+                sql`SELECT 1 FROM ${erpPayrollRunItems} WHERE ${erpPayrollRunItems.employeeId} = ${itemId}`,
+              ])
+            ) {
+              throw new PermanentDeleteRefused(EMPLOYEE_HAS_HISTORY_MESSAGE);
+            }
+            const [employee] = await tx
+              .select()
+              .from(employees)
+              .where(and(eq(employees.id, itemId), eq(employees.companyId, companyId)));
+            await tx.delete(employeeGroupMembers).where(eq(employeeGroupMembers.employeeId, itemId));
+            await tx.delete(employeeBaleRates).where(eq(employeeBaleRates.employeeId, itemId));
+            await tx.delete(employeeBalePctRates).where(eq(employeeBalePctRates.employeeId, itemId));
+            await tx.delete(erpWorkerDocs).where(eq(erpWorkerDocs.employeeId, itemId));
+            await tx.delete(employees).where(and(eq(employees.id, itemId), eq(employees.companyId, companyId)));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "employees",
+                recordId: itemId,
+                recordIdentifier: employee?.code ?? null,
+                changes: { permanentDelete: { new: true }, employee: { old: employee ?? null } },
+              },
+              tx
+            );
+          });
           break;
         case "customer": {
           // Permanent customer delete — must clear all FK references first.
           // Use db.transaction() + tx.execute(sql`...`) matching the established
           // pattern in this file (pool.connect parameterized queries fail here).
           await db.transaction(async (tx) => {
-            // 1. Null out nullable FKs (keep vouchers/bales intact)
-            await tx.execute(sql`UPDATE voucher_entries SET customer_id = NULL WHERE customer_id = ${itemId}`);
+            // Wave 12: refused while a voucher line or a sale names the customer
+            // (posted lines used to have the customer cleared).
+            if (
+              await firstFound(tx, [
+                sql`SELECT 1 FROM voucher_entries WHERE customer_id = ${itemId}`,
+                sql`SELECT 1 FROM container_sales WHERE customer_id = ${itemId}`,
+                sql`SELECT 1 FROM factory_pos_sales WHERE customer_id = ${itemId}`,
+              ])
+            ) {
+              throw new PermanentDeleteRefused(CUSTOMER_HAS_HISTORY_MESSAGE);
+            }
+            const [customer] = await tx
+              .select()
+              .from(customers)
+              .where(and(eq(customers.id, itemId), eq(customers.companyId, companyId)));
+
+            // 1. Null out nullable FKs (keep bales intact)
             await tx.execute(sql`UPDATE bales SET customer_id = NULL WHERE customer_id = ${itemId}`);
-            await tx.execute(sql`UPDATE factory_pos_sales SET customer_id = NULL WHERE customer_id = ${itemId}`);
 
             // 2. Delete dispatch sub-rows (deepest first)
             await tx.execute(sql`
@@ -242,9 +317,6 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
 
             // 3. Delete invoice loading sessions
             await tx.execute(sql`DELETE FROM factory_invoice_loading_sessions WHERE customer_id = ${itemId}`);
-
-            // 4. Delete container sales
-            await tx.execute(sql`DELETE FROM container_sales WHERE customer_id = ${itemId}`);
 
             // 5. Delete customer order children then orders
             await tx.execute(sql`
@@ -272,6 +344,20 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
 
             // 7. Delete the customer (customerBalances + customerLogos cascade automatically)
             await tx.execute(sql`DELETE FROM customers WHERE id = ${itemId} AND company_id = ${companyId}`);
+
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "customers",
+                recordId: itemId,
+                recordIdentifier: customer?.legalName ?? null,
+                changes: { permanentDelete: { new: true }, customer: { old: customer ?? null } },
+              },
+              tx
+            );
           });
           break;
         }
@@ -369,11 +455,42 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           });
           break;
         }
-        case "orphanedPosSale":
-          // Permanently delete an orphaned voucher and its entries
-          await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
-          await db.delete(vouchers).where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+        case "orphanedPosSale": {
+          if (!VOUCHER_PERMANENT_DELETE_ROLES.has(req.user?.role ?? "")) {
+            return res.status(403).json({ message: "Forbidden" });
+          }
+          // Wave 12: refused when posted (ledger or stock lines); otherwise the
+          // empty voucher goes in one transaction, audited.
+          await db.transaction(async (tx) => {
+            const [voucher] = await tx
+              .select()
+              .from(vouchers)
+              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)))
+              .for("update");
+            const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
+            const items = await tx.select().from(salesItems).where(eq(salesItems.voucherId, itemId));
+            if (entries.length > 0 || items.length > 0) throw new PermanentDeleteRefused(ORPHANED_POS_POSTED_MESSAGE);
+            await tx.delete(vouchers).where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "delete",
+                tableName: "vouchers",
+                recordId: itemId,
+                recordIdentifier: voucher?.voucherNumber ?? null,
+                changes: {
+                  permanentDelete: { new: true },
+                  orphanedPosSale: { new: true },
+                  voucher: { old: voucher ?? null },
+                },
+              },
+              tx
+            );
+          });
           break;
+        }
         // === Wave 1 permanent deletes ===
         // Note: these only remove the row + immediate dependent rows. They do NOT
         // attempt to reverse historical financial vouchers/daybook entries — that
@@ -447,6 +564,7 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
 
       res.json({ message: `${type} permanently deleted` });
     } catch (error: unknown) {
+      if (error instanceof PermanentDeleteRefused) return res.status(409).json({ message: error.message });
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });
     }
   });

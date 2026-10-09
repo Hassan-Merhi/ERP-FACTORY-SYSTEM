@@ -13,12 +13,8 @@ import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { recalculateIntercompanyForDate } from "../helpers/intercompanyHelpers";
 import { softDeleteInterCompanyCounterpartTx } from "./delete";
 import { MoneyDecimal, moneyString, toMoney } from "../../lib/money";
-import {
-  logAudit,
-  syncEmployeeBalancesFromEntries,
-  snapshotVoucherEntries,
-  buildVoucherChangesForDelete,
-} from "../_helpers";
+import { syncEmployeeBalancesFromEntries } from "../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
   vouchers,
   voucherEntries,
@@ -92,6 +88,7 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
 
           // Use the same transaction-wrapped deletion logic as the single delete endpoint
           await db.transaction(async (tx) => {
+            const auditBefore = await readVoucherAuditState(tx, id);
             // Wave 11: every stock document moves back exactly the value its
             // lines moved, and a sale's COGS journal leaves with it.
             await reverseVoucherStockTx(tx, {
@@ -119,7 +116,8 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                   creditAmount: e.creditAmount,
                 })),
                 currentCompanyId,
-                true // reverse
+                true, // reverse
+                tx
               );
             }
 
@@ -244,20 +242,17 @@ export function registerVoucherBulkDeleteRoutes(app: Express) {
                 }
               }
             }
-          });
 
-          // Log the deletion to audit log
-          const _bulkEntries = await storage.getVoucherEntriesByVoucher(id).catch(() => []);
-          const _bulkEntriesSnap = await snapshotVoucherEntries(_bulkEntries).catch(() => []);
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || "unknown",
-            companyId: req.session.currentCompanyId!,
-            action: "delete",
-            tableName: "vouchers",
-            recordId: id,
-            recordIdentifier: voucher.voucherNumber,
-            changes: buildVoucherChangesForDelete(voucher, _bulkEntriesSnap),
+            // Wave 12 (decision 2): audited with every line in this transaction;
+            // a failed audit write rolls this voucher's delete back.
+            await writeVoucherAuditTx(tx, {
+              actor: { userId: req.session.userId, username: req.session.username, companyId: currentCompanyId },
+              action: "delete",
+              voucherId: id,
+              before: auditBefore,
+              after: null,
+              extra: { softDelete: { new: true }, bulkDelete: { new: true } },
+            });
           });
 
           if (voucher.voucherType === "Sales" && !voucher.optional) {

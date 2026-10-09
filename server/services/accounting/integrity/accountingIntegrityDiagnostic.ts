@@ -17,6 +17,12 @@ import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { CANONICAL_ACCOUNT_TYPES } from "../accountClassification";
 import { LEDGER_GUARD_CONSTRAINTS } from "../ledgerIntegrityGuard";
+import {
+  VOUCHER_BALANCE_GUARD_TRIGGERS,
+  VOUCHER_BALANCE_GUARD_VERSION,
+  VOUCHER_HISTORY_MARKER_COLUMN,
+} from "../voucherBalanceGuard";
+import { OPENING_BALANCE_LOCK_TABLES, openingBalanceLockTriggerName } from "../openingBalanceLock";
 import { SYSTEM_ACCOUNTS, diagnoseSystemAccounts } from "../systemAccounts";
 import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
@@ -68,6 +74,12 @@ async function rows<T extends Row>(query: ReturnType<typeof sql>): Promise<T[]> 
 }
 
 const LIVE = sql`v.deleted_at IS NULL AND v.optional = false`;
+
+/** Wave 12 (A): the balance guard v3 triggers and the opening-balance lock triggers. */
+const LEDGER_INTEGRITY_WAVE12_TRIGGERS: readonly string[] = [
+  ...VOUCHER_BALANCE_GUARD_TRIGGERS.map(([, name]) => name),
+  ...OPENING_BALANCE_LOCK_TABLES.map(openingBalanceLockTriggerName),
+];
 
 export async function runAccountingIntegrityDiagnostic(companyId: number): Promise<AccountingIntegrityReport> {
   const checks: IntegrityCheck[] = [];
@@ -471,7 +483,16 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     SELECT tgname AS name FROM pg_trigger
      WHERE NOT tgisinternal
        AND tgname IN ('voucher_entries_target_guard', 'ledger_accounts_delete_guard',
-                      'voucher_entries_closed_period_guard', 'vouchers_closed_period_guard')
+                      'voucher_entries_closed_period_guard', 'vouchers_closed_period_guard',
+                      'audit_log_append_only', 'audit_log_no_truncate')
+    UNION ALL
+    -- Wave 12 (A): balance guard v3 and the opening-balance lock.
+    SELECT tgname AS name FROM pg_trigger
+     WHERE NOT tgisinternal
+       AND tgname IN (${sql.join(
+         LEDGER_INTEGRITY_WAVE12_TRIGGERS.map((name) => sql`${name}`),
+         sql`, `
+       )})
     UNION ALL
     SELECT conname AS name FROM pg_constraint
      WHERE conrelid = 'voucher_entries'::regclass
@@ -485,14 +506,32 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
     "ledger_accounts_delete_guard",
     "voucher_entries_closed_period_guard",
     "vouchers_closed_period_guard",
+    // Wave 12 (B): audit_log append-only (auditLogAppendOnlyGuard.ts).
+    "audit_log_append_only",
+    "audit_log_no_truncate",
     ...LEDGER_GUARD_CONSTRAINTS,
+    // Wave 12 (A): balance guard v3 and the opening-balance lock.
+    ...LEDGER_INTEGRITY_WAVE12_TRIGGERS,
   ].filter((name) => !guards.some((guard) => guard.name === name));
+  // Wave 12 (A): the balance guard must be at its current version, with its history marker
+  // (a catalogue read, not tenant data).
+  const HISTORY_MARKER_TABLE = "vouchers";
+  const [guardState] = await rows<{ version: string | null; marker: boolean }>(sql`
+    SELECT obj_description(to_regprocedure('erp_voucher_balance_check(integer)'), 'pg_proc') AS version,
+           EXISTS (SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = current_schema() AND table_name = ${HISTORY_MARKER_TABLE}
+                      AND column_name = ${VOUCHER_HISTORY_MARKER_COLUMN}) AS marker
+  `);
+  if (guardState?.version !== VOUCHER_BALANCE_GUARD_VERSION) {
+    missingGuards.push(`erp_voucher_balance_check ${VOUCHER_BALANCE_GUARD_VERSION}`);
+  }
+  if (!guardState?.marker) missingGuards.push(`vouchers.${VOUCHER_HISTORY_MARKER_COLUMN}`);
   checks.push(
     check(
       "database_guards_installed",
       missingGuards.length ? "fail" : "pass",
       missingGuards.length,
-      "Ledger integrity and closed-period triggers that must exist on the ledger tables.",
+      "Ledger integrity, closed-period, balance (current version, with its history marker) and opening-balance lock guards that must exist on the ledger tables.",
       missingGuards.map((name) => ({ missing: name }))
     )
   );
@@ -531,6 +570,36 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       "Journals posted automatically when an exchange rate was saved. They revalued every Cash account as if it held CFA, whatever its currency, so their amounts need review; no new ones are posted.",
       revaluations,
       revaluations.reduce((sum, row) => sum.plus(toMoney(row.amount)), new MoneyDecimal(0)).toFixed(2)
+    )
+  );
+
+  // 12. Container commission with no FACTORY-COMM-{container} journal (wave 8.4
+  // continuation). Commission is journalled when it is set or changed; legacy
+  // containers are listed here and in the factory-supplier memo, not back-filled.
+  const unjournalledCommission = await rows<{
+    id: number;
+    container_number: string;
+    commission_amount: string;
+    currency: string;
+  }>(sql`
+    SELECT fc.id, fc.container_number, fc.commission_amount::text AS commission_amount,
+           UPPER(COALESCE(fc.commission_currency_code, fc.currency_code, 'USD')) AS currency
+      FROM factory_containers fc
+     WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL AND COALESCE(fc.commission_amount, 0) > 0
+       AND NOT EXISTS (
+         SELECT 1 FROM vouchers v
+          WHERE v.company_id = fc.company_id AND ${LIVE}
+            AND (v.voucher_number = 'FACTORY-COMM-' || fc.id::text
+                 OR v.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%'))
+     ORDER BY fc.id
+  `);
+  checks.push(
+    check(
+      "factory_container_commission_not_journalled",
+      unjournalledCommission.length ? "warn" : "pass",
+      unjournalledCommission.length,
+      "Containers whose commission has no FACTORY-COMM journal: legacy containers, or a commission with no confirmed rate or no payee. The factory supplier memo lists them; they are not back-filled.",
+      unjournalledCommission
     )
   );
 

@@ -3,6 +3,7 @@ import { createHttpApp } from "../server/httpApp";
 import session from "express-session";
 import { registerRoutes } from "../server/routes";
 import { db } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { pool } from "../server/db";
 import { eq, and, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -157,7 +158,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // A closed fiscal period makes the closed-period guard refuse to delete the
     // vouchers it covers, so lift any closure before the voucher deletes below.
     await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
-    await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [company.id]);
     await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
     await db.delete(schema.inventory).where(eq(schema.inventory.companyId, company.id));
     await db
@@ -428,7 +429,7 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     // close it completely — nothing short of quiescing the middleware can — so
     // the delete below retries once, re-clearing whatever arrived in between.
     async function clearAsyncReferences(): Promise<void> {
-      await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
+      await deleteAuditLogRowsForTests(pool, "company_id = $1", [company.id]);
       await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
     }
 

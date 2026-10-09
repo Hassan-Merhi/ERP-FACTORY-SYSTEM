@@ -59,6 +59,8 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
+import Decimal from "decimal.js";
+import { writeAuditEvent } from "../../../services/audit/auditService";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
 type DynamicTable = PgTable & { id: PgColumn };
@@ -71,6 +73,52 @@ const asDynamicInsert = (rec: ImportRow): never => rec as never;
 /** `inserted.id` is `unknown` when the table is only known as a dynamic `PgTable`. */
 const insertedIdOf = (inserted: { id: unknown } | undefined): number | null =>
   inserted && typeof inserted.id === "number" ? inserted.id : null;
+
+export const IMPORT_UNBALANCED_VOUCHERS_MESSAGE =
+  "The file contains posted vouchers whose debits do not equal their credits. They cannot be imported: correct them in the source company first.";
+
+/**
+ * Posted (not deleted, not optional) vouchers of an export file whose lines do
+ * not balance to the cent in the base columns.
+ */
+export function unbalancedImportedVouchers(
+  tables: Record<string, ImportRow[]>
+): Array<{ voucherNumber: string; voucherType: string; debit: string; credit: string }> {
+  const totals = new Map<number, { debit: Decimal; credit: Decimal }>();
+  const amount = (value: unknown) => {
+    try {
+      const parsed = new Decimal(value == null || value === "" ? 0 : String(value));
+      return parsed.isFinite() ? parsed : new Decimal(0);
+    } catch {
+      return new Decimal(0);
+    }
+  };
+  for (const line of tables.voucher_entries ?? []) {
+    const voucherId = Number(line.voucherId);
+    if (!Number.isInteger(voucherId)) continue;
+    const current = totals.get(voucherId) ?? { debit: new Decimal(0), credit: new Decimal(0) };
+    totals.set(voucherId, {
+      debit: current.debit.plus(amount(line.debitAmount)),
+      credit: current.credit.plus(amount(line.creditAmount)),
+    });
+  }
+  const unbalanced: Array<{ voucherNumber: string; voucherType: string; debit: string; credit: string }> = [];
+  for (const voucher of tables.vouchers ?? []) {
+    if (voucher.deletedAt != null || voucher.optional === true) continue;
+    const total = totals.get(Number(voucher.id)) ?? { debit: new Decimal(0), credit: new Decimal(0) };
+    const debit = total.debit.toDecimalPlaces(2);
+    const credit = total.credit.toDecimalPlaces(2);
+    if (!debit.equals(credit)) {
+      unbalanced.push({
+        voucherNumber: String(voucher.voucherNumber ?? voucher.id),
+        voucherType: String(voucher.voucherType ?? ""),
+        debit: debit.toFixed(2),
+        credit: credit.toFixed(2),
+      });
+    }
+  }
+  return unbalanced;
+}
 
 export function registerFactoryCompanyImportRoutes(app: Express) {
   app.post("/api/factory/import-company-data", requireAuth, async (req: Request, res: Response) => {
@@ -124,6 +172,20 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             return res.status(400).json({
               message:
                 "Target company already has data (bales, containers, or vouchers). Import should only be done on a new/empty company to avoid duplicates.",
+            });
+          }
+
+          // Wave 12: every posted voucher in the file must balance. The balance
+          // guard would refuse them at commit anyway (an imported voucher is never
+          // history, whatever created_at the file carries), and the file has no stock
+          // adjustment documents, so a one-sided stock voucher is refused as well.
+          const unbalancedVouchers = unbalancedImportedVouchers(payload.tables);
+          if (unbalancedVouchers.length > 0) {
+            return res.status(400).json({
+              message: IMPORT_UNBALANCED_VOUCHERS_MESSAGE,
+              code: "IMPORT_UNBALANCED_VOUCHERS",
+              vouchers: unbalancedVouchers.slice(0, 50),
+              count: unbalancedVouchers.length,
             });
           }
 
@@ -798,6 +860,25 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
                 }
               );
             }
+            // Audited inside the import transaction (wave 12): no audit row, no import.
+            await writeAuditEvent(
+              {
+                userId: req.session.userId,
+                username: req.session.username || "unknown",
+                companyId: targetCompanyId,
+                action: "import",
+                tableName: "companies",
+                recordId: targetCompanyId,
+                recordIdentifier: "company-data-import",
+                changes: {
+                  sourceCompanyId: { new: payload.sourceCompanyId },
+                  fileName: { new: req.file?.originalname ?? null },
+                  totalRecords: { new: totalRecords },
+                  tables: { new: summary },
+                },
+              },
+              tx
+            );
           });
 
           res.json({

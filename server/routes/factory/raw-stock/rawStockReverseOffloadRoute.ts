@@ -38,6 +38,7 @@ import {
   withDurableFinancialOperation,
 } from "../../../services/accounting/durableFinancialOperation";
 import { factoryEntryAmountsOrLegacy } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 
 const REVERSAL_STATUS_MESSAGE = "Only OFFLOADED or PARTIALLY_RECEIVED containers can be reversed";
 const REVERSAL_SUCCESS_MESSAGE = "Offload reversed successfully. Container is back to its previous status.";
@@ -505,6 +506,8 @@ export function registerRawStockReverseOffloadRoute(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(factoryContainers.id, containerId));
+        // Wave 8.4 continuation: the commission journal follows the commission just written.
+        await syncContainerCommissionJournalTx(tx, companyId, containerId);
 
         return { message: REVERSAL_SUCCESS_MESSAGE, containerStatus: container.status };
       };

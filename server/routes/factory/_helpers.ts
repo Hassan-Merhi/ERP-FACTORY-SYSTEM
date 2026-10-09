@@ -19,7 +19,7 @@ import {
   factoryContainerCommissions,
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
@@ -30,6 +30,11 @@ import { systemAccountDefinition } from "../../services/accounting/systemAccount
 import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 import { withFactoryValuationEventTx } from "../../services/factory/factoryStockValueEvents";
 import { resolveMixSourcePricingBasis } from "../../services/factory/mixSourcePricingBasis";
+import {
+  findFactoryFxRateOnOrBefore,
+  recordedFactoryFxRateForDate,
+  storedFactoryFxRateOnOrBefore,
+} from "../../services/factory/factoryFxRateOnDate";
 
 function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
   try {
@@ -74,14 +79,26 @@ export async function writeDaybookEntry(
   // paths (rawStockBalanceRoutes/rawStockContainerRoutes/recalculateContainerCosts)
   // — instead flag it loudly so it surfaces in logs/diagnostics rather than
   // silently mispricing.
-  const { looksSet: daybookFxLooksSet } = resolveStoredFxRate(currency, opts.fxRateToUsd ?? null);
+  //
+  // Wave 8.4 continuation: a non-USD entry written without a rate takes the
+  // company's confirmed rate dated on or before its date; with none it is
+  // stored with rate 0 and amount_usd 0 (unresolved, as resolveStoredFxRate
+  // reads it), never at rate 1, which counted the native amount as USD.
+  let fxRate = currency === "USD" ? 1 : opts.fxRateToUsd || 0;
+  if (currency !== "USD" && !(fxRate > 0) && opts.amountUsd === undefined) {
+    const dated = await findFactoryFxRateOnOrBefore(dbOrTx, opts.companyId, currency, opts.txDate);
+    if (dated) fxRate = toMoney(dated.rate).toNumber();
+  }
+  const { looksSet: daybookFxLooksSet } = resolveStoredFxRate(currency, fxRate);
   if (!daybookFxLooksSet && currency !== "USD") {
     logger.warn(
       `[writeDaybookEntry] Unresolved exchange rate for ${currency} on txType=${opts.txType} companyId=${opts.companyId} — amountUsd may be inaccurate`
     );
   }
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
+  const amtUsd =
+    currency !== "USD" && !(fxRate > 0) && opts.amountUsd === undefined
+      ? "0"
+      : daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
   const [inserted] = await dbOrTx
     .insert(factoryDaybookEntries)
     .values({
@@ -104,43 +121,30 @@ export async function writeDaybookEntry(
   return inserted; // { id: number } — callers that ignore the return value continue to work
 }
 
+/**
+ * The factory rate (USD per unit) for a currency on a date (wave 8.4
+ * continuation: date-aware). Precedence:
+ *   1. the latest manual rate dated on or before `dateISO`;
+ *   2. the rate already recorded for exactly that date (auto);
+ *   3. the external historical rate for that date, recorded (auto, dated
+ *      `dateISO`) so the same rate is used again;
+ *   4. when the external source fails, the latest recorded rate dated on or
+ *      before `dateISO`.
+ * A rate dated after the transaction is never used (it used to take the most
+ * recent manual rate whatever its date); with none of the above it throws.
+ */
 export async function getOrFetchFxRateToUsd(companyId: number, currencyCode: string, dateISO: string): Promise<string> {
   if (currencyCode === "USD") return "1";
+  const currency = currencyCode.toUpperCase();
 
-  // Manual rates always take priority — use the most recent one for this currency.
-  const [manualRate] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, currencyCode.toUpperCase()),
-        eq(factoryFxRates.source, "manual")
-      )
-    )
-    .orderBy(desc(factoryFxRates.effectiveDate))
-    .limit(1);
+  const manualRate = await storedFactoryFxRateOnOrBefore(db, companyId, currency, dateISO, "manual");
+  if (manualRate) return manualRate.rate;
 
-  if (manualRate) return manualRate.rateToUsd;
-
-  // No manual rate — check for an auto-cached row for this exact date.
-  const [existing] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, currencyCode.toUpperCase()),
-        eq(factoryFxRates.effectiveDate, dateISO),
-        eq(factoryFxRates.source, "auto")
-      )
-    )
-    .limit(1);
-
-  if (existing) return existing.rateToUsd;
+  const existing = await recordedFactoryFxRateForDate(db, companyId, currency, dateISO);
+  if (existing) return existing;
 
   try {
-    const response = await fetch(buildValidatedUrl("https://api.frankfurter.app", dateISO, currencyCode.toUpperCase()));
+    const response = await fetch(buildValidatedUrl("https://api.frankfurter.app", dateISO, currency));
     if (!response.ok) throw new Error(`FX API returned ${response.status}`);
     const data = await response.json();
     const rate = data?.rates?.USD;
@@ -149,7 +153,7 @@ export async function getOrFetchFxRateToUsd(companyId: number, currencyCode: str
     const rateStr = String(rate);
     await db.insert(factoryFxRates).values({
       companyId,
-      currencyCode: currencyCode.toUpperCase(),
+      currencyCode: currency,
       rateToUsd: rateStr,
       effectiveDate: dateISO,
       source: "auto",
@@ -157,14 +161,8 @@ export async function getOrFetchFxRateToUsd(companyId: number, currencyCode: str
 
     return rateStr;
   } catch (err: unknown) {
-    const [fallback] = await db
-      .select()
-      .from(factoryFxRates)
-      .where(and(eq(factoryFxRates.companyId, companyId), eq(factoryFxRates.currencyCode, currencyCode.toUpperCase())))
-      .orderBy(desc(factoryFxRates.effectiveDate))
-      .limit(1);
-
-    if (fallback) return fallback.rateToUsd;
+    const fallback = await storedFactoryFxRateOnOrBefore(db, companyId, currency, dateISO);
+    if (fallback) return fallback.rate;
     throw new Error(
       `No FX rate available for ${dateISO}/${currencyCode}. External API error: ${getErrorMessage(err)}`,
       { cause: err }

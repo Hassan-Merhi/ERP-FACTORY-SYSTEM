@@ -13,6 +13,7 @@ import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/sche
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 import { releasePosSaleBalesTx } from "../../../../services/factory/factoryPosSaleBales";
+import { removeFactoryPosReceiptTx } from "../../../../services/accounting/factoryPosReceipt";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
@@ -31,6 +32,9 @@ export function registerPosSaleDeleteRoutes(app: Express) {
       await db.transaction(async (tx) => {
         // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
         await removeFactoryPosCogsTx(tx, companyId, saleId);
+        // Wave 8.4 continuation: and its revenue/receipt voucher (FPOS-RCPT-{sale},
+        // or a legacy FPOS-{sale}-{timestamp} one), which a void used to leave posted.
+        await removeFactoryPosReceiptTx(tx, companyId, saleId);
         // Wave 11: put back exactly the bales the sale recorded. A sale written
         // before that record falls back to re-opening the most recent SOLD bales
         // of each product at its location.

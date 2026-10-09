@@ -113,22 +113,22 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
           creditAmount: depositAmount.toFixed(2),
           narration: `Salary deposit - ${voucherNumber}`,
         });
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: "0",
+              creditAmount: depositAmount.toFixed(2),
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
         return voucher;
       });
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      // This ensures consistent behavior with voucher edit/delete operations
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: "0",
-            creditAmount: depositAmount.toFixed(2),
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance after sync
       const [updatedDepositEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
@@ -274,21 +274,24 @@ export function registerPayrollEmployeeDepositRoutes(app: Express) {
             amount: depositAmount,
           });
         }
+        // Sync all employee balances from voucher entries, in the voucher's transaction (wave 12).
+        const allDepositEntries = await tx
+          .select()
+          .from(voucherEntries)
+          .where(eq(voucherEntries.voucherId, voucher.id));
+        await syncEmployeeBalancesFromEntries(
+          allDepositEntries.map((e) => ({
+            ledgerAccountId: e.ledgerAccountId,
+            employeeId: e.employeeId,
+            debitAmount: e.debitAmount,
+            creditAmount: e.creditAmount,
+          })),
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
         return { voucher, results };
       });
-
-      // Sync all employee balances from voucher entries
-      const allDepositEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, voucher.id));
-
-      await syncEmployeeBalancesFromEntries(
-        allDepositEntries.map((e) => ({
-          ledgerAccountId: e.ledgerAccountId,
-          employeeId: e.employeeId,
-          debitAmount: e.debitAmount,
-          creditAmount: e.creditAmount,
-        })),
-        req.session.currentCompanyId!
-      );
 
       // Get updated balances for all employees
       const updatedResults = [];

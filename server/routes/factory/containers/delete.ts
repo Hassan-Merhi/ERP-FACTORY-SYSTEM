@@ -23,6 +23,7 @@ import {
 } from "@shared/schema";
 import { eq, and, or, inArray, ilike, isNull } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { removeContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 
 export function registerFactoryContainerDeleteRoutes(app: Express) {
   // ── Bulk cascade-delete containers ───────────────────────────────────────────
@@ -153,7 +154,10 @@ export function registerFactoryContainerDeleteRoutes(app: Express) {
             )
           );
 
-        // 3. Delete accounting vouchers and their entries
+        // 3. Delete accounting vouchers and their entries. The commission
+        // journal FACTORY-COMM-{container} carries a posting identity, so it is
+        // removed with it (wave 8.4 continuation).
+        await removeContainerCommissionJournalTx(tx, companyId, id);
         const containerVouchers = await tx
           .select({ id: vouchers.id })
           .from(vouchers)

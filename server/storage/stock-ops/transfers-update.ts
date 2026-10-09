@@ -18,7 +18,7 @@ import {
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
-import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
+import { stockAdjustmentHeaderTotal, stockAdjustmentNetLine } from "./stockAdjustmentTotals";
 import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 import {
   inventoryLedgerNetTx,
@@ -481,17 +481,15 @@ export async function updateStockAdjustment(
       return account.id;
     };
 
+    // Production and consumption both post to STOCK_ADJUSTMENT.
     let productionAccountId: number | null = null;
-    let consumptionAccountId: number | null = null;
     if (!isOptional) {
-      const adjustmentAccountId = await findOrCreateAdjustmentAccount(
+      productionAccountId = await findOrCreateAdjustmentAccount(
         "STOCK_ADJUSTMENT",
         "Stock Adjustment (Production/Consumption)",
         "Indirect Expense",
         "Dr"
       );
-      productionAccountId = adjustmentAccountId;
-      consumptionAccountId = adjustmentAccountId;
     }
 
     let totalProductionValue = toInventoryDecimal(0);
@@ -657,22 +655,13 @@ export async function updateStockAdjustment(
     }
 
     if (!isOptional) {
-      if (totalProductionValue.isPositive() && productionAccountId) {
+      // Production and consumption post to the same STOCK_ADJUSTMENT account: one net line (wave 12).
+      const netLine = stockAdjustmentNetLine(totalProductionValue, totalConsumptionValue, adjustmentType);
+      if (netLine && productionAccountId) {
         await tx.insert(schema.voucherEntries).values({
           voucherId: existingAdjustment.voucherId,
           ledgerAccountId: productionAccountId,
-          debitAmount: "0",
-          creditAmount: inventoryMoney(totalProductionValue),
-          narration: `Production adjustment - ${adjustmentType} voucher`,
-        });
-      }
-      if (totalConsumptionValue.isPositive() && consumptionAccountId) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId: existingAdjustment.voucherId,
-          ledgerAccountId: consumptionAccountId,
-          debitAmount: inventoryMoney(totalConsumptionValue),
-          creditAmount: "0",
-          narration: `Consumption expense - ${adjustmentType} voucher`,
+          ...netLine,
         });
       }
     }

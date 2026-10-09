@@ -5,7 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { errorStatus, getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -141,7 +141,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
       res.status(201).json(account);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -266,7 +266,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       }
       res.json(updatedAccount);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 

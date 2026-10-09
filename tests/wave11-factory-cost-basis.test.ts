@@ -32,6 +32,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 });
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { factoryStockValuation } from "../server/services/accounting/perpetualInventory/factoryValuation";
 import { syncFactoryStockJournalTx } from "../server/services/accounting/perpetualInventory/factoryStockJournal";
 import { cascadeContainerCostChange } from "../server/services/factory/rawStockCostCascade";
@@ -254,6 +255,8 @@ beforeAll(async () => {
 }, 60000);
 
 async function cleanup(companyId: number, supervisorId?: string) {
+  // audit_log is append-only (wave 12): its rows go through the test-only helper.
+  await deleteAuditLogRowsForTests(pool, "company_id = $1", [companyId]);
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -279,7 +282,6 @@ async function cleanup(companyId: number, supervisorId?: string) {
       "factory_bale_recost_runs",
       "factory_bale_production_attributions",
       "factory_daybook_entries",
-      "audit_log",
     ]) {
       await q(`DELETE FROM ${table} WHERE company_id = $1`);
     }
@@ -302,6 +304,7 @@ async function cleanup(companyId: number, supervisorId?: string) {
     await q(`DELETE FROM inventory WHERE company_id = $1`);
     await q(`DELETE FROM stock_items WHERE company_id = $1`);
     await q(`DELETE FROM stock_groups WHERE company_id = $1`);
+    await q(`DELETE FROM customer_balances WHERE company_id = $1`);
     await q(`UPDATE customers SET ledger_account_id = NULL WHERE company_id = $1`);
     await q(`DELETE FROM customers WHERE company_id = $1`);
     await q(`DELETE FROM ledger_accounts WHERE company_id = $1`);
@@ -444,6 +447,9 @@ describe("factory POS sale bales", () => {
     const sale = await call("POST /api/factory/pos/sale", {
       body: {
         locationId,
+        // Wave 8.4 continuation: an unpaid credit sale needs a customer (its
+        // receivable is posted to the customer's ledger).
+        customerId,
         paymentType: "CREDIT",
         depositAmount: "0",
         items: [{ productId, productName: "P", quantity: 1, unitPrice: "60" }],
@@ -573,6 +579,9 @@ describe("after the cut-over", () => {
     const sale = await call("POST /api/factory/pos/sale", {
       body: {
         locationId,
+        // Wave 8.4 continuation: an unpaid credit sale needs a customer (its
+        // receivable is posted to the customer's ledger).
+        customerId,
         paymentType: "CREDIT",
         depositAmount: "0",
         items: [{ productId, productName: "P", quantity: 1, unitPrice: "60" }],

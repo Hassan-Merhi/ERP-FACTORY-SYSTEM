@@ -241,7 +241,10 @@ describe("PUT /api/vouchers/:id/with-entries type changes", () => {
         entries: unbalancedEntries(),
       });
       expect(res.status, voucherType).toBe(400);
-      expect(res.body.message, voucherType).toMatch(/exempt from balancing/);
+      // Wave 12: stock adjustment types are refused outright on the generic route.
+      expect(res.body.message, voucherType).toMatch(
+        /exempt from balancing|can only be created and edited from the stock adjustment form/
+      );
     }
     expect((await voucherRow(voucherId)).voucherType).toBe("Journal");
     expect(await entryAmounts(voucherId)).toEqual([

@@ -4,13 +4,8 @@ import { logger } from "../../lib/logger";
 import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
-import {
-  logAudit,
-  syncEmployeeBalancesFromEntries,
-  snapshotVoucherEntries,
-  buildVoucherChangesForCreate,
-  buildVoucherChangesForUpdate,
-} from "../_helpers";
+import { syncEmployeeBalancesFromEntries } from "../_helpers";
+import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import { triggerIntercompanyNotifications } from "../intercompanyNotificationRoutes";
 import { autoReallocateLoansAccounts } from "../../lib/transporterAllocation";
 import { vouchers, voucherEntries, customers, ledgerAccounts } from "@shared/schema";
@@ -358,21 +353,24 @@ export function registerVoucherPaymentRoutes(app: Express) {
         // Batch insert all voucher entries
         const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
 
+        // Wave 12: employee balances and the audit row are written in this transaction.
+        if (!createdVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
+        }
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          action: "create",
+          voucherId: createdVoucher.id,
+          before: null,
+          after: { voucher: createdVoucher, entries: createdEntries },
+        });
+
         return { voucher: createdVoucher, entries: createdEntries };
       });
-
-      // Sync employee balances from voucher entries (only for non-optional vouchers)
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
 
       // Write to factory daybook if this company has factory settings
       try {
@@ -423,23 +421,6 @@ export function registerVoucherPaymentRoutes(app: Express) {
         });
       } catch (waErr: unknown) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
-      }
-
-      // Log the payment/receipt creation
-      try {
-        const _prEntriesSnap = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(result.voucher, _prEntriesSnap),
-        });
-      } catch {
-        /* non-fatal */
       }
 
       // Fire-and-forget intercompany notification check (Payment/Receipt only)
@@ -652,6 +633,26 @@ export function registerVoucherPaymentRoutes(app: Express) {
           newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
         });
 
+        // Wave 12: employee balances move in this transaction, and the edit is
+        // audited with the full before/after snapshot before it commits.
+        if (!existingVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(oldEntries, req.session.currentCompanyId!, true, tx);
+        }
+        if (!updatedVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
+        }
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          action: "update",
+          voucherId,
+          before: { voucher: existingVoucher, entries: oldEntries },
+          after: { voucher: updatedVoucher, entries: createdEntries },
+        });
+
         return {
           voucher: updatedVoucher,
           entries: createdEntries,
@@ -660,33 +661,6 @@ export function registerVoucherPaymentRoutes(app: Express) {
           wasOptional: existingVoucher.optional,
         };
       });
-
-      // Sync employee balances: reverse old entries if voucher was non-optional
-      if (!result.wasOptional) {
-        await syncEmployeeBalancesFromEntries(
-          result.oldEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!,
-          true // reverse
-        );
-      }
-
-      // Apply new entries if voucher is non-optional
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
 
       // WhatsApp rule check — prompt the frontend instead of auto-sending
       let waResultPatch: { prompt: boolean; accountId?: number; voucherDate?: string; month?: string } = {
@@ -704,39 +678,6 @@ export function registerVoucherPaymentRoutes(app: Express) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
       }
 
-      try {
-        const _oldSnap = await snapshotVoucherEntries(result.oldEntries);
-        const _newSnap = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForUpdate(
-            {
-              voucherType: result.existingVoucher.voucherType,
-              voucherDate: result.existingVoucher.voucherDate,
-              totalAmount: result.existingVoucher.totalAmount,
-              description: result.existingVoucher.description,
-              optional: result.existingVoucher.optional,
-            },
-            {
-              voucherType: result.voucher.voucherType,
-              voucherDate: result.voucher.voucherDate,
-              totalAmount: result.voucher.totalAmount,
-              description: result.voucher.description,
-              optional: result.voucher.optional,
-            },
-            _oldSnap,
-            _newSnap
-          ),
-        });
-      } catch {
-        /* non-fatal */
-      }
       res.json({ voucher: result.voucher, entries: result.entries, whatsapp: waResultPatch });
     } catch (error: unknown) {
       logger.error("Error updating payment/receipt voucher:", { error: error });

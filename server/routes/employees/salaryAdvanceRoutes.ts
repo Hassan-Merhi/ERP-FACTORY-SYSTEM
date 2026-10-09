@@ -18,6 +18,8 @@ import {
 } from "@shared/schema";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+import { writeAuditEvent } from "../../services/audit";
+import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 
 /** An advance is paid off only when nothing is left at cents. */
 function isPaidOff(remaining: Decimal): boolean {
@@ -66,43 +68,89 @@ export function registerSalaryAdvanceRoutes(app: Express): void {
         return res.status(403).json({ message: "Employee belongs to a different company" });
       }
 
-      let voucherId: number | null = null;
+      let cashAccountId: number | null = null;
       if (!parsed.isOpeningBalance) {
-        const cashAccountId = req.body.cashAccountId || req.session.cashAccountId;
+        cashAccountId = req.body.cashAccountId || req.session.cashAccountId || null;
         if (!cashAccountId) return res.status(400).json({ message: "Cash account is required" });
-        const voucherNumber = `SA-${Date.now()}`;
-        const [voucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Payment",
-            voucherDate: parsed.advanceDate,
-            description: parsed.notes || `Salary advance for ${employee.firstName} ${employee.lastName}`,
-            totalAmount: parsed.amount,
-          })
-          .returning();
-        voucherId = voucher.id;
-        await db.insert(voucherEntries).values([
-          {
-            voucherId: voucher.id,
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: parsed.amount,
-            creditAmount: "0",
-            narration: `Salary advance - ${voucherNumber}`,
-          },
-          {
-            voucherId: voucher.id,
-            ledgerAccountId: cashAccountId,
-            debitAmount: "0",
-            creditAmount: parsed.amount,
-            narration: `Salary advance - ${voucherNumber}`,
-          },
-        ]);
       }
 
-      const advance = await storage.createSalaryAdvance({ ...parsed, voucherId });
+      // Wave 12: the voucher, its lines and the advance row are written in one
+      // transaction and audited in it; any failure leaves nothing behind (they
+      // used to autocommit one by one).
+      const advance = await db.transaction(async (tx) => {
+        let voucherId: number | null = null;
+        let auditVoucher: {
+          voucher: typeof vouchers.$inferSelect;
+          entries: (typeof voucherEntries.$inferSelect)[];
+        } | null = null;
+        if (cashAccountId) {
+          const voucherNumber = `SA-${Date.now()}`;
+          const [voucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherNumber,
+              voucherType: "Payment",
+              voucherDate: parsed.advanceDate,
+              description: parsed.notes || `Salary advance for ${employee.firstName} ${employee.lastName}`,
+              totalAmount: parsed.amount,
+            })
+            .returning();
+          voucherId = voucher.id;
+          const entries = await tx
+            .insert(voucherEntries)
+            .values([
+              {
+                voucherId: voucher.id,
+                ledgerAccountId: null,
+                employeeId: employee.id,
+                debitAmount: parsed.amount,
+                creditAmount: "0",
+                narration: `Salary advance - ${voucherNumber}`,
+              },
+              {
+                voucherId: voucher.id,
+                ledgerAccountId: cashAccountId,
+                debitAmount: "0",
+                creditAmount: parsed.amount,
+                narration: `Salary advance - ${voucherNumber}`,
+              },
+            ])
+            .returning();
+          auditVoucher = { voucher, entries };
+        }
+
+        const [created] = await tx
+          .insert(salaryAdvances)
+          .values({ ...parsed, voucherId })
+          .returning();
+
+        const actor = { userId: req.session.userId, username: req.session.username, companyId };
+        if (auditVoucher) {
+          await writeVoucherAuditTx(tx, {
+            actor,
+            action: "create",
+            voucherId: auditVoucher.voucher.id,
+            before: null,
+            after: auditVoucher,
+            extra: { salaryAdvanceId: { new: created.id } },
+          });
+        }
+        await writeAuditEvent(
+          {
+            userId: req.session.userId ?? "unknown",
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "salary_advances",
+            recordId: created.id,
+            recordIdentifier: auditVoucher?.voucher.voucherNumber ?? null,
+            changes: { salaryAdvance: { new: created } },
+          },
+          tx
+        );
+        return created;
+      });
       res.status(201).json(advance);
     } catch (error: unknown) {
       res.status(400).json({ message: getErrorMessage(error) });

@@ -11,6 +11,7 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { writeDaybookEntry, getOrFetchFxRateToUsd } from "../_helpers";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { factorySuppliers, factoryContainers } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
@@ -166,6 +167,9 @@ export function registerFactoryContainerImportRoutes(app: Express) {
               amountCurrency: ratePerKg * totalKg,
               fxRateToUsd: fxRate,
             });
+
+            // Wave 8.4 continuation: the imported commission is journalled with the container.
+            await syncContainerCommissionJournalTx(tx, companyId, container.id);
 
             results.push(container);
           });

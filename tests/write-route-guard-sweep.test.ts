@@ -339,6 +339,8 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/intercompany-requests/:id/approve",
   "POST /api/intercompany-requests/:id/dismiss",
   "POST /api/ledger-accounts",
+  // Wave 12 (A): zeroes openings in its own transaction (it went through storage before).
+  "POST /api/ledger-accounts/zero-balances",
   "POST /api/lookup/reference/:referenceNumber/scan",
   "POST /api/offloads/:id/toggle-optional",
   "POST /api/orphaned-records/reassign",

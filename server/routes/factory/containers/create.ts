@@ -22,6 +22,7 @@ import {
 import { eq } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
 import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerCreateRoutes(app: Express) {
@@ -179,7 +180,13 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         }
       }
 
-      const [container] = await db.insert(factoryContainers).values(values).returning();
+      // The container and its commission journal FACTORY-COMM-{container}
+      // (wave 8.4 continuation) are written in one transaction.
+      const container = await db.transaction(async (tx) => {
+        const [inserted] = await tx.insert(factoryContainers).values(values).returning();
+        await syncContainerCommissionJournalTx(tx, companyId, inserted.id);
+        return inserted;
+      });
 
       let supplierNameForDesc = "";
       if (container.supplierId) {
@@ -256,9 +263,10 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         });
       }
 
-      // Commission is already included in the factory supplier balance calculation
-      // (via container.commissionAmount in the supplier liability formula).
-      // Posting a separate journal voucher would double-count it, so we skip it here.
+      // Commission: posted above as FACTORY-COMM-{container} (Dr import cost /
+      // Cr the commission payee). The factory supplier pages add the container's
+      // commission from the container row and read only debit voucher lines as
+      // payments, so the journal's credit line is not counted twice there.
 
       // Double-entry: Freight
       // If freightPaidBy='own': Dr Freight Expense / Cr own ledger account

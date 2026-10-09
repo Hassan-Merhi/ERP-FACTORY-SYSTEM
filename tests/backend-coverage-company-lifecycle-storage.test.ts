@@ -1,10 +1,16 @@
 /**
  * Company lifecycle and the per-company access records that hang off it.
  *
- * Deleting a company is the one operation that has to leave nothing behind:
- * every row keyed to it, in every module, across tables that predate their own
- * migrations. A single orphan keeps the company row alive behind a foreign key
- * or, worse, leaves another tenant's query joining onto a dead id. The rest of
+ * Deleting a company has to leave nothing behind but its audit trail: every
+ * configuration row keyed to it, in every module, across tables that predate
+ * their own migrations. A single orphan keeps the company row alive behind a
+ * foreign key or, worse, leaves another tenant's query joining onto a dead id.
+ *
+ * Wave 12 (owner decision 4) changed what may be deleted: a company with
+ * history (any voucher, stock, fiscal closure or non-zero balance) is refused
+ * and must be deactivated, and audit_log rows are never deleted. This file
+ * used to pin the old cascade (vouchers and audit_log removed); it now pins
+ * the refusal, the empty-company delete and the surviving audit rows. The rest of
  * this file covers the records that decide what a user may see once the company
  * exists — role feature flags, per-user page access and hidden cost fields —
  * and the parent-company setting that intercompany posting reads.
@@ -13,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
 import * as authStorage from "../server/storage/auth";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 
 const TEST_PREFIX = "colife";
@@ -98,6 +105,16 @@ describe("company deletion", () => {
     expect(await countIn("user_security_permissions", "company_id", companyId)).toBeGreaterThan(0);
     expect(await countIn("user_activity_log", "company_id", companyId)).toBeGreaterThan(0);
 
+    // With a voucher the company has history: refused, nothing removed.
+    await expect(authStorage.deleteCompany(companyId)).rejects.toThrow(/accounting history/);
+    expect(await authStorage.getCompanyById(companyId)).toBeDefined();
+    expect(await countIn("voucher_entries", "voucher_id", voucherId)).toBe(2);
+
+    // Once it holds no voucher and no stock (the fixture seeds 100 of each item)
+    // it is an empty company and can be deleted; zero-quantity inventory rows go with it.
+    await pool.query(`DELETE FROM voucher_entries WHERE voucher_id = $1`, [voucherId]);
+    await pool.query(`DELETE FROM vouchers WHERE id = $1`, [voucherId]);
+    await pool.query(`UPDATE inventory SET quantity = 0, total_value = 0 WHERE company_id = $1`, [companyId]);
     await authStorage.deleteCompany(companyId);
 
     expect(await authStorage.getCompanyById(companyId)).toBeUndefined();
@@ -115,19 +132,20 @@ describe("company deletion", () => {
       "exchange_rates",
       "role_feature_permissions",
       "erp_user_page_access",
-      "audit_log",
       "user_security_permissions",
       "user_activity_log",
     ]) {
       expect(await countIn(table, "company_id", companyId), `${table} still holds rows`).toBe(0);
     }
-    // Child rows keyed to the voucher rather than the company must go too.
-    expect(await countIn("voucher_entries", "voucher_id", voucherId)).toBe(0);
+    // audit_log is append-only: the company's rows and the deletion's own row survive.
+    expect(await countIn("audit_log", "company_id", companyId)).toBeGreaterThanOrEqual(2);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [companyId]);
   }, 180_000);
 
-  it("is safe to run against a company id that no longer exists", async () => {
-    // Re-deleting is how a retried teardown behaves; it must not throw.
-    await expect(authStorage.deleteCompany(2147481900)).resolves.toBeUndefined();
+  it("reports a company id that no longer exists", async () => {
+    // The legacy cascade silently did nothing here; the guarded delete (which
+    // server/storage.ts already used) says the company was not found.
+    await expect(authStorage.deleteCompany(2147481900)).rejects.toThrow(/Company not found/);
   }, 60_000);
 });
 

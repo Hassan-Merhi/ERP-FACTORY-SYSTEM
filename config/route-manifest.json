@@ -1465,7 +1465,7 @@
     "GET /api/pos-transfer-detail [requireAuth > <anonymous>]",
     "POST /api/stock-transfers/:transferId/revisions [requireAuth > <anonymous>]",
     "GET /api/stock-adjustments [requireAuth > requireNonPOS > <anonymous>]",
-    "POST /api/stock-adjustments [requireAuth > requireNonPOS > stockAdjustmentCreateHandler]",
+    "POST /api/stock-adjustments [requireAuth > requireNonPOS > <anonymous> > stockAdjustmentCreateHandler]",
     "PUT /api/stock-adjustments/:id [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/waste-dispatches [requireAuth > requireNonPOS > <anonymous>]",
     "GET /api/waste-dispatches/:id [requireAuth > requireNonPOS > <anonymous>]",

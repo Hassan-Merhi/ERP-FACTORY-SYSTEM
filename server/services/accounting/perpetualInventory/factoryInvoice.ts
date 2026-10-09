@@ -63,7 +63,11 @@ interface InvoiceRow {
 }
 
 /** The customer's ledger account, created and linked as the charge vouchers do when missing. */
-async function customerLedgerAccountTx(tx: DbTransaction, companyId: number, customerId: number): Promise<number> {
+export async function customerLedgerAccountTx(
+  tx: DbTransaction,
+  companyId: number,
+  customerId: number
+): Promise<number> {
   const [customer] = await rows<{ ledger_account_id: number | null; legal_name: string | null }>(
     tx,
     sql`SELECT ledger_account_id, legal_name FROM customers WHERE id = ${customerId} AND company_id = ${companyId}`

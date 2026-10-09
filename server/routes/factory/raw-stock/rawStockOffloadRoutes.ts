@@ -28,6 +28,7 @@ import { computeOffloadCosting } from "./offloadCosting";
 import { applySubsequentReceipt } from "./subsequentReceipt";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
 import { allLedgerAccountsOwned } from "../../helpers/companyOwnership";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 
 /** A request amount as the number parseFloat read it (NaN when it does not parse). */
 function requestNumber(value: unknown): number {
@@ -417,6 +418,8 @@ export function registerRawStockOffloadRoutes(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(factoryContainers.id, containerId));
+        // Wave 8.4 continuation: the commission journal follows the commission just written.
+        await syncContainerCommissionJournalTx(tx, companyId, containerId);
 
         // 6. Additional charges INSERTs
         const insertedAdditionalCharges = [];

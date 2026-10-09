@@ -1,5 +1,5 @@
 import { logger } from "../../../lib/logger";
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import {
   ledgerAccounts,
   vouchers,
@@ -39,8 +39,8 @@ export async function maybeRunAutoTransfer(
     if (!fromCompany) return;
 
     // Get or create TRANSFER-CLEARING account in a company
-    async function getOrCreateClearing(cid: number) {
-      const [existing] = await db
+    async function getOrCreateClearing(tx: DbTransaction, cid: number) {
+      const [existing] = await tx
         .select()
         .from(ledgerAccounts)
         .where(
@@ -51,7 +51,7 @@ export async function maybeRunAutoTransfer(
           )
         );
       if (existing) return existing;
-      const [created] = await db
+      const [created] = await tx
         .insert(ledgerAccounts)
         .values({
           companyId: cid,
@@ -63,8 +63,6 @@ export async function maybeRunAutoTransfer(
         .returning();
       return created;
     }
-
-    const fromClearing = await getOrCreateClearing(companyId);
 
     // Find the FIRST rule that matches the source account.
     // Rules with a specific sourceCashAccountIds list take precedence; fallback to the
@@ -80,12 +78,16 @@ export async function maybeRunAutoTransfer(
     const cfg = specificMatch ?? fallbackMatch;
     if (!cfg) return;
 
-    // Only one transfer per payment — use the matched rule.
-    {
-      const [toCompany] = await db.select().from(companies).where(eq(companies.id, cfg.destCompanyId));
-      if (!toCompany) return;
+    const [toCompany] = await db.select().from(companies).where(eq(companies.id, cfg.destCompanyId));
+    if (!toCompany) return;
 
-      const toClearing = await getOrCreateClearing(cfg.destCompanyId);
+    // Only one transfer per payment — use the matched rule. Wave 12: both
+    // companies' vouchers, their lines, any clearing account created for them
+    // and the link row are written in one transaction (they used to autocommit
+    // one by one, so a failure could leave money out of one company only).
+    await db.transaction(async (tx) => {
+      const fromClearing = await getOrCreateClearing(tx, companyId);
+      const toClearing = await getOrCreateClearing(tx, cfg.destCompanyId);
       const baseDesc = `Auto rent transfer - ${unitLabel}`;
       const desc = notes ? `${baseDesc} - ${notes}` : baseDesc;
       const txId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -96,7 +98,7 @@ export async function maybeRunAutoTransfer(
         : `Transfer in from ${fromCompany.name}`;
 
       // Voucher in FROM company (Payment — money leaves)
-      const [fromVoucher] = await db
+      const [fromVoucher] = await tx
         .insert(vouchers)
         .values({
           companyId,
@@ -108,7 +110,7 @@ export async function maybeRunAutoTransfer(
           optional: false,
         })
         .returning();
-      await db.insert(voucherEntries).values([
+      await tx.insert(voucherEntries).values([
         {
           voucherId: fromVoucher.id,
           ledgerAccountId: fromClearing.id,
@@ -127,7 +129,7 @@ export async function maybeRunAutoTransfer(
 
       // Voucher in TO company (Receipt — money arrives)
       // DR destLedgerAccountId (cash/account receives money), CR toClearing (clearing settled)
-      const [toVoucher] = await db
+      const [toVoucher] = await tx
         .insert(vouchers)
         .values({
           companyId: cfg.destCompanyId,
@@ -139,7 +141,7 @@ export async function maybeRunAutoTransfer(
           optional: false,
         })
         .returning();
-      await db.insert(voucherEntries).values([
+      await tx.insert(voucherEntries).values([
         {
           voucherId: toVoucher.id,
           ledgerAccountId: cfg.destLedgerAccountId,
@@ -157,7 +159,7 @@ export async function maybeRunAutoTransfer(
       ]);
 
       // Record link (sourcePaymentId links this transfer back to the originating payment)
-      await db.insert(interCompanyTransfers).values({
+      await tx.insert(interCompanyTransfers).values({
         transferType: "Cash",
         fromCompanyId: companyId,
         toCompanyId: cfg.destCompanyId,
@@ -170,7 +172,7 @@ export async function maybeRunAutoTransfer(
         description: desc,
         sourcePaymentId: sourcePaymentId ?? null,
       });
-    }
+    });
   } catch (err) {
     logger.error("[RentalAutoTransfer] failed:", { error: err });
   }

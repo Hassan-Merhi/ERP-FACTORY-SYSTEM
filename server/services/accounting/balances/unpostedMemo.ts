@@ -14,9 +14,13 @@
  *     CHARGE- voucher (those debit the customer ledger), which is exactly the
  *     receivable the INV-GL journal would post (perpetualInventory/factoryInvoice.ts).
  *   - factoryPosCreditSale / factoryPosDeposit: factory POS credit sales and
- *     their deposits, written only to the customer_balances cache (the POS
- *     receipt voucher debits cash and credits sales income for the deposit; it
- *     never touches the customer).
+ *     their deposits written only to the customer_balances cache: sales posted
+ *     before wave 8.4 continuation, whose FPOS-{sale}-{timestamp} receipt
+ *     voucher debited cash and credited sales income for the deposit only and
+ *     never touched the customer. A sale with a live FPOS-RCPT-{sale} voucher
+ *     is not listed: that voucher carries the full revenue and the unpaid part
+ *     on the customer's ledger (accounting/factoryPosReceipt.ts). A voided sale
+ *     is not listed either (its cache rows are left in place by the void).
  *   - customerBalanceCache: any other customer_balances row with no ledger
  *     counterpart, e.g. a legacy payment recorded against an invoice, or a
  *     credit-sale import row whose voucher was deleted.
@@ -32,8 +36,10 @@
  *   - factoryContainerFreight: supplier-paid freight with no live
  *     FACTORY-FREIGHT-{container} journal;
  *   - factoryContainerCommission: container commission with no live
- *     FACTORY-COMM-{container}- journal (commission is not journalled today),
- *     listed under the container's supplier.
+ *     FACTORY-COMM-{container} journal (legacy containers: commission is
+ *     journalled since wave 8.4 continuation, factory/containerCommissionJournal.ts),
+ *     listed under the party that journal credits: the commission supplier
+ *     (broker) when the container names one, else the container's supplier.
  *   Amounts in another currency are converted at the container's stored,
  *   confirmed rate; with no such rate `amount` is null (the line is listed
  *   with its native amount and left out of the memo total).
@@ -185,6 +191,13 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
        WHERE cb.company_id = ${companyId} AND cb.customer_id IN (${idList(ids)})
          AND NOT (cb.reference_type = 'INVOICE' AND cb.transaction_type = 'SALE')
          AND cb.reference_type IS DISTINCT FROM 'CONTAINER_SALE'
+         AND NOT (cb.reference_type IN ('FACTORY_POS_SALE', 'FACTORY_POS_DEPOSIT') AND EXISTS (
+               SELECT 1 FROM factory_pos_sales ps
+                WHERE ps.id = cb.reference_id AND ps.company_id = cb.company_id
+                  AND (ps.status = 'VOIDED' OR ${liveVoucherExists(
+                    sql`mv.voucher_number = 'FPOS-RCPT-' || ps.id::text`,
+                    sql`ps.company_id`
+                  )})))
          AND NOT (cb.reference_type = 'voucher' AND EXISTS (
                SELECT 1 FROM vouchers rv
                 WHERE rv.id = cb.reference_id AND rv.company_id = cb.company_id
@@ -215,6 +228,8 @@ interface ContainerMemoRow {
   id: number;
   container_number: string;
   supplier_id: number | null;
+  /** The party the commission is owed to: the commission supplier, else the container's supplier. */
+  commission_party_id: number | null;
   date: string;
   status: string | null;
   currency_code: string | null;
@@ -258,7 +273,9 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
   const containers = await rowsOf<ContainerMemoRow>(
     executor,
     sql`
-      SELECT fc.id, fc.container_number, fc.supplier_id, ${day}::text AS date, fc.status,
+      SELECT fc.id, fc.container_number, fc.supplier_id,
+             COALESCE(fc.commission_supplier_id, fc.supplier_id) AS commission_party_id,
+             ${day}::text AS date, fc.status,
              fc.currency_code, fc.fx_rate_to_usd::text AS fx_rate_to_usd, fc.fx_rate_confirmed,
              (COALESCE(fc.total_kg, 0) * COALESCE(fc.rate_per_kg, 0))::text AS goods,
              ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-IMPORT-' || fc.id::text || '-%'`, sql`fc.company_id`)} AS goods_posted,
@@ -270,19 +287,25 @@ async function factorySupplierMemoLines(executor: Executor, query: MemoQuery) {
              )} AS freight_posted,
              fc.commission_amount::text AS commission_amount, fc.commission_currency_code,
              fc.commission_fx_rate_to_usd::text AS commission_fx_rate_to_usd, fc.commission_fx_rate_confirmed,
-             ${liveVoucherExists(sql`mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%'`, sql`fc.company_id`)} AS commission_posted
+             ${liveVoucherExists(
+               sql`(mv.voucher_number = 'FACTORY-COMM-' || fc.id::text OR mv.voucher_number LIKE 'FACTORY-COMM-' || fc.id::text || '-%')`,
+               sql`fc.company_id`
+             )} AS commission_posted
         FROM factory_containers fc
-       WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL AND fc.supplier_id IN (${idList(ids)})
+       WHERE fc.company_id = ${companyId} AND fc.deleted_at IS NULL
+         AND (fc.supplier_id IN (${idList(ids)}) OR fc.commission_supplier_id IN (${idList(ids)}))
          ${dateCut(day, asOf)}
     `
   );
 
   const out: { partyId: number; line: PartyBalanceMemoLine }[] = [];
+  const wanted = new Set(ids);
   const push = (row: ContainerMemoRow, source: MemoSource, native: Decimal, currency: string, rate: Decimal | null) => {
-    if (!row.supplier_id || !native.greaterThan(0)) return;
+    const partyId = source === "factoryContainerCommission" ? row.commission_party_id : row.supplier_id;
+    if (!partyId || !wanted.has(partyId) || !native.greaterThan(0)) return;
     const owed = native.negated();
     out.push({
-      partyId: row.supplier_id,
+      partyId,
       line: {
         source,
         reference: row.container_number,

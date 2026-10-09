@@ -112,21 +112,22 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
         }
 
         await tx.insert(voucherEntries).values(creditEntry);
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: withdrawalAmount.toFixed(2),
+              creditAmount: "0",
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
         return voucher;
       });
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: withdrawalAmount.toFixed(2),
-            creditAmount: "0",
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance
       const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));

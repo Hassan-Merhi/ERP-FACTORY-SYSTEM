@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../lib/httpHandlers";
+import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { createHash } from "crypto";
 import Decimal from "decimal.js";
@@ -195,7 +195,7 @@ export function registerBankAssetRoutes(app: Express) {
       }
       res.json(account);
     } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 

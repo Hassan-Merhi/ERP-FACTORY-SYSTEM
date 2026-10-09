@@ -3,7 +3,7 @@ import {
   insertInfrastructureVoucherTx,
 } from "../../services/accounting/infrastructureVoucherIdentity";
 import Decimal from "decimal.js";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { db, type DbTransaction } from "../../db";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
 import * as schema from "@shared/schema";
@@ -52,7 +52,47 @@ interface IncomeExpenseBalanceRow {
   activity: string;
 }
 
-/** Debit-positive period activity of every Income/Expense account, exact. */
+/** The date an entry counts on: its effective date when set, else its voucher date (wave 12). */
+const ACCOUNTING_DATE = sql`COALESCE(v.effective_date, v.voucher_date)`;
+
+/**
+ * Debit-positive balance of every Income/Expense account through a date, exact:
+ * its opening plus every posted entry dated (effective date, else voucher date)
+ * on or before it, earlier closing journals included. The closing line is the
+ * opposite of this balance, so after the close every Income/Expense account is
+ * exactly zero at the period end, whatever earlier closes did (wave 12: a close
+ * no longer zeroes openings, which used to close an opening twice).
+ */
+async function incomeExpenseBalanceThroughTx(
+  tx: DbTransaction,
+  companyId: number,
+  throughDate: string
+): Promise<IncomeExpenseBalanceRow[]> {
+  const result = await tx.execute(sql`
+    SELECT la.id, la.name, la.account_type, la.opening_balance::text AS opening_balance, la.opening_balance_side,
+           COALESCE((
+             SELECT SUM(ve.debit_amount::numeric - ve.credit_amount::numeric)
+             FROM voucher_entries ve
+             JOIN vouchers v ON v.id = ve.voucher_id
+             WHERE ve.ledger_account_id = la.id
+               AND v.company_id = ${companyId}
+               AND v.optional = false
+               AND v.deleted_at IS NULL
+               AND ${ACCOUNTING_DATE} <= ${throughDate}
+           ), 0)::text AS activity
+    FROM ledger_accounts la
+    WHERE la.company_id = ${companyId}
+      AND LOWER(TRIM(la.account_type)) IN (${profitAndLossTypesSql()})
+    ORDER BY la.id
+  `);
+  return result.rows as unknown as IncomeExpenseBalanceRow[];
+}
+
+/**
+ * Debit-positive period activity of every Income/Expense account, exact, by
+ * voucher date: used only to reconstruct the openings a legacy close (one
+ * recorded before snapshots existed, which dated by voucher_date) zeroed.
+ */
 async function incomeExpenseActivityTx(
   tx: DbTransaction,
   companyId: number,
@@ -80,10 +120,14 @@ async function incomeExpenseActivityTx(
 }
 
 /**
- * Closes a fiscal period: one journal moves every Income/Expense balance
- * (period activity plus any opening balance) to retained earnings, the
- * accounts' opening balances are zeroed (and snapshotted for a reopen), and
- * the closed-period guard then locks the books through periodEndDate.
+ * Closes a fiscal period: one journal moves every Income/Expense balance at
+ * the period end (opening plus every entry dated, by effective date else
+ * voucher date, on or before periodEndDate, earlier closing journals included)
+ * to retained earnings, so each account is exactly zero after the close and
+ * retained earnings move by exactly the net profit closed. Openings are left
+ * in place (wave 12; earlier closes also zeroed them, which closed an opening
+ * twice). The closed-period guard then locks the books through periodEndDate,
+ * and the opening-balance lock freezes every master opening.
  *
  * Periods must be contiguous: after a close, the next starts the following
  * day; the first close must start no later than the earliest posted
@@ -122,14 +166,14 @@ export async function closeFiscalPeriod(
       }
     } else {
       const earlier = await tx.execute(sql`
-        SELECT MIN(v.voucher_date)::text AS earliest
+        SELECT MIN(${ACCOUNTING_DATE})::text AS earliest
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id
         WHERE v.company_id = ${companyId}
           AND v.optional = false
           AND v.deleted_at IS NULL
-          AND v.voucher_date < ${periodStartDate}
+          AND ${ACCOUNTING_DATE} < ${periodStartDate}
           AND LOWER(TRIM(la.account_type)) IN (${profitAndLossTypesSql()})
       `);
       const earliest = (earlier.rows[0] as { earliest: string | null } | undefined)?.earliest;
@@ -140,7 +184,7 @@ export async function closeFiscalPeriod(
       }
     }
 
-    const accounts = await incomeExpenseActivityTx(tx, companyId, periodStartDate, periodEndDate);
+    const accounts = await incomeExpenseBalanceThroughTx(tx, companyId, periodEndDate);
     if (accounts.length === 0) throw new FiscalPeriodCloseError("No Income or Expense accounts found for this company");
 
     interface ClosingLine {
@@ -226,13 +270,10 @@ export async function closeFiscalPeriod(
       );
     }
 
-    const openingSnapshot: schema.FiscalCloseOpeningBalance[] = accounts
-      .filter((account) => !new Decimal(account.opening_balance || "0").isZero())
-      .map((account) => ({
-        accountId: account.id,
-        openingBalance: new Decimal(account.opening_balance || "0").toFixed(2),
-        openingBalanceSide: account.opening_balance_side || "Dr",
-      }));
+    // Openings are left in place (wave 12): the closing line already includes
+    // them, so zeroing them too closed each opening twice. An empty snapshot
+    // records that this close changed no opening (null marks a legacy close).
+    const openingSnapshot: schema.FiscalCloseOpeningBalance[] = [];
 
     const [closure] = await tx
       .insert(schema.fiscalPeriodClosures)
@@ -251,21 +292,6 @@ export async function closeFiscalPeriod(
         openingBalanceSnapshot: openingSnapshot,
       })
       .returning();
-
-    if (openingSnapshot.length > 0) {
-      await tx
-        .update(schema.ledgerAccounts)
-        .set({ openingBalance: "0", openingBalanceSide: "Dr" })
-        .where(
-          and(
-            eq(schema.ledgerAccounts.companyId, companyId),
-            inArray(
-              schema.ledgerAccounts.id,
-              openingSnapshot.map((entry) => entry.accountId)
-            )
-          )
-        );
-    }
 
     return closure;
   });

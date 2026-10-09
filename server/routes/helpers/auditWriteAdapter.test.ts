@@ -34,7 +34,8 @@ describe("auditWriteAdapter", () => {
     await logAudit(event);
 
     expect(writeAuditEventMock).toHaveBeenCalledTimes(1);
-    expect(writeAuditEventMock).toHaveBeenCalledWith(event);
+    // Wave 12: the executor (the caller's transaction) is forwarded; none here.
+    expect(writeAuditEventMock).toHaveBeenCalledWith(event, undefined);
   });
 
   it("propagates audit failures so existing critical callers keep their current policy", async () => {

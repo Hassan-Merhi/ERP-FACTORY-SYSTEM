@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 
-import { db } from "../server/db";
-import { accountingPostingRequests, auditLog, voucherEntries, vouchers } from "../shared/schema";
+import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
+import { accountingPostingRequests, voucherEntries, vouchers } from "../shared/schema";
 import {
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
@@ -61,7 +62,7 @@ async function clearPosting() {
     .where(
       and(eq(accountingPostingRequests.companyId, ctx.companyId), eq(accountingPostingRequests.idempotencyKey, key))
     );
-  await db.delete(auditLog).where(and(eq(auditLog.companyId, ctx.companyId), eq(auditLog.recordIdentifier, key)));
+  await deleteAuditLogRowsForTests(pool, "company_id = $1 AND record_identifier = $2", [ctx.companyId, key]);
 
   const rows = await db
     .select({ id: vouchers.id })

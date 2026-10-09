@@ -387,4 +387,73 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "أوامر الشراء لهذه الحاوية بعملة غير الدولار الأمريكي دون سعر صرف مؤكد: في ظل الجرد المستمر لا يمكن تقييم المخزون، لذلك تم رفض التفريغ. سجّل أوامر الشراء بالدولار الأمريكي أولاً.",
     fr: "Les bons de commande de ce conteneur sont dans une devise autre que l’USD sans taux de change confirmé : en inventaire permanent le stock ne peut pas être valorisé, le déchargement est donc refusé. Enregistrez d’abord les bons de commande en USD.",
   },
+  // Wave 8.4 continuation: factory POS sale refusals (services/accounting/factoryPosReceipt.ts).
+  {
+    en: "This sale is in a currency with no confirmed exchange rate on or before its date. Enter the factory exchange rate for that currency first.",
+    ar: "هذا البيع بعملة ليس لها سعر صرف مؤكد في تاريخه أو قبله. أدخل سعر صرف المصنع لتلك العملة أولاً.",
+    fr: "Cette vente est dans une devise sans taux de change confirmé à sa date ou avant. Saisissez d’abord le taux de change de l’usine pour cette devise.",
+  },
+  {
+    en: "Choose the cash account that receives this sale's payment.",
+    ar: "اختر حساب النقدية الذي يستلم دفعة هذا البيع.",
+    fr: "Choisissez le compte de caisse qui reçoit le paiement de cette vente.",
+  },
+  {
+    en: "A credit sale with an unpaid amount needs a customer.",
+    ar: "يحتاج البيع الآجل الذي له مبلغ غير مدفوع إلى عميل.",
+    fr: "Une vente à crédit avec un montant impayé nécessite un client.",
+  },
+  {
+    en: "A factory POS sale voucher does not balance",
+    ar: "قيد بيع نقطة البيع في المصنع غير متوازن",
+    fr: "La pièce de vente du point de vente de l’usine n’est pas équilibrée",
+  },
+  // Wave 12 (A): ledger integrity refusals (stockVoucherTypes.ts, closedPeriodError.ts,
+  // ledger/zero-balances.ts, docs-users/companyImportRoutes.ts).
+  {
+    en: "Production, consumption, mixed and stock adjustment vouchers can only be created and edited from the stock adjustment form.",
+    ar: "لا يمكن إنشاء سندات الإنتاج والاستهلاك والسندات المختلطة وسندات تسوية المخزون وتعديلها إلا من نموذج تسوية المخزون.",
+    fr: "Les pièces de production, de consommation, mixtes et d’ajustement de stock ne peuvent être créées et modifiées que depuis le formulaire d’ajustement de stock.",
+  },
+  {
+    en: "Accounting period closed: the books are closed through ${closedThrough}, so an opening balance cannot be created or changed. Post an adjusting journal dated after the closed period instead.",
+    ar: "الفترة المحاسبية مغلقة: الدفاتر مغلقة حتى {{0}}، لذلك لا يمكن إنشاء رصيد افتتاحي أو تغييره. سجّل بدلاً من ذلك قيد تسوية مؤرخاً بعد الفترة المغلقة.",
+    fr: "Période comptable clôturée : les livres sont clôturés jusqu'au {{0}}, un solde d’ouverture ne peut donc pas être créé ni modifié. Passez plutôt une écriture d’ajustement datée après la période clôturée.",
+  },
+  {
+    en: "Opening balances cannot be zeroed after a fiscal period has been closed. Post an adjusting journal dated after the closed period instead.",
+    ar: "لا يمكن تصفير الأرصدة الافتتاحية بعد إغلاق فترة مالية. سجّل بدلاً من ذلك قيد تسوية مؤرخاً بعد الفترة المغلقة.",
+    fr: "Les soldes d’ouverture ne peuvent pas être remis à zéro après la clôture d’un exercice. Passez plutôt une écriture d’ajustement datée après la période clôturée.",
+  },
+  {
+    en: "The file contains posted vouchers whose debits do not equal their credits. They cannot be imported: correct them in the source company first.",
+    ar: "يحتوي الملف على سندات مرحّلة لا تتساوى مدينتها مع دائنتها. لا يمكن استيرادها: صحّحها في الشركة المصدر أولاً.",
+    fr: "Le fichier contient des pièces comptabilisées dont les débits ne sont pas égaux aux crédits. Elles ne peuvent pas être importées : corrigez-les d’abord dans la société source.",
+  },
+  // Wave 12 (B): audit trail and destructive routes.
+  {
+    en: "This company has accounting history (vouchers, stock, fiscal closures or balances) and cannot be deleted. Deactivate it instead.",
+    ar: "لهذه الشركة سجل محاسبي (سندات أو مخزون أو إقفالات فترات مالية أو أرصدة) ولا يمكن حذفها. قم بتعطيلها بدلاً من ذلك.",
+    fr: "Cette société a un historique comptable (pièces, stock, clôtures d’exercice ou soldes) et ne peut pas être supprimée. Désactivez-la plutôt.",
+  },
+  {
+    en: "Only an Owner of the company can delete it.",
+    ar: "لا يمكن حذف الشركة إلا من قبل مالكها.",
+    fr: "Seul un propriétaire de la société peut la supprimer.",
+  },
+  {
+    en: "This orphaned POS sale has ledger or stock lines, so it is posted and cannot be permanently deleted. Delete it as a voucher instead, which keeps its history.",
+    ar: "يحتوي بيع نقطة البيع اليتيم هذا على بنود قيود أو مخزون، فهو مرحّل ولا يمكن حذفه نهائياً. احذفه كسند بدلاً من ذلك، مما يحتفظ بسجله.",
+    fr: "Cette vente PDV orpheline a des lignes comptables ou de stock : elle est comptabilisée et ne peut pas être supprimée définitivement. Supprimez-la plutôt comme pièce, ce qui conserve son historique.",
+  },
+  {
+    en: "This employee is named on voucher lines, salary advances or payroll, so it cannot be permanently deleted. Keep it in Deleted Items.",
+    ar: "هذا الموظف مذكور في بنود سندات أو سلف رواتب أو كشوف رواتب، لذا لا يمكن حذفه نهائياً. أبقه في العناصر المحذوفة.",
+    fr: "Cet employé figure sur des lignes de pièces, des avances sur salaire ou la paie : il ne peut pas être supprimé définitivement. Conservez-le dans les éléments supprimés.",
+  },
+  {
+    en: "This customer is named on voucher lines or sales, so it cannot be permanently deleted. Keep it in Deleted Items.",
+    ar: "هذا العميل مذكور في بنود سندات أو مبيعات، لذا لا يمكن حذفه نهائياً. أبقه في العناصر المحذوفة.",
+    fr: "Ce client figure sur des lignes de pièces ou des ventes : il ne peut pas être supprimé définitivement. Conservez-le dans les éléments supprimés.",
+  },
 ];

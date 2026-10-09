@@ -11,7 +11,7 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
-import { logAudit, snapshotVoucherEntries, buildVoucherChangesForUpdate } from "../../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import { vouchers, voucherEntries, customerBalances, interCompanyTransfers } from "@shared/schema";
 import { eq, and, or } from "drizzle-orm";
@@ -30,6 +30,7 @@ import {
   voucherTypeRequiresBalance,
 } from "../../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { stockVoucherTypeRefusal } from "../../../services/accounting/stockVoucherTypes";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -81,6 +82,10 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
       // (wave 9 ledger safety). Changes within the same class keep working, and a
       // change to a balanced type is validated with the balanced rule below.
       const nextVoucherType = voucher.voucherType ?? existingVoucher.voucherType;
+      // Wave 12: stock adjustment vouchers are edited only through PUT /api/stock-adjustments/:id,
+      // and no voucher may be re-typed to or from a stock adjustment type here.
+      const stockTypeRefusal = stockVoucherTypeRefusal(existingVoucher.voucherType, nextVoucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
       if (
         nextVoucherType !== existingVoucher.voucherType &&
         voucherTypeRequiresBalance(existingVoucher.voucherType) &&
@@ -237,6 +242,20 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
 
         // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
         await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
+
+        // Wave 12 (decision 2): full before/after snapshot in this transaction; a
+        // failed audit write refuses the edit (it used to be written after commit).
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: existingVoucher.companyId,
+          },
+          action: "update",
+          voucherId: id,
+          before: { voucher: existingVoucher, entries: oldEntries },
+          after: { voucher: updatedVoucher, entries: createdEntries },
+        });
       });
 
       // An edited duty/transport/office charge voucher re-prices the offloaded bales.
@@ -248,19 +267,6 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
           newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
         })
       );
-
-      const _oldEntriesSnap = await snapshotVoucherEntries(oldEntries).catch(() => []);
-      const _newEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId: req.session.currentCompanyId!,
-        action: "update",
-        tableName: "vouchers",
-        recordId: id,
-        recordIdentifier: updatedVoucher.voucherNumber,
-        changes: buildVoucherChangesForUpdate(existingVoucher, updatedVoucher, _oldEntriesSnap, _newEntriesSnap),
-      });
 
       try {
         const [ict] = await db
@@ -281,6 +287,7 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
                 .from(voucherEntries)
                 .where(eq(voucherEntries.voucherId, otherVoucherId));
               await db.transaction(async (tx) => {
+                const auditBefore = await readVoucherAuditState(tx, otherVoucherId);
                 for (const e of otherEntries) {
                   await tx
                     .update(voucherEntries)
@@ -294,6 +301,19 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
                   .update(vouchers)
                   .set({ totalAmount: newTotal.toFixed(2) })
                   .where(eq(vouchers.id, otherVoucherId));
+                // Wave 12: the counterpart's rescaled lines are audited under its own company.
+                await writeVoucherAuditTx(tx, {
+                  actor: {
+                    userId: req.session.userId,
+                    username: req.session.username,
+                    companyId: otherVoucher.companyId,
+                  },
+                  action: "update",
+                  voucherId: otherVoucherId,
+                  before: auditBefore,
+                  after: await readVoucherAuditState(tx, otherVoucherId),
+                  extra: { interCompanyCounterpartOf: { new: { voucherId: id } } },
+                });
               });
               await db
                 .update(fde)

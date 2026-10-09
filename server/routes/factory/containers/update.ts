@@ -17,6 +17,7 @@ import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntr
 import { eq, and, or, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
 import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
 
@@ -253,14 +254,6 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         }
       }
 
-      const [updated] = await db
-        .update(factoryContainers)
-        .set(updateData)
-        .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)))
-        .returning();
-
-      if (!updated) return res.status(404).json({ message: "Container not found" });
-
       // ── Sync freight voucher ───────────────────────────────────────────────
       // Guard: only re-run FX-dependent freight entry computation when a
       // freight-relevant field was actually included in this request body.
@@ -296,13 +289,37 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         )
         .limit(1);
 
-      const newFreightAmt = toMoney(updated.freight);
-      const newFreightAcctId = updated.freightAccountId ?? null;
-      const newFreightPaidBy = updated.freightPaidBy || "supplier";
-      const newFreightOwnAcctId = updated.freightOwnAccountId ?? null;
-      const freightCcy = updated.freightCurrencyCode || updated.currencyCode || "USD";
+      // Wave 8.4 continuation: the commission journal FACTORY-COMM-{container}
+      // follows every change to the commission or what it is posted at.
+      const commissionNeedsSync = [
+        "commissionAmount",
+        "commissionCurrencyCode",
+        "commissionAccountId",
+        "commissionSupplierId",
+        "supplierId",
+        "currencyCode",
+        "fxRateToUsd",
+        "fxRateSource",
+        "ratePerKg",
+        "arrivalDate",
+      ].some((f) => f in b);
 
-      await db.transaction(async (tx) => {
+      // The container row, its freight voucher and its commission journal are
+      // written in one transaction.
+      const updated = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(factoryContainers)
+          .set(updateData)
+          .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)))
+          .returning();
+        if (!updated) return null;
+
+        const newFreightAmt = toMoney(updated.freight);
+        const newFreightAcctId = updated.freightAccountId ?? null;
+        const newFreightPaidBy = updated.freightPaidBy || "supplier";
+        const newFreightOwnAcctId = updated.freightOwnAccountId ?? null;
+        const freightCcy = updated.freightCurrencyCode || updated.currencyCode || "USD";
+
         if (newFreightAmt.greaterThan(0) && newFreightAcctId) {
           if (existingFV) {
             if (freightNeedsSync) {
@@ -425,7 +442,12 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
           await tx.delete(vouchers).where(eq(vouchers.id, existingFV.id));
         }
+
+        if (commissionNeedsSync) await syncContainerCommissionJournalTx(tx, companyId, id);
+        return updated;
       });
+
+      if (!updated) return res.status(404).json({ message: "Container not found" });
 
       // ── Sync CONTAINER_IMPORT daybook entry ────────────────────────────────
       // If any description-relevant fields were changed (container number, supplier,

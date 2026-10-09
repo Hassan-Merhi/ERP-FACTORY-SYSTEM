@@ -10,7 +10,8 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
-import { logAudit, syncEmployeeBalancesFromEntries } from "../../_helpers";
+import { syncEmployeeBalancesFromEntries } from "../../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import type Decimal from "decimal.js";
 import { vouchers } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -90,6 +91,7 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
         locationId: existingVoucher.locationId,
       };
       await db.transaction(async (tx) => {
+        const auditBefore = await readVoucherAuditState(tx, id);
         const ledgerBefore = await voucherInventoryLedgerTx(tx, toggleVoucher);
         let toggleDeltas: Decimal[] = [];
         let toggleRevision: number | null = null;
@@ -141,47 +143,26 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
               : null,
           });
         }
-      });
-      // Log the optional status change to audit log
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId: req.session.currentCompanyId!,
-        action: "update",
-        tableName: "vouchers",
-        recordId: id,
-        recordIdentifier: existingVoucher.voucherNumber,
-        changes: { optional: { old: wasOptional, new: willBeOptional } },
-      });
 
-      // Sync employee balances when optional status changes
-      if (wasOptional !== willBeOptional && req.session.currentCompanyId) {
-        const entries = await storage.getVoucherEntriesByVoucher(id);
-        if (willBeOptional) {
-          // Voucher is becoming optional - reverse entries' effects
-          await syncEmployeeBalancesFromEntries(
-            entries.map((e) => ({
-              ledgerAccountId: e.ledgerAccountId,
-              employeeId: e.employeeId,
-              debitAmount: e.debitAmount,
-              creditAmount: e.creditAmount,
-            })),
-            req.session.currentCompanyId,
-            true // reverse
-          );
-        } else {
-          // Voucher is becoming active - apply entries' effects
-          await syncEmployeeBalancesFromEntries(
-            entries.map((e) => ({
-              ledgerAccountId: e.ledgerAccountId,
-              employeeId: e.employeeId,
-              debitAmount: e.debitAmount,
-              creditAmount: e.creditAmount,
-            })),
-            req.session.currentCompanyId
-          );
+        // Wave 12: employee balances move in this transaction, and the toggle is
+        // audited with the full voucher snapshot before it commits.
+        if (wasOptional !== willBeOptional) {
+          await syncEmployeeBalancesFromEntries(auditBefore.entries, existingVoucher.companyId, willBeOptional, tx);
         }
-      }
+        const auditAfter = await readVoucherAuditState(tx, id);
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: existingVoucher.companyId,
+          },
+          action: "update",
+          voucherId: id,
+          before: auditBefore,
+          after: auditAfter,
+          extra: { optional: { old: wasOptional, new: willBeOptional } },
+        });
+      });
 
       // Fetch updated voucher outside transaction
       const updated = await storage.getVoucherById(id);

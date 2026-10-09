@@ -22,6 +22,7 @@ import {
   updateStockAdjustmentSchema,
 } from "@shared/schema";
 import { stockAdjustmentCreateHandler } from "./stockAdjustmentCreateHandler";
+import { requireActionAccess } from "../lib/permissionMiddleware";
 import { allStockItemsOwned, ownLocationIds } from "./helpers/companyOwnership";
 import { parseMoneyInput, sumMoney, toMoney } from "../lib/money";
 
@@ -48,7 +49,15 @@ export function registerStockAdjustmentWasteRoutes(app: Express) {
   // The create path lives in ./stockAdjustmentCreateHandler so it can align the
   // voucher with the company's native/base currency rather than the browser's
   // display-currency toggle. The route position and guard chain are unchanged.
-  app.post("/api/stock-adjustments", requireAuth, requireNonPOS, stockAdjustmentCreateHandler);
+  // Wave 12: the form creates its voucher here (POST /api/vouchers refuses stock
+  // types), so the voucher-create permission that route required applies here.
+  app.post(
+    "/api/stock-adjustments",
+    requireAuth,
+    requireNonPOS,
+    requireActionAccess("act_create_voucher"),
+    stockAdjustmentCreateHandler
+  );
 
   // Stock Adjustments - PUT endpoint (update)
   app.put("/api/stock-adjustments/:id", requireAuth, requireNonPOS, async (req, res) => {

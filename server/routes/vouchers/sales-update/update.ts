@@ -10,7 +10,8 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
-import { logAudit, syncEmployeeBalancesFromEntries, buildVoucherChangesForUpdate } from "../../_helpers";
+import { syncEmployeeBalancesFromEntries } from "../../_helpers";
+import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { applyVoucherOptionalInventoryChange } from "./optionalInventoryEvidence";
@@ -25,6 +26,7 @@ import {
   type ReplacementEntryTargets,
 } from "../../../services/accounting/voucherEntryReplacement";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
+import { stockVoucherTypeRefusal } from "../../../services/accounting/stockVoucherTypes";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
@@ -55,7 +57,24 @@ export function registerVoucherUpdateRoutes(app: Express) {
         const updates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) updates.voucherDate = req.body.voucherDate;
         if (Object.keys(updates).length > 0) {
-          await db.update(vouchers).set(updates).where(eq(vouchers.id, id));
+          // Wave 12: the POS date edit is audited in its own transaction (it was unaudited).
+          await db.transaction(async (tx) => {
+            const before = await readVoucherAuditState(tx, id);
+            await tx.update(vouchers).set(updates).where(eq(vouchers.id, id));
+            const after = await readVoucherAuditState(tx, id);
+            await writeVoucherAuditTx(tx, {
+              actor: {
+                userId: req.session.userId,
+                username: req.session.username,
+                companyId: existingVoucher.companyId,
+              },
+              action: "update",
+              voucherId: id,
+              before,
+              after,
+              extra: { posDateEdit: { new: true } },
+            });
+          });
         }
         return res.json({ id, ...updates });
       }
@@ -80,6 +99,9 @@ export function registerVoucherUpdateRoutes(app: Express) {
       const wasOptional = existingVoucher.optional;
       const willBeOptional = req.body.optional !== undefined ? req.body.optional === true : wasOptional;
       const replacesEntries = Array.isArray(req.body.entries);
+      // Wave 12: a stock adjustment voucher's lines are replaced only through PUT /api/stock-adjustments/:id.
+      const stockTypeRefusal = replacesEntries ? stockVoucherTypeRefusal(existingVoucher.voucherType) : null;
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
       // Lines are replaced only when the request sends them. A header-only edit
       // (date, description, optional flag) used to delete every line.
@@ -101,7 +123,8 @@ export function registerVoucherUpdateRoutes(app: Express) {
         throw validationError;
       }
 
-      await db.transaction(async (tx) => {
+      const { updated, newEntries } = await db.transaction(async (tx) => {
+        const before = await readVoucherAuditState(tx, id);
         const voucherUpdates: VoucherUpdate = {};
         if (req.body.voucherDate !== undefined) voucherUpdates.voucherDate = req.body.voucherDate;
         if (req.body.description !== undefined) voucherUpdates.description = req.body.description;
@@ -134,52 +157,35 @@ export function registerVoucherUpdateRoutes(app: Express) {
 
         // Perpetual inventory (wave 8.3): a stock adjustment voucher carries its inventory line.
         await syncStockAdjustmentInventoryTx(tx, existingVoucher.companyId, id);
+
+        const after = await readVoucherAuditState(tx, id);
+        if (!after.voucher) throw new Error("Voucher not found after update");
+
+        // Wave 12: employee balances move in this transaction (they used to be
+        // written on the pool after commit).
+        if (!wasOptional) {
+          await syncEmployeeBalancesFromEntries(before.entries, existingVoucher.companyId, true, tx);
+        }
+        if (!after.voucher.optional) {
+          await syncEmployeeBalancesFromEntries(after.entries, existingVoucher.companyId, false, tx);
+        }
+
+        // Wave 12 (decision 2): full before/after snapshot in the same transaction;
+        // a failed audit write refuses the edit.
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: existingVoucher.companyId,
+          },
+          action: "update",
+          voucherId: id,
+          before,
+          after,
+        });
+        return { updated: after.voucher, newEntries: after.entries };
       });
 
-      const updated = await storage.getVoucherById(id);
-      if (!updated) return res.status(404).json({ message: "Voucher not found after update" });
-      const newEntries = await storage.getVoucherEntriesByVoucher(id);
-
-      if (!wasOptional && req.session.currentCompanyId) {
-        await syncEmployeeBalancesFromEntries(
-          oldEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId,
-          true
-        );
-      }
-
-      const isNowOptional = req.body.optional !== undefined ? req.body.optional : wasOptional;
-      if (!isNowOptional && req.session.currentCompanyId) {
-        await syncEmployeeBalancesFromEntries(
-          newEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId
-        );
-      }
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: updated.id,
-          recordIdentifier: updated.voucherNumber,
-          changes: buildVoucherChangesForUpdate(existingVoucher, updated, oldEntries, newEntries),
-        });
-      } catch {
-        /* non-fatal */
-      }
       res.json({ ...updated, entries: newEntries });
     } catch (error: unknown) {
       res.status(errorStatus(error)).json({ message: getErrorMessage(error) });

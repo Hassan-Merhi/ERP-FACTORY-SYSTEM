@@ -21,6 +21,7 @@ vi.mock("../server/auth", async (importOriginal) => {
 });
 
 import { db, pool } from "../server/db";
+import { deleteAuditLogRowsForTests } from "./helpers/auditLogCleanup";
 import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
 import { buildTrialBalance } from "../server/services/accounting/integrity/trialBalance";
 import { calculateNetPositionAsOf } from "../server/helpers/calculateNetPositionAsOf";
@@ -134,7 +135,7 @@ async function cleanup() {
     await withFixtureTransaction(async (client) => {
       await client.query("DELETE FROM vouchers WHERE company_id = $1", [id]);
     });
-    await pool.query("DELETE FROM audit_log WHERE company_id = $1", [id]).catch(() => undefined);
+    await deleteAuditLogRowsForTests(pool, "company_id = $1", [id]).catch(() => undefined);
     await pool.query("DELETE FROM customer_balances WHERE company_id = $1", [id]);
     await pool.query("DELETE FROM customers WHERE company_id = $1", [id]);
     await pool.query("DELETE FROM suppliers WHERE company_id = $1", [id]);
