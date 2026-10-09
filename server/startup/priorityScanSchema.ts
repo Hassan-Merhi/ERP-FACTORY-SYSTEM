@@ -65,9 +65,11 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
       allocated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       reversed_at TIMESTAMPTZ,
       reversed_by TEXT,
-      reversal_reason TEXT,
-      CONSTRAINT fpaa_company_bale_unique UNIQUE (company_id, bale_id)
+      reversal_reason TEXT
     )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS fpaa_company_bale_active_unique
+     ON factory_priority_auto_allocations(company_id, bale_id)
+     WHERE reversed_at IS NULL`,
   `CREATE INDEX IF NOT EXISTS fpaa_company_order_active_idx
      ON factory_priority_auto_allocations(company_id, order_id)
      WHERE reversed_at IS NULL`,
