@@ -21,6 +21,20 @@ describe("allocateCents", () => {
     expect(parts.map((part) => part.toFixed(2))).toEqual(["20.00", "10.00", "3.33"]);
   });
 
+  it("never turns a share negative when several shares would round up", () => {
+    const parts = allocateCents(["1", "1", "1", "1"], "0.02");
+    expect(parts.map((part) => part.toFixed(2))).toEqual(["0.01", "0.01", "0.00", "0.00"]);
+    expect(parts.every((part) => !part.isNegative())).toBe(true);
+  });
+
+  it("splits a negative total the same way, with the sign restored", () => {
+    expect(allocateCents(["1", "1", "1"], "-100").map((part) => part.toFixed(2))).toEqual([
+      "-33.34",
+      "-33.33",
+      "-33.33",
+    ]);
+  });
+
   it("gives the whole total to the first line when no weight is positive", () => {
     expect(allocateCents(["0", "0"], "5").map((part) => part.toFixed(2))).toEqual(["5.00", "0.00"]);
     expect(allocateCents([], "5")).toEqual([]);
