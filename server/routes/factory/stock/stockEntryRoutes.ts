@@ -400,41 +400,40 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         // Keep the daybook evidence atomic with inventory receipt and
         // auto-allocation. A failure must roll back the entire Stock Entry,
         // rather than return a retryable 400 after bales already committed.
-      const today = effectiveDateStr;
-      // Build a meaningful description with product names and reference codes
-      const productGroups = new Map<string, string[]>();
-      for (const bale of bales) {
-        const name = bale.productName || bale.articleCode || "Unknown";
-        const ref = bale.referenceNumber || bale.baleCode || "";
-        if (!productGroups.has(name)) productGroups.set(name, []);
-        if (ref) productGroups.get(name)!.push(ref);
-      }
-      const descParts = Array.from(productGroups.keys());
-      const stockEntryDesc = `${bales.length} bale${bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
-      const totalBaleValue = sumMoney(bales.map((b) => b._product?.productionPrice)).toNumber();
-      const baleMetaJson = JSON.stringify({
-        bales: bales.map((b) => ({
-          id: b.id,
-          ref: b.referenceNumber,
-          productName: b.productName || b.articleCode || "Unknown",
-          weightKg: b.weightKg,
-          status: b.status || "IN_STOCK",
-          workerId: b.finalizedBy ?? null,
-          workerName: b.workerName ?? null,
-          productionPositionId: b.productionPositionId ?? null,
-          productionPositionName: b.productionPositionName ?? null,
-        })),
-      });
-      await writeDaybookEntry(tx, {
-        companyId,
-        txDate: today,
-        txType: "BALE_STOCK_ENTRY",
-        description: stockEntryDesc,
-        amountCurrency: totalBaleValue,
-        amountUsd: totalBaleValue,
-        metaJson: baleMetaJson,
-      });
-
+        const today = effectiveDateStr;
+        // Build a meaningful description with product names and reference codes
+        const productGroups = new Map<string, string[]>();
+        for (const bale of bales) {
+          const name = bale.productName || bale.articleCode || "Unknown";
+          const ref = bale.referenceNumber || bale.baleCode || "";
+          if (!productGroups.has(name)) productGroups.set(name, []);
+          if (ref) productGroups.get(name)!.push(ref);
+        }
+        const descParts = Array.from(productGroups.keys());
+        const stockEntryDesc = `${bales.length} bale${bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
+        const totalBaleValue = sumMoney(bales.map((b) => b._product?.productionPrice)).toNumber();
+        const baleMetaJson = JSON.stringify({
+          bales: bales.map((b) => ({
+            id: b.id,
+            ref: b.referenceNumber,
+            productName: b.productName || b.articleCode || "Unknown",
+            weightKg: b.weightKg,
+            status: b.status || "IN_STOCK",
+            workerId: b.finalizedBy ?? null,
+            workerName: b.workerName ?? null,
+            productionPositionId: b.productionPositionId ?? null,
+            productionPositionName: b.productionPositionName ?? null,
+          })),
+        });
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: today,
+          txType: "BALE_STOCK_ENTRY",
+          description: stockEntryDesc,
+          amountCurrency: totalBaleValue,
+          amountUsd: totalBaleValue,
+          metaJson: baleMetaJson,
+        });
 
         return { bales, totalWeight, autoPriorityAllocations, automaticPriorityModeEnabled: automaticMode };
       });
