@@ -24,8 +24,7 @@ export function valueMarketRow(row: MarketRow, includeOffloadingCost: boolean): 
   // Returns are already netted out of soldQty and revenue by the report API.
   const profit = row.revenue - row.soldQty * unitCost;
   const marginPct = row.revenue === 0 ? 0 : (profit / row.revenue) * 100;
-  const marketStatus: MarketRow["marketStatus"] =
-    profit < 0 ? "losing" : marginPct >= 15 ? "strong" : "watch";
+  const marketStatus: MarketRow["marketStatus"] = profit < 0 ? "losing" : marginPct >= 15 ? "strong" : "watch";
 
   return {
     ...row,
