@@ -1,7 +1,7 @@
 /**
  * Distribute one fixed bale target across workers when a production link ends.
- * No fractional bales and no duplicated target: allocated shares must sum
- * exactly to the shared target.
+ * Whole targets split in whole bales; existing fractional targets split to
+ * hundredths (the database column's scale). No duplicated targets.
  */
 export interface WorkerBaleAllocation {
   workerId: number;
@@ -15,9 +15,19 @@ export class ProductionTargetSplitError extends Error {
   }
 }
 
+/** Existing linked targets can contain two decimal places. Reject invalid precision. */
+export function isValidBaleTarget(value: number): boolean {
+  return (
+    Number.isFinite(value) &&
+    value >= 0 &&
+    Number.isSafeInteger(Math.round(value * 100)) &&
+    Math.abs(value - Math.round(value * 100) / 100) < 1e-8
+  );
+}
+
 export function evenSplitBales(total: number, workerIds: number[]): WorkerBaleAllocation[] {
-  if (!Number.isSafeInteger(total) || total < 0) {
-    throw new ProductionTargetSplitError("Shared target must be a non-negative whole number of bales");
+  if (!isValidBaleTarget(total)) {
+    throw new ProductionTargetSplitError("Shared target must be a non-negative number with at most two decimals");
   }
   if (
     workerIds.length === 0 ||
@@ -28,11 +38,15 @@ export function evenSplitBales(total: number, workerIds: number[]): WorkerBaleAl
   }
 
   const ordered = [...workerIds].sort((a, b) => a - b);
-  const base = Math.floor(total / ordered.length);
-  const remainder = total % ordered.length;
+  // Keep integer targets as whole bales; for legacy decimal targets,
+  // divide integer hundredths to avoid floating-point remainder errors.
+  const scale = Number.isSafeInteger(total) ? 1 : 100;
+  const units = Math.round(total * scale);
+  const base = Math.floor(units / ordered.length);
+  const remainder = units % ordered.length;
   return ordered.map((workerId, index) => ({
     workerId,
-    targetBales: base + (index < remainder ? 1 : 0),
+    targetBales: (base + (index < remainder ? 1 : 0)) / scale,
   }));
 }
 
@@ -74,15 +88,15 @@ export function resolveUnlinkBaleAllocations(
       !Number.isSafeInteger(entry.workerId) ||
       !expectedIds.has(entry.workerId) ||
       allocations.has(entry.workerId) ||
-      !Number.isSafeInteger(entry.targetBales) ||
-      entry.targetBales < 0
+      !isValidBaleTarget(entry.targetBales) ||
+      (Number.isSafeInteger(total) && !Number.isSafeInteger(entry.targetBales))
     ) {
-      throw new ProductionTargetSplitError("Allocations require unique workers and whole, non-negative bale counts");
+      throw new ProductionTargetSplitError("Allocations require unique workers and non-negative bale counts with valid precision");
     }
     allocations.set(entry.workerId, entry.targetBales);
-    sum += entry.targetBales;
+    sum += Math.round(entry.targetBales * 100);
   }
-  if (!Number.isSafeInteger(sum) || sum !== total) {
+  if (!Number.isSafeInteger(sum) || sum !== Math.round(total * 100)) {
     throw new ProductionTargetSplitError(`Worker allocations must add up to ${total} bales`);
   }
   return allocations;
