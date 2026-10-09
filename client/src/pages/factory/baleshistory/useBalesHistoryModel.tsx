@@ -182,6 +182,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/location-inventory"] });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/daybook"] });
       toast({ title: "Bale deleted" });
@@ -200,6 +202,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       toast({ title: "Status updated" });
     },
     onError: (error: ClientErrorLike) => {
@@ -214,6 +218,8 @@ export function useBalesHistoryModel() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list/priority-scan-configs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/factory/customer-orders/loading-list"] });
       setSelectedIds(new Set());
       setBulkStatus("");
       toast({ title: "Bulk status updated" });
