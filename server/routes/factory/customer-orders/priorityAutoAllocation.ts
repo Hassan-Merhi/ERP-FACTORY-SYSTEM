@@ -311,8 +311,10 @@ export async function runAutomaticPriorityPrintBatch(
   username: string | null,
   userId: string | null
 ): Promise<AutomaticPriorityPrintResult[]> {
-  if (!Array.isArray(items) || items.length === 0 || items.length > 200) {
-    throw new Error("Print batch must contain 1 to 200 bales");
+  // Public client preflight is capped at 200 by its route, while legacy
+  // /api/bale-label-prints can legitimately contain larger printing batches.
+  if (!Array.isArray(items) || items.length === 0 || items.length > 5000) {
+    throw new Error("Print batch must contain 1 to 5000 physical bales");
   }
   return db.transaction(async tx => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
