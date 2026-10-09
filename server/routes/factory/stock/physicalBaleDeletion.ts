@@ -23,7 +23,8 @@ import { createDatabaseStockMovementAdapter } from "../../../services/inventory/
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { writeDaybookEntry } from "../_helpers";
 import { reversePriorityAllocationForDeletedBaleTx } from "../customer-orders/priorityAutoAllocation";
-import type { PriorityScanTransaction } from "../customer-orders/priorityScanQueue";
+import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
+import { reactivateAutoCompletedPriorityLoadingsLockedTx, type PriorityScanTransaction } from "../customer-orders/priorityScanQueue";
 
 const movementAdapter = createDatabaseStockMovementAdapter();
 
@@ -59,6 +60,19 @@ export async function deletePhysicalFactoryBalesTx(
     throw new Error("One or more bales do not exist, are already deleted, or belong to another company");
   }
 
+  // Acquire all proforma locks in ascending order BEFORE any order or bale
+  // row locks, regardless of which bale the caller listed first.
+  const linkedOrders = await tx.select({
+    orderId: customerOrderBales.orderId,
+    proformaId: customerOrders.proformaIdUsed,
+  }).from(customerOrderBales)
+    .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
+    .where(and(inArray(customerOrderBales.baleId, baleIds), eq(customerOrders.companyId, companyId)));
+  for (const proformaId of [...new Set(linkedOrders.map(row => row.proformaId)
+    .filter((id): id is number => id != null))].sort((a,b) => a-b)) {
+    await acquireProformaCapacityTransactionLock(tx, { companyId, proformaId });
+  }
+  const affectedOrderIds = new Set<number>();
   const removed: DeletedPhysicalBale[] = [];
   // Preserve caller order; lock the customer/proforma through the reversal
   // service before taking a bale row lock (same hierarchy as Priority Scan).
@@ -80,9 +94,11 @@ export async function deletePhysicalFactoryBalesTx(
 
     // Remove all live loading links, recalculate totals, mark historic Priority
     // Scan allocations reversed and reopen satisfied priorities as required.
-    await reversePriorityAllocationForDeletedBaleTx(tx, {
+    const affected = await reversePriorityAllocationForDeletedBaleTx(tx, {
       companyId, baleId, actor: actorName, actorId, reason,
+      deferQueueRecovery: true,
     });
+    for (const orderId of affected) affectedOrderIds.add(orderId);
 
     if (links.length > 0) {
       await tx.insert(customerOrderBaleRemovals).values(links.map(link => ({
@@ -182,6 +198,12 @@ export async function deletePhysicalFactoryBalesTx(
     if (!updated) throw new Error("Bale deletion conflicted with another stock operation");
     removed.push(updated);
   }
+
+  // All linked bales are now deleted. Reopen every affected auto-completed
+  // loading together; old allocations on other orders are never retargeted.
+  await reactivateAutoCompletedPriorityLoadingsLockedTx(
+    tx, companyId, [...affectedOrderIds]
+  );
 
   const metaJson = JSON.stringify({
     bales: removed.map(b => ({
