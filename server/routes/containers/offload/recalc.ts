@@ -4,6 +4,8 @@
  * Registered by ./index.ts in the original order; Express resolves
  * first-match, so that order is behaviour.
  */
+import type Decimal from "decimal.js";
+import { lineAmount, MoneyDecimal, toMoney } from "../../../lib/money";
 import type { Express } from "express";
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
@@ -106,24 +108,27 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
             const allLineItems = [];
             for (const po of pos) allLineItems.push(...(await storage.getLineItemsByPO(po.id)));
 
-            const additionalCostPerBale = parseFloat(offloadRecord.additionalCostPerBale || "0");
-            const itemsMap = new Map<number, { stockItemId: number; totalQuantity: number; weightedRateSum: number }>();
+            // Exact sums: the reversed value is the same cents the offload added.
+            const itemsMap = new Map<number, { totalQuantity: Decimal; weightedRateSum: Decimal }>();
             for (const item of allLineItems) {
               const stockItemId = item.stockItemId;
               if (!stockItemId || stockItemId === 0) continue;
-              const quantity = parseFloat(item.quantity);
-              const rate = parseFloat(item.rate);
-              const existing = itemsMap.get(stockItemId);
-              if (existing) {
-                existing.totalQuantity += quantity;
-                existing.weightedRateSum += rate * quantity;
-              } else {
-                itemsMap.set(stockItemId, { stockItemId, totalQuantity: quantity, weightedRateSum: rate * quantity });
-              }
+              const existing = itemsMap.get(stockItemId) ?? {
+                totalQuantity: new MoneyDecimal(0),
+                weightedRateSum: new MoneyDecimal(0),
+              };
+              itemsMap.set(stockItemId, {
+                totalQuantity: existing.totalQuantity.plus(toMoney(item.quantity)),
+                weightedRateSum: existing.weightedRateSum.plus(lineAmount(item.quantity, item.rate)),
+              });
             }
 
-            for (const [stockItemId, data] of Array.from(itemsMap)) {
-              const estimatedValue = data.weightedRateSum + data.totalQuantity * additionalCostPerBale;
+            for (const [stockItemId, exact] of Array.from(itemsMap)) {
+              const estimated = exact.weightedRateSum.plus(
+                lineAmount(exact.totalQuantity, offloadRecord.additionalCostPerBale)
+              );
+              const estimatedValue = estimated.toNumber();
+              const data = { totalQuantity: exact.totalQuantity.toNumber() };
               await reverseInventoryByExactValue(
                 tx,
                 offloadRecord.locationId,
@@ -138,7 +143,9 @@ export function registerContainerOffloadRecalcRoutes(app: Express) {
                   stockItemId,
                   kind: "adjustment",
                   quantity: String(Math.abs(data.totalQuantity)),
-                  unitCost: String(data.totalQuantity !== 0 ? Math.max(estimatedValue / data.totalQuantity, 0) : 0),
+                  unitCost: exact.totalQuantity.isZero()
+                    ? "0"
+                    : MoneyDecimal.max(estimated.dividedBy(exact.totalQuantity), 0).toFixed(),
                   fromLocationId: offloadRecord.locationId,
                   occurredAt,
                   source: {

@@ -190,6 +190,16 @@ describe("PATCH /api/factory/bales/:id/weight", () => {
     expect(Number(row?.cost_per_kg)).toBeCloseTo(2.5, 4);
   });
 
+  it("prices the corrected weight exactly, rounding once to the cent", async () => {
+    const id = await createBale({ weightKg: "100.000", costPerKg: "1.115" });
+
+    // 3 x 1.115 is 3.3449999... as a float, which used to round down to 3.34.
+    const response = await agent.patch(`/api/factory/bales/${id}/weight`).send({ weightKg: 3 });
+
+    expect(response.status).toBe(200);
+    expect(Number((await baleRow(id))?.total_cost).toFixed(2)).toBe("3.35");
+  });
+
   it("rejects a zero, negative or non-numeric weight without changing the bale", async () => {
     const id = await createBale({ weightKg: "100.000", costPerKg: "2.00" });
     const before = await baleRow(id);
