@@ -27,6 +27,13 @@ export function useAgentLedger(
   setSelectedAccount: (account: Account | null) => void,
   toast: ToastFn
 ) {
+  // Factory routes resolve their own pinned company; shared ERP routes follow
+  // currentCompanyId, which may differ when another browser tab switches ERP.
+  const isFactory = typeof window !== "undefined" && window.location.pathname.startsWith("/factory/");
+  const accountsUrl = isFactory ? "/api/factory/agents/accounts" : "/api/accounts/all";
+  const pinnedUrl = isFactory ? "/api/factory/agents/pinned" : "/api/agent-accounts";
+  const statementPrefix = isFactory ? "/api/factory/agents" : "/api/accounts";
+
   // Preserve the server envelope in the shared cache and normalize only for
   // this screen. That keeps navigation safe for pages that share this query key.
   const { data: allAccounts = [], isLoading: accountsLoading } = useQuery<
@@ -34,13 +41,13 @@ export function useAgentLedger(
     Error,
     Account[]
   >({
-    queryKey: ["/api/accounts/all", selectedCompany?.id],
+    queryKey: [accountsUrl, selectedCompany?.id],
     select: selectAccountsArray,
     enabled: !!selectedCompany,
   });
 
   const { data: agentAccountRows = [], isLoading: agentsLoading } = useQuery<AgentAccount[]>({
-    queryKey: ["/api/agent-accounts"],
+    queryKey: [pinnedUrl, selectedCompany?.id],
     enabled: !!selectedCompany,
   });
 
@@ -48,7 +55,7 @@ export function useAgentLedger(
   const { data: transactions = [], isLoading: transactionsLoading } = useQuery<Transaction[]>({
     queryKey: selectedAccount
       ? [
-          `/api/accounts/${accountTypeUrl}/${selectedAccount.accountId}/transactions`,
+          `${statementPrefix}/${accountTypeUrl}/${selectedAccount.accountId}/transactions`,
           { startDate: periodFilter.fromDate, endDate: periodFilter.toDate },
         ]
       : [],
@@ -57,7 +64,7 @@ export function useAgentLedger(
       const params = new URLSearchParams();
       if (periodFilter.fromDate) params.append("startDate", periodFilter.fromDate);
       if (periodFilter.toDate) params.append("endDate", periodFilter.toDate);
-      const url = `/api/accounts/${accountTypeUrl}/${selectedAccount.accountId}/transactions${params.toString() ? `?${params.toString()}` : ""}`;
+      const url = `${statementPrefix}/${accountTypeUrl}/${selectedAccount.accountId}/transactions${params.toString() ? `?${params.toString()}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch transactions");
       const data = await res.json();
@@ -70,14 +77,14 @@ export function useAgentLedger(
     queryKey:
       selectedAccount && periodFilter.fromDate
         ? [
-            `/api/accounts/${accountTypeUrl}/${selectedAccount.accountId}/pre-period-balance`,
+            `${statementPrefix}/${accountTypeUrl}/${selectedAccount.accountId}/pre-period-balance`,
             { endDate: periodFilter.fromDate },
           ]
         : [],
     queryFn: async () => {
       if (!selectedAccount || !periodFilter.fromDate) return { balance: 0 };
       const res = await fetch(
-        `/api/accounts/${accountTypeUrl}/${selectedAccount.accountId}/pre-period-balance?endDate=${encodeURIComponent(periodFilter.fromDate)}`,
+        `${statementPrefix}/${accountTypeUrl}/${selectedAccount.accountId}/pre-period-balance?endDate=${encodeURIComponent(periodFilter.fromDate)}`,
         { credentials: "include" }
       );
       if (!res.ok) return { balance: 0 };
@@ -88,7 +95,7 @@ export function useAgentLedger(
 
   const addMutation = useMutation({
     mutationFn: async (account: Account) => {
-      const res = await fetch("/api/agent-accounts", {
+      const res = await fetch(pinnedUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -98,7 +105,7 @@ export function useAgentLedger(
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/agent-accounts"] });
+      queryClient.invalidateQueries({ queryKey: [pinnedUrl] });
       toast({ title: "Account added to Agent Ledger" });
     },
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -106,7 +113,7 @@ export function useAgentLedger(
 
   const removeMutation = useMutation({
     mutationFn: async (accountId: string) => {
-      const res = await fetch(`/api/agent-accounts/${encodeURIComponent(accountId)}`, {
+      const res = await fetch(`${pinnedUrl}/${encodeURIComponent(accountId)}`, {
         method: "DELETE",
         credentials: "include",
       });
@@ -114,7 +121,7 @@ export function useAgentLedger(
       return res.json();
     },
     onSuccess: (_, accountId) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/agent-accounts"] });
+      queryClient.invalidateQueries({ queryKey: [pinnedUrl] });
       if (selectedAccount?.id === accountId) setSelectedAccount(null);
       toast({ title: "Account removed from Agent Ledger" });
     },
