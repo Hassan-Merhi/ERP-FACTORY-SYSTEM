@@ -46,11 +46,11 @@ describe("voucher ledger expectations", () => {
     expect(classifyVoucherLedgerExpectation("Debit Note")).toBe("balanced-only");
   });
 
-  it("classifies inventory-sided stock documents without forcing false GL balance", () => {
-    expect(classifyVoucherLedgerExpectation("Stock Adjustment")).toBe("single-sided");
-    expect(classifyVoucherLedgerExpectation("Production")).toBe("single-sided");
-    expect(classifyVoucherLedgerExpectation("Consumption")).toBe("single-sided");
-    expect(classifyVoucherLedgerExpectation("Mixed")).toBe("inventory-sided");
+  it("holds stock adjustments to a balanced ledger now that they post their Inventory side", () => {
+    expect(classifyVoucherLedgerExpectation("Stock Adjustment")).toBe("balanced-only");
+    expect(classifyVoucherLedgerExpectation("Production")).toBe("balanced-only");
+    expect(classifyVoucherLedgerExpectation("Consumption")).toBe("balanced-only");
+    expect(classifyVoucherLedgerExpectation("Mixed")).toBe("balanced-only");
     for (const type of ["Stock Transfer", "StockTransfer", "Transfer"]) {
       expect(classifyVoucherLedgerExpectation(type)).toBe("none");
     }
