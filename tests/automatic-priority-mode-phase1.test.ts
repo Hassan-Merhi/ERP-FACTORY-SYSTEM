@@ -167,4 +167,28 @@ describe("Automatic Priority Printing company switch (Phase 1)", () => {
     );
     expect(audits.rows).toHaveLength(6);
   });
+  it("isolates independent ON/OFF state for two factory companies", async () => {
+    const another = await pool.query<{ id: number }>(
+      `INSERT INTO companies (code, name, base_currency, company_type)
+         VALUES ('APRMODEALT', '${PREFIX}-other-company', 'USD', 'factory') RETURNING id`
+    );
+    const otherCompanyId = another.rows[0].id;
+    await pool.query(
+      `INSERT INTO user_company_roles (user_id, company_id, role) VALUES ($1, $2, 'Admin')`,
+      [ctx.userId, otherCompanyId]
+    );
+    try {
+      const changed = await agent.post("/api/auth/set-company").send({ companyId: otherCompanyId });
+      expect(changed.status).toBe(200);
+      expect((await agent.get(ENDPOINT)).body.enabled).toBe(false);
+      expect((await agent.put(ENDPOINT).send({ enabled: true })).status).toBe(200);
+
+      const original = await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+      expect(original.status).toBe(200);
+      expect((await agent.get(ENDPOINT)).body.enabled).toBe(false);
+    } finally {
+      await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
+    }
+  });
+
 });
