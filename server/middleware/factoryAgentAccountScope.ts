@@ -39,26 +39,38 @@ export async function requireFactoryAgentStatementAccount(
     let ownerCompanyId: number | undefined;
     switch (type) {
       case "ledger": {
-        const [row] = await db.select({ companyId: ledgerAccounts.companyId }).from(ledgerAccounts)
-          .where(eq(ledgerAccounts.id, accountId)).limit(1);
+        const [row] = await db
+          .select({ companyId: ledgerAccounts.companyId })
+          .from(ledgerAccounts)
+          .where(eq(ledgerAccounts.id, accountId))
+          .limit(1);
         ownerCompanyId = row?.companyId;
         break;
       }
       case "bank": {
-        const [row] = await db.select({ companyId: bankAccounts.companyId }).from(bankAccounts)
-          .where(eq(bankAccounts.id, accountId)).limit(1);
+        const [row] = await db
+          .select({ companyId: bankAccounts.companyId })
+          .from(bankAccounts)
+          .where(eq(bankAccounts.id, accountId))
+          .limit(1);
         ownerCompanyId = row?.companyId;
         break;
       }
       case "fixed-asset": {
-        const [row] = await db.select({ companyId: fixedAssets.companyId }).from(fixedAssets)
-          .where(eq(fixedAssets.id, accountId)).limit(1);
+        const [row] = await db
+          .select({ companyId: fixedAssets.companyId })
+          .from(fixedAssets)
+          .where(eq(fixedAssets.id, accountId))
+          .limit(1);
         ownerCompanyId = row?.companyId;
         break;
       }
       case "employee": {
-        const [row] = await db.select({ companyId: employees.companyId }).from(employees)
-          .where(eq(employees.id, accountId)).limit(1);
+        const [row] = await db
+          .select({ companyId: employees.companyId })
+          .from(employees)
+          .where(eq(employees.id, accountId))
+          .limit(1);
         ownerCompanyId = row?.companyId;
         break;
       }
