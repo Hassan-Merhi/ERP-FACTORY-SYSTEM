@@ -13,7 +13,7 @@
 import express from "express";
 import { createHttpApp } from "./httpApp";
 import compression from "compression";
-import helmet from "helmet";
+import { securityHeadersMiddleware } from "./security/securityHeaders";
 import { registerRoutes } from "./routes";
 import { markStartupMigrationsComplete } from "./startupMigrationReport";
 import { registerDbHealthRoute } from "./health/dbHealthRoute";
@@ -27,7 +27,7 @@ import { apiRateLimit } from "./middleware/apiRateLimit";
 import { logger } from "./lib/logger";
 import { getErrorMessage } from "./lib/httpHandlers";
 import { originGuard } from "./security/originGuard";
-import { helmetContentSecurityPolicyOption, registerCspReportRoute } from "./security/contentSecurityPolicy";
+import { registerCspReportRoute } from "./security/contentSecurityPolicy";
 import { registerCsrfProtection } from "./security/csrfProtection";
 import { registerErrorHandler } from "./middleware/errorHandler";
 import { capacitorCors } from "./middleware/capacitorCors";
@@ -42,6 +42,8 @@ import { registerProcessErrorHandlers } from "./startup/registerProcessErrorHand
 import { runStartupMigrations, warmupDb } from "./startup/runServerStartupMigrations";
 import { ensureFactoryStaffTrackingSchema } from "./startup/factoryStaffTrackingSchema";
 import { ensureFactoryContainerPlannerSchemaOnBoot } from "./startup/factoryContainerPlannerSchema";
+import { ensurePriorityScanSchema } from "./startup/priorityScanSchema";
+import { ensureFactorySheetsSacksSchema } from "./startup/factorySheetsSacksSchema";
 import { ensureRecurringJournalSchema } from "./services/accounting/ensureRecurringJournalSchema";
 import { bootstrapRecurringJournalFromEnvironment } from "./services/accounting/recurringJournalBootstrap";
 import { ensureFactoryInvoiceDocumentSnapshotStore } from "./services/factoryInvoiceDocumentService";
@@ -78,18 +80,11 @@ app.use(
   })
 );
 
-// Security headers (X-Frame-Options, X-Content-Type-Options, HSTS, Referrer-Policy, etc.)
-// CSP ships report-only in production and off elsewhere; CSP_ENFORCE=true
-// flips the same policy to enforcing. Policy and violation collection live in
-// server/security/contentSecurityPolicy.ts.
-// crossOriginEmbedderPolicy is disabled to allow loading external images (logos, etc.).
-app.use(
-  helmet({
-    contentSecurityPolicy: helmetContentSecurityPolicyOption(),
-    crossOriginEmbedderPolicy: false,
-    crossOriginResourcePolicy: { policy: "cross-origin" },
-  })
-);
+// Security headers (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options,
+// HSTS, Referrer-Policy, etc.), mounted ahead of every route. The CSP is the one
+// enforced policy built in server/security/securityHeaders.ts; violations are
+// collected at /api/csp-report.
+app.use(securityHeadersMiddleware());
 
 // General API body limit is 2 MB. Upload routes specify their own higher limit via multer.
 app.use(
@@ -263,8 +258,16 @@ let migrationsDone = false;
       await ensureClosedPeriodGuard(pool);
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
+      await ensurePriorityScanSchema(pool);
+      logger.info("[startup] ✓ Priority Scan schema ensured");
       await ensureFactoryInvoiceDocumentSnapshotStore(pool);
       logger.info("[startup] ✓ Factory invoice document snapshot store ensured");
+      try {
+        await ensureFactorySheetsSacksSchema(pool);
+        logger.info("[startup] ✓ Sheets & Sacks schema ensured");
+      } catch (err: unknown) {
+        logger.error("[startup] Sheets & Sacks schema ensure failed", { error: String(err) });
+      }
       await bootstrapRecurringJournalFromEnvironment();
       try {
         // Factory Production Targets and Attendance Register must be available

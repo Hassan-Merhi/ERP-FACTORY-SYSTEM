@@ -11,6 +11,8 @@ import { storage } from "../../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { _getCached, _setCached } from "../shared/ttlCache";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 
 // ---------------------------------------------------------------------------
 // getMonthlyData — /api/stats/monthly-data
@@ -108,7 +110,7 @@ export async function getMonthlyData(
   const companyEntries = companyEntriesRaw;
 
   // Group data by month (last 6 months)
-  const monthlyData = new Map<string, { sales: number; profit: number }>();
+  const monthlyData = new Map<string, { sales: Decimal; profit: Decimal }>();
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   // Initialize last 6 months
@@ -116,18 +118,18 @@ export async function getMonthlyData(
   for (let i = 5; i >= 0; i--) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
     const monthKey = monthNames[date.getMonth()];
-    monthlyData.set(monthKey, { sales: 0, profit: 0 });
+    monthlyData.set(monthKey, { sales: new MoneyDecimal(0), profit: new MoneyDecimal(0) });
   }
 
   // Calculate sales by month
   for (const voucher of salesVouchers) {
     const voucherDate = new Date(voucher.voucherDate);
     const monthKey = monthNames[voucherDate.getMonth()];
-    const amount = parseFloat(voucher.totalAmount || "0");
+    const amount = toMoney(voucher.totalAmount);
 
     if (monthlyData.has(monthKey)) {
       const data = monthlyData.get(monthKey)!;
-      data.sales += amount;
+      data.sales = data.sales.plus(amount);
     }
   }
 
@@ -145,20 +147,20 @@ export async function getMonthlyData(
 
     // Income accounts: credits increase profit, debits decrease it
     if (entry.ledgerAccountId && incomeAccountIds.includes(entry.ledgerAccountId)) {
-      data.profit += parseFloat(entry.creditAmount || "0") - parseFloat(entry.debitAmount || "0");
+      data.profit = data.profit.plus(toMoney(entry.creditAmount)).minus(toMoney(entry.debitAmount));
     }
 
     // Expense accounts (including Purchases): debits decrease profit, credits increase it
     if (entry.ledgerAccountId && expenseAccountIds.includes(entry.ledgerAccountId)) {
-      data.profit -= parseFloat(entry.debitAmount || "0") - parseFloat(entry.creditAmount || "0");
+      data.profit = data.profit.minus(toMoney(entry.debitAmount)).plus(toMoney(entry.creditAmount));
     }
   }
 
   // Convert map to array
   return Array.from(monthlyData.entries()).map(([month, data]) => ({
     month,
-    sales: data.sales,
-    profit: data.profit,
+    sales: data.sales.toNumber(),
+    profit: data.profit.toNumber(),
   }));
 }
 
@@ -182,10 +184,10 @@ export async function getStockSummary(companyId: number): Promise<{
   // Calculate low stock items (quantity < 20)
   const lowStockThreshold = 20;
   const lowStockItems = inventory
-    .filter((item) => parseFloat(item.quantity) < lowStockThreshold && parseFloat(item.quantity) > 0)
+    .filter((item) => toMoney(item.quantity).lt(lowStockThreshold) && toMoney(item.quantity).gt(0))
     .map((item) => ({
       name: item.stockItemName ?? "Unknown",
-      stock: parseFloat(item.quantity),
+      stock: toMoney(item.quantity).toNumber(),
       location: item.locationName || "Unknown",
     }))
     .sort((a, b) => a.stock - b.stock) // Sort by lowest stock first
@@ -194,7 +196,7 @@ export async function getStockSummary(companyId: number): Promise<{
   // Count critical items (quantity < 5)
   const criticalThreshold = 5;
   const criticalCount = inventory.filter(
-    (item) => parseFloat(item.quantity) < criticalThreshold && parseFloat(item.quantity) > 0
+    (item) => toMoney(item.quantity).lt(criticalThreshold) && toMoney(item.quantity).gt(0)
   ).length;
 
   return {
@@ -282,23 +284,23 @@ export async function getExpenseBreakdown(companyId: number): Promise<Array<{ na
     .execute();
 
   // Sum balances by expense type
-  const expenseByType = new Map<string, number>();
+  const expenseByType = new Map<string, Decimal>();
 
   for (const entry of expenseEntries) {
     if (!entry.ledgerAccountId) continue;
     const accountType = accountTypeMap.get(entry.ledgerAccountId);
     if (!accountType) continue;
-    const amount = parseFloat(entry.debitAmount || "0") - parseFloat(entry.creditAmount || "0");
-    if (amount <= 0) continue;
-    expenseByType.set(accountType, (expenseByType.get(accountType) || 0) + amount);
+    const amount = toMoney(entry.debitAmount).minus(toMoney(entry.creditAmount));
+    if (amount.lte(0)) continue;
+    expenseByType.set(accountType, (expenseByType.get(accountType) ?? new MoneyDecimal(0)).plus(amount));
   }
 
   // Convert to array format for chart
   const result = Array.from(expenseByType.entries())
-    .filter(([_, value]) => value > 0)
+    .filter(([_, value]) => value.gt(0))
     .map(([name, value]) => ({
       name: name.replace(" Expense", ""),
-      value: Math.round(value * 100) / 100,
+      value: value.toDecimalPlaces(2).toNumber(),
     }))
     .sort((a, b) => b.value - a.value);
 

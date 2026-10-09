@@ -89,7 +89,7 @@ const CONFIG: Record<EntityType, EntityConfig> = {
 async function getBaseCurrency(companyId: number): Promise<string> {
   const result = await pool.query<{ base_currency: string | null }>(
     "SELECT base_currency FROM companies WHERE id = $1",
-    [companyId],
+    [companyId]
   );
   return result.rows[0]?.base_currency || "USD";
 }
@@ -111,25 +111,21 @@ async function entityExists(entityType: EntityType, entityId: number, companyId:
   if (config.companyColumn) clauses.push(`target.${config.companyColumn} = $2`);
   else clauses.push(supplierScopeSql("target"));
   if (config.deletedColumn) clauses.push(`target.${config.deletedColumn} IS NULL`);
-  const result = await pool.query(
-    `SELECT 1 FROM ${config.table} target WHERE ${clauses.join(" AND ")} LIMIT 1`,
-    [entityId, companyId],
-  );
+  const result = await pool.query(`SELECT 1 FROM ${config.table} target WHERE ${clauses.join(" AND ")} LIMIT 1`, [
+    entityId,
+    companyId,
+  ]);
   return result.rowCount === 1;
 }
 
 export function registerOpeningBalanceResolutionRoutes(app: Express) {
-  app.get(
-    "/api/accounts/multi-currency/unresolved-openings",
-    requireAuth,
-    requireNonPOS,
-    async (req, res) => {
-      try {
-        const companyId = req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+  app.get("/api/accounts/multi-currency/unresolved-openings", requireAuth, requireNonPOS, async (req, res) => {
+    try {
+      const companyId = req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const result = await pool.query(
-          `SELECT * FROM (
+      const result = await pool.query(
+        `SELECT * FROM (
              SELECT 'ledger'::text AS entity_type, la.id, la.name, la.code,
                     la.opening_balance::text AS raw_amount,
                     COALESCE(la.opening_balance_side, 'Dr') AS side
@@ -174,14 +170,13 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
                 AND (fa.purchase_native_amount IS NULL OR fa.purchase_currency IS NULL OR fa.purchase_base_amount IS NULL)
            ) unresolved
            ORDER BY entity_type, name`,
-          [companyId, companyId],
-        );
-        return res.json(result.rows);
-      } catch (error: unknown) {
-        return res.status(500).json({ message: getErrorMessage(error) });
-      }
-    },
-  );
+        [companyId, companyId]
+      );
+      return res.json(result.rows);
+    } catch (error: unknown) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
 
   app.put(
     "/api/accounts/multi-currency/opening-balance/:entityType/:id",
@@ -218,10 +213,7 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
         });
         // Supplier and employee opening balances retain their established credit
         // orientation; ledger/bank/customer sides may be explicitly reviewed.
-        const side =
-          entityType === "supplier" || entityType === "employee"
-            ? "Cr"
-            : req.body.side || "Dr";
+        const side = entityType === "supplier" || entityType === "employee" ? "Cr" : req.body.side || "Dr";
         if (side !== "Dr" && side !== "Cr") {
           return res.status(400).json({ message: "Side must be Dr or Cr" });
         }
@@ -257,13 +249,13 @@ export function registerOpeningBalanceResolutionRoutes(app: Express) {
                       ${config.currencyColumn} AS currency,
                       ${config.rateColumn} AS historical_rate,
                       ${config.baseColumn} AS base_amount${config.sideColumn ? `, ${config.sideColumn} AS side` : ""}`,
-          values,
+          values
         );
 
         return res.json({ entityType, ...result.rows[0] });
       } catch (error: unknown) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }
-    },
+    }
   );
 }

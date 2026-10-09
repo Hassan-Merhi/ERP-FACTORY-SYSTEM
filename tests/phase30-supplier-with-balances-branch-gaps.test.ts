@@ -375,6 +375,28 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
     expect(withOtw.body[0].otwByCurrency).toEqual({ USD: 1 });
   });
 
+  it("sums money exactly and rounds half-cents up instead of drifting under them", async () => {
+    // Binary floats make 1000 × 0.35 + 0.005 = 350.00499… and 0.1 + 0.2 + 0.305 =
+    // 0.60499…, which toFixed(2) used to show as 350.00 and 0.60.
+    const supplier = { ...baseSupplier, id: 10, name: "Exact Supplier", parentId: null };
+    const due = container({ id: 1001, supplierId: 10, totalKg: "1000", ratePerKg: "0.35", freight: "0.005" });
+    const payments = ["0.1", "0.2", "0.305"].map((amountUsd, i) => ({
+      id: i + 1,
+      supplierId: 10,
+      amount: amountUsd,
+      amountUsd,
+      currencyCode: "USD",
+    }));
+    const handler = captureHandler();
+    queueQueries([supplier], [due], payments, [], [], []);
+    const res = responseHarness();
+    await handler({ session: { currentCompanyId: 7 }, query: {} }, res);
+
+    expect(res.body[0].dueContainers[0].value).toBe("350.01");
+    expect(res.body[0].totalPaid).toBe("0.61");
+    expect(res.body[0].totalValue).toBe("349.40");
+  });
+
   it("falls back to computed broker exposure when the broker statement is unavailable", async () => {
     const parent = { ...baseSupplier, id: 20, name: "Parent", parentId: null };
     const linked = { ...baseSupplier, id: 21, name: "Linked", parentId: 20 };

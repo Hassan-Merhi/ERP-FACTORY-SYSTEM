@@ -23,6 +23,8 @@ import {
   vouchers,
 } from "@shared/schema";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
+import { moneyString, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import type Decimal from "decimal.js";
 
 export interface BonusLocationOption {
   id: number;
@@ -272,20 +274,20 @@ export function registerPayrollBonusRoutes(app: Express) {
 
       for (const emp of activeEmployees) {
         const lines: string[] = [];
-        let total = 0;
+        const subtotals: Decimal[] = [];
 
         // Per-location bale rates (employee_bale_rates table) — flat $/bale
         const baleRates = await storage.getEmployeeBaleRates(emp.id, companyId);
         for (const entry of baleRates) {
-          const rate = parseFloat(entry.rate as string);
-          if (!rate || rate <= 0 || !entry.locationId) continue;
+          const rate = toMoney(entry.rate as string);
+          if (!rate.gt(0) || !entry.locationId) continue;
           try {
             const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
             const data = await querySales(entry.locationId as number, srcId);
-            const qty = parseFloat(data.totalQuantity);
-            if (qty > 0) {
-              const sub = qty * rate;
-              total += sub;
+            const qty = toMoney(data.totalQuantity);
+            if (qty.gt(0)) {
+              const sub = qty.times(rate);
+              subtotals.push(sub);
               lines.push(`${qty} bales × $${rate} (${data.locationName}) = $${sub.toFixed(2)}`);
             }
           } catch {
@@ -296,15 +298,15 @@ export function registerPayrollBonusRoutes(app: Express) {
         // Per-location sales % rates (employee_bale_pct_rates table) — % of sales amount
         const balePctRates = await storage.getEmployeeBalePctRates(emp.id, companyId);
         for (const entry of balePctRates) {
-          const pct = parseFloat(entry.pct as string);
-          if (!pct || pct <= 0 || !entry.locationId) continue;
+          const pct = toMoney(entry.pct as string);
+          if (!pct.gt(0) || !entry.locationId) continue;
           try {
             const srcId = (entry.sourceCompanyId as number | null) ?? companyId;
             const data = await querySales(entry.locationId as number, srcId);
-            const sales = parseFloat(data.totalSalesAmount);
-            if (sales > 0) {
-              const sub = (sales * pct) / 100;
-              total += sub;
+            const sales = toMoney(data.totalSalesAmount);
+            if (sales.gt(0)) {
+              const sub = sales.times(pct).div(100);
+              subtotals.push(sub);
               lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${data.locationName}) = $${sub.toFixed(2)}`);
             }
           } catch {
@@ -313,17 +315,17 @@ export function registerPayrollBonusRoutes(app: Express) {
         }
 
         // Legacy single bale rate field — only if no per-location rates
-        if (baleRates.length === 0 && emp.balesBonusRate != null && parseFloat(emp.balesBonusRate as string) > 0) {
+        if (baleRates.length === 0 && emp.balesBonusRate != null && toMoney(emp.balesBonusRate as string).gt(0)) {
           const locId = emp.salesBonusPctLocationId as number | null;
           const srcId = (emp.salesBonusPctSourceCompanyId as number | null) ?? companyId;
           if (locId) {
             try {
               const data = await querySales(locId, srcId);
-              const qty = parseFloat(data.totalQuantity);
-              const rate = parseFloat(emp.balesBonusRate as string);
-              if (qty > 0) {
-                const sub = qty * rate;
-                total += sub;
+              const qty = toMoney(data.totalQuantity);
+              const rate = toMoney(emp.balesBonusRate as string);
+              if (qty.gt(0)) {
+                const sub = qty.times(rate);
+                subtotals.push(sub);
                 lines.push(`${qty} bales × $${rate} (${data.locationName}) = $${sub.toFixed(2)}`);
               }
             } catch {
@@ -333,17 +335,18 @@ export function registerPayrollBonusRoutes(app: Express) {
         }
 
         // Legacy single-location sales % bonus (emp.salesBonusPct + pctLocationId from UI dropdown)
-        if (pctSales && emp.salesBonusPct != null && parseFloat(emp.salesBonusPct as string) > 0) {
-          const sales = parseFloat(pctSales.totalSalesAmount);
-          const pct = parseFloat(emp.salesBonusPct as string);
-          if (sales > 0) {
-            const sub = (sales * pct) / 100;
-            total += sub;
+        if (pctSales && emp.salesBonusPct != null && toMoney(emp.salesBonusPct as string).gt(0)) {
+          const sales = toMoney(pctSales.totalSalesAmount);
+          const pct = toMoney(emp.salesBonusPct as string);
+          if (sales.gt(0)) {
+            const sub = sales.times(pct).div(100);
+            subtotals.push(sub);
             lines.push(`$${sales.toFixed(2)} sales × ${pct}% (${pctSales.locationName}) = $${sub.toFixed(2)}`);
           }
         }
 
-        if (total > 0) {
+        const total = sumMoney(subtotals);
+        if (total.gt(0)) {
           results.push({ employeeId: emp.id, amount: total.toFixed(2), breakdown: lines });
         }
       }
@@ -368,13 +371,17 @@ export function registerPayrollBonusRoutes(app: Express) {
         return res.status(400).json({ message: "Employee, amount, and date are required" });
       }
 
-      const bonusAmount = parseFloat(amount);
-      if (isNaN(bonusAmount) || bonusAmount <= 0) {
+      const parsedBonus = parseMoneyInput(amount);
+      if (!parsedBonus || !parsedBonus.gt(0)) {
         return res.status(400).json({ message: "Amount must be a positive number" });
       }
+      const bonusCents = moneyString(parsedBonus);
 
       // Get employee
-      const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [employee] = await db
+        .select()
+        .from(employees)
+        .where(and(eq(employees.id, employeeId), eq(employees.companyId, req.session.currentCompanyId)));
       if (!employee) {
         return res.status(404).json({ message: "Employee not found" });
       }
@@ -425,7 +432,7 @@ export function registerPayrollBonusRoutes(app: Express) {
           voucherType: "Journal",
           voucherDate: date,
           description: notes || `Bonus for ${employee.firstName} ${employee.lastName}`,
-          totalAmount: bonusAmount.toFixed(2),
+          totalAmount: bonusCents,
         })
         .returning();
 
@@ -434,7 +441,7 @@ export function registerPayrollBonusRoutes(app: Express) {
       await db.insert(voucherEntries).values({
         voucherId: voucher.id,
         ledgerAccountId: bonusSingleAccount.id,
-        debitAmount: bonusAmount.toFixed(2),
+        debitAmount: bonusCents,
         creditAmount: "0",
         narration: `Bonus payment - ${voucherNumber}`,
       });
@@ -445,7 +452,7 @@ export function registerPayrollBonusRoutes(app: Express) {
         ledgerAccountId: null,
         employeeId: employee.id,
         debitAmount: "0",
-        creditAmount: bonusAmount.toFixed(2),
+        creditAmount: bonusCents,
         narration: `Bonus payment - ${voucherNumber}`,
       });
 
@@ -456,14 +463,14 @@ export function registerPayrollBonusRoutes(app: Express) {
             ledgerAccountId: null,
             employeeId: employee.id,
             debitAmount: "0",
-            creditAmount: bonusAmount.toFixed(2),
+            creditAmount: bonusCents,
           },
         ],
         req.session.currentCompanyId!
       );
 
       // Get updated employee balance
-      const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employeeId));
+      const [updatedBonusEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));
 
       res.json({
         voucher,

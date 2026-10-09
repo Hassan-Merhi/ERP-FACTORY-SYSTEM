@@ -89,6 +89,7 @@ export interface OrderDetail {
   containerNumber?: string;
   shippingCompany?: string;
   containerNotes?: string;
+  bookingInfo?: string | null;
   destination?: string;
 }
 

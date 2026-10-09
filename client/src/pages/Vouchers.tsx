@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
 import { useAppMode, useModePrefix } from "@/contexts/AppModeContext";
 import { resolveWhatsAppPrompt } from "@/lib/whatsapp-prompt";
 import type { WhatsAppPromptState } from "@/lib/whatsapp-prompt";
@@ -395,6 +395,7 @@ export default function Vouchers({ posUser }: VouchersProps = {}) {
       queryClient.invalidateQueries({ queryKey: ["/api/customers", selectedCompany?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats/net-profit"] });
       if (isEditMode) {
+        invalidateContainerLandedCostQueries();
         setLocation(`${modePrefix}/daybook`);
       } else {
         form.reset({

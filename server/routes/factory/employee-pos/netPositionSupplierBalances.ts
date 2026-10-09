@@ -14,6 +14,8 @@ import { buildBrokerStatement } from "../suppliers/broker";
 import { isSupplierPaidFreight } from "../suppliers/_supplierStatementHelpers";
 import { resolveStoredFxRate } from "../../../services/factory/currencyConversion";
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 /**
  * Section 1 of the factory net-position report: what the company owes its
@@ -63,7 +65,7 @@ export async function computeNetPositionSupplierBalances(
   for (const s of suppliersList) {
     const persisted = s.currentRawMaterialCostPerKgUsd;
     if (persisted !== null && persisted !== undefined) {
-      supplierLockedRateMapNp.set(s.id, parseFloat(persisted as string) || 0);
+      supplierLockedRateMapNp.set(s.id, toMoney(persisted as string).toNumber());
     } else {
       supplierLockedRateMapNp.set(s.id, await getLockedSupplierRate(db, ctx.companyId, s.id));
     }
@@ -114,7 +116,7 @@ export async function computeNetPositionSupplierBalances(
   // Voucher-based payments (exclude auto-generated FACTORY-PAY-* and optional vouchers)
   const allSupplierIds = suppliersList.map((s) => s.id);
   // Per-currency voucher amounts, netted off each standalone supplier below.
-  const voucherPaidByCurrencyBySupplierId: Record<number, Record<string, number>> = {};
+  const voucherPaidByCurrencyBySupplierId: Record<number, Record<string, Decimal>> = {};
   if (allSupplierIds.length > 0) {
     const voucherRows = await db
       .select({
@@ -138,7 +140,7 @@ export async function computeNetPositionSupplierBalances(
       const sid = row.factorySupplierId;
       if (!sid) continue;
       if (row.optional) continue; // optional vouchers don't affect the balance
-      const amt = parseFloat(row.debitAmount || "0");
+      const amt = toMoney(row.debitAmount);
       const cc = row.currency || "USD";
       if (cc !== "USD") {
         // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
@@ -147,7 +149,7 @@ export async function computeNetPositionSupplierBalances(
         if (!looksSet) continue;
       }
       if (!voucherPaidByCurrencyBySupplierId[sid]) voucherPaidByCurrencyBySupplierId[sid] = {};
-      voucherPaidByCurrencyBySupplierId[sid][cc] = (voucherPaidByCurrencyBySupplierId[sid][cc] || 0) + amt;
+      voucherPaidByCurrencyBySupplierId[sid][cc] = (voucherPaidByCurrencyBySupplierId[sid][cc] ?? toMoney(0)).plus(amt);
     }
   }
 
@@ -182,13 +184,13 @@ export async function computeNetPositionSupplierBalances(
       processedBrokers.add(s.id);
       const stmt = await buildBrokerStatement(s.id, ctx.companyId, true);
       if (!stmt) continue;
-      let brokerUsd = 0;
+      let brokerUsd = new MoneyDecimal(0);
       for (const ledger of stmt.currencyLedgers) {
         const cc = ledger.currencyCode as string;
-        const bal = parseFloat(ledger.netBalance || "0");
-        brokerUsd += cc === "USD" ? bal : bal * ctx.getConfigFx(cc);
+        const bal = toMoney(ledger.netBalance);
+        brokerUsd = brokerUsd.plus(cc === "USD" ? bal : bal.times(ctx.getConfigFx(cc)));
       }
-      const rounded = ctx.round2(brokerUsd);
+      const rounded = ctx.round2(brokerUsd.toNumber());
       if (Math.abs(rounded) > 0.01) {
         supplierItems.push({ name: s.name, balanceUsd: rounded });
         if (rounded > 0) totalSupplierLiabilities += rounded;
@@ -200,14 +202,14 @@ export async function computeNetPositionSupplierBalances(
     // Standalone (non-broker) suppliers: native-bucket approach — exact match to
     // computeStats / Suppliers page. Accumulate all transactions in their native
     // currency, multiply each bucket by the configured rate once at the end.
-    const byCurrencyNative: Record<string, number> = {};
-    const addNative = (cc: string, amt: number) => {
-      byCurrencyNative[cc] = (byCurrencyNative[cc] || 0) + amt;
+    const byCurrencyNative: Record<string, Decimal> = {};
+    const addNative = (cc: string, amt: Decimal) => {
+      byCurrencyNative[cc] = (byCurrencyNative[cc] ?? new MoneyDecimal(0)).plus(amt);
     };
 
     // Opening balance (always USD-denominated)
-    const ob = parseFloat(s.openingBalance || "0");
-    if (ob !== 0) addNative("USD", ob);
+    const ob = toMoney(s.openingBalance);
+    if (!ob.isZero()) addNative("USD", ob);
 
     // Containers: goods + supplier-paid freight + commission (native currency each).
     // Own-account freight must never increase the supplier liability; use the same
@@ -216,16 +218,14 @@ export async function computeNetPositionSupplierBalances(
     const sc = allContainersF.filter((c) => c.supplierId === s.id);
     for (const c of sc) {
       const cc = c.currencyCode || "USD";
-      const kg = parseFloat(c.totalKg || "0");
-      const rate = parseFloat(c.ratePerKg || "0");
-      addNative(cc, kg * rate);
-      const freight = isSupplierPaidFreight(c) ? parseFloat(c.freight || "0") : 0;
-      if (freight > 0) {
+      addNative(cc, toMoney(c.totalKg).times(toMoney(c.ratePerKg)));
+      const freight = isSupplierPaidFreight(c) ? toMoney(c.freight) : new MoneyDecimal(0);
+      if (freight.greaterThan(0)) {
         const fcc = c.freightCurrencyCode || cc;
         addNative(fcc, freight);
       }
-      const commAmt = parseFloat(c.commissionAmount || "0");
-      if (commAmt > 0) {
+      const commAmt = toMoney(c.commissionAmount);
+      if (commAmt.greaterThan(0)) {
         const commCc = c.commissionCurrencyCode || cc;
         addNative(commCc, commAmt);
       }
@@ -234,38 +234,38 @@ export async function computeNetPositionSupplierBalances(
     // Column-level other charges (otherCharges / otherChargesSupplierId on containers)
     for (const oc of allColOtherChargesF) {
       if (oc.otherChargesSupplierId !== s.id) continue;
-      const ocAmt = parseFloat(oc.otherCharges || "0");
-      if (ocAmt <= 0) continue;
+      const ocAmt = toMoney(oc.otherCharges);
+      if (ocAmt.lessThanOrEqualTo(0)) continue;
       addNative(oc.otherChargesCurrencyCode || "USD", ocAmt);
     }
 
     // Direct payments — use native amount (p.amount), not p.amountUsd
     for (const p of allPaymentsF) {
       if (p.supplierId !== s.id) continue;
-      addNative(p.currencyCode || "USD", -parseFloat(p.amount || "0"));
+      addNative(p.currencyCode || "USD", toMoney(p.amount).negated());
     }
 
     // Voucher payments — native amounts per currency
     const voucherCurrMap = voucherPaidByCurrencyBySupplierId[s.id] || {};
     for (const [cc, amt] of Object.entries(voucherCurrMap)) {
-      addNative(cc, -(amt as number));
+      addNative(cc, amt.negated());
     }
 
     // FX transfers — subtract native from-currency, credit USD to USD bucket
     for (const t of allFxTransfersF) {
       if (t.fromSupplierId === s.id) {
-        addNative(t.fromCurrencyCode || "USD", -parseFloat(t.fromAmount || "0"));
+        addNative(t.fromCurrencyCode || "USD", toMoney(t.fromAmount).negated());
       }
       if (t.toSupplierId === s.id) {
-        addNative("USD", parseFloat(t.toAmountUsd || "0"));
+        addNative("USD", toMoney(t.toAmountUsd));
       }
     }
 
     // Balance: each currency bucket × configured rate (same formula as computeStats)
     const balance = ctx.round2(
-      Object.entries(byCurrencyNative).reduce((sum, [cc, native]) => {
-        return sum + native * ctx.getConfigFx(cc);
-      }, 0)
+      Object.entries(byCurrencyNative)
+        .reduce((sum, [cc, native]) => sum.plus(native.times(ctx.getConfigFx(cc))), new MoneyDecimal(0))
+        .toNumber()
     );
 
     if (Math.abs(balance) > 0.01) {

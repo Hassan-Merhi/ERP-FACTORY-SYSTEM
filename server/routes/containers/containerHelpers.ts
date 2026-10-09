@@ -5,6 +5,8 @@ import { storage } from "../../storage";
 import { vouchers, voucherEntries, intercompanyPosConfigs } from "@shared/schema";
 import { eq, and, or, sql, like } from "drizzle-orm";
 import type { DatabaseOrTransaction } from "../../db";
+import type Decimal from "decimal.js";
+import { toMoney, type MoneyInput } from "../../lib/money";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Centralised PO amount calculator — single source of truth for gross/interco
@@ -18,31 +20,56 @@ interface PoAmounts {
   freight: number;
 }
 
-export function calcPoAmounts(po: {
-  itemsTotal?: string | number | null;
-  freight?: string | number | null;
-  surcharge?: string | number | null;
-  fumigation?: string | number | null;
-  documentCharges?: string | number | null;
-  discount?: string | number | null;
-  otherCharges?: string | number | null;
+type PoAmountFields = {
+  itemsTotal?: MoneyInput;
+  freight?: MoneyInput;
+  surcharge?: MoneyInput;
+  fumigation?: MoneyInput;
+  documentCharges?: MoneyInput;
+  discount?: MoneyInput;
+  otherCharges?: MoneyInput;
   freightPaidBy?: string | null;
-}): PoAmounts {
-  const f = (v: string | number | null | undefined) => parseFloat(String(v ?? "0")) || 0;
-  const itemsTotal = f(po.itemsTotal);
-  const freight = f(po.freight);
-  const surcharge = f(po.surcharge);
-  const fumigation = f(po.fumigation);
-  const documentCharges = f(po.documentCharges);
-  const discount = f(po.discount);
-  const otherCharges = f(po.otherCharges);
+};
+
+type EntryAmounts = { debitAmount: string | null; creditAmount: string | null };
+/** A voucher entry that only debits. */
+export const isDebitOnlyEntry = (e: EntryAmounts) => toMoney(e.debitAmount).gt(0) && toMoney(e.creditAmount).isZero();
+/** A voucher entry that only credits. */
+export const isCreditOnlyEntry = (e: EntryAmounts) => toMoney(e.creditAmount).gt(0) && toMoney(e.debitAmount).isZero();
+/** Differs by more than a tenth of a cent, the tolerance the PO voucher repairs use. */
+export const differsByMoreThanTolerance = (a: Decimal, b: Decimal) => a.minus(b).abs().gt("0.001");
+
+/** calcPoAmounts as exact decimals, for callers that store or compare the totals. */
+export function calcPoAmountsExact(po: PoAmountFields): {
+  grossTotal: Decimal;
+  intercoTotal: Decimal;
+  freightPaidBy: string;
+  freight: Decimal;
+} {
+  const freight = toMoney(po.freight);
   const freightPaidBy = po.freightPaidBy ?? "supplier";
-  const grossTotal = itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+  const grossTotal = toMoney(po.itemsTotal)
+    .plus(freight)
+    .plus(toMoney(po.surcharge))
+    .plus(toMoney(po.fumigation))
+    .plus(toMoney(po.documentCharges))
+    .minus(toMoney(po.discount))
+    .plus(toMoney(po.otherCharges));
   // intercoTotal is the supplier's share: excludes freight when it's paid
   // by the subsidiary itself ("own") or by the parent company ("parent").
   const intercoTotal =
-    (freightPaidBy === "own" || freightPaidBy === "parent") && freight > 0 ? grossTotal - freight : grossTotal;
+    (freightPaidBy === "own" || freightPaidBy === "parent") && freight.gt(0) ? grossTotal.minus(freight) : grossTotal;
   return { grossTotal, intercoTotal, freightPaidBy, freight };
+}
+
+export function calcPoAmounts(po: PoAmountFields): PoAmounts {
+  const exact = calcPoAmountsExact(po);
+  return {
+    grossTotal: exact.grossTotal.toNumber(),
+    intercoTotal: exact.intercoTotal.toNumber(),
+    freightPaidBy: exact.freightPaidBy,
+    freight: exact.freight.toNumber(),
+  };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -62,17 +89,20 @@ interface SyncIntercoResult {
 export async function syncIntercoParentVoucher(
   dbOrTx: DatabaseOrTransaction,
   poNumbers: string | string[],
-  grossTotal: number,
+  grossTotal: MoneyInput,
   containerNumber?: string,
   freightOpts?: {
-    freightAmount: number;
+    freightAmount: MoneyInput;
     freightParentAccountId: number;
     subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
   }
 ): Promise<SyncIntercoResult> {
-  const amountStr = grossTotal.toFixed(2);
-  const intercoTotal =
-    freightOpts && freightOpts.freightAmount > 0 ? grossTotal - freightOpts.freightAmount : grossTotal;
+  // Amounts stay exact: numeric(20, 2) totals above about 10^15 have no cents left as numbers.
+  const gross = toMoney(grossTotal);
+  const freight = toMoney(freightOpts?.freightAmount);
+  const hasFreight = !!freightOpts && freight.greaterThan(0);
+  const amountStr = gross.toFixed(2);
+  const intercoTotal = hasFreight ? gross.minus(freight) : gross;
   try {
     const parentCompanyId = await storage.getParentCompanyId();
     if (!parentCompanyId) return { found: false, updated: false, amount: amountStr };
@@ -147,14 +177,14 @@ export async function syncIntercoParentVoucher(
       // is still credited to the configured account.
       if (
         freightOpts &&
-        freightOpts.freightAmount > 0 &&
+        hasFreight &&
         freightOpts.subsidiaryCompanyId &&
         freightOpts.subsidiaryCompanyId !== parentCompanyId
       ) {
         try {
           const primaryPoNum = nums[0];
           const fallbackVoucherNum = `PARENT-FREIGHT-${primaryPoNum}`;
-          const freightAmtStr = freightOpts.freightAmount.toFixed(2);
+          const freightAmtStr = freight.toFixed(2);
 
           // Look up the interco config to get the subsidiary receivable account (DR side).
           const [icCfg] = await dbOrTx
@@ -182,12 +212,12 @@ export async function syncIntercoParentVoucher(
               .from(voucherEntries)
               .where(eq(voucherEntries.voucherId, existingFallback.id));
             for (const fe of fbEntries) {
-              if (parseFloat(fe.debitAmount || "0") > 0) {
+              if (toMoney(fe.debitAmount).greaterThan(0)) {
                 await dbOrTx
                   .update(voucherEntries)
                   .set({ debitAmount: freightAmtStr })
                   .where(eq(voucherEntries.id, fe.id));
-              } else if (parseFloat(fe.creditAmount || "0") > 0) {
+              } else if (toMoney(fe.creditAmount).greaterThan(0)) {
                 await dbOrTx
                   .update(voucherEntries)
                   .set({
@@ -254,18 +284,18 @@ export async function syncIntercoParentVoucher(
       .from(voucherEntries)
       .where(eq(voucherEntries.voucherId, parentVoucher.id));
 
-    const oldAmount = parseFloat(parentVoucher.totalAmount || "0");
+    const oldAmount = toMoney(parentVoucher.totalAmount);
     const oldAmountStr = oldAmount.toFixed(2);
 
     // Check whether an update is needed (idempotent)
-    const totalMismatch = Math.abs(oldAmount - grossTotal) > 0.001;
+    const totalMismatch = differsByMoreThanTolerance(oldAmount, gross);
     let freightEntryMissing = false;
     let freightNarrationMismatch = false;
-    if (freightOpts && freightOpts.freightAmount > 0) {
+    if (freightOpts && hasFreight) {
       const fe = parentEntries.find(
-        (e) => e.ledgerAccountId === freightOpts.freightParentAccountId && parseFloat(e.creditAmount || "0") > 0
+        (e) => e.ledgerAccountId === freightOpts.freightParentAccountId && toMoney(e.creditAmount).greaterThan(0)
       );
-      freightEntryMissing = !fe || Math.abs(parseFloat(fe.creditAmount || "0") - freightOpts.freightAmount) > 0.001;
+      freightEntryMissing = !fe || differsByMoreThanTolerance(toMoney(fe.creditAmount), freight);
       if (fe && containerNumber) {
         freightNarrationMismatch = !(fe.narration || "").includes(containerNumber);
       }
@@ -280,17 +310,17 @@ export async function syncIntercoParentVoucher(
 
     await dbOrTx.update(vouchers).set({ totalAmount: amountStr }).where(eq(vouchers.id, parentVoucher.id));
 
-    if (freightOpts && freightOpts.freightAmount > 0) {
+    if (freightOpts && hasFreight) {
       // Split the INTERCO-PARENT: DR subsidiary receivable (grossTotal),
       //   CR supplier (intercoTotal — goods only), CR freightAccount (freight)
       const intercoAmtStr = intercoTotal.toFixed(2);
-      const freightAmtStr = freightOpts.freightAmount.toFixed(2);
+      const freightAmtStr = freight.toFixed(2);
       let freightEntryFound = false;
 
       for (const entry of parentEntries) {
-        if (parseFloat(entry.debitAmount || "0") > 0) {
+        if (toMoney(entry.debitAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (parseFloat(entry.creditAmount || "0") > 0) {
+        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
           if (entry.ledgerAccountId === freightOpts.freightParentAccountId) {
             freightEntryFound = true;
             await dbOrTx
@@ -322,9 +352,9 @@ export async function syncIntercoParentVoucher(
     } else {
       // No freight split — update all entries to grossTotal (original behaviour)
       for (const entry of parentEntries) {
-        if (parseFloat(entry.debitAmount || "0") > 0) {
+        if (toMoney(entry.debitAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ debitAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
-        } else if (parseFloat(entry.creditAmount || "0") > 0) {
+        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
           await dbOrTx.update(voucherEntries).set({ creditAmount: amountStr }).where(eq(voucherEntries.id, entry.id));
         }
       }

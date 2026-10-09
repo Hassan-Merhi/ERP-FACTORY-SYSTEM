@@ -125,9 +125,11 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       .values({
         companyId,
         productId: product.id,
+        color: "Black",
         size: "M",
         barcode: "RWP2-BARCODE-001",
         sku: "RWP2-TEE-M",
+        imageUrls: ["https://example.com/retail-wave2-tee-black.jpg"],
         cost: "4.000000",
         sellingPrice: "10.000000",
       })
@@ -167,12 +169,25 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       code: "RWP2-TEE",
       name: "Retail Wave 2 Tee",
       brand: "North Star",
+      color: "Black",
       size: "M",
       sku: "RWP2-TEE-M",
+      imageUrls: ["https://example.com/retail-wave2-tee-black.jpg"],
       barcode: "RWP2-BARCODE-001",
       price: 10,
       quantity: 5,
     });
+
+    const colorSearch = await agent.get(`/api/pos/retail/items?locationId=${locationId}&search=black`);
+    expect(colorSearch.status).toBe(200);
+    expect(colorSearch.body).toEqual([
+      expect.objectContaining({
+        variantId,
+        color: "Black",
+        size: "M",
+        imageUrls: ["https://example.com/retail-wave2-tee-black.jpg"],
+      }),
+    ]);
 
     const saleBody = {
       locationId,
@@ -185,7 +200,14 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
     expect(sale.body.replayed).toBe(false);
     expect(sale.body.sale.locationId).toBe(locationId);
     expect(sale.body.sale.items).toHaveLength(1);
-    expect(sale.body.sale.items[0]).toMatchObject({ variantId, size: "M", barcode: "RWP2-BARCODE-001", quantity: 2 });
+    expect(sale.body.sale.items[0]).toMatchObject({
+      variantId,
+      color: "Black",
+      size: "M",
+      barcode: "RWP2-BARCODE-001",
+      imageUrls: ["https://example.com/retail-wave2-tee-black.jpg"],
+      quantity: 2,
+    });
     expect(await retailQuantity()).toBe(3);
 
     const saleReplay = await agent.post("/api/pos/retail/sales").send(saleBody);

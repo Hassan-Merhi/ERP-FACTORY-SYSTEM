@@ -29,6 +29,7 @@ import {
   interCompanyTransfers,
 } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, incomeAccountName, shopExpenseAccountName } = ctx;
@@ -339,15 +340,15 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
       const pd = new Date(paymentDate);
       const y = pd.getUTCFullYear(),
         m = pd.getUTCMonth() + 1;
-      const totalAmountNum = parseFloat(amount);
-      const rentalAmountNum = parseFloat(contract.rentalAmount as string);
+      // A non-numeric amount allocates nothing and is refused below.
+      const totalAmount = parseMoneyInput(amount) ?? 0;
 
       const [unit] = await db.select().from(propertyUnits).where(eq(propertyUnits.id, contract.unitId));
       const unitLabel = unit ? `${unit.locationGroup}/${unit.unitNumber}` : `Unit#${contract.unitId}`;
       const isShop = unit?.unitType === "SHOP";
       const tenantPays = module === "ERP" || module === "FACTORY";
 
-      const allocations = await buildAllocations(contract.id, y, m, totalAmountNum, rentalAmountNum);
+      const allocations = await buildAllocations(contract.id, y, m, totalAmount, contract.rentalAmount as string);
       if (!allocations.length)
         return res.status(400).json({ message: "No outstanding rent to apply the guarantee to for that period." });
 

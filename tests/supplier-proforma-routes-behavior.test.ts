@@ -296,9 +296,7 @@ describe("supplier proforma route behavior", () => {
     // Zambia-style child-company flow: the supplier master belongs to the
     // explicitly linked parent, while the proforma itself belongs to the child.
     harness.executeResults.push([{ id: 23 }]);
-    harness.insertResults.push([
-      { id: 11, companyId: 19, supplierId: 23, reference: "RV", notes: null },
-    ]);
+    harness.insertResults.push([{ id: 11, companyId: 19, supplierId: 23, reference: "RV", notes: null }]);
     harness.selectResults.push([]);
     const res = resHarness();
 
@@ -383,6 +381,7 @@ describe("supplier proforma route behavior", () => {
   });
 
   it("deletes a scoped proforma and writes permanent audit evidence", async () => {
+    harness.selectResults.push([{ id: 10 }]);
     const res = resHarness();
     await routes.get("DELETE /api/suppliers/:supplierId/proformas/:proformaId")!(
       req({ params: { supplierId: "2", proformaId: "10" } }),
@@ -393,5 +392,15 @@ describe("supplier proforma route behavior", () => {
       expect.objectContaining({ companyId: 4, action: "delete", tableName: "supplier_proformas", recordId: 10 })
     );
     expect(res.body).toEqual({ success: true });
+  });
+
+  it("deletes nothing when the proforma is not the company's", async () => {
+    const res = resHarness();
+    await routes.get("DELETE /api/suppliers/:supplierId/proformas/:proformaId")!(
+      req({ params: { supplierId: "2", proformaId: "10" } }),
+      res
+    );
+    expect(res.statusCode).toBe(404);
+    expect(harness.deletedTables).toHaveLength(0);
   });
 });

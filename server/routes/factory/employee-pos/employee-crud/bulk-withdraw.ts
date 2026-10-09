@@ -9,7 +9,9 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { ledgerAccounts, voucherEntries, employees, vouchers } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
 
 export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
   // POST /api/factory/employees/bulk-withdraw — withdraw from multiple employees at once
@@ -23,10 +25,31 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
       if (!date) return res.status(400).json({ message: "Date is required" });
       if (!cashAccountId) return res.status(400).json({ message: "Cash account is required" });
 
-      const validWithdrawals = withdrawals.filter((w) => {
-        const a = parseFloat(w.amount);
-        return !isNaN(a) && a > 0 && w.employeeId;
-      });
+      // Each amount at cents; the cash credit below is the sum of these exact lines.
+      const amountsAtCents = withdrawals.map((w) => parseMoneyInput(w.amount)?.toDecimalPlaces(2) ?? null);
+      const requested = withdrawals
+        .map((w, index) => ({ ...w, exactAmount: amountsAtCents[index] }))
+        .filter(
+          (w): w is typeof w & { exactAmount: Decimal } => !!w.exactAmount && w.exactAmount.gt(0) && !!w.employeeId
+        );
+      // Only this company's employees are debited, and only they count toward the
+      // cash credit, so a skipped employee no longer leaves the voucher unbalanced.
+      const companyEmployees = requested.length
+        ? await db
+            .select()
+            .from(employees)
+            .where(
+              and(
+                eq(employees.companyId, companyId),
+                inArray(
+                  employees.id,
+                  requested.map((w) => parseInt(w.employeeId))
+                )
+              )
+            )
+        : [];
+      const employeeById = new Map(companyEmployees.map((emp) => [emp.id, emp]));
+      const validWithdrawals = requested.filter((w) => employeeById.has(parseInt(w.employeeId)));
       if (validWithdrawals.length === 0)
         return res.status(400).json({ message: "No valid withdrawal amounts provided" });
 
@@ -36,7 +59,7 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
         .where(and(eq(ledgerAccounts.id, parseInt(cashAccountId)), eq(ledgerAccounts.companyId, companyId)));
       if (!cashAccount) return res.status(404).json({ message: "Cash account not found" });
 
-      const totalAmount = validWithdrawals.reduce((s: number, w) => s + parseFloat(w.amount), 0);
+      const totalAmount = sumMoney(validWithdrawals.map((w) => w.exactAmount));
       const voucherNumber = `EMP-WD-BULK-${Date.now()}`;
 
       const [bulkVoucher] = await db
@@ -63,11 +86,8 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
       const results = [];
       for (const wd of validWithdrawals) {
         const empId = parseInt(wd.employeeId);
-        const amount = parseFloat(wd.amount);
-        const [emp] = await db
-          .select()
-          .from(employees)
-          .where(and(eq(employees.id, empId), eq(employees.companyId, companyId)));
+        const amount = wd.exactAmount;
+        const emp = employeeById.get(empId);
         if (!emp) continue;
 
         // DR: Employee
@@ -80,8 +100,8 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
           narration: wd.notes || `Withdrawal for ${emp.firstName} ${emp.lastName} - ${voucherNumber}`,
         });
 
-        const newBalance = parseFloat(emp.currentBalance || "0") - amount;
-        const newWithdrawals = parseFloat(emp.totalWithdrawals || "0") + amount;
+        const newBalance = toMoney(emp.currentBalance).minus(amount);
+        const newWithdrawals = toMoney(emp.totalWithdrawals).plus(amount);
         await db
           .update(employees)
           .set({
@@ -89,11 +109,17 @@ export function registerFactoryEmployeeBulkWithdrawRoutes(app: Express) {
             totalWithdrawals: newWithdrawals.toFixed(2),
           })
           .where(eq(employees.id, empId));
+        // The same employee may appear twice; the next line starts from this balance.
+        employeeById.set(empId, {
+          ...emp,
+          currentBalance: newBalance.toFixed(2),
+          totalWithdrawals: newWithdrawals.toFixed(2),
+        });
 
-        results.push({ employeeId: empId, amount, name: `${emp.firstName} ${emp.lastName}` });
+        results.push({ employeeId: empId, amount: amount.toNumber(), name: `${emp.firstName} ${emp.lastName}` });
       }
 
-      res.json({ voucher: bulkVoucher, results, totalAmount });
+      res.json({ voucher: bulkVoucher, results, totalAmount: totalAmount.toNumber() });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

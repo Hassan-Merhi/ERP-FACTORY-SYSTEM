@@ -1,7 +1,7 @@
 import { normalizeSearchText } from "@shared/searchNormalization";
 import type { Express, Request, Response } from "express";
-import { eq } from "drizzle-orm";
-import { companies } from "@shared/schema";
+import { and, eq } from "drizzle-orm";
+import { companies, storedFiles } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db, pool } from "../db";
 import { getErrorMessage } from "../lib/httpHandlers";
@@ -9,9 +9,11 @@ import { getErrorMessage } from "../lib/httpHandlers";
 interface CatalogQuery {
   search: string;
   brandId?: number;
+  color: string;
   size: string;
   category: string;
   locationId?: number;
+  archived: "exclude" | "include" | "only";
   stockStatus: "all" | "in" | "low" | "out";
   page: number;
   pageSize: number;
@@ -28,8 +30,11 @@ interface CatalogProductRow {
   brand_id: number | null;
   brand_name: string | null;
   variant_id: number | null;
+  color: string | null;
   size: string | null;
+  variant_image_urls: unknown;
   barcode: string | null;
+  barcode_source: string | null;
   sku: string | null;
   cost: string | number | null;
   selling_price: string | number | null;
@@ -67,9 +72,11 @@ function parseCatalogQuery(req: Request): CatalogQuery {
   return {
     search: normalize(req.query.search),
     brandId: positiveInteger(req.query.brandId),
+    color: normalize(req.query.color),
     size: normalize(req.query.size),
     category: normalize(req.query.category),
     locationId: positiveInteger(req.query.locationId),
+    archived: req.query.archived === "include" || req.query.archived === "only" ? req.query.archived : "exclude",
     stockStatus,
     page,
     pageSize,
@@ -105,6 +112,16 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
   };
 
   const where: string[] = [`p.company_id = ${add(companyId)}`];
+  // Archived styles keep their sales and movement history but are hidden from day-to-day browsing.
+  if (query.archived === "exclude") where.push("p.active = true");
+  if (query.archived === "only") {
+    where.push(`(p.active = false OR EXISTS (
+      SELECT 1 FROM retail_product_variants archived_variant
+      WHERE archived_variant.company_id = p.company_id
+        AND archived_variant.product_id = p.id
+        AND archived_variant.active = false
+    ))`);
+  }
 
   if (query.search) {
     const token = add(`%${query.search}%`);
@@ -117,10 +134,36 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
         '',
         'g'
       ) LIKE ${compactToken}
+      OR EXISTS (
+        SELECT 1
+        FROM retail_product_variants search_variant
+        WHERE search_variant.company_id = p.company_id
+          AND search_variant.product_id = p.id
+          AND search_variant.active = true
+          AND (
+            LOWER(CONCAT_WS(' ', search_variant.color, search_variant.size, search_variant.barcode, COALESCE(search_variant.sku, ''))) LIKE ${token}
+            OR regexp_replace(
+              lower(CONCAT_WS(' ', search_variant.color, search_variant.size, search_variant.barcode, COALESCE(search_variant.sku, ''))),
+              '[^[:alnum:]]+',
+              '',
+              'g'
+            ) LIKE ${compactToken}
+          )
+      )
     )`);
   }
   if (query.brandId) where.push(`p.brand_id = ${add(query.brandId)}`);
   if (query.category) where.push(`LOWER(COALESCE(p.category, '')) = ${add(query.category)}`);
+  if (query.color) {
+    where.push(`EXISTS (
+      SELECT 1
+      FROM retail_product_variants color_variant
+      WHERE color_variant.company_id = p.company_id
+        AND color_variant.product_id = p.id
+        AND color_variant.active = true
+        AND LOWER(color_variant.color) = ${add(query.color)}
+    )`);
+  }
   if (query.size) {
     where.push(`EXISTS (
       SELECT 1
@@ -160,19 +203,24 @@ function buildCatalogWhere(companyId: number, query: CatalogQuery) {
         AND low_inventory.quantity <= low_variant.low_stock_threshold
     )`);
   } else if (query.stockStatus === "in" || query.stockStatus === "out") {
+    // Fashion stock is judged per exact color/size: a style is "out" when any of its
+    // active variants is sold out (optionally at the chosen location), "in" when any has stock.
     const locationClause = query.locationId ? `AND stock_inventory.location_id = ${add(query.locationId)}` : "";
     const comparator = query.stockStatus === "in" ? "> 0" : "<= 0";
-    where.push(`COALESCE((
-      SELECT SUM(stock_inventory.quantity)
+    where.push(`EXISTS (
+      SELECT 1
       FROM retail_product_variants stock_variant
-      LEFT JOIN retail_variant_inventory stock_inventory
-        ON stock_inventory.company_id = stock_variant.company_id
-       AND stock_inventory.variant_id = stock_variant.id
-       ${locationClause}
       WHERE stock_variant.company_id = p.company_id
         AND stock_variant.product_id = p.id
         AND stock_variant.active = true
-    ), 0) ${comparator}`);
+        AND COALESCE((
+          SELECT SUM(stock_inventory.quantity)
+          FROM retail_variant_inventory stock_inventory
+          WHERE stock_inventory.company_id = stock_variant.company_id
+            AND stock_inventory.variant_id = stock_variant.id
+            ${locationClause}
+        ), 0) ${comparator}
+    )`);
   }
 
   return { text: where.join(" AND "), params };
@@ -190,8 +238,11 @@ function assembleProducts(rows: CatalogProductRow[]) {
     brand: { id: number | null; name: string };
     variants: Array<{
       id: number;
+      color: string;
       size: string;
+      imageUrls: string[];
       barcode: string;
+      barcodeSource: string;
       sku: string | null;
       cost: number;
       sellingPrice: number;
@@ -200,6 +251,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
       quantity: number;
       stocks: Array<{ locationId: number; locationName: string; quantity: number }>;
     }>;
+    availableColors: string[];
     availableSizes: string[];
     totalQuantity: number;
     minSellingPrice: number;
@@ -224,6 +276,7 @@ function assembleProducts(rows: CatalogProductRow[]) {
         active: row.active,
         brand: { id: row.brand_id, name: row.brand_name ?? "Other / No Brand" },
         variants: [],
+        availableColors: [],
         availableSizes: [],
         totalQuantity: 0,
         minSellingPrice: 0,
@@ -239,8 +292,13 @@ function assembleProducts(rows: CatalogProductRow[]) {
     if (!variant) {
       variant = {
         id: row.variant_id,
+        color: row.color ?? "Default",
         size: row.size ?? "",
+        imageUrls: Array.isArray(row.variant_image_urls)
+          ? row.variant_image_urls.filter((value): value is string => typeof value === "string")
+          : [],
         barcode: row.barcode ?? "",
+        barcodeSource: row.barcode_source ?? "manual",
         sku: row.sku,
         cost: numberValue(row.cost),
         sellingPrice: numberValue(row.selling_price),
@@ -266,7 +324,8 @@ function assembleProducts(rows: CatalogProductRow[]) {
 
   for (const product of products.values()) {
     const activeVariants = product.variants.filter((variant) => variant.active);
-    product.availableSizes = activeVariants.map((variant) => variant.size);
+    product.availableColors = [...new Set(activeVariants.map((variant) => variant.color))];
+    product.availableSizes = [...new Set(activeVariants.map((variant) => variant.size))];
     product.totalQuantity = activeVariants.reduce((sum, variant) => sum + variant.quantity, 0);
     const prices = activeVariants.map((variant) => variant.sellingPrice);
     product.minSellingPrice = prices.length ? Math.min(...prices) : 0;
@@ -277,12 +336,63 @@ function assembleProducts(rows: CatalogProductRow[]) {
 }
 
 export function registerRetailCatalogRoutes(app: Express): void {
+  // Product photos use the company file store, but retail users should not need
+  // the generic files.download permission just to see catalog/POS imagery.
+  // This endpoint is intentionally limited to image/* files in the selected
+  // retail company and keeps legacy product-photo records working.
+  app.get("/api/retail/media/:id", requireAuth, async (req, res) => {
+    try {
+      const companyId = await requireRetailCompany(req, res);
+      if (!companyId) return;
+
+      const fileId = positiveInteger(req.params.id);
+      if (!fileId) return res.status(404).json({ message: "Image not found" });
+
+      const [file] = await db
+        .select({
+          id: storedFiles.id,
+          fileName: storedFiles.fileName,
+          displayName: storedFiles.displayName,
+          fileType: storedFiles.fileType,
+          fileData: storedFiles.fileData,
+        })
+        .from(storedFiles)
+        .where(and(eq(storedFiles.id, fileId), eq(storedFiles.companyId, companyId)))
+        .limit(1);
+
+      if (!file || !file.fileType?.startsWith("image/")) {
+        return res.status(404).json({ message: "Image not found" });
+      }
+
+      const buffer = Buffer.from(file.fileData, "base64");
+      res.setHeader("Content-Type", file.fileType);
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${encodeURIComponent(file.displayName || file.fileName)}"`
+      );
+      res.setHeader("Content-Length", String(buffer.length));
+      res.setHeader("Cache-Control", "private, max-age=86400");
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.end(buffer);
+      return;
+    } catch (error: unknown) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/retail/catalog-facets", requireAuth, requireNonPOS, async (req, res) => {
     try {
       const companyId = await requireRetailCompany(req, res);
       if (!companyId) return;
 
-      const [sizes, categories] = await Promise.all([
+      const [colors, sizes, categories] = await Promise.all([
+        pool.query<{ color: string }>(
+          `SELECT DISTINCT color
+           FROM retail_product_variants
+           WHERE company_id = $1 AND active = true AND NULLIF(BTRIM(color), '') IS NOT NULL
+           ORDER BY color`,
+          [companyId]
+        ),
         pool.query<{ size: string }>(
           `SELECT DISTINCT size
            FROM retail_product_variants
@@ -300,6 +410,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
       ]);
 
       res.json({
+        colors: colors.rows.map((row) => row.color),
         sizes: sizes.rows.map((row) => row.size),
         categories: categories.rows.map((row) => row.category),
       });
@@ -335,7 +446,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
          FROM retail_products p
          LEFT JOIN retail_brands b ON b.id = p.brand_id AND b.company_id = p.company_id
          WHERE ${where.text}
-         ORDER BY LOWER(p.name), p.id
+         ORDER BY LOWER(COALESCE(b.name, '')), LOWER(p.name), p.id
          LIMIT ${limitParam} OFFSET ${offsetParam}`,
         pageParams
       );
@@ -356,8 +467,11 @@ export function registerRetailCatalogRoutes(app: Express): void {
            b.id AS brand_id,
            b.name AS brand_name,
            v.id AS variant_id,
+           v.color,
            v.size,
+           v.image_urls AS variant_image_urls,
            v.barcode,
+           v.barcode_source,
            v.sku,
            v.cost,
            v.selling_price,
@@ -372,7 +486,7 @@ export function registerRetailCatalogRoutes(app: Express): void {
          LEFT JOIN retail_variant_inventory i ON i.variant_id = v.id AND i.company_id = p.company_id
          LEFT JOIN locations l ON l.id = i.location_id AND l.company_id = p.company_id
          WHERE p.company_id = $1 AND p.id = ANY($2::int[])
-         ORDER BY ARRAY_POSITION($2::int[], p.id), v.size, l.name`,
+         ORDER BY ARRAY_POSITION($2::int[], p.id), v.color, v.size, l.name`,
         [companyId, productIds]
       );
 

@@ -42,6 +42,7 @@ import { supplierTrackingDefaultsSchema } from "./028-supplier-tracking-defaults
 import { userPresenceComplianceIndexes } from "./029-user-presence-compliance-indexes";
 import { scheduledWhatsAppDeliveryTracking } from "./030-scheduled-whatsapp-delivery-tracking";
 import { inventoryValuationOverrides } from "./031-inventory-valuation-overrides";
+import { historicalReplaySafetySchema } from "./032-historical-replay-safety";
 
 export const startupMigrations: string[] = [
   ...coreTablesAndColumns,
@@ -82,6 +83,7 @@ export const startupMigrations: string[] = [
   ...scheduledWhatsAppDeliveryTracking,
   // Appended last: references companies, locations and stock_items.
   ...inventoryValuationOverrides,
+  ...historicalReplaySafetySchema,
 ];
 
 // Re-exported so server/index.ts can bootstrap the journal from the module it

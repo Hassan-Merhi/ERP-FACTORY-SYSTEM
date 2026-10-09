@@ -9,8 +9,25 @@ import { logAudit } from "../_helpers";
 import { logger } from "../../lib/logger";
 import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
+
+/**
+ * A request amount as an exact Decimal, read as parseFloat reads it. A blank
+ * value is zero, as the edit form treats it; anything else that does not
+ * parse is rejected, where it used to be written as NaN.
+ */
+function amountInput(value: unknown): Decimal {
+  if (typeof value === "string" && value.trim() === "") return new MoneyDecimal(0);
+  const parsed = parseMoneyInput(value);
+  if (!parsed) throw new HttpError(400, "Invalid amount");
+  return parsed;
+}
+
+/** Cents as a numeric(…, 2) column stores them (half away from zero). */
+const cents = (value: Decimal) => value.toFixed(2);
 
 /**
  * A line item as the client sends it. Every field is optional and loosely typed
@@ -57,7 +74,7 @@ export async function applyPurchaseOrderItemsUpdate(
   const existingItemsMap = new Map(existingLineItems.map((item) => [item.id, item]));
 
   // Calculate new items total, preserving existing quantity/rate if not provided
-  let itemsTotal = 0;
+  let itemsTotal = new MoneyDecimal(0);
   const newItems = (req.body.items as PurchaseOrderItemInput[]).map((item) => {
     // Find existing item by id to preserve values
     // Convert item.id to number for consistent Map lookup (request may send string or number)
@@ -74,8 +91,8 @@ export async function applyPurchaseOrderItemsUpdate(
       item.rate !== undefined && item.rate !== null && item.rate !== ""
         ? item.rate.toString()
         : (existingItem?.rate ?? "0");
-    const lineTotal = parseFloat(quantity) * parseFloat(rate);
-    itemsTotal += lineTotal;
+    const lineTotal = amountInput(quantity).times(amountInput(rate));
+    itemsTotal = itemsTotal.plus(lineTotal);
 
     return {
       poId: id,
@@ -83,19 +100,29 @@ export async function applyPurchaseOrderItemsUpdate(
       itemName: (item.itemName ?? existingItem?.itemName) as string,
       quantity: quantity,
       rate: rate,
-      lineTotal: lineTotal.toFixed(2),
+      lineTotal: cents(lineTotal),
     };
   });
 
   // Capture freight in outer scope so the post-transaction parent-freight sync
   // can access it without a ReferenceError.
-  let _b1FreightForSync = parseFloat(existingPO.freight ?? "0");
+  let _b1FreightForSync = toMoney(existingPO.freight);
   // ── Lifted for post-transaction interco sync (belt-and-suspenders) ────
-  let _b1GrandTotalForSync = 0;
+  let _b1GrandTotalForSync = new MoneyDecimal(0);
   let _b1HasParentFreightForSync = false;
   let _b1FreightParentAccountIdForSync: number | null = null;
   let _b1PoNumsForSync: string | string[] = existingPO.poNumber;
   let _b1ContainerNumForSync: string | undefined;
+
+  // Use ?? to correctly handle explicit zero values from the request
+  const freight = amountInput(req.body.freight ?? existingPO.freight ?? "0");
+  const surcharge = amountInput(req.body.surcharge ?? existingPO.surcharge ?? "0");
+  const fumigation = amountInput(req.body.fumigation ?? existingPO.fumigation ?? "0");
+  const documentCharges = amountInput(req.body.documentCharges ?? existingPO.documentCharges ?? "0");
+  const discount = amountInput(req.body.discount ?? existingPO.discount ?? "0");
+  const otherCharges = amountInput(req.body.otherCharges ?? existingPO.otherCharges ?? "0");
+  // Every charge but the freight, net of the discount.
+  const nonFreightCharges = sumMoney([surcharge, fumigation, documentCharges, otherCharges]).minus(discount);
 
   // Delete existing line items and create new ones in a transaction.
   // Lock order intentionally matches the offload lifecycle: container -> purchase order.
@@ -161,14 +188,7 @@ export async function applyPurchaseOrderItemsUpdate(
     }
 
     // Update PO with new items total and charges
-    // Use ?? to correctly handle explicit zero values from the request
-    const freight = parseFloat(req.body.freight ?? existingPO.freight ?? "0");
     _b1FreightForSync = freight; // lift into outer scope for post-tx sync
-    const surcharge = parseFloat(req.body.surcharge ?? existingPO.surcharge ?? "0");
-    const fumigation = parseFloat(req.body.fumigation ?? existingPO.fumigation ?? "0");
-    const documentCharges = parseFloat(req.body.documentCharges ?? existingPO.documentCharges ?? "0");
-    const discount = parseFloat(req.body.discount ?? existingPO.discount ?? "0");
-    const otherCharges = parseFloat(req.body.otherCharges ?? existingPO.otherCharges ?? "0");
 
     // Check if any charge field was explicitly provided in the request
     const chargesWereEdited =
@@ -182,13 +202,13 @@ export async function applyPurchaseOrderItemsUpdate(
     await tx
       .update(purchaseOrders)
       .set({
-        itemsTotal: itemsTotal.toFixed(2),
-        freight: freight.toFixed(2),
-        surcharge: surcharge.toFixed(2),
-        fumigation: fumigation.toFixed(2),
-        documentCharges: documentCharges.toFixed(2),
-        discount: discount.toFixed(2),
-        otherCharges: otherCharges.toFixed(2),
+        itemsTotal: cents(itemsTotal),
+        freight: cents(freight),
+        surcharge: cents(surcharge),
+        fumigation: cents(fumigation),
+        documentCharges: cents(documentCharges),
+        discount: cents(discount),
+        otherCharges: cents(otherCharges),
         chargesEdited: chargesWereEdited ? true : existingPO.chargesEdited,
         poNumber: req.body.poNumber || existingPO.poNumber,
         currency: req.body.currency || existingPO.currency,
@@ -214,23 +234,19 @@ export async function applyPurchaseOrderItemsUpdate(
       // Get all POs for this container and recalculate totals
       const allPOs = await storage.getAllPurchaseOrders(existingPO.companyId);
       const containerPOs = allPOs.filter((po) => po.containerId === existingPO.containerId);
-      let totalItemsCost = 0;
-      let totalCharges = 0;
+      let totalItemsCost = new MoneyDecimal(0);
+      let totalCharges = new MoneyDecimal(0);
 
       for (const po of containerPOs) {
         if (po.id === id) {
           // Use the new values for this PO
-          totalItemsCost += itemsTotal;
-          totalCharges += freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+          totalItemsCost = totalItemsCost.plus(itemsTotal);
+          totalCharges = totalCharges.plus(freight).plus(nonFreightCharges);
         } else {
-          totalItemsCost += parseFloat(po.itemsTotal || "0");
-          totalCharges +=
-            parseFloat(po.freight || "0") +
-            parseFloat(po.surcharge || "0") +
-            parseFloat(po.fumigation || "0") +
-            parseFloat(po.documentCharges || "0") -
-            parseFloat(po.discount || "0") +
-            parseFloat(po.otherCharges || "0");
+          totalItemsCost = totalItemsCost.plus(toMoney(po.itemsTotal));
+          totalCharges = totalCharges
+            .plus(sumMoney([po.freight, po.surcharge, po.fumigation, po.documentCharges, po.otherCharges]))
+            .minus(toMoney(po.discount));
         }
       }
 
@@ -239,31 +255,27 @@ export async function applyPurchaseOrderItemsUpdate(
       await tx
         .update(containers)
         .set({
-          itemsTotal: totalItemsCost.toFixed(2),
-          chargesTotal: chargesTotal.toFixed(2),
-          grandTotal: (totalItemsCost + chargesTotal).toFixed(2),
+          itemsTotal: cents(totalItemsCost),
+          chargesTotal: cents(chargesTotal),
+          grandTotal: cents(totalItemsCost.plus(chargesTotal)),
         })
         .where(eq(containers.id, existingPO.containerId));
     }
 
     // Compute totals. intercoTotal = supplier share (excludes freight when own/parent-paid).
-    const poGrandTotal = itemsTotal + freight + surcharge + fumigation + documentCharges - discount + otherCharges;
+    const poGrandTotalExact = itemsTotal.plus(freight).plus(nonFreightCharges);
     const b1FreightPaidBy: string = req.body.freightPaidBy ?? existingPO.freightPaidBy ?? "supplier";
     // 'own': freight goes to a separate own-account voucher → exclude from PO voucher
-    // 'parent': subsidiary still owes parent the full amount including freight → use poGrandTotal
+    // 'parent': subsidiary still owes parent the full amount including freight → use poGrandTotalExact
     // 'supplier': full amount
-    const b1IntercoTotal =
-      b1FreightPaidBy === "own" && freight > 0
-        ? itemsTotal + surcharge + fumigation + documentCharges - discount + otherCharges
-        : poGrandTotal;
+    const b1IntercoTotal = cents(
+      b1FreightPaidBy === "own" && freight.greaterThan(0) ? itemsTotal.plus(nonFreightCharges) : poGrandTotalExact
+    );
 
     // Update the associated voucher — use supplier share (intercoTotal) so freight excluded
     // when it's paid via own-account or parent-company voucher.
     if (existingPO.voucherId) {
-      await tx
-        .update(vouchers)
-        .set({ totalAmount: b1IntercoTotal.toFixed(2) })
-        .where(eq(vouchers.id, existingPO.voucherId));
+      await tx.update(vouchers).set({ totalAmount: b1IntercoTotal }).where(eq(vouchers.id, existingPO.voucherId));
 
       const existingEntries = await tx
         .select()
@@ -271,15 +283,15 @@ export async function applyPurchaseOrderItemsUpdate(
         .where(eq(voucherEntries.voucherId, existingPO.voucherId));
 
       for (const entry of existingEntries) {
-        if (parseFloat(entry.debitAmount || "0") > 0) {
+        if (toMoney(entry.debitAmount).greaterThan(0)) {
           await tx
             .update(voucherEntries)
-            .set({ debitAmount: b1IntercoTotal.toFixed(2), creditAmount: "0" })
+            .set({ debitAmount: b1IntercoTotal, creditAmount: "0" })
             .where(eq(voucherEntries.id, entry.id));
-        } else if (parseFloat(entry.creditAmount || "0") > 0) {
+        } else if (toMoney(entry.creditAmount).greaterThan(0)) {
           await tx
             .update(voucherEntries)
-            .set({ creditAmount: b1IntercoTotal.toFixed(2), debitAmount: "0" })
+            .set({ creditAmount: b1IntercoTotal, debitAmount: "0" })
             .where(eq(voucherEntries.id, entry.id));
         }
       }
@@ -296,7 +308,8 @@ export async function applyPurchaseOrderItemsUpdate(
               ? null
               : Number(req.body.freightParentAccountId)
             : (existingPO.freightParentAccountId ?? null);
-        const _b1HasParentFreight = b1FreightPaidBy === "parent" && freight > 0 && !!_b1FreightParentAccountId;
+        const _b1HasParentFreight =
+          b1FreightPaidBy === "parent" && freight.greaterThan(0) && !!_b1FreightParentAccountId;
         const _b1NewPoNum =
           req.body.poNumber && req.body.poNumber !== existingPO.poNumber ? (req.body.poNumber as string) : null;
         const _b1PoNums = _b1NewPoNum ? [existingPO.poNumber, _b1NewPoNum] : existingPO.poNumber;
@@ -312,7 +325,7 @@ export async function applyPurchaseOrderItemsUpdate(
         const _b1Sync = await syncIntercoParentVoucher(
           tx,
           _b1PoNums,
-          poGrandTotal,
+          poGrandTotalExact,
           _b1ContainerRow?.containerNumber,
           _b1HasParentFreight
             ? {
@@ -328,7 +341,7 @@ export async function applyPurchaseOrderItemsUpdate(
           );
         }
         // Lift to outer scope so post-transaction backup sync can use them
-        _b1GrandTotalForSync = poGrandTotal;
+        _b1GrandTotalForSync = poGrandTotalExact;
         _b1HasParentFreightForSync = _b1HasParentFreight;
         _b1FreightParentAccountIdForSync = _b1FreightParentAccountId;
         _b1PoNumsForSync = _b1PoNums;
@@ -343,7 +356,7 @@ export async function applyPurchaseOrderItemsUpdate(
         { field: "surcharge", chargeType: "Surcharge", amount: surcharge },
         { field: "fumigation", chargeType: "Fumigation", amount: fumigation },
         { field: "documentCharges", chargeType: "Document Charges", amount: documentCharges },
-        { field: "discount", chargeType: "Discount", amount: -discount }, // Discount stored as negative
+        { field: "discount", chargeType: "Discount", amount: discount.negated() }, // Discount stored as negative
         { field: "otherCharges", chargeType: "Other Charges", amount: otherCharges },
       ];
 
@@ -357,7 +370,7 @@ export async function applyPurchaseOrderItemsUpdate(
           )
           .limit(1);
 
-        if (amount === 0) {
+        if (amount.isZero()) {
           // Delete entry if charge is 0
           if (existingCharge.length > 0) {
             await tx.delete(containerCharges).where(eq(containerCharges.id, existingCharge[0].id));
@@ -367,13 +380,13 @@ export async function applyPurchaseOrderItemsUpdate(
           if (existingCharge.length > 0) {
             await tx
               .update(containerCharges)
-              .set({ amount: amount.toFixed(2) })
+              .set({ amount: cents(amount) })
               .where(eq(containerCharges.id, existingCharge[0].id));
           } else {
             await tx.insert(containerCharges).values({
               containerId: existingPO.containerId,
               chargeType: chargeType,
-              amount: amount.toFixed(2),
+              amount: cents(amount),
             });
           }
         }
@@ -387,7 +400,7 @@ export async function applyPurchaseOrderItemsUpdate(
   // the transaction using the plain `db` handle — identical to the pattern
   // used by the charges-only path — so the parent INTERCO-PARENT JV is
   // guaranteed to be up-to-date even if the in-transaction call was a no-op.
-  if (_b1GrandTotalForSync > 0) {
+  if (_b1GrandTotalForSync.greaterThan(0)) {
     const _b1PostParentId = await storage.getParentCompanyId();
     if (_b1PostParentId && existingPO.companyId !== _b1PostParentId) {
       const _b1PostSync = await syncIntercoParentVoucher(

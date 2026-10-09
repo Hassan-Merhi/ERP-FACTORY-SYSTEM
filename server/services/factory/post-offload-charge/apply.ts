@@ -4,6 +4,7 @@ import {
   insertInfrastructureVoucherTx,
 } from "../../accounting/infrastructureVoucherIdentity";
 import Decimal from "decimal.js";
+import { toMoney } from "../../../lib/money";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   factoryContainers,
@@ -134,8 +135,8 @@ export async function applyPostOffloadChargeMutation(
     return {
       chargeId,
       action: "LEGACY_REBUILD",
-      oldContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
-      newContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
+      oldContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
+      newContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
       supplierLockedRateBefore,
       supplierLockedRateAfter: supplierLockedRateAfterStr,
       supplierRemainingKg,
@@ -321,7 +322,7 @@ export async function applyPostOffloadChargeMutation(
     return {
       chargeId: inserted.id,
       action: "CREATE",
-      oldContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
+      oldContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
       newContainerCostPerKgUsd: newCost.costPerKgUsd,
       supplierLockedRateBefore,
       supplierLockedRateAfter,
@@ -637,7 +638,7 @@ export async function applyPostOffloadChargeMutation(
     return {
       chargeId,
       action: "EDIT",
-      oldContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
+      oldContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
       newContainerCostPerKgUsd: newCost.costPerKgUsd,
       supplierLockedRateBefore,
       supplierLockedRateAfter,
@@ -676,8 +677,8 @@ export async function applyPostOffloadChargeMutation(
         chargeId,
         action: "UNDO",
         alreadyUndone: true,
-        oldContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
-        newContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
+        oldContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
+        newContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
         supplierLockedRateBefore: null,
         supplierLockedRateAfter: null,
         supplierRemainingKg,
@@ -809,9 +810,9 @@ export async function applyPostOffloadChargeMutation(
           referenceId: containerId,
           description: `REVERSAL: ${chargeRow.description} (post-offload) — container ${container.containerNumber}`,
           currencyCode: origEntry.currencyCode,
-          amountCurrency: -parseFloat(String(origEntry.amountCurrency || "0")),
-          fxRateToUsd: parseFloat(String(origEntry.fxRateToUsd || "1")),
-          amountUsd: -parseFloat(String(origEntry.amountUsd || "0")),
+          amountCurrency: toMoney(origEntry.amountCurrency).neg().toNumber(),
+          fxRateToUsd: toMoney(origEntry.fxRateToUsd || "1").toNumber(),
+          amountUsd: toMoney(origEntry.amountUsd).neg().toNumber(),
           metaJson: JSON.stringify({
             sourceType: "POST_OFFLOAD_ADDITIONAL_REVERSAL",
             chargeId,
@@ -842,7 +843,7 @@ export async function applyPostOffloadChargeMutation(
     return {
       chargeId,
       action: "UNDO",
-      oldContainerCostPerKgUsd: parseFloat(String(container.ratePerKgUsd || "0")),
+      oldContainerCostPerKgUsd: toMoney(container.ratePerKgUsd).toNumber(),
       newContainerCostPerKgUsd: newCost.costPerKgUsd,
       supplierLockedRateBefore,
       supplierLockedRateAfter,

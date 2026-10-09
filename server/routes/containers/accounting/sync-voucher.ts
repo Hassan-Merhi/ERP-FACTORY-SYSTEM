@@ -12,7 +12,8 @@ import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { containers, purchaseOrders, vouchers, voucherEntries, suppliers } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
-import { calcPoAmounts, syncIntercoParentVoucher } from "../containerHelpers";
+import { calcPoAmountsExact, syncIntercoParentVoucher } from "../containerHelpers";
+import { toMoney } from "../../../lib/money";
 
 export function registerContainerSyncVoucherRoutes(app: Express) {
   // Sync purchase voucher amounts for a container's POs (fixes cases where voucher
@@ -40,7 +41,7 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
       const errors: string[] = [];
 
       for (const po of pos) {
-        const { grossTotal: poTotal, intercoTotal: poIntercoTotal } = calcPoAmounts({
+        const { grossTotal: poTotal, intercoTotal: poIntercoTotal } = calcPoAmountsExact({
           itemsTotal: po.itemsTotal,
           freight: po.freight,
           surcharge: po.surcharge,
@@ -51,13 +52,13 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
           freightPaidBy: po.freightPaidBy,
         });
         const poFreightPaidBy: string = po.freightPaidBy || "supplier";
-        const poFreight = parseFloat(po.freight || "0");
+        const poFreight = toMoney(po.freight);
         const poFreightParentAccountId: number | null = po.freightParentAccountId
           ? Number(po.freightParentAccountId)
           : null;
         const poFreightOwnAccountId: number | null = po.freightOwnAccountId ? Number(po.freightOwnAccountId) : null;
-        const hasParentFreight = poFreightPaidBy === "parent" && poFreight > 0 && !!poFreightParentAccountId;
-        const hasOwnFreight = poFreightPaidBy === "own" && poFreight > 0 && !!poFreightOwnAccountId;
+        const hasParentFreight = poFreightPaidBy === "parent" && poFreight.gt(0) && !!poFreightParentAccountId;
+        const hasOwnFreight = poFreightPaidBy === "own" && poFreight.gt(0) && !!poFreightOwnAccountId;
         const hasEmbeddedFreight = hasParentFreight || hasOwnFreight;
         // Which account to credit for freight inside the purchase voucher
         const freightAccountId = hasParentFreight
@@ -69,7 +70,7 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
         // Local voucher amount: grossTotal when freight is embedded, intercoTotal otherwise.
         const poLocalTotal = hasEmbeddedFreight ? poTotal : poIntercoTotal;
 
-        if (poTotal <= 0) {
+        if (poTotal.lte(0)) {
           skipped.push(`PO ${po.poNumber}: total is 0`);
           continue;
         }
@@ -120,8 +121,8 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
 
             for (const entry of entries) {
               const acctId = entry.ledgerAccountId as number | null;
-              const isDebit = parseFloat(entry.debitAmount || "0") > 0 && parseFloat(entry.creditAmount || "0") === 0;
-              const isCredit = parseFloat(entry.creditAmount || "0") > 0 && parseFloat(entry.debitAmount || "0") === 0;
+              const isDebit = toMoney(entry.debitAmount).gt(0) && toMoney(entry.creditAmount).isZero();
+              const isCredit = toMoney(entry.creditAmount).gt(0) && toMoney(entry.debitAmount).isZero();
 
               if (isCredit && acctId === parentCreditAcctId && parentCreditEntryId === null) {
                 // Keep this one — we'll update it to grossTotal
@@ -183,8 +184,8 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
             let purchasesAcctId: number | null = null;
             let freightCrFound = false;
             for (const entry of entries) {
-              const isDebit = parseFloat(entry.debitAmount || "0") > 0 && parseFloat(entry.creditAmount || "0") === 0;
-              const isCredit = parseFloat(entry.creditAmount || "0") > 0 && parseFloat(entry.debitAmount || "0") === 0;
+              const isDebit = toMoney(entry.debitAmount).gt(0) && toMoney(entry.creditAmount).isZero();
+              const isCredit = toMoney(entry.creditAmount).gt(0) && toMoney(entry.debitAmount).isZero();
               if (isDebit) {
                 if (!purchasesAcctId) purchasesAcctId = entry.ledgerAccountId ?? null;
                 // Goods DR entry — update to intercoTotal; freight DR will be added/kept separately
@@ -233,12 +234,12 @@ export function registerContainerSyncVoucherRoutes(app: Express) {
           } else {
             // Standard: update all entries to poLocalTotal
             for (const entry of entries) {
-              const origDebit = parseFloat(entry.debitAmount || "0");
-              const origCredit = parseFloat(entry.creditAmount || "0");
+              const origDebit = toMoney(entry.debitAmount);
+              const origCredit = toMoney(entry.creditAmount);
               let isDebitEntry: boolean;
-              if (origDebit > 0 && origCredit === 0) {
+              if (origDebit.gt(0) && origCredit.isZero()) {
                 isDebitEntry = true;
-              } else if (origCredit > 0 && origDebit === 0) {
+              } else if (origCredit.gt(0) && origDebit.isZero()) {
                 isDebitEntry = false;
               } else {
                 const nar = (entry.narration || "").toLowerCase();

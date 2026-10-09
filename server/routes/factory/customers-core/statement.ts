@@ -11,6 +11,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { customerOrders, customerBalances, customers, voucherEntries, vouchers } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryCustomerStatementRoutes(app: Express) {
   // CUSTOMER STATEMENT
@@ -173,14 +174,13 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
       });
 
       // Build running balance
-      const openingBalance = parseFloat(customer.openingBalance || "0");
+      // Exact running balance: a float total drifted (0.10 + 0.20 = 0.30000000000000004).
+      const openingBalance = toMoney(customer.openingBalance);
       const openingSide = customer.openingBalanceSide || "Dr";
-      let runningBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
+      let runningBalance = openingSide === "Dr" ? openingBalance : openingBalance.negated();
 
       const balanceHistory = allRows.map((row) => {
-        const debit = parseFloat(row.debitAmount || "0");
-        const credit = parseFloat(row.creditAmount || "0");
-        runningBalance += debit - credit;
+        runningBalance = runningBalance.plus(toMoney(row.debitAmount)).minus(toMoney(row.creditAmount));
         const containerNumber =
           row.referenceType === "INVOICE" && row.referenceId ? (containerByOrderId.get(row.referenceId) ?? null) : null;
         const destination =
@@ -201,13 +201,13 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
           destination,
           totalQtyBales,
           totalWeightKg,
-          runningBalance,
-          runningBalanceSide: runningBalance >= 0 ? "Dr" : "Cr",
+          runningBalance: runningBalance.toNumber(),
+          runningBalanceSide: runningBalance.gte(0) ? "Dr" : "Cr",
         };
       });
 
-      const currentBalance = Math.abs(runningBalance);
-      const currentBalanceSide = runningBalance >= 0 ? "Dr" : "Cr";
+      const currentBalance = runningBalance.abs().toNumber();
+      const currentBalanceSide = runningBalance.gte(0) ? "Dr" : "Cr";
 
       res.json({
         customer,
@@ -215,7 +215,7 @@ export function registerFactoryCustomerStatementRoutes(app: Express) {
         balanceHistory,
         currentBalance,
         currentBalanceSide,
-        openingBalance,
+        openingBalance: openingBalance.toNumber(),
         openingBalanceSide: openingSide,
       });
     } catch (error: unknown) {

@@ -66,8 +66,10 @@ describe("Retail Wave 3 reporting and reconciliation", () => {
     const migration = read("migrations/0019_retail_reporting_audit.sql");
     const reporting = read("server/services/retail/retailReporting.ts");
     const catalog = read("server/routes/retailCatalogRoutes.ts");
-    const inventory = read("client/src/pages/retail/RetailInventory.tsx");
-    const pos = read("client/src/pages/pos/RetailPOS.tsx");
+    // Inventory images render through the shared RetailProductImage gallery.
+    const inventory = `${read("client/src/pages/retail/RetailInventory.tsx")}\n${read("client/src/pages/retail/RetailProductImage.tsx")}`;
+    // The POS item image component lives beside the POS page since the scan-to-sell split.
+    const pos = `${read("client/src/pages/pos/RetailPOS.tsx")}\n${read("client/src/pages/pos/RetailScanFeedback.tsx")}`;
 
     expect(reporting).toContain("Math.min(Math.max(filters.limit ?? 10, 1), 50)");
     expect(catalog).toContain("Math.min(positiveInteger(req.query.pageSize) ?? 60, 100)");

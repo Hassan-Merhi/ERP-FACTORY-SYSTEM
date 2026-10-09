@@ -2,7 +2,7 @@ import type { ClientErrorLike } from "@/lib/clientError";
 import { useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, keyStartsWith } from "@/lib/queryClient";
+import { queryClient, keyStartsWith, invalidateContainerLandedCostQueries } from "@/lib/queryClient";
 import {
   preparePaymentReceiptData,
   prepareJournalData,
@@ -58,6 +58,7 @@ export function useVoucherEditMutations({
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customers/") });
       queryClient.invalidateQueries({ queryKey: ["/api/factory/customers"] });
       queryClient.invalidateQueries({ predicate: keyStartsWith("/api/factory/customer-orders") });
+      invalidateContainerLandedCostQueries();
       toast({ title: "Success", description: "Voucher updated successfully" });
       handleBack();
     },

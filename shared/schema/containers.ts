@@ -18,6 +18,7 @@ import { companies, locations } from "./common";
 import { ledgerAccounts } from "./accounting";
 import { stockItems } from "./inventory";
 import { suppliers, vouchers } from "./erp";
+import { isNonNegativeNumeric } from "../numericString";
 
 export const containers = pgTable(
   "containers",
@@ -54,8 +55,8 @@ export const containers = pgTable(
     freightStatus: text("freight_status"),
     trackingLink: text("tracking_link"),
     trackingProvider: text("tracking_provider"),
-    trackingEnabled: boolean("tracking_enabled").notNull().default(true),
-    trackingAutoUpdate: boolean("tracking_auto_update").notNull().default(true),
+    trackingEnabled: boolean("tracking_enabled").notNull().default(false),
+    trackingAutoUpdate: boolean("tracking_auto_update").notNull().default(false),
     trackingCarrierHint: text("tracking_carrier_hint"),
     trackingLastCheckedAt: timestamp("tracking_last_checked_at", { withTimezone: true }),
     trackingLastStatus: text("tracking_last_status"),
@@ -319,27 +320,10 @@ export const insertContainerOffloadSchema = createInsertSchema(containerOffloads
   .extend({
     containerId: z.number().min(1, "Container is required"),
     locationId: z.number().min(1, "Location is required"),
-    duties: z
-      .string()
-      .refine((val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0, "Duties must be a valid non-negative number"),
-    officeCharges: z
-      .string()
-      .refine(
-        (val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0,
-        "Office charges must be a valid non-negative number"
-      ),
-    transferCharges: z
-      .string()
-      .refine(
-        (val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0,
-        "Transfer charges must be a valid non-negative number"
-      ),
-    transportFees: z
-      .string()
-      .refine(
-        (val) => !isNaN(parseFloat(val)) && parseFloat(val) >= 0,
-        "Transport fees must be a valid non-negative number"
-      ),
+    duties: z.string().refine(isNonNegativeNumeric, "Duties must be a valid non-negative number"),
+    officeCharges: z.string().refine(isNonNegativeNumeric, "Office charges must be a valid non-negative number"),
+    transferCharges: z.string().refine(isNonNegativeNumeric, "Transfer charges must be a valid non-negative number"),
+    transportFees: z.string().refine(isNonNegativeNumeric, "Transport fees must be a valid non-negative number"),
   });
 
 export const offloadRequestSchema = insertContainerOffloadSchema

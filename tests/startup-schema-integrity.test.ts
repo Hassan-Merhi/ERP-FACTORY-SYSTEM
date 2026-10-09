@@ -138,9 +138,35 @@ import { startupMigrations } from "../server/startup-schema";
  * three statements to 004-post-deploy-tables and
  * 010-security-notifications-and-precision without re-pinning, taking the
  * count from 1380 to 1383.
+ *
+ * Re-pinned for stage 032, the historical-replay safety tables
+ * (factory_recalc_undo_log, factory_replay_consumed_tokens and their indexes,
+ * the 17 statements of migrations/0007), appended after stage 031 without
+ * moving any earlier statement: 1383 to 1400.
+ *
+ * Re-pinned for 66c6aa5, which disabled automated container tracking and
+ * added five statements forcing the ERP and factory tracking defaults and
+ * existing flags off, without re-pinning: 1400 to 1405.
+ *
+ * Re-pinned when the Sheets & Sacks block in
+ * 010-security-notifications-and-precision moved to
+ * server/startup/factorySheetsSacksSchema.ts, which 010 now spreads in the
+ * same position: the 9 statements became 17 (the kept updated_at column, the
+ * guarded convergence of a legacy log and seven legacy index drops, replacing
+ * the fss_log_color block), 1405 to 1413. Nothing else moved.
+ *
+ * Re-pinned when 008-pos-exports-and-dispatch gained the Shipping Containers
+ * "anything" column (#2083: the column in the factory_shipping_container_rows
+ * CREATE plus its ADD COLUMN) and factory_shipping_availability.details
+ * (fe59923), taking the count from 1413 to 1415. Both ADD COLUMN statements sit
+ * beside their table's other ADD COLUMNs; nothing else moved.
+ *
+ * Re-pinned when 004-post-deploy-tables gained customer_orders.booking_info
+ * (#2109), taking the count from 1415 to 1416. The ADD COLUMN sits beside the
+ * table's other ADD COLUMNs; nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1383;
-const EXPECTED_CONTENT_HASH = "a52a03f379162f3a504a3a2f16b72d2cfc65062a6216a78ff15da7e8455232c0";
+const EXPECTED_STATEMENT_COUNT = 1416;
+const EXPECTED_CONTENT_HASH = "775c3016a10f034df0d087daf46fa48f381462718632c9f1628c41c60204892b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *

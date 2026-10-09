@@ -18,6 +18,7 @@ import {
 } from "../../../lib/inventoryMath";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
+import { ownLocationIds } from "../../helpers/companyOwnership";
 import { requireAuth, requireRole } from "../../../auth";
 import {
   containers,
@@ -81,6 +82,10 @@ export function registerContainerOffloadUpdateRoutes(app: Express) {
         .where(eq(containerOffloads.containerId, containerId))
         .limit(1);
       if (!currentOffload) return res.status(404).json({ message: "Offload record not found" });
+      // The new location is a body id, outside the path-based company scope.
+      if (!(await ownLocationIds(container.companyId, [locationId])).has(locationId)) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       let newAdditionalCostPerBale = toInventoryDecimal(0);
 

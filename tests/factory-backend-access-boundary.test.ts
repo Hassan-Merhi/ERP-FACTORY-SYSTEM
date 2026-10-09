@@ -102,7 +102,9 @@ describe("Wave 4 Factory backend access ownership", () => {
 
   it("maps end-production and production-session to Production Targets", () => {
     for (const path of ["/stock-entry/end-production", "/stock-entry/production-session"]) {
-      expect(resolveFactoryBackendAccessRequirement(req(path, path.endsWith("end-production") ? "POST" : "GET"))).toMatchObject({
+      expect(
+        resolveFactoryBackendAccessRequirement(req(path, path.endsWith("end-production") ? "POST" : "GET"))
+      ).toMatchObject({
         pageKey: "factory/stock-entry",
         tabs: ["hide_tab_stockentry_production_targets"],
       });
@@ -169,6 +171,7 @@ describe("Wave 4 Factory backend access ownership", () => {
     expect(rule?.alternatives).toEqual([
       { pageKey: "factory/stock-entry", tabs: ["hide_tab_stockentry_entry"] },
       { pageKey: "factory/stock-entry", tabs: ["hide_tab_stockentry_production_targets"] },
+      { pageKey: "factory/stock-entry", tabs: ["hide_tab_stockentry_history"] },
       { pageKey: "factory/payroll-hub", tabs: ["hide_tab_payrollhub_workers"] },
     ]);
   });

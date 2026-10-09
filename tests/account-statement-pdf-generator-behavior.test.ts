@@ -232,6 +232,39 @@ describe("account statement PDF generator behavior", () => {
     expectPdf(buffer);
   });
 
+  it("carries the running balance exactly, so whole amounts print without stray cents", async () => {
+    const PDFDocument = (await import("pdfkit")).default;
+    const printed: string[] = [];
+    const original = PDFDocument.prototype.text;
+    const spy = vi.spyOn(PDFDocument.prototype, "text").mockImplementation(function (this: any, ...args: any[]) {
+      if (typeof args[0] === "string") printed.push(args[0]);
+      return original.apply(this, args as never);
+    });
+    harness.selectResults.push([{ id: 31, name: "Petty Bank", openingBalance: "0", openingBalanceSide: "Dr" }]);
+    harness.bankEntries.push(
+      ...["0.2", "0.7", "0.1"].map((debitAmount, index) => ({
+        voucherId: index + 1,
+        voucherNumber: `REC-${index + 1}`,
+        voucherType: "Receipt",
+        voucherDate: `2026-08-0${index + 1}`,
+        voucherDescription: "Receipt",
+        narration: "",
+        debitAmount,
+        creditAmount: "0",
+      }))
+    );
+
+    try {
+      expectPdf(await generateAccountStatementPdf({ accountType: "bank", accountId: 31, companyId: 4, lang: "en" }));
+    } finally {
+      spy.mockRestore();
+    }
+
+    // 0.2 + 0.7 + 0.1 is 1 exactly; the float sum 0.9999999999999999 printed as 1.00.
+    expect(printed).toContain("$ 1 Dr");
+    expect(printed).not.toContain("$ 1.00 Dr");
+  });
+
   it("rejects unknown account types before attempting PDF generation", async () => {
     await expect(generateAccountStatementPdf({ accountType: "mystery", accountId: 1, companyId: 4 })).rejects.toThrow(
       "Unknown account type: mystery"

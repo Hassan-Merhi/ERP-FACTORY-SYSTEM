@@ -15,6 +15,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { propertyUnits, propertyContracts, propertyPayments, vouchers, voucherEntries } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { logAudit } from "../../_helpers";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerRentalContractEndRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix } = ctx;
@@ -75,7 +76,7 @@ export function registerRentalContractEndRoutes(app: Express, ctx: RentalRoutesC
         `);
 
         // ── Optional: refund remaining guarantee to tenant ──
-        if (refundGuarantee && refundAmount && parseFloat(refundAmount) > 0) {
+        if (refundGuarantee && refundAmount && parseMoneyInput(refundAmount)?.gt(0)) {
           const amt = refundAmount;
           const dateStr = endDate;
           const narration = refundNotes

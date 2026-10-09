@@ -14,6 +14,8 @@ import {
   moneyFromCents,
 } from "../../../services/accounting/payrollAccountingAmounts";
 import { eq, and, sql, gte, lte, inArray } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 import {
   factoryWorkers,
   factoryPayrolls,
@@ -24,14 +26,13 @@ import {
   voucherEntries,
 } from "@shared/schema";
 import {
-  computeMonthlyPay,
-  computeMonthlyPayFromAttendance,
   findOrCreateLedger,
   getFactoryCompanyId,
   normUsd,
   settleAdvancesForPayroll,
   writeDaybookEntry,
 } from "./_helpers";
+import { computeWorkerPayAmounts } from "./workerPayAmounts";
 
 export function registerPayrollGenerateRoutes(app: Express) {
   // POST /api/factory/payrolls/generate-bulk - Generate draft payrolls for multiple workers
@@ -56,7 +57,17 @@ export function registerPayrollGenerateRoutes(app: Express) {
       const days = daysCount
         ? parseInt(daysCount)
         : Math.floor((new Date(periodEnd).getTime() - new Date(periodStart).getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      const bonus = parseFloat(bonusPerWorker || "0");
+      const parsedBonus = parseMoneyInput(bonusPerWorker || "0");
+      if (!parsedBonus) return res.status(400).json({ message: "Invalid amount" });
+      // Every payroll component is taken at cents so the stored parts add up to the stored net.
+      const bonus = parsedBonus.toDecimalPlaces(2);
+      /** A per-worker override from the request, or null when absent or unparsable (the default applies). */
+      const overrideFor = (overrides: Record<string, unknown> | undefined, workerId: number) => {
+        const value = overrides?.[String(workerId)];
+        if (value === undefined || value === null) return null;
+        const parsed = parseMoneyInput(value);
+        return parsed && parsed.gte(0) ? parsed : null;
+      };
 
       let targetWorkers;
       if (workerIds && workerIds.length > 0) {
@@ -70,11 +81,6 @@ export function registerPayrollGenerateRoutes(app: Express) {
           .from(factoryWorkers)
           .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)));
       }
-
-      const daysInMonth = (d: string) => {
-        const dt = new Date(d);
-        return new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate();
-      };
 
       // Fetch all attendance records for the period (for monthly attendance-based calculation)
       const workerIdList = targetWorkers.map((w) => w.id);
@@ -108,9 +114,11 @@ export function registerPayrollGenerateRoutes(app: Express) {
             eq(factoryWorkerAdvances.repaymentType, "salary_deduction")
           )
         );
-      const advanceByWorker: Record<number, number> = {};
+      const advanceByWorker: Record<number, Decimal> = {};
       for (const adv of allOutstandingAdvances) {
-        advanceByWorker[adv.workerId] = (advanceByWorker[adv.workerId] || 0) + parseFloat(adv.remainingBalance || "0");
+        advanceByWorker[adv.workerId] = (advanceByWorker[adv.workerId] ?? new MoneyDecimal(0)).plus(
+          toMoney(adv.remainingBalance)
+        );
       }
 
       // Fetch pending (unapplied) deductions per worker
@@ -123,9 +131,11 @@ export function registerPayrollGenerateRoutes(app: Express) {
         if (!deductionByWorker[ded.workerId]) deductionByWorker[ded.workerId] = [];
         deductionByWorker[ded.workerId].push(ded.id);
       }
-      const deductionAmtByWorker: Record<number, number> = {};
+      const deductionAmtByWorker: Record<number, Decimal> = {};
       for (const ded of allPendingDeductions) {
-        deductionAmtByWorker[ded.workerId] = (deductionAmtByWorker[ded.workerId] || 0) + parseFloat(ded.amount || "0");
+        deductionAmtByWorker[ded.workerId] = (deductionAmtByWorker[ded.workerId] ?? new MoneyDecimal(0)).plus(
+          toMoney(ded.amount)
+        );
       }
 
       // Pre-resolve per-worker ledger accounts OUTSIDE the transaction
@@ -159,60 +169,28 @@ export function registerPayrollGenerateRoutes(app: Express) {
         // Track the exact persisted two-decimal worker values used by accounting.
         const workerExpenses: { workerId: number; workerName: string; salAmt: string; bonAmt: string }[] = [];
         for (const worker of targetWorkers) {
-          const baseSal = parseFloat(worker.baseSalary || "0");
-          const freq = worker.payFrequency || worker.salaryType || "Monthly";
-          let base: number;
-          if (freq === "Weekly") base = (days / 7) * parseFloat(worker.weeklySalary || baseSal.toString());
-          else if (freq === "Bi-Weekly") base = (days / 14) * parseFloat(worker.biWeeklySalary || baseSal.toString());
-          else if (freq === "Daily" || worker.salaryType === "Daily") base = days * baseSal;
-          else {
-            // Monthly: use attendance-based calculation if records exist
-            const workerAttRecords = attendanceByWorker.get(worker.id) || [];
-            if (workerAttRecords.length === 0) {
-              base = computeMonthlyPay(baseSal, periodStart, periodEnd);
-            } else {
-              base = computeMonthlyPayFromAttendance(baseSal, periodStart, workerAttRecords);
-            }
-          }
-          // Transport allowance — prorated by: (presentDays / daysInMonth) * monthlyRate
-          // Using the full month days (not period days) as denominator so two
-          // half-month runs add up to exactly the monthly allowance.
-          const workerAttRecs2 = attendanceByWorker.get(worker.id) || [];
-          let presentDays2 = 0;
-          for (const att of workerAttRecs2) {
-            if (att.status === "Present" || att.status === "Late" || att.status === "Leave") presentDays2 += 1;
-            else if (att.status === "Half Day") presentDays2 += 0.5;
-          }
-
-          const monthDaysForTransport = daysInMonth(periodStart);
-          const workerTransportDefault2 = parseFloat(worker.transportAllowance || "0");
-          const transportOverrideAmt2 = transportOverrides
-            ? parseFloat(transportOverrides[String(worker.id)] ?? "-1")
-            : -1;
-          const transportMonthly2 = transportOverrideAmt2 >= 0 ? transportOverrideAmt2 : workerTransportDefault2;
-          let transport = 0;
-          if (transportMonthly2 > 0) {
-            if (workerAttRecs2.length > 0 && monthDaysForTransport > 0) {
-              transport = (presentDays2 / monthDaysForTransport) * transportMonthly2;
-            } else {
-              transport = transportMonthly2;
-            }
-          }
-
-          const workerAdvanceBalance = advanceByWorker[worker.id] || 0;
-          // Use user-approved override if provided, otherwise auto-deduct full balance
-          const overrideAmt = advanceOverrides ? parseFloat(advanceOverrides[String(worker.id)] ?? "-1") : -1;
-          const advanceDeduction =
-            overrideAmt >= 0
-              ? Math.min(overrideAmt, base + bonus + transport, workerAdvanceBalance)
-              : Math.min(workerAdvanceBalance, base + bonus + transport);
-          // Include pending worker deductions
-          const workerPendingDeductions = deductionAmtByWorker[worker.id] || 0;
-          const net = base + bonus + transport - advanceDeduction - workerPendingDeductions;
-          const accounting = allocatePayrollAccountingAmounts({
-            netSalary: net,
-            advances: advanceDeduction,
+          const {
+            base,
+            transport,
+            advanceDeduction,
+            pendingDeductions: workerPendingDeductions,
+            net,
+          } = computeWorkerPayAmounts({
+            worker,
+            days,
+            periodStart,
+            periodEnd,
+            attendance: attendanceByWorker.get(worker.id) || [],
             bonus,
+            transportOverride: overrideFor(transportOverrides, worker.id),
+            advanceBalance: advanceByWorker[worker.id] ?? new MoneyDecimal(0),
+            advanceOverride: overrideFor(advanceOverrides, worker.id),
+            pendingDeductions: deductionAmtByWorker[worker.id] ?? new MoneyDecimal(0),
+          });
+          const accounting = allocatePayrollAccountingAmounts({
+            netSalary: net.toFixed(2),
+            advances: advanceDeduction.toFixed(2),
+            bonus: bonus.toFixed(2),
           });
           const workerName = (worker.fullName as string) || `Worker #${worker.id}`;
           workerExpenses.push({

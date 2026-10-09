@@ -44,6 +44,7 @@ import { AlertsDigest } from "./chat-widget/AlertsDigest";
 import { ChatMessageList } from "./chat-widget/ChatMessageList";
 import { ChatWidgetInput } from "./chat-widget/ChatWidgetInput";
 import { useChatActions } from "./chat-widget/useChatActions";
+import { confirmAction } from "@/components/ConfirmHost";
 
 export function ChatWidget() {
   const [isOpen, setIsOpen] = useState(false);
@@ -334,10 +335,13 @@ export function ChatWidget() {
     pendingFilePatches.length > 0
   );
 
-  const handleClearChat = () => {
+  const handleClearChat = async () => {
     if (
       hasPendingDrafts &&
-      !window.confirm("You have a pending action that hasn't been confirmed yet. Clear chat and discard it?")
+      !(await confirmAction({
+        title: "You have a pending action that hasn't been confirmed yet. Clear chat and discard it?",
+        tone: "destructive",
+      }))
     ) {
       return;
     }

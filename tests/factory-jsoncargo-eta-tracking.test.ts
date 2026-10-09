@@ -60,14 +60,12 @@ async function cleanupFactoryTables() {
 
 beforeAll(async () => {
   // Purge any leftovers from a previous failed run before deleting parent companies.
-  await pool.query(
-    "DELETE FROM factory_containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)",
-    [`%${TEST_PREFIX}%`]
-  );
-  await pool.query(
-    "DELETE FROM factory_suppliers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)",
-    [`%${TEST_PREFIX}%`]
-  );
+  await pool.query("DELETE FROM factory_containers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)", [
+    `%${TEST_PREFIX}%`,
+  ]);
+  await pool.query("DELETE FROM factory_suppliers WHERE company_id IN (SELECT id FROM companies WHERE name LIKE $1)", [
+    `%${TEST_PREFIX}%`,
+  ]);
 
   // Seed a minimal ERP context just to spin up the shared app server.
   erpCtx = await seedTestData(TEST_PREFIX);
@@ -159,10 +157,7 @@ afterEach(() => {
 describe("refreshFactoryContainerEta (service, mocked HTTP)", () => {
   it("updates arrivalDate on a successful response", async () => {
     const container = await makeFactoryContainer();
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-09-15" } } })
-    );
+    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-09-15" } } }));
     const result = await refreshFactoryContainerEta(container.id);
     expect(result.status).toBe("updated");
     expect(result.newEta).toBe("2026-09-15");
@@ -251,10 +246,7 @@ describe("refreshMultipleFactoryContainerEtas (bulk)", () => {
     const c1 = await makeFactoryContainer();
     const c2 = await makeFactoryContainer({ trackingCarrierHint: "Evergreen" }); // unsupported
     const c3 = await makeFactoryContainer({ status: "OFFLOADED" }); // inactive
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-01" } } })
-    );
+    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-01" } } }));
 
     const summary = await refreshMultipleFactoryContainerEtas([c1.id, c1.id, c2.id, c3.id]);
     expect(summary.total).toBe(3); // deduped
@@ -271,65 +263,22 @@ describe("factory routes — permissions and company isolation", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 404 when refreshing a container from another company", async () => {
-    const otherCtx = await seedTestData(`${TEST_PREFIX}other`);
-    const [otherFactoryCompany] = await db
-      .insert(schema.companies)
-      .values({
-        code: "FACTJC2",
-        name: `${TEST_PREFIX}other_FactoryCompany`,
-        baseCurrency: "USD",
-        companyType: "factory",
-      })
-      .returning();
-    try {
-      const [foreignSupplier] = await db
-        .insert(factorySuppliers)
-        .values({ companyId: otherFactoryCompany.id, name: "Foreign Supplier" })
-        .returning();
-      const [foreignContainer] = await db
-        .insert(factoryContainers)
-        .values({
-          companyId: otherFactoryCompany.id,
-          containerNumber: "MSCU7654321",
-          supplierId: foreignSupplier.id,
-          status: "PENDING",
-          trackingCarrierHint: "MSC",
-        } as any)
-        .returning();
-
-      vi.stubGlobal("fetch", mockFetchOnce({ status: 200 }));
-      const res = await agent.post(`/api/factory/containers/${foreignContainer.id}/refresh-eta`).send({});
-      expect(res.status).toBe(404);
-    } finally {
-      await pool.query("DELETE FROM factory_containers WHERE company_id = $1", [otherFactoryCompany.id]);
-      await pool.query("DELETE FROM factory_suppliers WHERE company_id = $1", [otherFactoryCompany.id]);
-      await pool.query("DELETE FROM companies WHERE id = $1", [otherFactoryCompany.id]);
-      await cleanupTestData(`${TEST_PREFIX}other`);
-    }
-  });
-
-  it("allows a regular (non-admin) authenticated user to refresh a single container", async () => {
+  // Automated carrier tracking is disabled (66c6aa5): ETA refresh answers 410
+  // for every role, single or bulk, before any lookup, and never calls a carrier.
+  it("answers 410 for single and bulk ETA refresh without calling a carrier", async () => {
     const container = await makeFactoryContainer();
-    vi.stubGlobal(
-      "fetch",
-      mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2026-12-15" } } })
-    );
-    const res = await managerAgent.post(`/api/factory/containers/${container.id}/refresh-eta`).send({});
-    expect(res.status).toBe(200);
-    expect(res.body.status).toBe("updated");
-  });
-
-  it("rejects bulk refresh for non-admin roles", async () => {
-    const res = await managerAgent.post("/api/factory/containers/refresh-etas").send({});
-    expect(res.status).toBe(403);
-  });
-
-  it("allows bulk refresh for Admin", async () => {
-    vi.stubGlobal("fetch", mockFetchOnce({ status: 200, body: { data: { eta_final_destination: "2027-01-01" } } }));
-    const res = await agent.post("/api/factory/containers/refresh-etas").send({});
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty("total");
+    const carrier = vi.fn();
+    vi.stubGlobal("fetch", carrier);
+    const attempts = [
+      managerAgent.post(`/api/factory/containers/${container.id}/refresh-eta`).send({}),
+      agent.post(`/api/factory/containers/${container.id}/refresh-eta`).send({}),
+      managerAgent.post("/api/factory/containers/refresh-etas").send({}),
+      agent.post("/api/factory/containers/refresh-etas").send({}),
+    ];
+    for (const res of await Promise.all(attempts)) {
+      expect(res.status).toBe(410);
+    }
+    expect(carrier).not.toHaveBeenCalled();
   });
 
   it("returns a safe summary with no secrets on GET eta-tracking-summary", async () => {

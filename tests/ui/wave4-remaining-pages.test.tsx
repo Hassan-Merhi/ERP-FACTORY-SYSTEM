@@ -91,11 +91,11 @@ const PAGES: PageCase[] = [
     sweep: true,
   },
   { name: "OffloadItemSearch", load: () => import("@/pages/OffloadItemSearch"), landmark: "input-item-search" },
-  { name: "SalesReport", load: () => import("@/pages/SalesReport"), landmark: "button-compare-companies", sweep: true },
+  { name: "SalesReport", load: () => import("@/pages/SalesReport"), landmark: "button-export-dropdown", sweep: true },
   {
     name: "SalesReportLegacy",
     load: () => import("@/pages/SalesReportLegacy"),
-    landmark: "button-compare-companies",
+    landmark: "button-export-dropdown",
     sweep: true,
   },
   { name: "SalesToolsHub", load: () => import("@/pages/SalesToolsHub"), landmark: "tab-transfers", sweep: true },

@@ -14,6 +14,52 @@ import { requireAuth, requireNonPOS } from "../auth";
 import { vouchers, voucherEntries } from "@shared/schema";
 import { _npsCached, _npsSetCache } from "./reportsNetProfitCache";
 import { isInventoryValuationOnlyAccount } from "../lib/inventoryPnlAccounts";
+import { MoneyDecimal, toMoney } from "../lib/money";
+
+type BreakdownAccount = { id: number; code: string | null; name: string };
+
+/**
+ * Per-account debit, credit and balance for the drill-downs, summed as
+ * decimals. `normal` is the side the balance is read from (debit for
+ * purchases and expenses, credit for incomes); the total is the sum of the
+ * shown balances. Accounts with no movement are left out.
+ */
+function accountBreakdown<T extends BreakdownAccount>(
+  ledgerAccounts: T[],
+  entries: Array<{ ledgerAccountId: number | null; debitAmount: string | null; creditAmount: string | null }>,
+  normal: "debit" | "credit"
+) {
+  const sums = new Map<
+    number,
+    { debit: InstanceType<typeof MoneyDecimal>; credit: InstanceType<typeof MoneyDecimal> }
+  >();
+  for (const entry of entries) {
+    if (!entry.ledgerAccountId) continue;
+    const current = sums.get(entry.ledgerAccountId) ?? { debit: new MoneyDecimal(0), credit: new MoneyDecimal(0) };
+    sums.set(entry.ledgerAccountId, {
+      debit: current.debit.plus(toMoney(entry.debitAmount)),
+      credit: current.credit.plus(toMoney(entry.creditAmount)),
+    });
+  }
+
+  let total = new MoneyDecimal(0);
+  const accounts = [];
+  for (const acc of ledgerAccounts) {
+    const sum = sums.get(acc.id);
+    if (!sum || (!sum.debit.greaterThan(0) && !sum.credit.greaterThan(0))) continue;
+    const balance = normal === "debit" ? sum.debit.minus(sum.credit) : sum.credit.minus(sum.debit);
+    total = total.plus(balance);
+    accounts.push({
+      id: acc.id,
+      code: acc.code,
+      name: acc.name,
+      debit: sum.debit.toNumber(),
+      credit: sum.credit.toNumber(),
+      balance: balance.toNumber(),
+    });
+  }
+  return { accounts, total: total.toNumber() };
+}
 
 export function registerReportsNetProfitStatementRoutes(app: Express) {
   // Net Profit Drill-down: Purchase Accounts
@@ -55,31 +101,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
               .execute()
           : [];
 
-      const accountBalances = new Map<number, { debit: number; credit: number }>();
-      for (const entry of entries) {
-        if (entry.ledgerAccountId) {
-          const debit = parseFloat(entry.debitAmount || "0");
-          const credit = parseFloat(entry.creditAmount || "0");
-          const current = accountBalances.get(entry.ledgerAccountId) || { debit: 0, credit: 0 };
-          accountBalances.set(entry.ledgerAccountId, { debit: current.debit + debit, credit: current.credit + credit });
-        }
-      }
-
-      const accounts = purchaseAccounts
-        .map((acc) => {
-          const balance = accountBalances.get(acc.id) || { debit: 0, credit: 0 };
-          return {
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            debit: balance.debit,
-            credit: balance.credit,
-            balance: balance.debit - balance.credit,
-          };
-        })
-        .filter((a) => a.debit > 0 || a.credit > 0);
-
-      const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+      const { accounts, total } = accountBreakdown(purchaseAccounts, entries, "debit");
       const result = { accounts, total };
       _npsSetCache(cacheKey, result);
       res.json(result);
@@ -127,31 +149,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
               .execute()
           : [];
 
-      const accountBalances = new Map<number, { debit: number; credit: number }>();
-      for (const entry of entries) {
-        if (entry.ledgerAccountId) {
-          const debit = parseFloat(entry.debitAmount || "0");
-          const credit = parseFloat(entry.creditAmount || "0");
-          const current = accountBalances.get(entry.ledgerAccountId) || { debit: 0, credit: 0 };
-          accountBalances.set(entry.ledgerAccountId, { debit: current.debit + debit, credit: current.credit + credit });
-        }
-      }
-
-      const accounts = directIncomeAccounts
-        .map((acc) => {
-          const balance = accountBalances.get(acc.id) || { debit: 0, credit: 0 };
-          return {
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            debit: balance.debit,
-            credit: balance.credit,
-            balance: balance.credit - balance.debit,
-          };
-        })
-        .filter((a) => a.debit > 0 || a.credit > 0);
-
-      const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+      const { accounts, total } = accountBreakdown(directIncomeAccounts, entries, "credit");
       const result = { accounts, total };
       _npsSetCache(cacheKey, result);
       res.json(result);
@@ -219,31 +217,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
               .execute()
           : [];
 
-      const accountBalances = new Map<number, { debit: number; credit: number }>();
-      for (const entry of entries) {
-        if (entry.ledgerAccountId) {
-          const debit = parseFloat(entry.debitAmount || "0");
-          const credit = parseFloat(entry.creditAmount || "0");
-          const current = accountBalances.get(entry.ledgerAccountId) || { debit: 0, credit: 0 };
-          accountBalances.set(entry.ledgerAccountId, { debit: current.debit + debit, credit: current.credit + credit });
-        }
-      }
-
-      const accounts = directExpenseAccounts
-        .map((acc) => {
-          const balance = accountBalances.get(acc.id) || { debit: 0, credit: 0 };
-          return {
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            debit: balance.debit,
-            credit: balance.credit,
-            balance: balance.debit - balance.credit,
-          };
-        })
-        .filter((a) => a.debit > 0 || a.credit > 0);
-
-      const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+      const { accounts, total } = accountBreakdown(directExpenseAccounts, entries, "debit");
       const result = { accounts, total };
       _npsSetCache(cacheKey, result);
       res.json(result);
@@ -296,31 +270,7 @@ export function registerReportsNetProfitStatementRoutes(app: Express) {
               .execute()
           : [];
 
-      const accountBalances = new Map<number, { debit: number; credit: number }>();
-      for (const entry of entries) {
-        if (entry.ledgerAccountId) {
-          const debit = parseFloat(entry.debitAmount || "0");
-          const credit = parseFloat(entry.creditAmount || "0");
-          const current = accountBalances.get(entry.ledgerAccountId) || { debit: 0, credit: 0 };
-          accountBalances.set(entry.ledgerAccountId, { debit: current.debit + debit, credit: current.credit + credit });
-        }
-      }
-
-      const accounts = indirectExpenseAccounts
-        .map((acc) => {
-          const balance = accountBalances.get(acc.id) || { debit: 0, credit: 0 };
-          return {
-            id: acc.id,
-            code: acc.code,
-            name: acc.name,
-            debit: balance.debit,
-            credit: balance.credit,
-            balance: balance.debit - balance.credit,
-          };
-        })
-        .filter((a) => a.debit > 0 || a.credit > 0);
-
-      const total = accounts.reduce((sum, a) => sum + a.balance, 0);
+      const { accounts, total } = accountBreakdown(indirectExpenseAccounts, entries, "debit");
       const result = { accounts, total };
       _npsSetCache(cacheKey, result);
       res.json(result);

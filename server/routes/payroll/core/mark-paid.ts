@@ -36,6 +36,7 @@ import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
 } from "../../../services/accounting/durableFinancialOperation";
+import { toMoney } from "../../../lib/money";
 
 async function ensureNoPendingProductionBonuses(companyId: number, payrollIds: number[]) {
   if (payrollIds.length === 0) return { ok: true as const };
@@ -171,10 +172,10 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
             .from(factoryWorkers)
             .where(eq(factoryWorkers.id, payroll.workerId));
           const workerName = workerDisplayName(worker?.fullName, payroll.workerId);
-          const netAmt = parseFloat(payroll.netSalary || "0");
-          if (netAmt > 0 && !cashAccountId) throw new Error("cashAccountId is required for non-zero payroll payment");
+          const netAmt = toMoney(payroll.netSalary);
+          if (netAmt.gt(0) && !cashAccountId) throw new Error("cashAccountId is required for non-zero payroll payment");
 
-          if (netAmt > 0) {
+          if (netAmt.gt(0)) {
             const payableAcc = payableAccSingle!;
             const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
             const [pVoucher] = await tx
@@ -206,7 +207,7 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
             payrollId: payroll.id,
             paymentDate,
             workerName,
-            netSalary: netAmt,
+            netSalary: netAmt.toNumber(),
             periodStart: payroll.periodStart,
             periodEnd: payroll.periodEnd,
           });
@@ -257,11 +258,11 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           .where(eq(factoryWorkers.id, payroll.workerId));
         const workerName = workerDisplayName(worker?.fullName, payroll.workerId);
         const paidDate = payroll.paidAt ? new Date(payroll.paidAt).toISOString().split("T")[0] : getClientDate(req);
-        const netAmt = parseFloat(payroll.netSalary || "0");
+        const netAmt = toMoney(payroll.netSalary);
         const narration = `Payroll payment (backdated): ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
 
         let voucherId: number | null = null;
-        if (netAmt > 0) {
+        if (netAmt.gt(0)) {
           const [pVoucher] = await tx
             .insert(vouchers)
             .values({
@@ -303,7 +304,7 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
               payrollId: payroll.id,
               paymentDate: paidDate,
               workerName,
-              netSalary: netAmt,
+              netSalary: netAmt.toNumber(),
               periodStart: payroll.periodStart,
               periodEnd: payroll.periodEnd,
             });
@@ -364,7 +365,7 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
             .where(and(eq(factoryPayrolls.companyId, companyId), inArray(factoryPayrolls.id, normalizedIds)));
           if (payrollsToMark.length !== normalizedIds.length)
             throw new Error("One or more payroll records were not found");
-          if (!cashId && payrollsToMark.some((payroll) => parseFloat(payroll.netSalary || "0") > 0)) {
+          if (!cashId && payrollsToMark.some((payroll) => toMoney(payroll.netSalary).gt(0))) {
             throw new Error("cashAccountId is required for non-zero payroll payment");
           }
 
@@ -381,14 +382,14 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
           const workerMap = new Map(workerRows.map((worker) => [worker.id, worker.fullName]));
 
           for (const payroll of payrollsToMark) {
-            const netAmt = parseFloat(payroll.netSalary || "0");
+            const netAmt = toMoney(payroll.netSalary);
             const workerName = workerDisplayName(
               workerMap.get(payroll.workerId) as string | null | undefined,
               payroll.workerId
             );
             const narration = `Payroll payment: ${workerName} (${payroll.periodStart} – ${payroll.periodEnd})`;
 
-            if (netAmt > 0 && cashId && payableAccBulk) {
+            if (netAmt.gt(0) && cashId && payableAccBulk) {
               const [pVoucher] = await tx
                 .insert(vouchers)
                 .values({
@@ -418,7 +419,7 @@ export function registerPayrollMarkPaidRoutes(app: Express) {
               payrollId: payroll.id,
               paymentDate,
               workerName,
-              netSalary: netAmt,
+              netSalary: netAmt.toNumber(),
               periodStart: payroll.periodStart,
               periodEnd: payroll.periodEnd,
             });

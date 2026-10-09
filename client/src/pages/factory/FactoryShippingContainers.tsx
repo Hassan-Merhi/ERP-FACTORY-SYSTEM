@@ -30,7 +30,6 @@ import {
   Trash2,
   RotateCcw,
   Check,
-  RefreshCw,
   Loader2,
   SlidersHorizontal,
 } from "lucide-react";
@@ -71,7 +70,6 @@ export default function FactoryShippingContainers() {
   const [docsRowId, setDocsRowId] = useState<number | null>(null);
   const [waRowId, setWaRowId] = useState<number | null>(null);
   const shippingInvoiceInputRef = useRef<HTMLInputElement>(null);
-  const trackingRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [shippingInvoiceUploadingId, setShippingInvoiceUploadingId] = useState<number | null>(null);
   const [doneExpanded, setDoneExpanded] = useState(false);
   const [donePage, setDonePage] = useState(1);
@@ -144,33 +142,6 @@ export default function FactoryShippingContainers() {
     syncShippingContainers();
   }, [me?.id, me?.currentCompanyId, me?.companyId, syncShippingContainers]);
 
-  const trackAllMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/factory/shipping-containers/track-now");
-      return (await res.json()) as { message?: string };
-    },
-    onSuccess: (data: { message?: string }) => {
-      toast({ title: "Tracking started", description: data?.message ?? "ETA updates will appear shortly." });
-      if (trackingRefreshTimerRef.current) clearTimeout(trackingRefreshTimerRef.current);
-      trackingRefreshTimerRef.current = setTimeout(() => {
-        trackingRefreshTimerRef.current = null;
-        if (document.visibilityState !== "visible") return;
-        queryClient.invalidateQueries(
-          { queryKey: ["/api/factory/invoice-container-tracking"], exact: true, refetchType: "active" },
-          { cancelRefetch: false }
-        );
-      }, 8000);
-    },
-    onError: (err: ClientErrorLike) =>
-      toast({ title: "Tracking failed", description: err.message, variant: "destructive" }),
-  });
-
-  useEffect(
-    () => () => {
-      if (trackingRefreshTimerRef.current) clearTimeout(trackingRefreshTimerRef.current);
-    },
-    []
-  );
 
   const rows = useMemo(() => [...activeRows, ...done], [activeRows, done]);
 
@@ -298,7 +269,8 @@ export default function FactoryShippingContainers() {
             !(r.clientName || "").toLowerCase().includes(q) &&
             !(r.containerNumber || "").toLowerCase().includes(q) &&
             !(r.destination || "").toLowerCase().includes(q) &&
-            !(r.shippingCompany || "").toLowerCase().includes(q)
+            !(r.shippingCompany || "").toLowerCase().includes(q) &&
+            !(r.anything || "").toLowerCase().includes(q)
           )
             return false;
         }
@@ -330,19 +302,6 @@ export default function FactoryShippingContainers() {
               data-testid="input-search"
             />
           </div>
-          <Button
-            variant="outline"
-            onClick={() => trackAllMutation.mutate()}
-            disabled={trackAllMutation.isPending}
-            data-testid="button-track-all-eta"
-          >
-            {trackAllMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-1" />
-            )}
-            {trackAllMutation.isPending ? "Tracking…" : "Track All ETAs"}
-          </Button>
           <Button
             variant={showFilters ? "secondary" : "outline"}
             onClick={() => setShowFilters((v) => !v)}
@@ -402,7 +361,9 @@ export default function FactoryShippingContainers() {
           <span className="flex items-center gap-1">
             <XCircle className="h-3.5 w-3.5 text-red-500" /> No documents
           </span>
-          <span>Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Arrived) to edit inline.</span>
+          <span>
+            Click editable cells (Container #, Destination, ETA, Shipping Co., Note, Anything, Arrived) to edit inline.
+          </span>
         </div>
 
         {/* ── Main Table ── */}
@@ -435,6 +396,7 @@ export default function FactoryShippingContainers() {
                 {colVis.containerCost && <TableHead className="text-xs min-w-[100px]">Container Cost</TableHead>}
                 {colVis.ciNumber && <TableHead className="text-xs min-w-[100px]">CI No.</TableHead>}
                 {colVis.note && <TableHead className="text-xs min-w-[110px]">Note</TableHead>}
+                {colVis.anything && <TableHead className="text-xs min-w-[150px]">Anything</TableHead>}
                 {colVis.whatsapp && <TableHead className="text-xs min-w-[90px]">WhatsApp</TableHead>}
                 {colVis.done && <TableHead className="text-xs min-w-[80px]">Done</TableHead>}
               </TableRow>
@@ -442,13 +404,13 @@ export default function FactoryShippingContainers() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto" />
                   </TableCell>
                 </TableRow>
               ) : filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={17} className="text-center py-10 text-muted-foreground">
+                  <TableCell colSpan={18} className="text-center py-10 text-muted-foreground">
                     {allDisplayRows.length === 0 ? "No active records." : "No records match the current filters."}
                   </TableCell>
                 </TableRow>
@@ -606,6 +568,17 @@ export default function FactoryShippingContainers() {
                           placeholder="Add note"
                           onSave={(v) => patchRowMutation.mutate({ id: r.id, patch: { note: v || null } })}
                           testId={`cell-note-${r.id}`}
+                        />
+                      </TableCell>
+                    )}
+
+                    {colVis.anything && (
+                      <TableCell>
+                        <EditableCellInput
+                          value={r.anything || ""}
+                          placeholder="Type anything"
+                          onSave={(v) => patchRowMutation.mutate({ id: r.id, patch: { anything: v || null } })}
+                          testId={`cell-anything-${r.id}`}
                         />
                       </TableCell>
                     )}

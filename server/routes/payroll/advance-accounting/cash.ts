@@ -15,6 +15,7 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import { ledgerAccounts, bankAccounts, vouchers, voucherEntries } from "@shared/schema";
 
 import { getFactoryCompanyId } from "./_helpers";
+import { parseMoneyInput } from "../../../lib/money";
 
 export function registerAdvanceCashRoutes(app: Express) {
   // GET /api/factory/cash-account-balance/:id — current DR-CR balance for a ledger account
@@ -111,8 +112,8 @@ export function registerAdvanceCashRoutes(app: Express) {
       const { cashAccountId: rawAcctId, amount: rawAmount, direction, date, narration } = req.body;
       const cashAccountId = parseInt(rawAcctId);
       if (!cashAccountId || isNaN(cashAccountId)) return res.status(400).json({ message: "cashAccountId is required" });
-      const amount = parseFloat(rawAmount);
-      if (!amount || amount <= 0) return res.status(400).json({ message: "amount must be a positive number" });
+      const amount = parseMoneyInput(rawAmount);
+      if (!amount || amount.lte(0)) return res.status(400).json({ message: "amount must be a positive number" });
       if (!date) return res.status(400).json({ message: "date is required" });
       const isCredit = direction !== "debit"; // default credit (reduces cash)
 

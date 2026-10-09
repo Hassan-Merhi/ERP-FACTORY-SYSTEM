@@ -15,9 +15,26 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
+import type Decimal from "decimal.js";
+import { parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
 
 /** The columns a voucher edit may set, checked against the vouchers table. */
 type VoucherUpdate = PgUpdateSetSource<typeof vouchers>;
+
+/**
+ * Each line's quantity and rate as exact Decimals, read as parseFloat reads
+ * them; null when any line does not parse, which used to be written as NaN.
+ */
+function parseItemAmounts(items: Array<{ quantity: unknown; rate: unknown }>) {
+  const parsed: Array<{ quantity: Decimal; rate: Decimal }> = [];
+  for (const item of items) {
+    const quantity = parseMoneyInput(item.quantity);
+    const rate = parseMoneyInput(item.rate);
+    if (!quantity || !rate) return null;
+    parsed.push({ quantity, rate });
+  }
+  return parsed;
+}
 
 /**
  * After saving a journal voucher, if it has a customer entry + a ledger account entry,
@@ -64,13 +81,13 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
 
       const [po] = await db.select().from(purchaseOrders).where(eq(purchaseOrders.voucherId, id)).limit(1);
       if (!po) return res.status(404).json({ message: "Associated purchase order not found" });
-      const oldPOTotal = parseFloat(po.itemsTotal || "0");
-      let totalAmount = 0;
-      const poItemsData = items.map((item) => {
-        const quantity = parseFloat(item.quantity);
-        const rate = parseFloat(item.rate);
-        const lineTotal = quantity * rate;
-        totalAmount += lineTotal;
+      const amounts = parseItemAmounts(items);
+      if (!amounts) return res.status(400).json({ message: "Invalid amount" });
+      const oldPOTotal = toMoney(po.itemsTotal);
+      const lineTotals = amounts.map(({ quantity, rate }) => quantity.times(rate));
+      const totalAmount = sumMoney(lineTotals);
+      const poItemsData = items.map((item, index) => {
+        const lineTotal = lineTotals[index];
         return {
           poId: po.id,
           stockItemId: item.stockItemId || 0,
@@ -91,11 +108,9 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
 
       const [container] = await db.select().from(containers).where(eq(containers.id, po.containerId)).limit(1);
       if (container) {
-        const containerItemsTotal = parseFloat(container.itemsTotal || "0");
-        const containerChargesTotal = parseFloat(container.chargesTotal || "0");
-        const difference = totalAmount - oldPOTotal;
-        const newContainerItemsTotal = containerItemsTotal + difference;
-        const newContainerGrandTotal = newContainerItemsTotal + containerChargesTotal;
+        const difference = totalAmount.minus(oldPOTotal);
+        const newContainerItemsTotal = toMoney(container.itemsTotal).plus(difference);
+        const newContainerGrandTotal = newContainerItemsTotal.plus(toMoney(container.chargesTotal));
         await db
           .update(containers)
           .set({ itemsTotal: newContainerItemsTotal.toFixed(2), grandTotal: newContainerGrandTotal.toFixed(2) })
@@ -159,6 +174,7 @@ export function registerVoucherPurchaseUpdateRoutes(app: Express) {
         return res.status(400).json({ message: "At least one item is required" });
       }
       if (!locationId) return res.status(400).json({ message: "Location ID is required" });
+      if (!parseItemAmounts(items)) return res.status(400).json({ message: "Invalid amount" });
 
       const existingVoucher = await storage.getVoucherById(id);
       if (!existingVoucher) return res.status(404).json({ message: "Voucher not found" });

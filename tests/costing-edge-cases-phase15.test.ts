@@ -304,4 +304,39 @@ describe("Phase 15 costing edge cases", () => {
     expect(Number(charge.rows[0].fx_rate_to_usd)).toBeCloseTo(1, 8);
     expect(charge.rows[0].fx_rate_confirmed).toBe(true);
   }, 120_000);
+
+  it("posts a non-USD additional charge's USD voucher legs at the exact cents", async () => {
+    const containerId = await makeContainer({ suffix: "addl", totalKg: "100", ratePerKg: "1", supplierId: null });
+
+    const response = await agent.post("/api/factory/raw-stock/offload").send({
+      containerId: String(containerId),
+      receivedKg: "100",
+      costPerKg: "1",
+      currencyCode: "USD",
+      additionalCharges: [
+        {
+          description: "EUR inspection",
+          amount: "1.3",
+          currencyCode: "EUR",
+          fxRateToUsd: "0.35",
+          ledgerAccountId: String(ctx.cashAccountId),
+        },
+      ],
+      offloadDate: "2026-09-14",
+      idempotencyKey: `${TEST_PREFIX}-addl`,
+    });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+
+    // 1.3 x 0.35 = 0.455; the float product 0.45499999999999996 was stored as 0.45.
+    const legs = await pool.query<{ debit_amount: string; credit_amount: string }>(
+      `SELECT ve.debit_amount, ve.credit_amount
+         FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+        WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND v.voucher_number NOT LIKE $3`,
+      [ctx.companyId, `FACTORY-OC-${containerId}-%`, `FACTORY-OC-${containerId}-MAIN-%`]
+    );
+    expect(legs.rows.map((row) => [row.debit_amount, row.credit_amount]).sort()).toEqual([
+      ["0.00", "0.46"],
+      ["0.46", "0.00"],
+    ]);
+  }, 120_000);
 });

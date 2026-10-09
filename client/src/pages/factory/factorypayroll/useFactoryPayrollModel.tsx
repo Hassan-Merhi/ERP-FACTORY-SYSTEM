@@ -10,6 +10,7 @@ import type { FactoryWorker } from "@shared/schema";
 import type { ProductionBonusDecisionResult } from "./ProductionBonusDecisionPanel";
 import type { Company, PayrollRecord } from "./types";
 import { amount } from "./utils";
+import { confirmAction } from "@/components/ConfirmHost";
 
 interface PayrollSettings {
   payrollTabWorkerMasterEnabled?: boolean;
@@ -279,9 +280,10 @@ export function useFactoryPayrollModel() {
   const handleMigrateCitySplit = async () => {
     if (!selectedCompanyId) return;
     if (
-      !window.confirm(
-        "This will split historical salary/bonus expense entries by city (Lubumbashi / Kolwezi). Run once only. Continue?"
-      )
+      !(await confirmAction({
+        title:
+          "This will split historical salary/bonus expense entries by city (Lubumbashi / Kolwezi). Run once only. Continue?",
+      }))
     )
       return;
     setMigrating(true);

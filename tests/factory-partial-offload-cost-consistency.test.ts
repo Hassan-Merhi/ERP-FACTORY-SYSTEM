@@ -8,25 +8,26 @@ import { calculateMovingAverageRate } from "../server/services/factory/factoryCo
 
 const repoFile = (...parts: string[]) => fs.readFileSync(path.join(process.cwd(), ...parts), "utf8");
 
-const buildContainer = (actualReceivedKg: string) => ({
-  id: 1,
-  companyId: 1,
-  containerNumber: "CMAU7353468",
-  currencyCode: "USD",
-  fxRateToUsd: "1",
-  fxRateToUsdOffload: "1",
-  fxRateConfirmed: true,
-  totalKg: "24000",
-  declaredKg: "24000",
-  actualReceivedKg,
-  ratePerKg: "0.500000",
-  freight: "648",
-  freightCurrencyCode: "USD",
-  otherCharges: "0",
-  commissionAmount: "0",
-  dutyStatus: "NONE",
-  dutyAmount: "0",
-}) as any;
+const buildContainer = (actualReceivedKg: string) =>
+  ({
+    id: 1,
+    companyId: 1,
+    containerNumber: "CMAU7353468",
+    currencyCode: "USD",
+    fxRateToUsd: "1",
+    fxRateToUsdOffload: "1",
+    fxRateConfirmed: true,
+    totalKg: "24000",
+    declaredKg: "24000",
+    actualReceivedKg,
+    ratePerKg: "0.500000",
+    freight: "648",
+    freightCurrencyCode: "USD",
+    otherCharges: "0",
+    commissionAmount: "0",
+    dutyStatus: "NONE",
+    dutyAmount: "0",
+  }) as any;
 
 describe("partial offload cost consistency", () => {
   it("keeps the full container value fixed and divides it by actual received weight", () => {
@@ -76,34 +77,10 @@ describe("partial offload cost consistency", () => {
     // The UI-preview cost math was extracted from OffloadDialog.tsx into the
     // pure module below during the P1 god-file split; the contract being
     // pinned (valuation basis vs actual received divisor) is unchanged.
-    const dialog = repoFile(
-      "client",
-      "src",
-      "pages",
-      "factory",
-      "production-raw-stock",
-      "offloadFormCalculations.ts"
-    );
-    const landedCost = repoFile(
-      "server",
-      "services",
-      "factory",
-      "containerLandedCost.ts"
-    );
-    const offloadRoute = repoFile(
-      "server",
-      "routes",
-      "factory",
-      "raw-stock",
-      "rawStockOffloadRoutes.ts"
-    );
-    const historyRoute = repoFile(
-      "server",
-      "routes",
-      "factory",
-      "raw-stock",
-      "rawStockAdjRoutes.ts"
-    );
+    const dialog = repoFile("client", "src", "pages", "factory", "production-raw-stock", "offloadFormCalculations.ts");
+    const landedCost = repoFile("server", "services", "factory", "containerLandedCost.ts");
+    const offloadRoute = repoFile("server", "routes", "factory", "raw-stock", "rawStockOffloadRoutes.ts");
+    const historyRoute = repoFile("server", "routes", "factory", "raw-stock", "rawStockAdjRoutes.ts");
     const invalidation = repoFile(
       "client",
       "src",
@@ -122,7 +99,10 @@ describe("partial offload cost consistency", () => {
     expect(offloadRoute).toContain("newReceivedKg: dReceivedKg.toNumber()");
     expect(offloadRoute).toContain("newContainerLandedCostPerKgUsd: dCostPerKgUsd.toNumber()");
 
-    expect(historyRoute).toContain("costPerKg: parseFloat(r.costPerKgUsd as string)");
+    // Receipt history prefers the USD rate set at offload, falling back to the native rate.
+    expect(historyRoute).toContain(
+      "costPerKg: (toMoney(r.costPerKgUsd).isZero() ? toMoney(r.costPerKg) : toMoney(r.costPerKgUsd)).toNumber()"
+    );
     expect(invalidation).toContain('key.startsWith("/api/factory/raw-stock/history/")');
   });
 });

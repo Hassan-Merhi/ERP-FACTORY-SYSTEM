@@ -104,13 +104,14 @@ describe("retail product and import contracts", () => {
     expect(row.qty).toBe(3);
   });
 
-  it("rejects a variant without a barcode", () => {
-    const parsed = retailProductWriteSchema.safeParse({
-      code: "BAD-1",
-      name: "Bad Product",
+  it("treats a variant without a barcode as a request to generate one (Wave 3)", () => {
+    const parsed = retailProductWriteSchema.parse({
+      code: "GEN-1",
+      name: "Generated Barcode Product",
       variants: [{ size: "M", cost: 1, sellingPrice: 2, stocks: [] }],
     });
-    expect(parsed.success).toBe(false);
+    // The server issues a unique in-store EAN-13 for blank barcodes; it never stores an empty one.
+    expect(parsed.variants[0].barcode).toBe("");
   });
 
   it("keeps SKU/item code and description out of the product form and uses real image uploads", () => {

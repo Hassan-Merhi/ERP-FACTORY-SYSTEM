@@ -28,7 +28,7 @@ PDF exports and print layouts are optimized for A4 paper.
 
 | Version | Status |
 |---------|--------|
-| 24.19.0 | ✅ Pinned and certified (`.node-version`) |
+| 24.21.0 | ✅ Pinned and certified (`.node-version`) |
 | Other 24.x | ⚠️ Meets the package engine but is not the CI reference runtime |
 | 22.x and earlier | ❌ Unsupported |
 

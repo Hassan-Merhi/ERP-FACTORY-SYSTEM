@@ -21,6 +21,8 @@ import {
 } from "@shared/schema";
 
 import { getFactoryCompanyId, writeDaybookEntry } from "./_helpers";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 
 export function registerAdvanceRepayByMonthRoutes(app: Express) {
   app.post("/api/factory/advances/repay-by-month", requireAuth, async (req: Request, res: Response) => {
@@ -93,11 +95,11 @@ export function registerAdvanceRepayByMonthRoutes(app: Express) {
         }
 
         let repaidCount = 0;
-        let repaidTotal = 0;
+        let repaidTotal: Decimal = new MoneyDecimal(0);
 
         for (const advance of outstanding) {
-          const bal = parseFloat(advance.remainingBalance || "0");
-          if (bal <= 0) continue;
+          const bal = toMoney(advance.remainingBalance).toDecimalPlaces(2);
+          if (bal.lte(0)) continue;
 
           const workerName = workerMap[advance.workerId] || `Worker #${advance.workerId}`;
           const narration = `Advance repayment from ${workerName}: $${bal.toFixed(2)} (advance #${advance.id})`;
@@ -163,17 +165,17 @@ export function registerAdvanceRepayByMonthRoutes(app: Express) {
             referenceId: repayment.id,
             referenceTable: "factory_advance_repayments",
             description: narration,
-            amountCurrency: bal,
+            amountCurrency: bal.toNumber(),
             currencyCode: "USD",
-            amountUsd: bal,
+            amountUsd: bal.toNumber(),
             createdBy: req.session.userId ?? undefined,
           });
 
           repaidCount++;
-          repaidTotal += bal;
+          repaidTotal = repaidTotal.plus(bal);
         }
 
-        return { repaid: repaidCount, total: repaidTotal };
+        return { repaid: repaidCount, total: repaidTotal.toNumber() };
       });
 
       res.json(result);

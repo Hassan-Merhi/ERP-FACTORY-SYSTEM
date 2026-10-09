@@ -1,7 +1,44 @@
 import { storage } from "../../storage";
 import { db } from "../../db";
 import { employees } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../lib/money";
+
+type EmployeeBalanceChanges = { balanceChange: Decimal; deposits: Decimal; withdrawals: Decimal };
+
+function emptyChanges(): EmployeeBalanceChanges {
+  return { balanceChange: new MoneyDecimal(0), deposits: new MoneyDecimal(0), withdrawals: new MoneyDecimal(0) };
+}
+
+async function applyEmployeeBalanceChanges(
+  employee: {
+    id: number;
+    currentBalance: string | null;
+    totalDeposits: string | null;
+    totalWithdrawals: string | null;
+  },
+  changes: EmployeeBalanceChanges
+): Promise<void> {
+  // Changes are taken at cents (half away from zero) before they are applied,
+  // so reversing a voucher removes exactly what posting it added.
+  const cents = (value: Decimal) => value.toDecimalPlaces(2);
+  const newBalance = toMoney(employee.currentBalance).plus(cents(changes.balanceChange));
+  const newDeposits = MoneyDecimal.max(0, toMoney(employee.totalDeposits).plus(cents(changes.deposits)));
+  const newWithdrawals = MoneyDecimal.max(0, toMoney(employee.totalWithdrawals).plus(cents(changes.withdrawals)));
+  await db
+    .update(employees)
+    .set({
+      currentBalance: newBalance.toFixed(2),
+      totalDeposits: newDeposits.toFixed(2),
+      totalWithdrawals: newWithdrawals.toFixed(2),
+    })
+    .where(eq(employees.id, employee.id));
+}
+
+function hasChanges(changes: EmployeeBalanceChanges): boolean {
+  return !changes.balanceChange.isZero() || !changes.deposits.isZero() || !changes.withdrawals.isZero();
+}
 
 // ─── Employee balance sync ────────────────────────────────────────────────────
 export async function syncEmployeeBalancesFromEntries(
@@ -24,79 +61,55 @@ export async function syncEmployeeBalancesFromEntries(
     }
   }
 
-  const employeeChangesById = new Map<number, { balanceChange: number; deposits: number; withdrawals: number }>();
-  const employeeChangesByCode = new Map<string, { balanceChange: number; deposits: number; withdrawals: number }>();
+  const employeeChangesById = new Map<number, EmployeeBalanceChanges>();
+  const employeeChangesByCode = new Map<string, EmployeeBalanceChanges>();
+
+  const accumulate = <K>(map: Map<K, EmployeeBalanceChanges>, key: K, debit: Decimal, credit: Decimal) => {
+    const current = map.get(key) ?? emptyChanges();
+    const balanceChange = reverse ? debit.minus(credit) : credit.minus(debit);
+    map.set(key, {
+      balanceChange: current.balanceChange.plus(balanceChange),
+      deposits: current.deposits.plus(reverse ? credit.negated() : credit),
+      withdrawals: current.withdrawals.plus(reverse ? debit.negated() : debit),
+    });
+  };
 
   for (const entry of entries) {
-    const debit = parseFloat(entry.debitAmount || "0");
-    const credit = parseFloat(entry.creditAmount || "0");
-    let balanceChange = credit - debit;
-    if (reverse) balanceChange = -balanceChange;
-    const depositChange = reverse ? -credit : credit;
-    const withdrawalChange = reverse ? -debit : debit;
+    const debit = toMoney(entry.debitAmount);
+    const credit = toMoney(entry.creditAmount);
 
     if (entry.employeeId) {
-      const current = employeeChangesById.get(entry.employeeId) || {
-        balanceChange: 0,
-        deposits: 0,
-        withdrawals: 0,
-      };
-      employeeChangesById.set(entry.employeeId, {
-        balanceChange: current.balanceChange + balanceChange,
-        deposits: current.deposits + depositChange,
-        withdrawals: current.withdrawals + withdrawalChange,
-      });
+      accumulate(employeeChangesById, entry.employeeId, debit, credit);
       continue;
     }
 
     if (entry.ledgerAccountId) {
       const employeeAccount = employeeAccountMap.get(entry.ledgerAccountId);
       if (employeeAccount) {
-        const current = employeeChangesByCode.get(employeeAccount.employeeCode) || {
-          balanceChange: 0,
-          deposits: 0,
-          withdrawals: 0,
-        };
-        employeeChangesByCode.set(employeeAccount.employeeCode, {
-          balanceChange: current.balanceChange + balanceChange,
-          deposits: current.deposits + depositChange,
-          withdrawals: current.withdrawals + withdrawalChange,
-        });
+        accumulate(employeeChangesByCode, employeeAccount.employeeCode, debit, credit);
       }
     }
   }
 
+  // Lookups are scoped to the voucher's company so an entry can never move
+  // another tenant's employee balance (employee codes are only unique per company).
   for (const [employeeId, changes] of Array.from(employeeChangesById.entries())) {
-    if (changes.balanceChange === 0 && changes.deposits === 0 && changes.withdrawals === 0) continue;
-    const employee = await storage.getEmployeeById(employeeId);
+    if (!hasChanges(changes)) continue;
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)));
     if (!employee) continue;
-    const newBalance = parseFloat(employee.currentBalance || "0") + changes.balanceChange;
-    const newDeposits = Math.max(0, parseFloat(employee.totalDeposits || "0") + changes.deposits);
-    const newWithdrawals = Math.max(0, parseFloat(employee.totalWithdrawals || "0") + changes.withdrawals);
-    await db
-      .update(employees)
-      .set({
-        currentBalance: newBalance.toFixed(2),
-        totalDeposits: newDeposits.toFixed(2),
-        totalWithdrawals: newWithdrawals.toFixed(2),
-      })
-      .where(eq(employees.id, employee.id));
+    await applyEmployeeBalanceChanges(employee, changes);
   }
 
   for (const [employeeCode, changes] of Array.from(employeeChangesByCode.entries())) {
-    if (changes.balanceChange === 0 && changes.deposits === 0 && changes.withdrawals === 0) continue;
-    const employee = await storage.getEmployeeByCode(employeeCode);
+    if (!hasChanges(changes)) continue;
+    const [employee] = await db
+      .select()
+      .from(employees)
+      .where(and(eq(employees.code, employeeCode), eq(employees.companyId, companyId)));
     if (!employee) continue;
-    const newBalance = parseFloat(employee.currentBalance || "0") + changes.balanceChange;
-    const newDeposits = Math.max(0, parseFloat(employee.totalDeposits || "0") + changes.deposits);
-    const newWithdrawals = Math.max(0, parseFloat(employee.totalWithdrawals || "0") + changes.withdrawals);
-    await db
-      .update(employees)
-      .set({
-        currentBalance: newBalance.toFixed(2),
-        totalDeposits: newDeposits.toFixed(2),
-        totalWithdrawals: newWithdrawals.toFixed(2),
-      })
-      .where(eq(employees.id, employee.id));
+    await applyEmployeeBalanceChanges(employee, changes);
   }
 }

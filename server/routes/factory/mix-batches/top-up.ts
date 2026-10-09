@@ -18,6 +18,7 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import { getStableSupplierCost } from "../../../services/factory/rawStockStableCost";
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
 import Decimal from "decimal.js";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchTopUpRoutes(app: Express) {
   // Top-up an existing mix batch with additional sources
@@ -34,6 +35,14 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
       const { supplierSources = [], sources = [], batchSources = [], txDate } = req.body;
       const hasAnySources = supplierSources.length > 0 || sources.length > 0 || batchSources.length > 0;
       if (!hasAnySources) return res.status(400).json({ message: "At least one source is required" });
+
+      // Source weights are read the way parseFloat reads them; one that does not
+      // parse would otherwise reach usedKg as NaN.
+      const allSources: Array<{ weightKg?: unknown }> = [...supplierSources, ...sources, ...batchSources];
+      if (allSources.some((source) => parseMoneyInput(source.weightKg) === null)) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+      const weightOf = (source: { weightKg?: unknown }) => parseMoneyInput(source.weightKg) as Decimal;
 
       // Capture old values before the transaction for the audit log.
       const [batchBeforeTopup] = await db
@@ -55,8 +64,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
         if (!batch) throw new Error("Batch not found");
 
-        const existingTotalKg = parseFloat(batch.totalWeightKg);
-        const existingTotalCost = parseFloat(batch.totalCost);
+        const existingTotalKg = toMoney(batch.totalWeightKg);
+        const existingTotalCost = toMoney(batch.totalCost);
         // DEFECT 15 FIX: use Decimal.js for cost accumulation (top-up route).
         let dAddedWeightKg = new Decimal(0);
         let dAddedCost = new Decimal(0);
@@ -64,8 +73,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
         for (const source of supplierSources) {
           // costPerKg from the client is NEVER trusted for a real supplier.
-          const { supplierId, weightKg } = source;
-          const weight = parseFloat(weightKg);
+          const { supplierId } = source;
+          const weight = weightOf(source);
 
           // Locked, offload-time moving-average rate — never derived from remaining/
           // available kg, so it doesn't shift depending on which container FIFO
@@ -85,13 +94,13 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
                 `Supplier has no established raw-material rate yet. Record a container offload or opening-balance/ADD adjustment before using it as a mix-batch source.`
               );
             }
-            const dWman = new Decimal(weight);
+            const dWman = weight;
             const dCman = new Decimal(stableCostPerKg);
             dAddedWeightKg = dAddedWeightKg.plus(dWman);
             dAddedCost = dAddedCost.plus(dWman.times(dCman));
             sourceRecords.push({
               supplierId,
-              weightKg: String(weight),
+              weightKg: weight.toFixed(),
               costPerKg: String(stableCostPerKg),
               totalCost: dWman.times(dCman).toDecimalPlaces(6).toFixed(6),
             });
@@ -102,34 +111,34 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
             // driving its usedKg above receivedKg (negative stock).
             let toDeduct = weight;
             for (const rs of supplierRawStocks) {
-              if (toDeduct <= 0.001) break;
-              const avail = Math.max(0, rs.receivedKg - rs.usedKg);
-              if (avail <= 0) continue;
-              const take = Math.min(toDeduct, avail);
+              if (toDeduct.lessThanOrEqualTo(0.001)) break;
+              const avail = MoneyDecimal.max(0, toMoney(rs.receivedKg).minus(toMoney(rs.usedKg)));
+              if (avail.lessThanOrEqualTo(0)) continue;
+              const take = MoneyDecimal.min(toDeduct, avail);
               await tx
                 .update(factoryRawStock)
-                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${take}` })
+                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${take.toFixed()}` })
                 .where(eq(factoryRawStock.id, rs.id));
-              toDeduct -= take;
+              toDeduct = toDeduct.minus(take);
             }
             // If there's still remaining kg (over-use), push it onto the last raw stock row
-            if (toDeduct > 0.001 && supplierRawStocks.length > 0) {
+            if (toDeduct.greaterThan(0.001) && supplierRawStocks.length > 0) {
               const lastRs = supplierRawStocks[supplierRawStocks.length - 1];
               await tx
                 .update(factoryRawStock)
-                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct}` })
+                .set({ usedKg: sql`${factoryRawStock.usedKg} + ${toDeduct.toFixed()}` })
                 .where(eq(factoryRawStock.id, lastRs.id));
             }
 
             // Cost is always the supplier's locked rate — client-supplied cost is
             // never trusted, regardless of which raw-stock rows FIFO happened to hit.
-            const dWfifo = new Decimal(weight);
+            const dWfifo = weight;
             const dCfifo = new Decimal(stableCostPerKg);
             dAddedWeightKg = dAddedWeightKg.plus(dWfifo);
             dAddedCost = dAddedCost.plus(dWfifo.times(dCfifo));
             sourceRecords.push({
               supplierId,
-              weightKg: String(weight),
+              weightKg: weight.toFixed(),
               costPerKg: String(stableCostPerKg),
               totalCost: dWfifo.times(dCfifo).toDecimalPlaces(6).toFixed(6),
             });
@@ -141,7 +150,7 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           // cost — client-supplied costPerKg is always ignored.
           // FIX 4: If the container has a linked supplier, use the supplier's
           // authoritative moving-average locked rate.
-          const { containerId, weightKg } = source;
+          const { containerId } = source;
           const [rawStockRow] = await tx
             .select()
             .from(factoryRawStock)
@@ -164,35 +173,37 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           if (!ctnRow2) throw new Error(`Container ${containerId} not found, deleted, or belongs to another company`);
           const ctnSupplierId2 = ctnRow2?.supplierId ?? null;
 
-          const weight = parseFloat(weightKg);
-          let costUsd: number;
+          const weight = weightOf(source);
+          let costUsd: Decimal;
           if (ctnSupplierId2) {
-            costUsd = await getLockedSupplierRate(tx, companyId, ctnSupplierId2, { forUpdate: true });
+            costUsd = toMoney(await getLockedSupplierRate(tx, companyId, ctnSupplierId2, { forUpdate: true }));
           } else {
-            costUsd = parseFloat(rawStockRow.costPerKgUsd || "0") || parseFloat(rawStockRow.costPerKg || "0") || 0;
+            // The USD rate when it is set, else the native rate.
+            const usdRate = toMoney(rawStockRow.costPerKgUsd);
+            costUsd = usdRate.isZero() ? toMoney(rawStockRow.costPerKg) : usdRate;
           }
 
           // Allow over-use: usedKg may exceed receivedKg, driving stock negative
           await tx
             .update(factoryRawStock)
-            .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight}` })
+            .set({ usedKg: sql`${factoryRawStock.usedKg} + ${weight.toFixed()}` })
             .where(eq(factoryRawStock.id, rawStockRow.id));
 
-          const dWctn = new Decimal(weight);
-          const dCctn = new Decimal(costUsd);
+          const dWctn = weight;
+          const dCctn = costUsd;
           dAddedWeightKg = dAddedWeightKg.plus(dWctn);
           dAddedCost = dAddedCost.plus(dWctn.times(dCctn));
           sourceRecords.push({
             supplierId: ctnSupplierId2 ?? undefined,
             containerId,
-            weightKg: String(weight),
-            costPerKg: String(costUsd),
+            weightKg: weight.toFixed(),
+            costPerKg: costUsd.toFixed(),
             totalCost: dWctn.times(dCctn).toDecimalPlaces(6).toFixed(6),
           });
         }
 
         for (const bSource of batchSources) {
-          const { sourceBatchId, weightKg } = bSource;
+          const { sourceBatchId } = bSource;
           const [srcBatch] = await tx
             .select()
             .from(factoryMixBatches)
@@ -201,32 +212,32 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
 
           if (!srcBatch) throw new Error(`Source batch ${sourceBatchId} not found`);
 
-          const batchRemaining = parseFloat(srcBatch.totalWeightKg) - parseFloat(srcBatch.usedKg);
-          const weight = parseFloat(weightKg);
-          if (weight > batchRemaining + 0.001) {
+          const batchRemaining = toMoney(srcBatch.totalWeightKg).minus(toMoney(srcBatch.usedKg));
+          const weight = weightOf(bSource);
+          if (weight.greaterThan(batchRemaining.plus(0.001))) {
             throw new Error(`Not enough in batch ${srcBatch.batchCode}. Available: ${batchRemaining.toFixed(3)} kg`);
           }
 
-          const cost = parseFloat(srcBatch.costPerKg);
+          const cost = toMoney(srcBatch.costPerKg);
           await tx
             .update(factoryMixBatches)
-            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight}`, updatedAt: new Date() })
+            .set({ usedKg: sql`${factoryMixBatches.usedKg} + ${weight.toFixed()}`, updatedAt: new Date() })
             .where(eq(factoryMixBatches.id, srcBatch.id));
 
-          const dWtb = new Decimal(weight);
-          const dCtb = new Decimal(cost);
+          const dWtb = weight;
+          const dCtb = cost;
           dAddedWeightKg = dAddedWeightKg.plus(dWtb);
           dAddedCost = dAddedCost.plus(dWtb.times(dCtb));
           sourceRecords.push({
             sourceBatchId,
-            weightKg: String(weight),
-            costPerKg: String(cost),
+            weightKg: weight.toFixed(),
+            costPerKg: cost.toFixed(),
             totalCost: dWtb.times(dCtb).toDecimalPlaces(6).toFixed(6),
           });
         }
 
-        const dExistingKg = new Decimal(existingTotalKg);
-        const dExistingCost = new Decimal(existingTotalCost);
+        const dExistingKg = existingTotalKg;
+        const dExistingCost = existingTotalCost;
         const newTotalKg = dExistingKg.plus(dAddedWeightKg);
         const newTotalCost = dExistingCost.plus(dAddedCost);
         const newCostPerKg = newTotalKg.gt(0) ? newTotalCost.div(newTotalKg).toDecimalPlaces(6).toNumber() : 0;
@@ -276,8 +287,8 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
         referenceId: result.id,
         referenceTable: "factory_mix_batches",
         description: `Mix batch top-up: ${result.batchCode}${result.name ? ` – ${result.name}` : ""}`,
-        amountCurrency: parseFloat(result.totalCost || "0"),
-        amountUsd: parseFloat(result.totalCost || "0"),
+        amountCurrency: toMoney(result.totalCost).toNumber(),
+        amountUsd: toMoney(result.totalCost).toNumber(),
       });
 
       try {
@@ -291,12 +302,12 @@ export function registerFactoryMixBatchTopUpRoutes(app: Express) {
           recordIdentifier: result.batchCode + (result.name ? ` – ${result.name}` : ""),
           changes: {
             totalWeightKg: {
-              old: parseFloat(batchBeforeTopup?.totalWeightKg || "0").toFixed(3),
-              new: parseFloat(result.totalWeightKg || "0").toFixed(3),
+              old: toMoney(batchBeforeTopup?.totalWeightKg).toFixed(3),
+              new: toMoney(result.totalWeightKg).toFixed(3),
             },
             totalCost: {
-              old: parseFloat(batchBeforeTopup?.totalCost || "0").toFixed(2),
-              new: parseFloat(result.totalCost || "0").toFixed(2),
+              old: toMoney(batchBeforeTopup?.totalCost).toFixed(2),
+              new: toMoney(result.totalCost).toFixed(2),
             },
           },
         });

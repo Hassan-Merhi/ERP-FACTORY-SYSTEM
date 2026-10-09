@@ -635,6 +635,18 @@ export function keyStartsWith(prefix: string) {
 }
 
 /**
+ * Invalidate the container offload and inventory views. Editing a container's
+ * duty / transport / office charge voucher re-prices the offloaded bales on the
+ * server, so the offload detail and inventory cost per bale must refetch.
+ */
+export function invalidateContainerLandedCostQueries() {
+  queryClient.invalidateQueries({ predicate: keyStartsWith("/api/offloads") });
+  queryClient.invalidateQueries({ predicate: keyStartsWith("/api/containers") });
+  queryClient.invalidateQueries({ predicate: keyStartsWith("/api/inventory") });
+  queryClient.invalidateQueries({ predicate: keyStartsWith("/api/location-inventory") });
+}
+
+/**
  * Invalidate every query that depends on a customer's balance.
  *
  * Use this in any `useMutation.onSuccess` that creates / edits / deletes a

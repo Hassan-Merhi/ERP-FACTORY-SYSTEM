@@ -25,6 +25,7 @@ import { getProformaCapacitySnapshot } from "./proformaCapacity";
 import { allocateRemainingProformaLines } from "./proformaCapacityEnforcement";
 import { guardExistingOrderProformaLink, guardProformaOrderCreation } from "./proformaCapacityWriteGuards";
 import { acquireProformaCapacityTransactionLock } from "./proformaCapacityConcurrency";
+import { canViewBookingInfo, isValidBookingInfo } from "./bookingInfo";
 
 export function registerOrderCrudRoutes(app: Express) {
   app.get("/api/factory/customer-orders", requireAuth, async (req: Request, res: Response) => {
@@ -85,6 +86,7 @@ export function registerOrderCrudRoutes(app: Express) {
           containerNumber: customerOrders.containerNumber,
           shippingCompany: customerOrders.shippingCompany,
           containerNotes: customerOrders.containerNotes,
+          bookingInfo: canViewBookingInfo(req.session) ? customerOrders.bookingInfo : sql<string | null>`NULL`,
           destination: customerOrders.destination,
           locationId: customerOrders.locationId,
           loadingStartedAt: customerOrders.loadingStartedAt,
@@ -156,6 +158,7 @@ export function registerOrderCrudRoutes(app: Express) {
         containerNumber: r.container_number ?? null,
         shippingCompany: r.shipping_company ?? null,
         containerNotes: r.container_notes ?? null,
+        bookingInfo: r.booking_info ?? null,
         destination: r.destination ?? null,
         verifiedByUserId: r.verified_by_user_id ?? null,
         verifiedAt: r.verified_at ?? null,
@@ -768,7 +771,7 @@ export function registerOrderCrudRoutes(app: Express) {
       const orderId = parseId(req.params.id);
 
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
-      const { containerNumber, shippingCompany, containerNotes, destination } = req.body;
+      const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
 
       const [order] = await db
         .select()
@@ -780,6 +783,10 @@ export function registerOrderCrudRoutes(app: Express) {
       if (containerNumber !== undefined) updateData.containerNumber = containerNumber;
       if (shippingCompany !== undefined) updateData.shippingCompany = shippingCompany;
       if (containerNotes !== undefined) updateData.containerNotes = containerNotes;
+      if (bookingInfo !== undefined && !isValidBookingInfo(bookingInfo)) {
+        return res.status(400).json({ message: "Booking info must be text up to 2000 characters" });
+      }
+      if (bookingInfo !== undefined) updateData.bookingInfo = bookingInfo;
       if (destination !== undefined) updateData.destination = destination || null;
 
       const [updated] = await db

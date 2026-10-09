@@ -1,6 +1,7 @@
 import { eq, and, desc, sql } from "drizzle-orm";
 import { db } from "../../db";
 import * as schema from "@shared/schema";
+import { toMoney } from "../../lib/money";
 
 export async function addCustomerBalanceEntry(entry: schema.InsertCustomerBalance): Promise<schema.CustomerBalance> {
   const debitAmount = entry.debitAmount || "0";
@@ -42,7 +43,7 @@ export async function getCustomerBalance(customerId: number, companyId: number):
     })
     .from(schema.customerBalances)
     .where(and(eq(schema.customerBalances.customerId, customerId), eq(schema.customerBalances.companyId, companyId)));
-  return result ? parseFloat(result.net) : 0;
+  return result ? toMoney(result.net).toNumber() : 0;
 }
 
 export async function getCustomerStatement(

@@ -19,6 +19,7 @@ import {
 import { eq, and, sql, ne } from "drizzle-orm";
 
 import { buildLoadingSummary, getCompanyId } from "./_helpers";
+import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 
 export function registerInvoiceLoadingSessionRoutes(app: Express) {
   // GET /api/factory/invoices/:invoiceId/loading-summary
@@ -116,6 +117,9 @@ export function registerInvoiceLoadingSessionRoutes(app: Express) {
       const userId = req.user?.id ?? null;
       const username = req.user?.username ?? "";
       const { locationId, truckNo, driverName, notes } = req.body;
+      if (locationId && !(await isFactorySessionLocation(req.session, locationId))) {
+        return res.status(400).json({ message: "Location not found" });
+      }
 
       const [session] = await db
         .insert(factoryInvoiceLoadingSessions)
