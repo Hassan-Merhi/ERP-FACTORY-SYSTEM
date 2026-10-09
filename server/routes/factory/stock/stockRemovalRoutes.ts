@@ -80,7 +80,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
 
         for (const bale of balesToRemove) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
-            companyId, baleId: bale.id, actor: supervisorUsername, reason: reason || "Factory bale stock removal",
+            companyId, baleId: bale.id, actor: supervisorUsername, actorId: String(supervisor.id), reason: reason || "Factory bale stock removal",
           });
           const [updated] = await tx
             .update(factoryBales)
@@ -257,7 +257,7 @@ export function registerFactoryStockRemovalRoutes(app: Express) {
 
         for (const bale of balesToRemove) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
-            companyId, baleId: bale.id, actor: supervisorUsername, reason: reason || "Factory bale stock removal",
+            companyId, baleId: bale.id, actor: supervisorUsername, actorId: String(supervisor.id), reason: reason || "Factory bale stock removal",
           });
           const [updated] = await tx
             .update(factoryBales)
