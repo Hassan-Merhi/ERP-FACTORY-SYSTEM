@@ -38,7 +38,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useAppMode } from "@/contexts/AppModeContext";
-import { useErpVisibleSections } from "@/components/AppSidebar";
+import { isRetailHiddenErpPath, useErpVisibleSections } from "@/components/AppSidebar";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useFactoryVisibleSections } from "@/components/FactorySidebar";
 import { PROPERTIES_NAV_SECTIONS } from "@/components/PropertiesSidebar";
 import type { NavItem, NavSection } from "@/components/sidebar/sidebarPrimitives";
@@ -496,19 +497,25 @@ export function CommandPalette({
     [setOpen, setLocation]
   );
 
+  const { selectedCompany } = useCompany();
   const erpVis = useErpVisibleSections(hasErpAccess && !isPOS ? user : undefined);
   const factoryVis = useFactoryVisibleSections(
     hasFactoryAccess && !isPOS && user ? { role: user.role ?? undefined } : undefined
   );
 
+  const isRetailCompany = selectedCompany?.companyType === "retail";
   const erpPages = useMemo(
     () =>
       buildEntries(
         erpVis.sections,
-        [...ERP_EXTRAS, ...ERP_HUB_TABS],
+        [
+          ...ERP_EXTRAS,
+          // Hub tabs bypass the sidebar visibility rules, so retail companies filter them here.
+          ...ERP_HUB_TABS.filter((tab) => !isRetailCompany || !isRetailHiddenErpPath(tab.path)),
+        ],
         [...erpVis.visiblePinnedItems, ...erpVis.visibleUtilityItems]
       ),
-    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems]
+    [erpVis.sections, erpVis.visiblePinnedItems, erpVis.visibleUtilityItems, isRetailCompany]
   );
 
   const factoryPages = useMemo(() => {
