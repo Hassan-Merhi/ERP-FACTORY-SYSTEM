@@ -19,6 +19,7 @@
  */
 
 import Decimal from "decimal.js";
+import { HttpError } from "../../lib/httpHandlers";
 
 // ─── Rate-convention enum ────────────────────────────────────────────────────
 
@@ -85,7 +86,15 @@ const KNOWN_CURRENCIES = new Set([
   "USD", // US Dollar — base currency
   "XOF", // West African CFA Franc (ISO 4217)
   "CFA", // Non-standard alias used in this project for XOF; accepted here
-  "EUR", "GBP", "CNY", "NGN", "GHS", "CDF", "JPY", "CAD", "CHF",
+  "EUR",
+  "GBP",
+  "CNY",
+  "NGN",
+  "GHS",
+  "CDF",
+  "JPY",
+  "CAD",
+  "CHF",
 ]);
 
 // ─── Public helpers ──────────────────────────────────────────────────────────
@@ -115,28 +124,36 @@ export function normalizeCurrencyCode(code: string | null | undefined): string {
 }
 
 /**
+ * A missing or invalid exchange rate on the request. Routes answer it with 400
+ * so the user sees the message and can enter a rate, instead of a server error.
+ */
+export class InvalidExchangeRateError extends HttpError {
+  constructor(message: string) {
+    super(400, message);
+    this.name = "InvalidExchangeRateError";
+  }
+}
+
+/**
  * Validate a historical exchange rate.
  * Returns the rate as a Decimal. Throws for zero, negative, NaN, Infinity,
  * or non-numeric strings. Never silently defaults to 1.
  */
-export function validateHistoricalRate(
-  rate: string | number | null | undefined,
-  context = "exchange rate"
-): Decimal {
+export function validateHistoricalRate(rate: string | number | null | undefined, context = "exchange rate"): Decimal {
   if (rate === null || rate === undefined || rate === "") {
-    throw new Error(`${context}: a valid positive rate is required; got null/undefined/empty.`);
+    throw new InvalidExchangeRateError(`${context}: a valid positive rate is required; got null/undefined/empty.`);
   }
   let d: Decimal;
   try {
     d = new Decimal(rate);
   } catch {
-    throw new Error(`${context}: "${rate}" is not a valid numeric rate.`);
+    throw new InvalidExchangeRateError(`${context}: "${rate}" is not a valid numeric rate.`);
   }
   if (!d.isFinite()) {
-    throw new Error(`${context}: rate must be finite; got "${rate}".`);
+    throw new InvalidExchangeRateError(`${context}: rate must be finite; got "${rate}".`);
   }
   if (d.lte(0)) {
-    throw new Error(`${context}: rate must be positive; got "${rate}".`);
+    throw new InvalidExchangeRateError(`${context}: rate must be positive; got "${rate}".`);
   }
   return d;
 }
@@ -253,9 +270,7 @@ export interface NormalizeVoucherEntryAmountsInput {
  *    baseDebit = txDebit / rate, backward-compat debitAmount = baseDebit.
  *  - debitAmount (backward compat) always equals baseDebitAmount.
  */
-export function normalizeVoucherEntryAmounts(
-  input: NormalizeVoucherEntryAmountsInput
-): NormalizedEntryAmounts {
+export function normalizeVoucherEntryAmounts(input: NormalizeVoucherEntryAmountsInput): NormalizedEntryAmounts {
   const { baseCurrency, historicalRate } = input;
 
   const txCurrency = normalizeCurrencyCode(input.transactionCurrency);
@@ -498,9 +513,7 @@ export function classifyVoucherEntryFallback(params: {
   let baseCcy: string;
 
   try {
-    txCcy = normalizeCurrencyCode(
-      transactionCurrency || voucherCurrency || baseCurrency
-    );
+    txCcy = normalizeCurrencyCode(transactionCurrency || voucherCurrency || baseCurrency);
   } catch {
     return {
       safe: false,
