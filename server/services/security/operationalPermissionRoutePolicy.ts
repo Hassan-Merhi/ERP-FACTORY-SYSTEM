@@ -82,8 +82,12 @@ export type OperationalPermissionName = keyof typeof OPERATIONAL_PERMISSIONS;
  * permissions, the one listed first here wins.
  */
 export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissionName, readonly string[]>> = {
-  posShiftControl: ["POST /api/pos/shifts/open", "POST /api/pos/shifts/:id/close"],
-  posShiftSummary: ["GET /api/pos/shifts/history", "GET /api/pos/shifts/:id"],
+  posShiftControl: [
+    "POST /api/pos/shifts/open",
+    "POST /api/pos/shifts/:id/close",
+    "POST /api/pos/retail/shifts/:id/cash-movements",
+  ],
+  posShiftSummary: ["GET /api/pos/shifts/history", "GET /api/pos/shifts/:id", "GET /api/pos/retail/shifts/:id/summary"],
   posSalesImport: [
     "POST /api/pos-import/parse",
     "POST /api/pos-import/validate",
