@@ -11,14 +11,10 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { getClientDate } from "../../../lib/dateUtils";
-import { firstRow } from "../../../lib/queryResult";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { deletePhysicalFactoryBalesTx } from "../stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
-import { adjustInventory } from "../../../inventoryHelper";
-import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
-import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 
 import {
   factoryBaleProducts,
@@ -32,8 +28,6 @@ import {
   factoryV3LoadBales,
   factoryInvoiceLoadingBales,
   factoryBaleProductionAttributions,
-  stockItems,
-  inventory,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
 
