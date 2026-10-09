@@ -201,68 +201,59 @@ export function registerBalesCrudRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-
       const { ids, status } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0)
-        return res.status(400).json({ message: "ids must be a non-empty array" });
-      if (!status || typeof status !== "string") return res.status(400).json({ message: "status is required" });
-
+      if (!Array.isArray(ids) || !ids.length || ids.length > 200 ||
+          ids.some(id => !Number.isSafeInteger(id) || id < 1) ||
+          new Set(ids).size !== ids.length) {
+        return res.status(400).json({ message: "Provide 1–200 unique physical bale IDs" });
+      }
       const ALLOWED = [
-        "PENDING_PRESSING",
-        "LABEL_PRINTED",
-        "PRESSED",
-        "IN_STOCK",
-        "RESERVED",
-        "RESERVED_FOR_ORDER",
-        "SOLD",
-        "REPACKED",
-        "REMOVED",
-        "DELETED",
-        "DISPATCHED",
+        "PENDING_PRESSING", "LABEL_PRINTED", "PRESSED", "IN_STOCK", "RESERVED",
+        "RESERVED_FOR_ORDER", "SOLD", "REPACKED", "REMOVED", "DELETED", "DISPATCHED",
       ];
       if (!ALLOWED.includes(status))
         return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
-      // These states have physical stock implications. Arbitrary status PATCH
-      // must not bypass the same atomic reversal used by supervised deletion.
-      if (status === "REMOVED") {
-        return res.status(409).json({ message: "Use physical bale deletion to remove this bale from stock." });
-      }
-      if (status === "DELETED") {
-        const [deleted] = await db.transaction(async (tx) => {
-          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
-          return deletePhysicalFactoryBalesTx(tx, {
-            companyId, baleIds: [id],
+      if (status === "REMOVED")
+        return res.status(409).json({ message: "Use Physical Bale Removal to remove stock." });
+
+      const updated = await db.transaction(async tx => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        if (status === "DELETED") {
+          const removed = await deletePhysicalFactoryBalesTx(tx, {
+            companyId, baleIds: ids,
             actorId: req.session.userId == null ? null : String(req.session.userId),
             actorName: String(req.session.username || req.session.userId || "unknown"),
-            reason: "Physical bale deleted via status change",
+            reason: "Physical bales deleted via bulk status change",
             businessDate: getClientDate(req),
           });
-        });
-        try {
-          await logAudit({
-            userId: req.session.userId!,
-            username: req.session.username || req.session.userId!,
-            companyId, action: "delete", tableName: "factory_bales",
-            recordId: id, recordIdentifier: deleted.referenceNumber || `Bale #${id}`,
-            changes: { status: { old: "IN_STOCK", new: "DELETED" } },
-          });
-        } catch (auditError) {
-          logger.error("Bale status deletion audit failed after commit", { error: auditError });
+          return removed.length;
         }
-        return res.json({ id, status: "DELETED" });
-      }
-
-
-      const now = new Date();
-      const result = await db
-        .update(factoryBales)
-        .set({ status, updatedAt: now, deletedAt: status === "DELETED" ? now : null })
-        .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
-        .returning({ id: factoryBales.id });
-
-      res.json({ updated: result.length });
+        const bales = await tx.select({ id: factoryBales.id, status: factoryBales.status,
+          deletedAt: factoryBales.deletedAt }).from(factoryBales)
+          .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids)));
+        if (bales.length !== ids.length ||
+            bales.some(b => b.deletedAt || ["DELETED", "REMOVED"].includes(b.status))) {
+          throw new Error("Cannot update deleted, removed or foreign-company bales");
+        }
+        if (status === "IN_STOCK") {
+          const linked = await tx.select({ status: customerOrders.status })
+            .from(customerOrderBales)
+            .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
+            .where(and(inArray(customerOrderBales.baleId, ids), eq(customerOrders.companyId, companyId)));
+          if (linked.some(row => ["FINALIZED", "VERIFIED", "DISPATCHED", "SOLD"].includes(row.status))) {
+            throw new Error("Cannot reset verified/finalized loading bales to stock without controlled return");
+          }
+        }
+        const now = new Date();
+        const result = await tx.update(factoryBales)
+          .set({ status, updatedAt: now })
+          .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids)))
+          .returning({ id: factoryBales.id });
+        return result.length;
+      });
+      return res.json({ updated });
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(400).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -336,6 +327,33 @@ export function registerBalesCrudRoutes(app: Express) {
       ];
       if (!ALLOWED.includes(status))
         return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
+
+      if (status === "REMOVED")
+        return res.status(409).json({ message: "Use Physical Bale Removal to remove stock." });
+      if (status === "DELETED") {
+        const [deleted] = await db.transaction(async tx => {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+          return deletePhysicalFactoryBalesTx(tx, {
+            companyId, baleIds: [id],
+            actorId: req.session.userId == null ? null : String(req.session.userId),
+            actorName: String(req.session.username || req.session.userId || "unknown"),
+            reason: "Physical bale deleted via status change",
+            businessDate: getClientDate(req),
+          });
+        });
+        try {
+          await logAudit({
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId, action: "delete", tableName: "factory_bales", recordId: id,
+            recordIdentifier: deleted.referenceNumber || `Bale #${id}`,
+            changes: { status: { old: null, new: "DELETED" } },
+          });
+        } catch (auditError) {
+          logger.error("Bale status deletion audit failed after commit", { error: auditError });
+        }
+        return res.json({ id, status: "DELETED" });
+      }
 
       // Guard: prevent resetting a bale to IN_STOCK if it's on a finalized order.
       // The correct flow is to use the "Return to Stock" action which removes it from the order first.
