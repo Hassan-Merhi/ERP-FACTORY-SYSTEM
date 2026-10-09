@@ -13,7 +13,12 @@
     "DELETE /api/factory/agents/pinned/:accountId [requireAuth > requireFactoryAgentIfNeeded > removePinnedAgent]"
   ],
   "routeManifestMountAdditions": [],
-  "routeManifestReplacements": [],
+  "routeManifestReplacements": [
+    {
+      "expected": "GET /api/accounts/employee/:id/transactions [requireAuth > <anonymous>]",
+      "actual": "GET /api/accounts/employee/:id/transactions [requireAuth > readAgentEmployeeTransactions]"
+    }
+  ],
   "sourceTextAssertionDelta": {
     "additionalSourceCoupledTests": [
       "tests/account-migration-round-trip.test.ts",
