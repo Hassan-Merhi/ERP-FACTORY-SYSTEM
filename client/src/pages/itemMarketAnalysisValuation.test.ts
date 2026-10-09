@@ -75,7 +75,10 @@ describe("Item Market Analysis purchase cost modes", () => {
 
   it("does not fabricate estimated profit for non-USD, mixed-currency or missing purchase rates", () => {
     const row = makeRow();
-    expect(valueMarketRow({ ...row, purchaseCurrencies: ["CDF"] }, true)).toEqual({ ...row, purchaseCurrencies: ["CDF"] });
+    expect(valueMarketRow({ ...row, purchaseCurrencies: ["CDF"] }, true)).toEqual({
+      ...row,
+      purchaseCurrencies: ["CDF"],
+    });
     expect(valueMarketRow({ ...row, purchaseCurrencies: ["USD", "CDF"] }, false).profit).toBe(316.47);
     expect(valueMarketRow({ ...row, weightedPurchaseCostWithOffloading: null }, true).profit).toBe(316.47);
     expect(valueMarketRow({ ...row, importedQty: 0 }, true).profit).toBe(316.47);
