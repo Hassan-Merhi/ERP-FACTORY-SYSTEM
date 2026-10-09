@@ -97,194 +97,199 @@ export function registerAccountStatementRoutes(app: Express) {
     }
   });
 
-  app.get(["/api/accounts/:type/:id/pre-period-balance", "/api/factory/agents/:type/:id/pre-period-balance"], requireAuth, requireFactoryAgentStatementAccount, async (req, res) => {
-    try {
-      const accountType = req.params.type;
-      const accountId = parseInt(req.params.id);
-      const endDateRaw = req.query.endDate;
-      const companyId = req.path.toLowerCase().startsWith("/api/factory/agents/")
-        ? (req.session.factoryCompanyId || req.session.currentCompanyId)
-        : req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
-      if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
-        return res.status(400).json({ message: "endDate must be a single YYYY-MM-DD value" });
-      }
-      const endDate = endDateRaw;
-      const endDateValidation = validateStatementDateRange(undefined, endDate);
-      if (!endDateValidation.ok) return res.status(400).json({ message: endDateValidation.message });
-
-      const typeToColumn: Record<string, PgColumn> = {
-        ledger: voucherEntries.ledgerAccountId,
-        bank: voucherEntries.bankAccountId,
-        "fixed-asset": voucherEntries.fixedAssetId,
-        supplier: voucherEntries.supplierId,
-        employee: voucherEntries.employeeId,
-        customer: voucherEntries.customerId,
-      };
-      const entryColumn = typeToColumn[accountType];
-      if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
-
-      let rawOB = new MoneyDecimal(0);
-      let obSide = "Dr";
-      if (accountType === "ledger") {
-        const [acct] = await db
-          .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
-          .from(ledgerAccounts)
-          .where(eq(ledgerAccounts.id, accountId));
-        const [linkedCust] = await db
-          .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
-          .from(customers)
-          .where(eq(customers.ledgerAccountId, accountId))
-          .limit(1);
-        rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
-        obSide = linkedCust?.side ?? acct?.side ?? "Dr";
-
-        if (linkedCust) {
-          const currentCompany = await storage.getCompanyById(companyId);
-          if (currentCompany?.companyType === "factory") {
-            const custId = linkedCust.id;
-            const dateFilter = endDate ? sql`${vouchers.voucherDate} < ${endDate}` : sql`1=1`;
-            const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
-            const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
-
-            const [salesRows, cbRows, lVRows, cVRows] = await Promise.all([
-              db
-                .select({ total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)` })
-                .from(customerOrders)
-                .where(
-                  and(
-                    eq(customerOrders.customerId, custId),
-                    eq(customerOrders.companyId, companyId),
-                    eq(customerOrders.status, "FINALIZED"),
-                    orderDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-                })
-                .from(customerBalances)
-                .where(
-                  and(
-                    eq(customerBalances.customerId, custId),
-                    eq(customerBalances.companyId, companyId),
-                    sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`,
-                    cbDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.ledgerAccountId, accountId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-                    dateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.customerId, custId),
-                    isNull(voucherEntries.ledgerAccountId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-                    dateFilter
-                  )
-                ),
-            ]);
-
-            const ob = toMoney(linkedCust.ob);
-            const side = linkedCust.side || "Dr";
-            const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
-              sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVRows[0]?.net, cVRows[0]?.net])
-            );
-            return res.json({ balance: prePeriodBalance.toNumber() });
-          }
+  app.get(
+    ["/api/accounts/:type/:id/pre-period-balance", "/api/factory/agents/:type/:id/pre-period-balance"],
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    async (req, res) => {
+      try {
+        const accountType = req.params.type;
+        const accountId = parseInt(req.params.id);
+        const endDateRaw = req.query.endDate;
+        const companyId = req.path.toLowerCase().startsWith("/api/factory/agents/")
+          ? (req.session.factoryCompanyId || req.session.currentCompanyId)
+          : req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
+        if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
+          return res.status(400).json({ message: "endDate must be a single YYYY-MM-DD value" });
         }
-      } else if (accountType === "bank") {
-        const [acct] = await db
-          .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
-          .from(bankAccounts)
-          .where(eq(bankAccounts.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = acct?.side ?? "Dr";
-      } else if (accountType === "supplier") {
-        const isParentForSupplier = await isParentCompanyContext(companyId);
-        if (isParentForSupplier) {
+        const endDate = endDateRaw;
+        const endDateValidation = validateStatementDateRange(undefined, endDate);
+        if (!endDateValidation.ok) return res.status(400).json({ message: endDateValidation.message });
+  
+        const typeToColumn: Record<string, PgColumn> = {
+          ledger: voucherEntries.ledgerAccountId,
+          bank: voucherEntries.bankAccountId,
+          "fixed-asset": voucherEntries.fixedAssetId,
+          supplier: voucherEntries.supplierId,
+          employee: voucherEntries.employeeId,
+          customer: voucherEntries.customerId,
+        };
+        const entryColumn = typeToColumn[accountType];
+        if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
+  
+        let rawOB = new MoneyDecimal(0);
+        let obSide = "Dr";
+        if (accountType === "ledger") {
           const [acct] = await db
-            .select({ ob: suppliers.openingBalance })
-            .from(suppliers)
-            .where(eq(suppliers.id, accountId));
+            .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
+            .from(ledgerAccounts)
+            .where(eq(ledgerAccounts.id, accountId));
+          const [linkedCust] = await db
+            .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
+            .from(customers)
+            .where(eq(customers.ledgerAccountId, accountId))
+            .limit(1);
+          rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
+          obSide = linkedCust?.side ?? acct?.side ?? "Dr";
+  
+          if (linkedCust) {
+            const currentCompany = await storage.getCompanyById(companyId);
+            if (currentCompany?.companyType === "factory") {
+              const custId = linkedCust.id;
+              const dateFilter = endDate ? sql`${vouchers.voucherDate} < ${endDate}` : sql`1=1`;
+              const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
+              const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
+  
+              const [salesRows, cbRows, lVRows, cVRows] = await Promise.all([
+                db
+                  .select({ total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)` })
+                  .from(customerOrders)
+                  .where(
+                    and(
+                      eq(customerOrders.customerId, custId),
+                      eq(customerOrders.companyId, companyId),
+                      eq(customerOrders.status, "FINALIZED"),
+                      orderDateFilter
+                    )
+                  ),
+                db
+                  .select({
+                    net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
+                  })
+                  .from(customerBalances)
+                  .where(
+                    and(
+                      eq(customerBalances.customerId, custId),
+                      eq(customerBalances.companyId, companyId),
+                      sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`,
+                      cbDateFilter
+                    )
+                  ),
+                db
+                  .select({
+                    net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
+                  })
+                  .from(voucherEntries)
+                  .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+                  .where(
+                    and(
+                      eq(voucherEntries.ledgerAccountId, accountId),
+                      eq(vouchers.optional, false),
+                      isNull(vouchers.deletedAt),
+                      sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
+                      dateFilter
+                    )
+                  ),
+                db
+                  .select({
+                    net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
+                  })
+                  .from(voucherEntries)
+                  .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+                  .where(
+                    and(
+                      eq(voucherEntries.customerId, custId),
+                      isNull(voucherEntries.ledgerAccountId),
+                      eq(vouchers.optional, false),
+                      isNull(vouchers.deletedAt),
+                      sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
+                      dateFilter
+                    )
+                  ),
+              ]);
+  
+              const ob = toMoney(linkedCust.ob);
+              const side = linkedCust.side || "Dr";
+              const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
+                sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVRows[0]?.net, cVRows[0]?.net])
+              );
+              return res.json({ balance: prePeriodBalance.toNumber() });
+            }
+          }
+        } else if (accountType === "bank") {
+          const [acct] = await db
+            .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
+            .from(bankAccounts)
+            .where(eq(bankAccounts.id, accountId));
           rawOB = toMoney(acct?.ob);
-        } else {
-          rawOB = new MoneyDecimal(0);
+          obSide = acct?.side ?? "Dr";
+        } else if (accountType === "supplier") {
+          const isParentForSupplier = await isParentCompanyContext(companyId);
+          if (isParentForSupplier) {
+            const [acct] = await db
+              .select({ ob: suppliers.openingBalance })
+              .from(suppliers)
+              .where(eq(suppliers.id, accountId));
+            rawOB = toMoney(acct?.ob);
+          } else {
+            rawOB = new MoneyDecimal(0);
+          }
+          obSide = "Cr";
+        } else if (accountType === "employee") {
+          const [acct] = await db
+            .select({ ob: employees.openingBalance })
+            .from(employees)
+            .where(eq(employees.id, accountId));
+          rawOB = toMoney(acct?.ob);
+          obSide = "Cr";
+        } else if (accountType === "customer") {
+          const [acct] = await db
+            .select({ ob: customers.openingBalance })
+            .from(customers)
+            .where(eq(customers.id, accountId));
+          rawOB = toMoney(acct?.ob);
+          obSide = "Dr";
+        } else if (accountType === "fixed-asset") {
+          const [acct] = await db
+            .select({ ob: fixedAssets.openingBalance })
+            .from(fixedAssets)
+            .where(eq(fixedAssets.id, accountId));
+          rawOB = toMoney(acct?.ob);
+          obSide = "Dr";
         }
-        obSide = "Cr";
-      } else if (accountType === "employee") {
-        const [acct] = await db
-          .select({ ob: employees.openingBalance })
-          .from(employees)
-          .where(eq(employees.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Cr";
-      } else if (accountType === "customer") {
-        const [acct] = await db
-          .select({ ob: customers.openingBalance })
-          .from(customers)
-          .where(eq(customers.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Dr";
-      } else if (accountType === "fixed-asset") {
-        const [acct] = await db
-          .select({ ob: fixedAssets.openingBalance })
-          .from(fixedAssets)
-          .where(eq(fixedAssets.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Dr";
+  
+        const isSupplier = accountType === "supplier";
+        let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
+  
+        if (endDate) {
+          const conditions = [
+            eq(entryColumn, accountId),
+            eq(vouchers.optional, false),
+            isNull(vouchers.deletedAt),
+            sql`${vouchers.voucherDate} < ${endDate}`,
+          ];
+          if (isSupplier) conditions.push(eq(vouchers.companyId, companyId));
+          const [totals] = await db
+            .select({
+              totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}), 0)`,
+              totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}), 0)`,
+            })
+            .from(voucherEntries)
+            .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+            .where(and(...conditions));
+  
+          const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
+          balance = balance.plus(isSupplier ? net.negated() : net);
+        }
+  
+        res.json({ balance: balance.toNumber() });
+      } catch (error: unknown) {
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const isSupplier = accountType === "supplier";
-      let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
-
-      if (endDate) {
-        const conditions = [
-          eq(entryColumn, accountId),
-          eq(vouchers.optional, false),
-          isNull(vouchers.deletedAt),
-          sql`${vouchers.voucherDate} < ${endDate}`,
-        ];
-        if (isSupplier) conditions.push(eq(vouchers.companyId, companyId));
-        const [totals] = await db
-          .select({
-            totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}), 0)`,
-            totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}), 0)`,
-          })
-          .from(voucherEntries)
-          .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(...conditions));
-
-        const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
-        balance = balance.plus(isSupplier ? net.negated() : net);
-      }
-
-      res.json({ balance: balance.toNumber() });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   app.get("/api/accounts/:type/:id/statement-pdf", requireAuth, async (req: Request, res: Response) => {
     try {
