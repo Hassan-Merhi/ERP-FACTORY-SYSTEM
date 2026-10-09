@@ -140,6 +140,21 @@ beforeAll(async () => {
 afterAll(cleanup);
 
 describe("stock transfer optional lifecycle", () => {
+  it("totals a line at exact cents: 3 x 1.115 is 3.35, not the float's 3.34", async () => {
+    const result = await saveStockTransferLifecycle({
+      companyId,
+      transferId,
+      destinationLocationId: destinationId,
+      notes: "Exact line total",
+      items: [{ stockItemId: itemId, sourceLocationId: sourceAId, quantity: 3, rate: 1.115 }],
+    });
+
+    expect(result.totalAmount).toBe("3.35");
+    expect(result.items.map((item) => item.totalAmount)).toEqual(["3.35"]);
+    const [voucher] = await db.select().from(vouchers).where(eq(vouchers.id, voucherId));
+    expect(voucher.totalAmount).toBe("3.35");
+  });
+
   it("edits a multi-source optional draft without moving inventory", async () => {
     const before = [await inventoryQty(sourceAId), await inventoryQty(sourceBId), await inventoryQty(destinationId)];
 

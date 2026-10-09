@@ -42,6 +42,7 @@ import { insertSaleVoucher } from "./createSaleVoucher";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
 import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
+import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
   return { status: result.status, body: result.body };
@@ -312,7 +313,7 @@ export async function createPosSale(
       if (goldenCoastSaleDetected && !isCreditSale) {
         const payableAmount = Math.max(
           0,
-          Number((grandTotal - spCtx.spPosTotalQtySold * spCtx.spPosDeductionPerQty).toFixed(2))
+          spPayableAfterDeduction(grandTotal, spDeductionAmount(spCtx.spPosTotalQtySold, spCtx.spPosDeductionPerQty))
         );
         await postGoldenCoastPosAccountingTx({
           tx,
