@@ -30,7 +30,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
     expect(runTypeBadgeClass("manual_email")).toContain("bg-violet-100");
     expect(runTypeBadgeClass("manual_whatsapp")).toContain("bg-green-100");
     expect(runTypeBadgeClass("manual_download")).toContain("bg-slate-100");
-    expect(runTypeBadgeClass("future_mode")).toBe(\n      "bg-muted text-muted-foreground",\n    );
+    expect(runTypeBadgeClass("future_mode")).toBe("bg-muted text-muted-foreground");
   });
 
   it("formats midnight, morning, noon, and evening schedule hours", () => {
@@ -59,7 +59,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         autoSend: true,
         frequency: "daily",
         sendHour: 0,
-      } as any),
+      } as any)
     ).toBe("Daily at 12:00 AM EST");
     expect(
       scheduleLabel({
@@ -67,7 +67,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         autoSend: true,
         frequency: "monthly",
         sendHour: 12,
-      } as any),
+      } as any)
     ).toBe("Monthly (1st) at 12:00 PM EST");
     expect(
       scheduleLabel({
@@ -76,7 +76,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         frequency: "weekly",
         sendHour: 18,
         sendDayOfWeek: 5,
-      } as any),
+      } as any)
     ).toBe("Every Friday at 6:00 PM EST");
     expect(
       scheduleLabel({
@@ -85,7 +85,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         frequency: "weekly",
         sendHour: 18,
         sendDayOfWeek: 99,
-      } as any),
+      } as any)
     ).toBe("Every Monday at 6:00 PM EST");
     expect(
       scheduleLabel({
@@ -93,7 +93,7 @@ describe("ExportCenterHelpers behavioral formatting", () => {
         autoSend: true,
         frequency: "yearly",
         sendHour: 18,
-      } as any),
+      } as any)
     ).toBe("Auto-Send On");
   });
 
