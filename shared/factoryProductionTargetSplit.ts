@@ -91,7 +91,9 @@ export function resolveUnlinkBaleAllocations(
       !isValidBaleTarget(entry.targetBales) ||
       (Number.isSafeInteger(total) && !Number.isSafeInteger(entry.targetBales))
     ) {
-      throw new ProductionTargetSplitError("Allocations require unique workers and non-negative bale counts with valid precision");
+      throw new ProductionTargetSplitError(
+        "Allocations require unique workers and non-negative bale counts with valid precision"
+      );
     }
     allocations.set(entry.workerId, entry.targetBales);
     sum += Math.round(entry.targetBales * 100);
