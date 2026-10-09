@@ -30,6 +30,7 @@ import {
   rows,
   type StockTransferRevisionStatus,
 } from "./immutableStockTransferRevisionQueries";
+import { MoneyDecimal, lineAmount, toMoney } from "../lib/money";
 
 export { normalizeImmutableRevisionItems } from "./immutableStockTransferRevisionInput";
 export type { ImmutableRevisionItemInput } from "./immutableStockTransferRevisionInput";
@@ -321,9 +322,9 @@ export async function createImmutableStockTransferRevision(
           stockItemName: item.stockItemName,
           sourceLocationId: item.sourceLocationId,
           sourceLocationName: item.sourceLocationName,
-          originalQuantity: item.originalQuantity.toFixed(3),
-          delta: item.delta.toFixed(3),
-          newQuantity: item.newQuantity.toFixed(3),
+          originalQuantity: toMoney(item.originalQuantity).toFixed(3),
+          delta: toMoney(item.delta).toFixed(3),
+          newQuantity: toMoney(item.newQuantity).toFixed(3),
         }))
       )
       .returning();
@@ -449,7 +450,7 @@ export async function approveImmutableStockTransferRevision(
         appliedRevisionCount: 0,
         inventoryApplied,
         totalAmount: currentItems
-          .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+          .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
           .toFixed(2),
         items: toRevisionAuditItems(currentRevisionItems),
       };
@@ -670,8 +671,8 @@ export async function approveImmutableStockTransferRevision(
           await tx
             .update(stockTransferItems)
             .set({
-              quantity: change.newQuantity.toFixed(3),
-              totalAmount: (change.newQuantity * change.rate).toFixed(2),
+              quantity: toMoney(change.newQuantity).toFixed(3),
+              totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
               valueMoved: valueMoved ?? null,
             })
             .where(eq(stockTransferItems.id, change.existing.id));
@@ -681,9 +682,9 @@ export async function approveImmutableStockTransferRevision(
           transferId,
           stockItemId: change.stockItemId,
           sourceLocationId: change.sourceLocationId,
-          quantity: change.newQuantity.toFixed(3),
-          rate: change.rate.toFixed(2),
-          totalAmount: (change.newQuantity * change.rate).toFixed(2),
+          quantity: toMoney(change.newQuantity).toFixed(3),
+          rate: toMoney(change.rate).toFixed(2),
+          totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
           valueMoved: valueMoved ?? null,
         });
       }
@@ -716,7 +717,7 @@ export async function approveImmutableStockTransferRevision(
 
     const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems
-      .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+      .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
       .toFixed(2);
     const uniqueSources = Array.from(
       new Set(finalItems.map((item) => item.sourceLocationId).filter((value): value is number => Boolean(value)))
@@ -819,7 +820,7 @@ export async function rejectImmutableStockTransferRevision(
         changedItemCount: 0,
         inventoryApplied,
         totalAmount: currentItems
-          .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+          .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
           .toFixed(2),
         items: toRevisionAuditItems(rejectedRevisionItems),
       };
@@ -854,7 +855,7 @@ export async function rejectImmutableStockTransferRevision(
       changedItemCount: 0,
       inventoryApplied,
       totalAmount: currentItems
-        .reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate ?? 0), 0)
+        .reduce((sum, item) => sum.plus(lineAmount(item.quantity, item.rate)), new MoneyDecimal(0))
         .toFixed(2),
       items: toRevisionAuditItems(rejectedRevisionItems),
     };

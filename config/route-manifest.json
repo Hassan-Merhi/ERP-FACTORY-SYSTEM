@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2066,
+  "routeCount": 2072,
   "middlewareMountCount": 130,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -1285,6 +1285,12 @@
     "GET /api/retail/variants/:id/labels [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/retail/variants/:id/active [requireAuth > requireNonPOS > <anonymous>]",
     "PATCH /api/retail/products/:id/active [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/financial/accounts [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
+    "PUT /api/retail/financial/settings [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/retail/financial/reconciliation [requireAuth > requireNonPOS > <anonymous>]",
+    "GET /api/pos/retail/shifts/:id/summary [requireAuth > <anonymous>]",
+    "POST /api/pos/retail/shifts/:id/cash-movements [requireAuth > <anonymous>]",
     "GET /api/bank-accounts [requireAuth > <anonymous>]",
     "POST /api/bank-accounts [requireAuth > <anonymous>]",
     "PUT /api/bank-accounts/:id [requireAuth > <anonymous>]",

@@ -10,7 +10,6 @@ import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { storage } from "../../storage";
 import { deleteStockAdjustmentVoucher, StockAdjustmentDeletionError } from "../../services/stockAdjustmentDeletion";
 import { buildVoucherChangesForDelete, logAudit, snapshotVoucherEntries } from "../_helpers";
-import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
 
 const ADJUSTMENT_TYPES = ["Production", "Consumption", "Mixed"] as const;
 type AdjustmentType = (typeof ADJUSTMENT_TYPES)[number];
@@ -98,29 +97,14 @@ export function registerExactStockAdjustmentLifecycleRoutes(app: Express): void 
             stockItemId: item.stockItemId,
             quantity: item.quantity.toFixed(3),
             rate: item.rate.toFixed(2),
-          }))
+          })),
+          {
+            voucherDate: parsed.voucherDate,
+            description: parsed.description,
+          }
         );
 
-        const totalAmount = updated.items.reduce((sum, item) => {
-          const amount = Math.abs(Number(item.totalAmount || 0));
-          if (parsed.adjustmentType !== "Mixed") return sum + amount;
-          return sum + (Number(item.quantity) >= 0 ? amount : -amount);
-        }, 0);
-
-        const [updatedVoucher] = await db
-          .update(vouchers)
-          .set({
-            locationId: parsed.locationId,
-            totalAmount: totalAmount.toFixed(2),
-            description: parsed.description,
-            ...(parsed.voucherDate !== undefined ? { voucherDate: parsed.voucherDate } : {}),
-          })
-          .where(eq(vouchers.id, voucherId))
-          .returning();
-        // Perpetual inventory (wave 8.3): the inventory line follows the voucher's (possibly new) date.
-        await db.transaction((tx) => syncStockAdjustmentInventoryTx(tx, companyId, voucherId));
-
-        return res.json(updatedVoucher);
+        return res.json(updated.voucher);
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ message: "Invalid stock adjustment data", errors: error.issues });

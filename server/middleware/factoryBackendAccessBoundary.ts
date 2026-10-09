@@ -440,6 +440,7 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return anyOf(
       requirement("factory/stock-entry", ["hide_tab_stockentry_entry"]),
       requirement("factory/stock-entry", ["hide_tab_stockentry_production_targets"]),
+      requirement("factory/stock-entry", ["hide_tab_stockentry_history"]),
       requirement("factory/payroll-hub", [PAYROLL_WORKERS])
     );
   }

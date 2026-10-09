@@ -38,7 +38,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
+import { getLoadedBalesColorClass, getOverloadedBales, getRemainingBales } from "./invoiceCalculations";
 import type { CustomerOrder } from "./types";
 
 /** Weight cell formatting shared by the order row and the customer group row. */
@@ -51,6 +51,7 @@ export function fmtKg(val: string | number | null | undefined) {
 /** Page-level callbacks shared by every order row (and the group rows). */
 export interface InvoiceOrderRowContext {
   hideProformaCol: boolean;
+  showBookingInfo: boolean;
   hideTotalsUsd: boolean;
   formatDisplayDate: (date: string) => string;
   getStatusBadge: (status: string) => ReactNode;
@@ -84,6 +85,7 @@ export function InvoiceOrderRow({
   onDrop,
   onDragEnd,
   hideProformaCol,
+  showBookingInfo,
   hideTotalsUsd,
   formatDisplayDate,
   getStatusBadge,
@@ -133,6 +135,15 @@ export function InvoiceOrderRow({
       <TableCell className="font-mono text-sm" data-testid={`text-container-${order.id}`}>
         {order.containerNumber || <span className="text-muted-foreground/50">—</span>}
       </TableCell>
+      {showBookingInfo && (
+        <TableCell
+          className="text-sm max-w-[180px] truncate"
+          title={order.bookingInfo ?? undefined}
+          data-testid={`text-booking-info-${order.id}`}
+        >
+          {order.bookingInfo || <span className="text-muted-foreground/50">—</span>}
+        </TableCell>
+      )}
       <TableCell className="text-sm" data-testid={`text-destination-${order.id}`}>
         {order.destination || <span className="text-muted-foreground/50">—</span>}
       </TableCell>
@@ -147,8 +158,11 @@ export function InvoiceOrderRow({
         {order.orderDate ? formatDisplayDate(order.orderDate) : "-"}
       </TableCell>
       <TableCell>{getStatusBadge(order.status)}</TableCell>
-      <TableCell className="text-right font-mono" data-testid={`text-total-bales-${order.id}`}>
-        {order.totalQtyBales ?? "-"}
+      <TableCell
+        className="text-right font-mono text-lg font-bold tabular-nums"
+        data-testid={`text-total-bales-${order.id}`}
+      >
+        <span className={getLoadedBalesColorClass(order.totalQtyBales ?? 0)}>{order.totalQtyBales ?? "-"}</span>
       </TableCell>
       <TableCell className="text-right font-mono text-sm" data-testid={`text-weight-${order.id}`}>
         {fmtKg(order.totalWeightKg)}

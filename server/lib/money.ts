@@ -48,6 +48,43 @@ export function toMoney(value: MoneyInput): Decimal {
   }
 }
 
+/**
+ * Split `total` across lines in proportion to `weights`, each share in cents,
+ * so the shares add up to `total` exactly. Each share is first cut down to the
+ * cent, then the cents left over go one at a time to the shares that lost the
+ * most in the cut (largest remainder), so no share overshoots and none turns
+ * negative. With no positive weight, everything goes to the first line.
+ */
+export function allocateCents(weights: readonly MoneyInput[], total: MoneyInput): Decimal[] {
+  if (weights.length === 0) return [];
+  const exactTotal = toMoney(total).toDecimalPlaces(MONEY_DECIMAL_PLACES);
+  const parts = weights.map((weight) => MoneyDecimal.max(toMoney(weight), 0));
+  const weightSum = sumMoney(parts);
+  if (!weightSum.gt(0)) return parts.map((_, index) => (index === 0 ? exactTotal : new MoneyDecimal(0)));
+
+  // Work on the magnitude and restore the sign, so a negative total splits the same way.
+  const sign = exactTotal.isNegative() ? -1 : 1;
+  const magnitude = exactTotal.abs();
+  const exactShares = parts.map((weight) => magnitude.times(weight).dividedBy(weightSum));
+  const shares = exactShares.map((share) => share.toDecimalPlaces(MONEY_DECIMAL_PLACES, MoneyDecimal.ROUND_DOWN));
+  const cent = new MoneyDecimal(1).dividedBy(10 ** MONEY_DECIMAL_PLACES);
+  let leftoverCents = magnitude.minus(sumMoney(shares)).dividedBy(cent).round().toNumber();
+  const byRemainder = exactShares
+    .map((share, index) => ({ index, remainder: share.minus(shares[index]) }))
+    .sort((a, b) => b.remainder.comparedTo(a.remainder) || a.index - b.index);
+  for (const { index } of byRemainder) {
+    if (leftoverCents <= 0) break;
+    shares[index] = shares[index].plus(cent);
+    leftoverCents -= 1;
+  }
+  return sign < 0 ? shares.map((share) => share.negated()) : shares;
+}
+
+/** Quantity x rate as an exact Decimal; round it once where it is stored. */
+export function lineAmount(quantity: MoneyInput, rate: MoneyInput): Decimal {
+  return toMoney(quantity).times(toMoney(rate));
+}
+
 /** Exact sum of money values. */
 export function sumMoney(values: Iterable<MoneyInput>): Decimal {
   let total = new MoneyDecimal(0);

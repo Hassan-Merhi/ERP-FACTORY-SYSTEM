@@ -154,9 +154,19 @@ import { startupMigrations } from "../server/startup-schema";
  * same position: the 9 statements became 17 (the kept updated_at column, the
  * guarded convergence of a legacy log and seven legacy index drops, replacing
  * the fss_log_color block), 1405 to 1413. Nothing else moved.
+ *
+ * Re-pinned when 008-pos-exports-and-dispatch gained the Shipping Containers
+ * "anything" column (#2083: the column in the factory_shipping_container_rows
+ * CREATE plus its ADD COLUMN) and factory_shipping_availability.details
+ * (fe59923), taking the count from 1413 to 1415. Both ADD COLUMN statements sit
+ * beside their table's other ADD COLUMNs; nothing else moved.
+ *
+ * Re-pinned when 004-post-deploy-tables gained customer_orders.booking_info
+ * (#2109), taking the count from 1415 to 1416. The ADD COLUMN sits beside the
+ * table's other ADD COLUMNs; nothing else moved.
  */
-const EXPECTED_STATEMENT_COUNT = 1421;
-const EXPECTED_CONTENT_HASH = "73d7a6c27ae4335db419cd8d6186e40b99b18364b9887242384e54892edbd258";
+const EXPECTED_STATEMENT_COUNT = 1422;
+const EXPECTED_CONTENT_HASH = "987c0ebc4ecebfc1dc6704bc8f8c14aff33527a819a9a3285444b508da0cc80b";
 /**
  * sha256 of JSON.stringify(startupMigrations) for the reviewed composed array.
  *
@@ -237,6 +247,14 @@ const EXPECTED_CONTENT_HASH = "73d7a6c27ae4335db419cd8d6186e40b99b18364b98872423
  * outlives the company it describes, so an empty company's deletion keeps its
  * audit rows; with the RESTRICT key no company could ever be deleted. One
  * statement replaced, so the count is unchanged.
+ *
+ * Re-pinned again when the 2026-10 accounting audit branch merged main:
+ * main's array was 1416 (its notes above, the last being
+ * customer_orders.booking_info in 004) and this branch's was 1421 (the audit
+ * notes above). The 1413 -> 1415 step main describes (#2083, fe59923) was
+ * already in this branch's 1413 base, so the merge adds only main's
+ * booking_info ADD COLUMN to this branch's 1421: 1422. Nothing else
+ * moved.
  */
 
 function contentHash(statements: string[]): string {

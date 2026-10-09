@@ -24,6 +24,7 @@ import { softDeleteInterCompanyCounterpartTx } from "../voucher-entries/delete";
 import { recalculateOrderTotals } from "../factory/_helpers";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
+import { allocateCents, toMoney } from "../../lib/money";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -152,19 +153,34 @@ async function syncIntercompanyCounterpart(
     const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
     if (!otherVoucher) return;
 
-    const oldTotal = Number(otherVoucher.totalAmount || 0);
-    const ratio = oldTotal > 0 ? newTotal / oldTotal : 1;
     const otherEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, otherVoucherId));
+
+    // Rescale each side to the new total in proportion to its lines. Scaling
+    // and rounding every line on its own could leave debits and credits a cent
+    // apart; allocating each side to the exact total keeps the voucher balanced.
+    const debitLines = otherEntries.filter((entry) => toMoney(entry.debitAmount).gt(0));
+    const creditLines = otherEntries.filter((entry) => toMoney(entry.creditAmount).gt(0));
+    const newDebits = allocateCents(
+      debitLines.map((entry) => entry.debitAmount),
+      newTotal
+    );
+    const newCredits = allocateCents(
+      creditLines.map((entry) => entry.creditAmount),
+      newTotal
+    );
 
     await db.transaction(async (tx) => {
       const auditBefore = await readVoucherAuditState(tx, otherVoucherId);
-      for (const entry of otherEntries) {
+      for (const [index, entry] of debitLines.entries()) {
         await tx
           .update(voucherEntries)
-          .set({
-            debitAmount: (Number(entry.debitAmount || 0) * ratio).toFixed(2),
-            creditAmount: (Number(entry.creditAmount || 0) * ratio).toFixed(2),
-          })
+          .set({ debitAmount: newDebits[index].toFixed(2) })
+          .where(eq(voucherEntries.id, entry.id));
+      }
+      for (const [index, entry] of creditLines.entries()) {
+        await tx
+          .update(voucherEntries)
+          .set({ creditAmount: newCredits[index].toFixed(2) })
           .where(eq(voucherEntries.id, entry.id));
       }
 

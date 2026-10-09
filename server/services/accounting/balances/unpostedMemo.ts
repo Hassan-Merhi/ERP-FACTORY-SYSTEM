@@ -208,7 +208,8 @@ async function customerMemoRows(executor: Executor, query: MemoQuery): Promise<C
              cb.description AS extra
         FROM customer_balances cb
        WHERE cb.company_id = ${companyId} AND cb.customer_id IN (${idList(ids)})
-         AND NOT (cb.reference_type = 'INVOICE' AND cb.transaction_type = 'SALE')
+         -- NULL-safe: a legacy row with no reference type is still a cache-only row.
+         AND NOT (cb.reference_type IS NOT DISTINCT FROM 'INVOICE' AND cb.transaction_type IS NOT DISTINCT FROM 'SALE')
          AND cb.reference_type IS DISTINCT FROM 'CONTAINER_SALE'
          AND NOT (cb.reference_type IN ('FACTORY_POS_SALE', 'FACTORY_POS_DEPOSIT') AND EXISTS (
                SELECT 1 FROM factory_pos_sales ps

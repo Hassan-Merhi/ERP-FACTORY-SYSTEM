@@ -414,10 +414,20 @@ export async function createStockAdjustment(
   notes: string,
   items: StockAdjustmentInputItem[],
   _consumptionAccountOverride?: { code: string; name: string },
-  voucherHeader?: { currency?: string }
+  voucherHeader?: { currency?: string; voucherDate?: string; description?: string },
+  storedAdjustmentType?: string
 ) {
   return await db.transaction((tx) =>
-    createStockAdjustmentTx(tx, voucherId, locationId, adjustmentType, notes, items, voucherHeader)
+    createStockAdjustmentTx(
+      tx,
+      voucherId,
+      locationId,
+      adjustmentType,
+      notes,
+      items,
+      voucherHeader,
+      storedAdjustmentType
+    )
   );
 }
 
@@ -465,7 +475,7 @@ export async function createStockAdjustmentWithVoucherTx(
     voucherHeader
   );
   const [stored] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, created.id));
-  return { voucher: stored ?? created, ...result };
+  return { ...result, voucher: stored ?? result.voucher };
 }
 
 async function createStockAdjustmentTx(
@@ -475,7 +485,8 @@ async function createStockAdjustmentTx(
   adjustmentType: StockAdjustmentType,
   notes: string,
   items: StockAdjustmentInputItem[],
-  voucherHeader?: { currency?: string }
+  voucherHeader?: { currency?: string; voucherDate?: string; description?: string },
+  storedAdjustmentType?: string
 ) {
   {
     // Locking the voucher row serialises everyone who wants to adjust it, so the
@@ -493,7 +504,7 @@ async function createStockAdjustmentTx(
 
     const [adjustment] = await tx
       .insert(schema.stockAdjustmentVouchers)
-      .values({ voucherId, locationId, adjustmentType, notes })
+      .values({ voucherId, locationId, adjustmentType: storedAdjustmentType ?? adjustmentType, notes })
       .returning();
 
     const [location] = await tx.select().from(schema.locations).where(eq(schema.locations.id, locationId));
@@ -688,18 +699,23 @@ async function createStockAdjustmentTx(
     }
 
     const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
-    await tx
+    const [updatedVoucher] = await tx
       .update(schema.vouchers)
       .set({
         totalAmount: headerTotal,
         locationId,
         ...(voucherHeader?.currency ? { currency: voucherHeader.currency } : {}),
+        ...(voucherHeader?.description !== undefined ? { description: voucherHeader.description } : {}),
+        ...(voucherHeader?.voucherDate !== undefined ? { voucherDate: voucherHeader.voucherDate } : {}),
       })
-      .where(eq(schema.vouchers.id, voucherId));
+      .where(eq(schema.vouchers.id, voucherId))
+      .returning();
+
+    if (!updatedVoucher) throw new Error(`Voucher ${voucherId} not found`);
 
     // Perpetual inventory (wave 8.3): the voucher carries the inventory side of the adjustment.
     await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucherId);
 
-    return { adjustment, items: adjustmentItems };
+    return { adjustment, items: adjustmentItems, voucher: updatedVoucher };
   }
 }

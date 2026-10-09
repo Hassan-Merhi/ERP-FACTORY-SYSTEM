@@ -284,7 +284,8 @@ export async function updateStockAdjustment(
   // it into a different case.
   adjustmentType: string,
   notes: string,
-  items: Array<{ stockItemId: number; quantity: string; rate: string }>
+  items: Array<{ stockItemId: number; quantity: string; rate: string }>,
+  voucherHeader?: { voucherDate?: string; description?: string }
 ) {
   return await db.transaction(async (tx) => {
     // Follow the same lock order as stock-adjustment deletion: voucher first,
@@ -667,10 +668,18 @@ export async function updateStockAdjustment(
     }
 
     const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
-    await tx
+    const [updatedVoucher] = await tx
       .update(schema.vouchers)
-      .set({ totalAmount: headerTotal, locationId })
-      .where(eq(schema.vouchers.id, existingAdjustment.voucherId));
+      .set({
+        totalAmount: headerTotal,
+        locationId,
+        ...(voucherHeader?.description !== undefined ? { description: voucherHeader.description } : {}),
+        ...(voucherHeader?.voucherDate !== undefined ? { voucherDate: voucherHeader.voucherDate } : {}),
+      })
+      .where(eq(schema.vouchers.id, existingAdjustment.voucherId))
+      .returning();
+
+    if (!updatedVoucher) throw new Error(`Voucher ${existingAdjustment.voucherId} not found`);
 
     // Perpetual inventory (wave 8.3): the voucher carries the inventory side of the adjustment.
     await syncStockAdjustmentInventoryTx(tx, voucher.companyId, existingAdjustment.voucherId);
@@ -694,6 +703,6 @@ export async function updateStockAdjustment(
       });
     }
 
-    return { adjustment: updatedAdjustment, items: adjustmentItems };
+    return { adjustment: updatedAdjustment, items: adjustmentItems, voucher: updatedVoucher };
   });
 }

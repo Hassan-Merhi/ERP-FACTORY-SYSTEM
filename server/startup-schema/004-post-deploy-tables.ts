@@ -367,6 +367,7 @@ export const postDeployTables: string[] = [
   `ALTER TABLE stored_files ADD COLUMN IF NOT EXISTS folder_id integer REFERENCES file_folders(id) ON DELETE SET NULL`,
   `ALTER TABLE stored_files ADD COLUMN IF NOT EXISTS display_name text`,
   `ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS destination text`,
+  `ALTER TABLE customer_orders ADD COLUMN IF NOT EXISTS booking_info text`,
   `ALTER TABLE locations ADD COLUMN IF NOT EXISTS whatsapp_group_chat_id text`,
   `ALTER TABLE locations ADD COLUMN IF NOT EXISTS transfer_wa_group_chat_id text`,
   `CREATE TABLE IF NOT EXISTS factory_invoice_loading_sessions (

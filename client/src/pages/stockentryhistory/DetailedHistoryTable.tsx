@@ -1,3 +1,5 @@
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import type { StockEntryWorker } from "./derived";
 import type { BaleDetail } from "./types";
 import { STATUS_COLORS, formatDailyNum, formatHistoryDateTime } from "./utils";
 import { StockEntryHistoryEditableDateCell } from "./EditableDateCell";
@@ -5,19 +7,23 @@ import { StockEntryHistoryEditableDateCell } from "./EditableDateCell";
 interface DetailedHistoryTableProps {
   isLoading: boolean;
   allBales: BaleDetail[];
+  workers: StockEntryWorker[];
   editingDateKey: string | null;
   setEditingDateKey: (key: string | null) => void;
   formatDisplayDate: (date: string) => string;
   onUpdateDate: (baleId: number, stockEntryDate: string) => void;
+  onAssignWorker: (baleId: number, workerId: number) => void;
 }
 
 export function DetailedHistoryTable({
   isLoading,
   allBales,
+  workers,
   editingDateKey,
   setEditingDateKey,
   formatDisplayDate,
   onUpdateDate,
+  onAssignWorker,
 }: DetailedHistoryTableProps) {
   return (
     <div className="rounded-xl border overflow-hidden">
@@ -71,7 +77,38 @@ export function DetailedHistoryTable({
               </td>
               <td className="px-3 py-1.5">{bale.locationName}</td>
               <td className="px-3 py-1.5">
-                {bale.workerName || <span className="italic text-muted-foreground text-xs">Unassigned</span>}
+                <Select
+                  value={bale.workerId != null ? String(bale.workerId) : ""}
+                  onValueChange={(value) => {
+                    const workerId = Number(value);
+                    if (Number.isInteger(workerId) && workerId > 0 && workerId !== bale.workerId) {
+                      onAssignWorker(bale.id, workerId);
+                    }
+                  }}
+                >
+                  <SelectTrigger
+                    className="h-7 min-w-32 text-xs"
+                    aria-label={`Change assigned name for ${bale.referenceNumber}`}
+                    data-testid={`select-assign-worker-bale-${bale.id}`}
+                  >
+                    <SelectValue placeholder={bale.workerName || "Unassigned"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bale.workerId != null &&
+                      !workers.some((worker) => worker.id === bale.workerId && worker.active) && (
+                        <SelectItem value={String(bale.workerId)} disabled>
+                          {bale.workerName || "Inactive worker"}
+                        </SelectItem>
+                      )}
+                    {workers
+                      .filter((worker) => worker.active)
+                      .map((worker) => (
+                        <SelectItem key={worker.id} value={String(worker.id)}>
+                          {worker.fullName || worker.full_name || worker.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </td>
               <td className="px-3 py-1.5">{bale.productName || "—"}</td>
               <td className="px-3 py-1.5 text-muted-foreground text-xs">{bale.articleCode || "—"}</td>
@@ -83,9 +120,7 @@ export function DetailedHistoryTable({
                   {bale.status}
                 </span>
               </td>
-              <td className="px-3 py-1.5 text-muted-foreground text-xs">
-                {formatHistoryDateTime(bale.finalizedAt)}
-              </td>
+              <td className="px-3 py-1.5 text-muted-foreground text-xs">{formatHistoryDateTime(bale.finalizedAt)}</td>
             </tr>
           ))}
         </tbody>
