@@ -207,11 +207,15 @@ export async function reversePriorityAllocationForDeletedBaleTx(
 ): Promise<number[]> {
   const { companyId, baleId, actor, reason } = args;
   const rows = await tx.select({ id: customerOrderBales.id, orderId: customerOrderBales.orderId,
-    proformaIdUsed: customerOrders.proformaIdUsed })
+    status: customerOrders.status, proformaIdUsed: customerOrders.proformaIdUsed })
     .from(customerOrderBales)
     .innerJoin(customerOrders, eq(customerOrderBales.orderId, customerOrders.id))
     .where(and(eq(customerOrderBales.baleId, baleId), eq(customerOrders.companyId, companyId),
       isNull(customerOrders.deletedAt)));
+  // Do not silently bypass invoicing or finalized-order accounting.
+  if (rows.some((row) => !["DRAFT", "LOADING"].includes(row.status))) {
+    throw new Error("Cannot delete a bale in a verified/finalized loading. Reverse the order financially first.");
+  }
   const affected = [...new Set(rows.map((r) => r.orderId))];
   // Respect the existing priority -> proforma lock order.
   for (const id of [...new Set(rows.map((r) => r.proformaIdUsed).filter((id): id is number => id != null))].sort((a,b)=>a-b)) {
