@@ -72,6 +72,50 @@ describe("unlinking shared factory production targets", () => {
     ).toThrow("non-negative");
   });
 
+  it("splits existing fractional fixed targets without losing any hundredth", () => {
+    expect(evenSplitBales(12.5, [20, 10])).toEqual([
+      { workerId: 10, targetBales: 6.25 },
+      { workerId: 20, targetBales: 6.25 },
+    ]);
+    expect(evenSplitBales(13.01, [10, 20])).toEqual([
+      { workerId: 10, targetBales: 6.51 },
+      { workerId: 20, targetBales: 6.5 },
+    ]);
+    expect([
+      ...resolveUnlinkBaleAllocations(
+        12.5,
+        [10, 20],
+        [
+          { workerId: 10, targetBales: 6.2 },
+          { workerId: 20, targetBales: 6.3 },
+        ]
+      ),
+    ]).toEqual([
+      [10, 6.2],
+      [20, 6.3],
+    ]);
+    expect(() =>
+      resolveUnlinkBaleAllocations(
+        12.5,
+        [10, 20],
+        [
+          { workerId: 10, targetBales: 6.251 },
+          { workerId: 20, targetBales: 6.249 },
+        ]
+      )
+    ).toThrow("valid precision");
+    expect(() =>
+      resolveUnlinkBaleAllocations(
+        14,
+        [10, 20],
+        [
+          { workerId: 10, targetBales: 6.5 },
+          { workerId: 20, targetBales: 7.5 },
+        ]
+      )
+    ).toThrow("valid precision");
+  });
+
   it("keeps missing targets missing and handles zero targets", () => {
     expect([...resolveUnlinkBaleAllocations(null, [1, 2])]).toEqual([
       [1, null],
