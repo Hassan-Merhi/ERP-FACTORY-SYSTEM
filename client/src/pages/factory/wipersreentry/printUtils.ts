@@ -27,7 +27,7 @@ export function printLabelsInBrowser(
   designColor?: A4DesignColor
 ): boolean {
   prefetchBannersForPrint();
-  if (format === "A4" && !designColor) return false;
+  if (format === "A4" && !designColor && !labels.some((label) => label.priorityColor)) return false;
 
   const popup = window.open("", "_blank");
   if (!popup) return true;
