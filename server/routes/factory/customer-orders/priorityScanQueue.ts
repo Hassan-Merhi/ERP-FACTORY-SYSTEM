@@ -324,7 +324,7 @@ export async function reactivateAutoCompletedPriorityLoadingsLockedTx(
   }
   if (!eligible.length) return [];
   eligible.sort((a,b) =>
-    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime() || a.orderId - b.orderId
+    a.createdAt.getTime() - b.createdAt.getTime() || a.orderId - b.orderId
   );
 
   const active = await loadActivePriorityRows(tx, companyId);
