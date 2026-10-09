@@ -142,6 +142,11 @@ export const RETAIL_HIDDEN_ERP_ROUTES = new Set([
   "/ai-validation",
 ]);
 
+/** True when a palette or nav path (query string ignored) belongs to an ERP page retail companies hide. */
+export function isRetailHiddenErpPath(path: string): boolean {
+  return RETAIL_HIDDEN_ERP_ROUTES.has(path.split("?")[0]);
+}
+
 export const ERP_PINNED_ITEMS = defaultPinnedItems;
 export const ERP_UTILITY_ITEMS = utilityItems;
 
