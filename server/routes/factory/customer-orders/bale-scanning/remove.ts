@@ -110,7 +110,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           for (const row of removedLinks) {
             await reversePriorityAllocationForDeletedBaleTx(tx, {
               companyId, baleId: row.baleId, detachedOrderId: orderId,
-              actor: String(username || userId || "unknown"), reason: "Loading emptied",
+              actor: String(username || userId || "unknown"), actorId: userId, reason: "Loading emptied",
             });
           }
           return removedLinks.length;
@@ -215,6 +215,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
           await reversePriorityAllocationForDeletedBaleTx(tx, {
             companyId, baleId: orderBale.baleId, detachedOrderId: orderId,
             actor: String(req.session.username || req.session.userId || "unknown"),
+            actorId: req.session.userId == null ? null : String(req.session.userId),
             reason: "Bale removed from loading",
           });
         }
@@ -323,7 +324,7 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
         await recalculateOrderTotals(tx, orderId);
         await reversePriorityAllocationForDeletedBaleTx(tx, {
           companyId, baleId, detachedOrderId: orderId,
-          actor: String(username || userId || "unknown"), reason: "Bale returned to stock",
+          actor: String(username || userId || "unknown"), actorId: userId, reason: "Bale returned to stock",
         });
 
         // 9. For FINALIZED orders: sync customer_balances + daybook INVOICE entry
