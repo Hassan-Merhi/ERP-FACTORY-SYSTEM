@@ -126,3 +126,37 @@ describe("A5 and sticker labels", () => {
     expect(generateStickerLabelsHtml([label()])).toContain("@page");
   });
 });
+
+describe("Automatic Priority Printing labels", () => {
+  it("colors only the small HMD lettering using the original assigned red", () => {
+    const bale = label({ priorityColor: "#dc2626", priorityOrderId: 123, priorityNumber: 1 });
+    for (const html of [
+      generateCombinedLabelsHtml([bale]),
+      generateA5LabelsHtml([bale]),
+      generateStickerLabelsHtml([bale]),
+    ]) {
+      expect(html).toContain("priority-hmd-letters");
+      expect(html).toContain("color:#dc2626 !important");
+      expect(html).toContain("INTERNATIONAL GROUP");
+      expect(html).toContain("REF-001");
+      expect(html).toContain("ART-100");
+    }
+  });
+
+  it("uses the new HMD globe artwork layout on priority A4 and A5", () => {
+    const bale = label({ priorityColor: "#16a34a" });
+    expect(generateCombinedLabelsHtml([bale])).toContain('class="a4-page priority-print-a4"');
+    expect(generateA5LabelsHtml([bale])).toContain('class="a5-page priority-print-a5"');
+  });
+
+  it("leaves the original normal layout unchanged without a priority assignment", () => {
+    const html = generateCombinedLabelsHtml([label()]);
+    expect(html).not.toContain('class="a4-page priority-print-a4"');
+    expect(html).toContain('class="a4-page"');
+  });
+
+  it("does not inject arbitrary CSS through a malformed priority color", () => {
+    const html = generateStickerLabelsHtml([label({ priorityColor: "red; position:absolute" })]);
+    expect(html).not.toContain("red; position:absolute");
+  });
+});
