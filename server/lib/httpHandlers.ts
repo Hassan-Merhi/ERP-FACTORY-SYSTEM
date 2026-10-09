@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { closedPeriodErrorResponse } from "./closedPeriodError";
+import { HttpError } from "./httpError";
 
 // Intersect with the globally-augmented `Request["user"]` shape (see the
 // Express namespace augmentation in server/index.ts) so this stays a valid
@@ -11,15 +12,7 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
-export class HttpError extends Error {
-  constructor(
-    public readonly statusCode: number,
-    message: string
-  ) {
-    super(message);
-    this.name = "HttpError";
-  }
-}
+export { HttpError };
 
 export function getAuthenticatedUserId(request: AuthenticatedRequest): string {
   const userId = request.user?.id;

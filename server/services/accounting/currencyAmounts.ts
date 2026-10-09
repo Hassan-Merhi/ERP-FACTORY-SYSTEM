@@ -19,7 +19,7 @@
  */
 
 import Decimal from "decimal.js";
-import { HttpError } from "../../lib/httpHandlers";
+import { HttpError } from "../../lib/httpError";
 
 // ─── Rate-convention enum ────────────────────────────────────────────────────
 
