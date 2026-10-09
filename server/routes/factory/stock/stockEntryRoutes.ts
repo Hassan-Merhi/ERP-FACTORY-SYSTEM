@@ -436,11 +436,19 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       });
 
 
-        return { bales, totalWeight, autoPriorityAllocations };
+        return { bales, totalWeight, autoPriorityAllocations, automaticPriorityModeEnabled: automaticMode };
       });
 
-      res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber(),
-        autoPriorityAllocations: result.autoPriorityAllocations });
+      res.json({
+        bales: result.bales,
+        totalWeight: result.totalWeight.toNumber(),
+        automaticPriorityModeEnabled: result.automaticPriorityModeEnabled,
+        autoPriorityAllocations: result.autoPriorityAllocations,
+        autoPrioritySummary: {
+          allocated: result.autoPriorityAllocations.length,
+          leftInStock: result.bales.length - result.autoPriorityAllocations.length,
+        },
+      });
     } catch (error: unknown) {
       logger.error("Error in stock entry:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
