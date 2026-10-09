@@ -29,6 +29,7 @@ import {
   loadCustomerNotInLedger,
 } from "../services/accounting/balances/customerLedgerStatement";
 import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
+import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
   bankAccounts,
@@ -99,12 +100,14 @@ export function registerAccountStatementRoutes(app: Express) {
     }
   });
 
-  app.get("/api/accounts/:type/:id/pre-period-balance", requireAuth, async (req, res) => {
+  const readAgentPrePeriodBalance = async (req: Request, res: Response) => {
     try {
       const accountType = req.params.type;
       const accountId = parseInt(req.params.id);
       const endDateRaw = req.query.endDate;
-      const companyId = req.session.currentCompanyId;
+      const companyId = (req.path ?? "").toLowerCase().startsWith("/api/factory/agents/")
+        ? req.session.factoryCompanyId || req.session.currentCompanyId
+        : req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       if (isNaN(accountId)) return res.status(400).json({ message: "Invalid account ID" });
       if (endDateRaw !== undefined && typeof endDateRaw !== "string") {
@@ -198,7 +201,14 @@ export function registerAccountStatementRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  };
+  app.get("/api/accounts/:type/:id/pre-period-balance", requireAuth, (req, res) => readAgentPrePeriodBalance(req, res));
+  app.get(
+    "/api/factory/agents/:type/:id/pre-period-balance",
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    readAgentPrePeriodBalance
+  );
 
   app.get("/api/accounts/:type/:id/statement-pdf", requireAuth, async (req: Request, res: Response) => {
     try {

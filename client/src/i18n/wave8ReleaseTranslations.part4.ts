@@ -202,4 +202,71 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "تغيّرت إعادة تصنيف الإيجار المؤجل منذ مراجعتها؛ راجعها مرة أخرى قبل التطبيق.",
     fr: "Le reclassement des loyers différés a changé depuis sa revue ; revoyez-le avant de l’appliquer.",
   },
+  // Full Item Market Analysis Excel export, including the error messages.
+  {
+    en: "Export Excel",
+    ar: "تصدير Excel",
+    fr: "Exporter vers Excel",
+  },
+  {
+    en: "Exporting...",
+    ar: "جارٍ التصدير...",
+    fr: "Exportation en cours...",
+  },
+  {
+    en: "Excel exported",
+    ar: "تم تصدير ملف Excel",
+    fr: "Fichier Excel exporté",
+  },
+  {
+    en: "Exported ${groupedRows.length} items and ${rows.length} company-item records with current filters.",
+    ar: "تم تصدير {{0}} صنفًا و{{1}} سجلًا للأصناف حسب الشركة باستخدام عوامل التصفية الحالية.",
+    fr: "{{0}} articles et {{1}} enregistrements d’articles par société exportés avec les filtres actuels.",
+  },
+  {
+    en: "Excel export failed",
+    ar: "فشل تصدير ملف Excel",
+    fr: "Échec de l’exportation Excel",
+  },
+  {
+    en: "Could not generate the workbook.",
+    ar: "تعذّر إنشاء مصنف Excel.",
+    fr: "Impossible de générer le classeur Excel.",
+  },
+  {
+    en: "Invalid sale-price export filters",
+    ar: "عوامل تصفية تصدير أسعار البيع غير صالحة",
+    fr: "Filtres d’exportation des prix de vente non valides",
+  },
+  {
+    en: "Invalid or repeated companies or too many item IDs",
+    ar: "شركات غير صالحة أو مكررة، أو عدد كبير جدًا من معرّفات الأصناف",
+    fr: "Sociétés invalides ou en double, ou trop d’identifiants d’articles",
+  },
+  {
+    en: "One or more companies could not be found",
+    ar: "تعذر العثور على شركة واحدة أو أكثر",
+    fr: "Une ou plusieurs sociétés sont introuvables",
+  },
+  {
+    en: "Failed to export item sale price breakdown",
+    ar: "فشل تصدير تفاصيل أسعار بيع الأصناف",
+    fr: "Échec de l’exportation du détail des prix de vente des articles",
+  },
+  // Merge of main 365cf55: one-sided stock adjustment vouchers, Owner preview/apply.
+  {
+    en: "A supplier-partner company keeps its stock in sp_stock; its stock adjustments carry no Inventory line",
+    ar: "تحتفظ شركة الشريك المورّد بمخزونها في sp_stock؛ ولا تحمل تسويات المخزون لديها سطر مخزون",
+    fr: "Une société partenaire fournisseur tient son stock dans sp_stock ; ses ajustements de stock ne portent pas de ligne Stock",
+  },
+  {
+    en: "The INVENTORY account is deleted, inactive, not an asset or still named as the credit-note expense; it is not renamed, retyped or restored here",
+    ar: "حساب INVENTORY محذوف أو غير نشط أو ليس أصلاً أو ما زال يحمل اسم مصروف إشعار الدائن؛ لا تتم هنا إعادة تسميته أو تغيير نوعه أو استعادته",
+    fr: "Le compte INVENTORY est supprimé, inactif, n’est pas un actif ou porte encore le nom de la charge d’avoir ; il n’est ni renommé, ni reclassé, ni restauré ici",
+  },
+  {
+    en: "Voucher ${row.voucherNumber} would not balance; nothing was applied",
+    ar: "لن يكون السند {{0}} متوازنًا؛ لم يُطبَّق أي شيء",
+    fr: "La pièce {{0}} ne serait pas équilibrée ; rien n’a été appliqué",
+  },
 ];

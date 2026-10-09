@@ -199,6 +199,11 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return requirement("factory/raw-materials");
   }
 
+  // Agent Ledger reads and pins accounts in the pinned Factory company.
+  if (hasPrefix(path, "/agents")) {
+    return requirement("factory/agents");
+  }
+
   // Additional high-risk operational utilities inherit the page that exposes them.
   if (hasPrefix(path, "/status-builder") || hasPrefix(path, "/weekly-report-wa-settings")) {
     return requirement("factory/production-report");

@@ -98,6 +98,8 @@ const reviewedTechnicalValues = new Set([
   "requestJson",
   // Factory production code uses fetchJson as a local typed-request helper; it is never rendered.
   "fetchJson",
+  // Retail workspaces use getJson as the same kind of local typed-request helper; it is never rendered.
+  "getJson",
   // State-enum value used by ErpAccessBoundary; never rendered as user-facing copy.
   "error",
   // Prettier can split adjacent translated JSX expressions so the scanner sees closing/opening

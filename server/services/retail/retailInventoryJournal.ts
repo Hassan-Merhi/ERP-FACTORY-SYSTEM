@@ -320,7 +320,7 @@ export interface RetailStockKey {
 }
 
 export type RetailStockJournalKind =
-  "receipt" | "intake" | "import" | "product" | "adjustment" | "transfer" | "return" | "cancel";
+  "receipt" | "intake" | "import" | "product" | "adjustment" | "transfer" | "return" | "cancel" | "count";
 
 const keyOf = (key: RetailStockKey) => `${key.variantId}:${key.locationId}`;
 

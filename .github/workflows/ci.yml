@@ -41,7 +41,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
@@ -159,7 +159,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -173,7 +173,7 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" |
             tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -224,7 +224,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -234,7 +234,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -249,7 +249,7 @@ jobs:
           npm run check 2>&1 | tee ts-errors-ci.txt
       - name: Upload type-check failure log
         if: always() && steps.typecheck.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: typecheck-errors
           path: ts-errors-ci.txt
@@ -264,7 +264,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -274,7 +274,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -289,7 +289,7 @@ jobs:
           npm run lint 2>&1 | tee lint-errors-ci.txt
       - name: Upload lint failure log
         if: always() && steps.lint.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: lint-errors
           path: lint-errors-ci.txt
@@ -316,7 +316,7 @@ jobs:
           node node_modules/prettier/bin/prettier.cjs --check "${changed_files[@]}" 2>&1 | tee -a "$RUNNER_TEMP/format-errors-ci.txt"
       - name: Upload format failure log
         if: always() && steps.format_check.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: format-errors
           path: ${{ runner.temp }}/format-errors-ci.txt
@@ -331,7 +331,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -341,7 +341,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -356,7 +356,7 @@ jobs:
           npm run build 2>&1 | tee build-errors-ci.txt
       - name: Upload build failure log
         if: always() && steps.build.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: build-errors
           path: build-errors-ci.txt
@@ -391,7 +391,7 @@ jobs:
       PORT: "5000"
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -401,7 +401,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -416,7 +416,7 @@ jobs:
           npm run build 2>&1 | tee backend-build-errors-ci.txt
       - name: Upload backend build failure log
         if: always() && steps.build.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-build-errors
           path: backend-build-errors-ci.txt
@@ -430,7 +430,7 @@ jobs:
           node node_modules/drizzle-kit/bin.cjs push --force 2>&1 | tee db-schema-ci.txt
       - name: Upload database schema failure log
         if: always() && steps.db_schema.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: database-schema-errors
           path: db-schema-ci.txt
@@ -454,7 +454,7 @@ jobs:
           exit 1
       - name: Upload startup migration failure log
         if: always() && steps.runtime_migrations.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: startup-migration-errors
           path: |
@@ -479,7 +479,7 @@ jobs:
           HEALTH_URL="http://127.0.0.1:${PORT}" HEALTH_LABEL='second boot, schema already applied' npm run verify:startup-migrations
       - name: Upload startup migration ratchet log
         if: always() && steps.startup_migration_ratchet.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: startup-migration-ratchet
           path: ${{ runner.temp }}/startup-migrations-verify.txt
@@ -493,7 +493,7 @@ jobs:
           npm run test:backend:coverage -- --maxWorkers=2 2>&1 | tee backend-coverage-errors-ci.txt
       - name: Upload backend coverage failure log
         if: always() && steps.backend_coverage.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-coverage-errors
           path: backend-coverage-errors-ci.txt
@@ -501,7 +501,7 @@ jobs:
           retention-days: 7
       - name: Upload backend coverage summary
         if: always() && steps.backend_coverage.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-coverage-summary
           path: coverage/backend/coverage-summary.json
@@ -516,7 +516,7 @@ jobs:
     timeout-minutes: 35
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -526,7 +526,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
@@ -541,7 +541,7 @@ jobs:
           npm run test:frontend:coverage 2>&1 | tee frontend-coverage-errors-ci.txt
       - name: Upload frontend coverage failure log
         if: always() && steps.frontend_coverage.outcome == 'failure'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: frontend-coverage-errors
           path: frontend-coverage-errors-ci.txt
@@ -549,7 +549,7 @@ jobs:
           retention-days: 7
       - name: Upload frontend coverage summary
         if: always() && steps.frontend_coverage.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: frontend-coverage-summary
           path: coverage/frontend/coverage-summary.json
@@ -572,7 +572,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Harden Runner (audit mode)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
       - name: Download repository source
@@ -582,19 +582,19 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --location --header "Authorization: Bearer ${GH_TOKEN}" --header "Accept: application/vnd.github+json" "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" | tar --extract --gzip --strip-components=1
       - name: Set up Node.js 24.21.0
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24.21.0"
           cache: npm
       - name: Install dependencies
         run: npm ci --no-audit --bin-links=true
       - name: Download backend coverage summary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: backend-coverage-summary
           path: coverage/backend
       - name: Download frontend coverage summary
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: frontend-coverage-summary
           path: coverage/frontend

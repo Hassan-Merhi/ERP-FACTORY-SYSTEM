@@ -14,6 +14,7 @@ import { vouchers, voucherEntries } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, sql, isNull, lt, lte, inArray } from "drizzle-orm";
 import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { requireFactoryPageAccess } from "../../lib/factoryAccessControl";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
 import { resultRows } from "../../lib/queryResult";
@@ -438,6 +439,14 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
 }
 
 export function registerAccountListRoutes(app: Express) {
+  // Factory Agent Ledger must use the Factory-pinned company, not the ERP
+  // company selected by another tab. The existing ERP endpoint is unchanged.
+  app.get("/api/factory/agents/accounts", requireAuth, requireFactoryPageAccess("factory/agents"), async (req, res) => {
+    const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+    if (!companyId) return res.status(400).json({ message: "No company selected" });
+    return serveAccountListForCompany(req, res, companyId);
+  });
+
   app.get("/api/accounts/all", requireAuth, async (req, res) => {
     const companyId = req.session.currentCompanyId;
     if (!companyId) {

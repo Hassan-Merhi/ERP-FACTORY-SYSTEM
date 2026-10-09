@@ -7,7 +7,13 @@ import "./helpers/masterPasswordPolicy";
 
 export { upload } from "./helpers/uploadHelpers";
 
-export { hashPassword, isLegacySHA256Hash, verifyLegacyPassword, verifyPassword } from "./helpers/passwordHelpers";
+export {
+  hashPassword,
+  isLegacySHA256Hash,
+  verifyLegacyPassword,
+  verifyPassword,
+  verifyPasswordBcryptOnly,
+} from "./helpers/passwordHelpers";
 
 export { logAudit } from "./helpers/auditWriteAdapter";
 export {

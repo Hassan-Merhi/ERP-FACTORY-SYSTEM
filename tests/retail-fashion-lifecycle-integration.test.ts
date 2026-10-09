@@ -314,6 +314,19 @@ describeWithDatabase("Retail fashion lifecycle (PostgreSQL)", () => {
       idempotencyKey: "rfl-cancel-0001",
     });
     expect(canceled.status).toBe(201);
+    // A cancellation refunds the remaining paid value and reverses it in the ledger.
+    const cancelPayments: Array<{ paymentType: string; amount: number }> = canceled.body.sale.payments ?? [];
+    const paidTotal = cancelPayments.filter((p) => p.paymentType === "payment").reduce((sum, p) => sum + p.amount, 0);
+    const refundedTotal = cancelPayments
+      .filter((p) => p.paymentType === "refund")
+      .reduce((sum, p) => sum + p.amount, 0);
+    expect(paidTotal).toBeGreaterThan(0);
+    expect(refundedTotal).toBeCloseTo(paidTotal, 6);
+    const cancelPosting = await pool.query(
+      "SELECT voucher_id FROM accounting_posting_requests WHERE source_type = 'retail-pos-cancel' AND source_id = $1",
+      [String(twoUnits.body.sale.id)]
+    );
+    expect(Number(cancelPosting.rows[0]?.voucher_id ?? 0)).toBeGreaterThan(0);
     const salesAfter = (await manager.get(`/api/retail/reporting/variant-sales`)).body.find(
       (row: { variantId: number }) => row.variantId === blackM.variantId
     );

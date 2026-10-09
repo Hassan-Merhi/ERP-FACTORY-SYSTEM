@@ -1,5 +1,5 @@
 {
-  "description": "Triage baseline for tests that assert on source text. structuralGuardTests intentionally constrain repository shape and survive code motion. sourceCoupledTests pin literal code substrings and will fail when code moves even if behaviour is unchanged, so they must be reviewed before splitting the files they pin. This list is a ratchet: it may shrink, never grow.",
+  "description": "Triage baseline for tests that assert on source text. structuralGuardTests intentionally constrain repository shape and survive code motion. sourceCoupledTests pin literal code substrings and will fail when code moves even if behaviour is unchanged, so they must be reviewed before splitting the files they pin. This list is a ratchet: it may shrink, never grow. godFileHotspots gained the two Retail Wave 2 files on 2026-10-05: the Wave 2 contract suite pins client/src/pages/pos/RetailPOS.tsx and server/services/retail/retailStockCount.ts, so any split of either must rewrite tests/retail-wave2-contract.test.ts first.",
   "regenerate": "UPDATE_SOURCE_TEXT_BASELINE=1 npm run test:backend -- source-text-assertions",
   "classificationCaveat": "Classification is heuristic: a test that reads source files and also asserts substrings on parsed JSON can be reported as source-coupled. The godFileHotspots reverse index below is exact and is the actionable output.",
   "maxSourceCoupledTests": 121,
@@ -157,7 +157,22 @@
     "tests/write-evidence-ratchet.test.ts",
     "tests/write-route-coverage.test.ts"
   ],
-  "godFileHotspots": [],
+  "godFileHotspots": [
+    {
+      "path": "client/src/pages/pos/RetailPOS.tsx",
+      "lines": 1042,
+      "pinnedBy": [
+        "tests/retail-wave2-contract.test.ts"
+      ]
+    },
+    {
+      "path": "server/services/retail/retailStockCount.ts",
+      "lines": 1022,
+      "pinnedBy": [
+        "tests/retail-wave2-contract.test.ts"
+      ]
+    }
+  ],
   "pinnedPathsNoLongerPresent": [
     "client/src/components/GlobalLanguageSwitch.tsx",
     "server/chat/reports/legacyReportEngine.ts",

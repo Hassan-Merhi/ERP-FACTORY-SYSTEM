@@ -84,6 +84,12 @@ function accountingMoney(value: Decimal.Value): Decimal {
   return new MoneyDecimal(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 }
 
+/** The tax included in an amount, in cents: never negative and never more than the amount. */
+function includedTax(total: Decimal, tax: MoneyInput | undefined, label: string): Decimal {
+  const taxAmount = accountingMoney(exactMoney(tax ?? 0, label));
+  return MoneyDecimal.min(total, MoneyDecimal.max(0, taxAmount));
+}
+
 /**
  * Splits a voucher amount (cents) across payment lines in proportion to the
  * payments, by largest remainder (allocateCents): the shares add up to the
@@ -223,6 +229,8 @@ export async function settleRetailSaleTx(
     saleId: number;
     saleIdempotencyKey: string;
     totalAmount: Decimal.Value;
+    /** Tax included in totalAmount; credited to tax payable instead of revenue. */
+    taxAmount?: Decimal.Value;
     totalCost: Decimal.Value;
     userId: string;
     username?: string | null;
@@ -281,6 +289,8 @@ export async function settleRetailSaleTx(
 
   const saleAccountingAmount = accountingMoney(saleTotal);
   const costAccountingAmount = accountingMoney(totalCost);
+  const taxAccountingAmount = includedTax(saleAccountingAmount, input.taxAmount, "Retail sale tax");
+  const revenueAccountingAmount = saleAccountingAmount.minus(taxAccountingAmount);
   const entries = [
     ...allocatePaymentLines(resolved, saleAccountingAmount).map(({ payment, amount }) => ({
       ...(payment.bankAccountId
@@ -290,14 +300,24 @@ export async function settleRetailSaleTx(
       creditAmount: "0",
       narration: `Retail sale #${input.saleId} · ${payment.method}`,
     })),
-    ...(saleAccountingAmount.isZero()
+    ...(revenueAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.salesRevenueLedgerAccountId,
             debitAmount: "0",
-            creditAmount: saleAccountingAmount.toFixed(2),
+            creditAmount: revenueAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · revenue`,
+          },
+        ]),
+    ...(taxAccountingAmount.isZero()
+      ? []
+      : [
+          {
+            ledgerAccountId: settings.taxPayableLedgerAccountId,
+            debitAmount: "0",
+            creditAmount: taxAccountingAmount.toFixed(2),
+            narration: `Retail sale #${input.saleId} · tax`,
           },
         ]),
     ...(costAccountingAmount.isZero()
@@ -503,6 +523,8 @@ export async function postRetailRefundAccountingTx(
     sourceId: string;
     idempotencyKey: string;
     refundAmount: Decimal.Value;
+    /** Tax included in refundAmount; debited to tax payable instead of revenue. */
+    refundTaxAmount?: Decimal.Value;
     restoredCost: Decimal.Value;
     refunds: RetailResolvedPayment[];
     userId: string;
@@ -525,16 +547,32 @@ export async function postRetailRefundAccountingTx(
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
   const refundAccountingAmount = accountingMoney(refundTotal);
   const restoredCostAccountingAmount = accountingMoney(restoredCost);
+  const refundTaxAccountingAmount = includedTax(refundAccountingAmount, input.refundTaxAmount, "Retail refund tax");
+  const refundRevenueAccountingAmount = refundAccountingAmount.minus(refundTaxAccountingAmount);
   const entries = [
     ...(refundAccountingAmount.isZero()
       ? []
       : [
-          {
-            ledgerAccountId: settings.salesRevenueLedgerAccountId,
-            debitAmount: refundAccountingAmount.toFixed(2),
-            creditAmount: "0",
-            narration: `Retail sale #${input.saleId} · refund revenue reversal`,
-          },
+          ...(refundRevenueAccountingAmount.isZero()
+            ? []
+            : [
+                {
+                  ledgerAccountId: settings.salesRevenueLedgerAccountId,
+                  debitAmount: refundRevenueAccountingAmount.toFixed(2),
+                  creditAmount: "0",
+                  narration: `Retail sale #${input.saleId} · refund revenue reversal`,
+                },
+              ]),
+          ...(refundTaxAccountingAmount.isZero()
+            ? []
+            : [
+                {
+                  ledgerAccountId: settings.taxPayableLedgerAccountId,
+                  debitAmount: refundTaxAccountingAmount.toFixed(2),
+                  creditAmount: "0",
+                  narration: `Retail sale #${input.saleId} · refund tax reversal`,
+                },
+              ]),
           ...allocatePaymentLines(input.refunds, refundAccountingAmount).map(({ payment, amount }) => ({
             ...(payment.bankAccountId
               ? { bankAccountId: payment.bankAccountId }

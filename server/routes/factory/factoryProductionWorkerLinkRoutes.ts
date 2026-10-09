@@ -7,6 +7,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { requireFactoryTabAccess } from "../../lib/factoryAccessControl";
 import { resultRows } from "../../lib/queryResult";
 import { factoryWorkers } from "@shared/schema";
+import { ProductionTargetSplitError } from "@shared/factoryProductionTargetSplit";
 import {
   createProductionWorkerLink,
   loadActiveProductionWorkerLinks,
@@ -78,14 +79,14 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
     requireProductionTargetsAccess,
     async (req: Request, res: Response) => {
       try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      const asOf = String(req.query.asOf || "");
-      if (!ISO_DATE.test(asOf)) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
-      }
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+        const asOf = String(req.query.asOf || "");
+        if (!ISO_DATE.test(asOf)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+        }
 
-      res.json({ asOf, links: await loadActiveProductionWorkerLinks(companyId, asOf) });
+        res.json({ asOf, links: await loadActiveProductionWorkerLinks(companyId, asOf) });
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
       }
@@ -98,65 +99,63 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
     requireProductionTargetsAccess,
     async (req: Request, res: Response) => {
       try {
-      const companyId = getFactoryCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
-      const effectiveFrom = String(req.body?.effectiveFrom || "");
-      const rawWorkerIds: unknown[] = Array.isArray(req.body?.workerIds) ? req.body.workerIds : [];
-      const workerIds = [
-        ...new Set(
-          rawWorkerIds
-            .map((value: unknown) => Number(value))
-            .filter((id: number) => Number.isInteger(id) && id > 0)
-        ),
-      ];
-      const targetBales = numberOrNull(req.body?.targetBales);
+        const companyId = getFactoryCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: factoryStaffTrackingMessages.noFactoryCompany });
+        const effectiveFrom = String(req.body?.effectiveFrom || "");
+        const rawWorkerIds: unknown[] = Array.isArray(req.body?.workerIds) ? req.body.workerIds : [];
+        const workerIds = [
+          ...new Set(
+            rawWorkerIds.map((value: unknown) => Number(value)).filter((id: number) => Number.isInteger(id) && id > 0)
+          ),
+        ];
+        const targetBales = numberOrNull(req.body?.targetBales);
 
-      if (!ISO_DATE.test(effectiveFrom)) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
-      }
-      if (workerIds.length < 2 || workerIds.length > 10) {
-        return res.status(400).json({ message: "Link between 2 and 10 workers" });
-      }
-      if (
-        req.body?.targetBales !== null &&
-        req.body?.targetBales !== undefined &&
-        req.body?.targetBales !== "" &&
-        targetBales === null
-      ) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
-      }
-      if (await hasFinalizedProductionOnOrAfter(companyId, effectiveFrom)) {
-        return res.status(409).json({
-          message: "Worker links cannot be changed from a date that already has finalized production history",
+        if (!ISO_DATE.test(effectiveFrom)) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidPeriod });
+        }
+        if (workerIds.length < 2 || workerIds.length > 10) {
+          return res.status(400).json({ message: "Link between 2 and 10 workers" });
+        }
+        if (
+          req.body?.targetBales !== null &&
+          req.body?.targetBales !== undefined &&
+          req.body?.targetBales !== "" &&
+          targetBales === null
+        ) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.invalidBaleNumbers });
+        }
+        if (await hasFinalizedProductionOnOrAfter(companyId, effectiveFrom)) {
+          return res.status(409).json({
+            message: "Worker links cannot be changed from a date that already has finalized production history",
+          });
+        }
+
+        const workers = await db
+          .select({ id: factoryWorkers.id })
+          .from(factoryWorkers)
+          .where(and(eq(factoryWorkers.companyId, companyId), inArray(factoryWorkers.id, workerIds)));
+        if (workers.length !== workerIds.length) {
+          return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
+        }
+
+        const plannerWorkerIds = await loadPlannerWorkerIds(companyId);
+        if (workerIds.some((workerId) => !plannerWorkerIds.has(workerId))) {
+          return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
+        }
+
+        const linkId = await createProductionWorkerLink({
+          companyId,
+          effectiveFrom,
+          workerIds,
+          targetBales,
+          createdBy: req.session.userId || null,
         });
-      }
 
-      const workers = await db
-        .select({ id: factoryWorkers.id })
-        .from(factoryWorkers)
-        .where(and(eq(factoryWorkers.companyId, companyId), inArray(factoryWorkers.id, workerIds)));
-      if (workers.length !== workerIds.length) {
-        return res.status(400).json({ message: factoryStaffTrackingMessages.personOutsideFactory });
-      }
-
-      const plannerWorkerIds = await loadPlannerWorkerIds(companyId);
-      if (workerIds.some((workerId) => !plannerWorkerIds.has(workerId))) {
-        return res.status(400).json({ message: "Worker is not assigned to a saved Production Planner group" });
-      }
-
-      const linkId = await createProductionWorkerLink({
-        companyId,
-        effectiveFrom,
-        workerIds,
-        targetBales,
-        createdBy: req.session.userId || null,
-      });
-
-      res.json({
-        success: true,
-        linkId,
-        links: await loadActiveProductionWorkerLinks(companyId, effectiveFrom),
-      });
+        res.json({
+          success: true,
+          linkId,
+          links: await loadActiveProductionWorkerLinks(companyId, effectiveFrom),
+        });
       } catch (error: unknown) {
         res.status(500).json({ message: getErrorMessage(error) });
       }
@@ -187,6 +186,7 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
           linkId,
           effectiveTo,
           createdBy: req.session.userId || null,
+          allocations: req.body?.allocations,
         });
         if (!unlinked) return res.status(404).json({ message: "Worker link not found" });
 
@@ -195,6 +195,9 @@ export function registerFactoryProductionWorkerLinkRoutes(app: Express): void {
           links: await loadActiveProductionWorkerLinks(companyId, effectiveTo),
         });
       } catch (error: unknown) {
+        if (error instanceof ProductionTargetSplitError) {
+          return res.status(400).json({ message: error.message });
+        }
         res.status(500).json({ message: getErrorMessage(error) });
       }
     }
