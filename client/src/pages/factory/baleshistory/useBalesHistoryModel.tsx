@@ -446,13 +446,23 @@ export function useBalesHistoryModel() {
     };
 
     try {
-      await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: baleRow.bale.id });
+      const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: baleRow.bale.id });
+      if (!response.ok) throw new Error("Could not prepare reprint");
+      const result = (await response.json()) as {
+        priorityAllocation?: { color: string; orderId: number; priority: number } | null;
+      };
+      if (result.priorityAllocation) {
+        label.priorityColor = result.priorityAllocation.color;
+        label.priorityOrderId = result.priorityAllocation.orderId;
+        label.priorityNumber = result.priorityAllocation.priority;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/factory/bales"] });
-    } catch {
-      // Cache invalidation is best-effort; the next fetch corrects it and a failure here is not worth surfacing.
+    } catch (error) {
+      toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
     }
 
-    if (isZebraMode()) {
+    if (isZebraMode() && !label.priorityColor) {
       try {
         const zpl = buildZplBatch([label], true);
         await printRawZpl(zpl);
@@ -473,7 +483,7 @@ export function useBalesHistoryModel() {
   const openBrowserReprint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const fmt = getPaperFormat();
-    if (fmt === "A4" && !designColor) {
+    if (fmt === "A4" && !designColor && !labels.some((label) => label.priorityColor)) {
       setPendingReprintLabels(labels);
       setDesignPickerOpen(true);
       return;
