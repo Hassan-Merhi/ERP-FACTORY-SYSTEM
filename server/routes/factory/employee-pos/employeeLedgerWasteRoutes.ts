@@ -746,13 +746,18 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             FROM customer_order_bales cob
             JOIN customer_orders co ON co.id = cob.order_id
             JOIN factory_bales fb ON fb.id = cob.bale_id
-           WHERE cob.bale_id IN (${sql.join(balesToDispose.map((bale) => sql`${bale.id}`), sql`, `)})
+           WHERE cob.bale_id IN (${sql.join(
+             balesToDispose.map((bale) => sql`${bale.id}`),
+             sql`, `
+           )})
              AND co.company_id = ${companyId} AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL
            LIMIT 1
         `);
         const loadedRow = firstRow(loaded) as { referenceNumber?: string } | undefined;
         if (loadedRow) {
-          throw new Error(`Bale ${loadedRow.referenceNumber} is on a customer loading. Remove it from the loading first.`);
+          throw new Error(
+            `Bale ${loadedRow.referenceNumber} is on a customer loading. Remove it from the loading first.`
+          );
         }
 
         const totalWeightKg = sumMoney(balesToDispose.map((bale) => bale.weightKg as string)).toNumber();

@@ -33,6 +33,8 @@ const INITIAL_FACTORY_FEATURES = {
   supplierStatementEnabled: true,
 } as const;
 
+const UNSAFE_SETTINGS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   // ───────────────────────────────────────────────
   // 1. Settings CRUD
@@ -256,11 +258,14 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
         (k) => !KNOWN_SETTINGS_COLUMNS.has(k) && k !== "id" && k !== "updatedAt" && k !== "extraSettings"
       );
       if (extraKeys.length > 0) {
-        const patch: Record<string, unknown> = {};
-        for (const key of extraKeys) {
-          if (req.body[key] !== undefined) patch[key] = req.body[key];
-        }
-        updateData.extraSettings = patch;
+        // Build the patch from own entries (never bracket writes keyed by user
+        // input) and drop prototype-shaped keys entirely.
+        const allowedExtraKeys = new Set(extraKeys);
+        updateData.extraSettings = Object.fromEntries(
+          Object.entries(req.body as Record<string, unknown>).filter(
+            ([key, value]) => allowedExtraKeys.has(key) && value !== undefined && !UNSAFE_SETTINGS_KEYS.has(key)
+          )
+        );
       }
 
       const [result] = await db
