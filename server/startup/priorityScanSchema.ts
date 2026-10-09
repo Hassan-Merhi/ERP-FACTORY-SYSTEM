@@ -109,6 +109,21 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
   `CREATE INDEX IF NOT EXISTS fpaa_company_order_active_idx
      ON factory_priority_auto_allocations(company_id, order_id)
      WHERE reversed_at IS NULL`,
+  `CREATE TABLE IF NOT EXISTS factory_physical_bale_deletions (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      bale_id INTEGER NOT NULL,
+      reference_number VARCHAR(100) NOT NULL,
+      previous_status TEXT NOT NULL,
+      original_location_id INTEGER,
+      removed_by_user_id TEXT,
+      removed_by_name TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      removed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT fpbd_company_bale_unique UNIQUE (company_id, bale_id)
+    )`,
+  `CREATE INDEX IF NOT EXISTS fpbd_company_removed_idx
+     ON factory_physical_bale_deletions(company_id, removed_at DESC, id DESC)`,
 ] as const;
 
 type StartupQueryable = {
