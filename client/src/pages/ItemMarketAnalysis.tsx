@@ -325,18 +325,22 @@ export default function ItemMarketAnalysis() {
         itemIdsByCompany.set(row.companyId, ids);
       }
 
-      let salePriceRows: SalePriceExportRow[] = [];
-      if (itemIdsByCompany.size > 0) {
-        const response = await apiRequest("POST", "/api/reports/item-market-analysis/export-sale-prices", {
-          startDate: period.fromDate || undefined,
-          endDate: period.toDate || undefined,
-          companyItems: [...itemIdsByCompany].map(([companyId, ids]) => ({
-            companyId,
-            stockItemIds: [...ids],
-          })),
-        });
-        const salePrices = (await response.json()) as { rows: SalePriceExportRow[] };
-        salePriceRows = salePrices.rows;
+      const salePriceRows: SalePriceExportRow[] = [];
+      // The backend permits up to 5,000 items per company/request. Request
+      // smaller batches so large datasets export in full instead of returning
+      // a validation error. A failed batch aborts the entire export.
+      const maxItemsPerBatch = 2500;
+      for (const [companyId, itemIds] of itemIdsByCompany) {
+        const ids = [...itemIds];
+        for (let offset = 0; offset < ids.length; offset += maxItemsPerBatch) {
+          const response = await apiRequest("POST", "/api/reports/item-market-analysis/export-sale-prices", {
+            startDate: period.fromDate || undefined,
+            endDate: period.toDate || undefined,
+            companyItems: [{ companyId, stockItemIds: ids.slice(offset, offset + maxItemsPerBatch) }],
+          });
+          const salePrices = (await response.json()) as { rows: SalePriceExportRow[] };
+          salePriceRows.push(...salePrices.rows);
+        }
       }
 
       const { exportItemMarketAnalysisExcel } = await import("./itemMarketAnalysisExport");
