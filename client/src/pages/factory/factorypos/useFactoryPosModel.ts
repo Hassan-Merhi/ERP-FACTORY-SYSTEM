@@ -103,12 +103,30 @@ export function useFactoryPosModel() {
     },
     enabled: !!locationId,
   });
-  const { data: ledgerAccounts } = useQuery<PosLedgerAccount[]>({
-    queryKey: ["/api/ledger-accounts?includeHidden=true"],
+  // Factory POS needs cash and deduction options even when the user has no
+  // general Accounting module access. This endpoint is read-only, limited to
+  // the active Factory company, and protected by the Factory POS page grant.
+  const {
+    data: ledgerAccounts,
+    isLoading: accountOptionsLoading,
+    isError: accountOptionsError,
+  } = useQuery<PosLedgerAccount[]>({
+    queryKey: ["/api/factory/pos/account-options", selectedCompany?.id],
+    queryFn: async () => {
+      const response = await fetch("/api/factory/pos/account-options", { credentials: "include" });
+      if (!response.ok) throw new Error("Failed to load Factory POS payment accounts");
+      return (await response.json()) as PosLedgerAccount[];
+    },
+    enabled: !!selectedCompany?.id,
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
   const cashAccounts = (ledgerAccounts || []).filter((a) => a.accountType === "Cash");
+
+  // A previous company's cash account must never carry into a new company's sale.
+  useEffect(() => {
+    setCashAccountId("");
+  }, [selectedCompany?.id]);
   const { data: sales, isLoading: salesLoading } = useQuery<PosSale[]>({
     queryKey: ["/api/factory/pos/sales"],
     enabled: showHistory,
@@ -476,6 +494,8 @@ export function useFactoryPosModel() {
     currencyCode,
     setCurrencyCode,
     cashAccounts,
+    accountOptionsLoading,
+    accountOptionsError,
     cashAccountId,
     setCashAccountId,
     paymentType,
