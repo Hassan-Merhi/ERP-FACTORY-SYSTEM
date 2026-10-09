@@ -9,6 +9,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
+import {
+  allocateAutomaticPriorityBaleTx,
+  automaticPriorityModeEnabled,
+} from "../customer-orders/priorityAutoAllocation";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -57,6 +62,12 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
 
       const result = await db.transaction(async (tx) => {
+        // Acquire the queue lock before stock/inventory row locks to avoid
+        // deadlocks with concurrent automatic bale deletion and manual scans.
+        const automaticMode = await automaticPriorityModeEnabled(tx, companyId);
+        if (automaticMode) {
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        }
         let mixBatch = null;
         if (mixBatchId) {
           const [mb] = await tx
@@ -369,7 +380,24 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           }
         }
 
-        return { bales, totalWeight };
+        // Stock creation, priority assignment, scan history and totals share
+        // one transaction. A printer error can only require a reprint; it cannot
+        // leave a partially allocated bale.
+        const autoPriorityAllocations = [];
+        if (automaticMode) {
+          for (const bale of insertedBales) {
+            const allocation = await allocateAutomaticPriorityBaleTx(tx, {
+              companyId,
+              baleId: bale.id,
+              userId: req.session.userId == null ? null : String(req.session.userId),
+              username: String(req.session.username || req.session.userId || "automatic"),
+              source: "stock-entry",
+            });
+            if (allocation) autoPriorityAllocations.push(allocation);
+          }
+        }
+
+        return { bales, totalWeight, autoPriorityAllocations };
       });
 
       const today = effectiveDateStr || getClientDate(req);
@@ -407,7 +435,8 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         metaJson: baleMetaJson,
       });
 
-      res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber() });
+      res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber(),
+        autoPriorityAllocations: result.autoPriorityAllocations });
     } catch (error: unknown) {
       logger.error("Error in stock entry:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
