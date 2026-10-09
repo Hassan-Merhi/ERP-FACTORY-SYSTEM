@@ -26,14 +26,28 @@ import {
   resolveRetailItemImages,
 } from "../../services/retail/retailSaleService";
 import { aggregateRetailCartItems, nextRetailTransferQuantities } from "../../services/retail/retailStockMath";
+import {
+  postRetailRefundAccountingTx,
+  refundRetailPaymentsTx,
+  validateRetailShiftTx,
+} from "../../services/retail/retailFinancialService";
 
 const idempotencyKeySchema = z.string().trim().min(8).max(191);
 const positiveQuantitySchema = z.coerce.number().finite().positive();
+
+const paymentSchema = z.object({
+  method: z.enum(["cash", "card", "bank", "mobile", "other"]),
+  amount: z.coerce.number().finite().positive(),
+  tenderedAmount: z.coerce.number().finite().positive().optional(),
+  reference: z.string().trim().max(191).optional(),
+});
 
 const saleSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
   notes: z.string().trim().max(2000).optional(),
+  shiftId: z.coerce.number().int().positive().optional(),
+  payments: z.array(paymentSchema).min(1).max(8).optional(),
   items: z
     .array(
       z.object({
@@ -48,6 +62,7 @@ const saleSchema = z.object({
 const returnSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
+  shiftId: z.coerce.number().int().positive().optional(),
   notes: z.string().trim().max(2000).optional(),
   items: z
     .array(
@@ -84,6 +99,7 @@ const adjustmentSchema = z.object({
 const cancelSchema = z.object({
   locationId: z.coerce.number().int().positive(),
   idempotencyKey: idempotencyKeySchema,
+  shiftId: z.coerce.number().int().positive().optional(),
   reason: z.string().trim().min(1).max(500).optional(),
 });
 
@@ -274,7 +290,10 @@ export function registerRetailPosRoutes(app: Express): void {
           notes: body.notes ?? null,
           items,
           userId,
+          username: req.user?.username ?? null,
           canSellNegativeStock,
+          shiftId: body.shiftId ?? null,
+          payments: body.payments,
         })
       );
 
@@ -318,8 +337,8 @@ export function registerRetailPosRoutes(app: Express): void {
       await ensureCompanyLocation(companyId, body.locationId);
       const userId = currentUserId(req);
 
-      const result = await db.transaction((tx) =>
-        createRetailReturnInTx(tx, {
+      const result = await db.transaction(async (tx) => {
+        const returned = await createRetailReturnInTx(tx, {
           companyId,
           saleId,
           locationId: body.locationId,
@@ -327,8 +346,39 @@ export function registerRetailPosRoutes(app: Express): void {
           notes: body.notes ?? null,
           items: body.items,
           userId,
-        })
-      );
+        });
+        if (!returned.replayed) {
+          const shift = await validateRetailShiftTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            userId,
+            shiftId: body.shiftId ?? null,
+          });
+          const refunds = await refundRetailPaymentsTx(tx, {
+            companyId,
+            saleId,
+            locationId: body.locationId,
+            shiftId: shift?.id ?? null,
+            refundAmount: returned.refundValue,
+            idempotencyKey: body.idempotencyKey,
+            userId,
+          });
+          await postRetailRefundAccountingTx(tx, {
+            companyId,
+            locationId: body.locationId,
+            saleId,
+            sourceType: "retail-pos-return",
+            sourceId: String(returned.returnId),
+            idempotencyKey: `retail-pos-return:${returned.returnId}`,
+            refundAmount: returned.refundValue,
+            restoredCost: returned.costValue,
+            refunds,
+            userId,
+            username: req.user?.username ?? null,
+          });
+        }
+        return returned;
+      });
 
       res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
     } catch (error) {
@@ -526,13 +576,19 @@ export function registerRetailPosRoutes(app: Express): void {
             variantId: retailPosSaleItems.variantId,
             quantity: retailPosSaleItems.quantity,
             returnedQuantity: retailPosSaleItems.returnedQuantity,
+            unitPrice: retailPosSaleItems.unitPrice,
+            unitCost: retailPosSaleItems.unitCost,
           })
           .from(retailPosSaleItems)
           .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
 
+        let refundAmount = 0;
+        let restoredCost = 0;
         for (const item of saleItems) {
           const quantityToRestore = Math.max(0, toNumber(item.quantity) - toNumber(item.returnedQuantity));
           if (quantityToRestore <= 0) continue;
+          refundAmount += quantityToRestore * toNumber(item.unitPrice);
+          restoredCost += quantityToRestore * toNumber(item.unitCost);
           const stock = await lockInventoryRow(tx, companyId, item.variantId, sale.locationId);
           const after = stock.quantity + quantityToRestore;
           await setInventoryQuantity(tx, companyId, item.variantId, sale.locationId, after);
@@ -555,7 +611,35 @@ export function registerRetailPosRoutes(app: Express): void {
           .update(retailPosSales)
           .set({ status: "canceled", canceledAt: new Date(), updatedAt: new Date() })
           .where(eq(retailPosSales.id, saleId));
-        return { replayed: false, operationId: operation.id };
+        const shift = await validateRetailShiftTx(tx, {
+          companyId,
+          locationId: body.locationId,
+          userId,
+          shiftId: body.shiftId ?? null,
+        });
+        const refunds = await refundRetailPaymentsTx(tx, {
+          companyId,
+          saleId,
+          locationId: body.locationId,
+          shiftId: shift?.id ?? null,
+          refundAmount,
+          idempotencyKey: body.idempotencyKey,
+          userId,
+        });
+        await postRetailRefundAccountingTx(tx, {
+          companyId,
+          locationId: body.locationId,
+          saleId,
+          sourceType: "retail-pos-cancel",
+          sourceId: String(saleId),
+          idempotencyKey: `retail-pos-cancel:${saleId}`,
+          refundAmount,
+          restoredCost,
+          refunds,
+          userId,
+          username: req.user?.username ?? null,
+        });
+        return { replayed: false, operationId: operation.id, refundAmount, restoredCost };
       });
       res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
     } catch (error) {
