@@ -12,7 +12,8 @@ import type { DatabaseOrTransaction } from "../../db";
  */
 export async function getOrCreateInventoryControlAccount(
   tx: DatabaseOrTransaction,
-  companyId: number
+  companyId: number,
+  options: { matchByName?: boolean } = {}
 ): Promise<{ id: number }> {
   const [liveCanonical] = await tx
     .select({
@@ -83,22 +84,27 @@ export async function getOrCreateInventoryControlAccount(
     if (revived) return revived;
   }
 
-  const [liveByMeaning] = await tx
-    .select({ id: ledgerAccounts.id })
-    .from(ledgerAccounts)
-    .where(
-      and(
-        eq(ledgerAccounts.companyId, companyId),
-        isNull(ledgerAccounts.deletedAt),
-        inArray(ledgerAccounts.accountType, ["Asset", "Current Asset"]),
-        or(
-          ilike(ledgerAccounts.name, "%inventory%"),
-          ilike(ledgerAccounts.name, "%stock in hand%"),
-          ilike(ledgerAccounts.name, "%stock on hand%")
-        )
-      )
-    )
-    .limit(1);
+  // Stock adjustments pass matchByName: false so they never land on a Golden
+  // Coast "Stock in Hand" account, which is reconciled against FIFO layers.
+  const [liveByMeaning] =
+    options.matchByName === false
+      ? []
+      : await tx
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(
+            and(
+              eq(ledgerAccounts.companyId, companyId),
+              isNull(ledgerAccounts.deletedAt),
+              inArray(ledgerAccounts.accountType, ["Asset", "Current Asset"]),
+              or(
+                ilike(ledgerAccounts.name, "%inventory%"),
+                ilike(ledgerAccounts.name, "%stock in hand%"),
+                ilike(ledgerAccounts.name, "%stock on hand%")
+              )
+            )
+          )
+          .limit(1);
   if (liveByMeaning) return liveByMeaning;
 
   const [created] = await tx
@@ -113,6 +119,11 @@ export async function getOrCreateInventoryControlAccount(
       openingBalanceSide: "Dr",
       active: true,
       isHidden: false,
+    })
+    // Two writers creating the account at once both land on the same row.
+    .onConflictDoUpdate({
+      target: [ledgerAccounts.companyId, ledgerAccounts.code],
+      set: { accountType: "Asset", subType: "Current Asset", active: true, isHidden: false, deletedAt: null },
     })
     .returning({ id: ledgerAccounts.id });
 
