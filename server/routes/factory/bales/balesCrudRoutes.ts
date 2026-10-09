@@ -12,6 +12,11 @@ import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+import { reversePriorityAllocationForDeletedBaleTx } from "../customer-orders/priorityAutoAllocation";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
+import { adjustInventory } from "../../../inventoryHelper";
+import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
+import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 
 import {
   factoryBaleProducts,
@@ -25,6 +30,8 @@ import {
   factoryV3LoadBales,
   factoryInvoiceLoadingBales,
   factoryBaleProductionAttributions,
+  stockItems,
+  inventory,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
 
@@ -362,13 +369,63 @@ export function registerBalesCrudRoutes(app: Express) {
       if (id === null) return res.status(400).json({ message: "Invalid id" });
       if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
 
-      const [updated] = await db
-        .update(factoryBales)
-        .set({ status: "DELETED", deletedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
-        .returning({ id: factoryBales.id });
+      const updated = await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        const [bale] = await tx.select().from(factoryBales)
+          .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId))).limit(1);
+        if (!bale || bale.deletedAt || bale.status === "DELETED") return null;
+        const [autoRow] = await tx.execute(sql`
+          SELECT id FROM factory_priority_auto_allocations
+           WHERE company_id = ${companyId} AND bale_id = ${id} AND reversed_at IS NULL
+           LIMIT 1
+        `).then((r) => {
+          const result = r as unknown as { rows?: Array<{ id: number }> };
+          return result.rows || [];
+        });
+        if (autoRow) {
+          await reversePriorityAllocationForDeletedBaleTx(tx, {
+            companyId, baleId: id, actor: String(req.session.username || req.session.userId || "unknown"),
+            reason: "Factory bale deleted",
+          });
+          // A V5 loaded bale is still IN_STOCK, so the original inventory receipt
+          // needs precisely one corresponding stock movement reversal.
+          if (bale.status === "IN_STOCK" && bale.erpLocationId) {
+            const [product] = bale.productId
+              ? await tx.select().from(factoryBaleProducts).where(and(
+                eq(factoryBaleProducts.id, bale.productId), eq(factoryBaleProducts.companyId, companyId)))
+              : [];
+            const itemCode = product?.articleCode || product?.code || bale.articleCode || bale.baleCode;
+            const [item] = await tx.select({ id: stockItems.id }).from(stockItems)
+              .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, itemCode))).limit(1);
+            if (!item) throw new Error("Missing ERP stock item; cannot safely reverse an automatically allocated bale.");
+            const [inventoryBefore] = await tx.select({ averageRate: inventory.averageRate }).from(inventory)
+              .where(and(eq(inventory.companyId, companyId),
+                eq(inventory.locationId, bale.erpLocationId), eq(inventory.stockItemId, item.id))).limit(1);
+            const unitCost = Math.max(0, Number(inventoryBefore?.averageRate || 0));
+            await adjustInventory(tx, bale.erpLocationId, item.id, -1, companyId);
+            await postStockMovementTx(tx, {
+              companyId, stockItemId: item.id, kind: "adjustment", quantity: "1",
+              unitCost: String(unitCost), fromLocationId: bale.erpLocationId,
+              occurredAt: new Date().toISOString(),
+              source: {
+                sourceType: "factory_bale_removal",
+                sourceId: String(bale.id),
+                idempotencyKey: `factory-bale-removal:${companyId}:${bale.id}`,
+              },
+              actor: { userId: String(req.session.userId || ""), username: String(req.session.username || "unknown"),
+                reason: "Factory bale deleted" },
+              allowNegativeStock: true,
+            }, createDatabaseStockMovementAdapter());
+          }
+        }
+        const [result] = await tx.update(factoryBales)
+          .set({ status: "DELETED", deletedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
+          .returning({ id: factoryBales.id });
+        return result;
+      });
 
-      if (!updated) return res.status(404).json({ message: "Bale not found" });
+      if (!updated) return res.status(404).json({ message: "Bale not found or already deleted" });
       await logAudit({
         userId: req.session.userId!,
         username: req.session.username || req.session.userId!,
