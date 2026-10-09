@@ -19,7 +19,7 @@ import {
   rewriteActivePriorityQueue,
 } from "./priorityScanQueue";
 import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "@shared/schema";
-import { runAutomaticPriorityReprint } from "./priorityAutoAllocation";
+import { runAutomaticPriorityPrintBatch, runAutomaticPriorityReprint } from "./priorityAutoAllocation";
 import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 
 const MAX_COLOR_LENGTH = 64;
@@ -95,6 +95,39 @@ class PriorityScanConfigError extends Error {
 
 export function registerPriorityScanConfigRoutes(app: Express) {
   registerPriorityAllocationHistoryRoutes(app);
+  // Prepare whole sets of existing factory bales before any label is rendered.
+  // Each request is atomic: a bad reference cannot leave half the set newly
+  // allocated. Existing snapshot colors are returned even when the switch is OFF.
+  app.post("/api/factory/customer-orders/loading-list/automatic-print-preflight-batch",
+    requireAuth, async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const items = req.body?.items;
+        if (!Array.isArray(items) || items.length === 0 || items.length > 200 ||
+            items.some(item => !item || typeof item !== "object" ||
+              ((item.baleId === undefined || !Number.isSafeInteger(item.baleId) || item.baleId < 1) &&
+               (typeof item.referenceNumber !== "string" || !item.referenceNumber.trim())))) {
+          return res.status(400).json({ message: "Provide 1–200 valid bale IDs or reference numbers" });
+        }
+        const results = await runAutomaticPriorityPrintBatch(
+          companyId, items,
+          String(req.session.username || req.session.userId || "automatic"),
+          req.session.userId == null ? null : String(req.session.userId)
+        );
+        res.set("Cache-Control", "private, no-store");
+        return res.json({ results });
+      } catch (error) {
+        logger.error("Automatic Priority Print batch preflight failed", { error });
+        const message = getErrorMessage(error);
+        if (/Bale not found|Print reference does not match|Invalid|requires|must contain/i.test(message)) {
+          return res.status(400).json({ message });
+        }
+        return res.status(500).json({ message: "Failed to prepare priority labels" });
+      }
+    }
+  );
+
   // Used by specialist relabel screens where the API returns a REF but not a
   // physical bale ID. Resolve server-side, never trusting the client to choose
   // a loading or a priority color.
