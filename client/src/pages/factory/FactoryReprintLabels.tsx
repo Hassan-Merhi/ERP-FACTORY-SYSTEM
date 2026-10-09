@@ -145,7 +145,7 @@ export default function FactoryReprintLabels() {
   const openBrowserPrint = (labels: LabelData[], designColor?: A4DesignColor) => {
     prefetchBannersForPrint();
     const fmt = getPaperFormat();
-    if (fmt === "A4" && !designColor) {
+    if (fmt === "A4" && !designColor && !labels.some((label) => label.priorityColor)) {
       setPendingLabels(labels);
       setDesignPickerOpen(true);
       return;
@@ -201,15 +201,25 @@ export default function FactoryReprintLabels() {
       productName: row.bale.productName || row.product?.name || row.bale.category || "",
     }));
 
-    for (const row of rowsToPrint) {
+    for (const [index, row] of rowsToPrint.entries()) {
       try {
-        await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-      } catch {
-        // Failure here is non-fatal and the surrounding flow continues deliberately.
+        const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
+        if (!response.ok) throw new Error("Could not prepare priority reprint");
+        const result = (await response.json()) as {
+          priorityAllocation?: { color: string; orderId: number; priority: number } | null;
+        };
+        if (result.priorityAllocation) {
+          labels[index].priorityColor = result.priorityAllocation.color;
+          labels[index].priorityOrderId = result.priorityAllocation.orderId;
+          labels[index].priorityNumber = result.priorityAllocation.priority;
+        }
+      } catch (error) {
+        toast({ title: "Reprint preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+        return;
       }
     }
 
-    if (isZebraMode()) {
+    if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
       try {
         const zpl = buildZplBatch(labels, true);
         await printRawZpl(zpl);
