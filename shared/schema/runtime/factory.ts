@@ -512,6 +512,31 @@ export const factoryReplayConsumedTokens = pgTable(
 );
 
 /**
+ * Audit trail of physical stock deletion. The historical row has no foreign
+ * keys to bale or customer order, so cleanup cannot destroy this evidence.
+ * A unique company/bale key makes a second physical deletion impossible.
+ */
+export const factoryPhysicalBaleDeletions = pgTable(
+  "factory_physical_bale_deletions",
+  {
+    id: bigserial({ mode: "number" }).primaryKey().notNull(),
+    companyId: integer("company_id").notNull(),
+    baleId: integer("bale_id").notNull(),
+    referenceNumber: varchar("reference_number", { length: 100 }).notNull(),
+    previousStatus: text("previous_status").notNull(),
+    originalLocationId: integer("original_location_id"),
+    removedByUserId: text("removed_by_user_id"),
+    removedByName: text("removed_by_name").notNull(),
+    reason: text("reason").notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("fpbd_company_bale_unique").on(table.companyId, table.baleId),
+    index("fpbd_company_removed_idx").on(table.companyId, table.removedAt.desc(), table.id.desc()),
+  ]
+);
+
+/**
  * Permanent original assignment of an automatically allocated physical bale.
  * Reversals annotate the old row without deleting it. If a still-physical bale\n * is later allocated again, that becomes a new timeline entry; at most one\n * active record exists per company/bale.
  */
