@@ -15,6 +15,24 @@ import { writeAuditEvent } from "../../services/audit";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../factory/customer-orders/priorityScanQueue";
 import { factorySettings } from "@shared/schema";
 
+const INITIAL_FACTORY_FEATURES = {
+  dashboardEnabled: true,
+  kpisEnabled: true,
+  profitabilityEnabled: true,
+  alertsEnabled: true,
+  supplierScoringEnabled: true,
+  mixOptimizerEnabled: true,
+  traceabilityEnabled: true,
+  balePhotosEnabled: true,
+  wasteTrackingEnabled: true,
+  cashflowEnabled: true,
+  rolesEnabled: true,
+  netProfitEnabled: true,
+  productionSummaryEnabled: true,
+  supplierReportEnabled: true,
+  supplierStatementEnabled: true,
+} as const;
+
 export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMiddleware, db: AppDb) {
   // ───────────────────────────────────────────────
   // 1. Settings CRUD
@@ -35,21 +53,7 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
             .insert(factorySettings)
             .values({
               companyId,
-              dashboardEnabled: true,
-              kpisEnabled: true,
-              profitabilityEnabled: true,
-              alertsEnabled: true,
-              supplierScoringEnabled: true,
-              mixOptimizerEnabled: true,
-              traceabilityEnabled: true,
-              balePhotosEnabled: true,
-              wasteTrackingEnabled: true,
-              cashflowEnabled: true,
-              rolesEnabled: true,
-              netProfitEnabled: true,
-              productionSummaryEnabled: true,
-              supplierReportEnabled: true,
-              supplierStatementEnabled: true,
+              ...INITIAL_FACTORY_FEATURES,
             })
             .onConflictDoNothing()
             .returning();
@@ -118,7 +122,7 @@ export function registerFactorySettingsRoutes(app: Express, requireAuth: AuthMid
 
           const patch = { automaticPriorityPrintingEnabled: enabled };
           const [saved] = await tx.insert(factorySettings)
-            .values({ companyId, extraSettings: patch, updatedAt: new Date() })
+            .values({ companyId, ...INITIAL_FACTORY_FEATURES, extraSettings: patch, updatedAt: new Date() })
             .onConflictDoUpdate({
               target: factorySettings.companyId,
               set: {
