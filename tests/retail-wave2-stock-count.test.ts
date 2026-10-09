@@ -399,4 +399,59 @@ describeWithDatabase("Retail Wave 2 — physical stock count sessions", () => {
     expect(report.body.summary.sessionCount).toBeGreaterThanOrEqual(3);
     expect(report.body.sessions.some((row: { status: string }) => row.status === "finalized")).toBe(true);
   });
+
+  it("rejects overlapping active count sessions for the same location", async () => {
+    const first = await cashier.post("/api/pos/retail/stock-counts").send({ locationId });
+    expect(first.status).toBe(201);
+    const overlapping = await cashier.post("/api/pos/retail/stock-counts").send({ locationId });
+    expect(overlapping.status).toBe(409);
+    expect(overlapping.body.code).toBe("STOCK_COUNT_LOCATION_ALREADY_OPEN");
+
+    const canceled = await manager.post(`/api/pos/retail/stock-counts/${first.body.id}/cancel`).send({});
+    expect(canceled.status).toBe(200);
+    const reopened = await cashier.post("/api/pos/retail/stock-counts").send({ locationId });
+    expect(reopened.status).toBe(201);
+    await manager.post(`/api/pos/retail/stock-counts/${reopened.body.id}/cancel`).send({});
+  });
+
+  it("does not overwrite a sale made after a physical line was counted", async () => {
+    const session = await cashier.post("/api/pos/retail/stock-counts").send({ locationId });
+    expect(session.status).toBe(201);
+    const lineA = session.body.lines.find((line: { variantId: number }) => line.variantId === variantAId);
+    const beforeSale = await quantityOf(variantAId);
+
+    const counted = await cashier
+      .patch(`/api/pos/retail/stock-counts/${session.body.id}/lines/${lineA.id}`)
+      .send({ countedQuantity: beforeSale });
+    expect(counted.status).toBe(200);
+
+    const sale = await cashier.post("/api/pos/retail/sales").send({
+      locationId,
+      idempotencyKey: "rw2sc-sale-after-count",
+      items: [{ variantId: variantAId, quantity: 1 }],
+    });
+    expect(sale.status).toBe(201);
+    expect(await quantityOf(variantAId)).toBe(beforeSale - 1);
+
+    const staleFinalize = await manager
+      .post(`/api/pos/retail/stock-counts/${session.body.id}/finalize`)
+      .send({ allowUncounted: true, confirmVariance: true });
+    expect(staleFinalize.status).toBe(409);
+    expect(staleFinalize.body.code).toBe("STOCK_COUNT_RECOUNT_REQUIRED");
+    expect(await quantityOf(variantAId)).toBe(beforeSale - 1);
+    expect(await stockCountMovements(session.body.id)).toHaveLength(0);
+
+    // A fresh count incorporates the sale and can be finalized without restoring it.
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    const recounted = await cashier
+      .patch(`/api/pos/retail/stock-counts/${session.body.id}/lines/${lineA.id}`)
+      .send({ countedQuantity: beforeSale - 1 });
+    expect(recounted.status).toBe(200);
+    const finalized = await manager
+      .post(`/api/pos/retail/stock-counts/${session.body.id}/finalize`)
+      .send({ allowUncounted: true, confirmVariance: true });
+    expect(finalized.status).toBe(201);
+    expect(await quantityOf(variantAId)).toBe(beforeSale - 1);
+  });
+
 });
