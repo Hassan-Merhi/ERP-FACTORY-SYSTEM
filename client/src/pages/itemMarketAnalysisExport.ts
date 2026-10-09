@@ -70,8 +70,8 @@ export interface ItemMarketExportOptions {
 
 type ExcelValue = number | string | null;
 type Column = { header: string; key: string; width: number; numFmt?: string };
-const numberFormat = '#,##0.00;[Red](#,##0.00);–';
-const quantityFormat = '#,##0.###;[Red](#,##0.###);–';
+const numberFormat = "#,##0.00;[Red](#,##0.00);–";
+const quantityFormat = "#,##0.###;[Red](#,##0.###);–";
 const percentFormat = '0.00"%"';
 
 function purchaseAmount(value: number | null, currencies: string[]): ExcelValue {
@@ -83,7 +83,12 @@ function printableStatus(status: MarketStatus): string {
 }
 
 function safeFilePart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 36) || "all";
+  return (
+    value
+      .replace(/[^a-zA-Z0-9_-]+/g, "_")
+      .replace(/^_+|_+$/g, "")
+      .slice(0, 36) || "all"
+  );
 }
 
 /** Export the complete filtered data returned by the report; never use the UI's 250-row page slice. */
@@ -98,7 +103,18 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
   const navy = "17324D";
   const cyan = "D9F0F4";
   const pale = "F4F7FA";
-  const moneyFields = new Set(["purchaseValue", "purchaseAverage", "purchaseWithOffloading", "averageWithOffloading", "historicalCost", "avgSell", "revenue", "profit", "profitPerUnit", "unitPrice"]);
+  const moneyFields = new Set([
+    "purchaseValue",
+    "purchaseAverage",
+    "purchaseWithOffloading",
+    "averageWithOffloading",
+    "historicalCost",
+    "avgSell",
+    "revenue",
+    "profit",
+    "profitPerUnit",
+    "unitPrice",
+  ]);
   const pctFields = new Set(["marginPct"]);
 
   function addDataSheet(name: string, columns: Column[], values: Record<string, ExcelValue>[]) {
@@ -123,7 +139,8 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
         const key = columns[column - 1].key;
         cell.alignment = { vertical: "middle" };
         if (typeof cell.value === "number") {
-          cell.numFmt = columns[column - 1].numFmt ??
+          cell.numFmt =
+            columns[column - 1].numFmt ??
             (pctFields.has(key) ? percentFormat : moneyFields.has(key) ? numberFormat : quantityFormat);
         }
         if (key === "profit" && typeof cell.value === "number") {
@@ -191,165 +208,193 @@ export async function exportItemMarketAnalysisExcel(options: ItemMarketExportOpt
     cell.numFmt = i === 5 ? percentFormat : i >= 3 ? numberFormat : quantityFormat;
     cell.font = { bold: true };
   });
-  overview.getCell(26, 1).value = "Source: historic report results under authorized company and location access. Purchase figures are native currency; mixed currencies are not summed. Revenue, cost of sales, and historical profit use report values.";
+  overview.getCell(26, 1).value =
+    "Source: historic report results under authorized company and location access. Purchase figures are native currency; mixed currencies are not summed. Revenue, cost of sales, and historical profit use report values.";
   overview.mergeCells("A26:D27");
   overview.getCell("A26").alignment = { wrapText: true, vertical: "top" };
   overview.getCell("A26").font = { italic: true, color: { argb: "FF555F6B" }, size: 10 };
 
-  addDataSheet("Item Summary", [
-    { header: "Code", key: "code", width: 18 },
-    { header: "Item", key: "name", width: 36 },
-    { header: "Stock Group", key: "stockGroup", width: 24 },
-    { header: "Companies", key: "companyCount", width: 13 },
-    { header: "Company Names", key: "companyNames", width: 45 },
-    { header: "Imports", key: "importCount", width: 12 },
-    { header: "Imported Qty", key: "importedQty", width: 15 },
-    { header: "Purchase Currencies", key: "currencies", width: 22 },
-    { header: "Purchase Value", key: "purchaseValue", width: 18 },
-    { header: "Average Purchase", key: "purchaseAverage", width: 19 },
-    { header: "Purchase + Offloading", key: "purchaseWithOffloading", width: 22 },
-    { header: "Avg Cost + Offloading", key: "averageWithOffloading", width: 22 },
-    { header: "Sold Qty", key: "soldQty", width: 15 },
-    { header: "Avg Sell (USD)", key: "avgSell", width: 18 },
-    { header: "Revenue (USD)", key: "revenue", width: 19 },
-    { header: "Historical Cost (USD)", key: "historicalCost", width: 21 },
-    { header: "Profit (USD)", key: "profit", width: 19 },
-    { header: "Profit / Sold Unit", key: "profitPerUnit", width: 20 },
-    { header: "Margin %", key: "marginPct", width: 14 },
-    { header: "Status", key: "status", width: 14 },
-    { header: "Top Profit Company", key: "topProfitCompany", width: 30 },
-  ], options.groups.map((group) => {
-    // Multiple stock IDs can share a normalized code inside a company.
-    // Match the on-screen comparison: aggregate by company before ranking.
-    const byCompany = new Map<number, { name: string; revenue: number; profit: number }>();
-    for (const row of group.companyRows) {
-      const total = byCompany.get(row.companyId) ?? { name: row.companyName, revenue: 0, profit: 0 };
-      total.revenue += row.revenue;
-      total.profit += row.profit;
-      byCompany.set(row.companyId, total);
-    }
-    const mostProfitable = [...byCompany.values()]
-      .filter((company) => company.revenue > 0 && company.profit > 0)
-      .sort((a, b) => b.profit - a.profit);
-    const winner = mostProfitable.length === 0 ? "None"
-      : mostProfitable.length > 1 && Math.abs(mostProfitable[0].profit - mostProfitable[1].profit) < 0.005
-        ? "Equal" : mostProfitable[0].name;
-    return {
-      code: group.code,
-      name: group.name,
-      stockGroup: group.stockGroupName || "",
-      companyCount: group.companyRows.length,
-      companyNames: group.companyRows.map((row) => row.companyName).join(", "),
-      importCount: group.importCount,
-      importedQty: group.importedQty,
-      currencies: group.purchaseCurrencies.join(", "),
-      purchaseValue: purchaseAmount(group.purchaseValue, group.purchaseCurrencies),
-      purchaseAverage: purchaseAmount(group.weightedPurchaseCost, group.purchaseCurrencies),
-      purchaseWithOffloading: purchaseAmount(group.purchaseValueWithOffloading, group.purchaseCurrencies),
-      averageWithOffloading: purchaseAmount(group.weightedPurchaseCostWithOffloading, group.purchaseCurrencies),
-      soldQty: group.soldQty,
-      avgSell: group.avgSellingPrice,
-      revenue: group.revenue,
-      historicalCost: group.historicalCost,
-      profit: group.profit,
-      profitPerUnit: group.profitPerUnit,
-      marginPct: group.marginPct,
-      status: printableStatus(group.marketStatus),
-      topProfitCompany: winner,
-    };
-  }));
+  addDataSheet(
+    "Item Summary",
+    [
+      { header: "Code", key: "code", width: 18 },
+      { header: "Item", key: "name", width: 36 },
+      { header: "Stock Group", key: "stockGroup", width: 24 },
+      { header: "Companies", key: "companyCount", width: 13 },
+      { header: "Company Names", key: "companyNames", width: 45 },
+      { header: "Imports", key: "importCount", width: 12 },
+      { header: "Imported Qty", key: "importedQty", width: 15 },
+      { header: "Purchase Currencies", key: "currencies", width: 22 },
+      { header: "Purchase Value", key: "purchaseValue", width: 18 },
+      { header: "Average Purchase", key: "purchaseAverage", width: 19 },
+      { header: "Purchase + Offloading", key: "purchaseWithOffloading", width: 22 },
+      { header: "Avg Cost + Offloading", key: "averageWithOffloading", width: 22 },
+      { header: "Sold Qty", key: "soldQty", width: 15 },
+      { header: "Avg Sell (USD)", key: "avgSell", width: 18 },
+      { header: "Revenue (USD)", key: "revenue", width: 19 },
+      { header: "Historical Cost (USD)", key: "historicalCost", width: 21 },
+      { header: "Profit (USD)", key: "profit", width: 19 },
+      { header: "Profit / Sold Unit", key: "profitPerUnit", width: 20 },
+      { header: "Margin %", key: "marginPct", width: 14 },
+      { header: "Status", key: "status", width: 14 },
+      { header: "Top Profit Company", key: "topProfitCompany", width: 30 },
+    ],
+    options.groups.map((group) => {
+      // Multiple stock IDs can share a normalized code inside a company.
+      // Match the on-screen comparison: aggregate by company before ranking.
+      const byCompany = new Map<number, { name: string; revenue: number; profit: number }>();
+      for (const row of group.companyRows) {
+        const total = byCompany.get(row.companyId) ?? { name: row.companyName, revenue: 0, profit: 0 };
+        total.revenue += row.revenue;
+        total.profit += row.profit;
+        byCompany.set(row.companyId, total);
+      }
+      const mostProfitable = [...byCompany.values()]
+        .filter((company) => company.revenue > 0 && company.profit > 0)
+        .sort((a, b) => b.profit - a.profit);
+      const winner =
+        mostProfitable.length === 0
+          ? "None"
+          : mostProfitable.length > 1 && Math.abs(mostProfitable[0].profit - mostProfitable[1].profit) < 0.005
+            ? "Equal"
+            : mostProfitable[0].name;
+      return {
+        code: group.code,
+        name: group.name,
+        stockGroup: group.stockGroupName || "",
+        companyCount: group.companyRows.length,
+        companyNames: group.companyRows.map((row) => row.companyName).join(", "),
+        importCount: group.importCount,
+        importedQty: group.importedQty,
+        currencies: group.purchaseCurrencies.join(", "),
+        purchaseValue: purchaseAmount(group.purchaseValue, group.purchaseCurrencies),
+        purchaseAverage: purchaseAmount(group.weightedPurchaseCost, group.purchaseCurrencies),
+        purchaseWithOffloading: purchaseAmount(group.purchaseValueWithOffloading, group.purchaseCurrencies),
+        averageWithOffloading: purchaseAmount(group.weightedPurchaseCostWithOffloading, group.purchaseCurrencies),
+        soldQty: group.soldQty,
+        avgSell: group.avgSellingPrice,
+        revenue: group.revenue,
+        historicalCost: group.historicalCost,
+        profit: group.profit,
+        profitPerUnit: group.profitPerUnit,
+        marginPct: group.marginPct,
+        status: printableStatus(group.marketStatus),
+        topProfitCompany: winner,
+      };
+    })
+  );
 
-  addDataSheet("Company Item Details", [
-    { header: "Company", key: "companyName", width: 30 },
-    { header: "Company Code", key: "companyCode", width: 16 },
-    { header: "Company ID", key: "companyId", width: 13 },
-    { header: "Item Code", key: "code", width: 18 },
-    { header: "Item Name", key: "name", width: 36 },
-    { header: "Stock Item ID", key: "stockItemId", width: 16 },
-    { header: "Stock Group", key: "stockGroup", width: 24 },
-    { header: "Stock Group ID", key: "stockGroupId", width: 16 },
-    { header: "Imports", key: "importCount", width: 13 },
-    { header: "Imported Qty", key: "importedQty", width: 15 },
-    { header: "Purchase Currencies", key: "currencies", width: 21 },
-    { header: "Purchase Value", key: "purchaseValue", width: 19 },
-    { header: "Average Purchase", key: "purchaseAverage", width: 20 },
-    { header: "Purchase + Offloading", key: "purchaseWithOffloading", width: 22 },
-    { header: "Avg Cost + Offloading", key: "averageWithOffloading", width: 22 },
-    { header: "Sold Qty", key: "soldQty", width: 15 },
-    { header: "Avg Sell (USD)", key: "avgSell", width: 18 },
-    { header: "Revenue (USD)", key: "revenue", width: 18 },
-    { header: "Historical Cost (USD)", key: "historicalCost", width: 22 },
-    { header: "Profit (USD)", key: "profit", width: 20 },
-    { header: "Profit / Sold Unit", key: "profitPerUnit", width: 21 },
-    { header: "Margin %", key: "marginPct", width: 14 },
-    { header: "Status", key: "status", width: 14 },
-  ], options.rows.map((row) => ({
-    companyName: row.companyName,
-    companyCode: row.companyCode,
-    companyId: row.companyId,
-    code: row.code,
-    name: row.name,
-    stockItemId: row.stockItemId,
-    stockGroup: row.stockGroupName || "",
-    stockGroupId: row.stockGroupId,
-    importCount: row.importCount,
-    importedQty: row.importedQty,
-    currencies: row.purchaseCurrencies.join(", "),
-    purchaseValue: purchaseAmount(row.purchaseValue, row.purchaseCurrencies),
-    purchaseAverage: purchaseAmount(row.weightedPurchaseCost, row.purchaseCurrencies),
-    purchaseWithOffloading: purchaseAmount(row.purchaseValueWithOffloading, row.purchaseCurrencies),
-    averageWithOffloading: purchaseAmount(row.weightedPurchaseCostWithOffloading, row.purchaseCurrencies),
-    soldQty: row.soldQty,
-    avgSell: row.avgSellingPrice,
-    revenue: row.revenue,
-    historicalCost: row.historicalCost,
-    profit: row.profit,
-    profitPerUnit: row.profitPerUnit,
-    marginPct: row.marginPct,
-    status: printableStatus(row.marketStatus),
-  })));
+  addDataSheet(
+    "Company Item Details",
+    [
+      { header: "Company", key: "companyName", width: 30 },
+      { header: "Company Code", key: "companyCode", width: 16 },
+      { header: "Company ID", key: "companyId", width: 13 },
+      { header: "Item Code", key: "code", width: 18 },
+      { header: "Item Name", key: "name", width: 36 },
+      { header: "Stock Item ID", key: "stockItemId", width: 16 },
+      { header: "Stock Group", key: "stockGroup", width: 24 },
+      { header: "Stock Group ID", key: "stockGroupId", width: 16 },
+      { header: "Imports", key: "importCount", width: 13 },
+      { header: "Imported Qty", key: "importedQty", width: 15 },
+      { header: "Purchase Currencies", key: "currencies", width: 21 },
+      { header: "Purchase Value", key: "purchaseValue", width: 19 },
+      { header: "Average Purchase", key: "purchaseAverage", width: 20 },
+      { header: "Purchase + Offloading", key: "purchaseWithOffloading", width: 22 },
+      { header: "Avg Cost + Offloading", key: "averageWithOffloading", width: 22 },
+      { header: "Sold Qty", key: "soldQty", width: 15 },
+      { header: "Avg Sell (USD)", key: "avgSell", width: 18 },
+      { header: "Revenue (USD)", key: "revenue", width: 18 },
+      { header: "Historical Cost (USD)", key: "historicalCost", width: 22 },
+      { header: "Profit (USD)", key: "profit", width: 20 },
+      { header: "Profit / Sold Unit", key: "profitPerUnit", width: 21 },
+      { header: "Margin %", key: "marginPct", width: 14 },
+      { header: "Status", key: "status", width: 14 },
+    ],
+    options.rows.map((row) => ({
+      companyName: row.companyName,
+      companyCode: row.companyCode,
+      companyId: row.companyId,
+      code: row.code,
+      name: row.name,
+      stockItemId: row.stockItemId,
+      stockGroup: row.stockGroupName || "",
+      stockGroupId: row.stockGroupId,
+      importCount: row.importCount,
+      importedQty: row.importedQty,
+      currencies: row.purchaseCurrencies.join(", "),
+      purchaseValue: purchaseAmount(row.purchaseValue, row.purchaseCurrencies),
+      purchaseAverage: purchaseAmount(row.weightedPurchaseCost, row.purchaseCurrencies),
+      purchaseWithOffloading: purchaseAmount(row.purchaseValueWithOffloading, row.purchaseCurrencies),
+      averageWithOffloading: purchaseAmount(row.weightedPurchaseCostWithOffloading, row.purchaseCurrencies),
+      soldQty: row.soldQty,
+      avgSell: row.avgSellingPrice,
+      revenue: row.revenue,
+      historicalCost: row.historicalCost,
+      profit: row.profit,
+      profitPerUnit: row.profitPerUnit,
+      marginPct: row.marginPct,
+      status: printableStatus(row.marketStatus),
+    }))
+  );
 
-  addDataSheet("Company Totals", [
-    { header: "Company", key: "companyName", width: 36 },
-    { header: "Company Code", key: "companyCode", width: 16 },
-    { header: "Company ID", key: "companyId", width: 14 },
-    { header: "Items", key: "itemCount", width: 14 },
-    { header: "Imported Qty", key: "importedQty", width: 20 },
-    { header: "Sold Qty", key: "soldQty", width: 17 },
-    { header: "Revenue (USD)", key: "revenue", width: 22 },
-    { header: "Profit (USD)", key: "profit", width: 22 },
-    { header: "Margin %", key: "marginPct", width: 15 },
-  ], options.companySummaries);
+  addDataSheet(
+    "Company Totals",
+    [
+      { header: "Company", key: "companyName", width: 36 },
+      { header: "Company Code", key: "companyCode", width: 16 },
+      { header: "Company ID", key: "companyId", width: 14 },
+      { header: "Items", key: "itemCount", width: 14 },
+      { header: "Imported Qty", key: "importedQty", width: 20 },
+      { header: "Sold Qty", key: "soldQty", width: 17 },
+      { header: "Revenue (USD)", key: "revenue", width: 22 },
+      { header: "Profit (USD)", key: "profit", width: 22 },
+      { header: "Margin %", key: "marginPct", width: 15 },
+    ],
+    options.companySummaries
+  );
 
   const byId = new Map(options.rows.map((row) => [row.companyId + ":" + row.stockItemId, row]));
-  addDataSheet("Sale Price Breakdown", [
-    { header: "Company", key: "companyName", width: 31 },
-    { header: "Item Code", key: "code", width: 19 },
-    { header: "Item Name", key: "name", width: 38 },
-    { header: "Stock Item ID", key: "stockItemId", width: 17 },
-    { header: "Type", key: "activityType", width: 15 },
-    { header: "Sold Price (USD)", key: "unitPrice", width: 20 },
-    { header: "Qty", key: "quantity", width: 17 },
-    { header: "Revenue (USD)", key: "revenue", width: 20 },
-    { header: "Profit (USD)", key: "profit", width: 20 },
-    { header: "Transactions", key: "transactionCount", width: 18 },
-  ], options.salePriceRows.map((row) => {
-    const item = byId.get(row.companyId + ":" + row.stockItemId);
-    return {
-      companyName: item?.companyName ?? "",
-      code: item?.code ?? "",
-      name: item?.name ?? "",
-      stockItemId: row.stockItemId,
-      activityType: row.activityType === "return" ? "Return" : "Sale",
-      unitPrice: row.unitPrice,
-      quantity: row.quantity,
-      revenue: row.revenue,
-      profit: row.profit,
-      transactionCount: row.transactionCount,
-    };
-  }));
+  addDataSheet(
+    "Sale Price Breakdown",
+    [
+      { header: "Company", key: "companyName", width: 31 },
+      { header: "Item Code", key: "code", width: 19 },
+      { header: "Item Name", key: "name", width: 38 },
+      { header: "Stock Item ID", key: "stockItemId", width: 17 },
+      { header: "Type", key: "activityType", width: 15 },
+      { header: "Sold Price (USD)", key: "unitPrice", width: 20 },
+      { header: "Qty", key: "quantity", width: 17 },
+      { header: "Revenue (USD)", key: "revenue", width: 20 },
+      { header: "Profit (USD)", key: "profit", width: 20 },
+      { header: "Transactions", key: "transactionCount", width: 18 },
+    ],
+    options.salePriceRows.map((row) => {
+      const item = byId.get(row.companyId + ":" + row.stockItemId);
+      return {
+        companyName: item?.companyName ?? "",
+        code: item?.code ?? "",
+        name: item?.name ?? "",
+        stockItemId: row.stockItemId,
+        activityType: row.activityType === "return" ? "Return" : "Sale",
+        unitPrice: row.unitPrice,
+        quantity: row.quantity,
+        revenue: row.revenue,
+        profit: row.profit,
+        transactionCount: row.transactionCount,
+      };
+    })
+  );
 
-  const filename = "item_market_analysis_" + safeFilePart(options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + "_companies") +
-    "_" + (options.startDate || "all") + "_to_" + (options.endDate || "all") + ".xlsx";
+  const filename =
+    "item_market_analysis_" +
+    safeFilePart(
+      options.companyNames.length === 1 ? options.companyNames[0] : options.companyNames.length + "_companies"
+    ) +
+    "_" +
+    (options.startDate || "all") +
+    "_to_" +
+    (options.endDate || "all") +
+    ".xlsx";
   await writeFile(workbook, filename);
 }
