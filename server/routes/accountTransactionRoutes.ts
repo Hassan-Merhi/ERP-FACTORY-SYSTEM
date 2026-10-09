@@ -5,13 +5,14 @@
  * employee, customer) with optional date filtering. Extracted from
  * accountRoutes.ts as a sub-registrar; behaviour is unchanged.
  */
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
 import { getClientDate } from "../lib/dateUtils";
 import { buildFactoryCustomerLedgerEntries, getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
@@ -24,7 +25,7 @@ function statementResponse(transactions: unknown[], fields: Record<string, unkno
 
 export function registerAccountTransactionRoutes(app: Express) {
   // Get transactions for a specific ledger account with optional date filtering
-  app.get("/api/accounts/ledger/:id/transactions", requireAuth, async (req, res) => {
+  const readAgentLedgerTransactions = async (req: Request, res: Response) => {
     try {
       const ledgerAccountId = parseInt(req.params.id);
 
@@ -124,10 +125,17 @@ export function registerAccountTransactionRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  };
+  app.get("/api/accounts/ledger/:id/transactions", requireAuth, (req, res) => readAgentLedgerTransactions(req, res));
+  app.get(
+    "/api/factory/agents/ledger/:id/transactions",
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    readAgentLedgerTransactions
+  );
 
   // Get transactions for a specific bank account with optional date filtering
-  app.get("/api/accounts/bank/:id/transactions", requireAuth, async (req, res) => {
+  const readAgentBankTransactions = async (req: Request, res: Response) => {
     try {
       const bankAccountId = parseInt(req.params.id);
       if (isNaN(bankAccountId)) {
@@ -187,10 +195,17 @@ export function registerAccountTransactionRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  };
+  app.get("/api/accounts/bank/:id/transactions", requireAuth, (req, res) => readAgentBankTransactions(req, res));
+  app.get(
+    "/api/factory/agents/bank/:id/transactions",
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    readAgentBankTransactions
+  );
 
   // Get transactions for a specific fixed asset with optional date filtering
-  app.get("/api/accounts/fixed-asset/:id/transactions", requireAuth, async (req, res) => {
+  const readAgentAssetTransactions = async (req: Request, res: Response) => {
     try {
       const fixedAssetId = parseInt(req.params.id);
       if (isNaN(fixedAssetId)) {
@@ -250,7 +265,16 @@ export function registerAccountTransactionRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  };
+  app.get("/api/accounts/fixed-asset/:id/transactions", requireAuth, (req, res) =>
+    readAgentAssetTransactions(req, res)
+  );
+  app.get(
+    "/api/factory/agents/fixed-asset/:id/transactions",
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    readAgentAssetTransactions
+  );
 
   // Get transactions for a specific supplier with optional date filtering
   app.get("/api/accounts/supplier/:id/transactions", requireAuth, async (req, res) => {
@@ -326,7 +350,7 @@ export function registerAccountTransactionRoutes(app: Express) {
   });
 
   // Get transactions for a specific employee with optional date filtering
-  app.get("/api/accounts/employee/:id/transactions", requireAuth, async (req, res) => {
+  const readAgentEmployeeTransactions = async (req: Request, res: Response) => {
     try {
       const employeeId = parseInt(req.params.id);
       if (isNaN(employeeId)) {
@@ -381,7 +405,14 @@ export function registerAccountTransactionRoutes(app: Express) {
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  };
+  app.get("/api/accounts/employee/:id/transactions", requireAuth, readAgentEmployeeTransactions);
+  app.get(
+    "/api/factory/agents/employee/:id/transactions",
+    requireAuth,
+    requireFactoryAgentStatementAccount,
+    readAgentEmployeeTransactions
+  );
 
   // Get transactions for a specific customer (maps customerBalances to voucher-entry format)
   app.get("/api/accounts/customer/:id/transactions", requireAuth, async (req, res) => {

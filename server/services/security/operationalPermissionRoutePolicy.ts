@@ -282,6 +282,7 @@ export const OPERATIONAL_ROUTE_PERMISSIONS: Readonly<Record<OperationalPermissio
   ],
   print: ["POST /api/factory/pressing/create-and-print"],
   excelExport: [
+    "POST /api/reports/item-market-analysis/export-sale-prices",
     "GET /api/factory/location-inventory/:locationId/export/excel",
     "GET /api/factory/location-inventory/export/all",
     "GET /api/factory/suppliers/:id/broker-statement/export",

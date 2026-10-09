@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
 import { sqlArray } from "../../lib/sqlArray";
+import { resolveUnlinkBaleAllocations, type WorkerBaleAllocation } from "@shared/factoryProductionTargetSplit";
 
 export interface ProductionWorkerLinkMember {
   workerId: number;
@@ -126,8 +127,7 @@ export async function createProductionWorkerLink(input: {
         AND m.worker_id = ANY(${sqlArray(workerIds)})
     `);
     const nextEffectiveFromRaw = resultRows(nextConflictResult)[0]?.nextEffectiveFrom;
-    const nextEffectiveFrom =
-      nextEffectiveFromRaw == null ? null : String(nextEffectiveFromRaw);
+    const nextEffectiveFrom = nextEffectiveFromRaw == null ? null : String(nextEffectiveFromRaw);
 
     await tx.execute(sql`
       UPDATE factory_worker_production_links l
@@ -156,9 +156,7 @@ export async function createProductionWorkerLink(input: {
     const linkId = Number(resultRows(linkResult)[0]?.id);
     if (!linkId) throw new Error("Could not create worker link");
 
-    const memberValues = workerIds.map(
-      (workerId) => sql`(${linkId}, ${input.companyId}, ${workerId}, now())`
-    );
+    const memberValues = workerIds.map((workerId) => sql`(${linkId}, ${input.companyId}, ${workerId}, now())`);
     await tx.execute(sql`
       INSERT INTO factory_worker_production_link_members (
         link_id, company_id, worker_id, created_at
@@ -204,6 +202,7 @@ export async function unlinkProductionWorkerLink(input: {
   linkId: number;
   effectiveTo: string;
   createdBy: string | number | null;
+  allocations?: WorkerBaleAllocation[];
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(7319, ${input.companyId})`);
@@ -240,6 +239,9 @@ export async function unlinkProductionWorkerLink(input: {
       ORDER BY worker_id
     `);
     const workerIds = resultRows(membersResult).map((row) => Number(row.workerId));
+    // Validate and calculate before changing the link. Transaction rollback protects
+    // the existing link if allocations are incomplete or over the shared total.
+    const splitByWorker = resolveUnlinkBaleAllocations(sharedTarget, workerIds, input.allocations);
 
     await tx.execute(sql`
       UPDATE factory_worker_production_links
@@ -275,7 +277,7 @@ export async function unlinkProductionWorkerLink(input: {
           company_id, worker_id, effective_from, category, target_bales, created_by, created_at, updated_at
         ) VALUES (
           ${input.companyId}, ${workerId}, ${input.effectiveTo}::date,
-          ${category}, ${sharedTarget}, ${input.createdBy}, now(), now()
+          ${category}, ${splitByWorker.get(workerId) ?? null}, ${input.createdBy}, now(), now()
         )
         ON CONFLICT (company_id, worker_id, effective_from)
         DO UPDATE SET

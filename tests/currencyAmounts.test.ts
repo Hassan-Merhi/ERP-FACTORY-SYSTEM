@@ -23,14 +23,10 @@ import {
   sumNormalizedEntries,
   resolveLegacyTransactionAmounts,
   erpRateToDaybookFxRateToUsd,
+  InvalidExchangeRateError,
   RateConvention,
 } from "../server/services/accounting/currencyAmounts";
-
-// ─── helper ─────────────────────────────────────────────────────────────────
-
-function decimal(v: string | number, dp = 6) {
-  return new Decimal(v).toDecimalPlaces(dp).toFixed(dp);
-}
+import { errorStatus } from "../server/lib/httpHandlers";
 
 // ─── 1. normalizeCurrencyCode ────────────────────────────────────────────────
 
@@ -96,6 +92,20 @@ describe("validateHistoricalRate", () => {
     // This was the original bug — verify it is impossible
     expect(() => validateHistoricalRate(null, "CFA rate")).toThrow(/required/i);
   });
+
+  it("throws a 400 InvalidExchangeRateError that routes answer as a client error", () => {
+    for (const bad of [null, undefined, "", "abc", "0", "-1", "Infinity"]) {
+      let caught: unknown;
+      try {
+        validateHistoricalRate(bad, "historical rate for CFA/USD");
+      } catch (error) {
+        caught = error;
+      }
+      expect(caught).toBeInstanceOf(InvalidExchangeRateError);
+      expect(errorStatus(caught)).toBe(400);
+    }
+    expect(errorStatus(new Error("database down"))).toBe(500);
+  });
 });
 
 // ─── 3. convertTransactionToBase ────────────────────────────────────────────
@@ -134,18 +144,18 @@ describe("normalizeVoucherEntryAmounts", () => {
   // Note: passing "XOF" or "CFA" as transactionCurrency both normalise to "CFA" (project identifier).
   it("TC1 — CFA customer receipt: 1,000,000 CFA @ 600 = 1,666.666667 USD", () => {
     const norm = normalizeVoucherEntryAmounts({
-      transactionCurrency: "XOF",   // normalised to "CFA" on output
+      transactionCurrency: "XOF", // normalised to "CFA" on output
       baseCurrency: "USD",
       transactionDebitAmount: "1000000",
       transactionCreditAmount: "0",
       historicalRate: "600",
     });
-    expect(norm.transactionCurrency).toBe("CFA");   // XOF input → CFA stored
+    expect(norm.transactionCurrency).toBe("CFA"); // XOF input → CFA stored
     expect(norm.transactionDebitAmount).toBe("1000000.000000");
     expect(norm.transactionCreditAmount).toBe("0.000000");
     // base = 1,000,000 / 600 = 1666.666666...
     expect(new Decimal(norm.baseDebitAmount).toDecimalPlaces(6).toFixed(6)).toBe("1666.666667");
-    expect(norm.debitAmount).toBe(norm.baseDebitAmount);   // backward compat
+    expect(norm.debitAmount).toBe(norm.baseDebitAmount); // backward compat
     expect(norm.rateConvention).toBe(RateConvention.TRANSACTION_PER_BASE);
     expect(norm.historicalExchangeRate).toBe("600.0000000000");
   });
@@ -199,9 +209,9 @@ describe("normalizeVoucherEntryAmounts", () => {
     const atNewRate = normalizeVoucherEntryAmounts({
       transactionCurrency: "XOF",
       baseCurrency: "USD",
-      transactionDebitAmount: "1200000",  // unchanged
+      transactionDebitAmount: "1200000", // unchanged
       transactionCreditAmount: "0",
-      historicalRate: "620",              // new rate
+      historicalRate: "620", // new rate
     });
     // CFA amount unchanged
     expect(atNewRate.transactionDebitAmount).toBe(atOriginal.transactionDebitAmount);
@@ -264,7 +274,7 @@ describe("normalizeVoucherEntryAmounts", () => {
         baseCurrency: "USD",
         transactionDebitAmount: "500000",
         transactionCreditAmount: "0",
-        historicalRate: null,  // ← must throw, not silently use 1
+        historicalRate: null, // ← must throw, not silently use 1
       })
     ).toThrow();
   });
@@ -278,9 +288,9 @@ describe("normalizeVoucherEntryAmounts", () => {
     const norm = normalizeVoucherEntryAmounts({
       transactionCurrency: "XOF",
       baseCurrency: "USD",
-      transactionDebitAmount: "600",  // 600 CFA
+      transactionDebitAmount: "600", // 600 CFA
       transactionCreditAmount: "0",
-      historicalRate: "0.00167",      // wrong convention (this is USD per CFA, not CFA per USD)
+      historicalRate: "0.00167", // wrong convention (this is USD per CFA, not CFA per USD)
     });
     // With a wrong tiny rate: 600 / 0.00167 ≈ 359,281 USD for 600 CFA — obviously wrong
     // The test documents that the convention mismatch is detectable from the stored fields.
@@ -349,14 +359,14 @@ describe("Mixed USD+CFA customer transactions — TC7", () => {
     const cfaEntry = normalizeVoucherEntryAmounts({
       transactionCurrency: "XOF",
       baseCurrency: "USD",
-      transactionDebitAmount: "600000",  // CFA invoice
+      transactionDebitAmount: "600000", // CFA invoice
       transactionCreditAmount: "0",
-      historicalRate: "600",             // rate at posting time
+      historicalRate: "600", // rate at posting time
     });
     const usdEntry = normalizeVoucherEntryAmounts({
       transactionCurrency: "USD",
       baseCurrency: "USD",
-      transactionDebitAmount: "500",     // USD invoice
+      transactionDebitAmount: "500", // USD invoice
       transactionCreditAmount: "0",
       historicalRate: null,
     });
@@ -410,7 +420,7 @@ describe("erpRateToDaybookFxRateToUsd", () => {
 describe("resolveLegacyTransactionAmounts", () => {
   it("already-repaired rows return null", () => {
     const result = resolveLegacyTransactionAmounts({
-      existingTransactionCurrency: "CFA",  // project identifier, not "XOF"
+      existingTransactionCurrency: "CFA", // project identifier, not "XOF"
       voucherCurrency: "XOF",
       baseCurrency: "USD",
       storedDebitAmount: "1666.67",
@@ -438,7 +448,7 @@ describe("resolveLegacyTransactionAmounts", () => {
   it("CFA voucher: transaction = base × rate", () => {
     const result = resolveLegacyTransactionAmounts({
       existingTransactionCurrency: null,
-      voucherCurrency: "CFA",  // project alias
+      voucherCurrency: "CFA", // project alias
       baseCurrency: "USD",
       storedDebitAmount: "1666.666667",
       storedCreditAmount: "0",
@@ -551,7 +561,7 @@ describe("Payment entry — dual-currency fields round-trip", () => {
       baseCurrency: "USD",
       transactionDebitAmount: "720000",
       transactionCreditAmount: "0",
-      historicalRate: "600",  // preserved from the original posting
+      historicalRate: "600", // preserved from the original posting
     });
     expect(edited.historicalExchangeRate).toBe(original.historicalExchangeRate);
     expect(new Decimal(edited.baseDebitAmount).toFixed(2)).toBe("1200.00");
@@ -578,13 +588,17 @@ describe("POS CFA entry normalization — simulates normalizePosEntry logic", ()
   it("SP sale split: payable 1,350,000 CFA + deduction 150,000 CFA = total 1,500,000 CFA", () => {
     // Verify the credits sum back to the total
     const payable = normalizeVoucherEntryAmounts({
-      transactionCurrency: "CFA", baseCurrency: "USD",
-      transactionDebitAmount: "0", transactionCreditAmount: "1350000",
+      transactionCurrency: "CFA",
+      baseCurrency: "USD",
+      transactionDebitAmount: "0",
+      transactionCreditAmount: "1350000",
       historicalRate: "600",
     });
     const deduction = normalizeVoucherEntryAmounts({
-      transactionCurrency: "CFA", baseCurrency: "USD",
-      transactionDebitAmount: "0", transactionCreditAmount: "150000",
+      transactionCurrency: "CFA",
+      baseCurrency: "USD",
+      transactionDebitAmount: "0",
+      transactionCreditAmount: "150000",
       historicalRate: "600",
     });
     const totalBaseCr = new Decimal(payable.baseCreditAmount).plus(deduction.baseCreditAmount);
