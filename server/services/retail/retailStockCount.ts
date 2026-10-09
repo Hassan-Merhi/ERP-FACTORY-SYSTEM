@@ -170,6 +170,30 @@ export async function createRetailStockCountSession(input: {
     if (!location)
       throw new RetailStockCountValidationError("Location is not active or does not belong to the company");
 
+    // Serialize count creation for this location. Both the conflict check and
+    // insert must run under the same lock or two registers can start a stale count.
+    await tx.execute(
+      sql`select id from locations where id = ${input.locationId} and company_id = ${input.companyId} for update`
+    );
+    const [openCount] = await tx
+      .select({ id: retailStockCountSessions.id })
+      .from(retailStockCountSessions)
+      .where(
+        and(
+          eq(retailStockCountSessions.companyId, input.companyId),
+          eq(retailStockCountSessions.locationId, input.locationId),
+          inArray(retailStockCountSessions.status, ["draft", "counting", "review"])
+        )
+      )
+      .limit(1);
+    if (openCount) {
+      throw new RetailStockCountConflictError(
+        "Another stock count is already open for this location. Finish or cancel it first.",
+        "STOCK_COUNT_LOCATION_ALREADY_OPEN",
+        { sessionId: openCount.id }
+      );
+    }
+
     const [inserted] = await tx
       .insert(retailStockCountSessions)
       .values({
