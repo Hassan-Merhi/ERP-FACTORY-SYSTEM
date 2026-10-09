@@ -21,6 +21,7 @@ import {
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
+import { insertStockAdjustmentLedgerEntriesTx } from "./adjustmentLedgerEntries";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -348,15 +349,21 @@ export async function updateStockAdjustment(
 
     if (!isOptional) {
       // Older adjustment edits used separate production/consumption accounts;
-      // the current create/update path posts both through STOCK_ADJUSTMENT. Clean
-      // all three codes so repeated edits cannot accumulate duplicate entries.
+      // the current create/update path posts both through STOCK_ADJUSTMENT and
+      // balances each side against INVENTORY. Clean all four codes so repeated
+      // edits cannot accumulate duplicate entries.
       const generatedAccounts = await tx
         .select({ id: schema.ledgerAccounts.id })
         .from(schema.ledgerAccounts)
         .where(
           and(
             eq(schema.ledgerAccounts.companyId, location.companyId),
-            inArray(schema.ledgerAccounts.code, ["STOCK_ADJUSTMENT", "PRODUCTION_ADJUSTMENT", "CONSUMPTION_EXPENSE"]),
+            inArray(schema.ledgerAccounts.code, [
+              "STOCK_ADJUSTMENT",
+              "PRODUCTION_ADJUSTMENT",
+              "CONSUMPTION_EXPENSE",
+              "INVENTORY",
+            ]),
             isNull(schema.ledgerAccounts.deletedAt)
           )
         );
@@ -443,17 +450,14 @@ export async function updateStockAdjustment(
       return account.id;
     };
 
-    let productionAccountId: number | null = null;
-    let consumptionAccountId: number | null = null;
+    let adjustmentAccountId: number | null = null;
     if (!isOptional) {
-      const adjustmentAccountId = await findOrCreateAdjustmentAccount(
+      adjustmentAccountId = await findOrCreateAdjustmentAccount(
         "STOCK_ADJUSTMENT",
         "Stock Adjustment (Production/Consumption)",
         "Indirect Expense",
         "Dr"
       );
-      productionAccountId = adjustmentAccountId;
-      consumptionAccountId = adjustmentAccountId;
     }
 
     let totalProductionValue = toInventoryDecimal(0);
@@ -607,24 +611,14 @@ export async function updateStockAdjustment(
     }
 
     if (!isOptional) {
-      if (totalProductionValue.isPositive() && productionAccountId) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId: existingAdjustment.voucherId,
-          ledgerAccountId: productionAccountId,
-          debitAmount: "0",
-          creditAmount: inventoryMoney(totalProductionValue),
-          narration: `Production adjustment - ${adjustmentType} voucher`,
-        });
-      }
-      if (totalConsumptionValue.isPositive() && consumptionAccountId) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId: existingAdjustment.voucherId,
-          ledgerAccountId: consumptionAccountId,
-          debitAmount: inventoryMoney(totalConsumptionValue),
-          creditAmount: "0",
-          narration: `Consumption expense - ${adjustmentType} voucher`,
-        });
-      }
+      await insertStockAdjustmentLedgerEntriesTx(tx, {
+        voucherId: existingAdjustment.voucherId,
+        companyId: newLocation.companyId,
+        adjustmentAccountId,
+        adjustmentType,
+        productionValue: totalProductionValue,
+        consumptionValue: totalConsumptionValue,
+      });
     }
 
     const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
