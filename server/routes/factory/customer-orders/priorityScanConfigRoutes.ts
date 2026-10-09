@@ -62,26 +62,35 @@ function sendPriorityConflict(res: Response, constraint: string | null) {
 }
 
 async function disableStalePriorityScanConfigs(companyId: number): Promise<void> {
-  // A finished/cancelled/deleted loading must never keep a color or priority
-  // reserved forever. Cleanup runs before queue reads and writes so the active
-  // uniqueness constraints continue to describe the pending-loading queue.
-  await db.execute(sql`
-    UPDATE customer_order_priority_scan_configs AS config
-    SET enabled = FALSE,
-        updated_by = NULL,
-        updated_by_name = 'system',
-        updated_at = now()
-    FROM customer_orders AS order_row
-    WHERE config.order_id = order_row.id
-      AND config.company_id = ${companyId}
-      AND order_row.company_id = ${companyId}
-      AND config.enabled = TRUE
-      AND (
-        order_row.status <> 'LOADING'
-        OR order_row.deleted_at IS NOT NULL
-        OR order_row.proforma_id_used IS NULL
-      )
-  `);
+  // Stale cleanup is a QUEUE WRITE, even when triggered by a GET request.
+  // Serialize it with stock-entry routing, manual scan, deletion/recovery,
+  // and configuration edits. A read must never race a queue rewrite.
+  await db.transaction(async tx => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+    const disabled = await tx.execute(sql`
+      UPDATE customer_order_priority_scan_configs AS config
+      SET enabled = FALSE,
+          updated_by = NULL,
+          updated_by_name = 'system:stale-disabled',
+          updated_at = now()
+      FROM customer_orders AS order_row
+      WHERE config.order_id = order_row.id
+        AND config.company_id = ${companyId}
+        AND order_row.company_id = ${companyId}
+        AND config.enabled = TRUE
+        AND (
+          order_row.status <> 'LOADING'
+          OR order_row.deleted_at IS NOT NULL
+          OR order_row.proforma_id_used IS NULL
+        )
+      RETURNING config.id
+    `);
+    if (resultRows(disabled).length === 0) return;
+    const active = await loadActivePriorityRows(tx, companyId);
+    await rewriteActivePriorityQueue(
+      tx, companyId, active.map(row => row.id), null, "system:stale-compact"
+    );
+  });
 }
 
 class PriorityScanConfigError extends Error {
