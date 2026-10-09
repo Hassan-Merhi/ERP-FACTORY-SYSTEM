@@ -29,6 +29,7 @@ import {
 import { isRetailWave1Text, translateRetailWave1Text } from "@/i18n/retailWave1Translations";
 import { isRetailWave2Text, translateRetailWave2Text } from "@/i18n/retailWave2Translations";
 import { isRetailWave3Text, translateRetailWave3Text } from "@/i18n/retailWave3Translations";
+import { isRetailFinancialText, translateRetailFinancialText } from "@/i18n/retailFinancialTranslations";
 import { isRetailFashionText, translateRetailFashionText } from "@/i18n/retailFashionTranslations";
 import { isWave8ReleaseText, translateWave8ReleaseText } from "@/i18n/wave8ReleaseTranslations";
 import { isPayrollUiText, translatePayrollUiText } from "@/i18n/payrollUiTranslations";
@@ -118,6 +119,7 @@ function isApprovedNonVisualText(value: string): boolean {
     isRetailWave1Text(value) ||
     isRetailWave2Text(value) ||
     isRetailWave3Text(value) ||
+    isRetailFinancialText(value) ||
     isRetailFashionText(value) ||
     isWave8ReleaseText(value) ||
     isPayrollUiText(value)
@@ -131,6 +133,7 @@ export function translateApprovedInterfaceText(value: string, language: Applicat
     translateRetailWave1Text(value, language) ??
     translateRetailWave2Text(value, language) ??
     translateRetailWave3Text(value, language) ??
+    translateRetailFinancialText(value, language) ??
     translateRetailFashionText(value, language) ??
     translateWave8ReleaseText(value, language) ??
     translatePayrollUiText(value, language) ??

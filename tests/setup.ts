@@ -159,6 +159,11 @@ export async function cleanupTestData(prefix: string): Promise<void> {
     await pool.query("DELETE FROM fiscal_period_closures WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM audit_log WHERE company_id = $1", [company.id]);
     await pool.query("DELETE FROM login_history WHERE company_id = $1", [company.id]);
+    // Retail Wave 1 financial rows reference shifts, locations, ledger/bank accounts,
+    // sales and users. Clear them before the shared parents are torn down.
+    await pool.query("DELETE FROM retail_cash_movements WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM retail_pos_payments WHERE company_id = $1", [company.id]);
+    await pool.query("DELETE FROM retail_accounting_settings WHERE company_id = $1", [company.id]);
     await db.delete(schema.inventory).where(eq(schema.inventory.companyId, company.id));
     await db
       .delete(schema.salesItems)
