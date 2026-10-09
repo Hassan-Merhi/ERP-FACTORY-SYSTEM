@@ -1,59 +1,111 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { factoryApiRequest } from "@/lib/factoryApi";
+import { companyQueryKey } from "@/lib/companyQueryScope";
+import { useCompany } from "@/contexts/CompanyContext";
 import { useToast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 const URL = "/api/factory/automatic-priority-mode";
 
+type ModeResponse = {
+  enabled: boolean;
+  canEdit: boolean;
+  changed?: boolean;
+};
+
 /**
- * Operational feature flag; intentionally separate from the bulk "Enable All"
- * settings action. OFF only affects future automatic allocations.
+ * Operational feature flag, deliberately independent of the "Enable All" and
+ * "Save Settings" controls. Existing allocations survive switching it OFF.
  */
 export function AutomaticPriorityPrintingCard() {
   const queryClient = useQueryClient();
+  const { selectedCompany } = useCompany();
   const { toast } = useToast();
-  const { data, isLoading } = useQuery<{ enabled: boolean }>({
-    queryKey: [URL],
-    queryFn: async () => (await apiRequest("GET", URL)).json(),
+  const companyId = selectedCompany?.id ?? null;
+  const queryKey = companyQueryKey(URL, companyId);
+  const { data, isPending, isError, refetch } = useQuery<ModeResponse>({
+    queryKey,
+    queryFn: async () => {
+      const response = await factoryApiRequest("GET", URL);
+      if (!response.ok) throw new Error("Could not load Automatic Priority Printing setting");
+      return response.json();
+    },
+    enabled: companyId !== null,
     staleTime: 0,
+    refetchOnWindowFocus: true,
   });
-  const { data: user } = useQuery<{ currentRole?: string; role?: string }>({
-    queryKey: ["/api/auth/me"],
-  });
-  const role = (user?.currentRole || user?.role || "").toLowerCase();
-  const allowed = ["admin", "owner", "developer"].includes(role);
   const mutation = useMutation({
-    mutationFn: async (enabled: boolean) => (await apiRequest("PUT", URL, { enabled })).json(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [URL] });
-      queryClient.invalidateQueries({ queryKey: ["/api/factory/settings"] });
-      toast({ title: "Automatic Priority Printing setting saved" });
+    mutationFn: async (enabled: boolean): Promise<ModeResponse> => {
+      const response = await factoryApiRequest("PUT", URL, { enabled });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({ message: "Setting update failed" }));
+        throw new Error(body.message || "Setting update failed");
+      }
+      return response.json();
+    },
+    onSuccess: (updated) => {
+      // Never locally flip the switch before the server confirms the commit.
+      queryClient.setQueryData(queryKey, (previous: ModeResponse | undefined) =>
+        previous ? { ...previous, enabled: updated.enabled } : updated
+      );
+      void queryClient.invalidateQueries({ queryKey: [URL] });
+      void queryClient.invalidateQueries({ queryKey: ["/api/factory/settings"] });
+      toast({ title: updated.enabled ? "Automatic Priority Printing enabled" : "Automatic Priority Printing disabled" });
     },
     onError: (error: Error) => {
-      toast({ title: "Cannot update automatic printing", description: error.message, variant: "destructive" });
+      toast({ title: "Could not change automatic printing", description: error.message, variant: "destructive" });
     },
   });
+
+  const canEdit = data?.canEdit === true;
+  const isDisabled = companyId === null || isPending || isError || mutation.isPending || !canEdit;
+  const enabled = data?.enabled === true;
+
   return (
-    <Card>
+    <Card data-testid="automatic-priority-mode-card">
       <CardHeader>
-        <CardTitle>Automatic Priority Printing & Loading</CardTitle>
+        <CardTitle>Automatic Priority Printing &amp; Loading</CardTitle>
         <CardDescription>
-          When enabled, newly printed or eligible reprinted factory bales are automatically assigned
-          to the highest-priority loading that still needs their article. Turning this off restores
-          ordinary printing for future actions and does not reverse earlier allocations.
+          When ON, eligible new and reprinted bales are automatically allocated to their highest-priority
+          loading. When OFF, future prints follow the original workflow. Existing allocations and their
+          original colors are never reversed by this switch.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex items-center justify-between gap-4">
-        <Label htmlFor="automatic-priority-mode">Automatic allocation on Print</Label>
-        <Switch
-          id="automatic-priority-mode"
-          data-testid="switch-automatic-priority-mode"
-          checked={data?.enabled === true}
-          disabled={!allowed || isLoading || mutation.isPending}
-          onCheckedChange={(enabled) => mutation.mutate(enabled)}
-        />
+      <CardContent className="space-y-3">
+        <div className="flex items-center justify-between gap-4">
+          <Label htmlFor="automatic-priority-mode" className="cursor-pointer">
+            Automatic loading on printing
+          </Label>
+          <Switch
+            id="automatic-priority-mode"
+            data-testid="switch-automatic-priority-mode"
+            aria-label="Automatic Priority Printing and Loading"
+            checked={enabled}
+            disabled={isDisabled}
+            onCheckedChange={(nextEnabled) => mutation.mutate(nextEnabled)}
+          />
+        </div>
+        {isError ? (
+          <div className="flex items-center justify-between gap-2 text-sm text-destructive" role="alert">
+            <span>Unable to read the current setting. No changes are allowed until it loads.</span>
+            <Button variant="outline" size="sm" onClick={() => void refetch()}>Retry</Button>
+          </div>
+        ) : isPending || !companyId ? (
+          <p className="text-xs text-muted-foreground">Loading company setting…</p>
+        ) : !canEdit ? (
+          <p className="text-xs text-muted-foreground">
+            Only Admin, Owner, or Developer users can change this company-wide setting.
+          </p>
+        ) : (
+          <p className="text-xs text-muted-foreground" data-testid="automatic-priority-mode-status">
+            {enabled
+              ? "ON — future eligible prints use automatic loading."
+              : "OFF — current printing and manual Priority Scan remain unchanged."}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
