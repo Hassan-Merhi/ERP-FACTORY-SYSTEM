@@ -368,6 +368,8 @@ export async function settleRetailSaleTx(
     saleId: number;
     saleIdempotencyKey: string;
     totalAmount: number;
+    /** Tax included in totalAmount; credited to tax payable instead of revenue. */
+    taxAmount?: number;
     totalCost: number;
     userId: string;
     username?: string | null;
@@ -436,6 +438,8 @@ export async function settleRetailSaleTx(
 
   const saleAccountingAmount = new Decimal(accountingMoney(saleTotal));
   const costAccountingAmount = new Decimal(accountingMoney(totalCost));
+  const taxAccountingAmount = Decimal.min(saleAccountingAmount, new Decimal(accountingMoney(input.taxAmount ?? 0)));
+  const revenueAccountingAmount = saleAccountingAmount.minus(taxAccountingAmount);
   const paymentAccountingAmounts = allocateAccountingAmounts(
     resolved.map((payment) => payment.amount),
     saleAccountingAmount
@@ -449,14 +453,24 @@ export async function settleRetailSaleTx(
       creditAmount: "0",
       narration: `Retail sale #${input.saleId} · ${payment.method}`,
     })),
-    ...(saleAccountingAmount.isZero()
+    ...(revenueAccountingAmount.isZero()
       ? []
       : [
           {
             ledgerAccountId: settings.salesRevenueLedgerAccountId,
             debitAmount: "0",
-            creditAmount: saleAccountingAmount.toFixed(2),
+            creditAmount: revenueAccountingAmount.toFixed(2),
             narration: `Retail sale #${input.saleId} · revenue`,
+          },
+        ]),
+    ...(taxAccountingAmount.isZero()
+      ? []
+      : [
+          {
+            ledgerAccountId: settings.taxPayableLedgerAccountId,
+            debitAmount: "0",
+            creditAmount: taxAccountingAmount.toFixed(2),
+            narration: `Retail sale #${input.saleId} · tax`,
           },
         ]),
     ...(costAccountingAmount.isZero()
@@ -672,6 +686,8 @@ export async function postRetailRefundAccountingTx(
     sourceId: string;
     idempotencyKey: string;
     refundAmount: number;
+    /** Tax included in refundAmount; debited to tax payable instead of revenue. */
+    refundTaxAmount?: number;
     restoredCost: number;
     refunds: RetailResolvedPayment[];
     userId: string;
@@ -694,6 +710,11 @@ export async function postRetailRefundAccountingTx(
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
   const refundAccountingAmount = new Decimal(accountingMoney(refundTotal));
   const restoredCostAccountingAmount = new Decimal(accountingMoney(restoredCost));
+  const refundTaxAccountingAmount = Decimal.min(
+    refundAccountingAmount,
+    new Decimal(accountingMoney(input.refundTaxAmount ?? 0))
+  );
+  const refundRevenueAccountingAmount = refundAccountingAmount.minus(refundTaxAccountingAmount);
   const refundPaymentAccountingAmounts = allocateAccountingAmounts(
     input.refunds.map((payment) => payment.amount),
     refundAccountingAmount
@@ -702,12 +723,26 @@ export async function postRetailRefundAccountingTx(
     ...(refundAccountingAmount.isZero()
       ? []
       : [
-          {
-            ledgerAccountId: settings.salesRevenueLedgerAccountId,
-            debitAmount: refundAccountingAmount.toFixed(2),
-            creditAmount: "0",
-            narration: `Retail sale #${input.saleId} · refund revenue reversal`,
-          },
+          ...(refundRevenueAccountingAmount.isZero()
+            ? []
+            : [
+                {
+                  ledgerAccountId: settings.salesRevenueLedgerAccountId,
+                  debitAmount: refundRevenueAccountingAmount.toFixed(2),
+                  creditAmount: "0",
+                  narration: `Retail sale #${input.saleId} · refund revenue reversal`,
+                },
+              ]),
+          ...(refundTaxAccountingAmount.isZero()
+            ? []
+            : [
+                {
+                  ledgerAccountId: settings.taxPayableLedgerAccountId,
+                  debitAmount: refundTaxAccountingAmount.toFixed(2),
+                  creditAmount: "0",
+                  narration: `Retail sale #${input.saleId} · refund tax reversal`,
+                },
+              ]),
           ...input.refunds.map((payment, index) => ({
             ...(payment.bankAccountId
               ? { bankAccountId: payment.bankAccountId }

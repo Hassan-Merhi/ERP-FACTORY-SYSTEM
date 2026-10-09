@@ -122,7 +122,34 @@ export function setLastSynced(): void {
 const NEVER_QUEUE_PATTERNS: RegExp[] = [
   /^\/api\/factory\/raw-stock\/recalc(?:\/|$)/,
   /^\/api\/factory\/raw-stock\/\d+\/assign-to-bales$/,
+  // Credential-bearing endpoints. A manager approval or a password change must be typed
+  // again while online; replaying a stored secret hours later is both stale and unsafe.
+  /^\/api\/pos\/retail\/discount-approvals$/,
+  /^\/api\/auth\/(?:login|logout|change-password)$/,
+  /^\/api\/user\/change-password$/,
 ];
+
+/**
+ * Payload keys that must never be persisted to localStorage. The queue only stores
+ * JSON request bodies, so a defensive scan keeps a future allow-listed endpoint from
+ * dropping a password, API token or card secret into clear-text browser storage.
+ */
+const SENSITIVE_PAYLOAD_KEY =
+  /^(?:password|passwd|pwd|oldPassword|currentPassword|newPassword|confirmPassword|managerPassword|supervisorPassword|passwordHash|authorization|apiKey|apiToken|accessToken|refreshToken|clientSecret|secret|cvv|cardNumber|pin)$/i;
+
+/**
+ * True when a request payload carries credentials anywhere in its JSON shape.
+ * The scan is depth-limited because request bodies are shallow by construction.
+ */
+export function containsSensitiveCredentials(value: unknown, depth = 0): boolean {
+  if (depth > 6 || value === null || typeof value !== "object") return false;
+  if (Array.isArray(value)) {
+    return value.some((entry) => containsSensitiveCredentials(entry, depth + 1));
+  }
+  return Object.entries(value as Record<string, unknown>).some(
+    ([key, entry]) => SENSITIVE_PAYLOAD_KEY.test(key) || containsSensitiveCredentials(entry, depth + 1)
+  );
+}
 
 const SAFE_PATTERNS: Array<{ method: string; pattern: RegExp }> = [
   { method: "POST", pattern: /^\/api\/auth\/set-company$/ },

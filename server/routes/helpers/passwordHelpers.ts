@@ -29,3 +29,14 @@ export async function verifyPassword(
   const isValid = await bcrypt.compare(password, hash);
   return { valid: isValid, needsMigration: false };
 }
+
+/**
+ * bcrypt-only verification for privileged confirmations (manager discount approvals).
+ * Legacy SHA-256 hashes are refused rather than compared with a weak digest, so the
+ * approval path never touches the legacy fallback. Affected managers reset their
+ * password once and can approve again.
+ */
+export async function verifyPasswordBcryptOnly(password: string, hash: string): Promise<boolean> {
+  if (isLegacySHA256Hash(hash)) return false;
+  return bcrypt.compare(password, hash);
+}
