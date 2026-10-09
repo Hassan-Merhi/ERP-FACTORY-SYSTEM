@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   retailBrands,
+  retailDiscountApprovals,
   retailPosReturnItems,
   retailPosReturns,
   retailPosSaleItems,
@@ -8,16 +9,16 @@ import {
   retailProductVariants,
   retailProducts,
 } from "@shared/schema";
-import { db } from "../../db";
+import type { RetailLineDiscountInputType, RetailOrderDiscountInput, RetailPricedCart } from "./retailPricing";
+import { priceRetailCart, roundRetailMoney } from "./retailPricing";
+import { RetailApprovalReuseError } from "./retailDiscountApproval";
+import { bestPromotionForLine, type RetailPromotionRow } from "./retailPromotions";
+import { DEFAULT_RETAIL_SELLING_SETTINGS, type RetailSellingSettings } from "./retailSettings";
 import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
+import { nextRetailReturnQuantity, nextRetailSaleQuantity, validateRetailReturnQuantity } from "./retailStockMath";
+import { db } from "../../db";
 import { settleRetailSaleTx, type RetailPaymentInput } from "./retailFinancialService";
 import { loadRetailSalePayments } from "./retailFinancialQueries";
-import {
-  nextRetailReturnQuantity,
-  nextRetailSaleQuantity,
-  validateRetailReturnQuantity,
-  type RetailCartItemInput,
-} from "./retailStockMath";
 
 function toNumber(value: string | number | null | undefined): number {
   const parsed = Number(value ?? 0);
@@ -47,7 +48,18 @@ export async function loadSaleResponse(companyId: number, saleId: number) {
       variantId: retailPosSaleItems.variantId,
       quantity: retailPosSaleItems.quantity,
       returnedQuantity: retailPosSaleItems.returnedQuantity,
+      originalUnitPrice: retailPosSaleItems.originalUnitPrice,
       unitPrice: retailPosSaleItems.unitPrice,
+      grossUnitPrice: retailPosSaleItems.grossUnitPrice,
+      lineDiscountAmount: retailPosSaleItems.lineDiscountAmount,
+      lineDiscountType: retailPosSaleItems.lineDiscountType,
+      lineDiscountValue: retailPosSaleItems.lineDiscountValue,
+      discountReason: retailPosSaleItems.discountReason,
+      priceOverride: retailPosSaleItems.priceOverride,
+      promotionId: retailPosSaleItems.promotionId,
+      taxAmount: retailPosSaleItems.taxAmount,
+      lineTotal: retailPosSaleItems.lineTotal,
+      approvedByUserId: retailPosSaleItems.approvedByUserId,
       name: retailProducts.name,
       code: retailProducts.code,
       color: retailProductVariants.color,
@@ -66,8 +78,24 @@ export async function loadSaleResponse(companyId: number, saleId: number) {
   const payments = await loadRetailSalePayments(companyId, saleId);
   return {
     ...sale,
-    totalAmount: toNumber(sale.totalAmount),
     payments,
+    customerId: sale.customerId ?? null,
+    customerName: sale.customerName ?? "Walk-in",
+    listSubtotal: toNumber(sale.listSubtotal),
+    discountTotal: toNumber(sale.discountTotal),
+    subtotal: toNumber(sale.subtotal),
+    orderDiscountType: sale.orderDiscountType ?? "none",
+    orderDiscountValue: toNumber(sale.orderDiscountValue),
+    orderDiscountAmount: toNumber(sale.orderDiscountAmount),
+    orderDiscountReason: sale.orderDiscountReason ?? null,
+    taxEnabled: Boolean(sale.taxEnabled),
+    taxLabel: sale.taxLabel ?? "Tax",
+    taxRate: toNumber(sale.taxRate),
+    taxInclusive: Boolean(sale.taxInclusive),
+    taxAmount: toNumber(sale.taxAmount),
+    totalAmount: toNumber(sale.totalAmount),
+    approvedByUserId: sale.approvedByUserId ?? null,
+    approvedByName: sale.approvedByName ?? null,
     items: items.map((item) => {
       const { variantImageUrls, productImageUrls, ...rest } = item;
       return {
@@ -75,7 +103,13 @@ export async function loadSaleResponse(companyId: number, saleId: number) {
         imageUrls: resolveRetailItemImages(variantImageUrls, productImageUrls),
         quantity: toNumber(item.quantity),
         returnedQuantity: toNumber(item.returnedQuantity),
+        originalUnitPrice: toNumber(item.originalUnitPrice) || toNumber(item.unitPrice),
         unitPrice: toNumber(item.unitPrice),
+        grossUnitPrice: toNumber(item.grossUnitPrice) || toNumber(item.unitPrice),
+        lineDiscountAmount: toNumber(item.lineDiscountAmount),
+        lineDiscountValue: toNumber(item.lineDiscountValue),
+        taxAmount: toNumber(item.taxAmount),
+        lineTotal: toNumber(item.lineTotal) || roundRetailMoney(toNumber(item.unitPrice) * toNumber(item.quantity)),
         brand: item.brand ?? "Other / No Brand",
       };
     }),
@@ -114,22 +148,142 @@ export async function ensureRetailVariant(executor: Pick<typeof db, "select">, c
   return variant;
 }
 
+export interface RetailSaleLineRequest {
+  variantId: number;
+  quantity: number;
+  priceOverride?: number | null;
+  discountType?: RetailLineDiscountInputType | null;
+  discountValue?: number | null;
+  discountReason?: string | null;
+}
+
+export interface RetailSaleApprovalSnapshot {
+  approvalId: number | null;
+  approvedByUserId: string | null;
+  approvedByName: string | null;
+}
+
 export interface RetailSaleInput {
   companyId: number;
   locationId: number;
   idempotencyKey: string;
   notes?: string | null;
-  items: RetailCartItemInput[];
+  items: RetailSaleLineRequest[];
   userId: string;
   username?: string | null;
   canSellNegativeStock: boolean;
   shiftId?: number | null;
   payments?: RetailPaymentInput[];
+  customer?: { id: number | null; name: string } | null;
+  orderDiscount?: RetailOrderDiscountInput | null;
+  /** Company selling settings snapshot (tax + policy). Defaults to Wave 1 behaviour. */
+  settings?: RetailSellingSettings | null;
+  /** Active promotions for the company; the best match per line is applied automatically. */
+  promotions?: RetailPromotionRow[] | null;
+  approval?: RetailSaleApprovalSnapshot | null;
+}
+
+export interface RetailSaleVariantRow {
+  id: number;
+  productId: number;
+  brandId: number | null;
+  color: string;
+  size: string;
+  sellingPrice: string | number;
+  cost: string | number;
+  productName: string;
+}
+
+export interface RetailSalePricingInput {
+  companyId: number;
+  items: RetailSaleLineRequest[];
+  orderDiscount?: RetailOrderDiscountInput | null;
+  settings?: RetailSellingSettings | null;
+  promotions?: RetailPromotionRow[] | null;
+}
+
+/**
+ * Loads the requested variants from the database and prices the cart exactly the way
+ * checkout will. Routes use it to evaluate the approval policy before writing anything;
+ * `createRetailSaleInTx` re-runs it inside the transaction so the snapshot is authoritative.
+ */
+export async function prepareRetailSalePricing(
+  executor: Pick<typeof db, "select">,
+  input: RetailSalePricingInput
+): Promise<{ priced: RetailPricedCart; variantsById: Map<number, RetailSaleVariantRow> }> {
+  const settings = input.settings ?? DEFAULT_RETAIL_SELLING_SETTINGS;
+  const promotions = input.promotions ?? [];
+  const variantRows = await executor
+    .select({
+      id: retailProductVariants.id,
+      productId: retailProductVariants.productId,
+      brandId: retailProducts.brandId,
+      color: retailProductVariants.color,
+      size: retailProductVariants.size,
+      sellingPrice: retailProductVariants.sellingPrice,
+      cost: retailProductVariants.cost,
+      productName: retailProducts.name,
+    })
+    .from(retailProductVariants)
+    .innerJoin(retailProducts, eq(retailProducts.id, retailProductVariants.productId))
+    .where(
+      and(
+        eq(retailProductVariants.companyId, input.companyId),
+        eq(retailProducts.companyId, input.companyId),
+        eq(retailProductVariants.active, true),
+        eq(retailProducts.active, true),
+        inArray(
+          retailProductVariants.id,
+          input.items.map((item) => item.variantId)
+        )
+      )
+    );
+  const variantsById = new Map(variantRows.map((row) => [row.id, row]));
+  const now = new Date();
+  const priced = priceRetailCart(
+    input.items.map((item) => {
+      const variant = variantsById.get(item.variantId);
+      if (!variant) throw new Error("Retail variant not found or inactive");
+      const listUnitPrice = toNumber(variant.sellingPrice);
+      const hasOverride = item.priceOverride !== null && item.priceOverride !== undefined;
+      const promotion =
+        !hasOverride && promotions.length
+          ? bestPromotionForLine(
+              promotions,
+              { variantId: variant.id, productId: variant.productId, brandId: variant.brandId ?? null },
+              listUnitPrice,
+              now
+            )
+          : null;
+      return {
+        variantId: item.variantId,
+        quantity: item.quantity,
+        listUnitPrice,
+        priceOverride: hasOverride ? Number(item.priceOverride) : null,
+        discountType: item.discountType ?? ("none" as const),
+        discountValue: item.discountValue ?? 0,
+        discountReason: item.discountReason ?? null,
+        promotion,
+      };
+    }),
+    input.orderDiscount ?? { type: "none", value: 0 },
+    {
+      enabled: settings.taxEnabled,
+      rate: settings.taxRate,
+      inclusive: settings.taxInclusive,
+      label: settings.taxLabel,
+    }
+  );
+  return { priced, variantsById };
 }
 
 /**
  * Records a retail sale and deducts the exact variant at the exact location.
- * Idempotent on (company, idempotencyKey): a replay returns the original sale.
+ *
+ * Prices are re-derived from the variant rows loaded inside this transaction (list
+ * price, promotion, discounts, order discount, tax) and snapshotted per line, so the
+ * receipt/return/report history can never disagree with what was charged. Idempotent
+ * on (company, idempotencyKey): a replay returns the original sale without deducting twice.
  */
 export async function createRetailSaleInTx(
   tx: RetailTransaction,
@@ -146,6 +300,8 @@ export async function createRetailSaleInTx(
       createdBy: input.userId,
       notes: input.notes ?? null,
       shiftId: input.shiftId ?? null,
+      customerId: input.customer?.id ?? null,
+      customerName: input.customer?.name?.trim() ? input.customer.name.trim().slice(0, 191) : "Walk-in",
     })
     .onConflictDoNothing({ target: [retailPosSales.companyId, retailPosSales.idempotencyKey] })
     .returning({ id: retailPosSales.id });
@@ -160,40 +316,62 @@ export async function createRetailSaleInTx(
     return { saleId: existing.id, replayed: true };
   }
 
-  let totalAmount = 0;
+  const settings = input.settings ?? DEFAULT_RETAIL_SELLING_SETTINGS;
+  const approval = input.approval ?? null;
   let totalCost = 0;
-  for (const item of input.items) {
-    const variant = await ensureRetailVariant(tx, companyId, item.variantId);
-    const stock = await lockInventoryRow(tx, companyId, item.variantId, input.locationId);
+
+  // ── Price the cart from the database ──────────────────────────────────────
+  const { priced, variantsById } = await prepareRetailSalePricing(tx, {
+    companyId,
+    items: input.items,
+    orderDiscount: input.orderDiscount,
+    settings,
+    promotions: input.promotions,
+  });
+
+  for (const line of priced.lines) {
+    const variant = variantsById.get(line.variantId);
+    if (!variant) throw new Error("Retail variant not found or inactive");
+    const stock = await lockInventoryRow(tx, companyId, line.variantId, input.locationId);
     let after: number;
     try {
-      after = nextRetailSaleQuantity(stock.quantity, item.quantity, input.canSellNegativeStock);
+      after = nextRetailSaleQuantity(stock.quantity, line.quantity, input.canSellNegativeStock);
     } catch {
       throw new Error(
         `Insufficient stock for ${variant.productName} / ${variant.color} / ${variant.size}. Available: ${stock.quantity}`
       );
     }
-    await setInventoryQuantity(tx, companyId, item.variantId, input.locationId, after);
-    const unitPrice = toNumber(variant.sellingPrice);
+    await setInventoryQuantity(tx, companyId, line.variantId, input.locationId, after);
     const [saleItem] = await tx
       .insert(retailPosSaleItems)
       .values({
         companyId,
         saleId: createdSale.id,
-        variantId: item.variantId,
-        quantity: String(item.quantity),
+        variantId: line.variantId,
+        quantity: String(line.quantity),
         returnedQuantity: "0",
-        unitPrice: String(unitPrice),
+        originalUnitPrice: String(line.originalUnitPrice),
+        unitPrice: String(line.unitPrice),
+        grossUnitPrice: String(line.grossUnitPrice),
+        lineDiscountAmount: String(line.lineDiscountAmount),
+        lineDiscountType: line.lineDiscountType,
+        lineDiscountValue: String(line.lineDiscountValue),
+        discountReason: line.discountReason,
+        priceOverride: line.priceOverride,
+        promotionId: line.promotionId,
+        taxAmount: String(line.taxAmount),
+        lineTotal: String(line.lineTotal),
+        approvedByUserId: approval?.approvedByUserId ?? null,
         // Snapshot cost at sale time so profit reports use the cost of the exact unit sold.
         unitCost: String(stock.averageCost > 0 ? stock.averageCost : toNumber(variant.cost)),
       })
       .returning({ id: retailPosSaleItems.id });
     await addMovement(tx, {
       companyId,
-      variantId: item.variantId,
+      variantId: line.variantId,
       locationId: input.locationId,
       movementType: "sale",
-      quantityDelta: -item.quantity,
+      quantityDelta: -line.quantity,
       before: stock.quantity,
       after,
       eventKey: `sale:${createdSale.id}:${saleItem.id}`,
@@ -202,28 +380,61 @@ export async function createRetailSaleInTx(
       createdBy: input.userId,
       metadata: { saleItemId: saleItem.id },
     });
-    totalAmount += unitPrice * item.quantity;
-    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * item.quantity;
+    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * line.quantity;
   }
 
   await tx
     .update(retailPosSales)
-    .set({ totalAmount: String(totalAmount), updatedAt: new Date() })
+    .set({
+      listSubtotal: String(priced.listSubtotal),
+      discountTotal: String(priced.discountTotal),
+      subtotal: String(priced.subtotal),
+      orderDiscountType: input.orderDiscount?.type ?? "none",
+      orderDiscountValue: String(input.orderDiscount?.value ?? 0),
+      orderDiscountAmount: String(priced.orderDiscountAmount),
+      orderDiscountReason: input.orderDiscount?.reason?.trim() ? input.orderDiscount.reason.trim() : null,
+      taxEnabled: settings.taxEnabled,
+      taxLabel: settings.taxLabel,
+      taxRate: String(settings.taxRate),
+      taxInclusive: settings.taxInclusive,
+      taxAmount: String(priced.taxAmount),
+      totalAmount: String(priced.totalAmount),
+      approvalId: approval?.approvalId ?? null,
+      approvedByUserId: approval?.approvedByUserId ?? null,
+      approvedByName: approval?.approvedByName ?? null,
+      updatedAt: new Date(),
+    })
     .where(eq(retailPosSales.id, createdSale.id));
 
+  // Consume the manager approval inside the same transaction: a consumed approval can
+  // never be replayed for a different sale, while retrying the same sale is allowed.
+  if (approval?.approvalId) {
+    const consumed = await tx
+      .update(retailDiscountApprovals)
+      .set({ consumedSaleId: createdSale.id, consumedAt: new Date() })
+      .where(
+        and(
+          eq(retailDiscountApprovals.id, approval.approvalId),
+          eq(retailDiscountApprovals.companyId, companyId),
+          sql`(${retailDiscountApprovals.consumedSaleId} IS NULL OR ${retailDiscountApprovals.consumedSaleId} = ${createdSale.id})`
+        )
+      )
+      .returning({ id: retailDiscountApprovals.id });
+    if (!consumed.length) throw new RetailApprovalReuseError();
+  }
   await settleRetailSaleTx(tx, {
     companyId,
     locationId: input.locationId,
     saleId: createdSale.id,
     saleIdempotencyKey: input.idempotencyKey,
-    totalAmount,
+    totalAmount: priced.totalAmount,
+    taxAmount: priced.taxAmount,
     totalCost,
     userId: input.userId,
     username: input.username ?? null,
     shiftId: input.shiftId ?? null,
     payments: input.payments,
   });
-
   return { saleId: createdSale.id, replayed: false };
 }
 
@@ -239,13 +450,21 @@ export interface RetailReturnInput {
 }
 
 /**
- * Returns sold units to the original sale location, restoring the exact variant
- * that was sold. Idempotent on (company, idempotencyKey).
+ * Returns sold units to the original sale location, restoring the exact variant that
+ * was sold and refunding the actual historical amount paid (`gross_unit_price`,
+ * tax included) rather than the current or list price. Idempotent on (company, idempotencyKey).
  */
 export async function createRetailReturnInTx(
   tx: RetailTransaction,
   input: RetailReturnInput
-): Promise<{ returnId: number; replayed: boolean; refundValue: number; costValue: number }> {
+): Promise<{
+  returnId: number;
+  replayed: boolean;
+  refundAmount: number;
+  refundTaxAmount: number;
+  refundValue: number;
+  costValue: number;
+}> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
     .insert(retailPosReturns)
@@ -260,12 +479,23 @@ export async function createRetailReturnInTx(
     .returning({ id: retailPosReturns.id });
   if (!createdReturn) {
     const [existing] = await tx
-      .select({ id: retailPosReturns.id })
+      .select({
+        id: retailPosReturns.id,
+        refundAmount: retailPosReturns.refundAmount,
+        refundTaxAmount: retailPosReturns.refundTaxAmount,
+      })
       .from(retailPosReturns)
       .where(and(eq(retailPosReturns.companyId, companyId), eq(retailPosReturns.idempotencyKey, input.idempotencyKey)))
       .limit(1);
     if (!existing) throw new Error("Return retry could not be resolved");
-    return { returnId: existing.id, replayed: true, refundValue: 0, costValue: 0 };
+    return {
+      returnId: existing.id,
+      replayed: true,
+      refundAmount: toNumber(existing.refundAmount),
+      refundTaxAmount: toNumber(existing.refundTaxAmount),
+      refundValue: toNumber(existing.refundAmount),
+      costValue: 0,
+    };
   }
 
   await tx.execute(sql`select id from retail_pos_sales where id = ${saleId} and company_id = ${companyId} for update`);
@@ -291,6 +521,8 @@ export async function createRetailReturnInTx(
       quantity: retailPosSaleItems.quantity,
       returnedQuantity: retailPosSaleItems.returnedQuantity,
       unitPrice: retailPosSaleItems.unitPrice,
+      grossUnitPrice: retailPosSaleItems.grossUnitPrice,
+      taxAmount: retailPosSaleItems.taxAmount,
       unitCost: retailPosSaleItems.unitCost,
     })
     .from(retailPosSaleItems)
@@ -305,7 +537,8 @@ export async function createRetailReturnInTx(
     .for("update");
   const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
 
-  let refundValue = 0;
+  let refundAmount = 0;
+  let refundTaxAmount = 0;
   let costValue = 0;
   for (const [saleItemId, quantity] of aggregate) {
     const saleItem = saleItemsById.get(saleItemId);
@@ -321,6 +554,17 @@ export async function createRetailReturnInTx(
       .update(retailPosSaleItems)
       .set({ returnedQuantity: String(nextReturnedQuantity) })
       .where(eq(retailPosSaleItems.id, saleItem.id));
+
+    // Refund basis: the historic tax-inclusive price paid for this line.
+    const grossPerUnit =
+      toNumber(saleItem.grossUnitPrice) > 0 ? toNumber(saleItem.grossUnitPrice) : toNumber(saleItem.unitPrice);
+    const taxPerUnit = sold > 0 ? toNumber(saleItem.taxAmount) / sold : 0;
+    const lineRefund = roundRetailMoney(grossPerUnit * quantity, 6);
+    const lineRefundTax = roundRetailMoney(taxPerUnit * quantity, 6);
+    refundAmount += lineRefund;
+    refundTaxAmount += lineRefundTax;
+    costValue += quantity * toNumber(saleItem.unitCost);
+
     const [returnItem] = await tx
       .insert(retailPosReturnItems)
       .values({
@@ -332,10 +576,10 @@ export async function createRetailReturnInTx(
         quantity: String(quantity),
         unitPrice: saleItem.unitPrice,
         unitCost: saleItem.unitCost,
+        grossUnitPrice: String(grossPerUnit),
+        taxAmount: String(lineRefundTax),
       })
       .returning({ id: retailPosReturnItems.id });
-    refundValue += quantity * toNumber(saleItem.unitPrice);
-    costValue += quantity * toNumber(saleItem.unitCost);
     await addMovement(tx, {
       companyId,
       variantId: saleItem.variantId,
@@ -351,5 +595,18 @@ export async function createRetailReturnInTx(
       metadata: { saleId, saleItemId: saleItem.id, ...input.metadata },
     });
   }
-  return { returnId: createdReturn.id, replayed: false, refundValue, costValue };
+  refundAmount = roundRetailMoney(refundAmount, 6);
+  refundTaxAmount = roundRetailMoney(refundTaxAmount, 6);
+  await tx
+    .update(retailPosReturns)
+    .set({ refundAmount: String(refundAmount), refundTaxAmount: String(refundTaxAmount) })
+    .where(eq(retailPosReturns.id, createdReturn.id));
+  return {
+    returnId: createdReturn.id,
+    replayed: false,
+    refundAmount,
+    refundTaxAmount,
+    refundValue: refundAmount,
+    costValue,
+  };
 }

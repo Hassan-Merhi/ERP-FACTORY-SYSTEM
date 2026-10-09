@@ -288,6 +288,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             sourceId: String(returned.returnId),
             idempotencyKey: `retail-pos-return:${returned.returnId}`,
             refundAmount: returned.refundValue,
+            refundTaxAmount: returned.refundTaxAmount,
             restoredCost: returned.costValue,
             refunds,
             userId,

@@ -6,6 +6,7 @@ import {
   isLegacySHA256Hash,
   verifyLegacyPassword,
   verifyPassword,
+  verifyPasswordBcryptOnly,
 } from "../server/routes/helpers/passwordHelpers";
 
 describe("passwordHelpers", () => {
@@ -45,6 +46,14 @@ describe("passwordHelpers", () => {
       valid: false,
       needsMigration: false,
     });
+  });
+
+  it("verifies bcrypt-only passwords and refuses a legacy hash outright", async () => {
+    const hash = await bcrypt.hash("modern-secret", 4);
+    await expect(verifyPasswordBcryptOnly("modern-secret", hash)).resolves.toBe(true);
+    await expect(verifyPasswordBcryptOnly("wrong", hash)).resolves.toBe(false);
+    // Privileged confirmations never fall back to the weak legacy comparison.
+    await expect(verifyPasswordBcryptOnly("modern-secret", "a".repeat(64))).resolves.toBe(false);
   });
 
   it("creates a bcrypt hash that verifies", async () => {

@@ -1,5 +1,5 @@
 import { useLocation } from "wouter";
-import { BarChart3, Boxes, Camera, ScanLine, ShoppingCart } from "lucide-react";
+import { BarChart3, Boxes, Camera, ClipboardList, History, ScanLine, Settings2, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -8,6 +8,9 @@ const LINKS = [
   { href: "/retail/stock", label: "Stock operations", icon: ScanLine },
   { href: "/retail/pos", label: "Retail POS", icon: ShoppingCart },
   { href: "/retail/reports", label: "Reports", icon: BarChart3 },
+  { href: "/retail/stock-count", label: "Stock count", icon: ClipboardList },
+  { href: "/retail/history", label: "Sales history", icon: History },
+  { href: "/retail/selling", label: "Selling settings", icon: Settings2 },
 ] as const;
 
 /** Compact, scrollable switcher between the retail fashion workspaces (phone friendly). */

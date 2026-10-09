@@ -94,6 +94,8 @@ These describe work in progress and carry live figures bound to their sources.
 | [system-quality-program.md](system-quality-program.md) | Type safety, test breadth, documentation state, configuration coherence |
 | [Retail fashion variants Wave 1 spec](superpowers/specs/2026-10-03-retail-fashion-variants-wave1-design.md) | Current Retail color + size variant and variant-image contract |
 | [Retail fashion variants Wave 1 plan](superpowers/plans/2026-10-03-retail-fashion-variants-wave1.md) | Implementation and verification plan for the current Retail fashion-variant rollout |
+| [Retail Wave 2 spec](superpowers/specs/2026-10-05-retail-wave2-customers-pricing-tax-stock-count-design.md) | Current Retail customers, discounts, tax foundation and physical stock-count contract |
+| [Retail Wave 2 plan](superpowers/plans/2026-10-05-retail-wave2-customers-pricing-tax-stock-count.md) | Implementation and verification plan for the current Retail Wave 2 rollout |
 | [retail-fashion-inventory.md](retail-fashion-inventory.md) | Retail fashion intake, generated barcodes and labels, scan-to-sell, barcode stock movements and reports |
 | [performance-phase9.md](performance-phase9.md) | Build, bundle, and runtime performance constraints |
 | [performance-wave5-production-certification.md](performance-wave5-production-certification.md) | Production performance certification and remaining measurement gates |

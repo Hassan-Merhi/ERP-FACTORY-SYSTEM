@@ -1,7 +1,7 @@
 import type { ClientErrorLike } from "@/lib/clientError";
 import { getErrorDetails } from "@shared/errorUtils";
 import { QueryClient, QueryFunction, MutationCache, QueryCache } from "@tanstack/react-query";
-import { isSafeToQueue, enqueueRequest, getDescriptionForRequest } from "./offlineQueue";
+import { isSafeToQueue, enqueueRequest, getDescriptionForRequest, containsSensitiveCredentials } from "./offlineQueue";
 import { OFFLINE_MODE_ENABLED } from "@/lib/featureFlags";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -438,13 +438,21 @@ function isNetworkError(error: unknown): boolean {
   );
 }
 
-export async function apiRequest(
+interface PreparedApiRequest {
+  /** Capacitor: resolved absolute URL when VITE_API_BASE_URL is set; unchanged on web. */
+  url: string;
+  init: RequestInit;
+  timeoutId: ReturnType<typeof setTimeout>;
+  didTimeout: () => boolean;
+}
+
+/** Shared request preparation for both the queueable and the privileged fetch paths. */
+async function prepareApiRequest(
   method: string,
   url: string,
-  data?: unknown | undefined,
-  _isRetry = false,
-  timeoutMs = 300000
-): Promise<Response> {
+  data: unknown,
+  timeoutMs: number
+): Promise<PreparedApiRequest> {
   const controller = new AbortController();
   let intentionalAbort = false;
   const timeoutId = setTimeout(() => {
@@ -452,68 +460,121 @@ export async function apiRequest(
     controller.abort();
   }, timeoutMs);
 
+  let body: string | undefined;
+  if (data) {
+    body = JSON.stringify(data);
+  }
+
+  // Attach CSRF token for state-changing methods.
+  const upMethod = method.toUpperCase();
+  const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
+  const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
+
+  const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
+  const init: RequestInit = {
+    method,
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      "X-Client-Date": getAppDate(),
+      ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
+    },
+    body,
+    credentials: "include",
+    signal: controller.signal,
+    // Logout must survive an immediate tab/browser close after the click.
+    // keepalive asks the browser to finish this tiny request during unload.
+    keepalive: upMethod === "POST" && url === "/api/auth/logout",
+  };
+  return { url: _apiUrl, init, timeoutId, didTimeout: () => intentionalAbort };
+}
+
+/**
+ * True when the server rejected a stale CSRF token (after a server restart / session
+ * regeneration on Render). The caller clears the cached token and retries exactly once.
+ */
+async function isCsrfTokenMismatch(res: Response): Promise<boolean> {
+  if (res.status !== 403) return false;
   try {
-    let body: string | undefined;
-    if (data) {
-      body = JSON.stringify(data);
-    }
+    const errBody = await res.clone().json();
+    return errBody?.code === "CSRF_TOKEN_MISMATCH";
+  } catch {
+    return false;
+  }
+}
 
-    // Attach CSRF token for state-changing methods.
-    const upMethod = method.toUpperCase();
-    const isStateChanging = upMethod !== "GET" && upMethod !== "HEAD" && upMethod !== "OPTIONS";
-    const csrfToken = isStateChanging ? await ensureCsrfToken() : null;
+export async function apiRequest(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+  _isRetry = false,
+  timeoutMs = 300000
+): Promise<Response> {
+  const prepared = await prepareApiRequest(method, url, data, timeoutMs);
 
-    // Capacitor: resolve to absolute URL when VITE_API_BASE_URL is set; no-op on web.
-    const _apiUrl = _CAPACITOR_API_BASE && url.startsWith("/") ? `${_CAPACITOR_API_BASE}${url}` : url;
-    const res = await fetch(_apiUrl, {
-      method,
-      headers: {
-        ...(data ? { "Content-Type": "application/json" } : {}),
-        "X-Client-Date": getAppDate(),
-        ...(csrfToken ? { "X-CSRF-Token": csrfToken } : {}),
-      },
-      body,
-      credentials: "include",
-      signal: controller.signal,
-      // Logout must survive an immediate tab/browser close after the click.
-      // keepalive asks the browser to finish this tiny request during unload.
-      keepalive: upMethod === "POST" && url === "/api/auth/logout",
-    });
+  try {
+    const res = await fetch(prepared.url, prepared.init);
 
-    clearTimeout(timeoutId);
+    clearTimeout(prepared.timeoutId);
 
-    // If the server rejected our CSRF token (stale after server restart /
-    // session regeneration on Render), clear the cache and retry exactly once.
-    if (!_isRetry && res.status === 403) {
-      try {
-        const clone = res.clone();
-        const errBody = await clone.json();
-        if (errBody?.code === "CSRF_TOKEN_MISMATCH") {
-          resetCsrfToken();
-          return apiRequest(method, url, data, true);
-        }
-      } catch {
-        /* not JSON — fall through to normal error handling */
-      }
+    if (!_isRetry && (await isCsrfTokenMismatch(res))) {
+      resetCsrfToken();
+      return apiRequest(method, url, data, true);
     }
 
     await throwIfResNotOk(res);
     return res;
   } catch (error) {
-    clearTimeout(timeoutId);
-    if (getErrorDetails(error).name === "AbortError" && intentionalAbort) {
+    clearTimeout(prepared.timeoutId);
+    if (getErrorDetails(error).name === "AbortError" && prepared.didTimeout()) {
       throw new Error(`Request timeout after ${Math.round(timeoutMs / 1000)} seconds for ${method} ${url}`, {
         cause: error,
       });
     }
     const networkFail = getErrorDetails(error).name === "AbortError" ? true : isNetworkError(error);
-    if (OFFLINE_MODE_ENABLED && networkFail && isSafeToQueue(method, url)) {
+    if (OFFLINE_MODE_ENABLED && networkFail && !containsSensitiveCredentials(data) && isSafeToQueue(method, url)) {
       const description = getDescriptionForRequest(url);
       const body = data ? JSON.stringify(data) : "";
       enqueueRequest(url, method, body, description, getAppDate());
       const offlineError = Object.assign(new Error(`Saved offline — will sync when connected`), { description });
       offlineError.name = "OfflineQueued";
       throw offlineError;
+    }
+    throw error;
+  }
+}
+
+/**
+ * Credential-bearing writes — manager discount approvals, password changes — use this
+ * variant. It deliberately has no offline-queue fallback: the secret in `data` is never
+ * written to localStorage, and an offline device fails fast with the network error the
+ * operator must retry while connected.
+ */
+export async function apiRequestPrivileged(
+  method: string,
+  url: string,
+  data?: unknown | undefined,
+  timeoutMs = 60000
+): Promise<Response> {
+  const prepared = await prepareApiRequest(method, url, data, timeoutMs);
+
+  try {
+    const res = await fetch(prepared.url, prepared.init);
+
+    clearTimeout(prepared.timeoutId);
+
+    if (await isCsrfTokenMismatch(res)) {
+      resetCsrfToken();
+      return apiRequestPrivileged(method, url, data, timeoutMs);
+    }
+
+    await throwIfResNotOk(res);
+    return res;
+  } catch (error) {
+    clearTimeout(prepared.timeoutId);
+    if (getErrorDetails(error).name === "AbortError" && prepared.didTimeout()) {
+      throw new Error(`Request timeout after ${Math.round(timeoutMs / 1000)} seconds for ${method} ${url}`, {
+        cause: error,
+      });
     }
     throw error;
   }

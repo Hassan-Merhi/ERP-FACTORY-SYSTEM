@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   decimal,
   index,
   integer,
@@ -15,7 +16,9 @@ import { companies, locations } from "./common";
 import { bankAccounts, ledgerAccounts } from "./accounting";
 import { posShifts } from "./pos";
 import { retailProductVariants } from "./retail";
+import { retailDiscountApprovals, retailPromotions } from "./retailSelling";
 import { users } from "./users";
+import { customers } from "./erp/vouchers";
 
 export const RETAIL_STOCK_MOVEMENT_TYPES = [
   "sale",
@@ -27,9 +30,13 @@ export const RETAIL_STOCK_MOVEMENT_TYPES = [
   "cancellation",
   "reversal",
   "receive",
+  "stock_count",
 ] as const;
 
 export type RetailStockMovementType = (typeof RETAIL_STOCK_MOVEMENT_TYPES)[number];
+
+/** Walk-in cash is the default retail customer; no customer row is required. */
+export const RETAIL_WALK_IN_CUSTOMER_NAME = "Walk-in";
 
 export const retailPosSales = pgTable(
   "retail_pos_sales",
@@ -45,7 +52,31 @@ export const retailPosSales = pgTable(
     status: varchar("status", { length: 32 }).notNull().default("completed"),
     shiftId: integer("shift_id").references(() => posShifts.id, { onDelete: "set null" }),
     accountingVoucherId: integer("accounting_voucher_id"),
+    // Walk-in cash sales keep customerId null and the snapshot name "Walk-in".
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    customerName: varchar("customer_name", { length: 191 }).notNull().default(RETAIL_WALK_IN_CUSTOMER_NAME),
+    /**
+     * Money snapshot for this sale, written once at checkout and never recomputed:
+     * listSubtotal (pre-discount, pre-tax) → discountTotal → subtotal (net after discount)
+     * → taxAmount → totalAmount (what the customer paid).
+     */
+    listSubtotal: decimal("list_subtotal", { precision: 20, scale: 6 }).notNull().default("0"),
+    discountTotal: decimal("discount_total", { precision: 20, scale: 6 }).notNull().default("0"),
+    subtotal: decimal("subtotal", { precision: 20, scale: 6 }).notNull().default("0"),
+    orderDiscountType: varchar("order_discount_type", { length: 20 }).notNull().default("none"),
+    orderDiscountValue: decimal("order_discount_value", { precision: 20, scale: 6 }).notNull().default("0"),
+    orderDiscountAmount: decimal("order_discount_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    orderDiscountReason: text("order_discount_reason"),
+    taxEnabled: boolean("tax_enabled").notNull().default(false),
+    taxLabel: varchar("tax_label", { length: 40 }).notNull().default("Tax"),
+    taxRate: decimal("tax_rate", { precision: 8, scale: 5 }).notNull().default("0"),
+    taxInclusive: boolean("tax_inclusive").notNull().default(false),
+    taxAmount: decimal("tax_amount", { precision: 20, scale: 6 }).notNull().default("0"),
     totalAmount: decimal("total_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    // Manager approval snapshot for discounts / price overrides above the role limit.
+    approvalId: integer("approval_id").references(() => retailDiscountApprovals.id, { onDelete: "set null" }),
+    approvedByUserId: varchar("approved_by_user_id", { length: 255 }),
+    approvedByName: text("approved_by_name"),
     createdBy: varchar("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
@@ -58,6 +89,8 @@ export const retailPosSales = pgTable(
     companyIdx: index("retail_pos_sales_company_idx").on(t.companyId),
     locationIdx: index("retail_pos_sales_location_idx").on(t.locationId),
     shiftIdx: index("retail_pos_sales_shift_idx").on(t.shiftId),
+    customerIdx: index("retail_pos_sales_customer_idx").on(t.customerId),
+    companyCreatedIdx: index("retail_pos_sales_company_created_idx").on(t.companyId, t.createdAt),
     companyIdempotencyUnique: uniqueIndex("retail_pos_sales_company_idempotency_unique").on(
       t.companyId,
       t.idempotencyKey
@@ -80,7 +113,24 @@ export const retailPosSaleItems = pgTable(
       .references(() => retailProductVariants.id, { onDelete: "restrict" }),
     quantity: decimal("quantity", { precision: 20, scale: 6 }).notNull(),
     returnedQuantity: decimal("returned_quantity", { precision: 20, scale: 6 }).notNull().default("0"),
+    /**
+     * originalUnitPrice is the variant selling price snapshot at sale time and is never
+     * overwritten. unitPrice is the final pre-tax price actually charged after every
+     * discount; grossUnitPrice is what the customer paid per unit including tax and is
+     * the refund basis for returns and exchanges.
+     */
+    originalUnitPrice: decimal("original_unit_price", { precision: 20, scale: 6 }).notNull().default("0"),
     unitPrice: decimal("unit_price", { precision: 20, scale: 6 }).notNull(),
+    grossUnitPrice: decimal("gross_unit_price", { precision: 20, scale: 6 }).notNull().default("0"),
+    lineDiscountAmount: decimal("line_discount_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    lineDiscountType: varchar("line_discount_type", { length: 20 }).notNull().default("none"),
+    lineDiscountValue: decimal("line_discount_value", { precision: 20, scale: 6 }).notNull().default("0"),
+    discountReason: text("discount_reason"),
+    priceOverride: boolean("price_override").notNull().default(false),
+    promotionId: integer("promotion_id").references(() => retailPromotions.id, { onDelete: "set null" }),
+    taxAmount: decimal("tax_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    lineTotal: decimal("line_total", { precision: 20, scale: 6 }).notNull().default("0"),
+    approvedByUserId: varchar("approved_by_user_id", { length: 255 }),
     unitCost: decimal("unit_cost", { precision: 20, scale: 6 }).notNull().default("0"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -105,6 +155,9 @@ export const retailPosReturns = pgTable(
     createdBy: varchar("created_by")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
+    // Actual historical amount refunded (tax included) and the tax portion of it.
+    refundAmount: decimal("refund_amount", { precision: 20, scale: 6 }).notNull().default("0"),
+    refundTaxAmount: decimal("refund_tax_amount", { precision: 20, scale: 6 }).notNull().default("0"),
     notes: text("notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -138,8 +191,12 @@ export const retailPosReturnItems = pgTable(
       .notNull()
       .references(() => locations.id, { onDelete: "restrict" }),
     quantity: decimal("quantity", { precision: 20, scale: 6 }).notNull(),
+    // unitPrice is the historic pre-tax price paid; grossUnitPrice is the tax-inclusive
+    // price paid per unit and is what a refund is calculated from.
     unitPrice: decimal("unit_price", { precision: 20, scale: 6 }).notNull(),
     unitCost: decimal("unit_cost", { precision: 20, scale: 6 }).notNull().default("0"),
+    grossUnitPrice: decimal("gross_unit_price", { precision: 20, scale: 6 }).notNull().default("0"),
+    taxAmount: decimal("tax_amount", { precision: 20, scale: 6 }).notNull().default("0"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (t) => ({
