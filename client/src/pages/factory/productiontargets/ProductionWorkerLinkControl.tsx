@@ -2,6 +2,9 @@ import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Link2, Loader2, Unlink2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { evenSplitBales } from "@shared/factoryProductionTargetSplit";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -37,6 +40,9 @@ export function ProductionWorkerLinkControl({
   const [selectingPartners, setSelectingPartners] = useState(false);
   const [selectedPartnerIds, setSelectedPartnerIds] = useState<number[]>([]);
   const [partnerSelectValue, setPartnerSelectValue] = useState("");
+  const [unlinkOpen, setUnlinkOpen] = useState(false);
+  const [unlinkTarget, setUnlinkTarget] = useState<number | null>(null);
+  const [unlinkDraft, setUnlinkDraft] = useState<Record<number, string>>({});
 
   const currentMemberIds = useMemo(() => {
     const linkedIds = row.linkedWorkerIds?.length
@@ -46,6 +52,46 @@ export function ProductionWorkerLinkControl({
   }, [row.personId, row.linkedWorkerIds, row.linkedWorkers]);
 
   const remainingSlots = Math.max(0, MAX_LINKED_WORKERS - currentMemberIds.length);
+
+  const unlinkMembers = useMemo(
+    () => currentMemberIds
+      .map((workerId) => ({
+        workerId,
+        name: rows.find((candidate) => candidate.personId === workerId)?.name ??
+          row.linkedWorkers?.find((member) => member.workerId === workerId)?.workerName ??
+          String(workerId),
+      }))
+      .sort((a, b) => a.workerId - b.workerId),
+    [currentMemberIds, rows, row.linkedWorkers]
+  );
+
+  const allocatedTotal = unlinkMembers.reduce((sum, member) => {
+    const value = unlinkDraft[member.workerId];
+    return sum + (value === "" || value === undefined ? 0 : Number(value));
+  }, 0);
+  const validSplit = unlinkTarget === null ||
+    (Number.isSafeInteger(unlinkTarget) && unlinkTarget >= 0 &&
+      unlinkMembers.every((member) => {
+        const value = unlinkDraft[member.workerId];
+        return value !== "" && value !== undefined &&
+          Number.isSafeInteger(Number(value)) && Number(value) >= 0;
+      }) && allocatedTotal === unlinkTarget);
+
+  const fillEvenSplit = (total: number) => {
+    const split = evenSplitBales(total, currentMemberIds);
+    setUnlinkDraft(Object.fromEntries(split.map((share) => [share.workerId, String(share.targetBales)])));
+  };
+
+  const openUnlinkDialog = () => {
+    const shared = targetBales === undefined ? (row.targetBales ?? null) : targetBales;
+    setUnlinkTarget(shared ?? null);
+    if (shared !== null && shared !== undefined && Number.isSafeInteger(shared) && shared >= 0) {
+      fillEvenSplit(shared);
+    } else {
+      setUnlinkDraft({});
+    }
+    setUnlinkOpen(true);
+  };
 
   const partnerOptions = useMemo(() => {
     const currentIds = new Set(currentMemberIds);
@@ -138,7 +184,15 @@ export function ProductionWorkerLinkControl({
       const response = await factoryApiRequest(
         "POST",
         `/api/factory/staff-tracking/production-worker-links/${row.linkGroupId}/unlink`,
-        { effectiveTo: effectiveFrom }
+        {
+          effectiveTo: effectiveFrom,
+          ...(unlinkTarget === null ? {} : {
+            allocations: unlinkMembers.map((member) => ({
+              workerId: member.workerId,
+              targetBales: Number(unlinkDraft[member.workerId]),
+            })),
+          }),
+        }
       );
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
@@ -148,6 +202,7 @@ export function ProductionWorkerLinkControl({
     },
     onSuccess: () => {
       resetSelection();
+      setUnlinkOpen(false);
       refreshLinkedProduction();
       toast({ title: tr("workerUnlinked") });
     },
@@ -161,6 +216,7 @@ export function ProductionWorkerLinkControl({
 
   if (!selectingPartners) {
     return (
+      <>
       <div className="flex flex-wrap items-center gap-1.5">
         <Button
           type="button"
@@ -181,7 +237,7 @@ export function ProductionWorkerLinkControl({
             size="sm"
             className="h-7 px-2 text-xs"
             disabled={disabled || busy}
-            onClick={() => unlinkMutation.mutate()}
+            onClick={openUnlinkDialog}
             data-testid={`button-unlink-worker-${row.personId}`}
           >
             {unlinkMutation.isPending ? (
@@ -193,6 +249,68 @@ export function ProductionWorkerLinkControl({
           </Button>
         )}
       </div>
+      <Dialog open={unlinkOpen} onOpenChange={(open) => !busy && setUnlinkOpen(open)}>
+        <DialogContent className="max-w-md" data-testid={`dialog-unlink-target-${row.personId}`}>
+          <DialogHeader>
+            <DialogTitle>{tr("unlinkSplitTitle")}</DialogTitle>
+            <DialogDescription>{tr("unlinkSplitDescription")}</DialogDescription>
+          </DialogHeader>
+          {unlinkTarget === null ? (
+            <p className="text-sm text-muted-foreground">{tr("unlinkSplitNoTarget")}</p>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold tabular-nums">{tr("totalTarget")}: {unlinkTarget}</span>
+                <Button type="button" variant="outline" size="sm"
+                  disabled={busy || !Number.isSafeInteger(unlinkTarget) || unlinkTarget < 0}
+                  onClick={() => fillEvenSplit(unlinkTarget)}
+                  data-testid={`button-even-split-${row.personId}`}>
+                  {tr("unlinkSplitAuto")}
+                </Button>
+              </div>
+              {unlinkMembers.map((member) => (
+                <div key={member.workerId} className="flex items-center gap-3">
+                  <label className="min-w-0 flex-1 truncate text-sm" dir="auto"
+                    htmlFor={`unlink-target-${row.personId}-${member.workerId}`}>
+                    {member.name}
+                  </label>
+                  <Input
+                    id={`unlink-target-${row.personId}-${member.workerId}`}
+                    type="number"
+                    min="0"
+                    step="1"
+                    className="w-24 text-right tabular-nums"
+                    disabled={busy}
+                    value={unlinkDraft[member.workerId] ?? ""}
+                    onChange={(event) => setUnlinkDraft((current) => ({
+                      ...current,
+                      [member.workerId]: event.target.value,
+                    }))}
+                    data-testid={`input-unlink-target-${member.workerId}`}
+                  />
+                </div>
+              ))}
+              <div className="text-sm font-medium tabular-nums">
+                {tr("unlinkSplitAllocated")}: {allocatedTotal} / {unlinkTarget}
+              </div>
+              {!validSplit && (
+                <p className="text-xs text-destructive" role="alert">{tr("unlinkSplitWholeBales")}</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={busy}
+              onClick={() => setUnlinkOpen(false)}>{tr("cancel")}</Button>
+            <Button type="button" disabled={busy || !validSplit}
+              onClick={() => unlinkMutation.mutate()}
+              data-testid={`button-confirm-unlink-${row.personId}`}>
+              {unlinkMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {tr("unlinkSplitConfirm")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
     );
   }
 
