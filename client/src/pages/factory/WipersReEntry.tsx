@@ -244,11 +244,37 @@ export default function WipersReEntry() {
     setDesignPickerOpen(true);
   };
 
+  const preparePriorityLabels = async (): Promise<LabelData[]> => {
+    const labels = buildLabelData(createdBales || []);
+    for (const label of labels) {
+      const response = await modeApiRequest(
+        "POST", "/api/factory/customer-orders/loading-list/automatic-print-preflight",
+        { referenceNumber: label.referenceNumber }
+      );
+      if (!response.ok) throw new Error("Could not verify priority before printing");
+      const result = (await response.json()) as {
+        priorityAllocation?: { color: string; orderId: number; priority: number } | null;
+      };
+      if (result.priorityAllocation) {
+        label.priorityColor = result.priorityAllocation.color;
+        label.priorityOrderId = result.priorityAllocation.orderId;
+        label.priorityNumber = result.priorityAllocation.priority;
+      }
+    }
+    return labels;
+  };
+
   const handlePrint = async (format: "A4" | "A5" | "sticker") => {
     if (!createdBales || createdBales.length === 0) return;
-    const labels = buildLabelData(createdBales);
+    let labels: LabelData[];
+    try {
+      labels = await preparePriorityLabels();
+    } catch (error) {
+      toast({ title: "Priority print preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
+    }
 
-    if (isZebraMode() && format === "sticker") {
+    if (isZebraMode() && format === "sticker" && !labels.some((label) => label.priorityColor)) {
       try {
         const zpl = buildZplBatch(labels, true);
         await printRawZpl(zpl);
@@ -267,13 +293,19 @@ export default function WipersReEntry() {
 
   const handlePrintAll = async () => {
     if (!createdBales || createdBales.length === 0) return;
-    const labels = buildLabelData(createdBales);
+    let labels: LabelData[];
+    try {
+      labels = await preparePriorityLabels();
+    } catch (error) {
+      toast({ title: "Priority print preparation failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
+    }
     const paperFormat = getPaperFormat();
-    if (paperFormat === "A4") {
+    if (paperFormat === "A4" && !labels.some((label) => label.priorityColor)) {
       setPendingLabels(labels);
       setDesignPickerOpen(true);
     } else {
-      openBrowserPrint(labels, "sticker");
+      openBrowserPrint(labels, paperFormat === "A4" ? "A4" : "sticker");
     }
   };
 
