@@ -1,0 +1,32 @@
+name: Retail Wave 2 Format Once
+on:
+  push:
+    branches:
+      - arena/01a10c1b-erp-factory-system
+    paths:
+      - .github/workflows/retail-wave2-format-once.yml
+permissions:
+  contents: write
+jobs:
+  format-retail-wave2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: '24.21.0'
+      - name: Install dependencies for Prettier
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Format only the three merged Retail files
+        run: node node_modules/prettier/bin/prettier.cjs --write client/src/pages/pos/RetailPOS.tsx server/routes/pos/retailPosRoutes.ts server/services/retail/retailSaleService.ts
+      - name: Commit formatting
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add client/src/pages/pos/RetailPOS.tsx server/routes/pos/retailPosRoutes.ts server/services/retail/retailSaleService.ts
+          if ! git diff --cached --quiet; then
+            git commit -m 'Format merged Retail Wave 2 files with Prettier'
+            git push
+          fi
