@@ -427,8 +427,16 @@ export function registerBaleRoutes(app: Express) {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { baleId } = req.body;
-      if (!baleId) return res.status(400).json({ message: "baleId required" });
+      const baleId = Number(req.body?.baleId);
+      if (!Number.isSafeInteger(baleId) || baleId < 1) {
+        return res.status(400).json({ message: "Valid baleId required" });
+      }
+      const [physicalBale] = await db.select({ id: factoryBales.id }).from(factoryBales)
+        .where(and(
+          eq(factoryBales.id, baleId), eq(factoryBales.companyId, companyId),
+          sql`${factoryBales.deletedAt} IS NULL`
+        )).limit(1);
+      if (!physicalBale) return res.status(404).json({ message: "Physical bale not found or deleted" });
       // Resolve before recording the print. Reprints of already assigned bales
       // return their original snapshot; unassigned bales may enter Priority Scan.
       const { runAutomaticPriorityReprint } = await import("./factory/customer-orders/priorityAutoAllocation");
