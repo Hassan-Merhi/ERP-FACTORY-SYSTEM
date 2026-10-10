@@ -43,7 +43,7 @@ requireTokens("Raw Production page", sources.rawPage, [
 requireTokens("Raw Stock", sources.rawTable, [
   'data-testid="raw-stock-mobile-list"',
   "space-y-3 md:hidden",
-  "hidden overflow-hidden rounded-md border bg-card shadow-sm md:block",
+  "hidden overflow-hidden rounded-md border bg-card shadow-xs md:block",
   'data-testid={`button-adjust-mobile-${row.supplierId}`}',
   'data-testid={`button-deduct-mobile-${row.supplierId}`}',
   'data-testid={`button-batch-mobile-${row.supplierId}`}',

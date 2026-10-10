@@ -41,7 +41,7 @@ for (const token of [
 for (const token of [
   'data-responsive-stat-card="true"',
   "min-w-0 max-w-full",
-  "break-words",
+  "wrap-break-word",
   "min-[360px]:text-2xl",
   'role={isClickable ? "button" : undefined}',
 ]) {
