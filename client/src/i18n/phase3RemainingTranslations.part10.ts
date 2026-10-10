@@ -188,6 +188,16 @@ export const phase3RemainingTranslationsPart10: readonly Phase3SharedUiEntry[] =
   { en: "FX unconfirmed", ar: "FX غير مؤكد", fr: "FX non confirmé" },
   { en: "FX USD out @ ${rate}", ar: "FX USD out @{{0}}", fr: "FX USD sur @{{0}}" },
   {
+    en: "Freight FX rate must be a positive number",
+    ar: "يجب أن يكون سعر صرف الشحن رقمًا موجبًا",
+    fr: "Le taux de change du fret doit être un nombre positif",
+  },
+  {
+    en: "Other charges FX rate must be a positive number",
+    ar: "يجب أن يكون سعر صرف الرسوم الأخرى رقمًا موجبًا",
+    fr: "Le taux de change des autres frais doit être un nombre positif",
+  },
+  {
     en: "fxRateToUsd must be a positive number",
     ar: "يجب أن يكون هناك رقم إيجابي",
     fr: "fxRateToUsd doit être un nombre positif",
