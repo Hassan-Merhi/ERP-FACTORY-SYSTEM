@@ -9,6 +9,11 @@ import {
   hscrError,
   inventoryEvidenceFingerprint,
 } from "./historicalSalesCostRepair";
+import {
+  assertSalesCostTargetsInOpenPeriods,
+  disableMaintenanceScope,
+  enableRunCompanyScope,
+} from "./historicalSalesCostRepairLoaders";
 import { HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION } from "./historicalSalesCostRepairEngine";
 import {
   APPLY_LOCK_SQL,
@@ -174,7 +179,7 @@ export async function applyHistoricalSalesCostPartialWithClient(
   const algorithmVersion = deps.algorithmVersion ?? HISTORICAL_SALES_COST_REPAIR_ALGORITHM_VERSION;
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
-    await enableMaintenanceScope(client);
+    await disableMaintenanceScope(client);
     await client.query(APPLY_LOCK_SQL);
     const writesBefore = await transactionWriteCounts(client);
 
@@ -219,6 +224,8 @@ export async function applyHistoricalSalesCostPartialWithClient(
 
     const companyIds = (run.requested_company_ids ?? []).map(Number);
     if (companyIds.length === 0) throw hscrError("HSCR_RUN_SCOPE_EMPTY");
+    await enableRunCompanyScope(client, companyIds);
+    await assertSalesCostTargetsInOpenPeriods(client, { kind: "run", runId: input.runId });
 
     const violations = rowSetIntegrityViolations(run, await runRowStatusCounts(client, input.runId));
     if (violations.length > 0) throw hscrError(`HSCR_PARTIAL_ROW_SET_INVALID:${violations.join(",")}`);
@@ -405,7 +412,7 @@ export async function rollbackHistoricalSalesCostPartialWithClient(
   validatePartialRollbackInput(input);
   try {
     await client.query("BEGIN ISOLATION LEVEL SERIALIZABLE");
-    await enableMaintenanceScope(client);
+    await disableMaintenanceScope(client);
     await client.query(APPLY_LOCK_SQL);
     const writesBefore = await transactionWriteCounts(client);
 
@@ -442,6 +449,15 @@ export async function rollbackHistoricalSalesCostPartialWithClient(
     if (Number(logCount.rows[0].rows) !== targetRows || Number(logCount.rows[0].open_rows) !== targetRows) {
       throw hscrError("HSCR_PARTIAL_ROLLBACK_SNAPSHOT_INCOMPLETE");
     }
+    const logCompanies = await client.query<{ company_id: number }>(
+      `SELECT DISTINCT company_id FROM historical_sales_cost_repair_apply_log WHERE partial_apply_id=$1`,
+      [partialApplyId]
+    );
+    await enableRunCompanyScope(
+      client,
+      logCompanies.rows.map((row) => Number(row.company_id))
+    );
+    await assertSalesCostTargetsInOpenPeriods(client, { kind: "partial-apply", partialApplyId });
 
     await assertSalesItemsUpdateHasNoSideEffectTriggers(client);
     const locked = await client.query(

@@ -99,10 +99,6 @@
       "reason": "Payroll accounting helpers receive the active factory company from their route caller."
     },
     {
-      "path": "server/routes/payroll/core/migrations.ts",
-      "reason": "Payroll migration maintenance is explicitly company-selected and guarded before execution."
-    },
-    {
       "path": "server/routes/rental/rentalPaymentsAccrualRoutes.ts",
       "reason": "Rental accrual writes use the active company rental scope."
     },

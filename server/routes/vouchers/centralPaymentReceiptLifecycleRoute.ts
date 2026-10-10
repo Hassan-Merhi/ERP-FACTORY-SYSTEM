@@ -6,6 +6,10 @@ import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { storage } from "../../storage";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
@@ -95,6 +99,17 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
     if (blockedVoucherReason) {
       res.status(403).json({ message: blockedVoucherReason });
       return;
+    }
+
+    // Phase 19 C (MC-2): an intercompany transfer leg is not edited here or on
+    // the legacy route this one falls through to (409): the transfer is deleted
+    // (both legs) and recorded again. This editor changed one leg and left the
+    // other company's voucher and the link as they were.
+    try {
+      await assertNotIntercompanyTransferLeg(voucherId);
+    } catch (legError: unknown) {
+      if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+      throw legError;
     }
 
     const body = req.body as CentralPaymentReceiptBody;

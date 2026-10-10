@@ -34,6 +34,25 @@ const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_le
    $fn$`;
 
 /**
+ * The classifier's class of an account (accountClassification.classifyAccountType:
+ * the type, else a sub-type that is itself a known type, else 'unknown'),
+ * generated from the classifier's type lists so the SQL cannot drift from it.
+ */
+const ACCOUNT_CLASSES = ["asset", "liability", "equity", "income", "expense", "party"] as const;
+const classCases = (column: string) =>
+  ACCOUNT_CLASSES.map(
+    (accountClass) => `WHEN lower(btrim(COALESCE(${column}, ''))) IN (${typeList(accountClass)}) THEN '${accountClass}'`
+  ).join("\n              ");
+const ACCOUNT_CLASS_FUNCTION = `CREATE OR REPLACE FUNCTION erp_ledger_account_class(p_type text, p_sub_type text)
+   RETURNS text LANGUAGE sql IMMUTABLE AS $fn$
+     SELECT CASE
+              ${classCases("p_type")}
+              ${classCases("p_sub_type")}
+              ELSE 'unknown'
+            END
+   $fn$`;
+
+/**
  * Ledger integrity guards (2026-10 accounting audit, wave 4).
  *
  * Production held posted lines on hard-deleted accounts (there was no foreign
@@ -57,7 +76,10 @@ const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_le
  *     reads it — wave 16 B) is not zero cannot be soft-deleted;
  *   - the same BEFORE trigger on bank_accounts (wave 18 B, v3): a bank whose
  *     opening plus the lines it owns under the engine's rule is not zero cannot
- *     be soft-deleted.
+ *     be soft-deleted;
+ *   - the account tree (phase 19 B, v4): a parent foreign key and a BEFORE
+ *     trigger refusing a parent of another company, a deleted parent, a parent
+ *     of another class (classifyAccountType) and cycles.
  *
  * Existing rows are left as they are: constraints are NOT VALID and the line
  * trigger only checks accounts when they are set or changed. The accounting
@@ -66,6 +88,10 @@ const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_le
  * A reviewed repair can `SET LOCAL app.ledger_integrity_bypass = 'on'` for its
  * own transaction; nothing in the application does.
  */
+/** Phase 19 (B), C5: the parent foreign key and the tree trigger on ledger_accounts. */
+export const LEDGER_ACCOUNT_PARENT_FK = "ledger_accounts_parent_id_fkey";
+export const LEDGER_ACCOUNT_TREE_TRIGGER = "ledger_accounts_tree_guard";
+
 export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
   `DO $$ BEGIN
      ALTER TABLE voucher_entries ADD CONSTRAINT voucher_entries_ledger_account_id_fkey
@@ -167,11 +193,18 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
      END IF;
 
      IF NEW.fixed_asset_id IS NOT NULL THEN
-       SELECT company_id INTO target_company FROM fixed_assets WHERE id = NEW.fixed_asset_id;
+       -- Phase 19 (B), v4: a soft-deleted fixed asset (PE7) is not postable;
+       -- read through to_jsonb so a database without the column still works.
+       SELECT fa.company_id, (to_jsonb(fa)->>'deleted_at') INTO target_company, target_deleted
+         FROM fixed_assets fa WHERE fa.id = NEW.fixed_asset_id;
        IF NOT FOUND OR target_company IS DISTINCT FROM NEW.company_id THEN
          RAISE EXCEPTION USING ERRCODE = '23514',
            MESSAGE = format('FIXED_ASSET_COMPANY_MISMATCH: fixed asset %s does not belong to company %s',
                             NEW.fixed_asset_id, NEW.company_id);
+       END IF;
+       IF target_deleted IS NOT NULL THEN
+         RAISE EXCEPTION USING ERRCODE = '23514',
+           MESSAGE = format('FIXED_ASSET_DELETED: fixed asset %s is deleted and cannot be posted to', NEW.fixed_asset_id);
        END IF;
      END IF;
 
@@ -291,6 +324,93 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
   `CREATE TRIGGER bank_accounts_delete_guard
      BEFORE UPDATE OF deleted_at ON bank_accounts
      FOR EACH ROW EXECUTE FUNCTION erp_bank_account_delete_guard()`,
+  // Phase 19 (B), C5: the account tree. A foreign key on parent_id, added NOT
+  // VALID (existing rows are not checked by the ADD) and then validated in its
+  // own savepoint: when an existing row names a missing parent the validation
+  // is skipped with a warning, the key stays NOT VALID (it still checks every
+  // new or changed row) and the integrity diagnostic lists the row. ON DELETE
+  // SET NULL: the nightly purge hard-deletes long soft-deleted accounts, and a
+  // child keeps its own place in the books when its deleted parent goes.
+  `DO $$ BEGIN
+     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${LEDGER_ACCOUNT_PARENT_FK}') THEN
+       ALTER TABLE ledger_accounts ADD CONSTRAINT ${LEDGER_ACCOUNT_PARENT_FK}
+         FOREIGN KEY (parent_id) REFERENCES ledger_accounts(id) ON DELETE SET NULL NOT VALID;
+     END IF;
+     IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${LEDGER_ACCOUNT_PARENT_FK}' AND NOT convalidated) THEN
+       BEGIN
+         ALTER TABLE ledger_accounts VALIDATE CONSTRAINT ${LEDGER_ACCOUNT_PARENT_FK};
+       EXCEPTION WHEN foreign_key_violation THEN
+         RAISE WARNING '${LEDGER_ACCOUNT_PARENT_FK} left NOT VALID: an existing account names a missing parent (see the integrity diagnostic)';
+       END;
+     END IF;
+   END $$`,
+  ACCOUNT_CLASS_FUNCTION,
+  // A new or changed parent link must name a live account of the same company
+  // and class that is not the account itself or one of its descendants. Only
+  // the row being written is checked (existing links are listed by the
+  // diagnostic, never refused at boot); an account with live children cannot
+  // move company, change class or be deleted.
+  `CREATE OR REPLACE FUNCTION erp_ledger_account_tree_guard() RETURNS trigger
+   LANGUAGE plpgsql AS $fn$
+   DECLARE
+     parent record;
+     reason text;
+     child_check boolean;
+   BEGIN
+     IF erp_ledger_integrity_bypassed() THEN RETURN NEW; END IF;
+     child_check := NEW.parent_id IS NOT NULL AND (
+       TG_OP = 'INSERT'
+       OR NEW.parent_id IS DISTINCT FROM OLD.parent_id
+       OR NEW.company_id IS DISTINCT FROM OLD.company_id
+       OR erp_ledger_account_class(NEW.account_type, NEW.sub_type)
+          IS DISTINCT FROM erp_ledger_account_class(OLD.account_type, OLD.sub_type)
+       OR (NEW.deleted_at IS NULL AND OLD.deleted_at IS NOT NULL));
+     IF child_check THEN
+       IF NEW.parent_id = NEW.id THEN
+         reason := 'an account cannot be its own parent';
+       ELSE
+         SELECT id, company_id, deleted_at, account_type, sub_type INTO parent
+           FROM ledger_accounts WHERE id = NEW.parent_id;
+         IF NOT FOUND OR parent.company_id IS DISTINCT FROM NEW.company_id THEN
+           reason := 'the parent is not an account of this company';
+         ELSIF parent.deleted_at IS NOT NULL THEN
+           reason := 'the parent account is deleted';
+         ELSIF erp_ledger_account_class(parent.account_type, parent.sub_type)
+               IS DISTINCT FROM erp_ledger_account_class(NEW.account_type, NEW.sub_type) THEN
+           reason := format('the parent is %s and the account is %s',
+             erp_ledger_account_class(parent.account_type, parent.sub_type),
+             erp_ledger_account_class(NEW.account_type, NEW.sub_type));
+         ELSIF TG_OP = 'UPDATE' AND EXISTS (
+           WITH RECURSIVE ancestors(id, parent_id, depth) AS (
+             SELECT la.id, la.parent_id, 1 FROM ledger_accounts la WHERE la.id = NEW.parent_id
+             UNION ALL
+             SELECT la.id, la.parent_id, a.depth + 1
+               FROM ledger_accounts la JOIN ancestors a ON la.id = a.parent_id
+              WHERE a.depth < 1000)
+           SELECT 1 FROM ancestors WHERE id = NEW.id) THEN
+           reason := 'the parent is the account itself or one of its sub-accounts';
+         END IF;
+       END IF;
+     END IF;
+     IF reason IS NULL AND TG_OP = 'UPDATE'
+        AND (NEW.company_id IS DISTINCT FROM OLD.company_id
+             OR erp_ledger_account_class(NEW.account_type, NEW.sub_type)
+                IS DISTINCT FROM erp_ledger_account_class(OLD.account_type, OLD.sub_type)
+             OR (NEW.deleted_at IS NOT NULL AND OLD.deleted_at IS NULL))
+        AND EXISTS (SELECT 1 FROM ledger_accounts c WHERE c.parent_id = OLD.id AND c.deleted_at IS NULL) THEN
+       reason := 'the account has sub-accounts: move them first';
+     END IF;
+     IF reason IS NOT NULL THEN
+       RAISE EXCEPTION USING ERRCODE = '23514',
+         MESSAGE = format('LEDGER_ACCOUNT_PARENT_INVALID: account %s: %s', COALESCE(NEW.code, NEW.name), reason);
+     END IF;
+     RETURN NEW;
+   END
+   $fn$`,
+  `DROP TRIGGER IF EXISTS ${LEDGER_ACCOUNT_TREE_TRIGGER} ON ledger_accounts`,
+  `CREATE TRIGGER ${LEDGER_ACCOUNT_TREE_TRIGGER}
+     BEFORE INSERT OR UPDATE OF parent_id, company_id, account_type, sub_type, deleted_at ON ledger_accounts
+     FOR EACH ROW EXECUTE FUNCTION erp_ledger_account_tree_guard()`,
 ];
 
 const INSTALL_LOCK_KEY = 741_220_263;
@@ -301,7 +421,7 @@ const INSTALL_LOCK_KEY = 741_220_263;
  * take no locks on the ledger tables (ADD CONSTRAINT and CREATE TRIGGER take
  * strong table locks even when they end up changing nothing).
  */
-export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v3";
+export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v4";
 
 // A schema push drops constraints it does not know about while the version
 // comment survives, so the constraints are checked as well as the version.
@@ -321,6 +441,8 @@ async function installedVersion(client: { query: Pool["query"] }): Promise<strin
       WHERE EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_target_guard' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ledger_accounts_delete_guard' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'bank_accounts_delete_guard' AND NOT tgisinternal)
+        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = '${LEDGER_ACCOUNT_TREE_TRIGGER}' AND NOT tgisinternal)
+        AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname = '${LEDGER_ACCOUNT_PARENT_FK}')
         AND (SELECT COUNT(*) FROM pg_constraint
               WHERE conrelid = 'voucher_entries'::regclass
                 AND conname = ANY($1::text[])) = cardinality($1::text[])`,

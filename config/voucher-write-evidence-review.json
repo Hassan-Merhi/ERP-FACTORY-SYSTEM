@@ -11,12 +11,13 @@
     "phase3InfrastructureCompleted": 11,
     "phase4OperationalCompleted": 22,
     "phase5OperationalCompleted": 22,
-    "phase6SpecialPurposeCompleted": 10,
+    "phase6SpecialPurposeCompleted": 8,
     "unreviewed": 0,
     "phase7PostReviewSafeWriters": 1,
     "phase8RequestIdentityCompleted": 1,
     "wave16NoLongerCreates": 2,
-    "wave18NoLongerCreates": 1
+    "wave18NoLongerCreates": 1,
+    "phase19NoLongerCreates": 2
   },
   "reviewed": {
     "explicit-replay-guard": {
@@ -126,11 +127,9 @@
     },
     "phase-6-intrinsic-replay-safe-writers": {
       "verdict": "phase 6 completed by durable business-state replay proof",
-      "reason": "These writers already derive safety from persistent business state rather than a browser request: payroll migration rewrites only old-account vouchers, company import requires an empty target, payroll backfill excludes payroll IDs that already have vouchers, and rental re-accrue only corrects still-detectable discrepancies. (The deferred-rent reclassification left this list in wave 16 A: it is an Owner preview/apply tool posting through the central engine.)",
+      "reason": "These writers already derive safety from persistent business state rather than a browser request: company import requires an empty target and rental re-accrue only corrects still-detectable discrepancies. (The deferred-rent reclassification left this list in wave 16 A: it is an Owner preview/apply tool posting through the central engine. The payroll group-expense migration and the payroll voucher backfill left it in phase 19 A: both routes are retired.)",
       "files": [
-        "server/routes/erp-payroll/runs-migration.ts",
         "server/routes/factory/docs-users/companyImportRoutes.ts",
-        "server/routes/payroll/worker-statement/backfill.ts",
         "server/routes/rental/rentalAccrualConfigRoutes.ts"
       ]
     },

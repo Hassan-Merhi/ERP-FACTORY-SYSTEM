@@ -10,6 +10,7 @@ const harness = vi.hoisted(() => {
       where: vi.fn(() => builder),
       orderBy: vi.fn(() => builder),
       limit: vi.fn(() => builder),
+      for: vi.fn(() => builder),
       execute: vi.fn(async () => result),
       then: (resolve: (value: unknown[]) => unknown, reject: (reason: unknown) => unknown) =>
         Promise.resolve(result).then(resolve, reject),
@@ -369,12 +370,15 @@ describe("bank and fixed-asset route behavior", () => {
     );
   });
 
+  // Phase 19 (B), PE7: a soft delete, refused (409) while lines reference the asset.
   it("blocks fixed-asset deletion while voucher entries still reference it", async () => {
+    harness.selectResults.push([{ id: 3, companyId: 4, name: "Van", openingBalance: "0" }]);
     harness.executeResults.push({ rows: [{ cnt: "2" }] });
     const res = resHarness();
     await routes.get("DELETE /api/fixed-assets/:id")!(req({ params: { id: "3" } }), res);
-    expect(res.statusCode).toBe(400);
-    expect(res.body.message).toContain("2 voucher entry/entries");
+    expect(res.statusCode).toBe(409);
+    expect(res.body.code).toBe("FIXED_ASSET_HAS_ENTRIES");
     expect(harness.db.delete).not.toHaveBeenCalled();
+    expect(harness.updatedValues).toEqual([]);
   });
 });

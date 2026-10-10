@@ -2,6 +2,10 @@ import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { and, eq } from "drizzle-orm";
 import { db } from "../db";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../services/accounting/intercompanyTransferLegGuard";
 import { requireAuth } from "../auth";
 import { voucherEntries, vouchers } from "@shared/schema";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
@@ -89,6 +93,15 @@ export function registerVoucherEntryCurrencyEditRoutes(app: Express) {
           return written;
         });
         return res.json(updated);
+      }
+
+      // Phase 19 C (MC-2): an amount on an intercompany transfer leg is not edited
+      // here (409): the transfer is deleted (both legs) and recorded again.
+      try {
+        await assertNotIntercompanyTransferLeg(row.voucher.id);
+      } catch (legError: unknown) {
+        if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+        throw legError;
       }
 
       const transactionCurrency =

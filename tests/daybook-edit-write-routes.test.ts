@@ -8,8 +8,8 @@
  * voucher-backed entry may be voided but never hard-deleted.** Deleting the
  * daybook row would leave the voucher and its two entries posted with nothing
  * in the daybook pointing at them — money in the trial balance that no
- * operational view shows. Voiding instead removes the voucher's entries,
- * soft-deletes the voucher so it stays auditable, and unwinds the payroll and
+ * operational view shows. Voiding instead retires the voucher (soft delete,
+ * lines kept, audited), and unwinds the payroll and
  * advance links that referenced it.
  *
  * The reverse is also asserted: an entry that is *not* voucher-backed cannot be
@@ -176,16 +176,17 @@ describe("DELETE /api/factory/daybook/entry/:id", () => {
 });
 
 describe("DELETE /api/factory/daybook/entry/:id/void", () => {
-  it("removes the voucher's legs, soft-deletes it, and drops the daybook row", async () => {
+  it("retires the voucher with its legs kept, and drops the daybook row", async () => {
     const voucherId = await createVoucher("Payment");
     const entryId = await createEntry(voucherId);
 
     const response = await agent.delete(`/api/factory/daybook/entry/${entryId}/void`);
     expect(response.status).toBe(200);
 
-    // The legs go, so the amounts leave the trial balance; the voucher itself
-    // stays as a tombstone so the void is auditable.
-    expect(await voucherEntryCount(voucherId)).toBe(0);
+    // Phase 19 (A), G3: the voucher is retired (soft-deleted, so its amounts
+    // leave the trial balance) and its legs stay with it as history; they were
+    // hard-deleted before.
+    expect(await voucherEntryCount(voucherId)).toBe(2);
     expect((await voucherRow(voucherId))?.deleted_at).not.toBeNull();
     expect(await entryRow(entryId)).toBeNull();
   });

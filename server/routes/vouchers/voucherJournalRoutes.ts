@@ -4,10 +4,14 @@ import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
 import { syncEmployeeBalancesFromEntries } from "../_helpers";
-import { readVoucherAuditState, writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
+import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { logger } from "../../lib/logger";
-import { vouchers, voucherEntries, customerBalances, interCompanyTransfers } from "@shared/schema";
-import { eq, and, or, isNull } from "drizzle-orm";
+import { vouchers, voucherEntries, customerBalances } from "@shared/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 
 import { recalculateOrderTotals } from "../factory/_helpers";
@@ -442,6 +446,17 @@ export function registerVoucherJournalRoutes(app: Express) {
         return res.status(400).json({ message: "Missing required fields" });
       }
 
+      // Phase 19 C (MC-2): an intercompany transfer leg (a Payment, Receipt or
+      // draft journal reaching this legacy editor) is not edited here (409): the
+      // transfer is deleted (both legs) and recorded again. This editor used to
+      // rescale the other company's voucher after commit, outside a transaction.
+      try {
+        await assertNotIntercompanyTransferLeg(voucherId);
+      } catch (legError: unknown) {
+        if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+        throw legError;
+      }
+
       // Determine voucher currency and rate for the PATCH handler.
       // currency/exchangeRate may not be sent on a PATCH (preserve existing values).
       const vCurrencyPatch = (currency as string | undefined) || "USD";
@@ -569,69 +584,6 @@ export function registerVoucherJournalRoutes(app: Express) {
       // Sync order charges: if the journal has a customer entry + a CR ledger entry
       // that matches a charge on one of their orders, update that charge automatically
       await syncJournalToOrderCharge(req.session.currentCompanyId!, result.entries, result.voucher.id).catch(() => {});
-
-      // ── Intercompany counterpart sync ─────────────────────────────────────
-      // If this voucher is one side of an intercompany transfer pair, scale the
-      // counterpart voucher's totalAmount and entries to match the new amount.
-      try {
-        const [ict] = await db
-          .select()
-          .from(interCompanyTransfers)
-          .where(
-            or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
-          )
-          .limit(1);
-        if (ict) {
-          const otherVoucherId = ict.fromVoucherId === voucherId ? ict.toVoucherId : ict.fromVoucherId;
-          if (otherVoucherId) {
-            const newTotal = toMoney(result.voucher.totalAmount);
-            const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
-            if (otherVoucher) {
-              const oldTotal = toMoney(otherVoucher.totalAmount);
-              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
-              const otherEntries = await db
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, otherVoucherId));
-              await db.transaction(async (tx) => {
-                const auditBefore = await readVoucherAuditState(tx, otherVoucherId);
-                for (const e of otherEntries) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({
-                      debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
-                      creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
-                    })
-                    .where(eq(voucherEntries.id, e.id));
-                }
-                await tx
-                  .update(vouchers)
-                  .set({ totalAmount: newTotal.toFixed(2) })
-                  .where(eq(vouchers.id, otherVoucherId));
-                // Wave 12: the counterpart's rescaled lines are audited under its own company.
-                await writeVoucherAuditTx(tx, {
-                  actor: {
-                    userId: req.session.userId,
-                    username: req.session.username,
-                    companyId: otherVoucher.companyId,
-                  },
-                  action: "update",
-                  voucherId: otherVoucherId,
-                  before: auditBefore,
-                  after: await readVoucherAuditState(tx, otherVoucherId),
-                  extra: { interCompanyCounterpartOf: { new: { voucherId } } },
-                });
-              });
-              await db
-                .update(fde)
-                .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })
-                .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, otherVoucherId)));
-            }
-          }
-        }
-      } catch (ictErr: unknown) {
-        logger.error("[ICT sync] Counterpart update failed (non-fatal):", { error: getErrorMessage(ictErr) });
-      }
 
       // WhatsApp rule check — prompt the frontend instead of auto-sending
       let waJournalPatch: { prompt: boolean; accountId?: number; voucherDate?: string; month?: string } = {

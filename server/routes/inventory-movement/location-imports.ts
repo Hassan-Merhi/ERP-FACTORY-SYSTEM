@@ -33,7 +33,8 @@ export function registerLocationImportRoutes(app: Express) {
   app.post(
     "/api/locations/:locationId/import-cost-prices",
     requireAuth,
-    requireRole("Developer"),
+    // Phase 19 C (I2): Admin/Owner (Developer passes).
+    requireRole("Admin", "Owner"),
     checkPOSLocation,
     privilegedMutationRateLimit,
     locationImportBudget,
@@ -68,7 +69,10 @@ export function registerLocationImportRoutes(app: Express) {
         // Wave 11: the import overwrites stock values with no journal, so it is
         // refused once the company's perpetual-inventory cut-over is applied.
         await assertNoInventoryCutoverTx(db, req.session.currentCompanyId, "cost-price-import");
-        const result = await storage.updateCostPricesByBarcode(locationId, req.session.currentCompanyId, updates);
+        const result = await storage.updateCostPricesByBarcode(locationId, req.session.currentCompanyId, updates, {
+          userId: String(req.session.userId ?? "unknown"),
+          username: req.session.username || String(req.session.userId ?? "unknown"),
+        });
         res.json(result);
       } catch (error: unknown) {
         if (sendInventoryCutoverRefusal(res, error)) return;

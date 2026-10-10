@@ -4,23 +4,49 @@ import { db } from "../../db";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { getStockItemByCodeOrAlias } from "../inventory";
-import { toFiniteNumber } from "@shared/typeGuards";
 import { moneyString, parseMoneyInput } from "../../lib/money";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { recordInventoryValuationOverride } from "../../services/inventory/recordInventoryValuationOverride";
+import { writeAuditEvent } from "../../services/audit/auditService";
+import {
+  assertNoInventoryCutoverTx,
+  InventoryCutoverRefusalError,
+} from "../../services/accounting/perpetualInventory/cutoverRefusal";
 
 // ---------------------------------------------------------------------------
 
+/** Who runs the cost-price import (the audit row's actor). */
+export interface CostPriceImportActor {
+  userId: string;
+  username: string;
+}
+
+/**
+ * The location cost-price import (phase 19 C, I2): it overwrites an inventory
+ * row's average rate and value with no stock movement and no journal, so the
+ * route is Admin/Owner and refused once the company's perpetual cut-over is
+ * applied. Each row is one transaction: the cut-over is re-checked in it, the
+ * rate is exact (Decimal, 6 places; was a float at 2), the value is quantity ×
+ * rate at cents, and the valuation override and an audit row (before/after)
+ * are written in it.
+ */
 export async function updateCostPricesByBarcode(
   locationId: number,
   companyId: number,
-  updates: Array<{ barcode: string; costPrice: number }>
+  updates: Array<{ barcode: string; costPrice: unknown }>,
+  actor: CostPriceImportActor = { userId: "system", username: "system" }
 ): Promise<{ updated: number; errors: string[] }> {
   const errors: string[] = [];
   let updated = 0;
 
   for (const update of updates) {
     try {
+      const costPrice = parseMoneyInput(update.costPrice);
+      if (!costPrice || costPrice.lt(0)) {
+        errors.push(`Invalid cost price for barcode: ${update.barcode}`);
+        continue;
+      }
+      const averageRate = costPrice.toDecimalPlaces(6).toFixed(6);
       const stockItem = await getStockItemByCodeOrAlias(update.barcode, companyId);
       if (!stockItem) {
         errors.push(`Barcode not found: ${update.barcode}`);
@@ -28,22 +54,20 @@ export async function updateCostPricesByBarcode(
       }
 
       await db.transaction(async (tx) => {
+        await assertNoInventoryCutoverTx(tx, companyId, "cost-price-import");
         const inventory = await lockInventoryRow(tx, locationId, stockItem.id);
 
         if (inventory) {
-          // `quantity` is a NOT NULL numeric column, so it arrives as a decimal
-          // string and is parsed rather than coerced: a blind parseFloat of a
-          // non-numeric would write "NaN" into totalValue.
-          const quantity = toFiniteNumber(inventory.quantity);
-          if (quantity === undefined) {
+          const quantity = parseMoneyInput(String(inventory.quantity));
+          if (!quantity) {
             errors.push(`Inventory quantity is not a number for barcode: ${update.barcode}`);
             return;
           }
-          const newTotalValue = (quantity * update.costPrice).toFixed(2);
+          const newTotalValue = quantity.times(averageRate).toDecimalPlaces(2).toFixed(2);
           await tx
             .update(schema.inventory)
             .set({
-              averageRate: update.costPrice.toFixed(2),
+              averageRate,
               totalValue: newTotalValue,
               lastUpdated: new Date(),
             })
@@ -63,16 +87,35 @@ export async function updateCostPricesByBarcode(
             },
             after: {
               quantity: inventory.quantity,
-              averageRate: update.costPrice.toFixed(2),
+              averageRate,
               totalValue: newTotalValue,
             },
           });
+          await writeAuditEvent(
+            {
+              userId: actor.userId,
+              username: actor.username,
+              companyId,
+              action: "update",
+              tableName: "inventory",
+              recordId: inventory.id,
+              recordIdentifier: `cost-price import: ${update.barcode} at location ${locationId}`,
+              changes: {
+                averageRate: { old: inventory.average_rate, new: averageRate },
+                totalValue: { old: inventory.total_value, new: newTotalValue },
+                source: { new: "location-cost-price-import" },
+              },
+            },
+            tx
+          );
           updated++;
         } else {
           errors.push(`Item not found in inventory for barcode: ${update.barcode}`);
         }
       });
     } catch (err: unknown) {
+      // The cut-over refusal stops the whole import (nothing more is written).
+      if (err instanceof InventoryCutoverRefusalError) throw err;
       errors.push(`Error processing ${update.barcode}: ${getErrorMessage(err)}`);
     }
   }

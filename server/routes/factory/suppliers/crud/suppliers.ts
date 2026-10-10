@@ -18,20 +18,53 @@ import {
 } from "./factorySupplierWrites";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
-import { requireAuth } from "../../../../auth";
-import {
-  factorySuppliers,
-  factoryContainers,
-  factoryRawStock,
-  factoryMixBatchSources,
-  factoryContainerCommissions,
-  factoryOffloadAdditionalCharges,
-  factorySupplierScoreSnapshots,
-  factorySupplierPayments,
-  factorySupplierFxTransfers,
-  factoryFxAllocations,
-} from "@shared/schema";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { requireAuth, requireRole } from "../../../../auth";
+import { logAudit } from "../../../_helpers";
+import { toMoney } from "../../../../lib/money";
+import type { DbTransaction } from "../../../../db";
+import { factorySuppliers, factorySupplierScoreSnapshots } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
+
+export const FACTORY_SUPPLIER_HAS_HISTORY_CODE = "FACTORY_SUPPLIER_HAS_HISTORY" as const;
+export const FACTORY_SUPPLIER_HAS_HISTORY_MESSAGE =
+  "This supplier has history (containers, stock, payments, transfers, voucher lines, linked suppliers or an opening balance), so it cannot be permanently deleted.";
+
+/** Rows that record a factory supplier's history, by kind (phase 19 B, PE6). */
+export async function factorySupplierHistoryCountsTx(
+  tx: DbTransaction,
+  companyId: number,
+  supplierId: number
+): Promise<Record<string, number>> {
+  // History rows are counted in the supplier's company; voucher lines and FX
+  // transfers in any company (a line naming the supplier is its history wherever it is).
+  const result = await tx.execute<Record<string, number>>(sql`
+    SELECT
+      (SELECT COUNT(*) FROM factory_containers
+        WHERE company_id = ${companyId} AND supplier_id = ${supplierId})::int AS containers,
+      (SELECT COUNT(*) FROM factory_raw_stock rs
+        WHERE rs.company_id = ${companyId}
+          AND (rs.commission_supplier_id = ${supplierId}
+               OR rs.container_id IN (SELECT id FROM factory_containers
+                                       WHERE company_id = ${companyId} AND supplier_id = ${supplierId})))::int AS "rawStock",
+      (SELECT COUNT(*) FROM factory_raw_material_adjustments
+        WHERE company_id = ${companyId} AND supplier_id = ${supplierId})::int AS "rawMaterialAdjustments",
+      (SELECT COUNT(*) FROM factory_offload_additional_charges
+        WHERE company_id = ${companyId} AND supplier_id = ${supplierId})::int AS "offloadCharges",
+      (SELECT COUNT(*) FROM factory_mix_batch_sources
+        WHERE supplier_id = ${supplierId} OR inventory_supplier_id = ${supplierId})::int AS "mixSources",
+      (SELECT COUNT(*) FROM factory_waste_entries
+        WHERE company_id = ${companyId} AND supplier_id = ${supplierId})::int AS waste,
+      (SELECT COUNT(*) FROM factory_supplier_payments
+        WHERE company_id = ${companyId} AND supplier_id = ${supplierId})::int AS payments,
+      (SELECT COUNT(*) FROM factory_supplier_fx_transfers
+        WHERE from_supplier_id = ${supplierId} OR to_supplier_id = ${supplierId})::int AS "fxTransfers",
+      (SELECT COUNT(*) FROM voucher_entries WHERE factory_supplier_id = ${supplierId})::int AS "voucherLines",
+      (SELECT COUNT(*) FROM factory_suppliers
+        WHERE company_id = ${companyId} AND parent_id = ${supplierId})::int AS "linkedSuppliers"
+  `);
+  const row = (result.rows[0] ?? {}) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(row).map(([key, value]) => [key, Number(value ?? 0)]));
+}
 
 function factorySupplierActor(req: Request) {
   return {
@@ -217,72 +250,91 @@ export function registerFactorySupplierCrudRoutes(app: Express) {
     }
   });
 
-  // Hard-delete a factory supplier — cascades through all related records
-  app.delete("/api/factory/suppliers/:id/permanent", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Permanent delete of a factory supplier. Phase 19 (B), PE6: Admin or Owner;
+  // refused (409 FACTORY_SUPPLIER_HAS_HISTORY) while anything records its
+  // history — containers (and through them commissions, offload charges, FX
+  // allocations), raw stock, raw-material adjustments, mix sources, waste,
+  // payments, FX transfers, voucher lines (live or retired voucher), linked
+  // child suppliers, or a non-zero opening. An empty supplier is removed in one
+  // transaction with its derived score snapshots and one audit row (the row as
+  // it was). With every voucher line refused there is no journal left to
+  // orphan. Before: sign-in only, it cascaded through containers, raw stock,
+  // commissions and payments with no transaction or audit, leaving their
+  // journals orphaned.
+  app.delete(
+    "/api/factory/suppliers/:id/permanent",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      const id = parseId(req.params.id);
+        const outcome = await db.transaction(async (tx) => {
+          const [supplier] = await tx
+            .select()
+            .from(factorySuppliers)
+            .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)))
+            .for("update");
+          if (!supplier) return { status: 404 as const, body: { message: "Supplier not found" } };
 
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      const [supplier] = await db
-        .select()
-        .from(factorySuppliers)
-        .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)));
+          const history = await factorySupplierHistoryCountsTx(tx, companyId, id);
+          const opening = toMoney(supplier.openingBalance);
+          const blockers = Object.entries(history).filter(([, count]) => count > 0);
+          if (blockers.length > 0 || !opening.isZero()) {
+            return {
+              status: 409 as const,
+              body: {
+                message: FACTORY_SUPPLIER_HAS_HISTORY_MESSAGE,
+                code: FACTORY_SUPPLIER_HAS_HISTORY_CODE,
+                history: {
+                  ...Object.fromEntries(blockers),
+                  ...(opening.isZero() ? {} : { opening: opening.toFixed() }),
+                },
+              },
+            };
+          }
 
-      if (!supplier) return res.status(404).json({ message: "Supplier not found" });
-
-      // 1. Collect container IDs belonging to this supplier
-      const supplierContainers = await db
-        .select({ id: factoryContainers.id })
-        .from(factoryContainers)
-        .where(and(eq(factoryContainers.companyId, companyId), eq(factoryContainers.supplierId, id)));
-      const containerIds = supplierContainers.map((c) => c.id);
-
-      // 2. Cascade-delete container-level dependents (only when containers exist)
-      if (containerIds.length > 0) {
-        await db.delete(factoryFxAllocations).where(inArray(factoryFxAllocations.containerId, containerIds));
-        await db
-          .delete(factoryOffloadAdditionalCharges)
-          .where(inArray(factoryOffloadAdditionalCharges.containerId, containerIds));
-        await db
-          .delete(factoryContainerCommissions)
-          .where(inArray(factoryContainerCommissions.containerId, containerIds));
-        await db.delete(factoryMixBatchSources).where(inArray(factoryMixBatchSources.containerId, containerIds));
-        await db.delete(factoryRawStock).where(inArray(factoryRawStock.containerId, containerIds));
-        await db.delete(factoryContainers).where(inArray(factoryContainers.id, containerIds));
+          const snapshots = await tx
+            .delete(factorySupplierScoreSnapshots)
+            .where(
+              and(
+                eq(factorySupplierScoreSnapshots.companyId, companyId),
+                eq(factorySupplierScoreSnapshots.supplierId, id)
+              )
+            )
+            .returning({ id: factorySupplierScoreSnapshots.id });
+          await tx
+            .delete(factorySuppliers)
+            .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)));
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "factory_suppliers",
+              recordId: supplier.id,
+              recordIdentifier: supplier.name,
+              changes: {
+                supplier: { old: supplier },
+                scoreSnapshotsRemoved: { new: snapshots.length },
+                reason: { new: "permanent delete (no history)" },
+              },
+            },
+            tx
+          );
+          return { status: 200 as const, body: { message: "Supplier permanently deleted" } };
+        });
+        res.status(outcome.status).json(outcome.body);
+      } catch (error: unknown) {
+        logger.error("Error permanently deleting factory supplier:", { error: error });
+        res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
       }
-
-      // 3. Delete supplier-level financial records
-      await db
-        .delete(factorySupplierFxTransfers)
-        .where(
-          and(
-            eq(factorySupplierFxTransfers.companyId, companyId),
-            or(eq(factorySupplierFxTransfers.fromSupplierId, id), eq(factorySupplierFxTransfers.toSupplierId, id))
-          )
-        );
-      await db
-        .delete(factorySupplierPayments)
-        .where(and(eq(factorySupplierPayments.companyId, companyId), eq(factorySupplierPayments.supplierId, id)));
-      await db
-        .delete(factorySupplierScoreSnapshots)
-        .where(
-          and(eq(factorySupplierScoreSnapshots.companyId, companyId), eq(factorySupplierScoreSnapshots.supplierId, id))
-        );
-
-      // 4. Finally delete the supplier itself
-      await db
-        .delete(factorySuppliers)
-        .where(and(eq(factorySuppliers.id, id), eq(factorySuppliers.companyId, companyId)));
-
-      res.json({ message: "Supplier permanently deleted" });
-    } catch (error: unknown) {
-      logger.error("Error permanently deleting factory supplier:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
   // ───────────────────────────────────────────────
   // 1b. Factory Supplier Categories

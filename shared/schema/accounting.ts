@@ -170,6 +170,8 @@ export const fixedAssets = pgTable(
     openingBalance: decimal("opening_balance", { precision: 15, scale: 2 }),
     active: boolean("active").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
+    // Phase 19 (B), PE7: the delete is a soft delete (ensureRuntimeSchema adds the column).
+    deletedAt: timestamp("deleted_at"),
   },
   (t) => ({
     companyIdx: index("fixed_assets_company_idx").on(t.companyId),
@@ -180,6 +182,7 @@ export const insertFixedAssetSchema = createInsertSchema(fixedAssets)
   .omit({
     id: true,
     createdAt: true,
+    deletedAt: true,
   })
   .extend({
     companyId: z.number().min(1, "Company is required"),

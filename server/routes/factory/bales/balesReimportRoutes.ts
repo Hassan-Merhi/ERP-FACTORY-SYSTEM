@@ -25,11 +25,12 @@ import {
   factoryBaleProducts,
   factoryBales,
   factoryBaleImportBatches,
+  factoryMixBatches,
   stockItems,
   stockGroups,
   locations,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt, inArray, isNull } from "drizzle-orm";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -219,6 +220,29 @@ export function registerBalesReimportRoutes(app: Express) {
               })
               .returning();
 
+            // Phase 19 C (F7/DI10): a mix-batch id from the sheet is kept only when the
+            // mix is this company's, live and costed (cost per kg above zero);
+            // any other id is dropped (the bale has no mix), and listed in the audit.
+            const sheetMixIds = [...new Set(rows.map((r) => r.mixBatchId).filter((id): id is number => id != null))];
+            const costedMixIds = new Set<number>(
+              sheetMixIds.length === 0
+                ? []
+                : (
+                    await tx
+                      .select({ id: factoryMixBatches.id })
+                      .from(factoryMixBatches)
+                      .where(
+                        and(
+                          eq(factoryMixBatches.companyId, companyId),
+                          inArray(factoryMixBatches.id, sheetMixIds),
+                          isNull(factoryMixBatches.deletedAt),
+                          gt(factoryMixBatches.costPerKg, "0")
+                        )
+                      )
+                  ).map((mix) => mix.id)
+            );
+            const droppedMixBatchIds = sheetMixIds.filter((id) => !costedMixIds.has(id));
+
             type ReimportBaleRow = typeof factoryBales.$inferSelect & {
               _product?: typeof factoryBaleProducts.$inferSelect;
             };
@@ -281,7 +305,7 @@ export function registerBalesReimportRoutes(app: Express) {
                   costPerKg: row.costPerKg,
                   totalCost: row.totalCost,
                   status: originalStatus,
-                  mixBatchId: row.mixBatchId,
+                  mixBatchId: row.mixBatchId != null && costedMixIds.has(row.mixBatchId) ? row.mixBatchId : null,
                   finalizedAt,
                   importBatchId: batch.id,
                 })
@@ -420,6 +444,7 @@ export function registerBalesReimportRoutes(app: Express) {
                   source: "factory_bale_reimport",
                   fileName: req.file?.originalname ?? null,
                   baleIds: createdBales.map((bale) => bale.id),
+                  droppedMixBatchIds,
                   totalCost: createdBales
                     .reduce((sum, bale) => sum.plus(lineAmount(bale.weightKg, bale.costPerKg)), new MoneyDecimal(0))
                     .toFixed(2),

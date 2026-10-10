@@ -8,7 +8,7 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
-import { db } from "../../../db";
+import { db, type DatabaseOrTransaction } from "../../../db";
 import { requireAuth, requireRole } from "../../../auth";
 import { writeAuditEvent } from "../../../services/audit/auditService";
 import {
@@ -457,9 +457,10 @@ export function registerBalesImportRoutes(app: Express) {
   // Only OB raw stock (containers with status='OPENING_BALANCE') is touched.
   // Non-OB (container offload) raw stock is never modified.
   async function recalcOpeningStockUsage(
-    companyId: number
+    companyId: number,
+    executor: DatabaseOrTransaction = db
   ): Promise<{ suppliersProcessed: number; totalAllocatedKg: number; unmatchedKg: number }> {
-    const obRawStocks = await db
+    const obRawStocks = await executor
       .select({
         id: factoryRawStock.id,
         receivedKg: factoryRawStock.receivedKg,
@@ -474,9 +475,9 @@ export function registerBalesImportRoutes(app: Express) {
     if (obRawStocks.length === 0) return { suppliersProcessed: 0, totalAllocatedKg: 0, unmatchedKg: 0 };
 
     const obIds = obRawStocks.map((r) => r.id);
-    await db.update(factoryRawStock).set({ usedKg: "0" }).where(inArray(factoryRawStock.id, obIds));
+    await executor.update(factoryRawStock).set({ usedKg: "0" }).where(inArray(factoryRawStock.id, obIds));
 
-    const consumed = await db
+    const consumed = await executor
       .select({
         supplierId: factoryMixBatchSources.supplierId,
         totalKg: sql<string>`COALESCE(SUM(${factoryMixBatchSources.weightKg}), '0')`,
@@ -512,7 +513,7 @@ export function registerBalesImportRoutes(app: Express) {
         if (remaining <= 0.001) break;
         const cap = parseFloat(rec.receivedKg as string) || 0;
         const deduct = Math.min(remaining, cap);
-        await db
+        await executor
           .update(factoryRawStock)
           .set({ usedKg: String(deduct.toFixed(3)) })
           .where(eq(factoryRawStock.id, rec.id));
@@ -538,133 +539,174 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/import/opening-raw-stock", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Phase 19 C (F7/DI10): Admin/Owner; one transaction that takes the cut-over
+  // lock and is refused once the cut-over is applied (409
+  // FACTORY_STOCK_IMPORT_AFTER_CUTOVER); a failing row rolls back to its
+  // savepoint and is reported, as before; one import audit row per raw-stock
+  // row (so the readiness report lists it at spreadsheet cost); the opening
+  // usage recalculation runs in the same transaction.
+  app.post(
+    "/api/factory/import/opening-raw-stock",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { items } = req.body;
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "No items provided" });
-      }
-
-      let imported = 0;
-      const errors: string[] = [];
-
-      const existingOBs = await db
-        .select({ containerNumber: factoryContainers.containerNumber })
-        .from(factoryContainers)
-        .where(
-          and(eq(factoryContainers.companyId, companyId), sql`${factoryContainers.containerNumber} LIKE ${"OB-%"}`)
-        );
-
-      let nextNum = 1;
-      for (const c of existingOBs) {
-        const parts = c.containerNumber.split("-");
-        const num = parseInt(parts[parts.length - 1]) || 0;
-        if (num >= nextNum) nextNum = num + 1;
-      }
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        try {
-          const supplierStr = String(item.supplier || "").trim();
-          const kgVal = parseMoneyInput(item.kg);
-          const rateVal = parseMoneyInput(item.costPerKg);
-          const currency = String(item.currency || "USD").trim();
-          // Never silently default a non-USD row's missing rate to 1 — require it explicitly.
-          const fxRate = currency === "USD" ? new MoneyDecimal(1) : parseMoneyInput(item.fxRateToUsd ?? "");
-          const openingDate = String(item.openingDate || "").trim();
-
-          if (!supplierStr) {
-            errors.push(`Row ${i + 1}: supplier is required`);
-            continue;
-          }
-          if (!kgVal || kgVal.lte(0)) {
-            errors.push(`Row ${i + 1}: kg must be > 0`);
-            continue;
-          }
-          if (!rateVal || rateVal.lt(0)) {
-            errors.push(`Row ${i + 1}: costPerKg must be >= 0`);
-            continue;
-          }
-          if (!currency) {
-            errors.push(`Row ${i + 1}: currency is required`);
-            continue;
-          }
-          if (!fxRate || fxRate.lte(0)) {
-            errors.push(`Row ${i + 1}: fxRateToUsd must be > 0`);
-            continue;
-          }
-          if (!openingDate) {
-            errors.push(`Row ${i + 1}: openingDate is required`);
-            continue;
-          }
-
-          const [supplier] = await db
-            .select()
-            .from(factorySuppliers)
-            .where(and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, supplierStr)));
-
-          if (!supplier) {
-            errors.push(`Row ${i + 1}: supplier "${supplierStr}" not found`);
-            continue;
-          }
-
-          // Exact products: a float kg x rate was written whole and rounded by Postgres.
-          const costPerKgUsd = currency === "USD" ? rateVal : rateVal.times(fxRate);
-          const containerNumber = `OB-${String(nextNum).padStart(4, "0")}`;
-          nextNum++;
-
-          const [container] = await db
-            .insert(factoryContainers)
-            .values({
-              companyId,
-              containerNumber,
-              supplierId: supplier.id,
-              origin: "Opening Import",
-              totalKg: String(kgVal),
-              ratePerKg: String(rateVal),
-              declaredKg: String(kgVal),
-              actualReceivedKg: String(kgVal),
-              finalPayableAmount: kgVal.times(rateVal).toFixed(),
-              differenceKg: "0",
-              currencyCode: currency,
-              fxRateToUsd: String(fxRate),
-              fxRateConfirmed: true,
-              ratePerKgUsd: String(costPerKgUsd),
-              finalPayableAmountUsd: kgVal.times(costPerKgUsd).toFixed(),
-              notes: String(item.notes || "Opening stock import"),
-              status: "OPENING_BALANCE",
-            })
-            .returning();
-
-          await db.insert(factoryRawStock).values({
-            companyId,
-            containerId: container.id,
-            receivedKg: String(kgVal),
-            usedKg: "0",
-            costPerKg: String(rateVal),
-            costPerKgUsd: String(costPerKgUsd),
-          });
-
-          imported++;
-        } catch (err: unknown) {
-          errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
+        const { items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "No items provided" });
         }
-      }
 
-      let recalcStats = null;
-      if (imported > 0) {
-        recalcStats = await recalcOpeningStockUsage(companyId);
-      }
+        const result = await db.transaction(async (tx) => {
+          await assertStockImportAllowedTx(tx, companyId);
+          let imported = 0;
+          const errors: string[] = [];
 
-      res.json({ imported, errors, recalcStats });
-    } catch (error: unknown) {
-      logger.error("Error importing opening raw stock:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+          const existingOBs = await tx
+            .select({ containerNumber: factoryContainers.containerNumber })
+            .from(factoryContainers)
+            .where(
+              and(eq(factoryContainers.companyId, companyId), sql`${factoryContainers.containerNumber} LIKE ${"OB-%"}`)
+            );
+
+          let nextNum = 1;
+          for (const c of existingOBs) {
+            const parts = c.containerNumber.split("-");
+            const num = parseInt(parts[parts.length - 1]) || 0;
+            if (num >= nextNum) nextNum = num + 1;
+          }
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            const supplierStr = String(item.supplier || "").trim();
+            const kgVal = parseMoneyInput(item.kg);
+            const rateVal = parseMoneyInput(item.costPerKg);
+            const currency = String(item.currency || "USD").trim();
+            // Never silently default a non-USD row's missing rate to 1 — require it explicitly.
+            const fxRate = currency === "USD" ? new MoneyDecimal(1) : parseMoneyInput(item.fxRateToUsd ?? "");
+            const openingDate = String(item.openingDate || "").trim();
+
+            if (!supplierStr) {
+              errors.push(`Row ${i + 1}: supplier is required`);
+              continue;
+            }
+            if (!kgVal || kgVal.lte(0)) {
+              errors.push(`Row ${i + 1}: kg must be > 0`);
+              continue;
+            }
+            if (!rateVal || rateVal.lt(0)) {
+              errors.push(`Row ${i + 1}: costPerKg must be >= 0`);
+              continue;
+            }
+            if (!currency) {
+              errors.push(`Row ${i + 1}: currency is required`);
+              continue;
+            }
+            if (!fxRate || fxRate.lte(0)) {
+              errors.push(`Row ${i + 1}: fxRateToUsd must be > 0`);
+              continue;
+            }
+            if (!openingDate) {
+              errors.push(`Row ${i + 1}: openingDate is required`);
+              continue;
+            }
+
+            const [supplier] = await tx
+              .select()
+              .from(factorySuppliers)
+              .where(and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, supplierStr)));
+
+            if (!supplier) {
+              errors.push(`Row ${i + 1}: supplier "${supplierStr}" not found`);
+              continue;
+            }
+
+            try {
+              await tx.transaction(async (row) => {
+                // Exact products: a float kg x rate was written whole and rounded by Postgres.
+                const costPerKgUsd = currency === "USD" ? rateVal : rateVal.times(fxRate);
+                const containerNumber = `OB-${String(nextNum).padStart(4, "0")}`;
+
+                const [container] = await row
+                  .insert(factoryContainers)
+                  .values({
+                    companyId,
+                    containerNumber,
+                    supplierId: supplier.id,
+                    origin: "Opening Import",
+                    totalKg: String(kgVal),
+                    ratePerKg: String(rateVal),
+                    declaredKg: String(kgVal),
+                    actualReceivedKg: String(kgVal),
+                    finalPayableAmount: kgVal.times(rateVal).toFixed(),
+                    differenceKg: "0",
+                    currencyCode: currency,
+                    fxRateToUsd: String(fxRate),
+                    fxRateConfirmed: true,
+                    ratePerKgUsd: String(costPerKgUsd),
+                    finalPayableAmountUsd: kgVal.times(costPerKgUsd).toFixed(),
+                    notes: String(item.notes || "Opening stock import"),
+                    status: "OPENING_BALANCE",
+                  })
+                  .returning();
+
+                const [rawStock] = await row
+                  .insert(factoryRawStock)
+                  .values({
+                    companyId,
+                    containerId: container.id,
+                    receivedKg: String(kgVal),
+                    usedKg: "0",
+                    costPerKg: String(rateVal),
+                    costPerKgUsd: String(costPerKgUsd),
+                  })
+                  .returning({ id: factoryRawStock.id });
+
+                await writeAuditEvent(
+                  {
+                    userId: req.session.userId ?? "unknown",
+                    username: req.session.username || "unknown",
+                    companyId,
+                    action: RAW_STOCK_IMPORT_AUDIT.action,
+                    tableName: RAW_STOCK_IMPORT_AUDIT.tableName,
+                    recordId: rawStock.id,
+                    recordIdentifier: `opening raw-stock import: container ${containerNumber}`,
+                    metadata: {
+                      source: "factory_opening_raw_stock_import",
+                      containerId: container.id,
+                      supplierId: supplier.id,
+                      kg: String(kgVal),
+                      costPerKg: String(rateVal),
+                      currency,
+                      fxRateToUsd: String(fxRate),
+                      costPerKgUsd: String(costPerKgUsd),
+                      openingDate,
+                    },
+                  },
+                  row
+                );
+              });
+              nextNum++;
+              imported++;
+            } catch (err: unknown) {
+              errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
+            }
+          }
+
+          const recalcStats = imported > 0 ? await recalcOpeningStockUsage(companyId, tx) : null;
+          return { imported, errors, recalcStats };
+        });
+
+        res.json(result);
+      } catch (error: unknown) {
+        if (sendStockImportRefusal(res, error)) return;
+        logger.error("Error importing opening raw stock:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.get("/api/factory/import/template/:type", requireAuth, async (req: Request, res: Response) => {
     try {

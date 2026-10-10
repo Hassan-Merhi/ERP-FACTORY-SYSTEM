@@ -30,6 +30,7 @@ import { normalizeVoucherEntryAmounts } from "../accounting/currencyAmounts";
 import { findOrCreateLedgerAccount, maybeRunAutoTransfer } from "../../routes/rental/shared";
 import { isRentalPeriodDue, getRentalBillingDay, getRentalPeriodDueDate } from "./rentalPeriodService";
 import { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
+import { isRentalRateRequiredError, recordedRentalPaymentRate } from "./rentalPaymentRate";
 
 export { buildAllocationsForPayment, findEarliestOutstandingMonth } from "./rentalPaymentAllocationService";
 
@@ -52,6 +53,13 @@ export type RentalUnitRef = {
 /** A posting failure that carries the HTTP status the route should return. */
 type RentalPostingError = Error & { status?: number };
 
+export {
+  RENTAL_RATE_REQUIRED_CODE,
+  RENTAL_RATE_REQUIRED_MESSAGE,
+  isRentalRateRequiredError,
+  recordedRentalPaymentRate,
+} from "./rentalPaymentRate";
+
 export interface RentalPaymentGroupOptions {
   companyId: number;
   contractCompanyId: number;
@@ -69,6 +77,8 @@ export interface RentalPaymentGroupOptions {
   shopExpenseAccountName: string;
   incomeAccountName: string;
   isSharedPayment?: boolean;
+  /** Phase 19 (B): the request's actor, audited with the posting. */
+  audit?: { actor: { userId: string; username: string }; trigger: string };
 }
 
 /** Deterministic int64 advisory-lock key for a payment group ID. */
@@ -486,6 +496,10 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
     err.status = 400;
     throw err;
   }
+  // Phase 19 (B), PE2: the recorded dated rate, never the client's (it was
+  // defaulted to "1"); `exchangeRate` from the request is not used.
+  void exchangeRate;
+  const recordedRate = await recordedRentalPaymentRate(companyId, currency || "USD", paymentDate);
 
   const billingDay = getRentalBillingDay(contract.startDate as string);
   // A non-numeric amount allocates nothing (the caller refuses an empty allocation).
@@ -555,7 +569,7 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
           forYear: alloc.year,
           forMonth: alloc.month,
           currency: currency || "USD",
-          exchangeRate: exchangeRate || "1",
+          exchangeRate: recordedRate,
           notes: allocations.length > 1 ? `${notes ? notes + " | " : ""}Split from ${amount} payment` : (notes ?? null),
           postingStatus: "SCHEDULED",
           paymentGroupId,
@@ -578,11 +592,12 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
       clientDate,
       cashAccountId,
       currency,
-      exchangeRate || "1",
+      recordedRate,
       notes,
       shopExpenseAccountName,
       incomeAccountName,
-      isSharedPayment ?? false
+      isSharedPayment ?? false,
+      opts.audit
     );
 
     const posted = await db
@@ -660,7 +675,7 @@ export async function postDueScheduledRentalPaymentsDetailed(
     // posting code (voucher numbers, closed-period check) cannot use (wave 18 A).
     `SELECT DISTINCT payment_group_id, payment_date::text AS payment_date, cash_account_id,
             COALESCE(currency, 'USD') AS currency,
-            COALESCE(exchange_rate::text, '1') AS exchange_rate
+            exchange_rate::text AS exchange_rate
      FROM property_payments
      WHERE company_id = $1
        AND module = $2
@@ -709,7 +724,9 @@ export async function postDueScheduledRentalPaymentsDetailed(
         asOfDate,
         row.cash_account_id,
         row.currency,
-        String(firstRow?.exchangeRate || row.exchange_rate || "1"),
+        // Phase 19 (B), PE2: the recorded rate on or before the payment date
+        // (the stored row rate was the client's, defaulted to "1").
+        await recordedRentalPaymentRate(companyId, row.currency, paymentDate),
         firstRow.notes as string | null,
         shopExpenseAccountName,
         incomeAccountName,
@@ -720,6 +737,14 @@ export async function postDueScheduledRentalPaymentsDetailed(
     } catch (err: unknown) {
       if (isClosedPeriodError(err)) {
         skipped.push({ paymentGroupId: row.payment_group_id, paymentDate, reason: "PERIOD_CLOSED", closedThrough });
+        continue;
+      }
+      if (isRentalRateRequiredError(err)) {
+        failed++;
+        logger.warn(`[rentalPostingService] Group ${row.payment_group_id} not posted: no recorded rate`, {
+          currency: err.currency,
+          paymentDate,
+        });
         continue;
       }
       failed++;
@@ -780,7 +805,8 @@ async function postScheduledGroup(
         : `${String(allocs[0].forMonth).padStart(2, "0")}/${allocs[0].forYear}`;
     const narration = `Rent paid - ${unitLabel} - ${monthSpan}`;
 
-    const groupExchangeRate = String(groupRows[0]?.exchangeRate || exchangeRate || "1");
+    // Phase 19 (B), PE2: the caller resolved the recorded dated rate.
+    const groupExchangeRate = exchangeRate;
 
     const voucherId = await postGroupCore(tx, {
       companyId,
@@ -818,6 +844,7 @@ async function postScheduledGroup(
         postingStatus: "POSTED",
         postedAt: new Date(),
         voucherId: voucherId ?? null,
+        exchangeRate: groupExchangeRate,
       })
       .where(inArray(propertyPayments.id, rowIds));
 

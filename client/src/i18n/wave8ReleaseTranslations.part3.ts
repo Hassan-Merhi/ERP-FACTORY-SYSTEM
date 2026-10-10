@@ -851,4 +851,34 @@ export const wave8ReleaseTranslationsPart3: readonly Phase3SharedUiEntry[] = [
     ar: "سبب حركة النقد",
     fr: "Motif du mouvement de caisse",
   },
+  {
+    en: "A supplier's cost per kg is no longer changed here. Bale and mix costs are changed only through the reviewed re-cost: preview the plan, then an Owner confirms it.",
+    ar: "لم يعد يتم تغيير تكلفة الكيلوغرام للمورد هنا. تُغيَّر تكاليف البالات والخلطات فقط من خلال إعادة التكلفة المراجَعة: عاين الخطة، ثم يؤكدها المالك.",
+    fr: "Le coût au kg d’un fournisseur n’est plus modifié ici. Les coûts des balles et des mélanges ne sont modifiés que par le recalcul des coûts revu : prévisualisez le plan, puis un propriétaire le confirme.",
+  },
+  {
+    en: "This bale status change would change the stock value. Sell bales through a customer order or invoice, remove or write them off through Stock Removal, and press them through a pressing batch.",
+    ar: "سيؤدي تغيير حالة البالة هذا إلى تغيير قيمة المخزون. بِع البالات من خلال طلب عميل أو فاتورة، وأزلها أو اشطبها من خلال إزالة المخزون، واكبسها من خلال دفعة كبس.",
+    fr: "Ce changement de statut de balle modifierait la valeur du stock. Vendez les balles par une commande client ou une facture, retirez-les ou passez-les en perte via le retrait de stock, et pressez-les via un lot de pressage.",
+  },
+  {
+    en: "This bale is factory stock or has left it. Remove or write it off through Stock Removal instead of deleting it.",
+    ar: "هذه البالة من مخزون المصنع أو خرجت منه. أزلها أو اشطبها من خلال إزالة المخزون بدلاً من حذفها.",
+    fr: "Cette balle fait partie du stock de l’usine ou l’a quitté. Retirez-la ou passez-la en perte via le retrait de stock au lieu de la supprimer.",
+  },
+  {
+    en: "This voucher is one side of an intercompany transfer. It cannot be edited here: delete the transfer (both companies' vouchers are removed together) and record it again.",
+    ar: "هذا السند هو أحد طرفي تحويل بين الشركات. لا يمكن تعديله هنا: احذف التحويل (يُحذف سندا الشركتين معاً) ثم سجّله من جديد.",
+    fr: "Ce bon est l’un des côtés d’un transfert intersociétés. Il ne peut pas être modifié ici : supprimez le transfert (les bons des deux sociétés sont supprimés ensemble) puis enregistrez-le à nouveau.",
+  },
+  {
+    en: "txDate must be a YYYY-MM-DD date",
+    ar: "يجب أن يكون txDate تاريخاً بصيغة YYYY-MM-DD",
+    fr: "txDate doit être une date au format AAAA-MM-JJ",
+  },
+  {
+    en: "ids must be bale ids",
+    ar: "يجب أن تكون المعرّفات معرّفات بالات",
+    fr: "les identifiants doivent être des identifiants de balles",
+  },
 ];

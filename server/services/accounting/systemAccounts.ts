@@ -24,6 +24,7 @@ import { db, type DbTransaction } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
+import { runInCompanyPostingScope } from "./scheduledPostingScope";
 
 export interface SystemAccountDefinition {
   code: string;
@@ -426,31 +427,33 @@ export async function ensureSystemAccounts(
 
 /**
  * Creates the required system accounts for every company. Runs on every boot
- * (production skips the ordered migration pass) under the process-owned
- * maintenance scope, one transaction per company. Existing accounts are never
- * changed; a failure is logged and retried on the next boot.
+ * (production skips the ordered migration pass), one transaction per company.
+ * Phase 19 (B): the companies are listed in the process-owned maintenance
+ * scope, and each company's accounts are created in that company's tenant
+ * scope (maintenance off), so the closed-period guard and the opening lock
+ * apply. Provisioning writes no voucher line and no opening (new accounts
+ * carry a zero opening), so a closed period does not stop it. Existing accounts
+ * are never changed; a failure is logged and retried on the next boot.
  */
 export async function ensureRequiredSystemAccountsForAllCompanies(): Promise<void> {
-  await runWithDatabaseMaintenanceScope("system-account-provisioning", async () => {
-    const companyRows = await db.execute<{ id: number } & Record<string, unknown>>(
-      sql`SELECT id FROM companies ORDER BY id`
-    );
-    let created = 0;
-    let failed = 0;
-    for (const { id } of companyRows.rows as unknown as { id: number }[]) {
-      try {
-        const statuses = await db.transaction((tx) => ensureSystemAccounts(tx, id));
-        created += statuses.filter((status) => status.state === "created").length;
-      } catch (error) {
-        failed += 1;
-        logger.error("[startup] System account provisioning failed for a company", {
-          companyId: id,
-          error: getErrorMessage(error),
-        });
-      }
+  const companyRows = await runWithDatabaseMaintenanceScope("system-account-provisioning", () =>
+    db.execute<{ id: number } & Record<string, unknown>>(sql`SELECT id FROM companies ORDER BY id`)
+  );
+  let created = 0;
+  let failed = 0;
+  for (const { id } of companyRows.rows as unknown as { id: number }[]) {
+    try {
+      const statuses = await runInCompanyPostingScope(id, () => db.transaction((tx) => ensureSystemAccounts(tx, id)));
+      created += statuses.filter((status) => status.state === "created").length;
+    } catch (error) {
+      failed += 1;
+      logger.error("[startup] System account provisioning failed for a company", {
+        companyId: id,
+        error: getErrorMessage(error),
+      });
     }
-    logger.info(
-      `[startup] ✓ Required system accounts ensured (${companyRows.rows.length} companies, ${created} created, ${failed} failed)`
-    );
-  });
+  }
+  logger.info(
+    `[startup] ✓ Required system accounts ensured (${companyRows.rows.length} companies, ${created} created, ${failed} failed)`
+  );
 }

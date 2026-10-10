@@ -13,6 +13,15 @@ vi.mock("../server/routes/factory/_helpers", () => ({
   writeDaybookEntry: async (_d: unknown, e: any) => void h.writes.push(["daybook", e]),
   recalculateContainerCosts: async () => h.d.recalc,
 }));
+// Phase 19 (A): the void retires the voucher through the retirement service
+// (lines kept, audited); its own suite covers it against the database.
+vi.mock("../server/services/accounting/voucherRetirement", () => ({
+  retireVouchersTx: async (_tx: unknown, options: { voucherIds: number[] }) => {
+    h.writes.push(["retire", options.voucherIds]);
+    return [];
+  },
+  sessionRetirementActor: () => ({ userId: 1, username: "1" }),
+}));
 vi.mock("../server/db", async () => {
   const { getTableName } = await import("drizzle-orm");
   const chain = (value: () => unknown) => {
@@ -103,6 +112,8 @@ describe("daybook edits", () => {
       (w) => Array.isArray(w) && w[0] === "update" && w[1] === "factory_worker_advances"
     ) as [string, string, Record<string, unknown>];
     expect(advanceUpdate[2]).toMatchObject({ remainingBalance: "11.01" });
+    expect(h.writes).toContainEqual(["retire", [5]]);
+    expect(h.writes.some((w) => Array.isArray(w) && w[0] === "delete" && w[1] === "voucher_entries")).toBe(false);
   });
 
   it("rejects a cost edit whose FX rate does not parse", async () => {

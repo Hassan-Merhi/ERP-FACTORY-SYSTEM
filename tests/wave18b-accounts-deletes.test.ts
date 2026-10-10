@@ -185,12 +185,12 @@ describe("payroll migrations retired", () => {
     expect(manifest).not.toContain("migrate-salary-groups");
   });
 
-  it("refuses migrate-worker-names for a company other than the active one", async () => {
+  it("no longer serves migrate-worker-names (retired in phase 19 A)", async () => {
     const other = await newCompany("PW");
     const response = await agent
       .post("/api/factory/payroll/migrate-worker-names")
       .send({ confirm: true, companyId: other });
-    expect(response.status).toBe(403);
+    expect([403, 404]).toContain(response.status);
   });
 
   it("findOrCreateLedger reuses an existing account without retyping, reactivating or unhiding it", async () => {
@@ -273,7 +273,8 @@ describe("bank accounts", () => {
     await expect(pool.query(`UPDATE bank_accounts SET deleted_at = NOW() WHERE id = $1`, [bankId])).rejects.toThrow(
       /BANK_ACCOUNT_HAS_BALANCE/
     );
-    expect(LEDGER_INTEGRITY_GUARD_VERSION).toBe("2026-10-ledger-integrity-v3");
+    // v3 added the bank delete guard; phase 19 B (v4) keeps it and adds the account tree.
+    expect(LEDGER_INTEGRITY_GUARD_VERSION).toBe("2026-10-ledger-integrity-v4");
   });
 
   it("refuses deleting a bank whose linked ledger has lines, and refuses moving its linked ledger", async () => {

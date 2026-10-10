@@ -44,6 +44,22 @@
  * writes a sensitive table. Unlike the worker deductions above, narrowing is
  * right here: these two routes can no longer write anything at all.
  *
+ * Phase 19 (A) removed eight routes from this list: six retired writers
+ * (sales-import backfill, test-data vouchers, the payroll group-expense and
+ * worker-name migrations, the payroll voucher backfill, the factory voucher
+ * description migration), the EMP-* account migration (now tested in
+ * tests/phase19a-retired-writers.test.ts; the bulk form moved to
+ * /api/admin/legacy-employee-accounts/migrate-all) and the container offload
+ * POST/PATCH, whose last directly-writing registrant (the unreachable legacy
+ * PATCH in offload/update.ts) is deleted; the central handler posts through
+ * the offload lifecycle service and many tests exercise it.
+ *
+ * Phase 19 (B) removed the seven factory supplier routes: their file
+ * (factory/suppliers/crud/suppliers.ts) was sensitive only through the
+ * permanent delete's cascade into factory_raw_stock; that delete now refuses a
+ * supplier with any history and removes only the supplier row and its score
+ * snapshots (tested in tests/phase19b-guards.test.ts).
+ *
  * The inventory below is written out rather than derived from the manifest at
  * runtime, for two reasons: the coverage audit looks for path literals in test
  * sources, and an explicit list is reviewable in a diff. The first test keeps
@@ -89,8 +105,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/factory/raw-stock/receipts/:rawStockId",
   "DELETE /api/factory/shipping-container-rows/:id",
   "DELETE /api/factory/supplier-payments/:id",
-  "DELETE /api/factory/suppliers/:id",
-  "DELETE /api/factory/suppliers/:id/permanent",
   "DELETE /api/factory/transporters/:id/transactions/:txId",
   "DELETE /api/factory/waste-dispatch/:id",
   "DELETE /api/factory/worker-bonuses/:id",
@@ -108,7 +122,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "DELETE /api/vouchers/:id",
   "PATCH /api/bales/:id",
   "PATCH /api/containers/:id/number",
-  "PATCH /api/containers/:id/offload",
   "PATCH /api/credit-notes/:id",
   "PATCH /api/factory/advances/:id",
   "PATCH /api/factory/bale-products/:id",
@@ -134,10 +147,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "PATCH /api/factory/raw-stock/receipts/:rawStockId",
   "PATCH /api/factory/shipping-container-rows/:id",
   "PATCH /api/factory/shipping-container-rows/:id/sync-order",
-  "PATCH /api/factory/suppliers/:id",
-  "PATCH /api/factory/suppliers/:id/opening-balance",
-  "PATCH /api/factory/suppliers/:id/reactivate",
-  "PATCH /api/factory/suppliers/:id/set-broker",
   "PATCH /api/factory/transporters/:id",
   "PATCH /api/insurance/members/:id",
   "PATCH /api/insurance/members/:id/toggle",
@@ -165,16 +174,13 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/admin/account-migration/preview",
   "POST /api/admin/account-migration/undo",
   "POST /api/admin/apply-missing-migrations",
-  "POST /api/admin/backfill-payroll-vouchers",
   "POST /api/admin/backfill-postoffload-vouchers",
-  "POST /api/admin/cleanup-legacy-employee-accounts",
   "POST /api/admin/company-data-reset",
   "POST /api/admin/delete-orphaned-pos-sales",
   "POST /api/admin/fix-orphaned-bales",
   "POST /api/admin/fix-orphaned-charge-vouchers",
   "POST /api/admin/fix-orphaned-pos-data",
   "POST /api/admin/fix-sales-inventory",
-  "POST /api/admin/migrate-employee-account/:accountId",
   "POST /api/admin/offload-charge-voucher-repair",
   "POST /api/admin/po-supplier-reconciliation",
   "POST /api/admin/po-supplier-reconciliation/rollback",
@@ -194,7 +200,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/cleanup/orphaned-charges",
   "POST /api/company-settings",
   "POST /api/containers",
-  "POST /api/containers/:id/offload",
   "POST /api/containers/:id/reverse-offload",
   "POST /api/containers/:id/sync-voucher",
   "POST /api/containers/sync-all-vouchers",
@@ -273,12 +278,10 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/import/opening-raw-stock",
   "POST /api/factory/import/raw-stock",
   "POST /api/factory/import/suppliers",
-  "POST /api/factory/migrate-voucher-descriptions",
   "POST /api/factory/mix-batches",
   "POST /api/factory/mix-batches/:id/assign-bales",
   "POST /api/factory/mix-batches/:id/finalize",
   "POST /api/factory/mix-batches/:id/top-up",
-  "POST /api/factory/payroll/migrate-worker-names",
   "POST /api/factory/payrolls/generate-bulk",
   "POST /api/factory/payrolls/mark-paid-bulk",
   "POST /api/factory/pos/sale",
@@ -304,7 +307,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/stock-entry/remove",
   "POST /api/factory/stock-entry/remove-by-product",
   "POST /api/factory/supplier-payments",
-  "POST /api/factory/suppliers",
   "POST /api/factory/transporters",
   "POST /api/factory/transporters/:id/charges",
   "POST /api/factory/transporters/:id/payments",
@@ -346,7 +348,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/payroll/pay-worker",
   "POST /api/payroll/runs",
   "POST /api/payroll/runs/:id/undo",
-  "POST /api/payroll/runs/migrate-group-expenses",
   "POST /api/payroll/withdraw-employee",
   "POST /api/payroll/workers/:id/deductions",
   "POST /api/po-import/backfill",
@@ -360,7 +361,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/salary-advances",
   "POST /api/salary-advances/:id/deduction",
   "POST /api/salary-advances/reconcile",
-  "POST /api/sales-import/backfill",
   "POST /api/sp/containers",
   "POST /api/sp/containers/:id/cancel",
   "POST /api/sp/migration/create-sp-company",
@@ -402,7 +402,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/stock-transfers",
   "POST /api/stock-transfers/:transferId/revisions",
   "POST /api/system/parent-company",
-  "POST /api/test-data/vouchers",
   "POST /api/voucher-entries",
   "POST /api/voucher-entries/transfer-account",
   "POST /api/vouchers",

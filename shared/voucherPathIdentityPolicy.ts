@@ -82,15 +82,13 @@ export function isPhase6DeterministicSpecialRequest(method: string, pathname: st
 }
 
 /**
- * The other five Phase 6 writers are intrinsically rerun-safe by durable
+ * The intrinsic Phase 6 writers (two since phase 19 A) are rerun-safe by durable
  * business state (empty-target import guard, existing-voucher/backfill guard,
  * migration state checks, rental repair state checks, or transaction-scoped
  * balance/advisory locking). Keeping this list explicit prevents a future
  * source change from silently turning an intrinsic exemption into an escape.
  */
 export const PHASE6_INTRINSIC_REPLAY_SAFE_WRITERS = [
-  "server/routes/erp-payroll/runs-migration.ts",
   "server/routes/factory/docs-users/companyImportRoutes.ts",
-  "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
 ] as const;

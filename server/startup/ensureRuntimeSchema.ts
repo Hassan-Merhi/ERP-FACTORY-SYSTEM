@@ -418,6 +418,10 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS opening_balance_native_amount    NUMERIC(20,6),
       ADD COLUMN IF NOT EXISTS category                         TEXT;
 
+    -- Phase 19 (B), PE7: fixed assets are soft-deleted.
+    ALTER TABLE fixed_assets
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
     ALTER TABLE bank_accounts
       ADD COLUMN IF NOT EXISTS opening_balance_currency         VARCHAR(10),
       ADD COLUMN IF NOT EXISTS opening_balance_historical_rate  NUMERIC(20,10),

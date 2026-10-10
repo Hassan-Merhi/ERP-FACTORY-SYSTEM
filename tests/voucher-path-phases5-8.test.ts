@@ -57,10 +57,9 @@ const PHASE6_DETERMINISTIC_WRITERS = [
   "server/routes/stockTransferImportRoutes.ts",
 ] as const;
 
+// Phase 19 (A): runs-migration.ts and worker-statement/backfill.ts are retired.
 const PHASE6_INTRINSIC_WRITERS = [
-  "server/routes/erp-payroll/runs-migration.ts",
   "server/routes/factory/docs-users/companyImportRoutes.ts",
-  "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
 ] as const;
 
@@ -122,7 +121,7 @@ describe("Voucher path review phases 5-8", () => {
 
   it("classifies all 11 special-purpose writers as deterministic or intrinsically replay-safe", () => {
     expect(voucherReview.summary.migrationImportRepair).toBe(0);
-    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(10);
+    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(8);
     expect(voucherReview.completed["phase-6-deterministic-source-writers"].files).toEqual(PHASE6_DETERMINISTIC_WRITERS);
     expect(voucherReview.completed["phase-6-intrinsic-replay-safe-writers"].files).toEqual(PHASE6_INTRINSIC_WRITERS);
     expect(PHASE6_INTRINSIC_REPLAY_SAFE_WRITERS).toEqual(PHASE6_INTRINSIC_WRITERS);

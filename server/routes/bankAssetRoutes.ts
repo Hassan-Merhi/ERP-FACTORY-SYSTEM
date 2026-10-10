@@ -5,7 +5,7 @@ import { createHash } from "crypto";
 import Decimal from "decimal.js";
 import { db, pool } from "../db";
 import { storage } from "../storage";
-import { requireAuth, requireNonPOS } from "../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../auth";
 import { upload, logAudit } from "./_helpers";
 import { registerBankAccountRoutes } from "./bankAccountRoutes";
 import { fixedAssets, insertFixedAssetSchema, ledgerAccounts, exchangeRates } from "@shared/schema";
@@ -14,6 +14,13 @@ import { buildAuditChanges } from "../services/audit";
 
 import { readExcel, sheetToJson } from "../excelHelper";
 import { parseMoneyInput, toMoney } from "../lib/money";
+
+export const FIXED_ASSET_HAS_OPENING_CODE = "FIXED_ASSET_HAS_OPENING" as const;
+export const FIXED_ASSET_HAS_OPENING_MESSAGE =
+  "This fixed asset has an opening balance, so it cannot be deleted. Move the balance with a journal first.";
+export const FIXED_ASSET_HAS_ENTRIES_CODE = "FIXED_ASSET_HAS_ENTRIES" as const;
+export const FIXED_ASSET_HAS_ENTRIES_MESSAGE =
+  "This fixed asset has voucher lines, so it cannot be deleted. Deactivate it instead.";
 
 /**
  * The container-import spreadsheet, as this route reads it.
@@ -403,33 +410,62 @@ export function registerBankAssetRoutes(app: Express) {
     }
   });
 
-  app.delete("/api/fixed-assets/:id", requireAuth, async (req, res) => {
+  // Phase 19 (B), PE7: Admin or Owner; a soft delete (the row stays, with its
+  // code, for the history), refused while the asset has an opening or any
+  // voucher line (live or deleted voucher), audited in the same transaction.
+  // It was sign-in only and a hard delete with no audit.
+  app.delete("/api/fixed-assets/:id", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const id = parseInt(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid asset ID" });
 
-      // Check for linked voucher entries
-      const entryCheck = await db.execute(
-        sql`SELECT COUNT(*) as cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
-      );
-      const entryCount = parseInt((entryCheck.rows[0] as { cnt: string })?.cnt || "0");
-      if (entryCount > 0) {
-        return res.status(400).json({
-          message: `Cannot delete: this asset has ${entryCount} voucher entry/entries. Remove related transactions first.`,
-        });
-      }
-
-      const [deleted] = await db
-        .delete(fixedAssets)
-        .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId)))
-        .returning({ id: fixedAssets.id });
-
-      if (!deleted) return res.status(404).json({ message: "Fixed asset not found" });
-      res.json({ message: "Fixed asset deleted successfully" });
+      const outcome = await db.transaction(async (tx) => {
+        const [asset] = await tx
+          .select()
+          .from(fixedAssets)
+          .where(and(eq(fixedAssets.id, id), eq(fixedAssets.companyId, companyId), isNull(fixedAssets.deletedAt)))
+          .for("update");
+        if (!asset) return { status: 404 as const, body: { message: "Fixed asset not found" } };
+        if (!toMoney(asset.openingBalance).isZero()) {
+          return {
+            status: 409 as const,
+            body: { message: FIXED_ASSET_HAS_OPENING_MESSAGE, code: FIXED_ASSET_HAS_OPENING_CODE },
+          };
+        }
+        const entryCheck = await tx.execute<{ cnt: string } & Record<string, unknown>>(
+          sql`SELECT COUNT(*)::text AS cnt FROM voucher_entries WHERE fixed_asset_id = ${id}`
+        );
+        if (Number(entryCheck.rows[0]?.cnt ?? 0) > 0) {
+          return {
+            status: 409 as const,
+            body: { message: FIXED_ASSET_HAS_ENTRIES_MESSAGE, code: FIXED_ASSET_HAS_ENTRIES_CODE },
+          };
+        }
+        const [deleted] = await tx
+          .update(fixedAssets)
+          .set({ deletedAt: new Date(), active: false })
+          .where(eq(fixedAssets.id, id))
+          .returning();
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName: "fixed_assets",
+            recordId: deleted.id,
+            recordIdentifier: deleted.name,
+            changes: buildAuditChanges(asset, deleted, ["code", "name", "category", "purchaseAmount", "active"]),
+          },
+          tx
+        );
+        return { status: 200 as const, body: { message: "Fixed asset deleted successfully" } };
+      });
+      res.status(outcome.status).json(outcome.body);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(errorStatus(error, 500)).json({ message: getErrorMessage(error) });
     }
   });
 

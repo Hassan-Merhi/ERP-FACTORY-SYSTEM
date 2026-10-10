@@ -8,12 +8,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { eq } from "drizzle-orm";
-import {
-  cleanupTestData,
-  closeTestServer,
-  seedTestData,
-  type TestContext,
-} from "./setup";
+import { cleanupTestData, closeTestServer, seedTestData, type TestContext } from "./setup";
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
 
@@ -45,16 +40,14 @@ async function createAndLoginAs(username: string, role: string): Promise<request
   await db.insert(schema.userCompanyRoles).values({ userId: user.id, companyId: ctx.companyId, role });
 
   const roleAgent = request.agent(ctx.app);
-  const login = await roleAgent
-    .post("/api/auth/login")
-    .send({ username, password: "testpassword123" });
+  const login = await roleAgent.post("/api/auth/login").send({ username, password: "testpassword123" });
   if (login.status !== 200) {
     throw new Error(`Login failed for ${username}: ${login.status} ${JSON.stringify(login.body)}`);
   }
   const companySwitch = await roleAgent.post("/api/auth/set-company").send({ companyId: ctx.companyId });
   if (companySwitch.status !== 200) {
     throw new Error(
-      `Set-company failed for ${username}: ${companySwitch.status} ${JSON.stringify(companySwitch.body)}`,
+      `Set-company failed for ${username}: ${companySwitch.status} ${JSON.stringify(companySwitch.body)}`
     );
   }
   return roleAgent;
@@ -66,13 +59,13 @@ async function cleanupFactoryTables(companyId: number): Promise<void> {
     `DELETE FROM factory_bales WHERE mix_batch_id IN (
        SELECT id FROM factory_mix_batches WHERE company_id = $1
      )`,
-    [companyId],
+    [companyId]
   );
   await pool.query(
     `DELETE FROM factory_mix_batch_sources WHERE mix_batch_id IN (
        SELECT id FROM factory_mix_batches WHERE company_id = $1
      )`,
-    [companyId],
+    [companyId]
   );
   await pool.query(`DELETE FROM factory_mix_batches WHERE company_id = $1`, [companyId]);
   await pool.query(`DELETE FROM factory_raw_material_adjustments WHERE company_id = $1`, [companyId]);
@@ -85,11 +78,9 @@ async function offloadedContainer(
   containerNumber: string,
   supplierId: number,
   receivedKg: string,
-  costPerKgUsd: string,
+  costPerKgUsd: string
 ) {
-  const { applyOffloadMovingAverage } = await import(
-    "../server/services/factory/rawStockLockedRate"
-  );
+  const { applyOffloadMovingAverage } = await import("../server/services/factory/rawStockLockedRate");
 
   const [container] = await db
     .insert(schema.factoryContainers)
@@ -133,10 +124,7 @@ async function getSupplierRow(supplierName: string): Promise<any> {
 
 beforeAll(async () => {
   ctx = await seedTestData(TEST_PREFIX);
-  await db
-    .update(schema.companies)
-    .set({ companyType: "factory" })
-    .where(eq(schema.companies.id, ctx.companyId));
+  await db.update(schema.companies).set({ companyType: "factory" }).where(eq(schema.companies.id, ctx.companyId));
   agent = request.agent(ctx.app);
   await loginAsTestUser();
 
@@ -340,21 +328,22 @@ describe("Adjustments, tamper resistance and explicit corrections", () => {
     expect(Number(topUp.body.costPerKg)).toBeCloseTo(lockedRate, 4);
   });
 
-  it("allows an explicit uniform update-cost correction", async () => {
+  // Phase 19 C (F2): the uniform update-cost correction is retired (410); the
+  // locked rate is unchanged.
+  it("refuses the retired update-cost correction", async () => {
+    const before = Number((await getSupplierRow(`${TEST_PREFIX}_SupplierC`)).costPerKgUsd);
     const response = await agent.post("/api/factory/raw-stock/update-cost").send({
       supplierId: supplierCId,
       newCostPerKg: "0.70",
     });
-    expect(response.status).toBe(200);
-    expect(Number((await getSupplierRow(`${TEST_PREFIX}_SupplierC`)).costPerKgUsd)).toBeCloseTo(0.7, 4);
+    expect(response.status).toBe(410);
+    expect(Number((await getSupplierRow(`${TEST_PREFIX}_SupplierC`)).costPerKgUsd)).toBeCloseTo(before, 4);
   });
 });
 
 describe("Landed-cost correction", () => {
   it("does not reintroduce already-consumed kilograms", async () => {
-    const { cascadeContainerCostChange } = await import(
-      "../server/services/factory/rawStockCostCascade"
-    );
+    const { cascadeContainerCostChange } = await import("../server/services/factory/rawStockCostCascade");
     const [supplier] = await db
       .insert(schema.factorySuppliers)
       .values({ companyId: ctx.companyId, name: `${TEST_PREFIX}_SupplierD` })
@@ -377,9 +366,7 @@ describe("Landed-cost correction", () => {
   });
 
   it("updates an open container-direct source but preserves supplier-owned historical sources", async () => {
-    const { cascadeContainerCostChange } = await import(
-      "../server/services/factory/rawStockCostCascade"
-    );
+    const { cascadeContainerCostChange } = await import("../server/services/factory/rawStockCostCascade");
     const [supplier] = await db
       .insert(schema.factorySuppliers)
       .values({ companyId: ctx.companyId, name: `${TEST_PREFIX}_SupplierE` })
@@ -552,7 +539,7 @@ describe("KPI reconciliation", () => {
           supplierSources: [{ supplierId: supplier.id, weightKg: "3000" }],
           name: "Batch G1",
         })
-      ).status,
+      ).status
     ).toBe(200);
 
     const row = await getSupplierRow(`${TEST_PREFIX}_SupplierG`);

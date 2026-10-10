@@ -40,6 +40,7 @@ const voucherReview = JSON.parse(
     explicitReplayGuard: number;
     wave16NoLongerCreates: number;
     wave18NoLongerCreates: number;
+    phase19NoLongerCreates: number;
     migrationImportRepair: number;
     operationalWithoutRequestIdentity: number;
     phase3InfrastructureCompleted: number;
@@ -176,7 +177,7 @@ describe("write evidence ratchet", () => {
       "phase-4-operational-writers": 22,
       "phase-5-operational-writers": 22,
       "phase-6-deterministic-source-writers": 6,
-      "phase-6-intrinsic-replay-safe-writers": 4,
+      "phase-6-intrinsic-replay-safe-writers": 2,
       "phase-7-post-review-safe-writers": 1,
       "phase-8-request-identity-writers": 1,
     };
@@ -197,7 +198,9 @@ describe("write evidence ratchet", () => {
     // Wave 16 (A): the deferred-rent reclassification left the phase 6 intrinsic
     // writers (an Owner tool posting through the central engine), counted in
     // wave16NoLongerCreates.
-    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(10);
+    // Phase 19 (A): the payroll group-expense migration and the payroll voucher
+    // backfill are retired, counted in phase19NoLongerCreates.
+    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(8);
     expect(voucherReview.summary.phase7PostReviewSafeWriters).toBe(1);
     expect(voucherReview.summary.phase8RequestIdentityCompleted).toBe(1);
   });
@@ -215,7 +218,8 @@ describe("write evidence ratchet", () => {
         voucherReview.summary.phase6SpecialPurposeCompleted +
         voucherReview.summary.phase8RequestIdentityCompleted +
         voucherReview.summary.wave16NoLongerCreates +
-        voucherReview.summary.wave18NoLongerCreates
+        voucherReview.summary.wave18NoLongerCreates +
+        voucherReview.summary.phase19NoLongerCreates
     ).toBe(voucherReview.summary.initialReviewed);
   });
 

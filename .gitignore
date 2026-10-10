@@ -37,6 +37,9 @@ android/keystore.properties
 ts-errors*.txt
 *-errors-ci.txt
 
+# Ad-hoc production data exports (phase 19 A: never commit company data)
+/reports/
+
 # Browser smoke screenshots and reports (regenerated on demand)
 artifacts/responsive-smoke/
 artifacts/bandwidth-smoke/

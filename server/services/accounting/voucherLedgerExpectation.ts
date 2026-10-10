@@ -61,3 +61,11 @@ export function classifyVoucherLedgerExpectation(voucherType: unknown): VoucherL
 export function classifiedVoucherTypes(): string[] {
   return Object.keys(VOUCHER_LEDGER_EXPECTATIONS).sort();
 }
+
+/** The voucher types classified with `expectation`, sorted (the balance guard builds its exemptions from them). */
+export function voucherTypesWithLedgerExpectation(expectation: VoucherLedgerExpectation): string[] {
+  return Object.entries(VOUCHER_LEDGER_EXPECTATIONS)
+    .filter(([, value]) => value === expectation)
+    .map(([type]) => type)
+    .sort();
+}

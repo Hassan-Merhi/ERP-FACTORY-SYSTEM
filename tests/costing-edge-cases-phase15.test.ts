@@ -87,6 +87,7 @@ beforeAll(async () => {
 }, 120_000);
 
 afterAll(async () => {
+  await pool.query(`DELETE FROM factory_fx_rates WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(
     `DELETE FROM factory_mix_batch_sources
       WHERE mix_batch_id IN (SELECT id FROM factory_mix_batches WHERE company_id = $1)`,
@@ -236,6 +237,13 @@ describe("Phase 15 costing edge cases", () => {
       supplierId: null,
     });
 
+    // Phase 19 C (M2): a non-USD offload needs a recorded dated factory rate;
+    // the rate entered on the offload is then used.
+    await pool.query(
+      `INSERT INTO factory_fx_rates (company_id, currency_code, rate_to_usd, effective_date, source)
+       VALUES ($1, 'EUR', '1.20000000', '2026-09-01', 'manual')`,
+      [ctx.companyId]
+    );
     const response = await agent.post("/api/factory/raw-stock/offload").send({
       containerId: String(containerId),
       receivedKg: "1000",

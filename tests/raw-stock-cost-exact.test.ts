@@ -1,8 +1,7 @@
 /**
  * Raw-stock cost corrections and deductions compute in exact decimals.
- * - update-cost wrote each open mix-batch source's totalCost as
- *   (weight × cost).toFixed(2) over binary floats: 100.5 kg × 0.35 = 35.175,
- *   held as 35.17499…, was stored as 35.17 instead of 35.18.
+ * - update-cost (retired in phase 19 C, 410) wrote each open mix-batch
+ *   source's totalCost over binary floats.
  * - deduct-received and the adjustment route let a non-numeric kg through
  *   (NaN <= 0 is false): one went on to post NaN daybook amounts, the other
  *   stored kg = 'NaN', which Postgres numeric accepts and every SUM then spreads.
@@ -65,19 +64,14 @@ async function post(path: string, body: Record<string, unknown>) {
 }
 
 describe("raw stock cost routes", () => {
-  it("costs an open mix-batch source to the exact cent", async () => {
+  // Phase 19 C (F2): update-cost is retired (410); costs change only through the reviewed re-cost.
+  it("refuses the retired supplier cost update and writes nothing", async () => {
     harness.rows = {
       factory_raw_stock: [{ id: 1 }],
       factory_mix_batch_sources: [{ id: 5, mixBatchId: 10, weightKg: "100.5", costPerKg: "0.35" }],
     };
-    expect(await post("/api/factory/raw-stock/update-cost", { supplierId: 1, newCostPerKg: "0.35" })).toBe(200);
-
-    const sourceWrites = harness.writes.filter(
-      ([kind, table]) => kind === "update" && table === "factory_mix_batch_sources"
-    );
-    expect(sourceWrites[0][2]).toEqual({ costPerKg: "0.35", totalCost: "35.18" });
-    const batchWrite = harness.writes.find(([kind, table]) => kind === "update" && table === "factory_mix_batches");
-    expect(batchWrite?.[2]).toMatchObject({ costPerKg: "0.3500", totalCost: "35.18" });
+    expect(await post("/api/factory/raw-stock/update-cost", { supplierId: 1, newCostPerKg: "0.35" })).toBe(410);
+    expect(harness.writes).toEqual([]);
   });
 
   it("rejects a non-numeric kg instead of posting NaN", async () => {

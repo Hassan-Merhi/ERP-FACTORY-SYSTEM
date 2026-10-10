@@ -15,7 +15,8 @@ import {
 import { cascadeContainerCostChange, type CascadeResult } from "../../../services/factory/rawStockCostCascade";
 import { computeCorrectContainerCost } from "../../../services/factory/raw-stock-recalc";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
-import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { writeDaybookEntry, getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import {
   factoryContainers,
   factoryRawStock,
@@ -34,7 +35,9 @@ const ADMIN_ROLES = ["Admin", "Developer"] as const;
  * Rules:
  *  A) USD charge                   → fxRateToUsd = 1,   fxRateDate = txDate
  *  B) Same CCY as container        → use confirmed container offload FX
- *  C) Third currency               → fetch via getOrFetchFxRateToUsd, must be > 0
+ *  C) Third currency               → the recorded factory rate on or before txDate
+ *     (manual, else recorded auto; phase 19 C, M2: it used to fetch an external
+ *     rate and mark it confirmed), else FactoryFxRateRequiredError (409)
  */
 async function resolvePostOffloadChargeFx(opts: {
   chargeCcy: string;
@@ -63,15 +66,9 @@ async function resolvePostOffloadChargeFx(opts: {
     }
     return { fxRateToUsd: containerFxRate, fxRateConfirmed: true, fxRateDate: containerFxRateDateOffload || txDate };
   }
-  // Third currency — fetch independently
-  const fetched = await getOrFetchFxRateToUsd(companyId, chargeCcy, txDate);
-  const rate = toMoney(fetched).toNumber();
-  if (!rate || rate <= 0) {
-    throw new Error(
-      `Cannot resolve FX rate for charge currency ${chargeCcy} on ${txDate}. Add an FX rate for this currency first.`
-    );
-  }
-  return { fxRateToUsd: rate, fxRateConfirmed: true, fxRateDate: txDate };
+  // Third currency — the recorded dated factory rate
+  const recorded = await factoryDocumentRate(db, companyId, chargeCcy, txDate);
+  return { fxRateToUsd: toMoney(recorded.rate).toNumber(), fxRateConfirmed: true, fxRateDate: txDate };
 }
 
 /**
@@ -310,6 +307,7 @@ export function registerRawStockContainerRoutes(app: Express) {
             companyId,
           });
         } catch (e: unknown) {
+          if (e instanceof FactoryFxRateRequiredError) return res.status(409).json(e.body);
           return res.status(400).json({ message: getErrorMessage(e) });
         }
 
@@ -519,6 +517,7 @@ export function registerRawStockContainerRoutes(app: Express) {
             companyId,
           });
         } catch (e: unknown) {
+          if (e instanceof FactoryFxRateRequiredError) return res.status(409).json(e.body);
           return res.status(400).json({ message: getErrorMessage(e) });
         }
 

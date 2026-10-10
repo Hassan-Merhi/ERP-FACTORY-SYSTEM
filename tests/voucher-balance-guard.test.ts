@@ -215,8 +215,10 @@ describe("voucher balance guard", () => {
   });
 
   it("leaves history, optional vouchers and periodic stock adjustments alone", async () => {
-    // A voucher that existed at the install is history: its lines stay editable.
-    // Only a superuser with triggers off can write the marker (as the install did).
+    // A voucher that existed at the install is history: its header and
+    // narrations stay editable; since phase 19 B (D1) a line change must leave
+    // it balanced. Only a superuser with triggers off can write the marker (as
+    // the install did).
     const legacy = (await transaction(async (q) => {
       await q(`SET LOCAL session_replication_role = replica`);
       const id = await voucher(q, companyId, "2026-09-01", [["100", "0"]]);
@@ -224,8 +226,11 @@ describe("voucher balance guard", () => {
       return id;
     })) as number;
     await expect(
-      transaction((q) => q(`UPDATE voucher_entries SET debit_amount = 90 WHERE voucher_id = $1`, [legacy]))
+      transaction((q) => q(`UPDATE voucher_entries SET narration = 'history' WHERE voucher_id = $1`, [legacy]))
     ).resolves.toBeDefined();
+    await expect(
+      transaction((q) => q(`UPDATE voucher_entries SET debit_amount = 90 WHERE voucher_id = $1`, [legacy]))
+    ).rejects.toThrow(/does not balance/);
 
     // Stock adjustments backed by a stock document are one-sided before a
     // cut-over and in a supplier partner.

@@ -18,9 +18,9 @@ import { CLOSED_PERIOD_LOCK_NAMESPACE } from "./closedPeriodGuard";
  *
  * Enforced by BEFORE triggers so every writer (master edit routes,
  * zero-balances, imports, resets) is covered. The bypass is the closed-period
- * guard's: the maintenance scope or a transaction-local
- * `app.closed_period_override = 'on'` (used by the fiscal reopen when it
- * restores a legacy close's zeroed openings). The rejection carries the
+ * guard's: only a transaction-local `app.closed_period_override = 'on'` (set
+ * by the fiscal reopen when it restores a legacy close's zeroed openings); the
+ * maintenance scope no longer passes (phase 19 B). The rejection carries the
  * closed-period SQLSTATE and marker, so routes map it to 409 with
  * closedPeriodErrorResponse / errorStatus. A shared advisory lock on the
  * company serialises the check against a concurrent close.
@@ -39,7 +39,13 @@ export const OPENING_BALANCE_LOCK_TABLES = [
   "fixed_assets",
 ] as const;
 
-export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v2";
+/**
+ * v3 (phase 19 B): the maintenance scope no longer bypasses the lock (DI2,
+ * erp_closed_period_guard_bypassed), and deleting a master after a close is
+ * locked too (DI4): a hard DELETE, or a soft delete / restore (deleted_at set
+ * or cleared), of a row whose opening is not zero.
+ */
+export const OPENING_BALANCE_LOCK_VERSION = "2026-10-opening-balance-lock-v3";
 
 export const openingBalanceLockTriggerName = (table: string) => `${table}_opening_balance_lock`;
 
@@ -57,7 +63,7 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
        RAISE EXCEPTION USING
          ERRCODE = '${CLOSED_PERIOD_ERROR_CODE}',
          MESSAGE = format(
-           'ACCOUNTING_PERIOD_CLOSED: the books are closed through %s, so an opening balance cannot be created or changed',
+           'ACCOUNTING_PERIOD_CLOSED: the books are closed through %s, so an opening balance cannot be created, changed or deleted',
            locked_through
          ),
          HINT = 'Post an adjusting journal dated after the closed period, or reopen the period.';
@@ -76,6 +82,12 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
      new_company integer := (to_jsonb(NEW)->>'company_id')::integer;
      old_company integer;
    BEGIN
+     IF TG_OP = 'DELETE' THEN
+       IF COALESCE((to_jsonb(OLD)->>'opening_balance')::numeric, 0) <> 0 THEN
+         PERFORM erp_assert_opening_balance_open((to_jsonb(OLD)->>'company_id')::integer);
+       END IF;
+       RETURN OLD;
+     END IF;
      IF TG_OP = 'INSERT' THEN
        IF new_amount <> 0 THEN PERFORM erp_assert_opening_balance_open(new_company); END IF;
        RETURN NEW;
@@ -84,6 +96,8 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
      old_amount := COALESCE((old_row->>'opening_balance')::numeric, 0);
      old_company := (old_row->>'company_id')::integer;
      IF new_amount <> old_amount
+        OR ((new_amount <> 0 OR old_amount <> 0)
+            AND ((new_row->>'deleted_at') IS NULL) IS DISTINCT FROM ((old_row->>'deleted_at') IS NULL))
         OR (new_amount <> 0 AND COALESCE(new_row->>'opening_balance_side', 'Dr') IS DISTINCT FROM COALESCE(old_row->>'opening_balance_side', 'Dr'))
         OR ((new_amount <> 0 OR old_amount <> 0) AND new_company IS DISTINCT FROM old_company) THEN
        PERFORM erp_assert_opening_balance_open(old_company);
@@ -106,17 +120,22 @@ export const OPENING_BALANCE_LOCK_DDL: readonly string[] = [
     (table) => `DO $lock$
    DECLARE
      has_side boolean;
+     has_deleted boolean;
    BEGIN
      IF (SELECT COUNT(*) FROM information_schema.columns
           WHERE table_schema = current_schema() AND table_name = '${table}'
             AND column_name IN ('opening_balance', 'company_id')) = 2 THEN
        has_side := EXISTS (SELECT 1 FROM information_schema.columns
           WHERE table_schema = current_schema() AND table_name = '${table}' AND column_name = 'opening_balance_side');
+       has_deleted := EXISTS (SELECT 1 FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = '${table}' AND column_name = 'deleted_at');
        DROP TRIGGER IF EXISTS ${openingBalanceLockTriggerName(table)} ON ${table};
        EXECUTE format(
-         'CREATE TRIGGER %I BEFORE INSERT OR UPDATE OF %s ON %I FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard()',
+         'CREATE TRIGGER %I BEFORE INSERT OR DELETE OR UPDATE OF %s ON %I FOR EACH ROW EXECUTE FUNCTION erp_opening_balance_lock_guard()',
          '${openingBalanceLockTriggerName(table)}',
-         CASE WHEN has_side THEN 'opening_balance, opening_balance_side, company_id' ELSE 'opening_balance, company_id' END,
+         'opening_balance, company_id'
+           || CASE WHEN has_side THEN ', opening_balance_side' ELSE '' END
+           || CASE WHEN has_deleted THEN ', deleted_at' ELSE '' END,
          '${table}'
        );
      ELSE

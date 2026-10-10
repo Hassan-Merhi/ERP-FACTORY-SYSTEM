@@ -11,7 +11,8 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
-import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { writeDaybookEntry, getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import {
   factorySuppliers,
   factoryContainers,
@@ -42,16 +43,20 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
 
       const parsed = insertFactoryContainerSchema.parse({ ...req.body, companyId });
       const currencyCode = parsed.currencyCode || "USD";
-      const fxRateSource = parsed.fxRateSource || "auto";
       const today = getClientDate(req);
       const importDate = parsed.arrivalDate || today;
 
-      let fxRate: string;
-      if (fxRateSource === "manual" && parsed.fxRateToUsd) {
-        fxRate = parsed.fxRateToUsd;
-      } else {
-        fxRate = await getOrFetchFxRateToUsd(companyId, currencyCode, importDate);
-      }
+      // Phase 19 C (M2): a non-USD container is posted at the recorded factory
+      // rate on or before its date (a manual rate entered on the container is
+      // used when such a rate exists), or refused (409 FACTORY_FX_RATE_REQUIRED).
+      // It used to fetch an external rate, never record it, and mark it confirmed.
+      const ownRate =
+        parsed.fxRateSource === "manual" && parsed.fxRateToUsd
+          ? { rate: parsed.fxRateToUsd, confirmed: true }
+          : undefined;
+      const documentRate = await factoryDocumentRate(db, companyId, currencyCode, importDate, ownRate);
+      const fxRate = documentRate.rate;
+      const fxRateSource = documentRate.source === "auto" ? "auto" : "manual";
 
       const ratePerKg = toMoney(parsed.ratePerKg);
       const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate));
@@ -61,10 +66,10 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         currencyCode,
         fxRateToUsd: fxRate,
         fxRateToUsdImport: fxRate,
-        fxRateSource: fxRateSource === "manual" ? "manual" : "auto",
+        fxRateSource,
         fxRateDateImport: importDate,
         ratePerKgUsd: ratePerKgUsd.toFixed(),
-        // Explicitly resolved above (manual user entry or a real auto-fetch) — trust it.
+        // A recorded dated rate (or the container's own rate checked against one).
         fxRateConfirmed: true,
       };
 
@@ -129,14 +134,8 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
           // Same currency as container — container FX is correct
           commFxResolved = toMoney(fxRate);
         } else {
-          // Different non-USD currency: resolve independently
-          try {
-            commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, commFxCcy, importDate));
-          } catch (err: unknown) {
-            return res.status(400).json({
-              message: `Cannot resolve FX rate for commission currency ${commFxCcy} on ${importDate}. ${getErrorMessage(err)}`,
-            });
-          }
+          // Different non-USD currency: the recorded rate on or before the date, or 409.
+          commFxResolved = toMoney((await factoryDocumentRate(db, companyId, commFxCcy, importDate)).rate);
         }
         values.commissionFxRateToUsd = commFxResolved.toFixed();
         values.commissionFxRateConfirmed = true;
@@ -350,6 +349,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         error,
       });
       logger.error("Error creating factory container:", { error: error });
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       const cause = ((error as { cause?: unknown })?.cause ?? error) as { code?: string; detail?: string };
       if (cause?.code === "23505" && cause?.detail?.includes("container_number")) {
         return res

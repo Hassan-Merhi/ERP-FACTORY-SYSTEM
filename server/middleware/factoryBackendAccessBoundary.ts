@@ -301,8 +301,6 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     path === "/admin-verify" ||
     path === "/import-company-data" ||
     path === "/export-company-data" ||
-    path === "/migrate-voucher-descriptions" ||
-    path === "/payroll/migrate-worker-names" ||
     // The reviewed bale/mix re-cost (preview and Owner apply, wave 11) is a cost
     // repair like /repair-perkg-prices; the retired /bales/backfill-costs (410)
     // now falls to the Bales parent below.

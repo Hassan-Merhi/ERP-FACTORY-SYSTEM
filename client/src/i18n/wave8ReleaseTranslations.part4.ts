@@ -406,4 +406,60 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "كان إجمالي القيد صفراً، لذلك لا يمكن إعادة قياس مقابله بين الشركات. احذف القيد وأعد ترحيل التحويل بدلاً من ذلك.",
     fr: "L’écriture avait un total nul ; sa contrepartie intersociétés ne peut donc pas être remise à l’échelle. Supprimez l’écriture et comptabilisez de nouveau le transfert.",
   },
+  {
+    en: "These vouchers are in a closed period (closed through ${outcome.closedThrough}), so their location cannot be changed: ${closedVouchers}",
+    ar: "هذه السندات في فترة مقفلة (مقفلة حتى {{0}})، لذلك لا يمكن تغيير موقعها: {{1}}",
+    fr: "Ces pièces sont dans une période clôturée (clôturée jusqu’au {{0}}) ; leur emplacement ne peut donc pas être modifié : {{1}}",
+  },
+  {
+    en: "Migrated ${result.migratedEntries} voucher entries from ${result.accountCode} to employee ${result.employeeCode}",
+    ar: "تم نقل {{0}} من بنود السندات من {{1}} إلى الموظف {{2}}",
+    fr: "{{0}} lignes de pièces transférées de {{1}} vers l’employé {{2}}",
+  },
+  {
+    en: "Container number cannot be changed: vouchers that mention it are in a closed period (closed through ${outcome.closedThrough}): ${closedVouchers}",
+    ar: "لا يمكن تغيير رقم الحاوية: السندات التي تذكره في فترة مقفلة (مقفلة حتى {{0}}): {{1}}",
+    fr: "Le numéro du conteneur ne peut pas être modifié : des pièces qui le mentionnent sont dans une période clôturée (clôturée jusqu’au {{0}}) : {{1}}",
+  },
+  // Phase 19 (B): guards, deletes and rental routes.
+  {
+    en: "This is a system account: its name cannot be changed.",
+    ar: "هذا حساب نظام: لا يمكن تغيير اسمه.",
+    fr: "Ceci est un compte système : son nom ne peut pas être modifié.",
+  },
+  {
+    en: "This is a system account: it cannot be deleted.",
+    ar: "هذا حساب نظام: لا يمكن حذفه.",
+    fr: "Ceci est un compte système : il ne peut pas être supprimé.",
+  },
+  {
+    en: "The parent must be another live account of this company and of the same class, and not one of its sub-accounts.",
+    ar: "يجب أن يكون الحساب الأب حساباً آخر نشطاً لهذه الشركة ومن الفئة نفسها، وألا يكون أحد حساباته الفرعية.",
+    fr: "Le compte parent doit être un autre compte actif de cette société, de la même classe, et non l’un de ses sous-comptes.",
+  },
+  {
+    en: "This fixed asset has an opening balance, so it cannot be deleted. Move the balance with a journal first.",
+    ar: "لهذا الأصل الثابت رصيد افتتاحي، لذا لا يمكن حذفه. انقل الرصيد بقيد يومية أولاً.",
+    fr: "Cette immobilisation a un solde d’ouverture et ne peut donc pas être supprimée. Transférez d’abord le solde par une écriture.",
+  },
+  {
+    en: "This fixed asset has voucher lines, so it cannot be deleted. Deactivate it instead.",
+    ar: "لهذا الأصل الثابت سطور قيود، لذا لا يمكن حذفه. قم بتعطيله بدلاً من ذلك.",
+    fr: "Cette immobilisation a des lignes d’écriture et ne peut donc pas être supprimée. Désactivez-la plutôt.",
+  },
+  {
+    en: "This supplier has history (containers, stock, payments, transfers, voucher lines, linked suppliers or an opening balance), so it cannot be permanently deleted.",
+    ar: "لهذا المورد سجل (حاويات أو مخزون أو مدفوعات أو تحويلات أو سطور قيود أو موردون مرتبطون أو رصيد افتتاحي)، لذا لا يمكن حذفه نهائياً.",
+    fr: "Ce fournisseur a un historique (conteneurs, stock, paiements, transferts, lignes d’écriture, fournisseurs liés ou solde d’ouverture) et ne peut donc pas être supprimé définitivement.",
+  },
+  {
+    en: "No exchange rate is recorded for this currency on or before the payment date. Enter the dated rate before posting the payment.",
+    ar: "لا يوجد سعر صرف مسجل لهذه العملة في تاريخ الدفع أو قبله. أدخل السعر المؤرخ قبل ترحيل الدفعة.",
+    fr: "Aucun taux de change n’est enregistré pour cette devise à la date du paiement ou avant. Saisissez le taux daté avant de comptabiliser le paiement.",
+  },
+  {
+    en: "The books are closed through this date, so rent cannot be accrued on it.",
+    ar: "الدفاتر مقفلة حتى هذا التاريخ، لذا لا يمكن استحقاق الإيجار فيه.",
+    fr: "Les comptes sont clôturés jusqu’à cette date : le loyer ne peut pas y être constaté.",
+  },
 ];

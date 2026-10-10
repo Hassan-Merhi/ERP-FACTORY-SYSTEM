@@ -7,14 +7,15 @@
  */
 import type { Express } from "express";
 import { registerWorkerRepaymentDeleteRoutes } from "./repayments";
-import { registerPayrollVoucherBackfillRoutes } from "./backfill";
 import { registerWorkerStatementReadRoutes } from "./statement";
 import { registerWorkerDeleteRoutes } from "./worker-delete";
 import { registerOrphanedVoucherRepairRoutes } from "./repair";
 
 export function registerWorkerStatementRoutes(app: Express) {
   registerWorkerRepaymentDeleteRoutes(app);
-  registerPayrollVoucherBackfillRoutes(app);
+  // Phase 19 (A): POST /api/admin/backfill-payroll-vouchers is retired: it debited
+  // salary expense again for payrolls the accrual had already expensed (double count),
+  // trusted the body's company, used floats and wrote no audit.
   registerWorkerStatementReadRoutes(app);
   registerWorkerDeleteRoutes(app);
   registerOrphanedVoucherRepairRoutes(app);

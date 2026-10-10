@@ -7,8 +7,9 @@ import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { applyOffloadMovingAverage } from "../../../services/factory/rawStockLockedRate";
-import { resolveStoredFxRate, resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
-import { writeDaybookEntry, getOrFetchFxRateToUsd } from "../_helpers";
+import { resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
+import { writeDaybookEntry } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { normFactoryEntry } from "../../../services/factory/factoryVoucherEntryAmounts";
 import {
   factoryContainers,
@@ -124,33 +125,19 @@ export function registerRawStockOffloadRoutes(app: Express) {
       const offloadDate = reqOffloadDate || today;
       const mixBatchAllocationsArr = Array.isArray(reqMixBatchAllocations) ? reqMixBatchAllocations : [];
 
+      // Phase 19 C (M2): a non-USD offload is posted at the recorded factory rate
+      // on or before the offload date (manual, else recorded auto); a rate entered
+      // on the offload is used only where such a rate exists. With none it is
+      // refused (409 FACTORY_FX_RATE_REQUIRED). It used to fetch an external rate
+      // (never recorded) and fall back to the container's rate.
       let fxRate: number;
-      if (reqFxRate && requestNumber(reqFxRate) > 0) {
-        // User explicitly set the FX rate — always honour it
-        fxRate = requestNumber(reqFxRate);
-      } else if (currencyCode === "USD") {
-        fxRate = 1;
-      } else {
-        try {
-          fxRate = requestNumber(await getOrFetchFxRateToUsd(companyId, currencyCode, offloadDate));
-        } catch (err: unknown) {
-          // Do NOT silently default to 1 for a non-USD offload — that would understate
-          // (or overstate) the USD landed cost by the entire FX differential with no
-          // trace of why. The container's own fxRateToUsd is only a legitimate fallback
-          // if it was itself explicitly set (not left at the schema default of "1" for
-          // a non-USD currency, which means "never actually set").
-          const { fxRate: containerRate, looksSet: containerRateLooksSet } = resolveStoredFxRate(
-            container.currencyCode,
-            container.fxRateToUsd,
-            container.fxRateConfirmed
-          );
-          if (!containerRateLooksSet) {
-            return res.status(400).json({
-              message: `No valid FX rate available for ${currencyCode} on ${offloadDate}, and the container has no explicitly-set fxRateToUsd to fall back on. Provide fxRateToUsd explicitly to offload this container. (${getErrorMessage(err)})`,
-            });
-          }
-          fxRate = containerRate;
-        }
+      try {
+        const ownRate =
+          reqFxRate && requestNumber(reqFxRate) > 0 ? { rate: String(reqFxRate), confirmed: true } : undefined;
+        fxRate = requestNumber((await factoryDocumentRate(db, companyId, currencyCode, offloadDate, ownRate)).rate);
+      } catch (rateError) {
+        if (rateError instanceof FactoryFxRateRequiredError) return res.status(409).json(rateError.body);
+        throw rateError;
       }
 
       const declaredKg = container.totalKg || "0";

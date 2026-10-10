@@ -4,7 +4,7 @@ import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { requireAuth, requireRole, requireNonPOS } from "../../auth";
+import { requireAuth, requireRole } from "../../auth";
 
 import {
   containers,
@@ -19,91 +19,13 @@ import { eq, and, or, isNull, like } from "drizzle-orm";
 
 import { registerPoSupplierReconciliationRoutes } from "./poSupplierReconciliationRoutes";
 import { calcPoAmountsExact } from "../containers/containerHelpers";
-import { MoneyDecimal, moneyString, parseMoneyInput } from "../../lib/money";
+import { MoneyDecimal, moneyString } from "../../lib/money";
 
 export function registerAdminPoFixRoutes(app: Express) {
   registerPoSupplierReconciliationRoutes(app);
 
-  app.post("/api/test-data/vouchers", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const { date, debitAccountId, creditAccountId, amount, description } = req.body;
-
-      // Validate required fields
-      if (!date || !debitAccountId || !creditAccountId || !amount) {
-        return res
-          .status(400)
-          .json({ message: "Missing required fields: date, debitAccountId, creditAccountId, amount" });
-      }
-
-      const parsedAmount = parseMoneyInput(amount);
-      if (!parsedAmount || parsedAmount.lessThanOrEqualTo(0)) {
-        return res.status(400).json({ message: "Amount must be a positive number" });
-      }
-
-      // Verify debit account exists and belongs to current company
-      const debitAccount = await storage.getLedgerAccountById(debitAccountId);
-      if (!debitAccount || debitAccount.companyId !== companyId) {
-        return res.status(404).json({ message: "Debit account not found or doesn't belong to current company" });
-      }
-
-      // Verify credit account exists and belongs to current company
-      const creditAccount = await storage.getLedgerAccountById(creditAccountId);
-      if (!creditAccount || creditAccount.companyId !== companyId) {
-        return res.status(404).json({ message: "Credit account not found or doesn't belong to current company" });
-      }
-
-      // Generate a unique voucher number with TEST- prefix
-      const voucherNumber = `TEST-${Date.now()}`;
-
-      const voucher = await db.transaction(async (tx) => {
-        // Create the voucher as optional (excluded from calculations by default)
-        const [voucher] = await tx
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Journal",
-            voucherDate: date,
-            description: description || `Test data entry`,
-            totalAmount: moneyString(parsedAmount),
-            optional: true, // Start as draft/optional
-          })
-          .returning();
-
-        // Create debit entry
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: debitAccountId,
-          debitAmount: moneyString(parsedAmount),
-          creditAmount: "0",
-          narration: `Test data - ${description || debitAccount.name}`,
-        });
-
-        // Create credit entry
-        await tx.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: creditAccountId,
-          debitAmount: "0",
-          creditAmount: moneyString(parsedAmount),
-          narration: `Test data - ${description || creditAccount.name}`,
-        });
-
-        return voucher;
-      });
-
-      res.status(201).json({
-        voucher,
-        message: "Test entry created as optional (draft). Toggle to apply to calculations.",
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  // Phase 19 (A): POST /api/test-data/vouchers is removed. Any non-POS user could
+  // post a TEST- journal into the real books with no audit.
 
   // ==========================================
   // Fix Old PO Inter-Company Credits

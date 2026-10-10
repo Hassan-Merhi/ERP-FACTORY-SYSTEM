@@ -16,7 +16,12 @@ import { sql } from "drizzle-orm";
 import { db } from "../../../db";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { CANONICAL_ACCOUNT_TYPES, classifyAccountType } from "../accountClassification";
-import { LEDGER_GUARD_CONSTRAINTS, LEDGER_INTEGRITY_GUARD_VERSION } from "../ledgerIntegrityGuard";
+import {
+  LEDGER_ACCOUNT_TREE_TRIGGER,
+  LEDGER_GUARD_CONSTRAINTS,
+  LEDGER_INTEGRITY_GUARD_VERSION,
+} from "../ledgerIntegrityGuard";
+import { CLOSED_PERIOD_GUARD_VERSION } from "../closedPeriodGuard";
 import {
   VOUCHER_BALANCE_GUARD_TRIGGERS,
   VOUCHER_BALANCE_GUARD_VERSION,
@@ -37,6 +42,7 @@ import { classifyVoucherLedgerExpectation } from "../voucherLedgerExpectation";
 import { buildTrialBalance } from "./trialBalance";
 import { payrollAdvancePostingChecks } from "./payrollAdvancePostingChecks";
 import { retailLedgerChecks } from "./retailLedgerChecks";
+import { ledgerShapeChecks } from "./ledgerShapeChecks";
 import { getPartyBalances, liveVouchersOf } from "../balances/ledgerBalanceEngine";
 
 export type IntegrityStatus = "pass" | "warn" | "fail";
@@ -94,6 +100,8 @@ const LEDGER_INTEGRITY_WAVE12_TRIGGERS: readonly string[] = [
   ...OPENING_BALANCE_LOCK_TABLES.map(openingBalanceLockTriggerName),
   // Wave 14 (A): the voucher-entry currency normalization trigger (migrations/20260720_005).
   CURRENCY_NORMALIZATION_TRIGGER,
+  // Phase 19 (B): the account tree guard (ledgerIntegrityGuard.ts v4).
+  LEDGER_ACCOUNT_TREE_TRIGGER,
 ];
 
 export async function runAccountingIntegrityDiagnostic(companyId: number): Promise<AccountingIntegrityReport> {
@@ -402,7 +410,7 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       "legacy_employee_ledger_accounts",
       legacyEmployeeLedgers.length ? "warn" : "pass",
       legacyEmployeeLedgers.length,
-      "Legacy EMP-<code> ledger accounts still holding lines or an opening. Their lines move employees.current_balance but count under the account, not the employee, in every ledger balance; migrate them onto the employee (POST /api/admin/migrate-employee-account/:id) after reviewing the opening, which the migration does not carry.",
+      "Legacy EMP-<code> ledger accounts still holding lines or an opening. Their lines move employees.current_balance but count under the account, not the employee, in every ledger balance; migrate them onto the employee (POST /api/admin/migrate-employee-account/:id, Admin/Owner, audited); it refuses an account with an opening, which it does not carry, so move the opening with a journal first.",
       legacyEmployeeLedgers
     )
   );
@@ -638,6 +646,13 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
   if (ledgerGuardVersions?.opening !== OPENING_BALANCE_LOCK_VERSION) {
     missingGuards.push(`erp_opening_balance_lock_guard ${OPENING_BALANCE_LOCK_VERSION}`);
   }
+  // Phase 19 (B): the closed-period guard without the maintenance bypass.
+  const [closedGuard] = await rows<{ version: string | null }>(sql`
+    SELECT obj_description(to_regprocedure('erp_closed_period_guard_bypassed()'), 'pg_proc') AS version
+  `);
+  if (closedGuard?.version !== CLOSED_PERIOD_GUARD_VERSION) {
+    missingGuards.push(`erp_closed_period_guard_bypassed ${CLOSED_PERIOD_GUARD_VERSION}`);
+  }
   checks.push(
     check(
       "database_guards_installed",
@@ -824,6 +839,8 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
 
   // 15. Retail cash movements before wave 17 D and RETAIL-INVENTORY against the stock sub-ledger.
   checks.push(...(await retailLedgerChecks(companyId)));
+  // Phase 19 (B): D5 voucher shape and C5 account tree, listed.
+  checks.push(...(await ledgerShapeChecks(companyId)));
 
   const status: IntegrityStatus = checks.some((c) => c.status === "fail")
     ? "fail"

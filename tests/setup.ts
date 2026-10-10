@@ -78,6 +78,7 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "custload",
   "phase4cap",
   "ordfin",
+  "p19af",
 ]);
 
 function testCompanyType(prefix: string): "erp" | "factory" {

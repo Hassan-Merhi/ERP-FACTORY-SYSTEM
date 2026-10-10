@@ -106,6 +106,12 @@ async function insertVoucher(
       ]
     );
   }
+  // Phase 19 (B), D5: the header total is the line total (base debits).
+  await client.query(
+    `UPDATE vouchers SET total_amount = (SELECT COALESCE(SUM(debit_amount), 0) FROM voucher_entries WHERE voucher_id = $1)
+      WHERE id = $1`,
+    [id]
+  );
   return id;
 }
 
@@ -319,7 +325,9 @@ describe("stock adjustment writer and the stock exemption", () => {
 });
 
 describe("history marker and re-checks", () => {
-  it("keeps history editable, never checked, and the marker immutable", async () => {
+  // Phase 19 (B), D1: a history voucher's line change must leave it balanced
+  // (it was "never checked"); header and narration edits stay unchecked.
+  it("keeps history editable, checks its line changes, and the marker immutable", async () => {
     // The marker was written once by the installer; only a superuser with
     // triggers off can write it (this models a voucher that existed at install).
     const history = await withFixtureTransaction(async (client) => {
@@ -331,6 +339,16 @@ describe("history marker and re-checks", () => {
     await expect(
       withFixtureTransaction((client) =>
         client.query(`UPDATE voucher_entries SET debit_amount = 90 WHERE voucher_id = $1`, [history])
+      )
+    ).rejects.toThrow(/does not balance/);
+    await expect(
+      withFixtureTransaction((client) =>
+        client.query(`UPDATE voucher_entries SET narration = 'history narration' WHERE voucher_id = $1`, [history])
+      )
+    ).resolves.toBeDefined();
+    await expect(
+      withFixtureTransaction((client) =>
+        client.query(`UPDATE vouchers SET description = 'history header', total_amount = 5 WHERE id = $1`, [history])
       )
     ).resolves.toBeDefined();
     await expect(
@@ -344,7 +362,7 @@ describe("history marker and re-checks", () => {
       const id = (
         await client.query(
           `INSERT INTO vouchers (company_id, voucher_number, voucher_type, voucher_date, total_amount, balance_guard_exempt_history)
-           VALUES ($1, $2, 'Journal', '2026-10-05', 0, true) RETURNING id`,
+           VALUES ($1, $2, 'Stock Transfer', '2026-10-05', 0, true) RETURNING id`,
           [ctx.companyId, nextNumber()]
         )
       ).rows[0].id as number;

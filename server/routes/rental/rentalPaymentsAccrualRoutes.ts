@@ -4,18 +4,25 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import {
   getCompanyId,
-  ensureMonthlyLedgerRows,
+  monthlyLedgerRowsForRead,
   ensureMonthlyForCompany,
   postRentAccrualForCompany,
   type RentalModule,
 } from "./shared";
 import {
-  postDueScheduledRentalPayments,
+  postDueScheduledRentalPaymentsDetailed,
   createRentalPaymentGroup,
+  isRentalRateRequiredError,
 } from "../../services/rental/rentalPaymentPostingService";
+import { companyBusinessDate } from "../../services/accounting/companyBusinessDate";
+import {
+  companyClosedThrough,
+  isDateInClosedPeriod,
+  runInCompanyPostingScope,
+} from "../../services/accounting/scheduledPostingScope";
 import { db, pool } from "../../db";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../services/rental/rentalPeriodService";
-import { requireAuth } from "../../auth";
+import { requireAuth, requireRole } from "../../auth";
 import { z } from "zod";
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import {
@@ -30,6 +37,17 @@ import { parseId } from "../../lib/parseId";
 import { getClientDate } from "../../lib/dateUtils";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
+
+export const RENTAL_POSTING_PERIOD_CLOSED_MESSAGE =
+  "The books are closed through this date, so rent cannot be accrued on it.";
+
+/** The signed-in user, as the actor of an audited rental posting (phase 19 B). */
+function requestActor(req: Request): { userId: string; username: string } {
+  return {
+    userId: String(req.session.userId ?? ""),
+    username: req.session.username || String(req.session.userId ?? "unknown"),
+  };
+}
 
 export function registerRentalPaymentsAccrualRoutes(
   app: Express,
@@ -52,11 +70,11 @@ export function registerRentalPaymentsAccrualRoutes(
           paymentDate: z.string().min(1),
           notes: z.string().optional(),
           currency: z.string().optional().default("USD"),
+          // Phase 19 (B), PE2: not used for posting (the recorded dated rate is).
           exchangeRate: z
             .union([z.string(), z.number()])
             .transform((v) => String(v))
-            .optional()
-            .default("1"),
+            .optional(),
           scheduleFuturePayment: z.boolean().optional().default(false),
         })
         .parse(req.body);
@@ -107,11 +125,12 @@ export function registerRentalPaymentsAccrualRoutes(
         clientDate,
         scheduleFuturePayment: data.scheduleFuturePayment,
         currency: data.currency,
-        exchangeRate: data.exchangeRate,
+        exchangeRate: data.exchangeRate ?? "",
         notes: data.notes ?? null,
         shopExpenseAccountName,
         incomeAccountName,
         isSharedPayment,
+        audit: { actor: requestActor(req), trigger: "route" },
       });
 
       if (result.scheduled) {
@@ -132,6 +151,9 @@ export function registerRentalPaymentsAccrualRoutes(
       if (e instanceof z.ZodError)
         return res.status(400).json({ message: e.issues.map((err) => err.message).join(", ") });
       if ((e as { status?: number }).status === 400) return res.status(400).json({ message: getErrorMessage(e) });
+      if (isRentalRateRequiredError(e)) {
+        return res.status(409).json({ message: e.message, code: e.code, currency: e.currency, date: e.date });
+      }
       logger.error(`${tag} payments:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
     }
@@ -155,8 +177,7 @@ export function registerRentalPaymentsAccrualRoutes(
             exchangeRate: z
               .union([z.string(), z.number()])
               .transform((v) => String(v))
-              .optional()
-              .default("1"),
+              .optional(),
             scheduleFuturePayment: z.boolean().optional().default(false),
           })
         )
@@ -199,11 +220,12 @@ export function registerRentalPaymentsAccrualRoutes(
             clientDate,
             scheduleFuturePayment: data.scheduleFuturePayment,
             currency: data.currency,
-            exchangeRate: data.exchangeRate,
+            exchangeRate: data.exchangeRate ?? "",
             notes: data.notes ?? null,
             shopExpenseAccountName,
             incomeAccountName,
             isSharedPayment: false,
+            audit: { actor: requestActor(req), trigger: "route" },
           });
 
           results.push({
@@ -390,15 +412,11 @@ export function registerRentalPaymentsAccrualRoutes(
       let guaranteePayments: PropertyPaymentRow[] = [];
 
       if (contract) {
-        await ensureMonthlyLedgerRows(contract.id, asOfDate);
-
+        // Phase 19 (B), PE2: a GET only reads; due months with no stored row
+        // are computed in memory (it created and updated monthly rows).
         const billingDay = getRentalBillingDay(contract.startDate as string);
 
-        const rawLedger = await db
-          .select()
-          .from(propertyMonthlyLedger)
-          .where(eq(propertyMonthlyLedger.contractId, contract.id))
-          .orderBy(propertyMonthlyLedger.year, propertyMonthlyLedger.month);
+        const rawLedger = await monthlyLedgerRowsForRead(contract.id, asOfDate);
 
         const allPayments = await db
           .select()
@@ -607,38 +625,65 @@ export function registerRentalPaymentsAccrualRoutes(
   });
 
   // ── MANUAL MONTHLY ROLLOVER ──
-  app.post(`${urlPrefix}/run-monthly`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      await ensureMonthlyForCompany(companyId, module);
-      res.json({ ok: true });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+  // Phase 19 (B), PE2: Admin/Owner, the company's business date, its tenant
+  // scope (monthly rows only, no voucher).
+  app.post(
+    `${urlPrefix}/run-monthly`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const asOf = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          await ensureMonthlyForCompany(companyId, module, businessDate);
+          return businessDate;
+        });
+        res.json({ ok: true, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── ACCRUAL (ERP SHOP only) ────────────────────────────────────────────────
   // Manually post rent accrual journal vouchers for all unpaid ERP shop months.
   // Returns { accrued: N } where N = number of newly-posted accrual voucher rows.
-  app.post(`${urlPrefix}/accrue`, requireAuth, async (req: Request, res: Response) => {
+  // Phase 19 (B), PE2: Admin/Owner; dated by the company's business date (it
+  // was the client's), in the company's tenant scope, refused (409) when that
+  // date is in a closed period; each voucher audited with the signed-in user.
+  app.post(`${urlPrefix}/accrue`, requireAuth, requireRole("Admin", "Owner"), async (req: Request, res: Response) => {
     try {
       const companyId = getCompanyId(req);
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const asOf = getClientDate(req);
-      await ensureMonthlyForCompany(companyId, module, asOf);
-
-      // Post all due, unaccrued rows as ONE combined journal voucher
-      const { accrued, skipped } = await postRentAccrualForCompany(
-        companyId,
-        shopExpenseAccountName,
-        module,
-        incomeAccountName,
-        asOf
-      );
-
-      res.json({ accrued, skipped });
+      const outcome = await runInCompanyPostingScope(companyId, async () => {
+        const asOf = await companyBusinessDate(companyId);
+        const closedThrough = await companyClosedThrough(companyId);
+        if (isDateInClosedPeriod(closedThrough, asOf)) return { closed: true as const, asOf, closedThrough };
+        await ensureMonthlyForCompany(companyId, module, asOf);
+        // Post all due, unaccrued rows as ONE combined journal voucher
+        const result = await postRentAccrualForCompany(
+          companyId,
+          shopExpenseAccountName,
+          module,
+          incomeAccountName,
+          asOf,
+          { actor: requestActor(req), trigger: "route" }
+        );
+        return { closed: false as const, asOf, ...result };
+      });
+      if (outcome.closed) {
+        return res.status(409).json({
+          message: RENTAL_POSTING_PERIOD_CLOSED_MESSAGE,
+          code: "PERIOD_CLOSED",
+          asOf: outcome.asOf,
+          closedThrough: outcome.closedThrough,
+        });
+      }
+      const { accrued, skipped, asOf } = outcome;
+      res.json({ accrued, skipped, asOf });
     } catch (e: unknown) {
       logger.error(`${tag} accrue:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
@@ -723,17 +768,39 @@ export function registerRentalPaymentsAccrualRoutes(
 
   // ── SCHEDULED PAYMENTS — manually trigger posting ─────────────────────────
   // Admin endpoint to manually post all due SCHEDULED payment groups.
-  app.post(`${urlPrefix}/payments/post-scheduled`, requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = getCompanyId(req);
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const asOf = getClientDate(req);
-      const posted = await postDueScheduledRentalPayments(companyId, module, asOf, shopExpenseAccountName);
-      res.json({ posted, asOf });
-    } catch (e: unknown) {
-      res.status(500).json({ message: getErrorMessage(e) });
+  // Phase 19 (B), PE2: Admin/Owner; due as of the company's business date (it
+  // was the client's), in the company's tenant scope, a group dated in a
+  // closed period skipped and reported; audited with the signed-in user (it
+  // was audited as the scheduler).
+  app.post(
+    `${urlPrefix}/payments/post-scheduled`,
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = getCompanyId(req);
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        const { asOf, result } = await runInCompanyPostingScope(companyId, async () => {
+          const businessDate = await companyBusinessDate(companyId);
+          const closedThrough = await companyClosedThrough(companyId);
+          return {
+            asOf: businessDate,
+            result: await postDueScheduledRentalPaymentsDetailed(
+              companyId,
+              module,
+              businessDate,
+              shopExpenseAccountName,
+              incomeAccountName,
+              { closedThrough, actor: requestActor(req), trigger: "route" }
+            ),
+          };
+        });
+        res.json({ posted: result.posted, failed: result.failed, skipped: result.skipped, asOf });
+      } catch (e: unknown) {
+        res.status(500).json({ message: getErrorMessage(e) });
+      }
     }
-  });
+  );
 
   // ── CANCEL SCHEDULED PAYMENT GROUP ────────────────────────────────────────
   app.delete(`${urlPrefix}/payments/scheduled/:groupId`, requireAuth, async (req: Request, res: Response) => {

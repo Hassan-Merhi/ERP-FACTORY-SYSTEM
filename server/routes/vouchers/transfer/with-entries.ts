@@ -6,15 +6,18 @@
  */
 import type { Express } from "express";
 import { getErrorMessage, errorStatus } from "../../../lib/httpHandlers";
-import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
-import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
+import { writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../../services/accounting/intercompanyTransferLegGuard";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
-import { vouchers, voucherEntries, customerBalances, interCompanyTransfers } from "@shared/schema";
-import { eq, and, or } from "drizzle-orm";
+import { vouchers, voucherEntries, customerBalances } from "@shared/schema";
+import { eq, and } from "drizzle-orm";
 import { recalculateOrderTotals } from "../../factory/_helpers";
 import { customerOrderCharges, customerOrders, factoryDaybookEntries as fde } from "@shared/schema";
 import { moveSalesVoucherInventoryLocation } from "./salesLocationInventoryEvidence";
@@ -63,6 +66,16 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
       }
       if (existingVoucher.companyId !== req.session.currentCompanyId) {
         return res.status(403).json({ message: "Access denied: Voucher belongs to a different company" });
+      }
+      // Phase 19 C (MC-2): an intercompany transfer leg is not edited here (409);
+      // the transfer is deleted (both legs) and recorded again. This editor used
+      // to rescale the other company's voucher after commit, outside a
+      // transaction, debit/credit only, with any failure hidden.
+      try {
+        await assertNotIntercompanyTransferLeg(id);
+      } catch (legError: unknown) {
+        if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+        throw legError;
       }
 
       const userRole = req.session.currentRole;
@@ -296,64 +309,6 @@ export function registerVoucherWithEntriesRoutes(app: Express) {
           newTotal: updatedVoucher.optional ? 0 : updatedVoucher.totalAmount,
         })
       );
-
-      try {
-        const [ict] = await db
-          .select()
-          .from(interCompanyTransfers)
-          .where(or(eq(interCompanyTransfers.fromVoucherId, id), eq(interCompanyTransfers.toVoucherId, id)))
-          .limit(1);
-        if (ict) {
-          const otherVoucherId = ict.fromVoucherId === id ? ict.toVoucherId : ict.fromVoucherId;
-          if (otherVoucherId) {
-            const newTotal = toMoney(updatedVoucher.totalAmount);
-            const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
-            if (otherVoucher) {
-              const oldTotal = toMoney(otherVoucher.totalAmount);
-              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
-              const otherEntries = await db
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, otherVoucherId));
-              await db.transaction(async (tx) => {
-                const auditBefore = await readVoucherAuditState(tx, otherVoucherId);
-                for (const e of otherEntries) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({
-                      debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
-                      creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
-                    })
-                    .where(eq(voucherEntries.id, e.id));
-                }
-                await tx
-                  .update(vouchers)
-                  .set({ totalAmount: newTotal.toFixed(2) })
-                  .where(eq(vouchers.id, otherVoucherId));
-                // Wave 12: the counterpart's rescaled lines are audited under its own company.
-                await writeVoucherAuditTx(tx, {
-                  actor: {
-                    userId: req.session.userId,
-                    username: req.session.username,
-                    companyId: otherVoucher.companyId,
-                  },
-                  action: "update",
-                  voucherId: otherVoucherId,
-                  before: auditBefore,
-                  after: await readVoucherAuditState(tx, otherVoucherId),
-                  extra: { interCompanyCounterpartOf: { new: { voucherId: id } } },
-                });
-              });
-              await db
-                .update(fde)
-                .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })
-                .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, otherVoucherId)));
-            }
-          }
-        }
-      } catch (ictErr: unknown) {
-        logger.error("[ICT sync] Counterpart update failed (non-fatal):", { error: getErrorMessage(ictErr) });
-      }
 
       const chargeMatch = existingVoucher.voucherNumber?.match(/^CHARGE-.+-(\d+)-\d+$/);
       if (chargeMatch && existingVoucher.sourceModule === "FACTORY") {

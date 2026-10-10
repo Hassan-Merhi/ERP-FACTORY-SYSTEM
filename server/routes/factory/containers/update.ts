@@ -12,7 +12,8 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
 import { eq, and, or, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
@@ -140,13 +141,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             }
             commFxResolved = containerFxNum;
           } else {
-            try {
-              commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, effCommCcy, effDate));
-            } catch (err: unknown) {
-              return res.status(400).json({
-                message: `Cannot resolve FX rate for commission currency ${effCommCcy} on ${effDate}. ${getErrorMessage(err)}`,
-              });
-            }
+            // Phase 19 C (M2): the recorded factory rate on or before the date, or 409.
+            commFxResolved = toMoney((await factoryDocumentRate(db, companyId, effCommCcy, effDate)).rate);
           }
           updateData.commissionFxRateToUsd = commFxResolved.toFixed();
           updateData.commissionFxRateConfirmed = true;
@@ -167,12 +163,15 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         const importDate = updateData.arrivalDate || existing.arrivalDate || getClientDate(req);
 
         if (fxRateSource === "auto") {
-          const fxRate = await getOrFetchFxRateToUsd(companyId, currencyCode, importDate);
+          // Phase 19 C (M2): the recorded factory rate on or before the date (manual,
+          // else recorded auto), or 409 FACTORY_FX_RATE_REQUIRED. It used to fetch an
+          // external rate, never record it, and mark it confirmed.
+          const fxRate = (await factoryDocumentRate(db, companyId, currencyCode, importDate)).rate;
           updateData.fxRateToUsd = fxRate;
           updateData.fxRateToUsdImport = fxRate;
           updateData.fxRateDateImport = importDate;
           updateData.fxRateSource = "auto";
-          updateData.fxRateConfirmed = true; // real auto-fetch, not a guess
+          updateData.fxRateConfirmed = true; // a recorded dated rate
           const ratePerKg = toMoney(updateData.ratePerKg || existing.ratePerKg);
           updateData.ratePerKgUsd = (currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate))).toFixed();
         } else {
@@ -183,6 +182,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           const explicitRate = b.fxRateToUsd !== undefined ? parseMoneyInput(dec(b.fxRateToUsd) ?? "") : null;
           let fxRateNum: Decimal;
           if (explicitRate && explicitRate.greaterThan(0)) {
+            // A manual rate is accepted only where a recorded dated rate exists (the factory document rule).
+            await factoryDocumentRate(db, companyId, currencyCode, importDate);
             fxRateNum = explicitRate;
             updateData.fxRateConfirmed = true; // freshly supplied by this request
           } else {
@@ -522,6 +523,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       });
       res.json(updated);
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("factory container update failed", {
         module: "factoryContainers",
         action: "update",

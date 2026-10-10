@@ -1,8 +1,5 @@
 import { db } from "../../db";
-import { logger } from "../../lib/logger";
-import { AUTO_FILL_REF_TABLE } from "../../services/factory/daybookSourceIntegrity";
 import {
-  factoryDaybookEntries,
   ledgerAccounts,
   customerOrderBales,
   customerOrderLines,
@@ -23,81 +20,15 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
-import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
 import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
 import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
 import { withFactoryValuationEventTx } from "../../services/factory/factoryStockValueEvents";
 import { resolveMixSourcePricingBasis } from "../../services/factory/mixSourcePricingBasis";
-import { findFactoryFxRateOnOrBefore } from "../../services/factory/factoryFxRateOnDate";
 import { resolveFactoryFxRateToUsd } from "../../services/factory/factoryFxRateReadOnly";
 
-export async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-    effectiveDate?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const amtCurrency = opts.amountCurrency || 0;
-  // This helper backs many non-raw-material daybook entries (payroll, sales, etc.)
-  // as well as raw-material cost entries, so an unresolved rate here must not
-  // block the write the way it does on the dedicated raw-material cost-recompute
-  // paths (rawStockBalanceRoutes/rawStockContainerRoutes/recalculateContainerCosts)
-  // — instead flag it loudly so it surfaces in logs/diagnostics rather than
-  // silently mispricing.
-  //
-  // Wave 8.4 continuation: a non-USD entry written without a rate takes the
-  // company's confirmed rate dated on or before its date; with none it is
-  // stored with rate 0 and amount_usd 0 (unresolved, as resolveStoredFxRate
-  // reads it), never at rate 1, which counted the native amount as USD.
-  let fxRate = currency === "USD" ? 1 : opts.fxRateToUsd || 0;
-  if (currency !== "USD" && !(fxRate > 0) && opts.amountUsd === undefined) {
-    const dated = await findFactoryFxRateOnOrBefore(dbOrTx, opts.companyId, currency, opts.txDate);
-    if (dated) fxRate = toMoney(dated.rate).toNumber();
-  }
-  const { looksSet: daybookFxLooksSet } = resolveStoredFxRate(currency, fxRate);
-  if (!daybookFxLooksSet && currency !== "USD") {
-    logger.warn(
-      `[writeDaybookEntry] Unresolved exchange rate for ${currency} on txType=${opts.txType} companyId=${opts.companyId} — amountUsd may be inaccurate`
-    );
-  }
-  const amtUsd =
-    currency !== "USD" && !(fxRate > 0) && opts.amountUsd === undefined
-      ? "0"
-      : daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  const [inserted] = await dbOrTx
-    .insert(factoryDaybookEntries)
-    .values({
-      companyId: opts.companyId,
-      txDate: opts.txDate,
-      txType: opts.txType,
-      referenceId: opts.referenceId ?? null,
-      referenceTable:
-        opts.referenceTable ?? (opts.referenceId != null ? (AUTO_FILL_REF_TABLE[opts.txType] ?? null) : null),
-      description: opts.description,
-      metaJson: opts.metaJson || null,
-      currencyCode: currency,
-      amountCurrency: String(amtCurrency),
-      fxRateToUsd: String(fxRate),
-      amountUsd: amtUsd,
-      createdBy: opts.createdBy || null,
-      effectiveDate: opts.effectiveDate || null,
-    })
-    .returning({ id: factoryDaybookEntries.id });
-  return inserted; // { id: number } — callers that ignore the return value continue to work
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../services/factory/factoryDaybookWriter";
 
 /**
  * The factory rate (USD per unit) for a currency on a date, for posting flows.

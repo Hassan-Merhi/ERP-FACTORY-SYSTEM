@@ -10,6 +10,10 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../../services/accounting/intercompanyTransferLegGuard";
 import { syncEmployeeBalancesFromEntries } from "../../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import { vouchers, voucherEntries } from "@shared/schema";
@@ -97,6 +101,22 @@ export function registerVoucherUpdateRoutes(app: Express) {
           }
         } else {
           return res.status(403).json({ message: "Insufficient permissions to edit vouchers" });
+        }
+      }
+
+      // Phase 19 C (MC-2): the date, lines or posted state of an intercompany
+      // transfer leg are not changed here (409): the transfer is deleted (both
+      // legs) and recorded again. A description-only edit is allowed.
+      if (
+        (req.body.voucherDate !== undefined && req.body.voucherDate !== existingVoucher.voucherDate) ||
+        Array.isArray(req.body.entries) ||
+        (req.body.optional !== undefined && req.body.optional !== existingVoucher.optional)
+      ) {
+        try {
+          await assertNotIntercompanyTransferLeg(id);
+        } catch (legError: unknown) {
+          if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+          throw legError;
         }
       }
 

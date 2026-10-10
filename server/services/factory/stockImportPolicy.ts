@@ -59,8 +59,22 @@ export class FactoryStockEntryBeforeCutoverError extends HttpError {
   }
 }
 
-/** Refuses a spreadsheet stock import once the company's cut-over is applied. */
+/**
+ * The cut-over apply's lock (openingJournal.ts): an import takes it before it
+ * reads the cut-over, so an import and an apply for the company run one after
+ * the other (phase 19 C).
+ */
+export async function lockInventoryCutoverTx(executor: DatabaseOrTransaction, companyId: number): Promise<void> {
+  await executor.execute(sql`SELECT pg_advisory_xact_lock(hashtext('gl_inventory_cutover'), ${companyId})`);
+}
+
+/**
+ * Refuses a spreadsheet stock import once the company's cut-over is applied.
+ * Takes the cut-over apply's advisory lock first (held to the end of the
+ * caller's transaction), so call it inside the import's transaction.
+ */
 export async function assertStockImportAllowedTx(executor: DatabaseOrTransaction, companyId: number): Promise<void> {
+  await lockInventoryCutoverTx(executor, companyId);
   const cutover = await getInventoryCutover(executor, companyId);
   if (cutover && cutover.status === "ACTIVE") throw new FactoryStockImportAfterCutoverError(cutover.effectiveFrom);
 }

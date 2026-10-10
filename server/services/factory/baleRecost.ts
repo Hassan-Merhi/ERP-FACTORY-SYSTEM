@@ -62,6 +62,9 @@ import { resolveMixSourcePricingBasis } from "./mixSourcePricingBasis";
 
 export const FACTORY_BALE_RECOST_MOVED_MESSAGE =
   "Bale costs are now changed only through the reviewed re-cost: preview the plan, then an Owner confirms it.";
+/** `POST /api/factory/raw-stock/update-cost` retired (accounting audit phase 19 C). */
+export const FACTORY_RAW_COST_UPDATE_RETIRED_MESSAGE =
+  "A supplier's cost per kg is no longer changed here. Bale and mix costs are changed only through the reviewed re-cost: preview the plan, then an Owner confirms it.";
 export const FACTORY_BALE_RECOST_PLAN_CHANGED_MESSAGE =
   "The re-cost plan changed since it was reviewed. Preview it again and confirm the new plan.";
 export const FACTORY_BALE_RECOST_NOTHING_MESSAGE = "There is nothing to re-cost.";

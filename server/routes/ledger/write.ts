@@ -5,13 +5,13 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { errorStatus, getErrorMessage } from "../../lib/httpHandlers";
+import { errorStatus, getErrorMessage, HttpError } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { requireAuth, requireNonPOS } from "../../auth";
+import { requireAuth, requireNonPOS, requireRole } from "../../auth";
 import { logAudit } from "../_helpers";
 import { ledgerAccounts, customers, insertLedgerAccountSchema, updateLedgerAccountSchema } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
 import { buildAuditChanges } from "../../services/audit";
 import { defaultOpeningSide } from "../../services/accounting/accountClassification";
@@ -65,6 +65,31 @@ export const SYSTEM_ACCOUNT_CODE_RESERVED_CODE = "SYSTEM_ACCOUNT_CODE_RESERVED" 
 export const SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE =
   "The system finds an account by this code, so an account cannot be re-coded to it or away from it.";
 
+// Phase 19 (B), C6: the accounts the system resolves by code (registry, RETAIL-*,
+// literal look-ups) keep their code and their name.
+export const SYSTEM_ACCOUNT_RENAME_REFUSED_CODE = "SYSTEM_ACCOUNT_RENAME_REFUSED" as const;
+export const SYSTEM_ACCOUNT_RENAME_REFUSED_MESSAGE = "This is a system account: its name cannot be changed.";
+// Phase 19 (B), C5: the tree guard (ledgerIntegrityGuard.ts) refuses the link.
+export const LEDGER_ACCOUNT_PARENT_INVALID_CODE = "LEDGER_ACCOUNT_PARENT_INVALID" as const;
+export const LEDGER_ACCOUNT_PARENT_INVALID_MESSAGE =
+  "The parent must be another live account of this company and of the same class, and not one of its sub-accounts.";
+
+/** The tree guard's refusal as a 409 body, or null for any other error. */
+export function ledgerParentErrorResponse(
+  error: unknown
+): { status: 409; body: { message: string; code: string; detail: string } } | null {
+  // A database error may arrive wrapped (drizzle's query error keeps it as the cause).
+  const cause = (error as { cause?: unknown } | null)?.cause;
+  const detail = [getErrorMessage(error), cause ? getErrorMessage(cause) : ""].find((message) =>
+    message.includes(LEDGER_ACCOUNT_PARENT_INVALID_CODE)
+  );
+  if (!detail) return null;
+  return {
+    status: 409,
+    body: { message: LEDGER_ACCOUNT_PARENT_INVALID_MESSAGE, code: LEDGER_ACCOUNT_PARENT_INVALID_CODE, detail },
+  };
+}
+
 export function registerLedgerAccountWriteRoutes(app: Express) {
   app.post("/api/ledger-accounts", requireAuth, requireNonPOS, async (req, res) => {
     try {
@@ -87,6 +112,14 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
         });
       }
 
+      // Phase 19 (B), C6: a code the system resolves accounts by is the
+      // registry's to create (ensureSystemAccounts), never a user's.
+      if (parsed.code && isSystemResolvedAccountCode(parsed.code)) {
+        return res
+          .status(409)
+          .json({ message: SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE, code: SYSTEM_ACCOUNT_CODE_RESERVED_CODE });
+      }
+
       // Auto-generate code from name if not provided
       if (!parsed.code) {
         // Generate code from name: take first 3 letters of each word, uppercase
@@ -107,7 +140,10 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
         // Ensure uniqueness by adding suffix if needed
         let code = baseCode;
         let suffix = 1;
-        while (await storage.getLedgerAccountByCode(code, req.session.currentCompanyId!)) {
+        while (
+          isSystemResolvedAccountCode(code) ||
+          (await storage.getLedgerAccountByCode(code, req.session.currentCompanyId!))
+        ) {
           code = `${baseCode}${suffix}`;
           suffix++;
         }
@@ -169,6 +205,8 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       });
       res.status(201).json(account);
     } catch (error: unknown) {
+      const parentRefused = ledgerParentErrorResponse(error);
+      if (parentRefused) return res.status(parentRefused.status).json(parentRefused.body);
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
@@ -224,6 +262,23 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
         return res
           .status(409)
           .json({ message: SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE, code: SYSTEM_ACCOUNT_CODE_RESERVED_CODE });
+      }
+
+      // Phase 19 (B), C6: a system account keeps its name (the close, the
+      // registry and the name-based readers depend on it); a rename must not
+      // take another live account's name.
+      if (parsed.name !== undefined && parsed.name.trim() !== existingAccount.name.trim()) {
+        if (isSystemResolvedAccountCode(existingAccount.code)) {
+          return res
+            .status(409)
+            .json({ message: SYSTEM_ACCOUNT_RENAME_REFUSED_MESSAGE, code: SYSTEM_ACCOUNT_RENAME_REFUSED_CODE });
+        }
+        const sameName = await storage.getLedgerAccountByName(parsed.name, req.session.currentCompanyId!);
+        if (sameName && sameName.id !== accountId) {
+          return res.status(400).json({
+            message: "Duplicate ledger: A ledger account with this name already exists",
+          });
+        }
       }
 
       // Check for duplicate code if code is being changed
@@ -368,37 +423,104 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
     } catch (error: unknown) {
       const refused = accountHistoryErrorResponse(error);
       if (refused) return res.status(refused.status).json(refused.body);
+      const parentRefused = ledgerParentErrorResponse(error);
+      if (parentRefused) return res.status(parentRefused.status).json(parentRefused.body);
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 
-  // Bulk-assign parentId to multiple ledger accounts
-  app.patch("/api/ledger-accounts/bulk-assign-parent", requireAuth, requireNonPOS, async (req, res) => {
-    try {
-      if (!req.session.currentCompanyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-      const { accountIds, parentId } = req.body;
-      if (!Array.isArray(accountIds) || accountIds.length === 0) {
-        return res.status(400).json({ message: "accountIds must be a non-empty array" });
-      }
-      const companyId = req.session.currentCompanyId;
-      const results = [];
-      for (const id of accountIds) {
-        const account = await storage.getLedgerAccountById(id);
-        if (!account || account.companyId !== companyId) continue;
-        if (parentId !== null && parentId !== undefined) {
-          const parent = await storage.getLedgerAccountById(parentId);
-          if (!parent || parent.companyId !== companyId) {
-            return res.status(400).json({ message: `Parent account ${parentId} not found` });
-          }
+  // Bulk-assign parentId to multiple ledger accounts. Phase 19 (B), C5: Admin
+  // or Owner, every account of this company, one transaction with each
+  // account's audit row; the tree guard refuses a parent of another company or
+  // class, a deleted parent and a cycle (nothing is changed then).
+  app.patch(
+    "/api/ledger-accounts/bulk-assign-parent",
+    requireAuth,
+    requireNonPOS,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
-        const updated = await storage.updateLedgerAccount({ id, parentId: parentId ?? null });
-        results.push(updated);
+        const { accountIds, parentId } = req.body ?? {};
+        if (!Array.isArray(accountIds) || accountIds.length === 0) {
+          return res.status(400).json({ message: "accountIds must be a non-empty array" });
+        }
+        const ids = [...new Set(accountIds.map(Number))];
+        if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) {
+          return res.status(400).json({ message: "accountIds must be a non-empty array" });
+        }
+        const newParentId = parentId === null || parentId === undefined || parentId === "" ? null : Number(parentId);
+        if (newParentId !== null && (!Number.isSafeInteger(newParentId) || newParentId <= 0)) {
+          return res.status(400).json({ message: `Parent account ${parentId} not found` });
+        }
+        const results = await db.transaction(async (tx) => {
+          const locked = await tx
+            .select()
+            .from(ledgerAccounts)
+            .where(
+              and(
+                inArray(ledgerAccounts.id, ids),
+                eq(ledgerAccounts.companyId, companyId),
+                isNull(ledgerAccounts.deletedAt)
+              )
+            )
+            .for("update");
+          if (locked.length !== ids.length) {
+            throw new HttpError(404, "Account not found");
+          }
+          if (newParentId !== null) {
+            const [parent] = await tx
+              .select({ id: ledgerAccounts.id })
+              .from(ledgerAccounts)
+              .where(
+                and(
+                  eq(ledgerAccounts.id, newParentId),
+                  eq(ledgerAccounts.companyId, companyId),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              );
+            if (!parent) throw new HttpError(400, `Parent account ${newParentId} not found`);
+          }
+          const updatedRows = [];
+          for (const before of locked) {
+            if (before.parentId === newParentId) {
+              updatedRows.push(before);
+              continue;
+            }
+            const [updated] = await tx
+              .update(ledgerAccounts)
+              .set({ parentId: newParentId })
+              .where(eq(ledgerAccounts.id, before.id))
+              .returning();
+            await logAudit(
+              {
+                userId: req.session.userId!,
+                username: req.session.username || "unknown",
+                companyId,
+                action: "update",
+                tableName: "ledger_accounts",
+                recordId: updated.id,
+                recordIdentifier: updated.name,
+                changes: {
+                  parentId: { old: before.parentId ?? null, new: updated.parentId ?? null },
+                  reason: { new: "bulk-assign-parent" },
+                },
+              },
+              tx
+            );
+            updatedRows.push(updated);
+          }
+          return updatedRows;
+        });
+        res.json(results);
+      } catch (error: unknown) {
+        const parentRefused = ledgerParentErrorResponse(error);
+        if (parentRefused) return res.status(parentRefused.status).json(parentRefused.body);
+        res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
       }
-      res.json(results);
-    } catch (error: unknown) {
-      res.status(400).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 }

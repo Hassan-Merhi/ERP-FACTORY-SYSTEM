@@ -10,6 +10,10 @@ import { db } from "../../../db";
 import { storage } from "../../../storage";
 import { requireAuth, requireNonPOS } from "../../../auth";
 import { voucherMutationBlockReason } from "../../../lib/migratedVoucherGuard";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../../services/accounting/intercompanyTransferLegGuard";
 import { syncEmployeeBalancesFromEntries } from "../../_helpers";
 import { readVoucherAuditState, writeVoucherAuditTx } from "../../helpers/voucherAuditTrail";
 import type Decimal from "decimal.js";
@@ -64,6 +68,17 @@ export function registerVoucherOptionalUpdateRoutes(app: Express) {
         return res.status(403).json({
           message: "Only Admin and Owner can toggle optional status",
         });
+      }
+
+      // Phase 19 C (MC-2): suspending or activating one leg of an intercompany
+      // transfer would post or unpost one company's side only (409).
+      if (existingVoucher.optional !== optional) {
+        try {
+          await assertNotIntercompanyTransferLeg(id);
+        } catch (legError: unknown) {
+          if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+          throw legError;
+        }
       }
 
       const wasOptional = existingVoucher.optional;

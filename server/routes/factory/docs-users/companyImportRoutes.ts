@@ -8,7 +8,8 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import { assertStockImportAllowedTx, sendStockImportRefusal } from "../../../services/factory/stockImportPolicy";
 import {
   factorySuppliers,
   factoryCategories,
@@ -59,7 +60,6 @@ import {
   vouchers,
 } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
-import Decimal from "decimal.js";
 import { writeAuditEvent } from "../../../services/audit/auditService";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
@@ -74,54 +74,15 @@ const asDynamicInsert = (rec: ImportRow): never => rec as never;
 const insertedIdOf = (inserted: { id: unknown } | undefined): number | null =>
   inserted && typeof inserted.id === "number" ? inserted.id : null;
 
-export const IMPORT_UNBALANCED_VOUCHERS_MESSAGE =
-  "The file contains posted vouchers whose debits do not equal their credits. They cannot be imported: correct them in the source company first.";
+// Split out of this file (phase 19 C) to keep it under the god-file limit.
+export { IMPORT_UNBALANCED_VOUCHERS_MESSAGE, unbalancedImportedVouchers } from "./companyImportValidation";
+import { unbalancedImportedVouchers, IMPORT_UNBALANCED_VOUCHERS_MESSAGE } from "./companyImportValidation";
 
-/**
- * Posted (not deleted, not optional) vouchers of an export file whose lines do
- * not balance to the cent in the base columns.
- */
-export function unbalancedImportedVouchers(
-  tables: Record<string, ImportRow[]>
-): Array<{ voucherNumber: string; voucherType: string; debit: string; credit: string }> {
-  const totals = new Map<number, { debit: Decimal; credit: Decimal }>();
-  const amount = (value: unknown) => {
-    try {
-      const parsed = new Decimal(value == null || value === "" ? 0 : String(value));
-      return parsed.isFinite() ? parsed : new Decimal(0);
-    } catch {
-      return new Decimal(0);
-    }
-  };
-  for (const line of tables.voucher_entries ?? []) {
-    const voucherId = Number(line.voucherId);
-    if (!Number.isInteger(voucherId)) continue;
-    const current = totals.get(voucherId) ?? { debit: new Decimal(0), credit: new Decimal(0) };
-    totals.set(voucherId, {
-      debit: current.debit.plus(amount(line.debitAmount)),
-      credit: current.credit.plus(amount(line.creditAmount)),
-    });
-  }
-  const unbalanced: Array<{ voucherNumber: string; voucherType: string; debit: string; credit: string }> = [];
-  for (const voucher of tables.vouchers ?? []) {
-    if (voucher.deletedAt != null || voucher.optional === true) continue;
-    const total = totals.get(Number(voucher.id)) ?? { debit: new Decimal(0), credit: new Decimal(0) };
-    const debit = total.debit.toDecimalPlaces(2);
-    const credit = total.credit.toDecimalPlaces(2);
-    if (!debit.equals(credit)) {
-      unbalanced.push({
-        voucherNumber: String(voucher.voucherNumber ?? voucher.id),
-        voucherType: String(voucher.voucherType ?? ""),
-        debit: debit.toFixed(2),
-        credit: credit.toFixed(2),
-      });
-    }
-  }
-  return unbalanced;
-}
+/** Phase 19 C (F7/DI10): Admin/Owner (Developer passes); the import was sign-in only. */
+const adminOrOwner = requireRole("Admin", "Owner");
 
 export function registerFactoryCompanyImportRoutes(app: Express) {
-  app.post("/api/factory/import-company-data", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/factory/import-company-data", requireAuth, adminOrOwner, async (req: Request, res: Response) => {
     try {
       const multer = (await import("multer")).default;
       const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
@@ -188,11 +149,6 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
               count: unbalancedVouchers.length,
             });
           }
-
-          await db.delete(factorySettings).where(eq(factorySettings.companyId, targetCompanyId));
-          await db.delete(factoryBaleSequences).where(eq(factoryBaleSequences.companyId, targetCompanyId));
-          await db.delete(customerInvoiceSequences).where(eq(customerInvoiceSequences.companyId, targetCompanyId));
-          await db.delete(companySettings).where(eq(companySettings.companyId, targetCompanyId));
 
           const t = payload.tables;
           const summary: Record<string, number> = {};
@@ -311,6 +267,14 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
           }
 
           await db.transaction(async (tx) => {
+            // Phase 19 C (F7/DI10): takes the cut-over lock and is refused once the
+            // cut-over is applied (409); the replaced settings are cleared in this
+            // transaction (they were cleared before it, so a failed import lost them).
+            await assertStockImportAllowedTx(tx, targetCompanyId);
+            await tx.delete(factorySettings).where(eq(factorySettings.companyId, targetCompanyId));
+            await tx.delete(factoryBaleSequences).where(eq(factoryBaleSequences.companyId, targetCompanyId));
+            await tx.delete(customerInvoiceSequences).where(eq(customerInvoiceSequences.companyId, targetCompanyId));
+            await tx.delete(companySettings).where(eq(companySettings.companyId, targetCompanyId));
             async function insertAndMap(
               tableName: string,
               drizzleTable: DynamicTable,
@@ -888,6 +852,7 @@ export function registerFactoryCompanyImportRoutes(app: Express) {
             details: summary,
           });
         } catch (importError: unknown) {
+          if (sendStockImportRefusal(res, importError)) return;
           logger.error("Import company data error:", { error: importError });
           res.status(500).json({ message: "Import failed: " + getErrorMessage(importError) });
         }

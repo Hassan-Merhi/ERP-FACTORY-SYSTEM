@@ -111,10 +111,8 @@ export const PHASE5_OPERATIONAL_REQUEST_BOUNDARY_WRITERS = new Set([
 export const PHASE6_SPECIAL_PURPOSE_COMPLETED_WRITERS = new Set([
   "server/routes/admin/adminPoFixRoutes.ts",
   "server/routes/creditSalesImportRoutes.ts",
-  "server/routes/erp-payroll/runs-migration.ts",
   "server/routes/exchangeRateRoutes.ts",
   "server/routes/factory/docs-users/companyImportRoutes.ts",
-  "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/posImportRoutes.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
   "server/routes/sp-migration/spMigrationSetupRoutes.ts",

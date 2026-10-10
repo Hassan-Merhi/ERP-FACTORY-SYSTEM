@@ -12,7 +12,17 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import type { DbTransaction } from "../../../db";
+import { writeAuditEvent } from "../../../services/audit/auditService";
+import {
+  BaleStatusChangeRefusal,
+  FACTORY_BALE_DELETE_CHANGES_VALUE_MESSAGE,
+  FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE,
+  isValueNeutralBaleDelete,
+  isValueNeutralBaleStatusChange,
+  KNOWN_BALE_STATUSES,
+} from "../../../services/factory/baleStatusPolicy";
 
 import {
   factoryBaleProducts,
@@ -28,6 +38,41 @@ import {
   factoryBaleProductionAttributions,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray, not } from "drizzle-orm";
+
+/** The status vocabulary the routes accept (an unknown status is 400). */
+const ALLOWED = KNOWN_BALE_STATUSES;
+
+const BALE_ON_FINALIZED_ORDER_MESSAGE =
+  "Cannot set status to IN_STOCK: this bale is on a finalized order. Use the Return to Stock action to remove it from the order first.";
+
+class BaleOnFinalizedOrderError extends Error {}
+
+/**
+ * A bale on a finalized, dispatched or sold order is not set back to IN_STOCK
+ * here (the valuation does not count it as stock); the Return to Stock action
+ * takes it off the order first.
+ */
+async function assertNotOnFinalizedOrderTx(
+  tx: DbTransaction,
+  companyId: number,
+  status: string,
+  baleIds: number[]
+): Promise<void> {
+  if (status !== "IN_STOCK" || baleIds.length === 0) return;
+  const [onOrder] = await tx
+    .select({ baleId: customerOrderBales.baleId })
+    .from(customerOrderBales)
+    .innerJoin(customerOrders, eq(customerOrders.id, customerOrderBales.orderId))
+    .where(
+      and(
+        inArray(customerOrderBales.baleId, baleIds),
+        eq(customerOrders.companyId, companyId),
+        inArray(customerOrders.status, ["FINALIZED", "DISPATCHED", "SOLD"])
+      )
+    )
+    .limit(1);
+  if (onOrder) throw new BaleOnFinalizedOrderError(BALE_ON_FINALIZED_ORDER_MESSAGE);
+}
 
 export function registerBalesCrudRoutes(app: Express) {
   app.get("/api/factory/bales", requireAuth, async (req: Request, res: Response) => {
@@ -189,44 +234,91 @@ export function registerBalesCrudRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/bales/bulk-status", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Phase 19 C (F3): Admin/Owner; only value-neutral changes (baleStatusPolicy:
+  // within finished goods, or within the pre-stock statuses); any other bale in
+  // the set refuses the whole change (409, nothing written). One transaction
+  // with one audit row per bale changed.
+  app.patch(
+    "/api/factory/bales/bulk-status",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { ids, status } = req.body;
-      if (!Array.isArray(ids) || ids.length === 0)
-        return res.status(400).json({ message: "ids must be a non-empty array" });
-      if (!status || typeof status !== "string") return res.status(400).json({ message: "status is required" });
+        const { ids, status } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0)
+          return res.status(400).json({ message: "ids must be a non-empty array" });
+        if (!status || typeof status !== "string") return res.status(400).json({ message: "status is required" });
+        if (!(ALLOWED as readonly string[]).includes(status))
+          return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
+        const baleIds = [...new Set(ids.map(Number))];
+        if (baleIds.some((id) => !Number.isInteger(id) || id <= 0))
+          return res.status(400).json({ message: "ids must be bale ids" });
 
-      const ALLOWED = [
-        "PENDING_PRESSING",
-        "LABEL_PRINTED",
-        "PRESSED",
-        "IN_STOCK",
-        "RESERVED",
-        "RESERVED_FOR_ORDER",
-        "SOLD",
-        "REPACKED",
-        "REMOVED",
-        "DELETED",
-        "DISPATCHED",
-      ];
-      if (!ALLOWED.includes(status))
-        return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
+        const updated = await db.transaction(async (tx) => {
+          const bales = await tx
+            .select({
+              id: factoryBales.id,
+              status: factoryBales.status,
+              deletedAt: factoryBales.deletedAt,
+              referenceNumber: factoryBales.referenceNumber,
+            })
+            .from(factoryBales)
+            .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)))
+            .for("update");
+          const refused = bales
+            .filter((bale) => !isValueNeutralBaleStatusChange(bale.status, status, bale.deletedAt))
+            .map((bale) => ({ id: bale.id, from: bale.status, to: status }));
+          if (refused.length > 0) throw new BaleStatusChangeRefusal(FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE, refused);
+          await assertNotOnFinalizedOrderTx(
+            tx,
+            companyId,
+            status,
+            bales.map((bale) => bale.id)
+          );
+          const changed = bales.filter((bale) => bale.status !== status);
+          if (changed.length === 0) return 0;
+          const now = new Date();
+          await tx
+            .update(factoryBales)
+            .set({ status, updatedAt: now })
+            .where(
+              and(
+                eq(factoryBales.companyId, companyId),
+                inArray(
+                  factoryBales.id,
+                  changed.map((bale) => bale.id)
+                )
+              )
+            );
+          for (const bale of changed) {
+            await writeAuditEvent(
+              {
+                userId: String(req.session.userId ?? "unknown"),
+                username: req.session.username || String(req.session.userId ?? "unknown"),
+                companyId,
+                action: "update",
+                tableName: "factory_bales",
+                recordId: bale.id,
+                recordIdentifier: bale.referenceNumber || `Bale #${bale.id}`,
+                changes: { status: { old: bale.status, new: status }, source: { new: "bulk-status" } },
+              },
+              tx
+            );
+          }
+          return changed.length;
+        });
 
-      const now = new Date();
-      const result = await db
-        .update(factoryBales)
-        .set({ status, updatedAt: now, deletedAt: status === "DELETED" ? now : null })
-        .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, ids.map(Number))))
-        .returning({ id: factoryBales.id });
-
-      res.json({ updated: result.length });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json({ updated });
+      } catch (error: unknown) {
+        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
+        if (error instanceof BaleOnFinalizedOrderError) return res.status(409).json({ message: error.message });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // PATCH /api/factory/bales/bulk-date — update stock_entry_date for a set of bales
   app.patch("/api/factory/bales/bulk-date", requireAuth, async (req: Request, res: Response) => {
@@ -270,121 +362,132 @@ export function registerBalesCrudRoutes(app: Express) {
     }
   });
 
-  app.patch("/api/factory/bales/:id/status", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Phase 19 C (F3): Admin/Owner; only a value-neutral change (baleStatusPolicy),
+  // otherwise 409 pointing to the sale, removal and pressing flows. The change
+  // and its audit row commit together.
+  app.patch(
+    "/api/factory/bales/:id/status",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const id = parseId(req.params.id);
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
+        const { status } = req.body;
+        if (!status || typeof status !== "string") return res.status(400).json({ message: "status is required" });
+        if (!(ALLOWED as readonly string[]).includes(status))
+          return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
 
-      const { status } = req.body;
-      if (!status || typeof status !== "string") return res.status(400).json({ message: "status is required" });
-
-      const ALLOWED = [
-        "PENDING_PRESSING",
-        "LABEL_PRINTED",
-        "PRESSED",
-        "IN_STOCK",
-        "RESERVED",
-        "RESERVED_FOR_ORDER",
-        "SOLD",
-        "REPACKED",
-        "REMOVED",
-        "DELETED",
-        "DISPATCHED",
-      ];
-      if (!ALLOWED.includes(status))
-        return res.status(400).json({ message: `Invalid status. Allowed: ${ALLOWED.join(", ")}` });
-
-      // Guard: prevent resetting a bale to IN_STOCK if it's on a finalized order.
-      // The correct flow is to use the "Return to Stock" action which removes it from the order first.
-      if (status === "IN_STOCK") {
-        const [orderBaleCheck] = await db
-          .select({ orderId: customerOrderBales.orderId })
-          .from(customerOrderBales)
-          .where(eq(customerOrderBales.baleId, id))
-          .limit(1);
-        if (orderBaleCheck) {
-          const [orderCheck] = await db
-            .select({ status: customerOrders.status })
-            .from(customerOrders)
-            .where(eq(customerOrders.id, orderBaleCheck.orderId))
-            .limit(1);
-          if (orderCheck && ["FINALIZED", "DISPATCHED", "SOLD"].includes(orderCheck.status)) {
-            return res.status(409).json({
-              message:
-                "Cannot set status to IN_STOCK: this bale is on a finalized order. Use the Return to Stock action to remove it from the order first.",
-            });
+        const updated = await db.transaction(async (tx) => {
+          const [bale] = await tx
+            .select({
+              id: factoryBales.id,
+              status: factoryBales.status,
+              deletedAt: factoryBales.deletedAt,
+              referenceNumber: factoryBales.referenceNumber,
+            })
+            .from(factoryBales)
+            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
+            .for("update");
+          if (!bale) return null;
+          if (!isValueNeutralBaleStatusChange(bale.status, status, bale.deletedAt)) {
+            throw new BaleStatusChangeRefusal(FACTORY_BALE_STATUS_CHANGES_VALUE_MESSAGE, [
+              { id, from: bale.status, to: status },
+            ]);
           }
-        }
+          await assertNotOnFinalizedOrderTx(tx, companyId, status, [id]);
+          if (bale.status === status) return { id, status };
+          const [row] = await tx
+            .update(factoryBales)
+            .set({ status, updatedAt: new Date() })
+            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
+            .returning({ id: factoryBales.id, status: factoryBales.status });
+          await writeAuditEvent(
+            {
+              userId: String(req.session.userId ?? "unknown"),
+              username: req.session.username || String(req.session.userId ?? "unknown"),
+              companyId,
+              action: "update",
+              tableName: "factory_bales",
+              recordId: id,
+              recordIdentifier: bale.referenceNumber || `Bale #${id}`,
+              changes: { status: { old: bale.status, new: status } },
+            },
+            tx
+          );
+          return row;
+        });
+
+        if (!updated) return res.status(404).json({ message: "Bale not found" });
+        res.json(updated);
+      } catch (error: unknown) {
+        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
+        if (error instanceof BaleOnFinalizedOrderError) return res.status(409).json({ message: error.message });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      // Read old status before updating so the audit has a real before/after diff.
-      const [baleBeforeStatusChange] = await db
-        .select({ status: factoryBales.status, referenceNumber: factoryBales.referenceNumber })
-        .from(factoryBales)
-        .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)));
-      if (!baleBeforeStatusChange) return res.status(404).json({ message: "Bale not found" });
-
-      const now = new Date();
-      const [updated] = await db
-        .update(factoryBales)
-        .set({ status, updatedAt: now, deletedAt: status === "DELETED" ? now : null })
-        .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
-        .returning({ id: factoryBales.id, status: factoryBales.status });
-
-      if (!updated) return res.status(404).json({ message: "Bale not found" });
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "update",
-        tableName: "factory_bales",
-        recordId: id,
-        recordIdentifier: baleBeforeStatusChange.referenceNumber || `Bale #${id}`,
-        changes: { status: { old: baleBeforeStatusChange.status, new: status } },
-      });
-      res.json(updated);
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
 
-  app.delete("/api/factory/bales/:id", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Phase 19 C (F3): Admin/Owner; only a pre-stock bale (no value) is deleted
+  // here; a valued or sold bale is removed or written off through Stock Removal
+  // (409). The delete and its audit row (the bale as it was) commit together.
+  app.delete(
+    "/api/factory/bales/:id",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const id = parseId(req.params.id);
+        const id = parseId(req.params.id);
+        if (id === null) return res.status(400).json({ message: "Invalid id" });
 
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) return res.status(400).json({ message: "Invalid bale ID" });
+        const deleted = await db.transaction(async (tx) => {
+          const [bale] = await tx
+            .select()
+            .from(factoryBales)
+            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
+            .for("update");
+          if (!bale) return false;
+          if (!isValueNeutralBaleDelete(bale.status, bale.deletedAt)) {
+            throw new BaleStatusChangeRefusal(FACTORY_BALE_DELETE_CHANGES_VALUE_MESSAGE, [
+              { id, from: bale.status, to: "DELETED" },
+            ]);
+          }
+          const now = new Date();
+          await tx
+            .update(factoryBales)
+            .set({ status: "DELETED", deletedAt: now, updatedAt: now })
+            .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)));
+          await writeAuditEvent(
+            {
+              userId: String(req.session.userId ?? "unknown"),
+              username: req.session.username || String(req.session.userId ?? "unknown"),
+              companyId,
+              action: "delete",
+              tableName: "factory_bales",
+              recordId: id,
+              recordIdentifier: bale.referenceNumber || `Bale #${id}`,
+              changes: { status: { old: bale.status, new: "DELETED" }, bale: { old: bale } },
+            },
+            tx
+          );
+          return true;
+        });
 
-      const [updated] = await db
-        .update(factoryBales)
-        .set({ status: "DELETED", deletedAt: new Date(), updatedAt: new Date() })
-        .where(and(eq(factoryBales.id, id), eq(factoryBales.companyId, companyId)))
-        .returning({ id: factoryBales.id });
-
-      if (!updated) return res.status(404).json({ message: "Bale not found" });
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || req.session.userId!,
-        companyId,
-        action: "delete",
-        tableName: "bales",
-        recordId: id,
-        recordIdentifier: `Bale #${id}`,
-        changes: null,
-      });
-      res.json({ message: "Bale deleted" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+        if (!deleted) return res.status(404).json({ message: "Bale not found" });
+        res.json({ message: "Bale deleted" });
+      } catch (error: unknown) {
+        if (error instanceof BaleStatusChangeRefusal) return res.status(409).json(error.body);
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   app.patch("/api/factory/bales/:id/product-name", requireAuth, async (req: Request, res: Response) => {
     try {
