@@ -181,6 +181,14 @@ export function renderPriorityColorBox(
     : "";
 }
 
+/**
+ * Screen and print share one size per format so the browser preview matches the
+ * printed label; the box replaces the small logo without growing past its area.
+ */
+export function priorityColorBoxCss(widthMm: number, heightMm: number): string {
+  return `.priority-color-box { width: ${widthMm}mm; height: ${heightMm}mm; border-radius: 2mm; display: block; flex-shrink: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }`;
+}
+
 /** Used by legacy Pressing and Production labels to retain their ordinary HMD logo. */
 export function renderLegacyPriorityLogo(label: Pick<LabelData, "referenceNumber" | "priorityColor">): string {
   return (
@@ -245,6 +253,7 @@ const detailBlockCss = `
     .label-top { display: flex; justify-content: space-between; align-items: center; }
     .logo-section { flex-shrink: 0; }
     .logo-img { height: 14mm; width: auto; object-fit: contain; display: block; }
+    ${priorityColorBoxCss(25, 14)}
     .info-section { text-align: right; font-size: 8pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }
@@ -384,7 +393,7 @@ ${detailBlockCss}
       .print-note { display: none !important; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       * { color: #000 !important; }
-      .priority-color-box { width: 25mm; height: 14mm; border-radius: 2mm; display: block; flex-shrink: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .priority-color-box { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .info-key, .info-val, .barcode-number, .barcode-subtext { -webkit-text-stroke: 0.3px #000; }
       .a4-name-right-text, .a4-bottom-name-text { -webkit-text-stroke: 0.7px #000; text-shadow: 0 0 0.5px #000; }
       img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
@@ -427,7 +436,7 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
     .label-top { display: flex; justify-content: space-between; align-items: center; }
     .logo-section { flex-shrink: 0; }
     .logo-img { height: 12mm; width: auto; object-fit: contain; display: block; }
-    .priority-color-box { width: 22mm; height: 12mm; }
+    ${priorityColorBoxCss(22, 12)}
     .info-section { text-align: right; font-size: 7pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }
@@ -453,7 +462,7 @@ export function generateA5LabelsHtml(labels: LabelData[]) {
       .print-note { display: none !important; }
       body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       * { color: #000 !important; }
-      .priority-color-box { width: 25mm; height: 14mm; border-radius: 2mm; display: block; flex-shrink: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .priority-color-box { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .info-key, .info-val, .barcode-number, .barcode-subtext { -webkit-text-stroke: 0.3px #000; }
       .a5-name-right-text, .a5-bottom-name-text { -webkit-text-stroke: 0.7px #000; text-shadow: 0 0 0.5px #000; }
       img:not(.header-banner-img):not(.a4-banner-img):not(.barcode-img) { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
@@ -500,7 +509,7 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
     .label-top { display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
     .logo-section { flex-shrink: 0; }
     .sticker-logo { height: 10mm; width: auto; object-fit: contain; display: block; }
-    .priority-color-box { width: 20mm; height: 10mm; }
+    ${priorityColorBoxCss(20, 10)}
     .info-section { text-align: right; font-size: 7.5pt; line-height: 1.3; }
     .info-label { font-weight: 900; }
     .info-value { font-weight: 900; }
@@ -514,7 +523,7 @@ export function generateStickerLabelsHtml(labels: LabelData[]) {
     @media print {
       .print-note { display: none !important; }
       * { color: #000 !important; }
-      .priority-color-box { width: 25mm; height: 14mm; border-radius: 2mm; display: block; flex-shrink: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .priority-color-box { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
       .info-label, .info-value, .ref-barcode-number, .ref-bale-name { -webkit-text-stroke: 0.3px #000; }
       img { filter: contrast(3) brightness(0.9); image-rendering: crisp-edges; image-rendering: -webkit-optimize-contrast; }
       .sticker-logo, .ref-barcode-img { filter: none; image-rendering: pixelated; }

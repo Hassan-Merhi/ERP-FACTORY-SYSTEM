@@ -247,7 +247,7 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
 
   it("never reactivates manually disabled or verified loadings", async () => {
     const manuallyDisabled = await loading();
-    await configure(manuallyDisabled, 4, "#7c3aed");
+    await configure(manuallyDisabled, 4, "#9400D3");
     // The loading was completed automatically, then an operator explicitly
     // switched it OFF. The later human action must win over auto recovery.
     await pool.query(
@@ -256,7 +256,7 @@ describe("Phase 7: auto-advance and front-of-queue recovery", () => {
        WHERE company_id = $1 AND order_id = $2`,
       [ctx.companyId, manuallyDisabled]
     );
-    await configure(manuallyDisabled, 4, "#7c3aed", false);
+    await configure(manuallyDisabled, 4, "#9400D3", false);
 
     const verified = await loading("VERIFIED");
     await pool.query(

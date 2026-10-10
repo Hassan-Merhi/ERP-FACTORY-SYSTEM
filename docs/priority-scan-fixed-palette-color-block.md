@@ -9,7 +9,7 @@ Implementation branch: `feat/priority-scan-fixed-11-colors-label-box` — PR #21
 - Moving an existing active queue position omits `color` and sends `enabled: true` and `priority`; the server preserves the existing color and colorKey. Create/re-enable/color-change requests cannot omit an approved color.
 - The print renderer uses the recorded allocation color (not the current queue palette), normalizes legacy named/short HEX values safely and rejects unsafe colors.
 - Where the small priority HMD logo used to appear, color-bearing labels show a plain solid rounded rectangle instead. No text or logo is inside the block. Non-priority labels keep their original logo and all other label content.
-- A4 and A5 use the shared detail markup; stickers and the separate Pressing/Production label templates use the same saved-color block principle.
+- A4 and A5 use the shared detail markup; stickers and the separate Pressing/Production label templates use the same saved-color block principle. Box sizes come from `priorityColorBoxCss()` and are identical on screen and in print: A4 25×14 mm, A5 22×12 mm, sticker 20×10 mm, Pressing/Production 25×14 mm.
 - Preflight and reprint audits reject stale mismatches between the prepared order/color and recorded order/color. The system does not rewrite historical colors or allocation snapshots.
 
 ## Local verification and Claude handoff — 2026-10-10
@@ -98,8 +98,32 @@ Formatting corrections used `node node_modules/prettier/bin/prettier.cjs --write
 - `tests/ui/priority-specialist-print.test.tsx` (new)
 - `docs/priority-scan-fixed-palette-color-block.md`
 
-### Claude still must verify
+## Integration verification — 2026-10-10 (Claude)
 
-Provision an isolated PostgreSQL database using the supported disposable-schema setup and run all 10 targeted integration suites and the complete required CI. Explicitly verify backend acceptance of every approved color, rejection of custom colors, duplicates, authorization, multi-company isolation, queue ordering, deletion/reopening/advancement, position-only legacy moves, and immutable historical allocations. The local UI tests cannot establish those server/database guarantees. Resolve any further integration or CI failures on this branch. Verify actual print/PDF layout, background fills and barcode scanning for A4, A5, sticker, Pressing and Production. Use the pinned Node version. Do not merge until Claude's complete verification is green.
+Run on Node 24.21.0 against a disposable local PostgreSQL 16 database (`heliumdb` on localhost, the same name CI uses), prepared exactly as CI does: `drizzle-kit push --force`, `npm run build`, application startup migrations (0 failures, `verify:startup-migrations` passed). No production database was used.
 
-No database data migration is required or authorized to recolor existing records.
+### Defects found and fixed
+
+- **A4 preview box invisible.** The A4 detail CSS had no screen rule for `.priority-color-box`, so the empty `div` rendered 0 mm wide in the print preview window. It now has a base rule.
+- **Print enlarged A5 and sticker boxes.** Every `@media print` block forced 25×14 mm, overriding A5 (22×12 mm) and sticker (20×10 mm). The printed sticker then no longer matched its preview and pushed the barcode area. Print now only forces `print-color-adjust: exact`; the size comes from the shared per-format rule.
+- **Phase 7 integration fixture** still configured a loading through the API with the old `#7c3aed` preset and failed with 400 once palette enforcement was live. It now uses `#9400D3`. Direct-SQL legacy history fixtures are intentionally left on legacy colors.
+- **Repository audit failure.** This doc was missing from `config/doc-index.json` and `docs/README.md`, which fails `audit:doc-index` (Repository Audits). It is registered as a reference.
+- **Stale reference doc.** `docs/automatic-priority-print-loading.md` still described the recolored HMD logo; it now describes the color box.
+- **Dead code.** `client/src/lib/priorityHmdLogo.ts` had no remaining importers and was removed.
+
+### Added coverage
+
+- `tests/priority-scan-fixed-palette.test.ts` (database-backed, 14 tests): all 11 colors active at once with canonical uppercase storage and case-insensitive input; a twelfth loading refused for every color; nine unapproved inputs rejected with nothing written (unapproved HEX, a former preset, named, `rgb()`, short HEX, padded, CSS injection, non-string, empty); color required to create/disable/re-enable; position-only move of an active legacy `#dc2626` priority keeps its color, and re-saving the legacy color is refused; recoloring never touches the bale's recorded history color; position-only moves are reserved for priority managers; another company's loading cannot be configured or moved and its active color does not block this company.
+- `client/src/lib/labelHtml.test.ts`: per-format box size on screen, and no size override in print (failed before the CSS fix, passes after).
+
+### Real browser print check
+
+The five real generators (A4, A5, sticker, Pressing, Production) were bundled and printed to PDF in headless Chromium with `printBackground: false`, the equivalent of "Background graphics" being off, so `print-color-adjust: exact` had to carry the fill. Barcodes were served by the same `bwip-js` Code 128 options as `/api/barcode/:code`. Each document held 13 labels: the 11 approved colors, a legacy `#dc2626` bale and an ordinary bale. The PDFs were rasterized at 200 dpi and decoded with ZXing.
+
+- 65 of 65 labels passed. Every priority label printed its exact saved color over the expected box area, within 6%, with no other palette color on the page. The ordinary label printed no priority color and kept its original logo.
+- 65 of 65 barcodes decoded to exactly the input reference.
+- Box geometry was identical in screen and print media and never overlapped the PIECES/ARTICLE/WEIGHT column.
+
+Limitation: a physical label printer and a handheld scanner were not available. The check covers Chromium's print pipeline, not printer driver color profiles.
+
+No database migration is needed. The feature uses the existing `color`/`color_key` columns, and no existing record is recolored.

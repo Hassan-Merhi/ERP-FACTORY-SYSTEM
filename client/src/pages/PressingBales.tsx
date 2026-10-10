@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactoryBaleProduct } from "@shared/schema";
-import { renderLegacyPriorityLogo, type LabelData } from "@/lib/labelHtml";
+import { priorityColorBoxCss, renderLegacyPriorityLogo, type LabelData } from "@/lib/labelHtml";
 import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 
 interface CartItem {
@@ -73,7 +73,7 @@ function generatePressingLabelHtml(
     .logo-section { display: flex; flex-direction: column; align-items: flex-start; }
     .logo-text { font-size: 18pt; font-weight: 900; letter-spacing: 2px; color: #000; line-height: 1; }
     .logo-subtitle { font-size: 5pt; font-weight: 700; letter-spacing: 1px; color: #000; margin-top: 0.5mm; }
-    .priority-color-box { width: 25mm; height: 14mm; border-radius: 2mm; display: block; flex-shrink: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    ${priorityColorBoxCss(25, 14)}
     .info-section { text-align: right; font-size: 8pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }

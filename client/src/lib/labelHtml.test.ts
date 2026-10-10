@@ -163,6 +163,21 @@ describe("Automatic Priority Printing labels", () => {
     }
   });
 
+  it.each([
+    ["A4", generateCombinedLabelsHtml, "25mm", "14mm"],
+    ["A5", generateA5LabelsHtml, "22mm", "12mm"],
+    ["sticker", generateStickerLabelsHtml, "20mm", "10mm"],
+  ] as const)("sizes the %s color box to its logo area on screen and in print", (_name, print, width, height) => {
+    const html = print([label({ priorityColor: "#7FFF00" })]);
+    const [screenCss, printCss = ""] = html.split("@media print");
+    // The preview must show the box (an empty div with no width renders invisibly).
+    expect(screenCss).toContain(`.priority-color-box { width: ${width}; height: ${height}; border-radius: 2mm;`);
+    // Print keeps the preview size; it only forces the background to print.
+    const printRule = printCss.match(/\.priority-color-box \{[^}]*\}/)?.[0] ?? "";
+    expect(printRule).toContain("print-color-adjust: exact !important");
+    expect(printRule).not.toMatch(/width|height/);
+  });
+
   it("keeps the exact ordinary A4/A5/sticker layout and large HMD banners for priority bales", () => {
     const [design] = A4_DESIGN_OPTIONS;
     const ordinary = label({ designColor: design.value });
