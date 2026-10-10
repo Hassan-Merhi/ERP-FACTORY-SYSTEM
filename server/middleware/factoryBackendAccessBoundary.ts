@@ -512,7 +512,9 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/location-inventory")) {
-    return requirement("factory/location-inventory");
+    if (isWrite(req)) return requirement("factory/location-inventory");
+    // Factory POS reads the selling location's stock to build its product picker.
+    return anyOf(requirement("factory/location-inventory"), requirement("factory/pos"));
   }
   if (hasPrefix(path, "/bale-stock-list")) {
     return requirement("factory/stock-bale-list");
@@ -648,7 +650,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     return anyOf(
       requirement("factory/parties", ["hide_tab_parties_customers"]),
       requirement("factory/invoicing"),
-      requirement("factory/stock-entry")
+      requirement("factory/stock-entry"),
+      requirement("factory/pos")
     );
   }
 
@@ -693,7 +696,8 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
   }
 
   if (hasPrefix(path, "/pos")) {
-    return requirement("factory/production-report");
+    // Factory POS owns its API. Overview keeps the access it had while POS was its alias.
+    return anyOf(requirement("factory/pos"), requirement("factory/production-report"));
   }
 
   if (hasPrefix(path, "/monthly-salary-summary")) {

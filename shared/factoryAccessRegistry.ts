@@ -29,7 +29,7 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
     label: "Overview",
     group: "Production",
     route: "/factory/production-report",
-    aliases: ["/factory/bale-ledger", "/factory/pos"],
+    aliases: ["/factory/bale-ledger"],
     pinned: true,
     landing: true,
   },
@@ -127,6 +127,14 @@ export const FACTORY_ACCESS_REGISTRY: readonly FactoryPageDefinition[] = [
   },
 
   // Sales
+  {
+    key: "factory/pos",
+    label: "Factory POS",
+    group: "Sales",
+    route: "/factory/pos",
+    sidebar: true,
+    landing: true,
+  },
   {
     key: "factory/invoicing",
     label: "Invoicing",
@@ -546,9 +554,7 @@ export function resolveFactoryPage(path: string): FactoryPageDefinition | null {
     .find((page) => pathMatchesPrefix(normalizedPath, page.route));
   if (direct) return direct;
 
-  const aliasMatch = FACTORY_ACCESS_REGISTRY.flatMap((page) =>
-    (page.aliases ?? []).map((alias) => ({ page, alias }))
-  )
+  const aliasMatch = FACTORY_ACCESS_REGISTRY.flatMap((page) => (page.aliases ?? []).map((alias) => ({ page, alias })))
     .sort((a, b) => b.alias.length - a.alias.length)
     .find(({ alias }) => pathMatchesPrefix(normalizedPath, alias));
 

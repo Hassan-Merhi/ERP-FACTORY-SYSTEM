@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { resolveFactoryPage } from "@shared/factoryAccessRegistry";
 
 /**
  * Keeps docs/factory-navigation-registry.md, the live Factory route table and the Factory
@@ -39,13 +40,11 @@ describe("Factory route registry", () => {
     }
   });
 
-  it("records Factory POS as a retired alias, matching its live redirect", () => {
-    expect(redirectPaths.has("/factory/pos")).toBe(true);
-    expect(canonicalTopLevelRoutes().includes("/factory/pos")).toBe(false);
-    const aliasRow = registryDoc.split("\n").find((line) => line.startsWith("| `/factory/pos` |"));
-    const [, , target, canonical] = (aliasRow ?? "").split("|").map((cell) => cell.trim());
-    expect(target).toBe("Factory default landing page");
-    expect(canonical).toBe("none (retired)");
+  it("keeps Factory POS as a canonical, non-redirected Sales destination", () => {
+    expect(routeFor("/factory/pos")).toBe("/factory/pos");
+    expect(redirectPaths.has("/factory/pos")).toBe(false);
+    expect(canonicalTopLevelRoutes().includes("/factory/pos")).toBe(true);
+    expect(resolveFactoryPage("/factory/pos")?.key).toBe("factory/pos");
   });
 
   it("routes every sidebar/access-registry destination to a real page", () => {

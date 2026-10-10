@@ -28,8 +28,13 @@ import {
   factoryPosSales,
   factoryPosSaleItems,
 } from "@shared/schema";
-import { eq, and, or, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import {
+  findFactoryPosSaleVouchersTx,
+  removeFactoryPosCustomerBalancesTx,
+  retireFactoryPosVoucherTx,
+} from "./sale-financials";
 import { allLedgerAccountsOwned, isFactorySessionLocation } from "../../../helpers/companyOwnership";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
@@ -559,22 +564,10 @@ export function registerPosSaleWriteRoutes(app: Express) {
           });
         }
 
-        // Step 6: Update customer balance entries if applicable
+        // Step 6: Replace customer balance entries. The old ones always go, so an
+        // edit from credit to cash (or to another customer) leaves no stale debt.
+        await removeFactoryPosCustomerBalancesTx(tx, companyId, saleId);
         if (isCredit && parsedCustomerId) {
-          // Remove old SALE and DEPOSIT balance entries for this sale
-          await tx
-            .delete(customerBalances)
-            .where(
-              and(
-                eq(customerBalances.referenceId, saleId),
-                eq(customerBalances.companyId, companyId),
-                or(
-                  eq(customerBalances.referenceType, "FACTORY_POS_SALE"),
-                  eq(customerBalances.referenceType, "FACTORY_POS_DEPOSIT")
-                )
-              )
-            );
-
           // Re-compute running balance and re-insert
           const [balRow] = await tx
             .select({ net: sql<string>`COALESCE(SUM(debit_amount::numeric - credit_amount::numeric), 0)` })
@@ -613,68 +606,74 @@ export function registerPosSaleWriteRoutes(app: Express) {
           }
         }
 
-        // Step 7: Update the ERP receipt voucher if it exists
-        const existingVouchers = await tx
-          .select()
-          .from(vouchers)
-          .where(
-            and(
-              eq(vouchers.companyId, companyId),
-              eq(vouchers.sourceModule, "FACTORY_POS"),
-              sql`voucher_number LIKE ${"FPOS-" + saleId + "-%"}`
-            )
-          );
-        if (existingVouchers.length > 0) {
-          const vchId = existingVouchers[0].id;
-          const voucherCashAmt = isCredit ? depositAmt : totalAmount;
-          if (cashAccountId && voucherCashAmt > 0) {
-            await tx
-              .update(vouchers)
-              .set({
-                voucherDate: txDate || existingSale.txDate,
-                description: `Factory POS Sale ${existingSale.saleNumber}${customerName ? ` – ${customerName}` : ""}`,
-                totalAmount: voucherCashAmt.toFixed(2),
-                currency: currencyCode || "USD",
-              })
-              .where(eq(vouchers.id, vchId));
-
+        // Step 7: Keep the ERP receipt voucher in step with the cash the edited sale
+        // takes in: update it, post one if the sale now takes cash, or retire it if not.
+        const [existingVoucher, ...staleVouchers] = await findFactoryPosSaleVouchersTx(tx, companyId, saleId);
+        for (const stale of staleVouchers) await retireFactoryPosVoucherTx(tx, companyId, stale.id);
+        const voucherCashAmt = isCredit ? depositAmt : totalAmount;
+        if (!(cashAccountId && voucherCashAmt > 0)) {
+          if (existingVoucher) await retireFactoryPosVoucherTx(tx, companyId, existingVoucher.id);
+        } else {
+          const voucherFields = {
+            voucherDate: txDate || existingSale.txDate,
+            description: `Factory POS Sale ${existingSale.saleNumber}${customerName ? ` – ${customerName}` : ""}`,
+            totalAmount: voucherCashAmt.toFixed(2),
+            currency: currencyCode || "USD",
+          };
+          let vchId: number;
+          if (existingVoucher) {
+            vchId = existingVoucher.id;
+            await tx.update(vouchers).set(voucherFields).where(eq(vouchers.id, vchId));
             // Replace voucher entries
             await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, vchId));
-            const netDeposit = Math.max(0, netCash);
-            if (netDeposit > 0) {
-              await tx.insert(voucherEntries).values({
-                voucherId: vchId,
-                ledgerAccountId: parseInt(cashAccountId),
-                debitAmount: netDeposit.toFixed(2),
-                creditAmount: "0",
-                narration: isCredit
-                  ? `Deposit on credit sale – ${existingSale.saleNumber}`
-                  : `Factory POS cash receipt – ${existingSale.saleNumber}`,
-              });
-            }
-            for (const exp of expenseRows) {
-              await tx.insert(voucherEntries).values({
-                voucherId: vchId,
-                ledgerAccountId: exp.accountId,
-                debitAmount: exp.amount.toFixed(2),
-                creditAmount: "0",
-                narration: exp.description || `POS deduction – ${existingSale.saleNumber}`,
-              });
-            }
-            const salesIncomeAccId = await getOrCreateLedgerAccount(
-              companyId,
-              "FACTORY_BALE_SALES_INCOME",
-              "Factory Bale Sales Income",
-              "Revenue"
-            );
+          } else {
+            const [created] = await tx
+              .insert(vouchers)
+              .values({
+                ...voucherFields,
+                companyId,
+                voucherType: "Receipt",
+                voucherNumber: `FPOS-${saleId}-${Date.now()}`,
+                exchangeRate: "1",
+                sourceModule: "FACTORY_POS",
+              })
+              .returning();
+            vchId = created.id;
+          }
+          const netDeposit = Math.max(0, netCash);
+          if (netDeposit > 0) {
             await tx.insert(voucherEntries).values({
               voucherId: vchId,
-              ledgerAccountId: salesIncomeAccId,
-              debitAmount: "0",
-              creditAmount: voucherCashAmt.toFixed(2),
-              narration: `Factory POS sales income – ${existingSale.saleNumber}`,
+              ledgerAccountId: parseInt(cashAccountId),
+              debitAmount: netDeposit.toFixed(2),
+              creditAmount: "0",
+              narration: isCredit
+                ? `Deposit on credit sale – ${existingSale.saleNumber}`
+                : `Factory POS cash receipt – ${existingSale.saleNumber}`,
             });
           }
+          for (const exp of expenseRows) {
+            await tx.insert(voucherEntries).values({
+              voucherId: vchId,
+              ledgerAccountId: exp.accountId,
+              debitAmount: exp.amount.toFixed(2),
+              creditAmount: "0",
+              narration: exp.description || `POS deduction – ${existingSale.saleNumber}`,
+            });
+          }
+          const salesIncomeAccId = await getOrCreateLedgerAccount(
+            companyId,
+            "FACTORY_BALE_SALES_INCOME",
+            "Factory Bale Sales Income",
+            "Revenue"
+          );
+          await tx.insert(voucherEntries).values({
+            voucherId: vchId,
+            ledgerAccountId: salesIncomeAccId,
+            debitAmount: "0",
+            creditAmount: voucherCashAmt.toFixed(2),
+            narration: `Factory POS sales income – ${existingSale.saleNumber}`,
+          });
         }
 
         return updatedSale;
