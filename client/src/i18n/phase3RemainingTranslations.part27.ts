@@ -365,4 +365,19 @@ export const phase3RemainingTranslationsPart27: readonly Phase3SharedUiEntry[] =
     ar: "مراجعة أثر التكلفة بعد التفريغ",
     fr: "Vérifier l'impact sur les coûts après déchargement",
   },
+  {
+    en: "The destination account does not belong to the destination company",
+    ar: "حساب الوجهة لا ينتمي إلى شركة الوجهة",
+    fr: "Le compte de destination n'appartient pas à la société de destination",
+  },
+  {
+    en: "Every source cash account must belong to this company",
+    ar: "يجب أن تنتمي جميع حسابات النقد المصدر إلى هذه الشركة",
+    fr: "Chaque compte de caisse source doit appartenir à cette société",
+  },
+  {
+    en: "Auto-transfer rule ${cfg.id}: account ${cfg.destLedgerAccountId} is not a live account of company ${cfg.destCompanyId}",
+    ar: "قاعدة التحويل التلقائي {{0}}: الحساب {{1}} ليس حساباً نشطاً للشركة {{2}}",
+    fr: "Règle de transfert automatique {{0}} : le compte {{1}} n'est pas un compte actif de la société {{2}}",
+  },
 ];
