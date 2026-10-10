@@ -23,6 +23,7 @@ import {
   MapPin,
   CalendarClock,
   LayoutPanelLeft,
+  Printer,
 } from "lucide-react";
 
 import { FxRatesCard } from "./settings/FxRatesCard";
@@ -38,6 +39,7 @@ import { ExportCenter } from "./settings/ExportCenter";
 import { UsersPermissionsHub } from "./settings/UsersPermissionsHub";
 import { SupplierTrackingDefaultsTab } from "./settings/SupplierTrackingDefaultsTab";
 import { RecurringJournalsTab } from "./settings/RecurringJournalsTab";
+import { AutomaticPriorityPrintingCard } from "./factory/factorysettings/AutomaticPriorityPrintingCard";
 import { useUserPreferences } from "@/hooks/use-user-preferences";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -144,7 +146,13 @@ export default function Settings() {
     },
     {
       label: "Factory",
-      items: appMode === "factory" ? [{ key: "fx-rates", label: "FX Rates", icon: TrendingUp }] : [],
+      items:
+        appMode === "factory"
+          ? [
+              { key: "automatic-priority-printing", label: "Automatic Priority Printing", icon: Printer },
+              { key: "fx-rates", label: "FX Rates", icon: TrendingUp },
+            ]
+          : [],
     },
     {
       label: "System",
@@ -289,6 +297,11 @@ export default function Settings() {
           {activeSection === "data-tools" && currentUser?.role === "Developer" && <DataToolsTab />}
           {activeSection === "pos-setup" && currentUser?.role === "Developer" && (
             <PosSetupHub userRole={currentUser?.role} />
+          )}
+          {activeSection === "automatic-priority-printing" && appMode === "factory" && (
+            <div className="space-y-5 max-w-3xl">
+              <AutomaticPriorityPrintingCard />
+            </div>
           )}
           {activeSection === "fx-rates" && appMode === "factory" && (
             <div className="space-y-5 max-w-2xl">

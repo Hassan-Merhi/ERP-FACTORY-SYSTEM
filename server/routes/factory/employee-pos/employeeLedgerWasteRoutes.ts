@@ -737,6 +737,24 @@ export function registerEmployeeLedgerWasteRoutes(app: Express) {
             throw new Error(`Bale ${bale.referenceNumber} is not available (status: ${bale.status})`);
           }
         }
+        // V5 loaded bales stay IN_STOCK while on a live loading. Waste-disposing
+        // one would dispatch it while it is still counted on that loading and
+        // in Priority Scan: it must be removed from the loading first.
+        const loaded = await tx.execute(sql`
+          SELECT fb.reference_number AS "referenceNumber"
+            FROM customer_order_bales cob
+            JOIN customer_orders co ON co.id = cob.order_id
+            JOIN factory_bales fb ON fb.id = cob.bale_id
+           WHERE cob.bale_id = ANY(string_to_array(${balesToDispose.map((bale) => bale.id).join(",")}, ',')::int[])
+             AND co.company_id = ${companyId} AND co.status <> 'CANCELLED' AND co.deleted_at IS NULL
+           LIMIT 1
+        `);
+        const loadedRow = resultRows(loaded)[0] as { referenceNumber?: string } | undefined;
+        if (loadedRow) {
+          throw new Error(
+            `Bale ${loadedRow.referenceNumber} is on a customer loading. Remove it from the loading first.`
+          );
+        }
 
         const totalWeightKg = sumMoney(balesToDispose.map((bale) => bale.weightKg as string)).toNumber();
         const totalCostWrittenOff = sumMoney(balesToDispose.map((bale) => bale.totalCost as string)).toNumber();

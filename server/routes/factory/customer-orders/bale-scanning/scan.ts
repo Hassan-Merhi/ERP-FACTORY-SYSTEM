@@ -457,7 +457,7 @@ export function registerOrderBaleScanRoutes(app: Express) {
           await tx.execute(sql`
             INSERT INTO factory_priority_scan_history
               (company_id, order_id, bale_id, reference_number, product_name, article_code,
-               priority, color, business_date, scanned_by)
+               priority, color, business_date, scanned_by, assigned_by_user_id, proforma_id, allocation_source)
             VALUES (
               ${companyId},
               ${orderId},
@@ -468,7 +468,10 @@ export function registerOrderBaleScanRoutes(app: Express) {
               ${priorityScanSnapshot.priority},
               ${priorityScanSnapshot.color},
               ${priorityScanBusinessDate},
-              ${scannerName}
+              ${scannerName},
+              ${req.session.userId ?? null},
+              ${order.proformaIdUsed ?? null},
+              'manual'
             )
           `);
         }

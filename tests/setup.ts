@@ -76,6 +76,14 @@ const FACTORY_COMPANY_PREFIXES = new Set([
   "canonfse",
   "custload",
   "phase4cap",
+  "autostk4",
+  "autoprt5",
+  "autodel6",
+  "autoque7",
+  "aprmode",
+  "aprh2",
+  "autopriority",
+  "autoe2e",
   "ordfin",
 ]);
 

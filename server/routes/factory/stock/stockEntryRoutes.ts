@@ -9,6 +9,11 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
+import {
+  allocateAutomaticPriorityBaleTx,
+  automaticPriorityModeEnabled,
+} from "../customer-orders/priorityAutoAllocation";
+import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { isFactorySessionLocation } from "../../helpers/companyOwnership";
 import { requireAuth } from "../../../auth";
 import { adjustInventory } from "../../../inventoryHelper";
@@ -57,6 +62,12 @@ export function registerFactoryStockEntryRoutes(app: Express) {
       }
 
       const result = await db.transaction(async (tx) => {
+        // Serialize the mode decision itself with Settings ON/OFF changes and
+        // priority configuration edits. Never take stock/proforma locks first.
+        // Even with the feature OFF, a concurrent toggle must not change the
+        // mode midway through a Stock Entry batch.
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PRIORITY_SCAN_LOCK_NAMESPACE}, ${companyId})`);
+        const automaticMode = await automaticPriorityModeEnabled(tx, companyId);
         let mixBatch = null;
         if (mixBatchId) {
           const [mb] = await tx
@@ -110,7 +121,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         }
         const factoryProducts =
           productIds.length > 0
-            ? await tx.select().from(factoryBaleProducts).where(inArray(factoryBaleProducts.id, productIds))
+            ? await tx
+                .select()
+                .from(factoryBaleProducts)
+                .where(and(eq(factoryBaleProducts.companyId, companyId), inArray(factoryBaleProducts.id, productIds)))
             : [];
         const productMap = new Map(factoryProducts.map((p) => [p.id, p]));
 
@@ -121,7 +135,10 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         const categoryIds = Array.from(categoryIdSet);
         const factoryCats =
           categoryIds.length > 0
-            ? await tx.select().from(factoryCategories).where(inArray(factoryCategories.id, categoryIds))
+            ? await tx
+                .select()
+                .from(factoryCategories)
+                .where(and(eq(factoryCategories.companyId, companyId), inArray(factoryCategories.id, categoryIds)))
             : [];
         const categoryMap = new Map(factoryCats.map((c) => [c.id, c]));
 
@@ -369,45 +386,74 @@ export function registerFactoryStockEntryRoutes(app: Express) {
           }
         }
 
-        return { bales, totalWeight };
+        // Stock creation, priority assignment, scan history and totals share
+        // one transaction. A printer error can only require a reprint; it cannot
+        // leave a partially allocated bale.
+        const autoPriorityAllocations = [];
+        if (automaticMode) {
+          for (const bale of insertedBales) {
+            const allocation = await allocateAutomaticPriorityBaleTx(tx, {
+              companyId,
+              baleId: bale.id,
+              userId: req.session.userId == null ? null : String(req.session.userId),
+              username: String(req.session.username || req.session.userId || "automatic"),
+              source: "stock-entry",
+            });
+            if (allocation) autoPriorityAllocations.push(allocation);
+          }
+        }
+
+        // Keep the daybook evidence atomic with inventory receipt and
+        // auto-allocation. A failure must roll back the entire Stock Entry,
+        // rather than return a retryable 400 after bales already committed.
+        const today = effectiveDateStr;
+        // Build a meaningful description with product names and reference codes
+        const productGroups = new Map<string, string[]>();
+        for (const bale of bales) {
+          const name = bale.productName || bale.articleCode || "Unknown";
+          const ref = bale.referenceNumber || bale.baleCode || "";
+          if (!productGroups.has(name)) productGroups.set(name, []);
+          if (ref) productGroups.get(name)!.push(ref);
+        }
+        const descParts = Array.from(productGroups.keys());
+        const stockEntryDesc = `${bales.length} bale${bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
+        const totalBaleValue = sumMoney(bales.map((b) => b._product?.productionPrice)).toNumber();
+        const baleMetaJson = JSON.stringify({
+          bales: bales.map((b) => ({
+            id: b.id,
+            ref: b.referenceNumber,
+            productName: b.productName || b.articleCode || "Unknown",
+            weightKg: b.weightKg,
+            status: b.status || "IN_STOCK",
+            workerId: b.finalizedBy ?? null,
+            workerName: b.workerName ?? null,
+            productionPositionId: b.productionPositionId ?? null,
+            productionPositionName: b.productionPositionName ?? null,
+          })),
+        });
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: today,
+          txType: "BALE_STOCK_ENTRY",
+          description: stockEntryDesc,
+          amountCurrency: totalBaleValue,
+          amountUsd: totalBaleValue,
+          metaJson: baleMetaJson,
+        });
+
+        return { bales, totalWeight, autoPriorityAllocations, automaticPriorityModeEnabled: automaticMode };
       });
 
-      const today = effectiveDateStr || getClientDate(req);
-      // Build a meaningful description with product names and reference codes
-      const productGroups = new Map<string, string[]>();
-      for (const bale of result.bales) {
-        const name = bale.productName || bale.articleCode || "Unknown";
-        const ref = bale.referenceNumber || bale.baleCode || "";
-        if (!productGroups.has(name)) productGroups.set(name, []);
-        if (ref) productGroups.get(name)!.push(ref);
-      }
-      const descParts = Array.from(productGroups.keys());
-      const stockEntryDesc = `${result.bales.length} bale${result.bales.length !== 1 ? "s" : ""} - ${descParts.join(" | ")}`;
-      const totalBaleValue = sumMoney(result.bales.map((b) => b._product?.productionPrice)).toNumber();
-      const baleMetaJson = JSON.stringify({
-        bales: result.bales.map((b) => ({
-          id: b.id,
-          ref: b.referenceNumber,
-          productName: b.productName || b.articleCode || "Unknown",
-          weightKg: b.weightKg,
-          status: b.status || "IN_STOCK",
-          workerId: b.finalizedBy ?? null,
-          workerName: b.workerName ?? null,
-          productionPositionId: b.productionPositionId ?? null,
-          productionPositionName: b.productionPositionName ?? null,
-        })),
+      res.json({
+        bales: result.bales,
+        totalWeight: result.totalWeight.toNumber(),
+        automaticPriorityModeEnabled: result.automaticPriorityModeEnabled,
+        autoPriorityAllocations: result.autoPriorityAllocations,
+        autoPrioritySummary: {
+          allocated: result.autoPriorityAllocations.length,
+          leftInStock: result.bales.length - result.autoPriorityAllocations.length,
+        },
       });
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: today,
-        txType: "BALE_STOCK_ENTRY",
-        description: stockEntryDesc,
-        amountCurrency: totalBaleValue,
-        amountUsd: totalBaleValue,
-        metaJson: baleMetaJson,
-      });
-
-      res.json({ bales: result.bales, totalWeight: result.totalWeight.toNumber() });
     } catch (error: unknown) {
       logger.error("Error in stock entry:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });

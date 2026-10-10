@@ -49,6 +49,83 @@ export const PRIORITY_SCAN_SCHEMA_SQL = [
     )`,
   `CREATE INDEX IF NOT EXISTS fpsh_company_date_scanned_idx
      ON factory_priority_scan_history(company_id, business_date, scanned_at DESC, id DESC)`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS allocation_source VARCHAR(32) NOT NULL DEFAULT 'manual'`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS assigned_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS proforma_id INTEGER`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_by TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversed_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_scan_history
+     ADD COLUMN IF NOT EXISTS reversal_reason TEXT`,
+  `CREATE INDEX IF NOT EXISTS fpsh_company_bale_timeline_idx
+     ON factory_priority_scan_history(company_id, bale_id, id DESC)`,
+  `CREATE INDEX IF NOT EXISTS fpsh_company_order_timeline_idx
+     ON factory_priority_scan_history(company_id, order_id, id DESC)`,
+  `CREATE TABLE IF NOT EXISTS factory_priority_auto_allocations (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      bale_id INTEGER NOT NULL,
+      order_id INTEGER NOT NULL,
+      reference_number VARCHAR(100) NOT NULL,
+      priority INTEGER NOT NULL,
+      color VARCHAR(64) NOT NULL,
+      allocation_source VARCHAR(32) NOT NULL,
+      allocated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      reversed_at TIMESTAMPTZ,
+      reversed_by TEXT,
+      reversal_reason TEXT,
+      proforma_id INTEGER,
+      article_code VARCHAR(50),
+      assigned_by_user_id TEXT,
+      assigned_by_name TEXT,
+      history_id BIGINT
+    )`,
+  // History must outlive its physical/order records. Earlier branch versions
+  // created FKs which would block hard deletion of a bale/order; drop them for
+  // new deployments as well as databases that ran an earlier startup ensure.
+  `ALTER TABLE factory_priority_auto_allocations
+     DROP CONSTRAINT IF EXISTS factory_priority_auto_allocations_bale_id_fkey`,
+  `ALTER TABLE factory_priority_auto_allocations
+     DROP CONSTRAINT IF EXISTS factory_priority_auto_allocations_order_id_fkey`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS proforma_id INTEGER`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS article_code VARCHAR(50)`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS assigned_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS assigned_by_name TEXT`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS reversed_by_user_id TEXT`,
+  `ALTER TABLE factory_priority_auto_allocations
+     ADD COLUMN IF NOT EXISTS history_id BIGINT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS fpaa_company_bale_active_unique
+     ON factory_priority_auto_allocations(company_id, bale_id)
+     WHERE reversed_at IS NULL`,
+  `CREATE INDEX IF NOT EXISTS fpaa_company_order_active_idx
+     ON factory_priority_auto_allocations(company_id, order_id)
+     WHERE reversed_at IS NULL`,
+  `CREATE TABLE IF NOT EXISTS factory_physical_bale_deletions (
+      id BIGSERIAL PRIMARY KEY,
+      company_id INTEGER NOT NULL,
+      bale_id INTEGER NOT NULL,
+      reference_number VARCHAR(100) NOT NULL,
+      previous_status TEXT NOT NULL,
+      original_location_id INTEGER,
+      removed_by_user_id TEXT,
+      removed_by_name TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      removed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      CONSTRAINT fpbd_company_bale_unique UNIQUE (company_id, bale_id)
+    )`,
+  `CREATE INDEX IF NOT EXISTS fpbd_company_removed_idx
+     ON factory_physical_bale_deletions(company_id, removed_at DESC, id DESC)`,
 ] as const;
 
 type StartupQueryable = {

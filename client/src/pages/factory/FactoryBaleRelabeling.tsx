@@ -37,6 +37,7 @@ import {
   type LabelData,
 } from "@/lib/labelHtml";
 import { useLabelDesignColors } from "@/hooks/useLabelDesignColors";
+import { preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 
 import type { ApplyItem, ParsedRow, RelabelSession, Step, ValidationResult } from "./factorybalerelabeling/types";
 import { downloadCsv, downloadExcelTemplate, parseExcelFile } from "./factorybalerelabeling/utils";
@@ -159,7 +160,7 @@ export default function FactoryBaleRelabeling() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
     if (!applyResult) return;
     const labels: LabelData[] = applyResult.items.map((item) => ({
       referenceNumber: item.newRef,
@@ -169,14 +170,22 @@ export default function FactoryBaleRelabeling() {
       productName: item.productName || "",
     }));
 
+    let preparedLabels: LabelData[];
+    try {
+      preparedLabels = await preparePriorityPrintLabels(labels, factoryApiRequest);
+    } catch (error) {
+      toast({ title: "Priority printing failed", description: getErrorDetails(error).message, variant: "destructive" });
+      return;
+    }
+
     prefetchBannersForPrint();
     let opened = 0;
     const formatsToOpen = Array.from(printFormats);
     for (const fmt of formatsToOpen) {
       let html: string;
-      if (fmt === "A4") html = generateCombinedLabelsHtml(labels, designColor);
-      else if (fmt === "A5") html = generateA5LabelsHtml(labels);
-      else html = generateStickerLabelsHtml(labels);
+      if (fmt === "A4") html = generateCombinedLabelsHtml(preparedLabels, designColor);
+      else if (fmt === "A5") html = generateA5LabelsHtml(preparedLabels);
+      else html = generateStickerLabelsHtml(preparedLabels);
 
       const win = window.open("", "_blank");
       if (!win) {

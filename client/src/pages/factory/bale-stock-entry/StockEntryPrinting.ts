@@ -30,6 +30,12 @@ interface PrintCartItem {
 
 type RequestDelegate = (method: string, url: string, data?: unknown) => Promise<Response>;
 type ToastFn = ReturnType<typeof useToast>["toast"];
+type AutoAssignment = {
+  baleId: number;
+  orderId: number;
+  color: string;
+  priority: number;
+};
 
 export const openBrowserPrint = (
   labels: LabelData[],
@@ -107,10 +113,12 @@ export const printLabels = async (
   selectedLogoId: number | null,
   modeApiRequest: RequestDelegate,
   toast: ToastFn,
-  preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>
+  preOpenedWindowsRef: React.MutableRefObject<{ a4: Window | null; sticker: Window | null } | null>,
+  autoAllocations: AutoAssignment[] = [],
+  autoModeEnabled = false
 ) => {
   try {
-    modeApiRequest("POST", "/api/bale-label-prints", {
+    const printPayload = {
       bales: bales.map((bale) => {
         const cartItem = cart.find((c) => c.productId === bale.productId);
         return {
@@ -121,12 +129,30 @@ export const printLabels = async (
           approxWeightKg: bale.weightKg || "0",
         };
       }),
-    }).catch(() => {});
+    };
+    // Stock Entry created its allocations transactionally. The print endpoint
+    // can see a newly enabled priority between stock creation and printing:
+    // wait for its definitive assignment snapshots BEFORE building the labels.
+    // This prevents a normal label from being printed for an allocated bale.
+    const assignmentMap = new Map(autoAllocations.map((row) => [row.baleId, row]));
+    try {
+      const response = await modeApiRequest("POST", "/api/bale-label-prints", printPayload);
+      if (!response.ok) throw new Error("Could not prepare bale label print");
+      const result = (await response.json()) as { priorityAllocations?: AutoAssignment[] };
+      for (const allocation of result.priorityAllocations ?? []) {
+        assignmentMap.set(allocation.baleId, allocation);
+      }
+    } catch (error) {
+      // Preserve the old best-effort audit behavior while OFF; when the new
+      // workflow is ON, fail closed rather than print labels with stale colors.
+      if (autoModeEnabled) throw error;
+    }
 
     const labels: LabelData[] = bales.map((bale) => {
       const product = baleProducts?.find((p) => p.id === bale.productId);
       const cartItem = cart.find((c) => c.productId === bale.productId);
       const hasLogo = cartItem?.overrideLogoId || selectedLogoId;
+      const assignment = assignmentMap.get(bale.id);
       const effectiveColor: A4DesignColor | null = hasLogo
         ? null
         : (product?.labelDesignColor as A4DesignColor | null | undefined) || null;
@@ -136,11 +162,19 @@ export const printLabels = async (
         pieces: 1,
         approxWeightKg: bale.weightKg || "0",
         productName: bale.productName || "",
+        ...(assignment
+          ? {
+              priorityColor: assignment.color,
+              priorityOrderId: assignment.orderId,
+              priorityNumber: assignment.priority,
+            }
+          : {}),
         ...(effectiveColor ? { designColor: effectiveColor } : {}),
       };
     });
 
-    if (isZebraMode()) {
+    // Color HMD lettering requires color printing; monochrome Zebra ZPL cannot reproduce it.
+    if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
       try {
         await printRawZpl(buildZplBatch(labels, true));
         toast({ title: "Labels sent to Zebra printer" });
@@ -153,9 +187,21 @@ export const printLabels = async (
         openBrowserPrint(labels, undefined, preOpenedWindowsRef);
       }
     } else {
+      if (isZebraMode()) {
+        toast({
+          title: "Priority labels need a color printer",
+          description:
+            "Bales assigned to a priority loading print through the browser so the colored HMD logo is kept.",
+        });
+      }
       openBrowserPrint(labels, undefined, preOpenedWindowsRef);
     }
   } catch (error) {
+    // Do not leave blank pre-opened print tabs behind when preparation fails.
+    const preOpened = preOpenedWindowsRef.current;
+    preOpenedWindowsRef.current = null;
+    if (preOpened?.a4 && !preOpened.a4.closed) preOpened.a4.close();
+    if (preOpened?.sticker && !preOpened.sticker.closed) preOpened.sticker.close();
     toast({ title: "Print Error", description: getErrorDetails(error).message, variant: "destructive" });
   }
 };

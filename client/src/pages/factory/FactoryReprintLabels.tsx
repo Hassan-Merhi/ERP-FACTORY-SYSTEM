@@ -1,5 +1,6 @@
 import { searchAny } from "@shared/searchNormalization";
 import { getErrorDetails } from "@shared/errorUtils";
+import { assertReprintMatchesPrepared, preparePriorityPrintLabels } from "@/lib/priorityPrintPreflight";
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/PageHeader";
@@ -193,7 +194,7 @@ export default function FactoryReprintLabels() {
       return;
     }
 
-    const labels: LabelData[] = rowsToPrint.map((row) => ({
+    let labels: LabelData[] = rowsToPrint.map((row) => ({
       referenceNumber: row.bale.referenceNumber || row.bale.baleCode,
       articleCode: row.product?.articleCode || row.bale.articleCode || row.bale.category || "",
       pieces: row.bale.quantity || 1,
@@ -201,15 +202,28 @@ export default function FactoryReprintLabels() {
       productName: row.bale.productName || row.product?.name || row.bale.category || "",
     }));
 
-    for (const row of rowsToPrint) {
-      try {
-        await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
-      } catch {
-        // Failure here is non-fatal and the surrounding flow continues deliberately.
+    try {
+      labels = await preparePriorityPrintLabels(
+        labels,
+        modeApiRequest,
+        rowsToPrint.map((row) => row.bale.id)
+      );
+      // Keep existing per-bale reprint audit records. They repeat the same
+      // server assignment lookup idempotently and must agree with the labels.
+      for (const [index, row] of rowsToPrint.entries()) {
+        const response = await modeApiRequest("POST", "/api/bale-label-prints/reprint", { baleId: row.bale.id });
+        await assertReprintMatchesPrepared(response, labels[index]);
       }
+    } catch (error) {
+      toast({
+        title: "Reprint preparation failed",
+        description: getErrorDetails(error).message,
+        variant: "destructive",
+      });
+      return;
     }
 
-    if (isZebraMode()) {
+    if (isZebraMode() && !labels.some((label) => label.priorityColor)) {
       try {
         const zpl = buildZplBatch(labels, true);
         await printRawZpl(zpl);
