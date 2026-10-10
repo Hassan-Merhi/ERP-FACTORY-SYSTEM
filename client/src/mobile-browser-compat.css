@@ -458,3 +458,21 @@ body {
   ) {
   overflow: visible;
 }
+
+/*
+ * Button and form action rows wrap instead of clipping off the right edge of a phone. Rows only:
+ * a wrapped column sizes each child to its max-content width (a page column once grew to the
+ * width of its widest tab strip), so columns (`flex-col`) and rows that ask for `flex-nowrap`
+ * keep a single line, except columns that become rows at sm/md. The selectors name Tailwind's
+ * generated classes directly (`.sm\:flex-row`), not substrings of the class attribute.
+ *
+ * This rule must stay out of index.css: Tailwind expands that file's `@apply flex flex-col gap-3`
+ * by copying every rule naming those classes with the applying class swapped in, and a copy of
+ * `:not(.flex-col)` as `:not(.empty-state)` matched nearly every column.
+ */
+@media (max-width: 767px) {
+  .flex:is(.gap-2, .gap-3, .gap-4):not(.flex-col):not(.flex-nowrap),
+  .flex.flex-col:is(.sm\:flex-row, .md\:flex-row):is(.gap-2, .gap-3, .gap-4) {
+    flex-wrap: wrap;
+  }
+}

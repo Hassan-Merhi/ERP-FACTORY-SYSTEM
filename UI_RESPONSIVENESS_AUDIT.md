@@ -10,7 +10,7 @@
 | Tablet (768×1024, 1024×768) | 20 | 11 | **17** | Sidebar collapsed by default below 1024px (user pin remembered, parked links inert), Vouchers usable in both orientations, payroll table scrolls instead of collapsing, Properties tiles fixed, 44px header controls, theme toggle on screen. Left: wide tables scroll sideways inside the page (by design), Daybook keeps its own scroll region for windowed rendering. |
 | Phone (390×844 portrait, 844×390 landscape) | 25 | 20 | **22** | Voucher title no longer clipped, Properties on the ERP phone contract (header, cards, summary grid, no floating launcher), Customers cards, POS checkout bar above the bottom nav, tab-strip and table edge fades, landscape phones keep the phone lists via `phone-land:` and hide keyboard hints. Left: landscape keeps the drawer-plus-hamburger chrome (deliberate), three Factory hubs have no title strip. |
 | Scrolling behaviour | 15 | 10 | **14** | Workspace tables let the page scroll (narrow ones keep a page-sticky header), zero `calc(100vh - N)` in the client, the synthetic wheel forwarder and the body scroll-lock sweep are gone with rendered evidence, voucher pickers and chat use `dvh`. Left: wide tables cannot have both a page-sticky header and a sideways scroller. |
-| Consistency and design system | 10 | 7 | **8** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 122, class-string selectors 53 → 9), Properties shares the ERP contracts, Payroll/Invoicing hubs on `PageHeader`. Left: four mobile stylesheets remain, the `index.css` `.flex.gap-*` wrap rule and its two undo blocks, most mobile tests still assert source text. |
+| Consistency and design system | 10 | 7 | **8** | One breakpoints module, `touch` and `phone-land` Tailwind variants so components declare their own touch/landscape behaviour, route-scoped overrides removed (`!important` 147 → 120, class-string selectors 53 → 5), one scoped action-row wrap rule instead of a global rule plus two undo blocks, Properties shares the ERP contracts and phone bottom-sheet dialogs, Payroll/Invoicing hubs on `PageHeader`. Left: four mobile stylesheets remain, seven mobile phase tests still assert source text. |
 | Accessibility and touch ergonomics | 5 | 4 | **4** | Collapsed sidebar is inert, 44px header controls on coarse pointers, shortcut badges hidden on touch, launcher hidden until anchored. Left: 10px text, web fonts from the network. |
 
 ### Re-audit evidence (branch `claude/fervent-hopper-wzfayi` at `2238e0e`, same harness and seeded data as §1)
@@ -361,7 +361,7 @@ Verified with the rendered harness on ERP, Factory and Properties at phone, phon
 | Fix dialog lifecycle instead of `useDialogScrollFix` | Find the dialogs unmounted mid-close (rapid open/close, route changes while open) and keep them mounted until `onAnimationEnd`; then delete the MutationObserver hook. | Body never left with `overflow: hidden` after 50 open/close cycles; hook removed. |
 | Phone landscape top bar | Apply the phone top-bar variant (no shortcut hint, 44px controls) when `ERP_PHONE_LAYOUT_QUERY` matches, not only below 640px. | 844×390 capture shows the simplified bar. |
 
-### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental) — STARTED (first increment shipped)
+### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental) — IN PROGRESS (two increments shipped)
 
 Shipped on this branch:
 
@@ -369,7 +369,15 @@ Shipped on this branch:
 - **Tests:** the four source-text tests that pinned the removed rules now assert the component contract (the variant on the control, the page classes, the absence of the override), and the Table scroll modes, overflow probe and sidebar default have behaviour tests. The remaining `mobile-responsive-phase*` files are still source-text assertions.
 - **Smoke runbook:** `run-responsive-browser-smoke.mjs` dismisses the language onboarding and daily-rate prompts after login.
 
-Not done (next increments): fold `mobile-shell-dialogs.css` and `mobile-card-table.css` into the dialog and table primitives, retire the `.flex.gap-*` wrap rule by giving action rows an explicit `flex-wrap`, and convert the rest of the phase tests.
+Second increment:
+
+- **One action-row wrap rule.** The global `index.css` rule that wrapped every `.flex.gap-*` box below 768px, and the ERP and Factory blocks that undid it on columns, the sidebar and sheets, are replaced by one rule in `mobile-browser-compat.css`: rows wrap, columns (`flex-col`) and `flex-nowrap` rows do not, columns that become rows at `sm`/`md` do. The selectors name Tailwind's generated classes (`.sm\:flex-row`) rather than substrings of the class attribute. The rule had to leave `index.css`: that file's `@apply flex flex-col … gap-3` makes Tailwind copy every rule naming those classes with `.empty-state` swapped in, so a `:not(.flex-col)` there compiled to `:not(.empty-state)` and wrapped nearly every column (the Factory stock-entry page grew to 521px on a 390px phone during this work). A new test compiles both stylesheets with the project's PostCSS pipeline and asserts, against the output the browser receives, that rows wrap and columns and nowrap rows never do. `!important` 122 → 120, class-string selectors 9 → 5 (the four left are the dialog slot selectors).
+- **Properties phone dialogs.** `mobile-shell-dialogs.css` and the visual-viewport hook now cover the Properties shell too, so its dialogs open as bottom sheets sized to the visible viewport like ERP and Factory (Add Shop at 390×844: full width, rounded top, actions on screen).
+- **Tests:** the Phase 5 tables/data-lists test renders the Table, pagination, data-list and horizontal-scroll primitives and asserts their roles, names, descriptions, touch sizes, keyboard scrolling and the absence of network calls, instead of reading source text.
+
+Verified with the rendered harness: ERP (6 routes), Factory (5) and Properties (3) at phone, phone landscape and tablet report no document or workspace overflow and no off-screen controls; `tsc --noEmit`, prettier, eslint and the frontend suites pass.
+
+Not done (next increments): fold `mobile-shell-dialogs.css` and `mobile-card-table.css` into the dialog and table primitives, and convert the seven remaining `mobile-responsive-phase*` source-text tests.
 
 
 | Item | Change | Done when |

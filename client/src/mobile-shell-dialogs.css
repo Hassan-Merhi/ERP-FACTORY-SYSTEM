@@ -1,7 +1,7 @@
 /*
  * Phone dialogs open as bottom sheets: full width, anchored to the bottom edge above the
  * home indicator, rounded on top, with the action row pinned while the form scrolls.
- * Covers every DialogContent/AlertDialogContent in the ERP and Factory shells; tablet/desktop
+ * Covers every DialogContent/AlertDialogContent in the ERP, Factory and Properties shells; tablet/desktop
  * keep the centred modal. Dialogs are portalled outside the shell, and this stylesheet stays
  * loaded after the user leaves those shells, so the rules key off `html[data-app-shell]`, which
  * ErpShell and FactoryShell set only while mounted (POS and Properties keep their own dialogs).
@@ -9,9 +9,10 @@
  * dialog form or sits last in the dialog (dialogs that predate DialogFooter).
  */
 @media (max-width: 639px), (hover: none) and (pointer: coarse) and (max-height: 500px) {
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [role="dialog"]:is([data-slot="dialog-content"], [data-slot="alert-dialog-content"]),
-  html:is([data-app-shell="erp"], [data-app-shell="factory"]) [role="alertdialog"][data-slot="alert-dialog-content"] {
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
+    [role="alertdialog"][data-slot="alert-dialog-content"] {
     /* Lifted above the on-screen keyboard and capped to what the user can see
        (useVisualViewportMetrics), so the pinned actions stay reachable while typing. */
     inset: auto 0 var(--erp-keyboard-inset, 0px) 0 !important;
@@ -24,13 +25,13 @@
     padding-bottom: max(1rem, var(--safe-area-bottom, 0px)) !important;
   }
 
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]),
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]
     > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a))) {
@@ -47,7 +48,7 @@
 
   /* Column dialogs with their own scrolling body (header / body / footer) must let that body
      shrink below its content height, or the footer is pushed out of the capped sheet. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]:is(.flex-col, [class*="flex-col"])
     > :is(
       [class*="overflow-y-auto"],
@@ -60,14 +61,15 @@
 
   /* Tables inside a phone sheet do not cap their own height (Table's default 70vh region): the
      sheet is the one scroll container, so entry lists never scroll inside it. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-content"], [data-slot="sheet-content"])
     [data-table-scroll-region] {
     max-height: none !important;
   }
 
   /* Bottom sheets (filters, page menu, pickers) sit above the keyboard too. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"]) [data-slot="sheet-content"][data-sheet-side="bottom"] {
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
+    [data-slot="sheet-content"][data-sheet-side="bottom"] {
     bottom: var(--erp-keyboard-inset, 0px);
   }
 
@@ -75,7 +77,7 @@
      scroll area, and the close control (normally absolute) becomes a sticky first item that
      overlaps the header row. */
   /* Dialogs that manage their own padding (p-0 frames with header/body/footer) are left alone. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]:not([class~="p-0"])
     > [data-slot="dialog-header"] {
     position: sticky;
@@ -90,7 +92,7 @@
       1rem 0 0 hsl(var(--background));
   }
 
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]
     > [data-slot="dialog-close"] {
     position: sticky !important;
@@ -107,17 +109,17 @@
   }
 
   /* Two actions (Cancel + primary) share one row, primary on the trailing side. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-footer"], [data-slot="alert-dialog-footer"]):has(> :nth-child(2):last-child) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   /* Button-only rows stretch their actions across the sheet like DialogFooter does. */
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]
     > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a))),
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a))) {
@@ -130,11 +132,11 @@
     padding-top: 0.75rem;
   }
 
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     [data-slot="dialog-content"]
     > div:has(+ [data-slot="dialog-close"]):has(> button):not(:has(> :not(button, a)))
     > *,
-  html:is([data-app-shell="erp"], [data-app-shell="factory"])
+  html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
     :is([data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     form
     > div:last-child:has(> button):not(:has(> :not(button, a)))
@@ -150,7 +152,8 @@
  * it to the viewport keeps it inert for layout. Scoped to the ERP/Factory shells like the dialog rules,
  * since Radix portals some selects outside the workspace.
  */
-html:is([data-app-shell="erp"], [data-app-shell="factory"]) select[aria-hidden="true"][tabindex="-1"] {
+html:is([data-app-shell="erp"], [data-app-shell="factory"], [data-app-shell="properties"])
+  select[aria-hidden="true"][tabindex="-1"] {
   position: fixed !important;
   top: 0;
   left: 0;

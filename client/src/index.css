@@ -751,14 +751,11 @@
   }
 
   /* ── 4. Buttons and form action rows ────────────────────────────────────
-     Rows of buttons (e.g. Save / Cancel / Export) should wrap rather than
-     clip off the right edge of the screen. Scoped to common flex-row
-     containers that hold interactive controls. */
-  .flex.gap-2,
-  .flex.gap-3,
-  .flex.gap-4 {
-    flex-wrap: wrap;
-  }
+     Rows of buttons (e.g. Save / Cancel / Export) wrap rather than clip off the
+     right edge of the screen. The rule lives in mobile-browser-compat.css: this
+     file's `@apply flex flex-col … gap-3` (`.empty-state`) makes Tailwind copy
+     every rule here that names those classes with `.empty-state` swapped in, and
+     a copy of `:not(.flex-col)` would match almost every column. */
 
   /* Form inputs, selects, and textareas must not exceed the viewport */
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
