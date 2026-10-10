@@ -3,6 +3,7 @@ import Decimal from "decimal.js";
 import { factoryContainerCommissions } from "@shared/schema";
 
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { lineAmount, parseMoneyInput, toMoney } from "../../../lib/money";
 import { computeContainerLandedCost } from "../../../services/factory/containerLandedCost";
 import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
 
@@ -120,10 +121,10 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
   let commInsertValues: typeof factoryContainerCommissions.$inferInsert | null = null;
   if (commission && commission.personName && commission.commissionRate) {
     const commType = commission.commissionType || "PER_KG";
-    const commRate = parseFloat(commission.commissionRate) || 0;
+    const commRate = toMoney(commission.commissionRate).toNumber();
     // Commission PER_KG is computed on the full declared weight — agreed for the
     // whole container, not just the portion received so far.
-    commTotalVal = commType === "PER_KG" ? commRate * parseFloat(declaredKg) : commRate;
+    commTotalVal = commType === "PER_KG" ? lineAmount(commRate, declaredKg).toNumber() : commRate;
     const commCurrency = (commission.currencyCode || currencyCode).toUpperCase();
     commCurrencyForUsd = commCurrency;
 
@@ -135,7 +136,7 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
       resolvedCommFxRate = fxRate;
     } else {
       try {
-        resolvedCommFxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, commCurrency, offloadDate));
+        resolvedCommFxRate = toMoney(await getOrFetchFxRateToUsd(companyId, commCurrency, offloadDate)).toNumber();
       } catch (err: unknown) {
         return {
           ok: false,
@@ -147,7 +148,8 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
       }
     }
     commFxRateForUsd = resolvedCommFxRate;
-    const commTotalUsd = commCurrency === "USD" ? commTotalVal : commTotalVal * resolvedCommFxRate;
+    const commTotalUsd =
+      commCurrency === "USD" ? commTotalVal : lineAmount(commTotalVal, resolvedCommFxRate).toNumber();
     commInsertValues = {
       companyId,
       containerId,
@@ -165,12 +167,20 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
 
   // Compute per-component USD values — kept for daybook/voucher posting.
   const freightCcy = reqFreightCurrencyCode || currencyCode;
-  const freightFxRateVal = parseFloat(reqFreightFxRate || String(fxRate));
-  const freightUsd = freightCcy === "USD" ? freightVal : freightVal * freightFxRateVal;
+  const freightFx = parseMoneyInput(reqFreightFxRate || fxRate);
+  if (freightCcy !== "USD" && freightVal > 0 && (!freightFx || freightFx.lte(0))) {
+    return { ok: false, httpStatus: 400, body: { message: "Freight FX rate must be a positive number" } };
+  }
+  const freightFxRateVal = freightFx ? freightFx.toNumber() : 0;
+  const freightUsd = freightCcy === "USD" ? freightVal : lineAmount(freightVal, freightFxRateVal).toNumber();
 
   const ocCcy = reqOtherChargesCurrencyCode || currencyCode;
-  const ocFxRateVal = parseFloat(reqOtherChargesFxRate || String(fxRate));
-  const ocUsd = ocCcy === "USD" ? otherChargesVal : otherChargesVal * ocFxRateVal;
+  const ocFx = parseMoneyInput(reqOtherChargesFxRate || fxRate);
+  if (ocCcy !== "USD" && otherChargesVal > 0 && (!ocFx || ocFx.lte(0))) {
+    return { ok: false, httpStatus: 400, body: { message: "Other charges FX rate must be a positive number" } };
+  }
+  const ocFxRateVal = ocFx ? ocFx.toNumber() : 0;
+  const ocUsd = ocCcy === "USD" ? otherChargesVal : lineAmount(otherChargesVal, ocFxRateVal).toNumber();
 
   // ── Build container snapshot for the shared landed-cost helper ────────────
   // All financial fields (inclusive cost/kg, finalPayableAmount, USD totals) are
@@ -232,7 +242,7 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
       amount: c.amount || "0",
       currencyCode: c.currencyCode || currencyCode,
       fxRateToUsd: c.fxRateToUsd || (c.currencyCode === "USD" ? "1" : String(fxRate)),
-      fxRateConfirmed: !!(c.fxRateToUsd && parseFloat(c.fxRateToUsd) > 0),
+      fxRateConfirmed: !!(c.fxRateToUsd && toMoney(c.fxRateToUsd).gt(0)),
     }));
 
   // Commission record: confirmed (rate was resolved above or is 1 for USD).
