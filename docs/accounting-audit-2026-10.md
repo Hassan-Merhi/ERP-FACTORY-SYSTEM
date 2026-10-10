@@ -1124,3 +1124,64 @@ Unchanged in substance since section 9. The plug writer rewrote `equity_adjustme
 - **Wave 17, reporting and inventory leftovers:** exclude the closing journal from period reports; one sideless-opening rule everywhere; net positions by the voucher's company; per-pair elimination; stock-adjustment edit on the negative-stock model; location delete refused with stock; V3 finalize, no-mix bale cost, non-USD factory invoices and factory goods in transit at the opening; the rate leftovers.
 - **Retail Wave 1 on `main`** (payments, cashier shifts and accounting) is new, posts to the ledger, and has not been audited; merging `main` into this branch must be followed by a review of it.
 - **Deployment** remains the only way production improves.
+
+## 11. Re-audit (2026-10-10, branch at `2c92272`, after waves 16–17)
+
+Method as in sections 8 and 10: three independent read-only code reviews checked each section-10 finding against the code (fixed, partly fixed or open, with file and line) and looked for new defects, including in main's merged Retail code. A fourth measured production read-only.
+
+### Score
+
+| Category | 10-06 | 10-07 | 10-08 | 10-09 | Now |
+|---|---|---|---|---|---|
+| Chart of Accounts | 20 | 40 | 45 | 50 | 55 |
+| Double Entry | 35 | 35 | 46 | 60 | 66 |
+| General Ledger | 25 | 40 | 45 | 50 | 54 |
+| Posting Engine | 40 | 40 | 45 | 52 | 58 |
+| AR/AP | 30 | 25 | 40 | 52 | 58 |
+| Inventory | 15 | 36 | 50 | 58 | 62 |
+| Factory Accounting | 15 | 30 | 42 | 50 | 55 |
+| Multi-Currency | 40 | 28 | 35 | 45 | 54 |
+| Multi-Company | 55 | 45 | 48 | 54 | 60 |
+| Reporting | 10 | 22 | 33 | 46 | 57 |
+| Data Integrity | 30 | 45 | 48 | 52 | 56 |
+| Audit Trail | 40 | 28 | 32 | 42 | 50 |
+
+**ACCOUNTING SCORE — branch code: 57/100** (51 on 2026-10-09). **Production: about 30/100** (28): every voucher now balances, but none of this branch is deployed.
+
+Section 10's three CRITICAL items are fixed: no boot step rewrites vouchers, the SP trigger no longer moves posted lines, and `reverse-po-credits` is gone (5 deliberate voucher hard deletes remain). Also fixed: replay of a deleted posting, line target guard for new lines, account delete side, closing journal excluded from period reports, fiscal close (audit, deleted accounts), net positions and elimination by company, import-cycle and dashboard on the engine, future rates in the latest lookups, reads writing rates, currency delete history, repair plan hash, currency trigger for every currency, stock adjustment edit, location delete with stock, factory goods in transit at the opening, cut-over apply guards.
+
+### CRITICAL
+
+1. **The scheduler bypasses the closed-period guard and the opening lock.** Every cron tick runs in maintenance scope (`scheduler/schedulerTickGuard.ts:57`, `db.ts:99-105`), which the guard treats as a bypass (`closedPeriodGuard.ts:42`). The daily rental job (`scheduled-jobs.ts:239-270`, on by default) runs `repairLegacyFullyPrepaidRentRecognition`, which posts `LEGACY-PREPAID-RECLASS-*` journals dated at original payment dates and accruals at past due dates, with no audit and no closure check. Once a year is closed, the next run posts into it. Recurring journals and the factory stock journal run in the same scope. This is in `main` and in production today.
+
+### HIGH
+
+- `GET {rental}/units` posts scheduled payments and accruals on page load, dated by the client (`rental/units-contracts/units-read.ts:30-44`), sign-in only.
+- Payroll `migrate-city-split` / `migrate-salary-groups` rewrite posted PAYROLL-GEN lines with floats, hard-delete accounts, no audit, trust the body's company (`payroll/core/migrations.ts`).
+- Journal edit syncs the intercompany counterpart after commit, swallowing errors, with float rescale that misstates a normalized non-USD counterpart (`centralJournalLifecycleRoute.ts:132-210, 377`).
+- Bank accounts: PUT and DELETE are sign-in only; DELETE ignores the opening and the linked ledger (`bankAccountRoutes.ts:138, 242`).
+- `/api/accounts/all` and the statement PDF/Excel openings are still off the engine (double counting, sideless Dr, no company filter in the PDF).
+- Bale reimport and bale/raw-stock import routes create stock value with no journal and no cut-over or cost-basis guard (`balesReimportRoutes.ts`, `balesImportRoutes.ts`).
+
+### MEDIUM
+
+- INVENTORY lookup by name can pick RETAIL-INVENTORY or Golden Coast "Stock in Hand"; it also retypes and restores the account (`inventoryControlAccount.ts`).
+- Deleted Items permanent deletes and the nightly purge are untransacted and unaudited; retired vouchers can be permanently deleted.
+- Name-based account helpers retype accounts (rental, payroll); ledger `code`, `active` and `deletedAt` editable by any non-POS user.
+- STOCK-IN per offload: the latest offload takes all later charges, so an earlier offload's journal is still reposted.
+- RETAIL-GRNI is never cleared; the retail opening plugs the difference to Opening Balance Equity.
+- Container, offload and receipt writers post at fetched, unrecorded rates (one falls back to rate 1); three rate-precedence rules.
+- Retail posts no exchange rate, so it fails in any non-USD base company.
+- 103 audit calls outside a transaction; floats in recurring journals and journal lifecycle; intercompany POS mirror after commit.
+
+### Production (2026-10-10, read-only)
+
+- Live deploy `274ca0c` (manual, 2026-10-10) from `feat/automatic-priority-print-loading`, which contains main up to `059230f` but none of this branch. Render auto-deploys that branch, not `main`.
+- Main's `2bf7351` boot backfill ran on 2026-10-09: it added INVENTORY mirror lines to the stock-adjustment history (company 1: 214 lines on 118 vouchers; 8: 60; 9: 23; 17: 4). **Every company now has 0 unbalanced vouchers** (175 before). This was an unaudited boot rewrite of history; this branch replaces it with a reviewed tool, but it has already run.
+- The plug writer is still live: `equity_adjustment_1` moved to −6,285,263.64 (10-09 18:58); six companies rewritten. Company 9 FX-REVAL posted again (dated 10-09).
+- No balance guard, no append-only audit, no cut-over tables. Company 1: 82 voucher updates and 8 deletes this week.
+- Cut-over blockers unchanged: 21.4M stock at missing locations (companies 1, 8), zero-quantity values, 462 legacy factory EUR/AUD lines with 5 dated rates, 48 commissions (45,500) unjournalled, 2 future-dated journals. Retail (company 18) not in use.
+
+### Proposed wave 18
+
+Scheduler and GET posting out of maintenance scope (tenant scope, closed-period and audit respected); payroll migrate routes and bank account routes behind Admin/Owner with audit; journal counterpart sync inside the transaction; `/api/accounts/all` and statement PDF/Excel on the engine; bale import routes guarded and journalled; INVENTORY lookup by code only, never retyped.
