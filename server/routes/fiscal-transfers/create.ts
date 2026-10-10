@@ -13,7 +13,10 @@ import { getClientDate } from "../../lib/dateUtils";
 import { logger } from "../../lib/logger";
 import { inventory, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
-import { MoneyDecimal, toMoney } from "../../lib/money";
+import { MoneyDecimal, parseMoneyInput, toMoney } from "../../lib/money";
+
+/** True when the value parses as a number greater than zero (malformed input is not). */
+const isPositive = (value: unknown) => parseMoneyInput(value)?.gt(0) === true;
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { sendTransferWhatsApp } from "../../helpers/sendTransferWhatsApp";
 import { getActiveCompanyPermissionContext } from "../../services/security/activeCompanyPermissionContext";
@@ -100,7 +103,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
           if (!item.stockItemId || isNaN(Number(item.stockItemId))) {
             return res.status(400).json({ message: `Invalid stockItemId: ${item.stockItemId}` });
           }
-          if (toMoney(item.quantity).lte(0)) {
+          if (!isPositive(item.quantity)) {
             return res.status(400).json({ message: `Invalid quantity for item ${item.stockItemId}: ${item.quantity}` });
           }
         }
@@ -387,10 +390,10 @@ export function registerStockTransferCreateRoutes(app: Express) {
         if (!item.stockItemId) {
           return res.status(400).json({ message: "Stock item ID is required for all items" });
         }
-        if (!item.quantity || toMoney(item.quantity).lte(0)) {
+        if (!item.quantity || !isPositive(item.quantity)) {
           return res.status(400).json({ message: "Quantity must be positive for all items" });
         }
-        if (!item.rate || toMoney(item.rate).lt(0)) {
+        if (!item.rate || parseMoneyInput(item.rate)?.gte(0) !== true) {
           return res.status(400).json({ message: "Rate must be non-negative for all items" });
         }
 
@@ -419,7 +422,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
       // Auto-fill rate from inventory for items with no rate (e.g. POS users who don't see cost)
       const itemsWithRate = await Promise.all(
         items.map(async (item) => {
-          if (!item.rate || toMoney(item.rate).isZero()) {
+          if (!item.rate || parseMoneyInput(item.rate)?.isZero() === true) {
             const [invRow] = await db
               .select({ averageRate: inventory.averageRate })
               .from(inventory)
