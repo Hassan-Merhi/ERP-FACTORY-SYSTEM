@@ -1,5 +1,5 @@
-import { and, eq, isNotNull } from "drizzle-orm";
-import { interCompanyTransfers, rentalAutoTransferConfigs } from "@shared/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { interCompanyTransfers, propertyPayments } from "@shared/schema";
 
 import { db } from "../../db";
 import { assertCompanyAccess, CompanyAccessError } from "../../security/companyAccessBoundary";
@@ -25,23 +25,45 @@ export class RentalAutoTransferScopeError extends Error {
 }
 
 /**
- * The companies a rental auto-transfer can reach from `companyId`: the
- * destinations of its own saved transfer rules and of the transfers it already
- * posted. Both come from server-side rows the company owns, never from a
- * request body.
+ * The companies that received auto-transfers for these payments of `companyId`.
+ * A reversal needs exactly these in scope: deriving them from the company's
+ * saved rules instead would refuse deleting any payment, transferred or not,
+ * whenever some rule names a company the user cannot access.
  */
-export async function autoTransferCounterpartyCompanyIds(companyId: number): Promise<number[]> {
-  const [configured, posted] = await Promise.all([
-    db
-      .select({ id: rentalAutoTransferConfigs.destCompanyId })
-      .from(rentalAutoTransferConfigs)
-      .where(eq(rentalAutoTransferConfigs.companyId, companyId)),
-    db
-      .selectDistinct({ id: interCompanyTransfers.toCompanyId })
-      .from(interCompanyTransfers)
-      .where(and(eq(interCompanyTransfers.fromCompanyId, companyId), isNotNull(interCompanyTransfers.sourcePaymentId))),
-  ]);
-  return [...new Set([...configured, ...posted].map((row) => row.id))].filter((id) => id !== companyId);
+export async function autoTransferCounterpartiesForPayments(
+  companyId: number,
+  paymentIds: readonly number[]
+): Promise<number[]> {
+  if (paymentIds.length === 0) return [];
+  const rows = await db
+    .selectDistinct({ id: interCompanyTransfers.toCompanyId })
+    .from(interCompanyTransfers)
+    .where(
+      and(
+        eq(interCompanyTransfers.fromCompanyId, companyId),
+        inArray(interCompanyTransfers.sourcePaymentId, [...paymentIds])
+      )
+    );
+  return rows.map((row) => row.id).filter((id) => id !== companyId);
+}
+
+/** As above, for a payment and every payment sharing its payment group. */
+export async function autoTransferCounterpartiesForPaymentGroup(companyId: number, paymentId: number) {
+  const [seed] = await db
+    .select({ groupId: propertyPayments.paymentGroupId })
+    .from(propertyPayments)
+    .where(and(eq(propertyPayments.id, paymentId), eq(propertyPayments.companyId, companyId)));
+  if (!seed) return [];
+  const group = seed.groupId
+    ? await db
+        .select({ id: propertyPayments.id })
+        .from(propertyPayments)
+        .where(and(eq(propertyPayments.companyId, companyId), eq(propertyPayments.paymentGroupId, seed.groupId)))
+    : [{ id: paymentId }];
+  return autoTransferCounterpartiesForPayments(
+    companyId,
+    group.map((row) => row.id)
+  );
 }
 
 /**

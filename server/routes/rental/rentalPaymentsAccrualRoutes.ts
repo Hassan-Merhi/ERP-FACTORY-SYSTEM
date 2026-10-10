@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import {
-  autoTransferCounterpartyCompanyIds,
+  autoTransferCounterpartiesForPayments,
+  RentalAutoTransferScopeError,
   runWithAutoTransferCounterparties,
 } from "../../services/rental/autoTransferScope";
 import { softDeleteVoucherTx } from "../../services/accounting/voucherSoftDelete";
@@ -251,7 +252,7 @@ export function registerRentalPaymentsAccrualRoutes(
         );
       if (!payment) return res.status(404).json({ message: "Payment not found" });
 
-      await runWithAutoTransferCounterparties(await autoTransferCounterpartyCompanyIds(companyId), () =>
+      await runWithAutoTransferCounterparties(await autoTransferCounterpartiesForPayments(companyId, [paymentId]), () =>
         db.transaction(async (tx) => {
           // 1. Reverse the monthly ledger paid_amount
           if (payment.ledgerRowId) {
@@ -318,6 +319,7 @@ export function registerRentalPaymentsAccrualRoutes(
 
       res.json({ ok: true });
     } catch (e: unknown) {
+      if (e instanceof RentalAutoTransferScopeError) return res.status(e.status).json({ message: e.message });
       logger.error(`${tag} delete-payment:`, { error: e });
       res.status(500).json({ message: getErrorMessage(e) });
     }

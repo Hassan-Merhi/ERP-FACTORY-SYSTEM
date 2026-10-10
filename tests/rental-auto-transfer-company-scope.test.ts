@@ -30,6 +30,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
     maybeRunAutoTransfer: typeof import("../server/routes/rental/shared/auto-transfer").maybeRunAutoTransfer;
     reverseAutoTransfersTx: typeof import("../server/routes/rental/shared/auto-transfer").reverseAutoTransfersTx;
     runWithAutoTransferCounterparties: typeof import("../server/services/rental/autoTransferScope").runWithAutoTransferCounterparties;
+    counterpartiesForPayments: typeof import("../server/services/rental/autoTransferScope").autoTransferCounterpartiesForPayments;
     db: typeof import("../server/db").db;
     pool: typeof import("../server/db").pool;
     inRequest: <T>(companyId: number, run: () => Promise<T>) => Promise<T>;
@@ -117,6 +118,7 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
       maybeRunAutoTransfer: transfer.maybeRunAutoTransfer,
       reverseAutoTransfersTx: transfer.reverseAutoTransfersTx,
       runWithAutoTransferCounterparties: scope.runWithAutoTransferCounterparties,
+      counterpartiesForPayments: scope.autoTransferCounterpartiesForPayments,
       db: dbModule.db,
       pool: dbModule.pool,
       inRequest: (companyId, run) =>
@@ -202,6 +204,32 @@ describeDatabase("rental auto-transfer under company-scope RLS", () => {
     ]);
     expect(vouchers.rows).toHaveLength(2);
     for (const voucher of vouchers.rows) expect(voucher.deleted_at).not.toBeNull();
+    expect(await transferRows(paymentId)).toHaveLength(0);
+  });
+
+  it("scopes a reversal to the payment's own transfers, not to every saved rule", async () => {
+    // A disabled rule pointing at a company the user cannot access must not
+    // block reversing, or deleting, payments that never went there.
+    await admin.query(
+      `INSERT INTO rental_auto_transfer_configs (company_id, module, dest_company_id, dest_ledger_account_id, enabled)
+       VALUES ($1, 'ERP', $2, $3, false)`,
+      [companyA, outsiderCompany, receivingAccountB]
+    );
+    const paymentId = 900_000_003;
+    await mods.inRequest(companyA, () =>
+      mods.maybeRunAutoTransfer(companyA, "PROPERTIES", cashAccountA, "50.00", "2026-10-04", "Unit 9", paymentId)
+    );
+
+    expect(await mods.inRequest(companyA, () => mods.counterpartiesForPayments(companyA, [paymentId]))).toEqual([
+      companyB,
+    ]);
+    expect(await mods.inRequest(companyA, () => mods.counterpartiesForPayments(companyA, [900_000_999]))).toEqual([]);
+
+    await mods.inRequest(companyA, async () =>
+      mods.runWithAutoTransferCounterparties(await mods.counterpartiesForPayments(companyA, [paymentId]), () =>
+        mods.db.transaction((tx) => mods.reverseAutoTransfersTx(tx, [paymentId]))
+      )
+    );
     expect(await transferRows(paymentId)).toHaveLength(0);
   });
 
