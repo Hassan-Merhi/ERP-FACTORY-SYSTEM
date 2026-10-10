@@ -14,7 +14,16 @@ import {} from "../../_helpers";
 import { factoryBaleProducts } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { resultRows } from "../../../../lib/queryResult";
-import { plusMoney } from "../../../../lib/money";
+import { MoneyDecimal, plusMoney, toMoney, type MoneyInput } from "../../../../lib/money";
+
+/** `total` split into `count` decimal strings that add back to `total` exactly. */
+function splitEvenly(total: MoneyInput, count: number): string[] {
+  if (count <= 0) return [];
+  const exact = toMoney(total);
+  const share = exact.dividedBy(count).toDecimalPlaces(6, MoneyDecimal.ROUND_DOWN);
+  const last = exact.minus(share.times(count - 1));
+  return Array.from({ length: count }, (_, i) => (i === count - 1 ? last : share).toFixed());
+}
 
 // Raw-row contracts for the SELECT * queries in this route. The columns are
 // snake_case because they come straight from PostgreSQL, and every field is
@@ -191,19 +200,18 @@ export function registerOrderVerificationSummaryRoutes(app: Express) {
             const qty = Number(row.qty ?? 0);
             if (qty <= 0) continue;
             const articleCode = String(row.article_code ?? row.articleCode ?? "UNKNOWN");
-            const totalWeight = Number(row.total_weight ?? row.totalWeight ?? 0);
-            const totalPrice = Number(row.total_price ?? row.totalPrice ?? 0);
-            const weightPerBale = qty > 0 ? totalWeight / qty : 0;
-            const pricePerBale = qty > 0 ? totalPrice / qty : 0;
+            // Equal shares whose sum is the line total exactly: the last bale takes the remainder.
+            const weightShares = splitEvenly(row.total_weight ?? row.totalWeight, qty);
+            const priceShares = splitEvenly(row.total_price ?? row.totalPrice, qty);
             for (let i = 0; i < qty; i++) {
               syntheticBalesFromLines.push({
                 id: 0,
                 order_id: orderId,
                 bale_id: 0,
-                weight: String(weightPerBale),
+                weight: weightShares[i],
                 article_code: articleCode,
                 bale_name: String(row.bale_name ?? row.baleName ?? articleCode),
-                price_used: String(pricePerBale),
+                price_used: priceShares[i],
                 bale_reference: "",
               });
             }
