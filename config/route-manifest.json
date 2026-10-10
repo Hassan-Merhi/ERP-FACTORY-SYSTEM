@@ -1,7 +1,7 @@
 {
   "formatVersion": 1,
   "description": "Ordered snapshot of every registered Express route (method, path, guard chain) and middleware mount. Regenerate with UPDATE_ROUTE_MANIFEST=1 only when a route change is intended; during a file split the manifest must not change at all.",
-  "routeCount": 2121,
+  "routeCount": 2125,
   "middlewareMountCount": 129,
   "routes": [
     "GET /api/admin/operational-monitoring [requireAuth > <anonymous> > <anonymous>]",
@@ -948,6 +948,10 @@
     "POST /api/accounting/phase3-historical/apply [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/accounting/stock-adjustment-inventory-side/plan [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/accounting/stock-adjustment-inventory-side/apply [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/accounting/legacy-equity-plug/plan [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/accounting/legacy-equity-plug/apply [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/accounting/stock-adjustment-inventory-mirror-reversal/plan [requireAuth > <anonymous> > <anonymous>]",
+    "POST /api/accounting/stock-adjustment-inventory-mirror-reversal/apply [requireAuth > <anonymous> > <anonymous>]",
     "POST /api/factory/admin/repair-truncated-user-attribution [requireAuth > <anonymous> > <anonymous>]",
     "GET /api/factory/sheets-sacks/log [requireAuth > <anonymous>]",
     "GET /api/factory/sheets-sacks [requireAuth > <anonymous>]",

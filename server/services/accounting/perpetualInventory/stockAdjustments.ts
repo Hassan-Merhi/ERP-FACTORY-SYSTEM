@@ -32,6 +32,24 @@
  * narration: an inventory line entered by hand is left alone and counted with
  * the other lines. An optional or deleted voucher, a voucher dated before the
  * cut-over and a supplier-partner company carry no inventory line.
+ *
+ * Phase 20 (decided by default, owner can override): main's boot backfill
+ * (2bf7351) gave old one-sided vouchers mirror lines on INVENTORY narrated
+ * "Inventory side (backfill) - …" (STOCK_ADJUSTMENT_BACKFILL_NARRATION_PREFIX).
+ * They are the voucher's inventory side, not hand-entered lines, so the sync
+ * owns them like its own line: a re-sync removes them and re-derives the side
+ * (before the cut-over: none, the voucher is periodic again and the balance
+ * guard exempts it; from the cut-over: the value-exact line). Kept as
+ * hand-entered lines they were counted into the net, so a re-dated voucher
+ * would carry the backfill and the exact line twice, and an edit that changed
+ * the adjustment value left a stale two-sided voucher the balance guard
+ * refuses. While they stay, the opening inventory journal absorbs them (it
+ * posts the sub-ledger less the INVENTORY balance on the eve); once removed,
+ * the opening posts the full value: either way they are counted once. A
+ * voucher whose backfill was reversed by the reviewed Owner tool
+ * (stockAdjustmentBackfillReversal.ts) keeps its backfill lines, neutralised
+ * by the reversal journal, and they are left out of the net, so removing them
+ * cannot leave the reversal alone on INVENTORY.
  */
 import { sql } from "drizzle-orm";
 
@@ -54,6 +72,12 @@ export const STOCK_ADJUSTMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set([
 export const STOCK_ADJUSTMENT_INVENTORY_NARRATION = "Inventory - stock adjustment";
 export const STOCK_ADJUSTMENT_VALUATION_NARRATION = "Inventory - stock adjustment valuation difference";
 export const STOCK_ADJUSTMENT_SETTLEMENT_NARRATION = "Inventory - stock adjustment shortage settlement";
+/** The narration prefix main's 2bf7351 boot backfill gave its INVENTORY mirror lines. */
+export const STOCK_ADJUSTMENT_BACKFILL_NARRATION_PREFIX = "Inventory side (backfill) - ";
+/** LIKE pattern for the backfill lines (the prefix holds no LIKE wildcard). */
+export const STOCK_ADJUSTMENT_BACKFILL_NARRATION_PATTERN = `${STOCK_ADJUSTMENT_BACKFILL_NARRATION_PREFIX}%`;
+/** The deterministic number of the reviewed reversal of one voucher's backfill lines. */
+export const stockAdjustmentBackfillReversalNumber = (voucherId: number) => `STOCKADJ-BACKFILL-REV-${voucherId}`;
 
 /**
  * Replaces the inventory line (and valuation-difference line) of a stock
@@ -75,12 +99,25 @@ export async function syncStockAdjustmentInventoryTx(
     { voucher_type: string; voucher_date: string; optional: boolean | null; deleted_at: string | null } | undefined;
   if (!voucher || !STOCK_ADJUSTMENT_VOUCHER_TYPES.has(voucher.voucher_type)) return null;
 
+  // Phase 20: a live reviewed reversal of this voucher's backfill lines keeps them in place.
+  const reversed = (
+    await tx.execute(sql`
+      SELECT EXISTS (
+        SELECT 1 FROM vouchers r
+         WHERE r.company_id = ${companyId} AND r.voucher_number = ${stockAdjustmentBackfillReversalNumber(voucherId)}
+           AND r.deleted_at IS NULL AND COALESCE(r.optional, false) = false
+      ) AS reversed
+    `)
+  ).rows[0] as { reversed: boolean } | undefined;
+  const backfillReversed = reversed?.reversed === true;
+
   await tx.execute(sql`
     DELETE FROM voucher_entries ve
      USING ledger_accounts la, vouchers v
      WHERE ve.voucher_id = ${voucherId} AND v.id = ve.voucher_id AND v.company_id = ${companyId}
        AND la.id = ve.ledger_account_id AND la.company_id = ${companyId}
        AND ((la.code = 'INVENTORY' AND ve.narration = ${STOCK_ADJUSTMENT_INVENTORY_NARRATION})
+         ${backfillReversed ? sql`` : sql`OR (la.code = 'INVENTORY' AND ve.narration LIKE ${STOCK_ADJUSTMENT_BACKFILL_NARRATION_PATTERN})`}
          OR (la.code = 'INVENTORY_ADJUSTMENT' AND ve.narration = ${STOCK_ADJUSTMENT_VALUATION_NARRATION})
          OR (la.code = 'COGS' AND ve.narration = ${STOCK_ADJUSTMENT_SETTLEMENT_NARRATION}))
   `);
@@ -93,7 +130,11 @@ export async function syncStockAdjustmentInventoryTx(
     await tx.execute(sql`
       SELECT COALESCE(SUM(ve.debit_amount), 0)::text AS debit, COALESCE(SUM(ve.credit_amount), 0)::text AS credit
         FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+        LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id AND la.company_id = ${companyId}
        WHERE ve.voucher_id = ${voucherId} AND v.company_id = ${companyId}
+         -- Reversed backfill lines are neutralised by their reversal journal.
+         AND NOT (COALESCE(la.code = 'INVENTORY', false)
+                  AND COALESCE(ve.narration LIKE ${STOCK_ADJUSTMENT_BACKFILL_NARRATION_PATTERN}, false))
     `)
   ).rows as { debit: string; credit: string }[];
   // The inventory line takes the side the other lines leave open.

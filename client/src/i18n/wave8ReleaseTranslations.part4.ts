@@ -462,4 +462,54 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "الدفاتر مقفلة حتى هذا التاريخ، لذا لا يمكن استحقاق الإيجار فيه.",
     fr: "Les comptes sont clôturés jusqu’à cette date : le loyer ne peut pas y être constaté.",
   },
+  {
+    en: "There is no stored equity adjustment to clear for this company.",
+    ar: "لا توجد تسوية حقوق ملكية مخزّنة لمسحها لهذه الشركة.",
+    fr: "Il n’y a aucun ajustement de capitaux propres enregistré à effacer pour cette société.",
+  },
+  {
+    en: "The stored equity adjustment changed since it was reviewed; review it again before clearing.",
+    ar: "تغيّرت تسوية حقوق الملكية المخزّنة منذ مراجعتها؛ راجعها مرة أخرى قبل المسح.",
+    fr: "L’ajustement de capitaux propres enregistré a changé depuis sa revue ; revoyez-le avant de l’effacer.",
+  },
+  {
+    en: "This company is not a supplier partner: the opening inventory journal absorbs its backfill lines. Reverse them only with an explicit request and a reason.",
+    ar: "هذه الشركة ليست شريكاً مورداً: قيد المخزون الافتتاحي يستوعب سطور التعبئة الخلفية الخاصة بها. اعكسها فقط بطلب صريح مع سبب.",
+    fr: "Cette société n’est pas un partenaire fournisseur : l’écriture d’ouverture des stocks absorbe ses lignes de reprise. Ne les extournez que sur demande explicite et avec un motif.",
+  },
+  {
+    en: "A reason of at least 10 characters is required to reverse the backfill of this company.",
+    ar: "يلزم سبب من 10 أحرف على الأقل لعكس التعبئة الخلفية لهذه الشركة.",
+    fr: "Un motif d’au moins 10 caractères est requis pour extourner la reprise de cette société.",
+  },
+  {
+    en: "The contra account of the reversal is deleted; restore it before applying.",
+    ar: "الحساب المقابل للعكس محذوف؛ استعده قبل التطبيق.",
+    fr: "Le compte de contrepartie de l’extourne est supprimé ; restaurez-le avant d’appliquer.",
+  },
+  {
+    en: "The reversal date is in a closed fiscal period.",
+    ar: "تاريخ العكس يقع في فترة مالية مقفلة.",
+    fr: "La date de l’extourne se situe dans une période comptable clôturée.",
+  },
+  {
+    en: "There is no backfill line left to reverse.",
+    ar: "لم يتبقَّ أي سطر تعبئة خلفية لعكسه.",
+    fr: "Il ne reste aucune ligne de reprise à extourner.",
+  },
+  {
+    en: "The backfill reversal changed since it was reviewed; review it again before applying.",
+    ar: "تغيّر عكس التعبئة الخلفية منذ مراجعته؛ راجعه مرة أخرى قبل التطبيق.",
+    fr: "L’extourne de la reprise a changé depuis sa revue ; revoyez-la avant d’appliquer.",
+  },
+  {
+    en: "offset must be OPENING_BALANCE_EQUITY or INVENTORY_ADJUSTMENT",
+    ar: "يجب أن يكون الحساب المقابل OPENING_BALANCE_EQUITY أو INVENTORY_ADJUSTMENT",
+    fr: "la contrepartie doit être OPENING_BALANCE_EQUITY ou INVENTORY_ADJUSTMENT",
+  },
+  {
+    en: "Unknown reversal contra account",
+    ar: "حساب مقابل غير معروف للعكس",
+    fr: "Compte de contrepartie d’extourne inconnu",
+  },
 ];
