@@ -191,3 +191,86 @@ Clean single-browser Factory pass (8 routes: Production Report, Stock Entry, Raw
 | wide 1920×1080 | 0 | 0 | 0 / 4 | 1 / 1 | 6.6 | 0 |
 
 Note on "controls off-screen" at 768×1024: the one control is the theme toggle in the Factory and Properties top bars, measured at x=767 with a 40px width, so it sits almost entirely past the right edge (see tablet finding 9). The notes launcher measured at (20, 904) 40×60 against a sidebar footer at (0, 924) 255×100, confirming the overlap in desktop finding 2.
+
+---
+
+## 9. Remediation phases, easiest to hardest
+
+Each phase is independently shippable and verifiable with the existing rendered smoke scripts. Effort is for one engineer. "Done when" is what the viewport harness or a manual check must show.
+
+### Phase 1 — CSS-only fixes (half a day)
+
+No component logic changes; every item is a class or a few lines of CSS.
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Opaque sticky table header | `client/src/components/ui/table.tsx:140` — replace `bg-muted/95 backdrop-blur supports-[backdrop-filter]:bg-muted/80` with solid `bg-muted` (keep `sticky top-0 z-30`). | Scrolled rows no longer read through the header on `/stock?tab=items`. |
+| Table header legibility | Same file: header cells `text-[10px]` → `text-[11px]`, `text-muted-foreground` → `text-foreground/80`. | Headers readable on the 1920 Containers OTW capture. |
+| Factory payroll table | Add `min-w-[56rem]` to the workers `<Table>` (or `className` on the table element) so it scrolls instead of collapsing. | 768×1024 `/factory/payroll-hub` shows a sideways scroller, no overlapping headers. |
+| Header touch targets on tablets | In `mobile-browser-compat.css`, extend the `min-height: 2.75rem` rule that currently targets `#main-content` controls to `header :is(button, [role="button"], a[href])` under `(pointer: coarse)`. | User menu and company switcher measure ≥44px on every tablet capture. |
+| Theme toggle off-screen at 768px | In `AppTopBar.tsx`, let the actions group wrap (`flex-wrap`) or hide the user-name label below `lg` as ERP already does. | No control past the viewport edge on Factory/Properties tablet captures. |
+| Tab-strip edge fade | Add a right-edge gradient mask (`mask-image: linear-gradient(to right, #000 90%, transparent)`) to `.erp-mobile-scroll-tabs` and `[data-factory-scroll-tabs]` when scrollable. | "Contai…" on `/inventory` phone shows a visible fade instead of a hard cut. |
+| POS "Select Cash" truncation | Give the cash-account `SelectTrigger` `min-w-[9rem]` and let the row wrap below `md`. | Label fully visible at 768 and 390. |
+
+### Phase 2 — Floating and fixed elements (half a day)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Notes launcher overlap | `UserNotesPanel.tsx:173` — position relative to the content column (`left: calc(var(--sidebar-width) + 1rem)` when the sidebar is expanded, or move to bottom-right above the chat bubble), and hide below `sm` in the Properties shell as ERP/Factory already do. | Launcher rect does not intersect `[data-sidebar="footer"]` or nav links at 1440×900, 768×1024, or Properties phones. |
+| POS checkout bar | Make the totals/Checkout bar `sticky bottom-0` inside `#main-content` (reuse `.mobile-action-bar`) instead of `position: fixed` across the viewport. | Bar no longer paints over the sidebar at 768×1024. |
+| Voucher landscape ghost footer | Give the sticky totals footer an opaque `bg-background` and remove the duplicated "lines" layer. | No ghost text under "LINES" at 844×390. |
+
+### Phase 3 — Breakpoints and sidebar default (one day)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Sidebar collapsed by default on tablets | `SidebarProvider`: `defaultOpen = window.matchMedia("(min-width: 1024px)").matches` (respect the existing `sidebar_state` cookie when set). | 768×1024 captures open with the content column full width; user can still pin. |
+| 768px overlap | `index.css` mobile block `@media (max-width: 768px)` → `767px` so it no longer overlaps Tailwind `md:` at exactly 768. | No rule from the phone block applies at 768 wide. |
+| Single breakpoint source | Export `PHONE_QUERY`, `TABLET_QUERY` from one module and use them in `use-mobile.tsx`, `use-erp-phone-layout.ts` and the CSS custom media (via PostCSS `@custom-media` or documented constants). | One place defines 639/767/1023. |
+
+### Phase 4 — Vouchers layout (one to two days)
+
+The single page with defects at three sizes.
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Phone header | `PaymentReceiptTab.tsx` header row: `flex-wrap`, date input `w-full sm:w-[9.5rem]`, effective-date control on its own line below `sm`. | "Payment Voucher" fully visible at 390 wide. |
+| Tablet columns | Drive the type-list / form / account-picker split by content width, not viewport: wrap the page in `@container` and use `@lg`/`@xl` container queries (Tailwind `container-queries` plugin), or move the split from `md:`/`lg:` to `lg:`/`xl:`. Stack the type list above the form when the content column is under ~900px. | At 768×1024 and 1024×768 with the sidebar pinned, inputs are ≥160px wide and "Pay From" is on one line. |
+| Entry inputs | `min-w-[10rem]` on the account cell and `min-w-[7rem]` on the amount cell; let the entry table scroll sideways rather than shrink. | No "Typ" / "0.(" at any size. |
+| Apply to all three modules | The same components serve `/vouchers`, `/factory/vouchers`, `/properties/vouchers`; verify all three. | Rendered smoke passes on all three at the six sizes. |
+
+### Phase 5 — Properties and Factory phone parity (two to three days)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Properties KPI tiles | Replace the ad-hoc 3-column grid on rentals/dashboard with the shared `KPICard` grid (`grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3`), split the combined Outstanding/Credit tile into two. | No text outside card borders at 768; no orphan tiles at 390. |
+| Properties lists | Add `mobileLayout="cards"` to rental and payment tables; wrap filters in `ErpMobileFilters`. | Phone captures show cards and a filter sheet like ERP. |
+| Header grammar | Adopt `PageHeader` (accent bar, Back, meta line) on Factory and Properties top-level pages instead of the legacy icon-above-title block. | Same title treatment across the three modules. |
+| Empty-state cards | `/parties?tab=customers`: set `mobileLayout="cards"` so empty and populated states match Stock Items. | Phone capture shows the card empty state. |
+| KPI chip rows | Use an auto-fit grid for chip rows on Customers/Containers. | No orphan chips at 390. |
+
+### Phase 6 — Table scroll model (three to five days)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Page scroll by default | In `table.tsx`, make `usesParentScroll` the default for tables rendered inside `#main-content`, keep the 70vh cap only inside dialogs/sheets or when `maxHeight` is passed explicitly. Audit the 250 call sites; most need nothing, a few long reports may want an explicit cap. | Wheel/swipe in the middle of `/stock?tab=items`, `/stock?tab=query`, `/combined-inventory` moves the page; `nestedVScrollers` = 0 on list routes. |
+| Frozen reference column + edge shadow | Add `data-sticky-first-column` support (already partly present per CSS comments) and a right-edge shadow on `[data-table-scroll-region]` while `scrollLeft < max`. | Containers OTW keeps `#`/Container visible while scrolling sideways. |
+| Remove `calc(100vh - N)` literals | Replace the 36 occurrences with flex `min-h-0` layouts or, where a cap is really needed, `dvh` with a shared `--workspace-chrome-height` token. | `grep -r "100vh" client/src/pages` returns 0. |
+
+### Phase 7 — Scroll and dialog plumbing (three to five days, needs regression care)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Retire `useWorkspaceWheelScroll` | Remove the non-passive wheel listener; verify the original symptom (wheel not reaching `main` before a click) is gone. If one overlay still needs it, scope the listener to that overlay. | Smooth scrolling and trackpad inertia on desktop; no `preventDefault` on wheel in the shell. |
+| Fix dialog lifecycle instead of `useDialogScrollFix` | Find the dialogs unmounted mid-close (rapid open/close, route changes while open) and keep them mounted until `onAnimationEnd`; then delete the MutationObserver hook. | Body never left with `overflow: hidden` after 50 open/close cycles; hook removed. |
+| Phone landscape top bar | Apply the phone top-bar variant (no shortcut hint, 44px controls) when `ERP_PHONE_LAYOUT_QUERY` matches, not only below 640px. | 844×390 capture shows the simplified bar. |
+
+### Phase 8 — Consolidate the mobile layer and the tests (two to four weeks, incremental)
+
+| Item | Change | Done when |
+| --- | --- | --- |
+| Move overrides into components | Screen by screen, replace rules in `erp-mobile-operations.css`, `factory-mobile-operations.css` and the `index.css` phone block with responsive Tailwind classes on the components themselves; delete each rule as its screen is converted. Start with the route-scoped `[data-erp-route="…"]` rules (they map 1:1 to a page). | `!important` count across the six stylesheets drops from 147 to under 30; no `[class*=…]` attribute selectors remain. |
+| Replace source-text tests | Convert `tests/ui/mobile-responsive-phase*.test.ts` from `toContain("…css…")` assertions to rendered checks (jsdom with `matchMedia` mocks for layout toggles; the Puppeteer smoke for geometry). | Tests fail when a phone layout breaks, not when a comment is edited. |
+| Smoke runbook | Make `run-responsive-browser-smoke.mjs` dismiss the language onboarding dialog (or seed its localStorage flag) so the documented manual gate passes on a fresh profile. | Script exits 0 against a fresh user on `main`. |
+
+Expected score after each phase (same rubric): Phase 1–2 → ~78, Phase 3–4 → ~84, Phase 5 → ~87, Phase 6–7 → ~92, Phase 8 → ~95.
