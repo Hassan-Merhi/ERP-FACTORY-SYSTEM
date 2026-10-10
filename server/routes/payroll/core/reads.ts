@@ -16,6 +16,8 @@ import {
   factoryAttendance,
   ledgerAccounts,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
 import { computeMonthlyPay, getFactoryCompanyId } from "./_helpers";
 import {
   attachProductionBonusesToPayroll,
@@ -178,10 +180,15 @@ export function registerPayrollCoreReadRoutes(app: Express) {
             eq(factoryWorkerAdvances.repaymentType, "salary_deduction")
           )
         );
-      const advanceMap: Record<number, number> = {};
+      const advanceTotals = new Map<number, Decimal>();
       for (const advance of advanceRows) {
-        advanceMap[advance.workerId] = (advanceMap[advance.workerId] || 0) + parseFloat(advance.remaining || "0");
+        advanceTotals.set(
+          advance.workerId,
+          (advanceTotals.get(advance.workerId) ?? new MoneyDecimal(0)).plus(toMoney(advance.remaining))
+        );
       }
+      const advanceMap: Record<number, number> = {};
+      for (const [workerId, total] of advanceTotals) advanceMap[workerId] = total.toNumber();
 
       const attendanceRows = await db
         .select({

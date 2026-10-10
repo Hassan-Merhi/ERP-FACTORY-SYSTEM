@@ -13,6 +13,7 @@ import { logger } from "../../lib/logger";
 import { stockItems, stockTransferVouchers, stockTransferItems, vouchers, locations } from "@shared/schema";
 import { eq, and, desc, inArray, isNull, gte, lte } from "drizzle-orm";
 import { registerFinancialSalesRoutes } from "../financialSalesRoutes";
+import { moneyString, sumMoney } from "../../lib/money";
 
 export function registerStockTransferReadRoutes(app: Express) {
   registerFinancialSalesRoutes(app);
@@ -133,7 +134,7 @@ export function registerStockTransferReadRoutes(app: Express) {
                     (i.sourceLocationId === null && r.sourceLocationId === posLocationIdList)
                 )
             : allItems;
-        const totalAmount = myItems.reduce((s, i) => s + parseFloat(i.totalAmount || "0"), 0);
+        const totalAmount = sumMoney(myItems.map((i) => i.totalAmount));
         const stockItemNames = [...new Set(myItems.map((i) => stockItemMap.get(i.stockItemId) ?? "").filter(Boolean))];
         return {
           transferId: r.transferId,
@@ -155,7 +156,7 @@ export function registerStockTransferReadRoutes(app: Express) {
           destinationLocationId: r.destinationLocationId,
           destinationLocationName: locationMap.get(r.destinationLocationId) ?? "Unknown",
           itemCount: myItems.length,
-          totalAmount: Math.round(totalAmount * 100) / 100,
+          totalAmount: Number(moneyString(totalAmount)),
           stockItemNames,
           createdAt: r.createdAt,
         };
