@@ -130,12 +130,27 @@ describe("A5 and sticker labels", () => {
   });
 });
 
+/** RGB of the first letters and first subtitle palette entries of the recolored logo. */
+function logoPalette(html: string): { letters: number[]; subtitle: number[] } {
+  const match = html.match(/priority-hmd-logo" src="data:image\/png;base64,([^"]+)"/);
+  if (!match) throw new Error("no priority logo");
+  const bytes = Uint8Array.from(atob(match[1]), (char) => char.charCodeAt(0));
+  const view = new DataView(bytes.buffer);
+  for (let offset = 8; offset < bytes.length; offset += 12 + view.getUint32(offset)) {
+    if (String.fromCharCode(...bytes.subarray(offset + 4, offset + 8)) === "PLTE") {
+      const data = offset + 8;
+      return { letters: [...bytes.subarray(data, data + 3)], subtitle: [...bytes.subarray(data + 48, data + 51)] };
+    }
+  }
+  throw new Error("no palette");
+}
+
 describe("Automatic Priority Printing labels", () => {
   const printers = [generateCombinedLabelsHtml, generateA5LabelsHtml, generateStickerLabelsHtml];
 
   function stripPriorityLogo(html: string): string {
     return html
-      .replace(/<svg class="[^"]*priority-hmd-logo"[\s\S]*?<\/svg>/g, "<LOGO>")
+      .replace(/<img class="(?:logo-img|sticker-logo) priority-hmd-logo"[^>]*\/>/g, "<LOGO>")
       .replace(/<img class="(?:logo-img|sticker-logo)"[^>]*\/>/g, "<LOGO>");
   }
 
@@ -143,13 +158,11 @@ describe("Automatic Priority Printing labels", () => {
     const bale = label({ priorityColor: "#dc2626", priorityOrderId: 123, priorityNumber: 1 });
     for (const print of printers) {
       const html = print([bale]);
-      // One recolored small logo; the letters layer gets the color, the
-      // INTERNATIONAL GROUP subtitle layer stays black.
+      // One recolored small logo: letters/swoosh palette entries carry the
+      // color, the INTERNATIONAL GROUP entries stay black.
       expect(html.match(/class="(?:logo-img|sticker-logo) priority-hmd-logo"/g)).toHaveLength(1);
       expect(html).toContain('data-priority-color="#dc2626"');
-      expect(html).toContain("0 0 0 0 0.8627 0 0 0 0 0.1490 0 0 0 0 0.1490");
-      expect(html).toContain("0 0 0 0 0 0 0 0 0 0 0 0 0 0 0");
-      expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(1);
+      expect(logoPalette(html)).toEqual({ letters: [220, 38, 38], subtitle: [0, 0, 0] });
       expect(html).toContain("REF-001");
       expect(html).toContain("ART-100");
       expect(html).toContain("/api/barcode/REF-001");
@@ -175,7 +188,7 @@ describe("Automatic Priority Printing labels", () => {
     for (const print of printers) {
       const html = print([label({ customerLogoUrl: "https://example.test/logo.png" })]);
       expect(html).toContain('src="https://example.test/logo.png" alt="Logo"');
-      expect(html).not.toContain('class="priority-hmd-letters"');
+      expect(html).not.toContain('priority-hmd-logo" src=');
     }
   });
 
@@ -217,14 +230,11 @@ describe("Automatic Priority Printing labels", () => {
     ];
     for (const print of printers) {
       const html = print(items);
-      expect(html.match(/class="priority-hmd-letters"/g)).toHaveLength(2);
+      expect(html.match(/priority-hmd-logo"/g)).toHaveLength(2);
       expect(html).toContain('data-priority-color="#dc2626"');
       expect(html).toContain('data-priority-color="#2563eb"');
       const normal = html.slice(html.indexOf("NORMAL-02") - 3000, html.indexOf("NORMAL-02"));
       expect(normal).not.toContain("priority-hmd-logo");
-      // SVG filter ids must be unique within one print document.
-      const ids = [...html.matchAll(/filter id="([^"]+)"/g)].map((m) => m[1]);
-      expect(new Set(ids).size).toBe(ids.length);
     }
   });
 
