@@ -33,7 +33,7 @@ export function StockTransferDesktopEntries({ model }: { model: StockTransferFor
           )}
           <div className="w-10 sm:w-12 flex items-center justify-center h-9 sm:h-10" />
         </div>
-        <div className="max-h-[calc(100vh-24rem)] overflow-y-auto">
+        <div className="max-h-[calc(100dvh-24rem)] overflow-y-auto">
           {model.transferFields.map((field, index) => (
             <div key={field.id} className="flex border-b hover-elevate">
               <div className="w-10 sm:w-12 flex items-center justify-center border-r h-9 sm:h-10 text-xs text-muted-foreground">

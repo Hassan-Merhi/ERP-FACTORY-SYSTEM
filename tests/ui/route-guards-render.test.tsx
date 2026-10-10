@@ -207,7 +207,6 @@ vi.mock("@/contexts/CompanyContext", () => ({
   useCompany: () => companyState.current,
   CompanyProvider: ({ children }: any) => <>{children}</>,
 }));
-vi.mock("@/hooks/use-dialog-scroll-fix", () => ({ useDialogScrollFix: () => {} }));
 vi.mock("@/hooks/use-mobile-performance-lifecycle", () => ({ useMobilePerformanceLifecycle: () => {} }));
 vi.mock("@/hooks/use-ws-invalidation", () => ({ useWsInvalidation: () => {} }));
 vi.mock("@/app/useErpScrollRestoration", () => ({ useErpScrollRestoration: () => {} }));

@@ -1,16 +1,31 @@
-import {useState, useMemo, useCallback, useRef} from "react";
-import {useQuery, useMutation, useQueryClient} from "@tanstack/react-query";
-import {Card, CardContent} from "@/components/ui/card";
-import {Button} from "@/components/ui/button";
-import {Badge} from "@/components/ui/badge";
-import {PageHeader} from "@/components/PageHeader";
-import {Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye} from "lucide-react";
-import {cn} from "@/lib/utils";
-import {apiRequest} from "@/lib/queryClient";
+import { useState, useMemo, useCallback, useRef } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/PageHeader";
+import { Loader2, CalendarDays, Printer, ChevronLeft, ChevronRight, Pencil, EyeOff, Eye } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
 
-import type {AttendanceFilter, AttendanceReportData, DateMode, WorkerReportRow} from "./factoryworkerattendancereport/types";
-import {CYCLE, MONTH_NAMES, computeWorkerExpectedSalary, fmtCurrency, isoMonthEnd, isoMonthStart, isoToday, isoYesterday, workerCodeNum} from "./factoryworkerattendancereport/utils";
-import {StatusPill} from "./factoryworkerattendancereport/components/StatusPill";
+import type {
+  AttendanceFilter,
+  AttendanceReportData,
+  DateMode,
+  WorkerReportRow,
+} from "./factoryworkerattendancereport/types";
+import {
+  CYCLE,
+  MONTH_NAMES,
+  computeWorkerExpectedSalary,
+  fmtCurrency,
+  isoMonthEnd,
+  isoMonthStart,
+  isoToday,
+  isoYesterday,
+  workerCodeNum,
+} from "./factoryworkerattendancereport/utils";
+import { StatusPill } from "./factoryworkerattendancereport/components/StatusPill";
 export default function FactoryWorkerAttendanceReport() {
   const qc = useQueryClient();
 
@@ -527,7 +542,7 @@ export default function FactoryWorkerAttendanceReport() {
             </Card>
           ) : (
             /* ── Attendance grid ────────────────────────────────────────────── */
-            <div className="overflow-auto rounded-md border print:overflow-visible print:border-0 max-h-[calc(100vh-360px)] print:max-h-none">
+            <div className="overflow-auto rounded-md border print:overflow-visible print:border-0 print:max-h-none">
               <table className="w-full text-xs border-collapse min-w-max print:text-[9px]">
                 <thead>
                   <tr className="bg-muted print:bg-gray-100">

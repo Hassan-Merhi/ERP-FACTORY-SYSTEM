@@ -2,7 +2,6 @@ import { Suspense, lazy, useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
-import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
 import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -59,7 +58,6 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
   // checkout bar), so it fills the workspace like it does in the POS shell instead of flowing.
   const isPosCanvasRoute = routePath === "/pos" || routePath.startsWith("/pos/edit/");
   useMainContentFocus(currentLocation);
-  useWorkspaceWheelScroll(erpContainerRef);
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(erpContainerRef);
 
@@ -90,7 +88,7 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                 id="main-content"
                 tabIndex={-1}
                 aria-label={t("workspace.controls")}
-                className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none sm:p-6"
+                className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
               >
                 <WorkspaceRouteBoundary
                   resetKey={currentLocation}
@@ -101,7 +99,11 @@ export function ErpShell({ user, hasErpAccess, handleLogout, leaveConfirmDialog 
                   <div
                     data-workspace-route={routePath}
                     data-erp-route={routePath}
-                    className={isPosCanvasRoute ? "h-full w-full min-w-0 max-w-full" : "w-full min-w-0 max-w-full"}
+                    className={
+                      isPosCanvasRoute
+                        ? "h-full w-full min-w-0 max-w-full p-3 sm:p-6"
+                        : "w-full min-w-0 max-w-full p-3 sm:p-6"
+                    }
                   >
                     <Router user={user} />
                   </div>

@@ -12,9 +12,9 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
   /** Optional ref to the actual scroll-region wrapper, used by bounded large-list rendering. */
   scrollRef?: React.Ref<HTMLDivElement>;
   /**
-   * Caps the scroll region's height so `TableHeader`'s sticky positioning has something to
-   * stick against. Any CSS length; pass `"none"` to let the table run its full height (which
-   * also disables the sticky header). Defaults to the `max-h-[70vh]` class on the wrapper.
+   * Caps the scroll region's height so the table scrolls inside its own box. Any CSS length.
+   * Without it, workspace tables let the page scroll (narrow ones keep a page-sticky header,
+   * wide ones scroll sideways), and tables inside dialogs/sheets cap at 70vh.
    */
   maxHeight?: string;
   /**
@@ -23,6 +23,11 @@ type TableProps = React.TableHTMLAttributes<HTMLTableElement> & {
    * (or pass `"scroll"`) for matrix-style tables whose columns must stay side by side.
    */
   mobileLayout?: "cards" | "scroll";
+  /**
+   * Keeps the first column in view while the table scrolls sideways (reference numbers, names).
+   * Only meaningful for tables that are wider than their container.
+   */
+  stickyFirstColumn?: boolean;
 };
 
 const Table = React.forwardRef<HTMLTableElement, TableProps>(
@@ -36,6 +41,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       scrollRef,
       maxHeight,
       mobileLayout,
+      stickyFirstColumn,
       style,
       ...props
     },
@@ -52,7 +58,14 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
       [ref, setCardTable]
     );
     const wrapperRef = React.useRef<HTMLDivElement>(null);
-    const [usesParentScroll, setUsesParentScroll] = React.useState(false);
+    // How the region scrolls:
+    //  - "capped": its own 70vh scroll region (dialogs, sheets, and anything outside a workspace);
+    //  - "parent": the element directly above it already scrolls, so it must not;
+    //  - "page": inside #main-content, the page scrolls and the table runs its full height.
+    const [scrollMode, setScrollMode] = React.useState<"capped" | "parent" | "page">("capped");
+    // In page mode a table wider than its box keeps a sideways scroller (which also pins the
+    // sticky header to the box); one that fits is left unclipped so the header sticks to the page.
+    const [wide, setWide] = React.useState(true);
     const setWrapperRef = React.useCallback(
       (node: HTMLDivElement | null) => {
         wrapperRef.current = node;
@@ -66,26 +79,46 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
     // the box. Those must not get a height cap either: with `overflow: visible` a capped table
     // would spill over whatever follows it instead of scrolling. They forgo the sticky header.
     const unclipped = /overflow-visible/.test(wrapperClassName ?? "");
+    // Callers that size the region themselves (an explicit cap or overflow) keep their own scroll.
+    const callerScroll = Boolean(maxHeight) || /overflow-y-|overflow-auto|max-h-/.test(wrapperClassName ?? "");
 
     React.useLayoutEffect(() => {
       const wrapper = wrapperRef.current;
       const parent = wrapper?.parentElement;
 
-      // If this table already sits directly inside a constrained vertical scroll container,
-      // let that parent own vertical scrolling instead of creating a second nested scrollbar.
-      // Explicit Table maxHeight/wrapper overflow settings still win because those callers
-      // intentionally asked the table to manage its own scroll region.
-      if (!wrapper || !parent || maxHeight || unclipped || /overflow-y-/.test(wrapperClassName ?? "")) {
-        setUsesParentScroll(false);
+      if (!wrapper || !parent || unclipped || callerScroll) {
+        setScrollMode("capped");
         return;
       }
 
+      // If this table already sits directly inside a constrained vertical scroll container,
+      // let that parent own vertical scrolling instead of creating a second nested scrollbar.
       const parentStyle = window.getComputedStyle(parent);
       const parentCanScrollVertically = parentStyle.overflowY === "auto" || parentStyle.overflowY === "scroll";
       const parentIsConstrained = parentStyle.maxHeight !== "none" || parent.scrollHeight > parent.clientHeight;
+      if (parentCanScrollVertically && parentIsConstrained) {
+        setScrollMode("parent");
+        return;
+      }
 
-      setUsesParentScroll(parentCanScrollVertically && parentIsConstrained);
-    }, [maxHeight, unclipped, wrapperClassName]);
+      // Workspace tables let the page scroll. Dialogs and sheets keep their own capped region so
+      // a long list never pushes the dialog's actions out of reach.
+      const inOverlay = wrapper.closest('[role="dialog"], [role="alertdialog"], [data-slot="sheet-content"]');
+      const inWorkspace = wrapper.closest("#main-content");
+      setScrollMode(inWorkspace && !inOverlay ? "page" : "capped");
+    }, [maxHeight, unclipped, callerScroll, wrapperClassName]);
+
+    React.useEffect(() => {
+      const wrapper = wrapperRef.current;
+      const table = wrapper?.querySelector("table");
+      if (scrollMode !== "page" || cards || !wrapper || !table || typeof ResizeObserver === "undefined") return;
+      const measure = () => setWide(table.scrollWidth > wrapper.clientWidth + 1);
+      const observer = new ResizeObserver(measure);
+      observer.observe(wrapper);
+      observer.observe(table);
+      measure();
+      return () => observer.disconnect();
+    }, [scrollMode, cards]);
 
     return (
       <div
@@ -97,6 +130,7 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
         data-horizontal-scroll="true"
         data-table-scroll-region="true"
         data-mobile-cards={cards ? "true" : undefined}
+        data-scroll-mode={scrollMode}
         className={cn(
           "relative max-w-full touch-pan-x overscroll-x-contain rounded-md border border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 dark:border-slate-600",
           // A sticky `thead` sticks to its nearest scrollport, which is this wrapper (declaring
@@ -105,9 +139,15 @@ const Table = React.forwardRef<HTMLTableElement, TableProps>(
           // with the page. Capping the height gives long tables their own scroll and makes the
           // header behave. Short tables never reach the cap, so their layout is unchanged.
           // Printing must never clip rows, so the cap lifts and the table paginates naturally.
-          !unclipped && !usesParentScroll && "max-h-[70vh] overflow-x-auto overflow-y-auto overscroll-y-contain",
-          !unclipped && !usesParentScroll && "print:max-h-none print:overflow-visible",
-          usesParentScroll && "max-h-none overflow-x-auto overflow-y-auto",
+          !unclipped && scrollMode === "capped" && "max-h-[70vh] overflow-x-auto overflow-y-auto overscroll-y-contain",
+          !unclipped && scrollMode === "capped" && "print:max-h-none print:overflow-visible",
+          scrollMode === "parent" && "max-h-none overflow-x-auto overflow-y-auto",
+          scrollMode === "page" &&
+            (wide ? "max-h-none overflow-x-auto overflow-y-hidden" : "max-h-none overflow-visible"),
+          scrollMode === "page" && "print:overflow-visible",
+          stickyFirstColumn &&
+            !cards &&
+            "[&_tr>*:first-child]:sticky [&_tr>*:first-child]:left-0 [&_tr>*:first-child]:z-20 [&_thead_tr>*:first-child]:bg-muted [&_tbody_tr>*:first-child]:bg-background [&_tr>*:first-child]:shadow-[1px_0_0_hsl(var(--border))]",
           wrapperClassName
         )}
         style={{ maxHeight }}

@@ -266,7 +266,7 @@ export default function FactoryStockAllocationV2() {
               </CardContent>
             </Card>
           ) : (
-            <div className="overflow-auto rounded-md border max-h-[calc(100vh-260px)]">
+            <div data-horizontal-scroll="true" className="overflow-x-auto rounded-md border">
               <table className="w-full text-sm border-collapse min-w-max">
                 <thead>
                   <tr className="bg-muted sticky top-0 z-30">

@@ -454,7 +454,7 @@ export default function BalesHistory() {
           </div>
         ) : (
           <div>
-            <Table wrapperClassName="max-h-[calc(100vh-380px)] overflow-auto">
+            <Table>
               <TableHeader className="sticky top-0 z-30 bg-muted border-b-2 border-border/60">
                 <TableRow>
                   <TableHead className="w-10">

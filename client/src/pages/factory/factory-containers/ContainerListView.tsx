@@ -204,7 +204,7 @@ export function ContainerListView({
         </div>
       </div>
 
-      <div className="overflow-auto max-h-[calc(100vh-280px)]">
+      <div data-horizontal-scroll="true" className="overflow-x-auto">
         {filteredContainers && filteredContainers.length > 0 ? (
           <Table mobileLayout="cards" wrapperClassName="overflow-visible border-0 rounded-none">
             <TableHeader className="sticky top-0 z-30 bg-background">

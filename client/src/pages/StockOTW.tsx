@@ -661,7 +661,7 @@ function StockOTWContent({ showCombined, onToggleCombined }: { showCombined: boo
         <>
           {/* Desktop table — borderless card, full-width */}
           <div className="hidden md:block">
-            <Table wrapperClassName="max-h-[calc(100vh-300px)]">
+            <Table>
               <TableHeader className="bg-muted">
                 <TableRow>
                   <TableHead className="w-10 pl-4"></TableHead>

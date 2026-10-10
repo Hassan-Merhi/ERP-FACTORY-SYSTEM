@@ -131,7 +131,7 @@ export function OtwTrackingPanel({ containers, isLoading, trackingNowId, setTrac
             })}
           </div>
         </div>
-        <div className="overflow-auto max-h-[calc(100vh-280px)]">
+        <div data-horizontal-scroll="true" className="overflow-x-auto">
           <Table mobileLayout="cards" wrapperClassName="overflow-visible border-0 rounded-none">
             <TableHeader className="sticky top-0 z-30 bg-background">
               <TableRow className="bg-muted border-b-2 border-border/60 hover:bg-muted">

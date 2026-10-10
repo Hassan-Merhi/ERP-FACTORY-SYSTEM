@@ -719,7 +719,7 @@ export default function DeletedItems() {
             <SheetDescription>Viewing deleted item information</SheetDescription>
           </SheetHeader>
           {detailItem && (
-            <div className="mt-6 space-y-4 overflow-y-auto max-h-[calc(100vh-10rem)] pr-1">
+            <div className="mt-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-muted-foreground">Type</p>

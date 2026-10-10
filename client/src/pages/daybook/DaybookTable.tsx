@@ -147,7 +147,7 @@ export function DaybookTable({
       });
 
     return (
-      <Table wrapperClassName="max-h-[calc(100vh-220px)]">
+      <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
         <TableHeader className="sticky top-0 z-20 bg-background">
           <TableRow>
             <TableHead className="sticky left-0 bg-muted z-10 pl-4">Date / Type</TableHead>
@@ -849,7 +849,7 @@ export function DaybookTable({
   return (
     <>
       {/* ── Mobile card list (hidden on sm+) ── */}
-      <div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100vh-260px)]">
+      <div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100dvh-260px)]">
         {mobileItems.length === 0 ? (
           <p className="text-sm text-muted-foreground text-center py-12">
             No transactions found. Create your first voucher to get started.
@@ -862,7 +862,7 @@ export function DaybookTable({
 
       {/* ── Desktop table (hidden below sm) ── */}
       <div className="hidden sm:block">
-        <Table wrapperClassName="max-h-[calc(100vh-220px)]">
+        <Table wrapperClassName="max-h-[calc(100dvh-220px)]">
           <TableHeader className="sticky top-0 z-20 bg-background">
             <TableRow>
               <TableHead className="sticky left-0 bg-muted z-10">Date</TableHead>

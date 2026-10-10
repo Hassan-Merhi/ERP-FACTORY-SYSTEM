@@ -480,11 +480,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           <p className="text-sm">No containers match your filters.</p>
         </div>
       ) : (
-        <Table
-          mobileLayout="cards"
-          className="text-xs whitespace-nowrap"
-          wrapperClassName="max-h-[calc(100vh-340px)] overflow-x-auto"
-        >
+        <Table mobileLayout="cards" className="text-xs whitespace-nowrap" wrapperClassName="overflow-x-auto">
           <TableHeader className="sticky top-0 z-10">
             <TableRow className="!bg-amber-100 dark:!bg-amber-900/40">
               <TableHead className="w-8">#</TableHead>
@@ -516,11 +512,7 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
               const location = c.destination || null;
               const rowBg = overdue ? "bg-red-50/50 dark:bg-red-950/20" : "";
               return (
-                <TableRow
-                  key={c.id}
-                  className={cn(rowBg)}
-                  data-testid={`row-otw-container-${c.id}`}
-                >
+                <TableRow key={c.id} className={cn(rowBg)} data-testid={`row-otw-container-${c.id}`}>
                   {/* # */}
                   <TableCell className="text-muted-foreground">{idx + 1}</TableCell>
                   {/* Container # */}
@@ -636,7 +628,6 @@ export default function FactoryOtwTrackingTab({ onEdit }: OtwTrackingTabProps = 
           </TableBody>
         </Table>
       )}
-
     </div>
   );
 }

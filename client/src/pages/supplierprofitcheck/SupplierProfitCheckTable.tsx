@@ -34,7 +34,7 @@ export function SupplierProfitCheckTable({ model }: { model: ProfitModel }) {
   }
   return (
     <div className="rounded-xl border overflow-hidden">
-      <Table wrapperClassName="max-h-[calc(100vh-340px)]">
+      <Table>
         <TableHeader className="sticky top-0 z-30">
           <TableRow className="bg-muted/60 border-b-2 hover:bg-muted/60">
             {visibility.code && <Header className="min-w-[90px]">Code</Header>}

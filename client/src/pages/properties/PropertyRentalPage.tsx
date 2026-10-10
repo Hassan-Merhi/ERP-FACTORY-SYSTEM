@@ -393,7 +393,7 @@ export default function PropertyRentalPage({
           /* Main table */
           <Card>
             <CardContent className="p-0">
-              <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)]">
+              <div data-horizontal-scroll="true" className="overflow-x-auto">
                 {isLoading ? (
                   <div className="p-8 text-center text-muted-foreground">Loading units…</div>
                 ) : grouped.length === 0 ? (

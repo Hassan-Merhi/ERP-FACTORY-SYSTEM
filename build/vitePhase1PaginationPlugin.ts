@@ -165,15 +165,15 @@ function transformDaybookTable(source: string): string {
   );
   code = replaceAllChecked(
     code,
-    `<Table wrapperClassName="max-h-[calc(100vh-220px)]">`,
-    `<Table scrollRef={daybookDesktopWindow.scrollRef} wrapperClassName="max-h-[calc(100vh-220px)]">`,
+    `<Table wrapperClassName="max-h-[calc(100dvh-220px)]">`,
+    `<Table scrollRef={daybookDesktopWindow.scrollRef} wrapperClassName="max-h-[calc(100dvh-220px)]">`,
     2,
     "Daybook table scroll owner",
   );
   code = replaceExactly(
     code,
-    `<div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100vh-260px)]">`,
-    `<div ref={daybookMobileWindow.scrollRef} className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100vh-260px)]">`,
+    `<div className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100dvh-260px)]">`,
+    `<div ref={daybookMobileWindow.scrollRef} className="sm:hidden -mx-4 overflow-y-auto max-h-[calc(100dvh-260px)]">`,
     "Daybook mobile scroll owner",
   );
   return code;

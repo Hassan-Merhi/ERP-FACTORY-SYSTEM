@@ -300,7 +300,19 @@ Verified with the rendered harness on Properties (phone, tablet), ERP Customers 
 | Empty-state cards | `/parties?tab=customers`: set `mobileLayout="cards"` so empty and populated states match Stock Items. | Phone capture shows the card empty state. |
 | KPI chip rows | Use an auto-fit grid for chip rows on Customers/Containers. | No orphan chips at 390. |
 
-### Phase 6 — Table scroll model (three to five days)
+### Phase 6 — Table scroll model (three to five days) — DONE
+
+Shipped on this branch:
+
+- **Page scroll is the default for workspace tables.** `Table` now picks a scroll mode: `page` inside `#main-content` (the table runs its full height and the page scrolls), `parent` when the element directly above it already scrolls, and `capped` (the old 70vh region) inside dialogs, sheets, outside a workspace, or when the caller passes its own cap. In page mode a ResizeObserver measures the table: one that fits is left unclipped so its sticky header sticks to the page; one wider than its box keeps a sideways scroller. `data-scroll-mode` on the region makes the mode visible to tests and the harness.
+- **Sticky headers stick at the true top.** The workspace padding moved from the scroll container (`main`) onto the route content, so a page-sticky table header or toolbar sits at the top edge of the scrollport instead of 24px below it with rows showing through the gap.
+- **Raw table scrollers** (Stock Items, Stock Query, Optional Vouchers, Workers roster, Factory allocation and container lists, Properties rentals) carry `data-horizontal-scroll`, and a scroller whose content fits is un-clipped by CSS so its header sticks to the page too; the overflow probe restores the scroller the moment columns outgrow it.
+- **Edge fade** on table regions and marked scrollers that still hide columns (same `data-scroll-overflow` mechanism as the tab strips); the Containers OTW table now fades at "Truck #" instead of ending in a hard cut.
+- **`stickyFirstColumn`** is available on `Table` (frozen first cell with an opaque background and a hairline shadow). It is not applied anywhere yet: the Containers table's first column is the row number, so freezing it adds nothing until the columns are reordered.
+- **`calc(100vh - N)` is gone from `client/src`.** Thirty-nine files changed: list-page caps were removed outright (the page scrolls), and the genuine full-height panels (voucher account pickers, chat, POS sale grid, account groups split pane) use `dvh`. Daybook keeps its own capped regions because its bounded-window renderer, wired in by `build/vitePhase1PaginationPlugin.ts`, listens to those regions' scroll events; the plugin's match strings were updated to `dvh` alongside.
+
+Measured after the change on 10 ERP routes × 4 sizes plus 6 Factory and 2 Properties routes: nested vertical scrollers on list routes went from 1 to 0; a wheel in the middle of `/stock?tab=items`, `/stock?tab=query` and `/combined-inventory` now moves the page at 1440 and 1920 (it moved nothing before); a swipe does the same at 768. No horizontal overflow anywhere.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |
@@ -308,7 +320,16 @@ Verified with the rendered harness on Properties (phone, tablet), ERP Customers 
 | Frozen reference column + edge shadow | Add `data-sticky-first-column` support (already partly present per CSS comments) and a right-edge shadow on `[data-table-scroll-region]` while `scrollLeft < max`. | Containers OTW keeps `#`/Container visible while scrolling sideways. |
 | Remove `calc(100vh - N)` literals | Replace the 36 occurrences with flex `min-h-0` layouts or, where a cap is really needed, `dvh` with a shared `--workspace-chrome-height` token. | `grep -r "100vh" client/src/pages` returns 0. |
 
-### Phase 7 — Scroll and dialog plumbing (three to five days, needs regression care)
+### Phase 7 — Scroll and dialog plumbing (three to five days, needs regression care) — DONE
+
+Shipped on this branch:
+
+- **`useWorkspaceWheelScroll` removed** from all four shells and deleted. Native wheel scrolling moves the workspace on every route where the page is taller than the viewport (verified at 1440 and 1920), with trackpad inertia and smooth scrolling intact and no non-passive wheel listener on the shell.
+- **`useDialogScrollFix` removed.** A Playwright stress run opened and closed the New Customer dialog 25 times, a third of them mid-open-animation, then changed route with it open. With the hook's MutationObserver neutralised, `body` was never left with `overflow` or `pointer-events` set, before or after the hook's 350ms sweep window, so Radix cleans up on its own in the current versions and the body-wide attribute observer is gone. One source-text test that asserted the hook's observer configuration now asserts the hook is not mounted.
+- **Phone landscape top bar.** Keyboard-shortcut badges are hidden on coarse pointers, so a landscape phone no longer shows "Ctrl /"; the 44px controls from Phase 1 already apply there. The full phone-variant header (no sidebar trigger, bottom nav) was deliberately not extended to landscape: with 390px of height the bottom nav would cost a quarter of the screen, and the sidebar drawer plus hamburger is the better fit.
+
+Verified with the rendered harness on ERP, Factory and Properties at phone, phone landscape, tablet, desktop and wide; `tsc --noEmit`, prettier, eslint and the affected suites (≈30 files, ~1,100 tests) pass, plus a new unit test for the Table scroll modes.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |

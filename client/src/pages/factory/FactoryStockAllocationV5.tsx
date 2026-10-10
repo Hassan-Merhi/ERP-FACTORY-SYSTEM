@@ -148,7 +148,6 @@ export default function FactoryStockAllocationV5() {
         </div>
       </div>
 
-
       {/* ── Row 2: Toolbar (search + filters + icon buttons) ──────────────── */}
       <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 border-b bg-muted/30 px-3 py-2.5 sm:px-4">
         {/* Left: search + category */}
@@ -361,7 +360,7 @@ export default function FactoryStockAllocationV5() {
         <>
           <FactoryStockAllocationV5MobileList model={model} />
 
-          <div className="hidden max-h-[calc(100vh-160px)] overflow-auto md:block">
+          <div data-horizontal-scroll="true" className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm border-collapse min-w-max">
               <thead>
                 <tr className="bg-muted sticky top-0 z-30">

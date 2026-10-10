@@ -245,7 +245,7 @@ function ItemsTable({ model }: { model: PosPriceListModel }) {
   return (
     <>
       <div className="rounded-xl border max-sm:border-0">
-        <Table wrapperClassName="max-h-[calc(100vh-320px)] sm:max-h-[calc(100vh-280px)]" mobileLayout="cards">
+        <Table mobileLayout="cards">
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
               <TableHead className="text-xs">Item Name</TableHead>

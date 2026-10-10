@@ -40,8 +40,8 @@ describe("Desktop table structure is preserved", () => {
   it("FactoryWorkers.tsx — table-fixed class present (desktop table not removed)", () => {
     expect(src(FACTORY_WORKERS_ROSTER)).toContain("table-fixed");
   });
-  it("FactoryWorkers.tsx — overflow-auto container present (table scrollable)", () => {
-    expect(src(FACTORY_WORKERS_ROSTER)).toContain("overflow-auto");
+  it("FactoryWorkers.tsx — sideways scroll container present (wide table scrollable)", () => {
+    expect(src(FACTORY_WORKERS_ROSTER)).toContain("overflow-x-auto");
   });
   it("FactoryWorkers.tsx — <TableHeader present (column headers intact)", () => {
     expect(src(FACTORY_WORKERS_ROSTER)).toContain("TableHeader");
@@ -65,9 +65,9 @@ describe("Mobile-compatible layout patterns", () => {
   it("FactoryWorkers.tsx — filter panel can be toggled (filtersOpen state)", () => {
     expect(src(FACTORY_WORKERS_ROSTER)).toContain("filtersOpen");
   });
-  it("FactoryWorkers.tsx — responsive max-height container present", () => {
+  it("FactoryWorkers.tsx — no viewport-height cap (the page scrolls, not the table box)", () => {
     const s = src(FACTORY_WORKERS_ROSTER);
-    expect(s).toMatch(/max-h-\[calc\(100vh/);
+    expect(s).not.toMatch(/max-h-\[calc\(100d?vh/);
   });
   it("Vouchers.tsx — flex layout container present (min-w-0 prevents overflow)", () => {
     const s = src("client/src/pages/Vouchers.tsx");

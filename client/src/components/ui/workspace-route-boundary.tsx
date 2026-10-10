@@ -71,11 +71,15 @@ export function WorkspaceRouteBoundary({
     <ErrorBoundary resetKey={resetKey}>
       <Suspense
         fallback={
-          <LoadingState
-            className={fill ? "h-full border-0 bg-transparent" : undefined}
-            title={loadingTitle}
-            description={loadingDescription}
-          />
+          // The workspace padding lives on the route content (not on the scroll container, so
+          // sticky headers stick at its true top); the loading card needs the same inset.
+          <div className={fill ? "h-full" : "p-3 sm:p-6"}>
+            <LoadingState
+              className={fill ? "h-full border-0 bg-transparent" : undefined}
+              title={loadingTitle}
+              description={loadingDescription}
+            />
+          </div>
         }
       >
         <WorkspaceConsistencyBoundary className={className} fill={fill} routeKey={resetKey}>

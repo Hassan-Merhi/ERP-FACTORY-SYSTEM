@@ -453,7 +453,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
         )}
 
         {/* Table */}
-        <div className="border rounded-xl overflow-auto max-h-[calc(100vh-220px)]">
+        <div data-horizontal-scroll="true" className="border rounded-xl overflow-x-auto">
           {/* min-w keeps the eight columns readable on tablets: the outer div scrolls sideways
               instead of table-fixed squeezing every header into one another. Phone cards reset it. */}
           <Table mobileLayout="cards" wrapperClassName="overflow-visible" className="w-full min-w-[64rem] table-fixed">

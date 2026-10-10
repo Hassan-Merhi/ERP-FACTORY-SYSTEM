@@ -69,7 +69,7 @@ export function SaleGrid({
           </div>
 
           {/* Rows */}
-          <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 22rem)" }}>
+          <div className="overflow-y-auto" style={{ maxHeight: "calc(100dvh - 22rem)" }}>
             {rows.map((row, rowIndex) => (
               <div key={row.id}>
                 <div className="group flex border-b border-muted/50 hover-elevate">

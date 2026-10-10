@@ -1,6 +1,5 @@
 import { useState, useRef } from "react";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
-import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
 import { useDocumentAppShell } from "@/hooks/use-document-app-shell";
 import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
@@ -29,7 +28,6 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
   const style = { "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem" };
   const propertiesContainerRef = useRef<HTMLDivElement>(null);
   useMainContentFocus(currentLocation);
-  useWorkspaceWheelScroll(propertiesContainerRef);
   // Lets shell-scoped CSS (the phone notes launcher rule) target Properties like ERP and Factory.
   useDocumentAppShell("properties");
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
@@ -54,12 +52,13 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
               id="main-content"
               tabIndex={-1}
               aria-label="Properties workspace"
-              className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none sm:p-6"
+              className="flex-1 overflow-y-auto overscroll-y-contain outline-none"
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}
                 loadingTitle="Loading properties workspace"
                 loadingDescription="Preparing the latest property and rental information."
+                className="p-3 sm:p-6"
               >
                 <PropertiesRoutes user={user} />
               </WorkspaceRouteBoundary>

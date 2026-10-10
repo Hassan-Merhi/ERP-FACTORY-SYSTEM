@@ -341,7 +341,7 @@ export default function Chat() {
   const isSending = sendMutation.isPending || isUploading;
 
   return (
-    <div className="h-[calc(100vh-6rem)] flex gap-3" data-testid="chat-page">
+    <div className="h-[calc(100dvh-6rem)] flex gap-3" data-testid="chat-page">
       {/* Left panel: conversations */}
       <Card className="w-64 shrink-0 flex flex-col">
         <div className="p-3 border-b flex items-center justify-between gap-2">

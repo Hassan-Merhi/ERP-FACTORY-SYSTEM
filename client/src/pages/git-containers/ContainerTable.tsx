@@ -41,7 +41,11 @@ export function ContainerTable({ containers, colVis, sessionCompanyId, onOpenDra
 
   return (
     <div className="rounded-md border bg-card h-full flex flex-col shadow-sm overflow-clip">
-      <div ref={virtualRows.scrollRef} className="flex-1 overflow-auto custom-scrollbar relative">
+      <div
+        ref={virtualRows.scrollRef}
+        data-horizontal-scroll="true"
+        className="flex-1 overflow-auto custom-scrollbar relative"
+      >
         <div ref={printRef as React.RefObject<HTMLDivElement>}>
           <Table className="text-xs" wrapperClassName="overflow-visible border-0 rounded-none" mobileLayout="cards">
             <TableHeader className="sticky top-0 z-[50] bg-teal-800 dark:bg-teal-950">

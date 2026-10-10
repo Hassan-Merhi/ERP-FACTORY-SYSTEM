@@ -396,7 +396,7 @@ export default function LocationMonthlySummary({ posUser }: { posUser?: AuthMe }
       )}
 
       {/* Tally-style Stock Movement Table */}
-      <Card className="overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 340px)" }}>
+      <Card className="overflow-hidden flex flex-col">
         <CardHeader className="pb-2 flex-shrink-0">
           <CardTitle className="text-base">
             Monthly Stock Movement

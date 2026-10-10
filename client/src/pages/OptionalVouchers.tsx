@@ -338,7 +338,7 @@ export default function OptionalVouchers() {
       ) : (
         <>
           {/* Desktop table */}
-          <div className="hidden md:block border rounded-xl overflow-auto max-h-[calc(100vh-280px)]">
+          <div data-horizontal-scroll="true" className="hidden md:block border rounded-xl overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="sticky top-0 z-30 bg-muted">
                 <tr className="h-11 bg-muted/40 border-b">

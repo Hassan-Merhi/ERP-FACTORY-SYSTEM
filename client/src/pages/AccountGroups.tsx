@@ -271,7 +271,7 @@ export default function AccountGroups() {
         )}
       </div>
 
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className="flex h-[calc(100dvh-73px)]">
         {/* Left panel */}
         <div className="w-72 border-r flex flex-col shrink-0">
           <div className="p-4 border-b space-y-3">

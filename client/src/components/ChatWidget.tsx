@@ -496,7 +496,7 @@ export function ChatWidget() {
             "shadow-[0_8px_30px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.4)] transition-all duration-200 flex flex-col overflow-hidden",
             isFullscreen
               ? "w-screen h-screen sm:w-[90vw] sm:h-[90vh] sm:max-w-6xl rounded-none sm:rounded-3xl"
-              : "w-[calc(100vw-24px)] h-[calc(100vh-24px)] sm:w-[580px] sm:h-[80vh] sm:max-h-[760px] rounded-3xl"
+              : "w-[calc(100vw-24px)] h-[calc(100dvh-24px)] sm:w-[580px] sm:h-[80vh] sm:max-h-[760px] rounded-3xl"
           )}
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 py-4 px-5 border-b shrink-0">

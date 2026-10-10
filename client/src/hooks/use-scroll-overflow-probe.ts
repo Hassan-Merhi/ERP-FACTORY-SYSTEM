@@ -1,6 +1,7 @@
 import { useEffect, type RefObject } from "react";
 
-export const SCROLL_OVERFLOW_SELECTOR = '.erp-mobile-scroll-tabs, [data-responsive-tabs="true"]';
+export const SCROLL_OVERFLOW_SELECTOR =
+  '.erp-mobile-scroll-tabs, [data-responsive-tabs="true"], [data-table-scroll-region], [data-horizontal-scroll="true"]';
 const ATTR = "data-scroll-overflow";
 
 export type ScrollOverflowState = "none" | "start" | "end" | "both";
@@ -32,9 +33,30 @@ function update(el: HTMLElement) {
  */
 export function useScrollOverflowProbe(rootRef: RefObject<HTMLElement | null>): void {
   useEffect(() => {
-    const root = rootRef.current;
-    if (!root || typeof ResizeObserver === "undefined" || typeof MutationObserver === "undefined") return;
+    if (typeof ResizeObserver === "undefined" || typeof MutationObserver === "undefined") return;
 
+    // The shell can mount an access/loading boundary before the workspace element exists, so the
+    // ref may still be empty when this effect first runs; keep looking until it is there.
+    let retry: ReturnType<typeof setTimeout> | null = null;
+    let cleanupAttached: (() => void) | null = null;
+    const start = () => {
+      const root = rootRef.current;
+      if (!root) {
+        retry = setTimeout(start, 150);
+        return;
+      }
+      cleanupAttached = attach(root);
+    };
+    start();
+    return () => {
+      if (retry) clearTimeout(retry);
+      cleanupAttached?.();
+    };
+  }, [rootRef]);
+}
+
+function attach(root: HTMLElement): () => void {
+  {
     const tracked = new Set<HTMLElement>();
     const resize = new ResizeObserver((entries) => {
       for (const entry of entries) update(entry.target as HTMLElement);
@@ -73,5 +95,5 @@ export function useScrollOverflowProbe(rootRef: RefObject<HTMLElement | null>): 
       for (const el of tracked) el.removeAttribute(ATTR);
       tracked.clear();
     };
-  }, [rootRef]);
+  }
 }

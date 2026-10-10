@@ -1,7 +1,6 @@
 import { Suspense, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
-import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
 import { useScrollOverflowProbe } from "@/hooks/use-scroll-overflow-probe";
 import { useButtonClickFeedback } from "@/hooks/use-button-click-feedback";
 import { useCompany } from "@/contexts/CompanyContext";
@@ -95,7 +94,6 @@ export function FactoryShell({
     /^\/factory\/sales\/pending-invoices\/\d+\/verify(?:\?|$)/.test(currentLocation) ||
     /^\/factory\/invoices\/\d+\/loading-scan(?:\?|$)/.test(currentLocation);
   useMainContentFocus(currentLocation);
-  useWorkspaceWheelScroll(factoryContainerRef);
   // Fades the trailing edge of tab strips that still hide tabs (data-scroll-overflow).
   useScrollOverflowProbe(factoryContainerRef);
   // Phone dialogs open as bottom sheets sized to the visible viewport (mobile-shell-dialogs.css),
@@ -124,12 +122,13 @@ export function FactoryShell({
               tabIndex={-1}
               aria-label="Factory and inventory workspace"
               data-factory-workspace="true"
-              className={`flex-1 overflow-y-auto overscroll-y-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] outline-none sm:p-6 ${factoryWorkspaceClasses}`}
+              className={`flex-1 overflow-y-auto overscroll-y-contain outline-none ${factoryWorkspaceClasses}`}
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}
                 loadingTitle="Loading factory workspace"
                 loadingDescription="Preparing the latest factory and inventory information."
+                className="p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6"
               >
                 <FactoryCatalogLanguageSwitch />
                 <Suspense fallback={null}>

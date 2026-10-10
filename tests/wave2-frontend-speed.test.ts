@@ -76,12 +76,12 @@ describe("Wave 2 frontend speed contracts", () => {
 
   it("keeps broad mutation scanning and polling out of the optimized translation/dialog bridges", () => {
     const translator = source("client/src/components/ApplicationInterfaceTranslator.tsx");
-    const dialogFix = source("client/src/hooks/use-dialog-scroll-fix.ts");
+    const authenticatedApp = source("client/src/app/AuthenticatedApp.tsx");
     const baleBridge = source("client/src/components/BaleProductArabicEditBridge.tsx");
 
     expect(translator).toContain("existing.contains(node)");
-    expect(dialogFix).not.toContain('"style"]');
-    expect(dialogFix).toContain('attributeFilter: ["data-state", "aria-hidden"]');
+    // The body-wide dialog scroll-lock sweep is gone: Radix restores the body itself.
+    expect(authenticatedApp).not.toContain("useDialogScrollFix");
     expect(baleBridge).not.toContain("setInterval(sync, 300)");
     expect(baleBridge).toContain("requestAnimationFrame");
   });

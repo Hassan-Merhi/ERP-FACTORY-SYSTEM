@@ -426,7 +426,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   }
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-200px)]">
+    <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100dvh-200px)]">
       <Card className="flex-1 flex flex-col">
         <CardHeader className="pb-3 flex-shrink-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

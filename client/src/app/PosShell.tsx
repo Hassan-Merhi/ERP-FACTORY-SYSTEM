@@ -1,7 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMainContentFocus } from "@/hooks/use-main-content-focus";
-import { useWorkspaceWheelScroll } from "@/hooks/use-workspace-wheel-scroll";
 import { useCompany } from "@/contexts/CompanyContext";
 import { useApplicationLanguage } from "@/contexts/ApplicationLanguageContext";
 import {
@@ -91,7 +90,6 @@ export function PosShell({
   const userMenuUser = { username: user.username, role: user.role ?? "POS" };
   const posContainerRef = useRef<HTMLDivElement>(null);
   useMainContentFocus(currentLocation, isFullHeightRoute);
-  useWorkspaceWheelScroll(posContainerRef);
 
   return (
     <>

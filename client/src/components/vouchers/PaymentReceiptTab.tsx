@@ -768,7 +768,7 @@ export function PaymentReceiptTab({
       {/* ── Right column: Account Sidebar — hidden on mobile, visible on sm+ ── */}
       <div
         className="hidden sm:block w-full xl:w-[40%] xl:sticky xl:top-4 h-fit"
-        style={{ maxHeight: "calc(100vh - 2rem)" }}
+        style={{ maxHeight: "calc(100dvh - 2rem)" }}
       >
         <AccountSidebar {...sidebarProps} />
       </div>

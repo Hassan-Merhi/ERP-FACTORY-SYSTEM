@@ -36,7 +36,7 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
   return (
     <>
       {showItemSidebar && (
-        <Card className="hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100vh-12rem)] self-start">
+        <Card className="hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-sm font-semibold">Search Items</h3>
@@ -152,7 +152,7 @@ export function StockTransferSidebars({ model }: { model: StockTransferFormModel
       )}
 
       {!isPOS && showSourceSidebar && (
-        <Card className="hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100vh-12rem)] self-start">
+        <Card className="hidden sm:flex flex-col w-full xl:w-80 xl:sticky xl:top-4 max-h-[60vh] xl:max-h-[calc(100dvh-12rem)] self-start">
           <div className="p-4 border-b">
             <div className="flex items-center justify-between gap-2 mb-2">
               <h3 className="text-sm font-semibold">Select Source</h3>
