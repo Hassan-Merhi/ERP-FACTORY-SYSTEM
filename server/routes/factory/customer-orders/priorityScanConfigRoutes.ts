@@ -22,17 +22,18 @@ import { customerOrderPriorityScanConfigs, customerOrders, factoryBales } from "
 import { runAutomaticPriorityPrintBatch, runAutomaticPriorityReprint } from "./priorityAutoAllocation";
 import { registerPriorityAllocationHistoryRoutes } from "./priorityAllocationHistoryRoutes";
 
-const MAX_COLOR_LENGTH = 64;
+import { isApprovedPriorityScanColor, PRIORITY_SCAN_COLORS } from "@shared/priorityScanColors";
+
 const MAX_PRIORITY = 10_000;
 const PRIORITY_SCAN_LIST_PATH = "/api/factory/customer-orders/loading-list/priority-scan-configs";
 const PRIORITY_SCAN_ORDER_PATH = "/api/factory/customer-orders/:id/loading-list/priority-scan-config";
 const PRIORITY_SCAN_ROUTE_PATH = "/api/factory/customer-orders/loading-list/priority-scan-route";
 
 function normalizeColor(raw: unknown): { color: string; colorKey: string } | null {
-  if (typeof raw !== "string") return null;
-  const color = raw.trim().replace(/\s+/g, " ");
-  if (!color || color.length > MAX_COLOR_LENGTH) return null;
-  return { color, colorKey: color.toLocaleLowerCase("en-US") };
+  if (!isApprovedPriorityScanColor(raw)) return null;
+  // Persist the approved canonical uppercase HEX value regardless of input casing.
+  const color = PRIORITY_SCAN_COLORS.find((preset) => preset.toLowerCase() === raw.toLowerCase())!;
+  return { color, colorKey: color.toLowerCase() };
 }
 
 function parsePriority(raw: unknown): number | null {
@@ -445,7 +446,7 @@ export function registerPriorityScanConfigRoutes(app: Express) {
 
       const normalizedColor = normalizeColor(req.body?.color);
       if (!normalizedColor) {
-        return res.status(400).json({ message: "Color is required and must be 64 characters or fewer." });
+        return res.status(400).json({ message: "Priority color must be one of the 11 approved HEX colors." });
       }
 
       const canManagePriority = canManagePriorityPosition(req);
