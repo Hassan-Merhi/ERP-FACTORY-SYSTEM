@@ -8,6 +8,7 @@
  * separate views under ./factorypos.
  */
 import { Check, History, Pencil, Plus } from "lucide-react";
+import { useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
@@ -19,7 +20,16 @@ import { FactoryPosProductBrowser } from "./factorypos/FactoryPosProductBrowser"
 import { FactoryPosMobileSheets } from "./factorypos/FactoryPosMobileSheets";
 import { FactoryPosDialogs, FactoryPosHistory } from "./factorypos/FactoryPosHistoryAndDialogs";
 
+/**
+ * Keyed on the sale being edited, so leaving edit mode ("New sale") or opening
+ * another sale starts from a fresh cart instead of the previous sale's state.
+ */
 export default function FactoryPOS() {
+  const editKey = new URLSearchParams(useSearch()).get("edit") ?? "new";
+  return <FactoryPOSScreen key={editKey} />;
+}
+
+function FactoryPOSScreen() {
   const model = useFactoryPosModel();
   const { editSaleId, saleMutation, editMutation } = model;
   const isSaving = saleMutation.isPending || editMutation.isPending;

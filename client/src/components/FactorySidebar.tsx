@@ -195,11 +195,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
-    if (
-      myAccess &&
-      !myAccess.fullAccess &&
-      !hasFactoryPageKey(page, myAccess.pageKeys)
-    ) {
+    if (myAccess && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       return false;
     }
     return true;

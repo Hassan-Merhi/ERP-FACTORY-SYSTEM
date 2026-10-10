@@ -460,7 +460,7 @@
     "GET /api/factory/waste-dispatch/history [requireAuth > <anonymous>]",
     "DELETE /api/factory/waste-dispatch/:id [requireAuth > <anonymous>]",
     "POST /api/factory/waste-dispatch/submit [requireAuth > <anonymous>]",
-    "GET /api/factory/pos/account-options [requireAuth > <anonymous> > <anonymous>]",
+    "GET /api/factory/pos/account-options [requireAuth > <anonymous>]",
     "GET /api/factory/pos/sales [requireAuth > <anonymous>]",
     "GET /api/factory/pos/sales/:id [requireAuth > <anonymous>]",
     "POST /api/factory/pos/sale [requireAuth > <anonymous>]",

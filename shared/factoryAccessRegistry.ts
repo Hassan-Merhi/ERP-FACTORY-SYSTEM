@@ -554,9 +554,7 @@ export function resolveFactoryPage(path: string): FactoryPageDefinition | null {
     .find((page) => pathMatchesPrefix(normalizedPath, page.route));
   if (direct) return direct;
 
-  const aliasMatch = FACTORY_ACCESS_REGISTRY.flatMap((page) =>
-    (page.aliases ?? []).map((alias) => ({ page, alias }))
-  )
+  const aliasMatch = FACTORY_ACCESS_REGISTRY.flatMap((page) => (page.aliases ?? []).map((alias) => ({ page, alias })))
     .sort((a, b) => b.alias.length - a.alias.length)
     .find(({ alias }) => pathMatchesPrefix(normalizedPath, alias));
 

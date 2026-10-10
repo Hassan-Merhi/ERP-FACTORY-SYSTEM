@@ -10,13 +10,12 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryPosSales, factoryPosSaleItems, ledgerAccounts } from "@shared/schema";
 import { eq, and, desc, inArray, isNull, asc } from "drizzle-orm";
-import { requireFactoryPageAccess } from "../../../../lib/factoryAccessControl";
 
 export function registerPosSalesReadRoutes(app: Express) {
   // Read-only dropdown options for Factory POS. Do not use /api/ledger-accounts:
   // that shared route requires Accounting module permission and is intentionally
   // suppressed on non-Accounting Factory screens.
-  app.get("/api/factory/pos/account-options", requireAuth, requireFactoryPageAccess("factory/pos"), async (req: Request, res: Response) => {
+  app.get("/api/factory/pos/account-options", requireAuth, async (req: Request, res: Response) => {
     try {
       // Always scope to the active Factory company; never accept companyId from query/body.
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

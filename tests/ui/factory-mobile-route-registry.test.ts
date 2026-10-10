@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { resolveFactoryPage } from "@shared/factoryAccessRegistry";
 
 /**
  * Keeps docs/factory-navigation-registry.md, the live Factory route table and the Factory
@@ -42,8 +43,8 @@ describe("Factory route registry", () => {
   it("keeps Factory POS as a canonical, non-redirected Sales destination", () => {
     expect(routeFor("/factory/pos")).toBe("/factory/pos");
     expect(redirectPaths.has("/factory/pos")).toBe(false);
-    expect(canonicalTopLevelRoutes()).toContain("/factory/pos");
-    expect(accessRegistry).toContain('key: "factory/pos"');
+    expect(canonicalTopLevelRoutes().includes("/factory/pos")).toBe(true);
+    expect(resolveFactoryPage("/factory/pos")?.key).toBe("factory/pos");
   });
 
   it("routes every sidebar/access-registry destination to a real page", () => {

@@ -130,7 +130,15 @@ export function FactoryPosToolbar({ model }: { model: FactoryPosModel }) {
       ) : (
         <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
           <User className="h-4 w-4 text-muted-foreground shrink-0 hidden sm:block" />
-          <Select value={model.selectedCustomerId} onValueChange={model.setSelectedCustomerId}>
+          <Select
+            value={model.selectedCustomerId}
+            onValueChange={(id) => {
+              model.setSelectedCustomerId(id);
+              // The sale, receipt and voucher carry the customer's name, not just its id.
+              const customer = (model.allCustomers || []).find((c) => String(c.id) === id);
+              if (customer) model.setCustomerName(customer.legalName || customer.name || "");
+            }}
+          >
             <SelectTrigger className="w-full sm:w-48" data-testid="select-credit-customer">
               <SelectValue placeholder="Select customer *" />
             </SelectTrigger>

@@ -15,7 +15,7 @@ import type { FactoryPosModel } from "./useFactoryPosModel";
 export function FactoryPosProductBrowser({ model }: { model: FactoryPosModel }) {
   const { ccPrefix, filteredInventory } = model;
   return (
-    <Card className="hidden lg:flex w-96 flex-col sticky top-4 max-h-[calc(100vh-8rem)] self-start">
+    <Card className="flex w-full lg:w-96 flex-col sticky top-4 max-h-[calc(100vh-8rem)] self-start">
       <div className="p-4 border-b">
         <h3 className="text-sm font-medium mb-2">Products</h3>
         <p className="text-xs text-muted-foreground mb-3">Type or scan a barcode — ↑↓ to navigate, Enter to add</p>
