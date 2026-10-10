@@ -270,7 +270,7 @@ function ScreenFeedDialog({ userId, username, onClose }: { userId: string; usern
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="!fixed !inset-0 !left-0 !top-0 !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !rounded-none p-0 overflow-hidden flex flex-col bg-background"
+        className="fixed! inset-0! left-0! top-0! h-screen! w-screen! max-w-none! translate-x-0! translate-y-0! rounded-none! p-0 overflow-hidden flex flex-col bg-background"
         data-testid="dialog-watch-user"
         data-watched-user-id={userId}
         data-watched-tab-id={selectedTabId}
@@ -452,7 +452,7 @@ function RuntimeLoadingDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="!fixed !inset-0 !left-0 !top-0 !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !rounded-none p-0 overflow-hidden flex items-center justify-center bg-background"
+        className="fixed! inset-0! left-0! top-0! h-screen! w-screen! max-w-none! translate-x-0! translate-y-0! rounded-none! p-0 overflow-hidden flex items-center justify-center bg-background"
         data-screenfeed-ignore="true"
       >
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -469,7 +469,7 @@ function RuntimeDisabledDialog({ onClose }: { onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent
-        className="!fixed !inset-0 !left-0 !top-0 !h-screen !w-screen !max-w-none !translate-x-0 !translate-y-0 !rounded-none p-0 overflow-hidden flex items-center justify-center bg-background"
+        className="fixed! inset-0! left-0! top-0! h-screen! w-screen! max-w-none! translate-x-0! translate-y-0! rounded-none! p-0 overflow-hidden flex items-center justify-center bg-background"
         data-screenfeed-ignore="true"
       >
         <div className="max-w-md space-y-3 p-6 text-center">

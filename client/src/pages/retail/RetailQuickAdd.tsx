@@ -745,7 +745,7 @@ export default function RetailQuickAdd() {
         <Plus className="mr-2 h-4 w-4" /> Add variant
       </Button>
 
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur md:static md:border-0 md:bg-transparent md:p-0">
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/95 p-3 backdrop-blur-sm md:static md:border-0 md:bg-transparent md:p-0">
         <div className="mx-auto flex max-w-2xl items-center gap-2">
           <div className="hidden flex-1 text-sm text-muted-foreground sm:block" data-i18n-ui>
             {variants.length} variant(s) · {variants.reduce((sum, variant) => sum + (Number(variant.quantity) || 0), 0)}{" "}

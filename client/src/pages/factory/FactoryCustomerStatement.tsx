@@ -672,7 +672,7 @@ export default function FactoryCustomerStatement() {
                                 onBlur={() => saveRowNote(entry.id, rowNotes[entry.id] ?? "")}
                                 placeholder={typeof entry.id === "string" ? "—" : "Add note…"}
                                 disabled={savingRowNote === entry.id || typeof entry.id === "string"}
-                                className="w-full text-xs bg-transparent border border-border rounded px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                                className="w-full text-xs bg-transparent border border-border rounded-sm px-2 py-1 placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-1 focus:ring-ring disabled:opacity-50"
                                 data-testid={`input-row-note-${entry.id}`}
                               />
                             </TableCell>

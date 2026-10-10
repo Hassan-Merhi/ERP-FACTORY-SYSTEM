@@ -187,7 +187,7 @@ function CartRows({ model }: { model: FactoryPosModel }) {
                     row.productId && model.updateRow(idx, col.key as "quantity" | "unitPrice", e.target.value)
                   }
                   readOnly={!row.productId}
-                  className={`w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20 text-sm font-mono text-right ${!row.productId ? "cursor-default" : ""}`}
+                  className={`w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20 text-sm font-mono text-right ${!row.productId ? "cursor-default" : ""}`}
                   data-testid={`input-${col.key}-${idx}`}
                 />
               )}

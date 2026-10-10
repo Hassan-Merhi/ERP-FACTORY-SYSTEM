@@ -126,7 +126,7 @@ function CategoryGroup({
             <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           )}
           <span className="text-foreground">{category}</span>
-          <span className="text-xs font-normal text-muted-foreground bg-background/60 rounded px-1.5 py-0.5">
+          <span className="text-xs font-normal text-muted-foreground bg-background/60 rounded-sm px-1.5 py-0.5">
             {accounts.length}
           </span>
         </div>
@@ -242,7 +242,7 @@ function SidePanel({
   return (
     <Card data-testid={`card-${id}`} className="flex flex-col overflow-hidden">
       <div
-        className={`bg-gradient-to-r ${headerGradient} px-5 py-4 cursor-pointer select-none`}
+        className={`bg-linear-to-r ${headerGradient} px-5 py-4 cursor-pointer select-none`}
         onClick={() => setOpen((v) => !v)}
       >
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -690,7 +690,7 @@ export default function NetProfitDetails() {
       {/* SP Partner: Realized POS Profit */}
       {((data?.spPosProfit ?? 0) !== 0 || hasSpPosProfitBaseline) && (
         <Card data-testid="card-sp-pos-profit" className="overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-500/10 to-transparent dark:from-blue-500/15 px-5 py-4">
+          <div className="bg-linear-to-r from-blue-500/10 to-transparent dark:from-blue-500/15 px-5 py-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400">

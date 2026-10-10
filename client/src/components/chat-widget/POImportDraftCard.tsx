@@ -343,7 +343,7 @@ export function POImportDraftCard({
               </p>
             )}
             {importError && (
-              <p className="text-[11px] text-red-600 dark:text-red-400 mb-2 bg-red-50 dark:bg-red-950/30 rounded px-2 py-1.5">
+              <p className="text-[11px] text-red-600 dark:text-red-400 mb-2 bg-red-50 dark:bg-red-950/30 rounded-sm px-2 py-1.5">
                 {importError}
               </p>
             )}

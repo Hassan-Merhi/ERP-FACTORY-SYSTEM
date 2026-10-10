@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { formatNumber } from "@/lib/formatNumber";
 import type { FactoryBaleProduct } from "@shared/schema";
-import { priorityLogoTextStyleAttr, type LabelData } from "@/lib/labelHtml";
+import { priorityColorBoxCss, renderLegacyPriorityLogo, type LabelData } from "@/lib/labelHtml";
 import { withRecordedPriorityAllocations, type PriorityPrintAssignment } from "@/lib/priorityPrintPreflight";
 
 interface CartItem {
@@ -47,8 +47,7 @@ function generatePressingLabelHtml(
         <div class="code-label">
           <div class="label-top">
             <div class="logo-section">
-              <div class="logo-text"${priorityLogoTextStyleAttr(label)}>HMD</div>
-              <div class="logo-subtitle">INTERNATIONAL GROUP</div>
+              ${renderLegacyPriorityLogo(label)}
             </div>
             <div class="info-section">
               <div class="info-row"><span class="info-key">PIECES:</span> <span class="info-val">${formatLabelNum(label.pieces)}</span></div>
@@ -74,6 +73,7 @@ function generatePressingLabelHtml(
     .logo-section { display: flex; flex-direction: column; align-items: flex-start; }
     .logo-text { font-size: 18pt; font-weight: 900; letter-spacing: 2px; color: #000; line-height: 1; }
     .logo-subtitle { font-size: 5pt; font-weight: 700; letter-spacing: 1px; color: #000; margin-top: 0.5mm; }
+    ${priorityColorBoxCss(25, 14)}
     .info-section { text-align: right; font-size: 8pt; line-height: 1.4; }
     .info-key { font-weight: 900; }
     .info-val { font-weight: 900; }
@@ -475,7 +475,7 @@ export default function PressingBales() {
                 type="date"
                 value={pressDate}
                 onChange={(e) => setPressDate(e.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                 data-testid="input-press-date"
               />
             </CardContent>

@@ -245,8 +245,8 @@ export default function AccountSidebar({
               : `${_accounts.length} accounts`}
           </p>
           <p className="text-[11px] text-muted-foreground hidden sm:block">
-            <kbd className="px-1 py-0.5 bg-muted rounded text-[10px]">↑↓</kbd> move{" "}
-            <kbd className="px-1 py-0.5 bg-muted rounded text-[10px] ml-1">↵</kbd> select
+            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px]">↑↓</kbd> move{" "}
+            <kbd className="px-1 py-0.5 bg-muted rounded-sm text-[10px] ml-1">↵</kbd> select
           </p>
         </div>
       </div>
@@ -275,7 +275,7 @@ export default function AccountSidebar({
                     Create "{searchValue.trim()}"
                   </Button>
                   <p className="text-xs">
-                    or press <kbd className="px-1.5 py-0.5 bg-muted rounded">Enter</kbd>
+                    or press <kbd className="px-1.5 py-0.5 bg-muted rounded-sm">Enter</kbd>
                   </p>
                 </div>
               ) : (
@@ -324,7 +324,7 @@ export default function AccountSidebar({
                         </div>
                         {TYPE_BADGE[account.type] && (
                           <span
-                            className={`inline-block text-[9px] font-medium px-1.5 py-0 rounded mt-0.5 ${TYPE_BADGE[account.type].cls}`}
+                            className={`inline-block text-[9px] font-medium px-1.5 py-0 rounded-sm mt-0.5 ${TYPE_BADGE[account.type].cls}`}
                           >
                             {TYPE_BADGE[account.type].label}
                           </span>
@@ -337,7 +337,7 @@ export default function AccountSidebar({
                           </div>
                         )}
                         <div
-                          className={`text-xs font-mono tabular-nums font-semibold flex-shrink-0 ${getBalanceColorClass(projectedBalance, account.type)}`}
+                          className={`text-xs font-mono tabular-nums font-semibold shrink-0 ${getBalanceColorClass(projectedBalance, account.type)}`}
                         >
                           {formatBalance(projectedBalance)}
                         </div>

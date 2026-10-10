@@ -68,7 +68,7 @@ function InsuranceSubGroup({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 font-medium text-foreground hover-elevate rounded px-1 -ml-1"
+          className="flex items-center gap-1.5 font-medium text-foreground hover-elevate rounded-sm px-1 -ml-1"
           data-testid="button-insurance-group-toggle"
         >
           {open ? (
@@ -698,7 +698,7 @@ export default function FactoryNetPositionDetails() {
                 value={asOf}
                 max={todayStr()}
                 onChange={(e) => e.target.value && setAsOf(e.target.value)}
-                className="text-sm bg-transparent border-none outline-none cursor-pointer w-[120px]"
+                className="text-sm bg-transparent border-none outline-hidden cursor-pointer w-[120px]"
                 data-testid="input-as-of-date"
               />
             </div>

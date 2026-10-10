@@ -151,7 +151,8 @@ export function BulkDialogs({
           <DialogHeader>
             <DialogTitle>Bulk Salary Deposit</DialogTitle>
             <DialogDescription>
-              Select employees, then edit the deposit amount for this payment if needed. The saved monthly salary is only used as the default.
+              Select employees, then edit the deposit amount for this payment if needed. The saved monthly salary is
+              only used as the default.
             </DialogDescription>
           </DialogHeader>
 
@@ -221,7 +222,9 @@ export function BulkDialogs({
                             </div>
                             {emp.code && <div className="text-xs text-muted-foreground">{emp.code}</div>}
                             {!hasValidSalary && (
-                              <div className="text-xs text-muted-foreground">No default salary set — enter an amount manually</div>
+                              <div className="text-xs text-muted-foreground">
+                                No default salary set — enter an amount manually
+                              </div>
                             )}
                           </TableCell>
                           <TableCell className="text-right font-mono">{formatAmount(salary)}</TableCell>
@@ -256,7 +259,7 @@ export function BulkDialogs({
               </div>
             </div>
 
-            <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
               <div className="text-sm">
                 <span className="text-muted-foreground">Total deposit: </span>
                 <span className="font-semibold font-mono">{formatAmount(bulkDepositTotal)}</span>
@@ -404,7 +407,7 @@ export function BulkDialogs({
               </div>
             </div>
 
-            <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
+            <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
               <div className="text-sm">
                 <span className="text-muted-foreground">Total Withdrawal: </span>
                 <span className="font-semibold font-mono">
@@ -644,7 +647,7 @@ export function BulkDialogs({
                 </div>
               </div>
 
-              <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
+              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Total: </span>
                   <span className="font-semibold font-mono">
@@ -710,7 +713,7 @@ export function BulkDialogs({
                 </div>
               </div>
 
-              <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
+              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t">
                 <div className="text-sm">
                   <span className="text-muted-foreground">Total: </span>
                   <span className="font-semibold font-mono">

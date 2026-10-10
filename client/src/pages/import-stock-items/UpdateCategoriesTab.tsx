@@ -136,12 +136,12 @@ export function UpdateCategoriesTab() {
           <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-1">
             <p className="font-medium">Required columns</p>
             <p className="text-muted-foreground">
-              <span className="font-mono bg-background px-1 rounded">Item Code</span> — must match an existing item's
+              <span className="font-mono bg-background px-1 rounded-sm">Item Code</span> — must match an existing item's
               code exactly
             </p>
             <p className="text-muted-foreground">
-              <span className="font-mono bg-background px-1 rounded">Category Name</span> — must match an existing stock
-              group name exactly
+              <span className="font-mono bg-background px-1 rounded-sm">Category Name</span> — must match an existing
+              stock group name exactly
             </p>
             <p className="text-muted-foreground">
               Each row updates one item. Duplicate item codes are skipped (first row wins).

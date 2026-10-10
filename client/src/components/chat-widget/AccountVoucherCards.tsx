@@ -76,7 +76,7 @@ export function AccountQueryResultCard({ result, onDismiss }: { result: AccountQ
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-xs font-semibold">{tx.voucherNumber}</span>
-                          <span className="text-[10px] text-muted-foreground bg-muted rounded px-1 py-0.5">
+                          <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                             {tx.voucherType}
                           </span>
                         </div>
@@ -118,7 +118,7 @@ export function AccountQueryResultCard({ result, onDismiss }: { result: AccountQ
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="text-xs font-semibold">{m.voucherNumber}</span>
-                        <span className="text-[10px] text-muted-foreground bg-muted rounded px-1 py-0.5">
+                        <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                           {m.voucherType}
                         </span>
                       </div>
@@ -209,7 +209,7 @@ export function VoucherConfirmCard({
             type="date"
             value={editDate}
             onChange={(e) => setEditDate(e.target.value)}
-            className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5"
+            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5"
             data-testid="input-voucher-date"
           />
         </div>
@@ -219,7 +219,7 @@ export function VoucherConfirmCard({
             type="text"
             value={editDesc}
             onChange={(e) => setEditDesc(e.target.value)}
-            className="flex-1 text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 min-w-0"
+            className="flex-1 text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 min-w-0"
             data-testid="input-voucher-desc"
           />
         </div>
@@ -252,7 +252,7 @@ export function VoucherConfirmCard({
                 type="number"
                 value={e.debitStr}
                 onChange={(ev) => setEntryField(i, "debitStr", ev.target.value)}
-                className="w-full text-right text-xs bg-background border rounded px-1 py-0.5"
+                className="w-full text-right text-xs bg-background border rounded-sm px-1 py-0.5"
                 placeholder="0"
                 data-testid={`input-debit-${i}`}
               />
@@ -260,7 +260,7 @@ export function VoucherConfirmCard({
                 type="number"
                 value={e.creditStr}
                 onChange={(ev) => setEntryField(i, "creditStr", ev.target.value)}
-                className="w-full text-right text-xs bg-background border rounded px-1 py-0.5"
+                className="w-full text-right text-xs bg-background border rounded-sm px-1 py-0.5"
                 placeholder="0"
                 data-testid={`input-credit-${i}`}
               />

@@ -138,7 +138,7 @@ export function PosMobileLayout({
       className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-y-contain pb-[calc(7.5rem+env(safe-area-inset-bottom))] lg:hidden"
     >
       <section
-        className="sticky top-0 z-30 border-b bg-background/95 px-3 pb-3 pt-3 shadow-sm backdrop-blur sm:px-4"
+        className="sticky top-0 z-30 border-b bg-background/95 px-3 pb-3 pt-3 shadow-xs backdrop-blur-sm sm:px-4"
         aria-label="Product search"
       >
         <label htmlFor="pos-mobile-product-search" className="mb-2 block text-sm font-semibold">
@@ -157,7 +157,7 @@ export function PosMobileLayout({
               autoComplete="off"
               autoCapitalize="none"
               enterKeyHint="search"
-              className="min-h-11 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
+              className="min-h-11 min-w-0 flex-1 bg-transparent text-base outline-hidden placeholder:text-muted-foreground"
               placeholder="Scan code or type product name…"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
@@ -196,7 +196,7 @@ export function PosMobileLayout({
                     data-testid={`button-mobile-select-item-${item.stockItemId ?? item.code}`}
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block break-words text-sm font-semibold leading-snug sm:text-base">
+                      <span className="block wrap-break-word text-sm font-semibold leading-snug sm:text-base">
                         {item.name}
                       </span>
                       <span className="mt-0.5 block break-all font-mono text-xs text-muted-foreground">
@@ -281,7 +281,7 @@ export function PosMobileLayout({
             onChange={posUser ? undefined : (event) => setSaleDate(event.target.value)}
             readOnly={Boolean(posUser)}
             aria-label="Sale date"
-            className={`min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-base font-mono outline-none focus:ring-2 focus:ring-ring ${
+            className={`min-h-11 min-w-0 rounded-lg border border-input bg-background px-3 text-base font-mono outline-hidden focus:ring-2 focus:ring-ring ${
               posUser ? "cursor-not-allowed opacity-60" : ""
             }`}
             data-testid="input-mobile-sale-date"
@@ -413,10 +413,10 @@ export function PosMobileLayout({
           cartRows.map((row) => {
             const actualIndex = rows.indexOf(row);
             return (
-              <Card key={row.id} className="min-w-0 p-3 shadow-sm sm:p-4">
+              <Card key={row.id} className="min-w-0 p-3 shadow-xs sm:p-4">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="min-w-0 flex-1">
-                    <p className="break-words text-sm font-semibold leading-snug sm:text-base">{row.itemName}</p>
+                    <p className="wrap-break-word text-sm font-semibold leading-snug sm:text-base">{row.itemName}</p>
                     <p className="mt-0.5 break-all font-mono text-xs text-muted-foreground">{row.stockItemCode}</p>
                   </div>
                   <Button
@@ -457,7 +457,7 @@ export function PosMobileLayout({
                         min={0}
                         value={row.quantity || ""}
                         onChange={(event) => updateRow(actualIndex, "quantity", event.target.value)}
-                        className="h-11 min-w-0 rounded-lg border border-input bg-background text-center text-base font-semibold tabular-nums outline-none focus:ring-2 focus:ring-ring"
+                        className="h-11 min-w-0 rounded-lg border border-input bg-background text-center text-base font-semibold tabular-nums outline-hidden focus:ring-2 focus:ring-ring"
                         data-testid={`input-mobile-qty-${actualIndex}`}
                       />
                       <Button
@@ -485,7 +485,7 @@ export function PosMobileLayout({
                         min={0}
                         value={row.rate || ""}
                         onChange={(event) => updateRow(actualIndex, "rate", event.target.value)}
-                        className="h-11 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-right text-base font-mono tabular-nums outline-none focus:ring-2 focus:ring-ring"
+                        className="h-11 w-full min-w-0 rounded-lg border border-input bg-background px-2 text-right text-base font-mono tabular-nums outline-hidden focus:ring-2 focus:ring-ring"
                         data-testid={`input-mobile-rate-${actualIndex}`}
                       />
                     </div>
@@ -530,7 +530,7 @@ export function PosMobileLayout({
 
       <div
         data-pos-mobile-checkout="true"
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)] backdrop-blur-sm lg:hidden"
       >
         <div className="mx-auto flex w-full max-w-3xl items-center gap-3">
           <div className="min-w-0 flex-1">
@@ -542,7 +542,7 @@ export function PosMobileLayout({
             </p>
           </div>
           <Button
-            className="min-h-12 min-w-[8.5rem] shrink-0 px-5 text-base font-semibold"
+            className="min-h-12 min-w-34 shrink-0 px-5 text-base font-semibold"
             size="lg"
             onClick={handleSaveSale}
             disabled={saveMutation?.isPending || !hasValidItems || disableSave}

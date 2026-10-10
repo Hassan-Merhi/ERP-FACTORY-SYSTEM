@@ -501,7 +501,7 @@ export default function Chat() {
                             )}
                           </div>
                         )}
-                        {msg.message && <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>}
+                        {msg.message && <p className="text-sm whitespace-pre-wrap wrap-break-word">{msg.message}</p>}
                         <div className={`flex items-center gap-1 mt-1 ${isMine ? "justify-end" : "justify-start"}`}>
                           <span
                             className={`text-xs ${isMine ? "text-primary-foreground/70" : "text-muted-foreground"}`}

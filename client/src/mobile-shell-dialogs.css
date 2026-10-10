@@ -18,7 +18,9 @@
     width: 100% !important;
     max-width: 100% !important;
     max-height: calc(var(--erp-visual-viewport-height, var(--app-viewport-height, 100dvh)) - 0.75rem) !important;
+    /* Tailwind v4 centres with the `translate` property, which `transform` does not reset. */
     transform: none !important;
+    translate: none !important;
     border-width: 1px 0 0 !important;
     border-radius: 1rem 1rem 0 0 !important;
     padding-bottom: max(1rem, var(--safe-area-bottom, 0px)) !important;

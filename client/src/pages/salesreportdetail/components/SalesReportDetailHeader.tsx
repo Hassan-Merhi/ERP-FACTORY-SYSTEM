@@ -219,7 +219,7 @@ export function SalesReportDetailHeader(props: SalesReportDetailHeaderProps) {
                     {ITEM_COLUMNS.map((c) => (
                       <div
                         key={c.id}
-                        className="flex items-center gap-2 px-2 py-1.5 rounded hover-elevate cursor-pointer"
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-sm hover-elevate cursor-pointer"
                         onClick={() => toggleColumn(c.id)}
                         data-testid={`toggle-col-${c.id}`}
                       >

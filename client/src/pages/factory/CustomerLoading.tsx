@@ -697,7 +697,7 @@ export default function CustomerLoading() {
       )}
 
       {selectedProductIds.size > 0 && (
-        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-4 py-3 shadow-2xl backdrop-blur md:left-[var(--sidebar-width,0px)]">
+        <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-background/95 px-4 py-3 shadow-2xl backdrop-blur-sm md:left-(--sidebar-width,0px)">
           <div className="mx-auto flex max-w-[1800px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
               <span>

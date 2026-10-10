@@ -63,7 +63,7 @@ export function RawStockPartialFixPanel({ rawStock }: RawStockPartialFixPanelPro
                   ` (${partialOffloadScan.skippedFx.length} additional skipped — unresolved FX rate)`}
               </div>
 
-              <div className="border rounded-md overflow-hidden bg-card shadow-sm">
+              <div className="border rounded-md overflow-hidden bg-card shadow-xs">
                 <Table mobileLayout="cards">
                   <TableHeader className="bg-muted/50">
                     <TableRow>

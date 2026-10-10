@@ -178,7 +178,7 @@ export default function FactoryBaleTracking() {
       {!loading && error && (
         <Card>
           <CardContent className="pt-4">
-            <p className="break-words text-sm text-muted-foreground">
+            <p className="wrap-break-word text-sm text-muted-foreground">
               Bale <span className="break-all font-mono font-semibold text-foreground">{submitted}</span> was not found.
             </p>
             <p className="text-xs text-muted-foreground mt-1">{error}</p>
@@ -214,7 +214,7 @@ export default function FactoryBaleTracking() {
                   {baleInfo.productName && (
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Product</p>
-                      <p className="break-words" data-testid="text-bale-product">
+                      <p className="wrap-break-word" data-testid="text-bale-product">
                         {baleInfo.productName}
                       </p>
                     </div>
@@ -261,14 +261,14 @@ export default function FactoryBaleTracking() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs text-muted-foreground">Customer</p>
-                    <p className="break-words" data-testid="text-dispatch-customer">
+                    <p className="wrap-break-word" data-testid="text-dispatch-customer">
                       {result.dispatch.customerName || "—"}
                     </p>
                   </div>
                   {result.dispatch.proformaName && (
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Proforma</p>
-                      <p className="break-words">{result.dispatch.proformaName}</p>
+                      <p className="wrap-break-word">{result.dispatch.proformaName}</p>
                     </div>
                   )}
                   <div>
@@ -290,7 +290,7 @@ export default function FactoryBaleTracking() {
                   {result.dispatch.driverName && (
                     <div className="min-w-0">
                       <p className="text-xs text-muted-foreground">Driver</p>
-                      <p className="break-words">{result.dispatch.driverName}</p>
+                      <p className="wrap-break-word">{result.dispatch.driverName}</p>
                     </div>
                   )}
                   {result.dispatch.amount && (

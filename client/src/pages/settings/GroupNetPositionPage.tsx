@@ -128,7 +128,7 @@ function CompanySide({
                     key={`${line.label}-${index}`}
                     className="flex items-start justify-between gap-4 px-3 py-2 text-sm"
                   >
-                    <span className="min-w-0 break-words">{line.label}</span>
+                    <span className="min-w-0 wrap-break-word">{line.label}</span>
                     <span
                       className={`shrink-0 font-mono tabular-nums ${line.value < 0 ? "text-rose-600 dark:text-rose-400" : ""}`}
                     >
@@ -456,7 +456,7 @@ export function GroupNetPositionPage({ onBack }: { onBack: () => void }) {
             </CardContent>
           </Card>
 
-          <div className="rounded-xl border border-blue-500/20 bg-blue-500/[0.04] px-4 py-3 flex items-start gap-3 text-sm">
+          <div className="rounded-xl border border-blue-500/20 bg-blue-500/4 px-4 py-3 flex items-start gap-3 text-sm">
             <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
               <p className="font-medium">Intercompany treatment</p>

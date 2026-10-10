@@ -7,7 +7,14 @@ interface RemoveFromStockTableProps {
   viewMode: "condensed" | "detailed";
   loading: boolean;
   filteredBales: InStockBale[] | undefined;
-  condensedRows: { groupKey: string; articleCode: string; productName: string; qty: number; totalWeight: number; baleIds: number[]; }[];
+  condensedRows: {
+    groupKey: string;
+    articleCode: string;
+    productName: string;
+    qty: number;
+    totalWeight: number;
+    baleIds: number[];
+  }[];
   selectedBaleIds: Set<number>;
   onToggleBale: (id: number) => void;
   onToggleCondensedRow: (ids: number[]) => void;
@@ -71,7 +78,7 @@ export function RemoveFromStockTable({
                 <TableCell>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded-sm border-gray-300 text-primary focus:ring-primary"
                     checked={selectedBaleIds.has(bale.id)}
                     onChange={() => onToggleBale(bale.id)}
                   />
@@ -82,7 +89,9 @@ export function RemoveFromStockTable({
                   <div className="text-[10px] text-muted-foreground font-mono">{bale.articleCode}</div>
                 </TableCell>
                 <TableCell className="text-xs">{bale.locationName}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">{formatDisplayDate(bale.finalizedAt ?? "")}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {formatDisplayDate(bale.finalizedAt ?? "")}
+                </TableCell>
                 <TableCell className="text-xs">{bale.finalizedByName || "-"}</TableCell>
                 <TableCell className="text-right font-bold text-sm">
                   {parseFloat(bale.weightKg || "0").toFixed(1)}{" "}
@@ -104,7 +113,7 @@ export function RemoveFromStockTable({
                 <TableCell>
                   <input
                     type="checkbox"
-                    className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    className="h-4 w-4 rounded-sm border-gray-300 text-primary focus:ring-primary"
                     checked={row.baleIds.every((id: number) => selectedBaleIds.has(id))}
                     onChange={() => onToggleCondensedRow(row.baleIds)}
                   />

@@ -56,17 +56,15 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
   const { isOnline } = useConnectivity();
   const { t } = useApplicationLanguage();
   const { toast } = useToast();
-  const mobileStatusLabelClassName = showMobileName
-    ? "max-w-[7rem] truncate text-xs sm:max-w-[9rem]"
-    : "hidden sm:inline";
+  const mobileStatusLabelClassName = showMobileName ? "max-w-28 truncate text-xs sm:max-w-36" : "hidden sm:inline";
   const singleCompanyLabelClassName = showMobileName
-    ? "max-w-[7rem] truncate text-xs sm:max-w-[120px]"
+    ? "max-w-28 truncate text-xs sm:max-w-[120px]"
     : "hidden max-w-[120px] truncate sm:inline";
-  const selectorClassName = `h-10 gap-1 px-1.5 sm:h-8 sm:max-w-[8rem] sm:pr-1.5 ${
-    showMobileName ? "max-w-[10rem]" : "max-w-[4.5rem]"
+  const selectorClassName = `h-10 gap-1 px-1.5 sm:h-8 sm:max-w-32 sm:pr-1.5 ${
+    showMobileName ? "max-w-40" : "max-w-18"
   }`;
   const selectorLabelClassName = showMobileName
-    ? "max-w-[6.75rem] truncate text-xs sm:max-w-[72px]"
+    ? "max-w-27 truncate text-xs sm:max-w-[72px]"
     : "hidden max-w-[72px] truncate text-xs sm:inline";
 
   const handleCompanyChange = async (company: Company) => {
@@ -184,7 +182,7 @@ export function CompanySelector({ showMobileName = false }: { showMobileName?: b
         align="end"
         sideOffset={8}
         collisionPadding={8}
-        className="max-h-[calc(var(--app-viewport-height)_-_1rem)] w-[calc(100vw_-_1rem)] max-w-80 overflow-y-auto p-1.5 sm:max-h-[32rem]"
+        className="max-h-[calc(var(--app-viewport-height)-1rem)] w-[calc(100vw-1rem)] max-w-80 overflow-y-auto p-1.5 sm:max-h-128"
       >
         <div className="mb-1 flex items-center justify-between px-2 py-1.5">
           <div className="flex items-center gap-1.5 text-muted-foreground">

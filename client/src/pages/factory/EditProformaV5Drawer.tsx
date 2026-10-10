@@ -598,7 +598,7 @@ export default function EditProformaV5Drawer({ open, onClose, proformaId, articl
                             const mode = pricingModes[row.articleCode] ?? "per_bale";
                             return (
                               <div className="flex items-center gap-1">
-                                <div className="flex rounded border shrink-0 overflow-hidden text-[9px] font-semibold">
+                                <div className="flex rounded-sm border shrink-0 overflow-hidden text-[9px] font-semibold">
                                   <button
                                     className={cn(
                                       "px-1.5 py-0.5 transition-colors",

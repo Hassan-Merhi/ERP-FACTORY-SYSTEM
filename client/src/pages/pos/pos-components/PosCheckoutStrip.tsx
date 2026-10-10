@@ -117,7 +117,7 @@ export function PosCheckoutStrip({
         value={saleDate}
         onChange={posUser ? undefined : (e) => setSaleDate(e.target.value)}
         readOnly={!!posUser}
-        className={`h-9 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring ${posUser ? "opacity-60 cursor-not-allowed" : ""}`}
+        className={`h-9 px-3 rounded-md border border-input bg-background text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-ring ${posUser ? "opacity-60 cursor-not-allowed" : ""}`}
         data-testid="input-sale-date"
       />
 

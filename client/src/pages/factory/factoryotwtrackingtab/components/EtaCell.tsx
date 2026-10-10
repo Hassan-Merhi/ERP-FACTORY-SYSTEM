@@ -3,10 +3,10 @@
  *
  * Extracted from FactoryOtwTrackingTab.tsx during the Phase 4 god-file split.
  */
-import {useState} from "react";
-import {Input} from "@/components/ui/input";
-import {cn} from "@/lib/utils";
-import {fmtDate} from "../utils";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { fmtDate } from "../utils";
 
 export // ── Inline ETA cell ──────────────────────────────────────────────────────────
 function EtaCell({
@@ -55,7 +55,7 @@ function EtaCell({
   return (
     <span
       className={cn(
-        "text-xs cursor-pointer rounded px-1 py-0.5 hover-elevate block font-medium",
+        "text-xs cursor-pointer rounded-sm px-1 py-0.5 hover-elevate block font-medium",
         overdue ? "text-red-600 dark:text-red-400" : arrivalDate ? "text-foreground" : "text-muted-foreground italic"
       )}
       onClick={startEdit}

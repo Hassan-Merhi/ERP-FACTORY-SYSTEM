@@ -96,7 +96,7 @@ export function FactoryLocationInventoryLocationView({ inventory }: { inventory:
               {filteredLocations.map((location) => (
                 <div
                   key={location.id}
-                  className="group relative flex min-h-[82px] cursor-pointer items-center gap-3 rounded-xl border bg-background px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md"
+                  className="group relative flex min-h-[82px] cursor-pointer items-center gap-3 rounded-xl border bg-background px-3.5 py-3 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/2 hover:shadow-md"
                   onClick={() => handleLocationClick(location)}
                   data-testid={`row-location-${location.id}`}
                 >

@@ -422,7 +422,7 @@ export default function LocationVouchers({ posUser }: { posUser?: unknown } = {}
       )}
 
       <Card className="overflow-hidden flex flex-col" style={{ maxHeight: "calc(100vh - 270px)" }}>
-        <CardHeader className="pb-2 flex-shrink-0">
+        <CardHeader className="pb-2 shrink-0">
           <CardTitle className="text-base">
             {showAllMonths
               ? `All Transactions — ${year}`

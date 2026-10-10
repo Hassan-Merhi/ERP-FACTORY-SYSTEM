@@ -54,7 +54,7 @@ export default function FactoryInvoiceDetailBilingual() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex flex-shrink-0 items-center justify-end gap-2 border-b bg-background px-6 py-2">
+      <div className="flex shrink-0 items-center justify-end gap-2 border-b bg-background px-6 py-2">
         <Languages className="h-4 w-4 text-muted-foreground" />
         <span className="mr-auto text-sm text-muted-foreground">
           Export this invoice using its frozen English or Arabic product snapshots.
@@ -93,7 +93,10 @@ export default function FactoryInvoiceDetailBilingual() {
             <DropdownMenuItem onClick={() => download("export-pdf?lang=en&noCharges=1", "invoice-en-no-charges.pdf")}>
               English PDF — No Charges
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => download("export-pdf?lang=ar&noCharges=1", "invoice-ar-no-charges.pdf")} dir="rtl">
+            <DropdownMenuItem
+              onClick={() => download("export-pdf?lang=ar&noCharges=1", "invoice-ar-no-charges.pdf")}
+              dir="rtl"
+            >
               PDF عربي — بدون رسوم
             </DropdownMenuItem>
           </DropdownMenuContent>

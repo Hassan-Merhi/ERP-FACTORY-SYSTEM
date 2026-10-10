@@ -265,7 +265,7 @@ export function AccountStatementView({
                 <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden="true" />
               </Button>
               <div className="min-w-0 flex-1">
-                <p className="break-words text-base font-semibold leading-snug">{selectedAccount?.name}</p>
+                <p className="wrap-break-word text-base font-semibold leading-snug">{selectedAccount?.name}</p>
                 {selectedAccount?.accountId && (
                   <p className="font-mono text-xs text-muted-foreground">#{selectedAccount.accountId}</p>
                 )}
@@ -327,7 +327,7 @@ export function AccountStatementView({
             )}
             {/* The everyday actions stay one tap away; exports in other languages, WhatsApp
                 settings and deleted-voucher controls remain in the Actions menu. */}
-            <div className="mt-3 grid grid-cols-2 gap-2 [&>*]:min-h-11" data-testid="account-statement-phone-actions">
+            <div className="mt-3 grid grid-cols-2 gap-2 *:min-h-11" data-testid="account-statement-phone-actions">
               <Button
                 type="button"
                 variant="outline"
@@ -352,7 +352,7 @@ export function AccountStatementView({
               )}
             </div>
           </div>
-          <div className="[&>*]:w-full">
+          <div className="*:w-full">
             <PeriodFilter value={periodFilter} onChange={setPeriodFilter} />
           </div>
         </div>
@@ -419,7 +419,7 @@ export function AccountStatementView({
                   </Button>
                 )}
               {/* Language toggle for PDF */}
-              <div className="flex items-center rounded border text-[10px] font-semibold overflow-hidden">
+              <div className="flex items-center rounded-sm border text-[10px] font-semibold overflow-hidden">
                 {(["en", "fr", "ar"] as const).map((l) => (
                   <button
                     key={l}

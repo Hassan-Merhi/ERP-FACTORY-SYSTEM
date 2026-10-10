@@ -118,7 +118,7 @@ export default function FactoryStockBaleList() {
                   <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{bale.baleCode}</td>
                   <td className={cn("px-3 py-2 text-xs", financialNumberClass)}>
                     <button
-                      className="group flex items-center gap-1 ml-auto hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+                      className="group flex items-center gap-1 ml-auto hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring rounded-xs"
                       onClick={(e) => {
                         e.stopPropagation();
                         setWeightEditBale({

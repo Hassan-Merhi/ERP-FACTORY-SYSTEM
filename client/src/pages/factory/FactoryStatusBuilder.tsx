@@ -745,7 +745,7 @@ export default function FactoryStatusBuilder() {
                                   <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                       <button
-                                        className="p-0.5 rounded hover:bg-muted/60"
+                                        className="p-0.5 rounded-sm hover:bg-muted/60"
                                         onClick={(e) => e.stopPropagation()}
                                         data-testid={`sb-button-cell-menu-${ri}-${ci}`}
                                         title={isLinked ? `Linked from: ${linkInfo ?? "…"}` : "Link this cell"}

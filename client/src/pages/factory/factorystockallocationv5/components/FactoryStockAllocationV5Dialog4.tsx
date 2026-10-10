@@ -87,7 +87,7 @@ export function FactoryStockAllocationV5Dialog4({ model }: { model: Model }) {
                     >
                       <div
                         className={cn(
-                          "w-4 h-4 rounded border flex items-center justify-center shrink-0",
+                          "w-4 h-4 rounded-sm border flex items-center justify-center shrink-0",
                           isSelected ? "bg-primary border-primary" : "border-muted-foreground/30",
                           customerMismatch && "border-muted-foreground/15"
                         )}

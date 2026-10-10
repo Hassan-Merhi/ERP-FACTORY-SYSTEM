@@ -291,7 +291,7 @@ export default function FactoryContainerCreate() {
           {/* Only show broker row when the selected supplier is linked to one */}
           {linkedBroker && (
             <div className="rounded-md bg-muted/50 px-3 py-2 text-sm flex items-center gap-2">
-              <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
               <span className="text-muted-foreground">
                 Linked Broker: <span className="font-medium text-foreground">{linkedBroker.name}</span>
               </span>
@@ -564,7 +564,7 @@ export default function FactoryContainerCreate() {
                       }
                     >
                       <SelectTrigger
-                        className="order-last col-span-3 sm:order-none sm:col-span-1"
+                        className="order-last col-span-3 sm:order-0 sm:col-span-1"
                         aria-label="Other charge account"
                         data-testid={`select-other-charge-account-${idx}`}
                       >

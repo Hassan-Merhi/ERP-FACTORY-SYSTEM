@@ -321,7 +321,7 @@ export function LocationWhatsappScheduleDialog({
               </div>
 
               {scheduleQuery.data?.lastError && (
-                <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive break-words">
+                <div className="rounded-md border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive wrap-break-word">
                   <span className="font-medium">{releaseDebtEnglish("Last automatic send error" + ":")}</span>{" "}
                   {scheduleQuery.data.lastError}
                 </div>

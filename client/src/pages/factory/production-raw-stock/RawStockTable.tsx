@@ -82,7 +82,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               variant="outline"
               size="sm"
               onClick={() => setShowZeroBalance((visible) => !visible)}
-              className="h-8 gap-2 rounded-lg border-slate-300 bg-background px-3 text-xs font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md dark:border-slate-700"
+              className="h-8 gap-2 rounded-lg border-slate-300 bg-background px-3 text-xs font-semibold shadow-xs transition-all hover:-translate-y-0.5 hover:border-primary/50 hover:bg-primary/5 hover:shadow-md dark:border-slate-700"
               aria-pressed={showZeroBalance}
               data-testid="button-toggle-zero-balance"
             >
@@ -105,7 +105,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
               const catValue = rows.reduce((sum, row) => sum + parseFloat(row.valueRemainingUsd), 0);
 
               return (
-                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                <div key={`mobile-cat-${cat}`} className="overflow-hidden rounded-xl border bg-card shadow-xs">
                   <button
                     type="button"
                     className="flex min-h-11 w-full items-center justify-between gap-3 bg-muted/30 px-3 py-2.5 text-left"
@@ -153,7 +153,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                               <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
                                 <span>Last offload: {new Date(row.lastOffloaded).toLocaleDateString()}</span>
                                 {row.sourceType === "OPENING_BALANCE" && (
-                                  <span className="inline-flex items-center rounded border border-blue-100 bg-blue-50 px-1.5 font-medium text-blue-600 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                  <span className="inline-flex items-center rounded-sm border border-blue-100 bg-blue-50 px-1.5 font-medium text-blue-600 dark:border-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
                                     OB
                                   </span>
                                 )}
@@ -170,11 +170,15 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                           <div className="grid grid-cols-2 gap-2 text-xs">
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Received</div>
-                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.receivedKg))} kg</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                {formatNumber(parseFloat(row.receivedKg))} kg
+                              </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Used</div>
-                              <div className="mt-0.5 font-mono font-medium">{formatNumber(parseFloat(row.usedKg))} kg</div>
+                              <div className="mt-0.5 font-mono font-medium">
+                                {formatNumber(parseFloat(row.usedKg))} kg
+                              </div>
                             </div>
                             <div className="rounded-lg bg-muted/40 p-2">
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Value</div>
@@ -235,7 +239,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
           )}
         </div>
 
-        <div className="hidden overflow-hidden rounded-md border bg-card shadow-sm md:block">
+        <div className="hidden overflow-hidden rounded-md border bg-card shadow-xs md:block">
           <Table>
             <TableHeader className="bg-muted/50">
               <TableRow className="hover:bg-transparent">
@@ -273,7 +277,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                         onClick={() => toggleCategory(cat)}
                       >
                         <TableCell className="font-semibold py-3 flex items-center gap-2">
-                          <div className="flex items-center justify-center w-5 h-5 rounded hover:bg-muted transition-colors">
+                          <div className="flex items-center justify-center w-5 h-5 rounded-sm hover:bg-muted transition-colors">
                             {isExpanded ? (
                               <ChevronDown className="h-3.5 w-3.5" />
                             ) : (
@@ -326,7 +330,7 @@ export function RawStockTable({ rawStock, onAdjust, onDeduct, onAddToBatch }: Ra
                                 <span className="text-[10px] text-muted-foreground flex items-center gap-2 mt-0.5">
                                   Last offload: {new Date(row.lastOffloaded).toLocaleDateString()}
                                   {row.sourceType === "OPENING_BALANCE" && (
-                                    <span className="inline-flex items-center px-1.5 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 font-medium">
+                                    <span className="inline-flex items-center px-1.5 rounded-sm bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 font-medium">
                                       OB
                                     </span>
                                   )}

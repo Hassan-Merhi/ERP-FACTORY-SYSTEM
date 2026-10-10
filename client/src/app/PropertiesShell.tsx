@@ -48,7 +48,7 @@ export function PropertiesShell({ user, currentLocation, handleLogout, leaveConf
               id="main-content"
               tabIndex={-1}
               aria-label="Properties workspace"
-              className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-none sm:p-6"
+              className="flex-1 overflow-y-auto overscroll-y-contain p-3 outline-hidden sm:p-6"
             >
               <WorkspaceRouteBoundary
                 resetKey={currentLocation}

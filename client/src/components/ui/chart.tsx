@@ -57,10 +57,10 @@ const ChartContainer = React.forwardRef<HTMLDivElement, ChartContainerProps>(
             "relative flex h-64 w-full min-w-0 max-w-full justify-center overflow-hidden text-xs sm:h-auto sm:aspect-video",
             "[&_.recharts-cartesian-axis-tick_text]:fill-muted-foreground [&_.recharts-cartesian-grid_line[stroke='#ccc']]:stroke-border/50",
             "[&_.recharts-curve.recharts-tooltip-cursor]:stroke-border [&_.recharts-dot[stroke='#fff']]:stroke-transparent",
-            "[&_.recharts-layer]:outline-none [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border",
+            "[&_.recharts-layer]:outline-hidden [&_.recharts-polar-grid_[stroke='#ccc']]:stroke-border",
             "[&_.recharts-radial-bar-background-sector]:fill-muted [&_.recharts-rectangle.recharts-tooltip-cursor]:fill-muted",
             "[&_.recharts-reference-line_[stroke='#ccc']]:stroke-border [&_.recharts-sector[stroke='#fff']]:stroke-transparent",
-            "[&_.recharts-sector]:outline-none [&_.recharts-surface]:max-w-full [&_.recharts-surface]:outline-none",
+            "[&_.recharts-sector]:outline-hidden [&_.recharts-surface]:max-w-full [&_.recharts-surface]:outline-hidden",
             className
           )}
           {...props}
@@ -181,14 +181,16 @@ const ChartTooltipContent = React.forwardRef<
           : itemConfig?.label;
 
       if (labelFormatter) {
-        return <div className={cn("break-words font-medium", labelClassName)}>{labelFormatter(value, payload)}</div>;
+        return (
+          <div className={cn("wrap-break-word font-medium", labelClassName)}>{labelFormatter(value, payload)}</div>
+        );
       }
 
       if (!value) {
         return null;
       }
 
-      return <div className={cn("break-words font-medium", labelClassName)}>{value}</div>;
+      return <div className={cn("wrap-break-word font-medium", labelClassName)}>{value}</div>;
     }, [label, labelFormatter, payload, hideLabel, labelClassName, config, labelKey]);
 
     if (!active || !payload?.length) {
@@ -201,7 +203,7 @@ const ChartTooltipContent = React.forwardRef<
       <div
         ref={ref}
         className={cn(
-          "grid min-w-[8rem] max-w-[min(20rem,calc(100vw-2rem))] items-start gap-1.5 overflow-hidden rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
+          "grid min-w-32 max-w-[min(20rem,calc(100vw-2rem))] items-start gap-1.5 overflow-hidden rounded-lg border border-border/50 bg-background px-2.5 py-1.5 text-xs shadow-xl",
           className
         )}
       >
@@ -229,7 +231,7 @@ const ChartTooltipContent = React.forwardRef<
                     ) : (
                       !hideIndicator && (
                         <div
-                          className={cn("shrink-0 rounded-[2px] border-[--color-border] bg-[--color-bg]", {
+                          className={cn("shrink-0 rounded-[2px] border-border bg-(--color-bg)", {
                             "h-2.5 w-2.5": indicator === "dot",
                             "w-1": indicator === "line",
                             "w-0 border-[1.5px] border-dashed bg-transparent": indicator === "dashed",
@@ -252,7 +254,7 @@ const ChartTooltipContent = React.forwardRef<
                     >
                       <div className="grid min-w-0 gap-1.5">
                         {nestLabel ? tooltipLabel : null}
-                        <span className="break-words text-muted-foreground">{itemConfig?.label || item.name}</span>
+                        <span className="wrap-break-word text-muted-foreground">{itemConfig?.label || item.name}</span>
                       </div>
                       {item.value !== undefined && item.value !== null && (
                         <span className="shrink-0 font-mono font-medium tabular-nums text-foreground">
@@ -318,7 +320,7 @@ const ChartLegendContent = React.forwardRef<
                 }}
               />
             )}
-            <span className="break-words">{itemConfig?.label}</span>
+            <span className="wrap-break-word">{itemConfig?.label}</span>
           </div>
         );
       })}

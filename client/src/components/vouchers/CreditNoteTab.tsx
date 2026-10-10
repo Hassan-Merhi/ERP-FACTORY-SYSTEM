@@ -428,7 +428,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
   return (
     <div className="flex flex-col lg:flex-row gap-4 lg:h-[calc(100vh-200px)]">
       <Card className="flex-1 flex flex-col">
-        <CardHeader className="pb-3 flex-shrink-0">
+        <CardHeader className="pb-3 shrink-0">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <CardTitle className="flex items-center gap-2">
               {isEditMode ? (
@@ -636,7 +636,7 @@ export function CreditNoteTab({ allAccounts, editVoucherId }: CreditNoteTabProps
       </Card>
 
       <Card className="w-full lg:w-80 flex flex-col">
-        <CardHeader className="pb-3 flex-shrink-0">
+        <CardHeader className="pb-3 shrink-0">
           <div className="flex items-center gap-2 mb-3">
             <MapPin className="h-4 w-4" />
             <span className="font-medium text-sm">Location</span>

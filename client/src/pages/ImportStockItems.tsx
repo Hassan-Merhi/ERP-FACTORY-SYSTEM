@@ -437,11 +437,11 @@ function BarcodesTab() {
           <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-1">
             <p className="font-medium">Required columns</p>
             <p className="text-muted-foreground">
-              <span className="font-mono bg-background px-1 rounded">Item Code</span> — must match the primary code of
-              an existing item exactly
+              <span className="font-mono bg-background px-1 rounded-sm">Item Code</span> — must match the primary code
+              of an existing item exactly
             </p>
             <p className="text-muted-foreground">
-              <span className="font-mono bg-background px-1 rounded">Barcode</span> — the barcode/alias to register
+              <span className="font-mono bg-background px-1 rounded-sm">Barcode</span> — the barcode/alias to register
               (e.g. EAN-13, UPC)
             </p>
             <p className="text-muted-foreground">

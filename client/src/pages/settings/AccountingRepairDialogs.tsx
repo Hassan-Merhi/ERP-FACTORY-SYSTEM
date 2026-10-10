@@ -95,7 +95,7 @@ export function ZeroBalancesDialog({ open, onOpenChange, companyId }: ZeroBalanc
                 <Badge variant="outline">{selected.length} selected</Badge>
               </div>
 
-              <div className="max-h-96 overflow-y-auto border rounded">
+              <div className="max-h-96 overflow-y-auto border rounded-sm">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -247,7 +247,7 @@ export function InitializeBalancesDialog({ open, onOpenChange }: InitializeBalan
                             )}
                           </Button>
                           {expandedId === r.companyId && (
-                            <div className="mt-2 grid grid-cols-2 gap-4 p-2 bg-muted/50 rounded">
+                            <div className="mt-2 grid grid-cols-2 gap-4 p-2 bg-muted/50 rounded-sm">
                               <div>
                                 <div className="font-medium text-green-600 dark:text-green-400 mb-1">
                                   Assets (Debit)

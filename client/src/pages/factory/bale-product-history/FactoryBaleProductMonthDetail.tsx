@@ -224,7 +224,7 @@ export function FactoryBaleProductMonthDetail() {
                         <span className="inline-flex items-center gap-1.5 group">
                           {formatNumber(Number(bale.weightKg))}
                           <button
-                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded-sm hover:bg-muted"
                             onClick={() =>
                               setWeightEditBale({
                                 id: bale.id,
@@ -327,7 +327,7 @@ export function FactoryBaleProductMonthDetail() {
                             weightKg: bale.weightKg,
                           })
                         }
-                        className="p-0.5 rounded hover:bg-muted"
+                        className="p-0.5 rounded-sm hover:bg-muted"
                         title="Correct weight"
                         data-testid={`button-edit-weight-mobile-${bale.id}`}
                       >

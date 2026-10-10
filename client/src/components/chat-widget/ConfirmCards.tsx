@@ -64,7 +64,7 @@ export function StockAdjustmentConfirmCard({
           <span className="shrink-0">Location</span>
           {hasLocChoice ? (
             <select
-              className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 max-w-[180px]"
+              className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 max-w-[180px]"
               value={selectedLocationId}
               onChange={(e) => {
                 const id = Number(e.target.value);
@@ -116,64 +116,64 @@ export function StockAdjustmentConfirmCard({
                   {hasStockPreview && <span className="text-right">Stock</span>}
                 </div>
                 <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
-                {draft.items.map((item, i) => {
-                  const candidates = item.candidates ?? [];
-                  const hasChoice = candidates.length > 1;
-                  const isNegative = item.projectedStock !== undefined && item.projectedStock < 0;
-                  return (
-                    <div key={i} className={`grid ${cols} gap-1 items-center`}>
-                      {hasChoice ? (
-                        <select
-                          className="text-xs font-medium text-foreground bg-background border rounded px-1.5 py-0.5 w-full"
-                          value={selectedItems[i].id}
-                          onChange={(e) => {
-                            const id = Number(e.target.value);
-                            const c = candidates.find((c) => c.id === id);
-                            if (c) {
-                              setSelectedItems((prev) =>
-                                prev.map((s, idx) => (idx === i ? { id: c.id, name: c.name } : s))
-                              );
-                            }
-                          }}
-                        >
-                          {candidates.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                              {c.code ? ` (${c.code})` : ""}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <span className="truncate text-foreground">{selectedItems[i].name}</span>
-                      )}
-                      <span
-                        className={`text-center text-[10px] font-semibold ${item.type === "PRODUCE" ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
-                      >
-                        {item.type === "PRODUCE" ? "Produce" : "Consume"}
-                      </span>
-                      <span className="text-right text-foreground">{item.quantity.toLocaleString()}</span>
-                      <span className="text-right text-muted-foreground">
-                        {item.rate > 0 ? (
-                          item.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                  {draft.items.map((item, i) => {
+                    const candidates = item.candidates ?? [];
+                    const hasChoice = candidates.length > 1;
+                    const isNegative = item.projectedStock !== undefined && item.projectedStock < 0;
+                    return (
+                      <div key={i} className={`grid ${cols} gap-1 items-center`}>
+                        {hasChoice ? (
+                          <select
+                            className="text-xs font-medium text-foreground bg-background border rounded-sm px-1.5 py-0.5 w-full"
+                            value={selectedItems[i].id}
+                            onChange={(e) => {
+                              const id = Number(e.target.value);
+                              const c = candidates.find((c) => c.id === id);
+                              if (c) {
+                                setSelectedItems((prev) =>
+                                  prev.map((s, idx) => (idx === i ? { id: c.id, name: c.name } : s))
+                                );
+                              }
+                            }}
+                          >
+                            {candidates.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name}
+                                {c.code ? ` (${c.code})` : ""}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
-                          <span className="italic text-[10px]">—</span>
+                          <span className="truncate text-foreground">{selectedItems[i].name}</span>
                         )}
-                      </span>
-                      {hasStockPreview && (
                         <span
-                          className={`text-right text-[10px] ${isNegative ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+                          className={`text-center text-[10px] font-semibold ${item.type === "PRODUCE" ? "text-green-600 dark:text-green-400" : "text-destructive"}`}
                         >
-                          {item.currentStock !== undefined ? `${item.currentStock}→` : ""}
-                          {item.projectedStock !== undefined ? (
-                            <span className={isNegative ? "text-destructive" : "text-green-600 dark:text-green-400"}>
-                              {item.projectedStock}
-                            </span>
-                          ) : null}
+                          {item.type === "PRODUCE" ? "Produce" : "Consume"}
                         </span>
-                      )}
-                    </div>
-                  );
-                })}
+                        <span className="text-right text-foreground">{item.quantity.toLocaleString()}</span>
+                        <span className="text-right text-muted-foreground">
+                          {item.rate > 0 ? (
+                            item.rate.toLocaleString(undefined, { maximumFractionDigits: 2 })
+                          ) : (
+                            <span className="italic text-[10px]">—</span>
+                          )}
+                        </span>
+                        {hasStockPreview && (
+                          <span
+                            className={`text-right text-[10px] ${isNegative ? "text-destructive font-semibold" : "text-muted-foreground"}`}
+                          >
+                            {item.currentStock !== undefined ? `${item.currentStock}→` : ""}
+                            {item.projectedStock !== undefined ? (
+                              <span className={isNegative ? "text-destructive" : "text-green-600 dark:text-green-400"}>
+                                {item.projectedStock}
+                              </span>
+                            ) : null}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             );
@@ -256,11 +256,11 @@ export function VoucherSearchResultsCard({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-xs font-semibold text-foreground">{v.voucherNumber}</span>
-                  <span className="text-[10px] text-muted-foreground bg-muted rounded px-1 py-0.5">
+                  <span className="text-[10px] text-muted-foreground bg-muted rounded-sm px-1 py-0.5">
                     {v.voucherType}
                   </span>
                   {v.optional && (
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded px-1 py-0.5">
+                    <span className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-sm px-1 py-0.5">
                       Optional
                     </span>
                   )}

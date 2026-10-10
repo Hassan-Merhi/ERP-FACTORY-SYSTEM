@@ -170,9 +170,9 @@ export function UserNotesPanel() {
             data-testid="button-open-user-notes"
             aria-label="My notes"
             style={{ left: pos.x, top: pos.y }}
-            className="group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-[2.25rem] hover:max-w-[120px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing"
+            className="group fixed z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-md px-3 py-2 opacity-30 hover:opacity-100 transition-all duration-300 ease-in-out overflow-hidden max-w-9 hover:max-w-[120px] focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring select-none cursor-grab active:cursor-grabbing"
           >
-            <NotebookPen className="h-4 w-4 flex-shrink-0" />
+            <NotebookPen className="h-4 w-4 shrink-0" />
             <span className="text-sm font-medium whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 delay-100">
               My Notes
             </span>
@@ -183,7 +183,7 @@ export function UserNotesPanel() {
 
       <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent side="right" className="flex flex-col w-full sm:max-w-md p-0" data-testid="panel-user-notes">
-          <SheetHeader className="px-5 pt-5 pb-3 border-b flex-shrink-0">
+          <SheetHeader className="px-5 pt-5 pb-3 border-b shrink-0">
             <div className="flex items-center justify-between gap-2">
               <SheetTitle className="flex items-center gap-2 text-base">
                 <NotebookPen className="h-4 w-4 text-muted-foreground" />
@@ -232,7 +232,7 @@ export function UserNotesPanel() {
             )}
           </div>
 
-          <div className="px-5 pb-4 pt-2 border-t flex-shrink-0">
+          <div className="px-5 pb-4 pt-2 border-t shrink-0">
             <p className="text-xs text-muted-foreground">Only you can see these notes.</p>
           </div>
         </SheetContent>

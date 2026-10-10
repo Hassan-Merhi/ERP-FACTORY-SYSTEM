@@ -88,13 +88,22 @@ export function StockTransferDesktopItemCell({ model, index }: { model: StockTra
             event.preventDefault();
             if (m.showItemSidebar && items.length > 0)
               m.setTransferHighlightedIndex(Math.max(0, m.transferHighlightedIndex - 1));
-            else if (index > 0) focusScopedTestId(`input-item-name-${index - 1}`, { select: true, delay: 50, anchor: event.currentTarget });
+            else if (index > 0)
+              focusScopedTestId(`input-item-name-${index - 1}`, {
+                select: true,
+                delay: 50,
+                anchor: event.currentTarget,
+              });
           } else if (event.key === "ArrowDown" && !event.shiftKey) {
             event.preventDefault();
             if (m.showItemSidebar && items.length > 0)
               m.setTransferHighlightedIndex(Math.min(items.length - 1, m.transferHighlightedIndex + 1));
             else if (index < m.transferFields.length - 1)
-              focusScopedTestId(`input-item-name-${index + 1}`, { select: true, delay: 50, anchor: event.currentTarget });
+              focusScopedTestId(`input-item-name-${index + 1}`, {
+                select: true,
+                delay: 50,
+                anchor: event.currentTarget,
+              });
           } else if (event.key === "ArrowLeft" && !m.isPOS) {
             event.preventDefault();
             m.setShowItemSidebar(false);
@@ -102,14 +111,18 @@ export function StockTransferDesktopItemCell({ model, index }: { model: StockTra
             focusScopedTestId(`input-source-${index}`, { select: true, delay: 50, anchor: event.currentTarget });
           } else if (event.key === "ArrowRight" || (event.key === "Tab" && !event.shiftKey)) {
             event.preventDefault();
-            focusScopedTestId(`input-transfer-quantity-${index}`, { select: true, delay: 50, anchor: event.currentTarget });
+            focusScopedTestId(`input-transfer-quantity-${index}`, {
+              select: true,
+              delay: 50,
+              anchor: event.currentTarget,
+            });
           } else if (event.key === "Enter") {
             event.preventDefault();
             chooseHighlightedItem();
           }
         }}
         placeholder="Type to search..."
-        className="w-full h-full px-3 bg-transparent outline-none focus:bg-accent/20"
+        className="w-full h-full px-3 bg-transparent outline-hidden focus:bg-accent/20"
         data-testid={`input-item-name-${index}`}
       />
     </div>

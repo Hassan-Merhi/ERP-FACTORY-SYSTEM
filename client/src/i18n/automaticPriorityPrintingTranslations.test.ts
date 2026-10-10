@@ -23,6 +23,18 @@ describe("Automatic Priority Printing translations", () => {
     ).toContain("REF9");
   });
 
+  it("translates the saved-color print and palette guard messages", () => {
+    expect(
+      translateAutomaticPriorityPrintingText("Priority color changed for REF7. Refresh before printing.", "fr")
+    ).toBe("La couleur de priorité a changé pour REF7. Actualisez avant d’imprimer.");
+    expect(translateAutomaticPriorityPrintingText("Incomplete priority reprint audit for REF7.", "ar")).toContain(
+      "REF7"
+    );
+    expect(
+      translateAutomaticPriorityPrintingText("Select one of the eleven approved Priority Scan colors.", "ar")
+    ).toBe("اختر أحد ألوان المسح حسب الأولوية الأحد عشر المعتمدة.");
+  });
+
   it("leaves unrelated text to other catalogs", () => {
     expect(translateAutomaticPriorityPrintingText("Save", "ar")).toBeNull();
   });

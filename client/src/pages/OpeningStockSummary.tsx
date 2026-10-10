@@ -105,12 +105,12 @@ export default function OpeningStockSummary() {
               <button
                 type="button"
                 key={group.id}
-                className="grid w-full grid-cols-2 p-2 text-left hover-elevate focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-7 sm:p-3"
+                className="grid w-full grid-cols-2 p-2 text-left hover-elevate focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:grid-cols-7 sm:p-3"
                 onClick={() => handleGroupClick(group.id, group.name)}
                 data-testid={`row-stock-group-${group.id}`}
               >
                 <span className="flex min-w-0 items-center gap-1 truncate text-xs font-medium sm:text-sm">
-                  <ChevronRight className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{group.name}</span>
                 </span>
                 <span className={cn(financialNumberClassName, "text-sm")}>{formatQty(group.opening.quantity)}</span>

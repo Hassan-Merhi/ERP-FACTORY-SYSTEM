@@ -179,7 +179,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                               <TableCell className="text-right font-mono" data-testid={`text-stock-${cmp.articleCode}`}>
                                 {stockQty > 0 ? (
                                   <button
-                                    className="underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 text-foreground font-medium"
+                                    className="underline underline-offset-2 cursor-pointer hover-elevate rounded-sm px-0.5 text-foreground font-medium"
                                     onClick={() => {
                                       const p = new URLSearchParams({
                                         articleCode: cmp.articleCode,
@@ -234,7 +234,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                             <TableCell className="text-right font-mono" data-testid={`text-stock-${line.articleCode}`}>
                               {(line.stockQty ?? 0) > 0 ? (
                                 <button
-                                  className="underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 text-foreground font-medium"
+                                  className="underline underline-offset-2 cursor-pointer hover-elevate rounded-sm px-0.5 text-foreground font-medium"
                                   onClick={() => {
                                     const p = new URLSearchParams({
                                       articleCode: line.articleCode,
@@ -326,7 +326,7 @@ export function FactoryPendingInvoiceVerifyDetailCard({ model }: { model: Model 
                             >
                               {(group.stockQty ?? 0) > 0 ? (
                                 <button
-                                  className="underline underline-offset-2 cursor-pointer hover-elevate rounded px-0.5 text-teal-600 dark:text-teal-400 font-medium"
+                                  className="underline underline-offset-2 cursor-pointer hover-elevate rounded-sm px-0.5 text-teal-600 dark:text-teal-400 font-medium"
                                   onClick={() => {
                                     const p = new URLSearchParams({
                                       articleCode: group.articleCode,

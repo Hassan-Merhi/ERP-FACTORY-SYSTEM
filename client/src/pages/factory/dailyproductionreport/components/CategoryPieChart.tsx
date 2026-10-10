@@ -47,12 +47,12 @@ export function CategoryPieChart({
             return (
               <li key={slice.name} className="flex min-w-0 items-start gap-2 rounded-lg bg-muted/30 p-2">
                 <span
-                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-sm"
+                  className="mt-1 h-2.5 w-2.5 shrink-0 rounded-xs"
                   style={{ background: slice.color }}
                   aria-hidden="true"
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block break-words text-xs font-medium text-foreground">{slice.name}</span>
+                  <span className="block wrap-break-word text-xs font-medium text-foreground">{slice.name}</span>
                   <span className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted-foreground tabular-nums">
                     <span className="font-semibold text-foreground">{percentage}%</span>
                     <span>{Math.round(slice.value).toLocaleString()} kg</span>
@@ -63,7 +63,7 @@ export function CategoryPieChart({
           })}
         </ResponsiveLegendList>
 
-        <ResponsiveChartViewport label="Production category pie chart" className="mx-auto w-full max-w-[13rem]">
+        <ResponsiveChartViewport label="Production category pie chart" className="mx-auto w-full max-w-52">
           <div className="h-52 w-full min-w-0">
             <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
               <PieChart>

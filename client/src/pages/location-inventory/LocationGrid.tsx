@@ -37,7 +37,7 @@ export function LocationGrid({
   if (selectedLocationLocal) return null;
 
   return (
-    <div className="overflow-hidden rounded-2xl border bg-card/40 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border bg-card/40 shadow-xs">
       <div className="flex flex-col gap-3 border-b bg-muted/10 p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2.5">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
@@ -76,7 +76,7 @@ export function LocationGrid({
             <div
               key={loc.id}
               onClick={() => setSelectedLocationLocal(loc)}
-              className="group flex min-h-[124px] cursor-pointer flex-col justify-between rounded-xl border bg-background p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/[0.02] hover:shadow-md"
+              className="group flex min-h-[124px] cursor-pointer flex-col justify-between rounded-xl border bg-background p-4 transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:bg-primary/2 hover:shadow-md"
               data-testid={`card-location-${loc.id}`}
             >
               <div className="flex items-start justify-between gap-3">

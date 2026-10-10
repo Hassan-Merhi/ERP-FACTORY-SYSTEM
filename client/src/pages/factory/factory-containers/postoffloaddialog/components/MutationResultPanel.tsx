@@ -3,9 +3,9 @@
  *
  * Extracted from PostOffloadDialog.tsx during the Phase 4 god-file split.
  */
-import {CheckCircle2} from "lucide-react";
-import {formatNumber} from "@/lib/formatNumber";
-import type {MutationResult} from "../types";
+import { CheckCircle2 } from "lucide-react";
+import { formatNumber } from "@/lib/formatNumber";
+import type { MutationResult } from "../types";
 
 export function MutationResultPanel({ result }: { result: MutationResult }) {
   const oldRate = result.supplierLockedRateBefore || result.supplierLockedRateOldExact;
@@ -93,7 +93,7 @@ export function MutationResultPanel({ result }: { result: MutationResult }) {
                 <span className="font-mono font-medium flex items-center gap-1.5 flex-wrap">
                   {b.batchCode}
                   {b.wasCompleted && (
-                    <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded whitespace-nowrap">
+                    <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded-sm whitespace-nowrap">
                       Completed
                     </span>
                   )}

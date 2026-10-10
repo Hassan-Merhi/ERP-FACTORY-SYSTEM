@@ -45,7 +45,7 @@ for (const invariant of [
   'aria-label="Previous record"',
   'aria-label="Next record"',
   "WorkspaceActions",
-  "break-words",
+  "wrap-break-word",
   "leading-5",
 ]) {
   if (!header.includes(invariant)) failures.push(`PageHeader missing ${invariant}`);

@@ -582,7 +582,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                             </span>
                           )}
                           <span
-                            className="font-medium text-sm leading-snug break-words"
+                            className="font-medium text-sm leading-snug wrap-break-word"
                             data-testid={`text-name-${worker.id}`}
                           >
                             {worker.fullName}
@@ -646,7 +646,7 @@ export function FactoryWorkersRosterPanel({ model }: FactoryWorkersModelProps) {
                             <PopoverTrigger asChild>
                               <button
                                 className={[
-                                  "flex items-center gap-1 ml-auto rounded px-1.5 py-0.5 transition-colors",
+                                  "flex items-center gap-1 ml-auto rounded-sm px-1.5 py-0.5 transition-colors",
                                   "hover:bg-muted/60 cursor-pointer select-none",
                                   due.net > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground/50",
                                 ].join(" ")}

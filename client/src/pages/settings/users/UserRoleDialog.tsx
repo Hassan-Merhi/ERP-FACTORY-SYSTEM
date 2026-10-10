@@ -278,7 +278,7 @@ export function UserRoleDialog({ open, onClose, userId, companies, editingRole }
                                       });
                                     }
                                   }}
-                                  className="rounded"
+                                  className="rounded-sm"
                                 />
                                 <span className="font-medium">{loc.name}</span>
                                 <span className="text-muted-foreground">({loc.code})</span>

@@ -369,7 +369,7 @@ export default function DailyScan() {
             value={selectedDate}
             max={today}
             onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
-            className="bg-transparent text-sm font-medium outline-none"
+            className="bg-transparent text-sm font-medium outline-hidden"
             data-testid="input-daily-scan-date"
           />
         </div>

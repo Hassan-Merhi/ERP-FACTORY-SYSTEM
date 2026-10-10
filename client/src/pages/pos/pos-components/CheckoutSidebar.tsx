@@ -143,7 +143,7 @@ export function CheckoutSidebar({
               type="date"
               value={saleDate}
               onChange={(e) => setSaleDate(e.target.value)}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm font-mono w-full focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 px-3 rounded-md border border-input bg-background text-sm font-mono w-full focus:outline-hidden focus:ring-2 focus:ring-ring"
               data-testid="input-sale-date"
             />
           )}

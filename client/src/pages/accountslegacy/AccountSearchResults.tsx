@@ -62,7 +62,7 @@ export function AccountSearchResults({ model }: { model: AccountsLegacyModel }) 
             {acc.type === "ledger" && (
               <button
                 type="button"
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground shrink-0"
                 onClick={() => model.openEditAccountDialog(acc)}
                 title="Edit account"
                 aria-label={`Edit ${acc.name}`}

@@ -85,7 +85,7 @@ export function StartContractForm({
         <div>
           <Label>Currency</Label>
           <select
-            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+            className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-hidden focus:ring-1 focus:ring-ring"
             value={form.currency}
             onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))}
             data-testid={`select-${testIdPrefix}-contract-currency`}

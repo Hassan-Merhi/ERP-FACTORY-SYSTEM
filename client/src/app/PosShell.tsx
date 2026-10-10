@@ -60,10 +60,10 @@ const posWorkspaceClasses = [
   "[&_table]:min-w-max",
   "[&_th]:whitespace-nowrap",
   "[&_td]:align-middle",
-  "[&_[role=dialog]]:max-w-[calc(100vw-1rem)]",
-  "[&_[role=listbox]]:max-h-[min(24rem,70dvh)]",
-  "[&_[data-pos-mobile-page]]:max-w-full",
-  "[&_[data-table-scroll-region]]:max-w-full",
+  "**:[[role=dialog]]:max-w-[calc(100vw-1rem)]",
+  "**:[[role=listbox]]:max-h-[min(24rem,70dvh)]",
+  "**:data-pos-mobile-page:max-w-full",
+  "**:data-table-scroll-region:max-w-full",
   "[&_.tabular-nums]:font-variant-numeric-tabular-nums",
 ].join(" ");
 
@@ -222,7 +222,7 @@ export function PosShell({
                     data-testid="button-open-palette"
                   >
                     <Search className="h-4 w-4" aria-hidden="true" />
-                    <kbd className="hidden h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] lg:inline-flex">
+                    <kbd className="hidden h-5 items-center gap-1 rounded-sm border bg-muted px-1.5 font-mono text-[10px] lg:inline-flex">
                       {typeof navigator !== "undefined" && /Mac|iPod|iPhone|iPad/.test(navigator.platform)
                         ? "⌘ /"
                         : "Ctrl /"}
@@ -238,7 +238,7 @@ export function PosShell({
               tabIndex={-1}
               aria-label="Point of sale workspace"
               data-pos-workspace="true"
-              className={`${posWorkspaceClasses} outline-none ${
+              className={`${posWorkspaceClasses} outline-hidden ${
                 isFullHeightRoute
                   ? "flex-1 min-w-0 overflow-hidden overscroll-contain"
                   : "flex-1 min-w-0 overflow-x-hidden overflow-y-auto overscroll-contain p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-6"

@@ -215,7 +215,7 @@ export default function ProductionRawStock() {
     <div className="min-w-0 space-y-4 p-3 sm:space-y-6 sm:p-6" data-testid="production-raw-stock-page">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/30 to-amber-600/10">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-amber-500/25 bg-linear-to-br from-amber-500/30 to-amber-600/10">
             <FlaskConical className="h-4.5 w-4.5 text-amber-500" />
           </div>
           <div className="min-w-0">
@@ -228,7 +228,7 @@ export default function ProductionRawStock() {
         <div className="grid w-full grid-cols-1 gap-2 min-[360px]:grid-cols-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
           <Button
             onClick={() => setCreateMixBatchOpen(true)}
-            className="h-11 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400 sm:h-9"
+            className="h-11 gap-2 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-blue-700 hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-400 sm:h-9"
             data-testid="button-create-mix-batch"
           >
             <Layers className="h-4 w-4" /> <span className="hidden sm:inline">New Mix Batch</span>
@@ -236,7 +236,7 @@ export default function ProductionRawStock() {
           </Button>
           <Button
             onClick={() => setOffloadDialogOpen(true)}
-            className="h-11 gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-9"
+            className="h-11 gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-semibold text-white shadow-xs transition-all hover:-translate-y-0.5 hover:bg-emerald-700 hover:shadow-md dark:bg-emerald-500 dark:text-emerald-950 dark:hover:bg-emerald-400 sm:h-9"
             data-testid="button-offload-container"
           >
             <ArrowDown className="h-4 w-4" /> Offload Container
@@ -244,7 +244,7 @@ export default function ProductionRawStock() {
           <Button
             variant="outline"
             onClick={() => setCategoriesDialogOpen(true)}
-            className="h-11 gap-2 rounded-lg border-amber-500/40 bg-amber-500/5 px-3 text-xs font-semibold text-amber-700 shadow-sm transition-all hover:-translate-y-0.5 hover:border-amber-500/60 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-9 sm:w-auto"
+            className="h-11 gap-2 rounded-lg border-amber-500/40 bg-amber-500/5 px-3 text-xs font-semibold text-amber-700 shadow-xs transition-all hover:-translate-y-0.5 hover:border-amber-500/60 hover:bg-amber-500/10 hover:shadow-md dark:text-amber-300 min-[360px]:col-span-2 sm:h-9 sm:w-auto"
             data-testid="button-manage-categories"
           >
             <Tag className="h-4 w-4" /> Categories

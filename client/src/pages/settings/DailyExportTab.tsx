@@ -223,7 +223,7 @@ export function DailyExportTab({
                   <button
                     key={f}
                     onClick={() => setHistoryFilter(f)}
-                    className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${historyFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover-elevate"}`}
+                    className={`px-2.5 py-1 rounded-sm text-xs font-medium transition-colors ${historyFilter === f ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover-elevate"}`}
                     data-testid={`filter-history-${f}`}
                   >
                     {f.charAt(0).toUpperCase() + f.slice(1)}
