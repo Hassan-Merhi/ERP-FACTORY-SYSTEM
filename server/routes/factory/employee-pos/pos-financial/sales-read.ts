@@ -8,10 +8,40 @@ import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { factoryPosSales, factoryPosSaleItems } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { factoryPosSales, factoryPosSaleItems, ledgerAccounts } from "@shared/schema";
+import { eq, and, desc, inArray, isNull, asc } from "drizzle-orm";
 
 export function registerPosSalesReadRoutes(app: Express) {
+  // Read-only dropdown options for Factory POS. Do not use /api/ledger-accounts:
+  // that shared route requires Accounting module permission and is intentionally
+  // suppressed on non-Accounting Factory screens.
+  app.get("/api/factory/pos/account-options", requireAuth, async (req: Request, res: Response) => {
+    try {
+      // Always scope to the active Factory company; never accept companyId from query/body.
+      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+      if (!companyId) return res.status(400).json({ message: "No company selected" });
+      const accounts = await db
+        .select({
+          id: ledgerAccounts.id,
+          name: ledgerAccounts.name,
+          accountType: ledgerAccounts.accountType,
+        })
+        .from(ledgerAccounts)
+        .where(
+          and(
+            eq(ledgerAccounts.companyId, companyId),
+            isNull(ledgerAccounts.deletedAt),
+            eq(ledgerAccounts.active, true),
+            inArray(ledgerAccounts.accountType, ["Cash", "Expense", "Direct Expense", "Indirect Expense"])
+          )
+        )
+        .orderBy(asc(ledgerAccounts.name));
+      return res.json(accounts);
+    } catch (error: unknown) {
+      return res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
+
   app.get("/api/factory/pos/sales", requireAuth, async (req: Request, res: Response) => {
     try {
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;

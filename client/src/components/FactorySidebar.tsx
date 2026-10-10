@@ -12,6 +12,7 @@ import {
   TrendingUp,
   MapPin,
   Settings,
+  ShoppingCart,
   HardHat,
   UserRound,
   ClipboardCheck,
@@ -88,6 +89,7 @@ const FACTORY_NAV_ICONS: Record<string, typeof Package> = {
   "factory/raw-materials": Package,
   "factory/waste-dispatch": Trash2,
   "factory/bales-hub": History,
+  "factory/pos": ShoppingCart,
   "factory/invoicing": FileText,
   "factory/location-inventory": MapPin,
   "factory/containers-hub": Container,
@@ -193,11 +195,7 @@ export function useFactoryVisibleSections(user?: FactorySidebarUser): {
       const enabled = defaultOn ? settings?.[page.featureFlag] !== false : settings?.[page.featureFlag] === true;
       if (!enabled) return false;
     }
-    if (
-      myAccess &&
-      !myAccess.fullAccess &&
-      !hasFactoryPageKey(page, myAccess.pageKeys)
-    ) {
+    if (myAccess && !myAccess.fullAccess && !hasFactoryPageKey(page, myAccess.pageKeys)) {
       return false;
     }
     return true;

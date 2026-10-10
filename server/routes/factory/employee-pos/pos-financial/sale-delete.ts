@@ -11,6 +11,7 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { reverseFactoryPosSaleFinancialsTx } from "./sale-financials";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
   // DELETE /api/factory/pos/sales/:id — void a factory POS sale
@@ -55,6 +56,8 @@ export function registerPosSaleDeleteRoutes(app: Express) {
             }
           }
         }
+        // Take the sale's receipt voucher, daybook rows and customer balance back out of the books
+        await reverseFactoryPosSaleFinancialsTx(tx, companyId, saleId);
         // Mark sale as voided
         await tx.update(factoryPosSales).set({ status: "VOIDED" }).where(eq(factoryPosSales.id, saleId));
       });
