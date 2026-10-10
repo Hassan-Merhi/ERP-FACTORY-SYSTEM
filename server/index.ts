@@ -34,6 +34,7 @@ import { capacitorCors } from "./middleware/capacitorCors";
 import { buildVersionHeader, apiNoCache, slowRequestLogger } from "./middleware/httpConventions";
 import { buildSessionMiddleware } from "./startup/sessionMiddleware";
 import { ensureRuntimeSchema } from "./startup/ensureRuntimeSchema";
+import { backfillStockAdjustmentInventorySide } from "./startup/stockAdjustmentInventoryBackfill";
 import { ensureClosedPeriodGuard } from "./services/accounting/closedPeriodGuard";
 import { runPostStartupJobs } from "./startup/postStartupJobs";
 import { serveProductionClient } from "./startup/staticServing";
@@ -256,6 +257,14 @@ let migrationsDone = false;
       // Needs fiscal_period_closures from ensureRuntimeSchema. Fatal on failure:
       // serving writes without the closed-period lock would let closed books change.
       await ensureClosedPeriodGuard(pool);
+      // Data repair, after the closed-period guard so closed books stay closed.
+      // Non-fatal: a failure leaves old vouchers as they were and boot goes on.
+      try {
+        const backfill = await backfillStockAdjustmentInventorySide(pool);
+        logger.info("[startup] ✓ Stock adjustment Inventory side ensured", backfill);
+      } catch (err: unknown) {
+        logger.error("[startup] Stock adjustment Inventory backfill failed", { error: getErrorMessage(err) });
+      }
       await ensureFinancialOperationRequests(pool);
       await ensureRecurringJournalSchema(pool);
       await ensurePriorityScanSchema(pool);

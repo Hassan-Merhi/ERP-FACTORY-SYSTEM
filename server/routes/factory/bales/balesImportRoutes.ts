@@ -22,7 +22,7 @@ import {
   factoryBaleImportBatches,
 } from "@shared/schema";
 import { eq, and, asc, desc, sql, inArray, ilike } from "drizzle-orm";
-import { MoneyDecimal, parseMoneyInput } from "../../../lib/money";
+import { lineAmount, MoneyDecimal, parseMoneyInput } from "../../../lib/money";
 
 export function registerBalesImportRoutes(app: Express) {
   // ───────────────────────────────────────────────
@@ -232,8 +232,7 @@ export function registerBalesImportRoutes(app: Express) {
           const status = bale.status || "IN_STOCK";
           const costPerKg = bale.costPerKg || "0";
           const weight = parseFloat(bale.weightKg);
-          const cost = parseFloat(costPerKg);
-          const totalCost = (weight * cost).toFixed(2);
+          const totalCost = lineAmount(bale.weightKg, costPerKg).toFixed(2);
 
           await db.insert(factoryBales).values({
             companyId,

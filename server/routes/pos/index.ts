@@ -13,6 +13,9 @@ import { registerPosCustomerRoutes } from "./posCustomerRoutes";
 import { registerPosWhatsAppRoutes } from "./posWhatsAppRoutes";
 import { registerRetailPosRoutes } from "./retailPosRoutes";
 import { registerRetailStockOpsRoutes } from "./retailStockOpsRoutes";
+import { registerRetailCustomerRoutes } from "./retailCustomerRoutes";
+import { registerRetailSellingRoutes } from "./retailSellingRoutes";
+import { registerRetailStockCountRoutes } from "./retailStockCountRoutes";
 
 export function registerAllPosRoutes(app: Express): void {
   // Run before all POS handlers. The legacy handlers keep their own requireAuth
@@ -24,6 +27,9 @@ export function registerAllPosRoutes(app: Express): void {
 
   registerRetailPosRoutes(app);
   registerRetailStockOpsRoutes(app);
+  registerRetailCustomerRoutes(app);
+  registerRetailSellingRoutes(app);
+  registerRetailStockCountRoutes(app);
   registerPosContainerTrackingRoutes(app);
   registerPosPrintRoutes(app);
   registerPosSalesRoutes(app);

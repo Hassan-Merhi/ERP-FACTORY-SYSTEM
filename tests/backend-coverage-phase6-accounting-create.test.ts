@@ -18,7 +18,11 @@ function voucherIdFrom(body: Record<string, any>): number {
   return Number(body?.voucher?.id ?? body?.posted?.voucher?.id ?? body?.voucherId ?? body?.id);
 }
 
-async function assertPersistedAndBalanced(voucherId: number, expectedType: string, expectedMinEntries = 2): Promise<void> {
+async function assertPersistedAndBalanced(
+  voucherId: number,
+  expectedType: string,
+  expectedMinEntries = 2
+): Promise<void> {
   expect(Number.isInteger(voucherId) && voucherId > 0).toBe(true);
 
   const voucher = await pool.query<{
@@ -127,6 +131,47 @@ describe("Phase 6 canonical accounting creates", () => {
 
       expect(response.status).toBe(200);
       await assertPersistedAndBalanced(voucherIdFrom(response.body), voucherType);
+    },
+    60000
+  );
+
+  it.each([
+    ["central", false],
+    ["optional (legacy route)", true],
+  ] as const)(
+    "answers a %s CFA payment with no exchange rate with 400 and the rate message",
+    async (_path, optional) => {
+      const before = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM vouchers WHERE company_id = $1",
+        [ctx.companyId]
+      );
+      const response = await agent.post("/api/vouchers/payment-receipt").send({
+        voucherType: "Payment",
+        voucherDate: "2026-09-14",
+        paymentAccountType: "ledger",
+        paymentAccountId: ctx.cashAccountId,
+        paymentAccountName: "Cash",
+        currency: "CFA",
+        optional,
+        clientRequestId: `${TEST_PREFIX}-cfa-no-rate-${Date.now()}`,
+        entries: [
+          {
+            accountType: "ledger",
+            accountId: ctx.salesAccountId,
+            accountName: "Sales",
+            amount: "5000",
+            narration: "Phase 6 CFA payment without a rate",
+          },
+        ],
+      });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toMatch(/a valid positive rate is required/);
+      const after = await pool.query<{ count: string }>(
+        "SELECT count(*)::text AS count FROM vouchers WHERE company_id = $1",
+        [ctx.companyId]
+      );
+      expect(after.rows[0].count).toBe(before.rows[0].count);
     },
     60000
   );

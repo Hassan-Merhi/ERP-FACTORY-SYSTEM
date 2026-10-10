@@ -14,7 +14,7 @@ import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
+import { insertStockAdjustmentLedgerEntriesTx } from "./adjustmentLedgerEntries";
 import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
@@ -491,18 +491,15 @@ export async function createStockAdjustment(
       return account.id;
     };
 
-    let productionAccountId: number | null = null;
-    let consumptionAccountId: number | null = null;
+    let adjustmentAccountId: number | null = null;
 
     if (!isOptional) {
-      const adjustmentAccountId = await findOrCreateAdjustmentAccount(
+      adjustmentAccountId = await findOrCreateAdjustmentAccount(
         "STOCK_ADJUSTMENT",
         "Stock Adjustment (Production/Consumption)",
         "Indirect Expense",
         "Dr"
       );
-      productionAccountId = adjustmentAccountId;
-      consumptionAccountId = adjustmentAccountId;
     }
 
     let totalProductionValue = toInventoryDecimal(0);
@@ -633,24 +630,14 @@ export async function createStockAdjustment(
     }
 
     if (!isOptional) {
-      if (shouldInsertAdjustmentVoucherEntry(totalProductionValue, productionAccountId)) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId,
-          ledgerAccountId: productionAccountId,
-          debitAmount: "0",
-          creditAmount: inventoryMoney(totalProductionValue),
-          narration: `Production adjustment - ${adjustmentType} voucher`,
-        });
-      }
-      if (shouldInsertAdjustmentVoucherEntry(totalConsumptionValue, consumptionAccountId)) {
-        await tx.insert(schema.voucherEntries).values({
-          voucherId,
-          ledgerAccountId: consumptionAccountId,
-          debitAmount: inventoryMoney(totalConsumptionValue),
-          creditAmount: "0",
-          narration: `Consumption expense - ${adjustmentType} voucher`,
-        });
-      }
+      await insertStockAdjustmentLedgerEntriesTx(tx, {
+        voucherId,
+        companyId: location.companyId,
+        adjustmentAccountId,
+        adjustmentType,
+        productionValue: totalProductionValue,
+        consumptionValue: totalConsumptionValue,
+      });
     }
 
     const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
