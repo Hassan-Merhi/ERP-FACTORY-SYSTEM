@@ -295,6 +295,11 @@ afterAll(async () => {
       [companyB]
     );
     await client.query(`DELETE FROM vouchers WHERE company_id = $1`, [companyB]);
+    // Lines on the company's factory suppliers go before the suppliers.
+    await client.query(
+      `DELETE FROM voucher_entries WHERE factory_supplier_id IN (SELECT id FROM factory_suppliers WHERE company_id = $1)`,
+      [id]
+    );
   });
   await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [id]);
   for (const table of ["bank_accounts", "ledger_accounts"]) {

@@ -69,7 +69,9 @@ beforeAll(async () => {
     [ctx.cashAccountId, "250.00", "0"],
     [ctx.salesAccountId, "0", "250.00"],
   ]);
-  await voucher("Consumption", "CONS", [[ctx.salesAccountId, "12.50", "0"]]);
+  // The balance guard exempts a one-sided stock voucher only when a stock
+  // document backs it; this fixture has none, so it is modelled as a legacy row.
+  await voucher("Consumption", "CONS", [[ctx.salesAccountId, "12.50", "0"]], undefined, true);
   await voucher(
     "Journal",
     "NOACC",
