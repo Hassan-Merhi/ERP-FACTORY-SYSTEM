@@ -10,6 +10,7 @@ import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { factoryWorkers, containerFreight, containerFreightPayments, customerOrders } from "@shared/schema";
+import { MoneyDecimal, moneyString, sumMoney, toMoney } from "../../lib/money";
 
 export function registerFactoryCashflowRoutes(app: Express, requireAuth: RequestHandler, db: Database) {
   app.get("/api/factory/cashflow", requireAuth, async (req: Request, res: Response) => {
@@ -41,22 +42,20 @@ export function registerFactoryCashflowRoutes(app: Express, requireAuth: Request
         .where(eq(containerFreightPayments.companyId, companyId));
 
       const upcomingFreight = [];
-      let totalFreightOutgoing = 0;
+      let totalFreightOutgoing = new MoneyDecimal(0);
 
       for (const f of freightEntries) {
-        const amount = parseFloat(f.freightAmount || "0");
-        const paid = freightPayments
-          .filter((p) => p.containerFreightId === f.id)
-          .reduce((s: number, p) => s + parseFloat(p.amount || "0"), 0);
-        const remaining = amount - paid;
-        if (remaining > 0.01) {
+        const amount = toMoney(f.freightAmount);
+        const paid = sumMoney(freightPayments.filter((p) => p.containerFreightId === f.id).map((p) => p.amount));
+        const remaining = amount.minus(paid);
+        if (remaining.gt("0.01")) {
           upcomingFreight.push({
             vendorName: f.vendorName || "Unknown",
-            amount: Math.round(amount * 100) / 100,
+            amount: Number(moneyString(amount)),
             dueDate: f.dueDate,
-            remaining: Math.round(remaining * 100) / 100,
+            remaining: Number(moneyString(remaining)),
           });
-          totalFreightOutgoing += remaining;
+          totalFreightOutgoing = totalFreightOutgoing.plus(remaining);
         }
       }
 
@@ -65,27 +64,25 @@ export function registerFactoryCashflowRoutes(app: Express, requireAuth: Request
         .from(factoryWorkers)
         .where(and(eq(factoryWorkers.companyId, companyId), eq(factoryWorkers.active, true)));
 
-      const totalMonthlyPayroll = activeWorkers.reduce((s: number, w) => {
-        return s + parseFloat(w.baseSalary || "0");
-      }, 0);
+      const totalMonthlyPayroll = sumMoney(activeWorkers.map((w) => w.baseSalary));
 
       const payPeriods = Math.ceil(days / 30);
-      const payrollEstimate = totalMonthlyPayroll * payPeriods;
+      const payrollEstimate = totalMonthlyPayroll.times(payPeriods);
 
-      const totalOutgoing = totalFreightOutgoing + payrollEstimate;
+      const totalOutgoing = totalFreightOutgoing.plus(payrollEstimate);
 
       const pendingOrders = await db
         .select()
         .from(customerOrders)
         .where(and(eq(customerOrders.companyId, companyId), eq(customerOrders.status, "FINALIZED")));
 
-      const expectedIncome = pendingOrders.reduce((s: number, o) => s + parseFloat(o.grandTotal || "0"), 0);
+      const expectedIncome = sumMoney(pendingOrders.map((o) => o.grandTotal));
 
       res.json({
         upcomingFreight,
-        payrollEstimate: Math.round(payrollEstimate * 100) / 100,
-        totalOutgoing: Math.round(totalOutgoing * 100) / 100,
-        expectedIncome: Math.round(expectedIncome * 100) / 100,
+        payrollEstimate: Number(moneyString(payrollEstimate)),
+        totalOutgoing: Number(moneyString(totalOutgoing)),
+        expectedIncome: Number(moneyString(expectedIncome)),
       });
     } catch (error: unknown) {
       logger.error("Error fetching cash flow forecast:", { error: error });
