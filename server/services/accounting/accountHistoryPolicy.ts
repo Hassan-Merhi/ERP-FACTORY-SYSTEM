@@ -13,6 +13,10 @@ import { classifyAccountType } from "./accountClassification";
  *   - opening (amount or side) of an account with posted lines: Admin or Owner
  *     only (Developer passes, as with requireRole), audited in the writer's
  *     transaction; the opening-balance lock still refuses it after a close;
+ *   - wave 18 B decision: the same holds for an account with no lines whose
+ *     current opening is not zero (an opening-only account is already in the
+ *     trial balance, so changing it moves reported figures). Setting the first
+ *     opening of an empty account (zero before) stays open to the editors;
  *   - account type change across category (classifyAccountType: Expense to
  *     Asset, Income to Liability...) once the account has a line on a
  *     non-deleted voucher: refused (409). A same-category change (a subtype,
@@ -46,6 +50,8 @@ export const ACCOUNT_HISTORY_EDIT_ROLES: ReadonlySet<string> = new Set(["Admin",
 export const ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE = "ACCOUNT_OPENING_CHANGE_FORBIDDEN" as const;
 export const ACCOUNT_OPENING_CHANGE_FORBIDDEN_MESSAGE =
   "Only an Admin or Owner can change the opening balance of an account that already has posted entries.";
+export const ACCOUNT_OPENING_ONLY_CHANGE_FORBIDDEN_MESSAGE =
+  "Only an Admin or Owner can change an opening balance that is not zero.";
 export const ACCOUNT_TYPE_CATEGORY_CHANGE_CODE = "ACCOUNT_TYPE_CATEGORY_CHANGE_REFUSED" as const;
 export const ACCOUNT_TYPE_CATEGORY_CHANGE_MESSAGE =
   "This account already has posted entries, so its type cannot be moved to another category (for example Expense to Asset). Create a new account and move the balance with a journal entry.";
@@ -136,13 +142,14 @@ export function requestRole(req: {
   return req.user?.role ?? req.session?.currentRole ?? null;
 }
 
+const amount = (value: unknown) => toMoney(typeof value === "number" ? String(value) : (value as string | null));
+
 /** Same opening: equal amounts (exact Decimal) and, when non-zero, the same side (`defaultSide` when unset). */
 function sameOpening(
   before: { amount: unknown; side?: unknown },
   after: { amount: unknown; side?: unknown },
   defaultSide: "Dr" | "Cr"
 ): boolean {
-  const amount = (value: unknown) => toMoney(typeof value === "number" ? String(value) : (value as string | null));
   const side = (value: unknown) => (value === "Dr" || value === "Cr" ? value : defaultSide);
   const beforeAmount = amount(before.amount);
   if (!beforeAmount.equals(amount(after.amount))) return false;
@@ -202,8 +209,22 @@ export function assertAccountChangeAllowed(check: AccountChangeCheck): {
     }
   }
   const openingChanged = openingChanges(check);
-  if (openingChanged && check.lines.live > 0 && !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))) {
-    throw new AccountHistoryError(ACCOUNT_OPENING_CHANGE_FORBIDDEN_MESSAGE, 403, ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE);
+  if (openingChanged && !ACCOUNT_HISTORY_EDIT_ROLES.has(String(check.role ?? ""))) {
+    if (check.lines.live > 0) {
+      throw new AccountHistoryError(
+        ACCOUNT_OPENING_CHANGE_FORBIDDEN_MESSAGE,
+        403,
+        ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE
+      );
+    }
+    // Wave 18 B: an opening-only account (no lines, a non-zero opening) too.
+    if (check.opening && !amount(check.opening.before.amount).isZero()) {
+      throw new AccountHistoryError(
+        ACCOUNT_OPENING_ONLY_CHANGE_FORBIDDEN_MESSAGE,
+        403,
+        ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE
+      );
+    }
   }
   return { openingChanged, typeChanged, companyChanged };
 }

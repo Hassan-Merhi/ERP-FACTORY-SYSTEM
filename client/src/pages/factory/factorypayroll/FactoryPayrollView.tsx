@@ -1,16 +1,5 @@
 import { useState } from "react";
-import {
-  CheckCircle2,
-  Download,
-  DollarSign,
-  Edit,
-  FileText,
-  GitMerge,
-  Loader2,
-  Table2,
-  Upload,
-  Users,
-} from "lucide-react";
+import { CheckCircle2, Download, DollarSign, Edit, FileText, Loader2, Table2, Upload, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -74,7 +63,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     setPayEffectiveDate,
     exportingPdf,
     exportingExcel,
-    migrating,
     workerSearch,
     setWorkerSearch,
     workerImporting,
@@ -93,7 +81,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     handleAdjustSubmit,
     handleConfirmPayment,
     handleWorkerImport,
-    handleMigrateCitySplit,
     handleExportPdf,
     handleExportExcel,
     totals,
@@ -166,16 +153,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                   <Download className="mr-1 h-4 w-4" />
                 )}{" "}
                 Export Excel
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleMigrateCitySplit}
-                disabled={!selectedCompanyId || migrating}
-                data-testid="button-migrate-city-split"
-                title="One-time: split historical salary/bonus by city"
-              >
-                {migrating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <GitMerge className="mr-1 h-4 w-4" />}{" "}
-                Split by City
               </Button>
             </>
           )}

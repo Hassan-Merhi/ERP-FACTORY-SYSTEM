@@ -527,6 +527,40 @@ export async function runAccountingIntegrityDiagnostic(companyId: number): Promi
       needsReview
     )
   );
+  // Wave 18 (B): the INVENTORY control account is found by code only and never
+  // changed; a row that blocks it (INVENTORY deleted or not an asset, or no
+  // INVENTORY and another account holding the name) makes stock postings refuse.
+  const inventoryCandidates = await rows<{
+    id: number;
+    code: string;
+    name: string;
+    account_type: string;
+    sub_type: string | null;
+    deleted: boolean;
+  }>(sql`
+    SELECT id, code, name, account_type, sub_type, (deleted_at IS NOT NULL) AS deleted
+      FROM ledger_accounts
+     WHERE company_id = ${companyId}
+       AND (code = 'INVENTORY' OR (deleted_at IS NULL AND name = 'Inventory'))
+     ORDER BY id
+  `);
+  const inventoryByCode = inventoryCandidates.find((account) => account.code === "INVENTORY");
+  const inventoryConflicts = inventoryByCode
+    ? inventoryByCode.deleted
+      ? [{ ...inventoryByCode, reason: "deleted" }]
+      : classifyAccountType(inventoryByCode.account_type, inventoryByCode.sub_type) !== "asset"
+        ? [{ ...inventoryByCode, reason: "not_asset" }]
+        : []
+    : inventoryCandidates.map((account) => ({ ...account, reason: "name_taken" }));
+  checks.push(
+    check(
+      "inventory_control_account_conflict",
+      inventoryConflicts.length ? "warn" : "pass",
+      inventoryConflicts.length,
+      "The INVENTORY control account is resolved by code only and never retyped, renamed or restored. Listed: an INVENTORY account that is deleted or not an asset, or (with no INVENTORY account) another account holding the name Inventory. Stock and credit-note postings that need the control account refuse until it is corrected.",
+      inventoryConflicts
+    )
+  );
   const hasEquity = accounts.some((account) => account.account_type === "Equity");
   checks.push(
     check(

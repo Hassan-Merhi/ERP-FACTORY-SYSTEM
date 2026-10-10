@@ -43,8 +43,10 @@ import { sql } from "drizzle-orm";
 
 import type { DatabaseOrTransaction, DbTransaction } from "../../../db";
 import { db } from "../../../db";
+import { isClosedPeriodError } from "../../../lib/closedPeriodError";
 import { logger } from "../../../lib/logger";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { companyClosedThrough, isDateInClosedPeriod, runInCompanyPostingScope } from "../scheduledPostingScope";
 import { isPerpetualInventoryActive } from "./cutover";
 import { factoryStockValuation } from "./factoryValuation";
 import {
@@ -80,7 +82,9 @@ export interface FactoryStockJournalResult {
   date: string;
   voucherId: number | null;
   /** Why nothing was posted, when nothing was. */
-  skipped?: "not-active" | "supplier-partner" | "nothing-to-post";
+  skipped?: "not-active" | "supplier-partner" | "nothing-to-post" | "period-closed";
+  /** The company's closed-books date, when the run was skipped as period-closed. */
+  closedThrough?: string | null;
   accounts: Array<{ accountCode: string; target: string; ledgerBalance: string; amount: string }>;
   received: string;
   /** What is left for Production Variance, once the tagged changes have their own lines. */
@@ -386,17 +390,59 @@ export async function syncFactoryStockJournalTx(
   };
 }
 
-/** The evening run: today's journal for every company whose cut-over is applied. */
+/**
+ * The evening run: today's journal for every company whose cut-over is applied.
+ * The companies are listed from the scheduler's scope; each company's journal
+ * posts in that company's tenant scope (wave 18 A), so the closed-period guard
+ * and the opening lock apply. A date in a closed period is skipped and
+ * reported (`period-closed`), never forced.
+ */
 export async function runFactoryStockJournals(date: string = todayUtc()): Promise<FactoryStockJournalResult[]> {
   const companies = await rows<{ company_id: number }>(
     db,
     sql`SELECT company_id FROM gl_inventory_cutovers WHERE effective_from <= ${date}::date ORDER BY company_id`
   );
   const results: FactoryStockJournalResult[] = [];
+  const periodClosed = (companyId: number, closedThrough: string | null): FactoryStockJournalResult => ({
+    companyId,
+    date,
+    voucherId: null,
+    skipped: "period-closed",
+    closedThrough,
+    accounts: [],
+    received: "0.00",
+    variance: "0.00",
+    explained: {},
+    unvalued: 0,
+  });
   for (const { company_id } of companies) {
     try {
-      results.push(await db.transaction((tx) => syncFactoryStockJournalTx(tx, company_id, date)));
+      const result = await runInCompanyPostingScope(company_id, () =>
+        db.transaction(async (tx) => {
+          const closedThrough = await companyClosedThrough(company_id, tx);
+          if (isDateInClosedPeriod(closedThrough, date)) return periodClosed(company_id, closedThrough);
+          return syncFactoryStockJournalTx(tx, company_id, date);
+        })
+      );
+      if (result.skipped === "period-closed") {
+        logger.warn("Factory stock journal skipped: date in a closed period", {
+          module: "perpetual-inventory",
+          companyId: company_id,
+          date,
+          closedThrough: result.closedThrough,
+        });
+      }
+      results.push(result);
     } catch (error: unknown) {
+      if (isClosedPeriodError(error)) {
+        results.push(periodClosed(company_id, null));
+        logger.warn("Factory stock journal skipped: the closed-period guard refused it", {
+          module: "perpetual-inventory",
+          companyId: company_id,
+          date,
+        });
+        continue;
+      }
       logger.error("Factory stock journal failed", { module: "perpetual-inventory", companyId: company_id, error });
     }
   }

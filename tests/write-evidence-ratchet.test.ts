@@ -39,6 +39,7 @@ const voucherReview = JSON.parse(
     activeReviewed: number;
     explicitReplayGuard: number;
     wave16NoLongerCreates: number;
+    wave18NoLongerCreates: number;
     migrationImportRepair: number;
     operationalWithoutRequestIdentity: number;
     phase3InfrastructureCompleted: number;
@@ -133,16 +134,17 @@ describe("write evidence ratchet", () => {
   });
 
   // Wave 16 (A): balance-repair/undo.ts no longer inserts vouchers (it restores
-  // the retired one), so the active backlog is 13.
-  it("keeps only the exact 13 reviewed compatibility writers in the active voucher backlog", () => {
+  // the retired one). Wave 18 (B): the retired payroll migrate-city-split route
+  // was the payroll migrations file's only voucher creator, so the active backlog is 12.
+  it("keeps only the exact 12 reviewed compatibility writers in the active voucher backlog", () => {
     const classified = Object.values(voucherReview.reviewed).flatMap((group) => group.files);
 
     expect(voucherReview.reviewState).toBe("REVIEWED FILE BY FILE");
-    expect(voucherReview.summary.activeReviewed).toBe(13);
-    expect(voucherReview.summary.explicitReplayGuard).toBe(13);
+    expect(voucherReview.summary.activeReviewed).toBe(12);
+    expect(voucherReview.summary.explicitReplayGuard).toBe(12);
     expect(voucherReview.summary.migrationImportRepair).toBe(0);
     expect(voucherReview.summary.operationalWithoutRequestIdentity).toBe(0);
-    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(13);
+    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(12);
     expect([...classified, ...voucherReview.unreviewed].sort()).toEqual(
       [...baseline.voucherWritesWithoutRequestIdentity.files].sort()
     );
@@ -212,7 +214,8 @@ describe("write evidence ratchet", () => {
         voucherReview.summary.phase5OperationalCompleted +
         voucherReview.summary.phase6SpecialPurposeCompleted +
         voucherReview.summary.phase8RequestIdentityCompleted +
-        voucherReview.summary.wave16NoLongerCreates
+        voucherReview.summary.wave16NoLongerCreates +
+        voucherReview.summary.wave18NoLongerCreates
     ).toBe(voucherReview.summary.initialReviewed);
   });
 

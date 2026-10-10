@@ -203,10 +203,14 @@ describe("account change rules (policy)", () => {
     for (const role of ["Admin", "Owner", "Developer"]) {
       expect(code(() => assertAccountChangeAllowed({ role, lines: lines(1), opening: opening("1", "2") }))).toBeNull();
     }
-    // No lines: anyone who may edit the account; an unchanged opening (100 vs 100.00) is no change.
+    // No lines and a zero opening: anyone who may edit the account sets the first opening (wave 18 B:
+    // a non-zero opening is Admin/Owner even with no lines); an unchanged opening (100 vs 100.00) is no change.
     expect(
-      code(() => assertAccountChangeAllowed({ role: "POS", lines: lines(0), opening: opening("1", "2") }))
+      code(() => assertAccountChangeAllowed({ role: "POS", lines: lines(0), opening: opening("0", "2") }))
     ).toBeNull();
+    expect(code(() => assertAccountChangeAllowed({ role: "POS", lines: lines(0), opening: opening("1", "2") }))).toBe(
+      ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE
+    );
     expect(
       code(() => assertAccountChangeAllowed({ role: "POS", lines: lines(3), opening: opening("100", "100.00") }))
     ).toBeNull();
@@ -320,9 +324,8 @@ describe("bank account edits", () => {
       .put(`/api/bank-accounts/${bankId}`)
       .send({ openingBalance: "150", openingBalanceSide: "Dr" });
     expect(refused.status).toBe(403);
-    expect(refused.body.code).toBe(ACCOUNT_OPENING_CHANGE_FORBIDDEN_CODE);
-    // Other fields stay editable for the same user.
-    expect((await agent.put(`/api/bank-accounts/${bankId}`).send({ name: `${PREFIX} Bank renamed` })).status).toBe(200);
+    // Wave 18 (B): every bank edit is Admin/Owner now (it was sign-in only).
+    expect((await agent.put(`/api/bank-accounts/${bankId}`).send({ name: `${PREFIX} Bank renamed` })).status).toBe(403);
 
     await setRole("Owner");
     expect(

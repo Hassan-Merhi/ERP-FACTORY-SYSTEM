@@ -274,4 +274,136 @@ export const wave8ReleaseTranslationsPart4: readonly Phase3SharedUiEntry[] = [
     ar: "جرد مخزون التجزئة {{0}}",
     fr: "Inventaire du stock de détail {{0}}",
   },
+  // Wave 18 A: rental "post due accruals now" (the units page no longer posts on load).
+  {
+    en: "Post due accruals now",
+    ar: "ترحيل الاستحقاقات المستحقة الآن",
+    fr: "Comptabiliser maintenant les loyers échus",
+  },
+  {
+    en: "Due rent posted",
+    ar: "تم ترحيل الإيجار المستحق",
+    fr: "Loyers échus comptabilisés",
+  },
+  {
+    en: "Rows accrued: ${result.accrued}; scheduled payments posted: ${result.scheduledPaymentsPosted}; skipped (closed period): ${result.skipped.length}",
+    ar: "الأشهر المستحقة: {{0}}؛ الدفعات المجدولة المرحّلة: {{1}}؛ المتخطاة (فترة مقفلة): {{2}}",
+    fr: "Mois comptabilisés : {{0}} ; paiements planifiés comptabilisés : {{1}} ; ignorés (période clôturée) : {{2}}",
+  },
+  {
+    en: "Could not post due accruals",
+    ar: "تعذر ترحيل الاستحقاقات المستحقة",
+    fr: "Impossible de comptabiliser les loyers échus",
+  },
+  // Wave 18 A: legacy prepaid shop rent recognition (Owner preview/apply).
+  {
+    en: "The legacy prepaid rent recognition applies to the ERP and factory shop rentals only.",
+    ar: "ينطبق الاعتراف بالإيجار المدفوع مقدمًا القديم على إيجارات محلات ERP والمصنع فقط.",
+    fr: "La comptabilisation des anciens loyers payés d’avance ne concerne que les locations de boutiques ERP et usine.",
+  },
+  {
+    en: "There is no legacy prepaid rent month to recognise.",
+    ar: "لا يوجد شهر إيجار مدفوع مقدمًا قديم للاعتراف به.",
+    fr: "Aucun ancien mois de loyer payé d’avance n’est à comptabiliser.",
+  },
+  {
+    en: "The legacy prepaid rent recognition changed since it was reviewed; review it again before applying.",
+    ar: "تغيّر الاعتراف بالإيجار المدفوع مقدمًا القديم منذ مراجعته؛ راجعه مرة أخرى قبل التطبيق.",
+    fr: "La comptabilisation des anciens loyers payés d’avance a changé depuis sa revue ; revoyez-la avant de l’appliquer.",
+  },
+  {
+    en: "Perpetual inventory applies from ${effectiveFrom}: stock cannot be imported from a spreadsheet. Enter it through costed receipts and mixes.",
+    ar: "يُطبَّق الجرد الدائم اعتبارًا من {{0}}: لا يمكن استيراد المخزون من جدول بيانات. أدخله عبر إيصالات وخلطات ذات تكلفة.",
+    fr: "L’inventaire permanent s’applique à partir du {{0}} : le stock ne peut pas être importé d’un tableur. Saisissez-le par des réceptions et des mélanges valorisés.",
+  },
+  {
+    en: "Perpetual inventory applies from ${effectiveFrom}: a stock entry cannot be dated before it.",
+    ar: "يُطبَّق الجرد الدائم اعتبارًا من {{0}}: لا يمكن تأريخ إدخال مخزون قبل هذا التاريخ.",
+    fr: "L’inventaire permanent s’applique à partir du {{0}} : une entrée de stock ne peut pas être datée avant cette date.",
+  },
+  {
+    en: "kind must be customer, supplier or factorySupplier",
+    ar: "يجب أن يكون النوع customer أو supplier أو factorySupplier",
+    fr: "kind doit être customer, supplier ou factorySupplier",
+  },
+  {
+    en: 'Ledger account "${name}" could not be found or created',
+    ar: 'تعذر العثور على حساب الأستاذ "{{0}}" أو إنشاؤه',
+    fr: "Le compte du grand livre « {{0}} » est introuvable et n’a pas pu être créé",
+  },
+  {
+    en: "The request company does not match the active company.",
+    ar: "شركة الطلب لا تطابق الشركة النشطة.",
+    fr: "La société de la requête ne correspond pas à la société active.",
+  },
+  {
+    en: "Only an Admin or Owner can change an opening balance that is not zero.",
+    ar: "يمكن للمسؤول أو المالك فقط تغيير رصيد افتتاحي غير صفري.",
+    fr: "Seul un administrateur ou le propriétaire peut modifier un solde d’ouverture non nul.",
+  },
+  {
+    en: "This bank account or its linked ledger already has voucher entries, so the linked ledger cannot be changed.",
+    ar: "يحتوي هذا الحساب البنكي أو حساب دفتر الأستاذ المرتبط به على قيود سندات بالفعل، لذلك لا يمكن تغيير الحساب المرتبط.",
+    fr: "Ce compte bancaire ou son compte général lié a déjà des écritures, le compte lié ne peut donc pas être modifié.",
+  },
+  {
+    en: "Cannot delete bank account: it has a non-zero opening balance. Move the balance with a journal entry first, or deactivate it instead.",
+    ar: "لا يمكن حذف الحساب البنكي: لديه رصيد افتتاحي غير صفري. انقل الرصيد بقيد يومية أولاً، أو قم بتعطيله بدلاً من ذلك.",
+    fr: "Impossible de supprimer le compte bancaire : il a un solde d’ouverture non nul. Transférez d’abord le solde par une écriture de journal, ou désactivez-le.",
+  },
+  {
+    en: "An account is deleted with the delete action, not by editing it.",
+    ar: "يُحذف الحساب بإجراء الحذف، وليس بتعديله.",
+    fr: "Un compte se supprime avec l’action de suppression, pas en le modifiant.",
+  },
+  {
+    en: "Only an Admin or Owner can change an account's code or active status.",
+    ar: "يمكن للمسؤول أو المالك فقط تغيير رمز الحساب أو حالة تفعيله.",
+    fr: "Seul un administrateur ou le propriétaire peut modifier le code ou le statut actif d’un compte.",
+  },
+  {
+    en: "The system finds an account by this code, so an account cannot be re-coded to it or away from it.",
+    ar: "يعثر النظام على حساب بهذا الرمز، لذلك لا يمكن تغيير رمز حساب إليه أو منه.",
+    fr: "Le système retrouve un compte par ce code ; un compte ne peut donc pas recevoir ce code ni le perdre.",
+  },
+  {
+    en: "This account is named on voucher lines or has an opening balance, so it cannot be permanently deleted. Keep it in Deleted Items.",
+    ar: "هذا الحساب مذكور في بنود سندات أو لديه رصيد افتتاحي، لذلك لا يمكن حذفه نهائياً. أبقه في العناصر المحذوفة.",
+    fr: "Ce compte figure sur des lignes de pièces ou a un solde d’ouverture ; il ne peut donc pas être supprimé définitivement. Gardez-le dans les éléments supprimés.",
+  },
+  {
+    en: "This customer has an opening balance, so it cannot be permanently deleted. Keep it in Deleted Items.",
+    ar: "لدى هذا العميل رصيد افتتاحي، لذلك لا يمكن حذفه نهائياً. أبقه في العناصر المحذوفة.",
+    fr: "Ce client a un solde d’ouverture ; il ne peut donc pas être supprimé définitivement. Gardez-le dans les éléments supprimés.",
+  },
+  {
+    en: "This voucher was retired by the system when its posting was replaced, so it is kept as history and cannot be permanently deleted.",
+    ar: "أوقف النظام هذا السند عند استبدال ترحيله، لذلك يُحتفظ به كسجل تاريخي ولا يمكن حذفه نهائياً.",
+    fr: "Cette pièce a été retirée par le système lors du remplacement de sa comptabilisation ; elle est conservée comme historique et ne peut pas être supprimée définitivement.",
+  },
+  {
+    en: "The account with code INVENTORY is not an asset account, so it cannot be used as the inventory control account. Correct it in the chart of accounts first (see the accounting integrity diagnostic).",
+    ar: "الحساب ذو الرمز INVENTORY ليس حساب أصول، لذلك لا يمكن استخدامه كحساب مراقبة المخزون. صححه في دليل الحسابات أولاً (راجع تشخيص سلامة المحاسبة).",
+    fr: "Le compte de code INVENTORY n’est pas un compte d’actif ; il ne peut donc pas servir de compte de contrôle des stocks. Corrigez-le d’abord dans le plan comptable (voir le diagnostic d’intégrité comptable).",
+  },
+  {
+    en: "The account with code INVENTORY is deleted, so it cannot be used as the inventory control account. Review it in the accounting integrity diagnostic first.",
+    ar: "الحساب ذو الرمز INVENTORY محذوف، لذلك لا يمكن استخدامه كحساب مراقبة المخزون. راجعه في تشخيص سلامة المحاسبة أولاً.",
+    fr: "Le compte de code INVENTORY est supprimé ; il ne peut donc pas servir de compte de contrôle des stocks. Examinez-le d’abord dans le diagnostic d’intégrité comptable.",
+  },
+  {
+    en: "There is no account with code INVENTORY and another account already uses the name Inventory, so the inventory control account cannot be created. Review it in the accounting integrity diagnostic first.",
+    ar: "لا يوجد حساب بالرمز INVENTORY وحساب آخر يستخدم الاسم Inventory بالفعل، لذلك لا يمكن إنشاء حساب مراقبة المخزون. راجعه في تشخيص سلامة المحاسبة أولاً.",
+    fr: "Il n’existe aucun compte de code INVENTORY et un autre compte porte déjà le nom Inventory ; le compte de contrôle des stocks ne peut donc pas être créé. Examinez-le d’abord dans le diagnostic d’intégrité comptable.",
+  },
+  {
+    en: "The intercompany counterpart voucher has lines in more than one currency or rate, so this edit cannot rescale it. Delete the journal and post the transfer again instead.",
+    ar: "يحتوي السند المقابل بين الشركات على بنود بأكثر من عملة أو سعر، لذلك لا يمكن لهذا التعديل إعادة قياسه. احذف القيد وأعد ترحيل التحويل بدلاً من ذلك.",
+    fr: "La pièce de contrepartie intersociétés a des lignes en plusieurs devises ou taux ; cette modification ne peut donc pas la remettre à l’échelle. Supprimez l’écriture et comptabilisez de nouveau le transfert.",
+  },
+  {
+    en: "The journal had a zero total, so its intercompany counterpart cannot be rescaled. Delete the journal and post the transfer again instead.",
+    ar: "كان إجمالي القيد صفراً، لذلك لا يمكن إعادة قياس مقابله بين الشركات. احذف القيد وأعد ترحيل التحويل بدلاً من ذلك.",
+    fr: "L’écriture avait un total nul ; sa contrepartie intersociétés ne peut donc pas être remise à l’échelle. Supprimez l’écriture et comptabilisez de nouveau le transfert.",
+  },
 ];

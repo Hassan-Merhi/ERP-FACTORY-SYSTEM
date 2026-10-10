@@ -87,6 +87,7 @@ const harness = vi.hoisted(() => {
     findOrCreateLedgerAccount: vi.fn(),
     isRentalPeriodDue: vi.fn(),
     logger: { info: vi.fn(), error: vi.fn() },
+    writeAuditEvent: vi.fn(),
   };
 });
 
@@ -94,6 +95,8 @@ vi.mock("../server/db", () => ({
   db: { select: harness.select, transaction: harness.transaction },
 }));
 vi.mock("../server/lib/logger", () => ({ logger: harness.logger }));
+// Wave 18 A: each accrual voucher is audited in its posting transaction.
+vi.mock("../server/services/audit", () => ({ writeAuditEvent: harness.writeAuditEvent }));
 vi.mock("../server/services/rental/rentalPeriodService", () => ({
   getUtcTodayString: () => "2026-08-11",
   isRentalPeriodDue: harness.isRentalPeriodDue,
@@ -194,6 +197,8 @@ describe("rental accrual positive paths", () => {
 
     expect(result).toEqual({ accrued: 4, skipped: 1 });
     expect(harness.transaction).toHaveBeenCalledTimes(4);
+    expect(harness.writeAuditEvent).toHaveBeenCalledTimes(4);
+    for (const [, executor] of harness.writeAuditEvent.mock.calls) expect(executor).toBe(harness.tx);
     expect(harness.voucherValues).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ description: "Rent accrual - 4 - 08/2026", totalAmount: "275", currency: "USD" }),

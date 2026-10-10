@@ -298,6 +298,32 @@ export function systemAccountDefinition(code: string): SystemAccountDefinition |
   return BY_CODE.get(code);
 }
 
+/**
+ * Codes that posting code resolves an account by (wave 18 B): every registry
+ * code, every RETAIL-* code, and the codes other writers look up literally.
+ * The ledger editor refuses re-coding an account to or from one of them, so a
+ * user edit cannot make a posting path pick another account or lose its own.
+ */
+const CODE_RESOLVED_OUTSIDE_REGISTRY: ReadonlySet<string> = new Set([
+  "PAYROLL_DEPOSIT_EXPENSE",
+  "PAYROLL_DEDUCTION_RECOVERY",
+  "SHOP-RENT-EXP",
+  "ACCR-RENT-PAY",
+  "RENT-INC",
+  "DEF-RENT-REV",
+  "TRANSFER-CLEARING",
+  "SP-PAYDDC",
+  "SP-PREEXP",
+  "SP-IC",
+  "SP-HADI-IC",
+]);
+
+export function isSystemResolvedAccountCode(code: string | null | undefined): boolean {
+  const normalized = (code ?? "").trim().toUpperCase();
+  if (!normalized) return false;
+  return BY_CODE.has(normalized) || normalized.startsWith("RETAIL-") || CODE_RESOLVED_OUTSIDE_REGISTRY.has(normalized);
+}
+
 type Executor = typeof db | DbTransaction;
 
 interface ExistingRow {

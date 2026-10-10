@@ -54,7 +54,10 @@ const DEFAULT_OPENING_SIDE_FUNCTION = `CREATE OR REPLACE FUNCTION erp_default_le
  *     deleted;
  *   - a BEFORE trigger on ledger_accounts: an account whose balance (opening
  *     plus posted lines; a sideless opening on its type's side, as the engine
- *     reads it — wave 16 B) is not zero cannot be soft-deleted.
+ *     reads it — wave 16 B) is not zero cannot be soft-deleted;
+ *   - the same BEFORE trigger on bank_accounts (wave 18 B, v3): a bank whose
+ *     opening plus the lines it owns under the engine's rule is not zero cannot
+ *     be soft-deleted.
  *
  * Existing rows are left as they are: constraints are NOT VALID and the line
  * trigger only checks accounts when they are set or changed. The accounting
@@ -258,6 +261,36 @@ export const LEDGER_INTEGRITY_GUARD_DDL: readonly string[] = [
   `CREATE TRIGGER ledger_accounts_delete_guard
      BEFORE UPDATE OF deleted_at ON ledger_accounts
      FOR EACH ROW EXECUTE FUNCTION erp_ledger_account_delete_guard()`,
+  // Wave 18 (B): the same rule for a bank account. Its balance is the engine's:
+  // the opening (a sideless opening is Dr) plus the posted lines it owns — a
+  // line naming the bank and a ledger account counts on the ledger (wave 10),
+  // so only lines with no ledger account are the bank's.
+  `CREATE OR REPLACE FUNCTION erp_bank_account_delete_guard() RETURNS trigger
+   LANGUAGE plpgsql AS $fn$
+   DECLARE
+     balance numeric;
+   BEGIN
+     IF erp_ledger_integrity_bypassed() OR NEW.deleted_at IS NULL OR OLD.deleted_at IS NOT NULL THEN
+       RETURN NEW;
+     END IF;
+     SELECT (CASE WHEN OLD.opening_balance_side = 'Cr' THEN -1 ELSE 1 END) * COALESCE(OLD.opening_balance, 0)
+            + COALESCE(SUM(ve.debit_amount - ve.credit_amount), 0)
+       INTO balance
+       FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id
+      WHERE ve.bank_account_id = OLD.id AND ve.ledger_account_id IS NULL
+        AND v.deleted_at IS NULL AND v.optional = false;
+     IF balance <> 0 THEN
+       RAISE EXCEPTION USING ERRCODE = '23514',
+         MESSAGE = format('BANK_ACCOUNT_HAS_BALANCE: bank account %s has a balance of %s and cannot be deleted', OLD.id, balance),
+         HINT = 'Move its balance to another account with a journal entry first, or deactivate it instead.';
+     END IF;
+     RETURN NEW;
+   END
+   $fn$`,
+  `DROP TRIGGER IF EXISTS bank_accounts_delete_guard ON bank_accounts`,
+  `CREATE TRIGGER bank_accounts_delete_guard
+     BEFORE UPDATE OF deleted_at ON bank_accounts
+     FOR EACH ROW EXECUTE FUNCTION erp_bank_account_delete_guard()`,
 ];
 
 const INSTALL_LOCK_KEY = 741_220_263;
@@ -268,7 +301,7 @@ const INSTALL_LOCK_KEY = 741_220_263;
  * take no locks on the ledger tables (ADD CONSTRAINT and CREATE TRIGGER take
  * strong table locks even when they end up changing nothing).
  */
-export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v2";
+export const LEDGER_INTEGRITY_GUARD_VERSION = "2026-10-ledger-integrity-v3";
 
 // A schema push drops constraints it does not know about while the version
 // comment survives, so the constraints are checked as well as the version.
@@ -287,6 +320,7 @@ async function installedVersion(client: { query: Pool["query"] }): Promise<strin
     `SELECT obj_description(to_regprocedure('erp_voucher_entry_target_guard()'), 'pg_proc') AS version
       WHERE EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'voucher_entries_target_guard' AND NOT tgisinternal)
         AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'ledger_accounts_delete_guard' AND NOT tgisinternal)
+        AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'bank_accounts_delete_guard' AND NOT tgisinternal)
         AND (SELECT COUNT(*) FROM pg_constraint
               WHERE conrelid = 'voucher_entries'::regclass
                 AND conname = ANY($1::text[])) = cardinality($1::text[])`,

@@ -278,8 +278,6 @@ const SENSITIVE_WRITE_ROUTES = [
   "POST /api/factory/mix-batches/:id/assign-bales",
   "POST /api/factory/mix-batches/:id/finalize",
   "POST /api/factory/mix-batches/:id/top-up",
-  "POST /api/factory/payroll/migrate-city-split",
-  "POST /api/factory/payroll/migrate-salary-groups",
   "POST /api/factory/payroll/migrate-worker-names",
   "POST /api/factory/payrolls/generate-bulk",
   "POST /api/factory/payrolls/mark-paid-bulk",

@@ -35,6 +35,16 @@ export type AccountStatementEntryRow = {
 /** Positional parameters bound into the statement queries below. */
 type StatementQueryParams = (string | number)[];
 
+/**
+ * The balance engine's line ownership for the bank, fixed-asset and employee
+ * statements (wave 18 C): `ownedOnly` lists exactly the lines the engine counts on the target,
+ * so a line naming a ledger account and a bank is the ledger's only and the
+ * statement foots to the engine's opening and closing.
+ */
+const BANK_OWNED_LINE = higherPriorityTargetsAbsent("ve", "bank_account_id");
+const FIXED_ASSET_OWNED_LINE = higherPriorityTargetsAbsent("ve", "fixed_asset_id");
+const EMPLOYEE_OWNED_LINE = higherPriorityTargetsAbsent("ve", "employee_id");
+
 export async function getAllVouchers(companyId: number): Promise<Voucher[]> {
   return await db
     .select()
@@ -202,7 +212,8 @@ export async function getVoucherEntriesByBankAccount(
   bankAccountId: number,
   startDate?: string,
   endDate?: string,
-  companyId?: number
+  companyId?: number,
+  options: { ownedOnly?: boolean } = {}
 ): Promise<AccountStatementEntryRow[]> {
   const params: StatementQueryParams = [bankAccountId];
   let dateFilters = "";
@@ -242,6 +253,7 @@ export async function getVoucherEntriesByBankAccount(
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
      WHERE ve.bank_account_id = $1
+       AND ${options.ownedOnly ? BANK_OWNED_LINE : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyFilter}
@@ -256,7 +268,8 @@ export async function getVoucherEntriesByFixedAsset(
   fixedAssetId: number,
   startDate?: string,
   endDate?: string,
-  companyId?: number
+  companyId?: number,
+  options: { ownedOnly?: boolean } = {}
 ): Promise<AccountStatementEntryRow[]> {
   const params: StatementQueryParams = [fixedAssetId];
   let dateFilters = "";
@@ -296,6 +309,7 @@ export async function getVoucherEntriesByFixedAsset(
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
      WHERE ve.fixed_asset_id = $1
+       AND ${options.ownedOnly ? FIXED_ASSET_OWNED_LINE : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyFilter}
@@ -376,7 +390,8 @@ export async function getVoucherEntriesByEmployee(
   employeeId: number,
   companyId?: number,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  options: { ownedOnly?: boolean } = {}
 ): Promise<AccountStatementEntryRow[]> {
   const params: StatementQueryParams = [employeeId];
   let dateFilters = "";
@@ -416,6 +431,7 @@ export async function getVoucherEntriesByEmployee(
      FROM voucher_entries ve
      JOIN vouchers v ON ve.voucher_id = v.id
      WHERE ve.employee_id = $1
+       AND ${options.ownedOnly ? EMPLOYEE_OWNED_LINE : "TRUE"}
        AND v.optional = false
        AND v.deleted_at IS NULL
        ${companyFilter}

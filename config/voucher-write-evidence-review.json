@@ -4,8 +4,8 @@
   "scope": "Active voucher creation sites detected by scripts/audit-write-evidence.mjs after excluding updates/deletes/restores/moves of existing voucher rows. Completed phases are retained separately as historical evidence and must not re-enter the active backlog.",
   "summary": {
     "initialReviewed": 81,
-    "activeReviewed": 13,
-    "explicitReplayGuard": 13,
+    "activeReviewed": 12,
+    "explicitReplayGuard": 12,
     "migrationImportRepair": 0,
     "operationalWithoutRequestIdentity": 0,
     "phase3InfrastructureCompleted": 11,
@@ -15,7 +15,8 @@
     "unreviewed": 0,
     "phase7PostReviewSafeWriters": 1,
     "phase8RequestIdentityCompleted": 1,
-    "wave16NoLongerCreates": 2
+    "wave16NoLongerCreates": 2,
+    "wave18NoLongerCreates": 1
   },
   "reviewed": {
     "explicit-replay-guard": {
@@ -30,7 +31,6 @@
         "server/routes/intercompanyNotificationRoutes.ts",
         "server/routes/payroll/advanceManagementRoutes.ts",
         "server/routes/payroll/core/generate.ts",
-        "server/routes/payroll/core/migrations.ts",
         "server/routes/sp-migration/spMigrationSalesRoutes.ts",
         "server/routes/sp/spContainerRoutes.ts",
         "server/routes/sp/spMigrationPhase2Containers.ts",

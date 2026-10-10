@@ -34,6 +34,7 @@ import type { DatabaseOrTransaction } from "../../db";
 import { HttpError } from "../../lib/httpHandlers";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import { isPerpetualInventoryActive } from "../accounting/perpetualInventory/cutover";
+import { sendStockImportRefusal, stockEntryCutoverTx } from "./stockImportPolicy";
 
 /** Bale and mix cost columns are numeric(20, 7). */
 export const FACTORY_COST_SCALE = 7;
@@ -77,11 +78,15 @@ export class FactoryBaleWithoutMixRefusalError extends HttpError {
 export const isZeroCostArticle = (articleCode: string | null | undefined) => Boolean(articleCode?.startsWith("HMD16"));
 
 /**
- * Refuses stock-entry bales with no mix once the company's cut-over applies to
- * the entry date (decision 2). Before the cut-over they keep the catalogue
- * price and are listed as unvalued by the readiness report
- * (noMixCataloguePricedBales), and the cut-over apply refuses while any is
- * stock.
+ * Refuses stock-entry bales with no mix once the company's cut-over applies
+ * (decision 2). Before the cut-over they keep the catalogue price and are
+ * listed as unvalued by the readiness report (noMixCataloguePricedBales), and
+ * the cut-over apply refuses while any is stock.
+ *
+ * Wave 18 C: the cut-over is tested on the company's business date as well as
+ * the client's entry date (stockEntryCutoverTx), so a back-dated entry no
+ * longer passes the guard; once the cut-over applies, an entry dated before
+ * the cut-over date is refused (FACTORY_STOCK_ENTRY_BEFORE_CUTOVER).
  */
 export async function assertStockEntryHasCostedMixTx(
   executor: DatabaseOrTransaction,
@@ -89,15 +94,15 @@ export async function assertStockEntryHasCostedMixTx(
   date: string,
   articleCodes: ReadonlyArray<string | null | undefined>
 ): Promise<void> {
+  const { perpetual } = await stockEntryCutoverTx(executor, companyId, date);
   const priced = [...new Set(articleCodes.filter((code) => !isZeroCostArticle(code)).map((code) => String(code)))];
   if (priced.length === 0) return;
-  if (await isPerpetualInventoryActive(executor, companyId, date)) {
-    throw new FactoryBaleWithoutMixRefusalError(priced);
-  }
+  if (perpetual) throw new FactoryBaleWithoutMixRefusalError(priced);
 }
 
 /** Sends the 409 when `error` is a cost-basis refusal; returns whether it did. */
 export function sendFactoryCostBasisRefusal(response: Response, error: unknown): boolean {
+  if (sendStockImportRefusal(response, error)) return true;
   if (error instanceof FactoryBaleWithoutMixRefusalError) {
     response.status(409).json({ code: error.code, message: error.message, articleCodes: error.articleCodes });
     return true;

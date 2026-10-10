@@ -9,7 +9,13 @@ import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
 import { parseId } from "../../../lib/parseId";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import { writeAuditEvent } from "../../../services/audit/auditService";
+import {
+  assertStockImportAllowedTx,
+  RAW_STOCK_IMPORT_AUDIT,
+  sendStockImportRefusal,
+} from "../../../services/factory/stockImportPolicy";
 import { requestRole } from "../../../services/accounting/accountHistoryPolicy";
 import { createFactorySupplierTx, updateFactorySupplierTx } from "../suppliers/crud/factorySupplierWrites";
 
@@ -111,212 +117,294 @@ export function registerBalesImportRoutes(app: Express) {
     }
   });
 
-  app.post("/api/factory/import/raw-stock", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
+  // Wave 18 C (owner decision): the raw-stock and bale imports create stock
+  // value from a spreadsheet with no journal. Admin/Owner only (Developer
+  // passes); refused once the perpetual cut-over is applied (409
+  // FACTORY_STOCK_IMPORT_AFTER_CUTOVER: stock enters through costed receipts
+  // and mixes); one transaction with the audit rows in it (a failing row is
+  // rolled back to its savepoint and reported, as before); the readiness
+  // report lists what they brought in at the spreadsheet's cost.
+  app.post(
+    "/api/factory/import/raw-stock",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const { items } = req.body;
-      if (!Array.isArray(items) || items.length === 0) {
-        return res.status(400).json({ message: "No items provided" });
+        const { items } = req.body;
+        if (!Array.isArray(items) || items.length === 0) {
+          return res.status(400).json({ message: "No items provided" });
+        }
+
+        const result = await db.transaction(async (tx) => {
+          await assertStockImportAllowedTx(tx, companyId);
+          let imported = 0;
+          const errors: string[] = [];
+
+          for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (!item.containerNumber || !item.containerNumber.trim()) {
+              errors.push(`Row ${i + 1}: Container number is required`);
+              continue;
+            }
+            if (!item.receivedKg) {
+              errors.push(`Row ${i + 1}: Received KG is required`);
+              continue;
+            }
+            if (!item.costPerKg) {
+              errors.push(`Row ${i + 1}: Cost per KG is required`);
+              continue;
+            }
+            try {
+              await tx.transaction(async (row) => {
+                let supplierId: number | null = null;
+                if (item.supplierName && item.supplierName.trim()) {
+                  const [supplier] = await row
+                    .select()
+                    .from(factorySuppliers)
+                    .where(
+                      and(
+                        eq(factorySuppliers.companyId, companyId),
+                        ilike(factorySuppliers.name, item.supplierName.trim())
+                      )
+                    );
+                  if (supplier) {
+                    supplierId = supplier.id;
+                  }
+                }
+
+                let [container] = await row
+                  .select()
+                  .from(factoryContainers)
+                  .where(
+                    and(
+                      eq(factoryContainers.companyId, companyId),
+                      eq(factoryContainers.containerNumber, item.containerNumber.trim())
+                    )
+                  );
+
+                const containerCreated = !container;
+                if (!container) {
+                  [container] = await row
+                    .insert(factoryContainers)
+                    .values({
+                      companyId,
+                      containerNumber: item.containerNumber.trim(),
+                      supplierId,
+                      totalKg: item.receivedKg,
+                      ratePerKg: item.costPerKg,
+                      arrivalDate: item.arrivalDate || null,
+                      status: "RECEIVED",
+                    })
+                    .returning();
+                } else if (supplierId && !container.supplierId) {
+                  await row.update(factoryContainers).set({ supplierId }).where(eq(factoryContainers.id, container.id));
+                }
+
+                // The import carries no currency: the cost is in the container's
+                // currency, so it is the USD cost only for a USD container. Any other
+                // currency stays without a USD cost (not valued) until its rate is
+                // confirmed (wave 11: never a native-currency cost as USD).
+                const containerIsUsd = (container.currencyCode || "USD").toUpperCase() === "USD";
+                const [rawStock] = await row
+                  .insert(factoryRawStock)
+                  .values({
+                    companyId,
+                    containerId: container.id,
+                    receivedKg: item.receivedKg,
+                    usedKg: item.usedKg || "0",
+                    costPerKg: item.costPerKg,
+                    costPerKgUsd: containerIsUsd ? String(item.costPerKg) : null,
+                  })
+                  .returning({ id: factoryRawStock.id });
+                // One audit row per raw-stock row: it is also how the readiness
+                // report finds the rows imported at spreadsheet cost.
+                await writeAuditEvent(
+                  {
+                    userId: req.session.userId ?? "unknown",
+                    username: req.session.username || "unknown",
+                    companyId,
+                    action: RAW_STOCK_IMPORT_AUDIT.action,
+                    tableName: RAW_STOCK_IMPORT_AUDIT.tableName,
+                    recordId: rawStock.id,
+                    recordIdentifier: `raw-stock import: container ${container.containerNumber}`,
+                    metadata: {
+                      source: "factory_raw_stock_import",
+                      containerId: container.id,
+                      containerCreated,
+                      receivedKg: String(item.receivedKg),
+                      usedKg: String(item.usedKg || "0"),
+                      costPerKg: String(item.costPerKg),
+                      costPerKgUsd: containerIsUsd ? String(item.costPerKg) : null,
+                    },
+                  },
+                  row
+                );
+              });
+              imported++;
+            } catch (err: unknown) {
+              errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
+            }
+          }
+          return { imported, errors };
+        });
+
+        res.json(result);
+      } catch (error: unknown) {
+        if (sendStockImportRefusal(res, error)) return;
+        logger.error("Error importing raw stock:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
       }
+    }
+  );
 
-      let imported = 0;
-      const errors: string[] = [];
+  app.post(
+    "/api/factory/import/bales",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      try {
+        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+        if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        try {
-          if (!item.containerNumber || !item.containerNumber.trim()) {
-            errors.push(`Row ${i + 1}: Container number is required`);
-            continue;
-          }
-          if (!item.receivedKg) {
-            errors.push(`Row ${i + 1}: Received KG is required`);
-            continue;
-          }
-          if (!item.costPerKg) {
-            errors.push(`Row ${i + 1}: Cost per KG is required`);
-            continue;
-          }
+        const { bales, fileName } = req.body;
+        if (!Array.isArray(bales) || bales.length === 0) {
+          return res.status(400).json({ message: "No bales provided" });
+        }
 
-          let supplierId: number | null = null;
-          if (item.supplierName && item.supplierName.trim()) {
-            const [supplier] = await db
-              .select()
-              .from(factorySuppliers)
-              .where(
-                and(eq(factorySuppliers.companyId, companyId), ilike(factorySuppliers.name, item.supplierName.trim()))
-              );
-            if (supplier) {
-              supplierId = supplier.id;
+        const result = await db.transaction(async (tx) => {
+          await assertStockImportAllowedTx(tx, companyId);
+          // Create import batch record upfront
+          const [batch] = await tx
+            .insert(factoryBaleImportBatches)
+            .values({
+              companyId,
+              fileName: fileName || "unknown.xlsx",
+              baleCount: 0,
+              errorCount: 0,
+              totalWeightKg: "0",
+              importedByUserId: String(req.session?.userId || ""),
+              importedByName: req.session?.username || null,
+            })
+            .returning();
+
+          const maxRef = await tx
+            .select({ maxRef: sql<number>`MAX(CAST(SUBSTRING(reference_number FROM 4) AS INTEGER))` })
+            .from(factoryBales)
+            .where(eq(factoryBales.companyId, companyId));
+          let nextRef = Math.max(Number(maxRef[0]?.maxRef ?? 0) + 1, 200000);
+
+          let imported = 0;
+          let totalWeightKg = 0;
+          let totalCostUsd = new MoneyDecimal(0);
+          const errors: string[] = [];
+
+          for (let i = 0; i < bales.length; i++) {
+            const bale = bales[i];
+            if (!bale.baleCode || !bale.baleCode.trim()) {
+              errors.push(`Row ${i + 1}: Bale code is required`);
+              continue;
+            }
+            if (!bale.weightKg) {
+              errors.push(`Row ${i + 1}: Weight KG is required`);
+              continue;
+            }
+
+            const referenceNumber = `REF${nextRef}`;
+            nextRef++;
+
+            const status = bale.status || "IN_STOCK";
+            // An imported bale's cost per kg is read as USD (the bale cost basis).
+            const costPerKg = bale.costPerKg || "0";
+            const weight = parseFloat(bale.weightKg);
+            const totalCost = lineAmount(bale.weightKg, costPerKg).toDecimalPlaces(7).toFixed(7);
+            try {
+              await tx.transaction(async (row) => {
+                await row.insert(factoryBales).values({
+                  companyId,
+                  baleCode: bale.baleCode.trim(),
+                  referenceNumber,
+                  articleCode: bale.articleCode || null,
+                  productName: bale.productName || null,
+                  category: bale.category || null,
+                  grade: bale.grade || null,
+                  quantity: 1,
+                  weightKg: bale.weightKg,
+                  costPerKg,
+                  totalCost,
+                  status,
+                  finalizedAt: status === "IN_STOCK" ? new Date() : null,
+                  importBatchId: batch.id,
+                });
+              });
+              imported++;
+              totalWeightKg += weight;
+              totalCostUsd = totalCostUsd.plus(totalCost);
+              nextRef++;
+            } catch (err: unknown) {
+              errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
             }
           }
 
-          let [container] = await db
+          // Update batch record with final counts
+          await tx
+            .update(factoryBaleImportBatches)
+            .set({ baleCount: imported, errorCount: errors.length, totalWeightKg: totalWeightKg.toFixed(3) })
+            .where(eq(factoryBaleImportBatches.id, batch.id));
+
+          // Sync the sequence table so future stock entries don't collide with imported refs
+          const [existingSeq] = await tx
             .select()
-            .from(factoryContainers)
-            .where(
-              and(
-                eq(factoryContainers.companyId, companyId),
-                eq(factoryContainers.containerNumber, item.containerNumber.trim())
-              )
-            );
+            .from(factoryBaleSequences)
+            .where(eq(factoryBaleSequences.companyId, companyId));
 
-          if (!container) {
-            [container] = await db
-              .insert(factoryContainers)
-              .values({
-                companyId,
-                containerNumber: item.containerNumber.trim(),
-                supplierId,
-                totalKg: item.receivedKg,
-                ratePerKg: item.costPerKg,
-                arrivalDate: item.arrivalDate || null,
-                status: "RECEIVED",
-              })
-              .returning();
-          } else if (supplierId && !container.supplierId) {
-            await db.update(factoryContainers).set({ supplierId }).where(eq(factoryContainers.id, container.id));
+          if (existingSeq) {
+            if (nextRef > existingSeq.nextNumber) {
+              await tx
+                .update(factoryBaleSequences)
+                .set({ nextNumber: nextRef })
+                .where(eq(factoryBaleSequences.id, existingSeq.id));
+            }
+          } else {
+            await tx.insert(factoryBaleSequences).values({
+              companyId,
+              nextNumber: nextRef,
+            });
           }
 
-          // The import carries no currency: the cost is in the container's
-          // currency, so it is the USD cost only for a USD container. Any other
-          // currency stays without a USD cost (not valued) until its rate is
-          // confirmed (wave 11: never a native-currency cost as USD).
-          const containerIsUsd = (container.currencyCode || "USD").toUpperCase() === "USD";
-          await db.insert(factoryRawStock).values({
-            companyId,
-            containerId: container.id,
-            receivedKg: item.receivedKg,
-            usedKg: item.usedKg || "0",
-            costPerKg: item.costPerKg,
-            costPerKgUsd: containerIsUsd ? String(item.costPerKg) : null,
-          });
-          imported++;
-        } catch (err: unknown) {
-          errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
-        }
-      }
+          await writeAuditEvent(
+            {
+              userId: req.session.userId ?? "unknown",
+              username: req.session.username || "unknown",
+              companyId,
+              action: "import",
+              tableName: "factory_bale_import_batches",
+              recordId: batch.id,
+              recordIdentifier: `bale import: ${imported} bale(s) at spreadsheet cost`,
+              metadata: {
+                source: "factory_bale_import",
+                fileName: fileName || "unknown.xlsx",
+                imported,
+                errors: errors.length,
+                totalCost: totalCostUsd.toFixed(2),
+              },
+            },
+            tx
+          );
 
-      res.json({ imported, errors });
-    } catch (error: unknown) {
-      logger.error("Error importing raw stock:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  app.post("/api/factory/import/bales", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const { bales, fileName } = req.body;
-      if (!Array.isArray(bales) || bales.length === 0) {
-        return res.status(400).json({ message: "No bales provided" });
-      }
-
-      // Create import batch record upfront
-      const [batch] = await db
-        .insert(factoryBaleImportBatches)
-        .values({
-          companyId,
-          fileName: fileName || "unknown.xlsx",
-          baleCount: 0,
-          errorCount: 0,
-          totalWeightKg: "0",
-          importedByUserId: String(req.session?.userId || ""),
-          importedByName: req.session?.username || null,
-        })
-        .returning();
-
-      const maxRef = await db
-        .select({ maxRef: sql<number>`MAX(CAST(SUBSTRING(reference_number FROM 4) AS INTEGER))` })
-        .from(factoryBales)
-        .where(eq(factoryBales.companyId, companyId));
-      let nextRef = Math.max(Number(maxRef[0]?.maxRef ?? 0) + 1, 200000);
-
-      let imported = 0;
-      let totalWeightKg = 0;
-      const errors: string[] = [];
-
-      for (let i = 0; i < bales.length; i++) {
-        const bale = bales[i];
-        try {
-          if (!bale.baleCode || !bale.baleCode.trim()) {
-            errors.push(`Row ${i + 1}: Bale code is required`);
-            continue;
-          }
-          if (!bale.weightKg) {
-            errors.push(`Row ${i + 1}: Weight KG is required`);
-            continue;
-          }
-
-          const referenceNumber = `REF${nextRef}`;
-          nextRef++;
-
-          const status = bale.status || "IN_STOCK";
-          // An imported bale's cost per kg is read as USD (the bale cost basis).
-          const costPerKg = bale.costPerKg || "0";
-          const weight = parseFloat(bale.weightKg);
-          const totalCost = lineAmount(bale.weightKg, costPerKg).toDecimalPlaces(7).toFixed(7);
-
-          await db.insert(factoryBales).values({
-            companyId,
-            baleCode: bale.baleCode.trim(),
-            referenceNumber,
-            articleCode: bale.articleCode || null,
-            productName: bale.productName || null,
-            category: bale.category || null,
-            grade: bale.grade || null,
-            quantity: 1,
-            weightKg: bale.weightKg,
-            costPerKg,
-            totalCost,
-            status,
-            finalizedAt: status === "IN_STOCK" ? new Date() : null,
-            importBatchId: batch.id,
-          });
-          imported++;
-          totalWeightKg += weight;
-          nextRef++;
-        } catch (err: unknown) {
-          errors.push(`Row ${i + 1}: ${getErrorMessage(err)}`);
-        }
-      }
-
-      // Update batch record with final counts
-      await db
-        .update(factoryBaleImportBatches)
-        .set({ baleCount: imported, errorCount: errors.length, totalWeightKg: totalWeightKg.toFixed(3) })
-        .where(eq(factoryBaleImportBatches.id, batch.id));
-
-      // Sync the sequence table so future stock entries don't collide with imported refs
-      const [existingSeq] = await db
-        .select()
-        .from(factoryBaleSequences)
-        .where(eq(factoryBaleSequences.companyId, companyId));
-
-      if (existingSeq) {
-        if (nextRef > existingSeq.nextNumber) {
-          await db
-            .update(factoryBaleSequences)
-            .set({ nextNumber: nextRef })
-            .where(eq(factoryBaleSequences.id, existingSeq.id));
-        }
-      } else {
-        await db.insert(factoryBaleSequences).values({
-          companyId,
-          nextNumber: nextRef,
+          return { imported, errors, batchId: batch.id };
         });
-      }
 
-      res.json({ imported, errors, batchId: batch.id });
-    } catch (error: unknown) {
-      logger.error("Error importing bales:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
+        res.json(result);
+      } catch (error: unknown) {
+        if (sendStockImportRefusal(res, error)) return;
+        logger.error("Error importing bales:", { error: error });
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
     }
-  });
+  );
 
   // ── Bale Import Batches – list ─────────────────────────────────────────────
   app.get("/api/factory/bale-import-batches", requireAuth, async (req: Request, res: Response) => {

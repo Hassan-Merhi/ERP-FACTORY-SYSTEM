@@ -16,6 +16,8 @@ import { createDatabaseStockMovementAdapter } from "../../../services/inventory/
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 import { resolveStockEntryProductionAttributions } from "../../../services/factory/stockEntryProductionAttribution";
 import { writeDaybookEntry } from "../_helpers";
+import { companyBusinessDate } from "../../../services/accounting/companyBusinessDate";
+import { stockEntryCutoverTx } from "../../../services/factory/stockImportPolicy";
 import {
   factoryCategories,
   factoryBaleProducts,
@@ -57,14 +59,19 @@ export function registerFactoryStockEntryRoutes(app: Express) {
         return res.status(400).json({ message: "Location not found" });
       }
 
-      // Parse optional backdated entry date; default to today so history is always populated.
-      // This date is the production/history date only; finalizedAt records the actual action time.
-      let effectiveDateStr: string = getClientDate(req);
+      // Parse optional backdated entry date; default to the company's business
+      // date (wave 18 C: the server's, not the client's) so history is always
+      // populated. This date is the production/history date only; finalizedAt
+      // records the actual action time.
+      let effectiveDateStr: string = await companyBusinessDate(companyId);
       if (entryDate && typeof entryDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(entryDate)) {
         effectiveDateStr = entryDate;
       }
 
       const result = await db.transaction(async (tx) => {
+        // Wave 18 C: once the cut-over applies on the business date, an entry
+        // dated before the cut-over date is refused, with or without a mix.
+        await stockEntryCutoverTx(tx, companyId, effectiveDateStr);
         let mixBatch = null;
         if (mixBatchId) {
           const [mb] = await tx

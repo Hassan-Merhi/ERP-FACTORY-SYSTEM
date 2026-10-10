@@ -101,6 +101,7 @@ vi.mock("@shared/schema", () => ({
 }));
 
 import { generateAccountStatementPdf } from "../server/lib/accountStatementPdfGenerator";
+import { getPartyBalance } from "../server/services/accounting/balances/ledgerBalanceEngine";
 
 function expectPdf(buffer: Buffer) {
   expect(Buffer.isBuffer(buffer)).toBe(true);
@@ -249,6 +250,8 @@ describe("account statement PDF generator behavior", () => {
       return original.apply(this, args as never);
     });
     harness.selectResults.push([{ id: 31, name: "Petty Bank", openingBalance: "0", openingBalanceSide: "Dr" }]);
+    // Wave 18 C: every family opens at the engine's period opening (zero here).
+    vi.mocked(getPartyBalance).mockResolvedValueOnce({ opening: "0.00" } as never);
     harness.bankEntries.push(
       ...["0.2", "0.7", "0.1"].map((debitAmount, index) => ({
         voucherId: index + 1,

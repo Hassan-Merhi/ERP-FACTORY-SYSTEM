@@ -233,10 +233,19 @@ describe("cut-over apply refuses on factory blockers (decisions 2 and 6)", () =>
     await asMaintenance(() =>
       db.transaction((tx) => assertStockEntryHasCostedMixTx(tx, ctx.companyId, today, ["HMD16-X"]))
     );
-    // Before the cut-over the catalogue price stays.
+    // Wave 18 C: the cut-over is tested on the business date, so an entry
+    // back-dated before the cut-over date no longer passes (it did).
+    await expect(
+      asMaintenance(() =>
+        db.transaction((tx) => assertStockEntryHasCostedMixTx(tx, ctx.companyId, "2025-12-31", ["ART-1"]))
+      )
+    ).rejects.toMatchObject({ statusCode: 409, code: "FACTORY_STOCK_ENTRY_BEFORE_CUTOVER" });
+    // Before the cut-over (a cut-over date still ahead) the catalogue price stays.
+    await setCutover("2099-01-01");
     await asMaintenance(() =>
       db.transaction((tx) => assertStockEntryHasCostedMixTx(tx, ctx.companyId, "2025-12-31", ["ART-1"]))
     );
+    await setCutover(CUTOVER);
   });
 });
 

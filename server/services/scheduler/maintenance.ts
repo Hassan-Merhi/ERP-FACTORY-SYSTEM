@@ -75,6 +75,41 @@ function mixBatchReferenceTotal(references: MixBatchReferenceCounts): number {
   return Object.values(references).reduce((total, count) => total + Number(count || 0), 0);
 }
 
+/**
+ * Wave 18 (B): the purge keeps an account or party that is history — named on
+ * any voucher line (live or deleted voucher) or holding a non-zero opening.
+ * `column` is the voucher_entries column that names the row.
+ */
+function accountHistoryKeep(column: string): string {
+  return `COALESCE(t.opening_balance, 0) <> 0 OR EXISTS (SELECT 1 FROM voucher_entries ve WHERE ve.${column} = t.id)`;
+}
+
+/**
+ * Deletes the rows of `table` matching `where` (alias `t`) and writes one
+ * audit row per removed row, with the row as it was, in the same statement
+ * (and so the same transaction). Returns how many rows went.
+ */
+async function auditedPurgeDelete(
+  client: PoolClient,
+  table: string,
+  where: string,
+  params: unknown[]
+): Promise<number> {
+  const result = await client.query(
+    `WITH removed AS (DELETE FROM ${table} t WHERE ${where} RETURNING to_jsonb(t) AS row)
+     INSERT INTO audit_log (user_id, username, company_id, action, table_name, record_id, record_identifier, changes)
+     SELECT 'system', 'scheduler:soft-delete-purge', NULLIF(row->>'company_id', '')::int, 'delete', '${table}',
+            NULLIF(row->>'id', '')::int,
+            COALESCE(row->>'code', row->>'voucher_number', row->>'batch_code', row->>'legal_name', row->>'name'),
+            jsonb_build_object('permanentDelete', jsonb_build_object('new', true),
+                               'reason', jsonb_build_object('new', '30-day soft-delete purge'),
+                               'row', jsonb_build_object('old', row))
+       FROM removed`,
+    params
+  );
+  return result.rowCount ?? 0;
+}
+
 async function runIsolatedPurgeUnit(client: PoolClient, label: string, action: () => Promise<void>): Promise<boolean> {
   await client.query(`SAVEPOINT ${PURGE_SAVEPOINT}`);
   try {
@@ -163,15 +198,12 @@ async function purgeOldFactoryMixBatches(client: PoolClient, cutoff: string): Pr
         continue;
       }
 
-      const removed = await client.query(
-        `DELETE FROM factory_mix_batches
-          WHERE id = $1
-            AND company_id = $2
-            AND deleted_at IS NOT NULL
-            AND deleted_at < $3`,
+      deletedCount += await auditedPurgeDelete(
+        client,
+        "factory_mix_batches",
+        "t.id = $1 AND t.company_id = $2 AND t.deleted_at IS NOT NULL AND t.deleted_at < $3",
         [candidate.id, candidate.company_id, cutoff]
       );
-      deletedCount += removed.rowCount ?? 0;
       await client.query(`RELEASE SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
     } catch (err: unknown) {
       await client.query(`ROLLBACK TO SAVEPOINT ${MIX_BATCH_PURGE_SAVEPOINT}`);
@@ -250,7 +282,7 @@ export async function purgeOldSoftDeletes(): Promise<void> {
       await client.query(`DELETE FROM inventory                         WHERE stock_item_id IN (${placeholders})`, ids);
       await client.query(`DELETE FROM stock_item_code_aliases           WHERE stock_item_id IN (${placeholders})`, ids);
       await client.query(`DELETE FROM stock_item_location_prices        WHERE stock_item_id IN (${placeholders})`, ids);
-      await client.query(`DELETE FROM stock_items WHERE id IN (${placeholders})`, ids);
+      await auditedPurgeDelete(client, "stock_items", `t.id IN (${placeholders})`, ids);
       logger.info(`[Purge] Permanently deleted ${ids.length} stock item(s) older than 30 days.`);
     });
 
@@ -261,14 +293,19 @@ export async function purgeOldSoftDeletes(): Promise<void> {
     // ── Other soft-delete tables ─────────────────────────────────────────────
     // Each table is isolated so a restrictive FK/schema-drift issue in one table
     // does not roll back unrelated cleanup completed by the same scheduled run.
-    const simplePurges: Array<{ table: string; col: string }> = [
+    // Wave 18 (B): a ledger account, bank account, customer or supplier named on
+    // any voucher line (live or deleted voucher) or carrying a non-zero opening
+    // is never hard-deleted (it is history the books still read); those rows are
+    // counted and reported. Every row the purge removes is audited (the row as
+    // it was) in the same transaction as its delete.
+    const simplePurges: Array<{ table: string; col: string; keep?: string }> = [
       { table: "stock_groups", col: "deleted_at" },
       { table: "locations", col: "deleted_at" },
-      { table: "ledger_accounts", col: "deleted_at" },
+      { table: "ledger_accounts", col: "deleted_at", keep: accountHistoryKeep("ledger_account_id") },
       { table: "employees", col: "deleted_at" },
-      { table: "customers", col: "deleted_at" },
-      { table: "suppliers", col: "deleted_at" },
-      { table: "bank_accounts", col: "deleted_at" },
+      { table: "customers", col: "deleted_at", keep: accountHistoryKeep("customer_id") },
+      { table: "suppliers", col: "deleted_at", keep: accountHistoryKeep("supplier_id") },
+      { table: "bank_accounts", col: "deleted_at", keep: accountHistoryKeep("bank_account_id") },
       { table: "factory_categories", col: "deleted_at" },
       { table: "factory_bale_products", col: "deleted_at" },
       { table: "factory_containers", col: "deleted_at" },
@@ -279,11 +316,24 @@ export async function purgeOldSoftDeletes(): Promise<void> {
       { table: "customer_orders", col: "deleted_at" },
     ];
 
-    for (const { table, col } of simplePurges) {
+    for (const { table, col, keep } of simplePurges) {
       await runIsolatedPurgeUnit(client, table, async () => {
-        const result = await client.query(`DELETE FROM ${table} WHERE ${col} IS NOT NULL AND ${col} < $1`, [cutoff]);
-        if (result.rowCount && result.rowCount > 0) {
-          logger.info(`[Purge] Permanently deleted ${result.rowCount} ${table} row(s) older than 30 days.`);
+        const due = `t.${col} IS NOT NULL AND t.${col} < $1`;
+        if (keep) {
+          const retained = await client.query<{ count: number }>(
+            `SELECT COUNT(*)::int AS count FROM ${table} t WHERE ${due} AND (${keep})`,
+            [cutoff]
+          );
+          const retainedCount = Number(retained.rows[0]?.count ?? 0);
+          if (retainedCount > 0) {
+            logger.warn(`[Purge] Deleted ${table} rows with voucher lines or an opening balance were retained.`, {
+              retained: retainedCount,
+            });
+          }
+        }
+        const removed = await auditedPurgeDelete(client, table, keep ? `${due} AND NOT (${keep})` : due, [cutoff]);
+        if (removed > 0) {
+          logger.info(`[Purge] Permanently deleted ${removed} ${table} row(s) older than 30 days.`);
         }
       });
     }

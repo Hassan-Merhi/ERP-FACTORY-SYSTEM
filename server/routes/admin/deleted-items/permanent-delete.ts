@@ -59,14 +59,19 @@ import {
   propertyPayments,
   factoryTransporterTransactions,
 } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { eq, and, inArray, ne, or, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
+import { isRetiredVoucherNumber } from "../../../services/accounting/voucherRetirement";
+import { toMoney } from "../../../lib/money";
 import { STOCK_ITEM_HAS_HISTORY_MESSAGE, stockItemHasHistory } from "../../../services/inventory/stockItemHistory";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 type DeletedItemRow = { id: AnyPgColumn; companyId: AnyPgColumn | null; deletedAt: AnyPgColumn };
 
 // The soft-deleted rows each type lists in Deleted Items (see ./list.ts).
-// Suppliers are global, so they have no company column to scope by.
+// Wave 18 (B): suppliers are company-owned (suppliers.company_id), so they
+// are scoped like every other type.
 const DELETED_ITEM_ROWS: Record<string, DeletedItemRow> = {
   location: { id: locations.id, companyId: locations.companyId, deletedAt: locations.deletedAt },
   stockItem: { id: stockItems.id, companyId: stockItems.companyId, deletedAt: stockItems.deletedAt },
@@ -74,7 +79,11 @@ const DELETED_ITEM_ROWS: Record<string, DeletedItemRow> = {
   ledgerAccount: { id: ledgerAccounts.id, companyId: ledgerAccounts.companyId, deletedAt: ledgerAccounts.deletedAt },
   employee: { id: employees.id, companyId: employees.companyId, deletedAt: employees.deletedAt },
   customer: { id: customers.id, companyId: customers.companyId, deletedAt: customers.deletedAt },
-  supplier: { id: suppliers.id, companyId: null, deletedAt: suppliers.deletedAt },
+  supplier: {
+    id: companyScopedSuppliers.id,
+    companyId: companyScopedSuppliers.companyId,
+    deletedAt: companyScopedSuppliers.deletedAt,
+  },
   bankAccount: { id: bankAccounts.id, companyId: bankAccounts.companyId, deletedAt: bankAccounts.deletedAt },
   voucher: { id: vouchers.id, companyId: vouchers.companyId, deletedAt: vouchers.deletedAt },
   factoryCategory: {
@@ -147,9 +156,11 @@ async function isInDeletedItems(type: string, itemId: number, companyId: number)
 /**
  * Wave 9 (ledger safety): permanently deleting a voucher erases accounting
  * history, so it is an Admin/Owner action (Developer passes, as with
- * requireRole). The other item types keep the route-level non-POS rule.
+ * requireRole). Wave 18 (B): every item type is (a permanent delete cannot be
+ * undone), each one runs in one transaction with its audit row (the row as it
+ * was and the dependent rows removed with it), scoped to the active company.
  */
-const VOUCHER_PERMANENT_DELETE_ROLES = new Set(["Admin", "Owner", "Developer"]);
+const PERMANENT_DELETE_ROLES = new Set(["Admin", "Owner", "Developer"]);
 const CLOSING_VOUCHER_MESSAGE = "A fiscal-period closing voucher cannot be deleted";
 
 /**
@@ -174,6 +185,41 @@ export const LOCATION_HAS_STOCK_MESSAGE =
   "This location still holds stock (a quantity or a value), so it cannot be permanently deleted. Move or write off the stock first, or keep it in Deleted Items.";
 export const CUSTOMER_HAS_HISTORY_MESSAGE =
   "This customer is named on voucher lines or sales, so it cannot be permanently deleted. Keep it in Deleted Items.";
+/** Wave 18 (B): accounts and parties with lines or a non-zero opening keep their record. */
+export const ACCOUNT_HAS_HISTORY_MESSAGE =
+  "This account is named on voucher lines or has an opening balance, so it cannot be permanently deleted. Keep it in Deleted Items.";
+export const CUSTOMER_HAS_OPENING_MESSAGE =
+  "This customer has an opening balance, so it cannot be permanently deleted. Keep it in Deleted Items.";
+/** Wave 18 (B): a voucher retired by the system (renamed ~DEL) is history of the posting that replaced it. */
+export const RETIRED_VOUCHER_NOT_DELETABLE_MESSAGE =
+  "This voucher was retired by the system when its posting was replaced, so it is kept as history and cannot be permanently deleted.";
+
+/** The row as it is, for the audit (null when it is gone). */
+async function snapshotRow(
+  executor: DbTransaction,
+  table: PgTable,
+  id: number
+): Promise<Record<string, unknown> | null> {
+  const result = await executor.execute(sql`SELECT to_jsonb(t) AS row FROM ${table} t WHERE t.id = ${id}`);
+  const rows = Array.isArray(result) ? result : (result as { rows?: unknown[] }).rows;
+  return ((rows?.[0] as { row?: Record<string, unknown> } | undefined)?.row ?? null) as Record<string, unknown> | null;
+}
+
+function rowIdentifier(row: Record<string, unknown> | null): string | null {
+  if (!row) return null;
+  for (const key of ["code", "voucher_number", "batch_code", "legal_name", "name", "container_number"]) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return null;
+}
+
+/** Non-zero opening (exact decimal). */
+function hasOpening(row: Record<string, unknown> | null): boolean {
+  const value = row?.opening_balance;
+  if (value == null) return false;
+  return !toMoney(String(value)).isZero();
+}
 
 async function firstFound(executor: DbTransaction, checks: SQL[]): Promise<boolean> {
   for (const check of checks) {
@@ -195,6 +241,9 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
   // Permanently delete an item
   app.delete("/api/deleted-items/:type/:id/permanent", requireAuth, requireNonPOS, async (req, res) => {
     try {
+      if (!PERMANENT_DELETE_ROLES.has(req.user?.role ?? "")) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
       const { type, id } = req.params;
       const itemId = parseInt(id);
       if (isNaN(itemId)) {
@@ -213,6 +262,44 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
       if (!inDeletedItems) {
         return res.status(404).json({ message: `${type} not found in Deleted Items` });
       }
+
+      const audit = (
+        tx: DbTransaction,
+        tableName: string,
+        row: Record<string, unknown> | null,
+        dependents: Record<string, unknown> = {}
+      ) =>
+        writeAuditEvent(
+          {
+            userId: req.session.userId ?? "unknown",
+            username: req.session.username || "unknown",
+            companyId,
+            action: "delete",
+            tableName,
+            recordId: itemId,
+            recordIdentifier: rowIdentifier(row),
+            changes: {
+              permanentDelete: { new: true },
+              row: { old: row },
+              ...Object.fromEntries(Object.entries(dependents).map(([key, value]) => [key, { old: value }])),
+            },
+          },
+          tx
+        );
+      /** Snapshot, delete and audit one row of the active company in one transaction. */
+      const removeOne = (
+        table: PgTable,
+        tableName: string,
+        remove: (tx: DbTransaction) => Promise<unknown>,
+        guard?: (tx: DbTransaction, row: Record<string, unknown> | null) => Promise<void>
+      ) =>
+        db.transaction(async (tx) => {
+          await tx.execute(sql`SELECT 1 FROM ${table} t WHERE t.id = ${itemId} FOR UPDATE`);
+          const row = await snapshotRow(tx, table, itemId);
+          if (guard) await guard(tx, row);
+          await remove(tx);
+          await audit(tx, tableName, row);
+        });
 
       switch (type) {
         case "location":
@@ -282,12 +369,31 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           });
           break;
         case "stockGroup":
-          await db.delete(stockGroups).where(and(eq(stockGroups.id, itemId), eq(stockGroups.companyId, companyId)));
+          await removeOne(stockGroups, "stock_groups", (tx) =>
+            tx.delete(stockGroups).where(and(eq(stockGroups.id, itemId), eq(stockGroups.companyId, companyId)))
+          );
           break;
         case "ledgerAccount":
-          await db
-            .delete(ledgerAccounts)
-            .where(and(eq(ledgerAccounts.id, itemId), eq(ledgerAccounts.companyId, companyId)));
+          // Wave 18 (B): refused while any voucher line (live or deleted voucher)
+          // names the account or its opening is not zero.
+          await removeOne(
+            ledgerAccounts,
+            "ledger_accounts",
+            (tx) =>
+              tx
+                .delete(ledgerAccounts)
+                .where(and(eq(ledgerAccounts.id, itemId), eq(ledgerAccounts.companyId, companyId))),
+            async (tx, row) => {
+              if (
+                hasOpening(row) ||
+                (await firstFound(tx, [
+                  sql`SELECT 1 FROM ${voucherEntries} WHERE ${voucherEntries.ledgerAccountId} = ${itemId}`,
+                ]))
+              ) {
+                throw new PermanentDeleteRefused(ACCOUNT_HAS_HISTORY_MESSAGE);
+              }
+            }
+          );
           break;
         case "employee":
           // Wave 12: refused while any voucher line, advance or payroll item names
@@ -345,7 +451,12 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
             const [customer] = await tx
               .select()
               .from(customers)
-              .where(and(eq(customers.id, itemId), eq(customers.companyId, companyId)));
+              .where(and(eq(customers.id, itemId), eq(customers.companyId, companyId)))
+              .for("update");
+            // Wave 18 (B): a non-zero opening is history too.
+            if (customer && !toMoney(customer.openingBalance ?? "0").isZero()) {
+              throw new PermanentDeleteRefused(CUSTOMER_HAS_OPENING_MESSAGE);
+            }
 
             // 1. Null out nullable FKs (keep bales intact)
             await tx.execute(sql`UPDATE bales SET customer_id = NULL WHERE customer_id = ${itemId}`);
@@ -406,15 +517,46 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           break;
         }
         case "supplier":
-          await db.delete(suppliers).where(eq(suppliers.id, itemId));
+          // Wave 18 (B): the active company's supplier only; refused while any
+          // voucher line names it or its opening is not zero.
+          await removeOne(
+            suppliers,
+            "suppliers",
+            (tx) =>
+              tx
+                .delete(companyScopedSuppliers)
+                .where(and(eq(companyScopedSuppliers.id, itemId), eq(companyScopedSuppliers.companyId, companyId))),
+            async (tx, row) => {
+              if (
+                hasOpening(row) ||
+                (await firstFound(tx, [
+                  sql`SELECT 1 FROM ${voucherEntries} WHERE ${voucherEntries.supplierId} = ${itemId}`,
+                ]))
+              ) {
+                throw new PermanentDeleteRefused(ACCOUNT_HAS_HISTORY_MESSAGE);
+              }
+            }
+          );
           break;
         case "bankAccount":
-          await db.delete(bankAccounts).where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId)));
+          await removeOne(
+            bankAccounts,
+            "bank_accounts",
+            (tx) =>
+              tx.delete(bankAccounts).where(and(eq(bankAccounts.id, itemId), eq(bankAccounts.companyId, companyId))),
+            async (tx, row) => {
+              if (
+                hasOpening(row) ||
+                (await firstFound(tx, [
+                  sql`SELECT 1 FROM ${voucherEntries} WHERE ${voucherEntries.bankAccountId} = ${itemId}`,
+                ]))
+              ) {
+                throw new PermanentDeleteRefused(ACCOUNT_HAS_HISTORY_MESSAGE);
+              }
+            }
+          );
           break;
         case "voucher": {
-          if (!VOUCHER_PERMANENT_DELETE_ROLES.has(req.user?.role ?? "")) {
-            return res.status(403).json({ message: "Forbidden" });
-          }
           // A fiscal close's journal is referenced by its closure row. Deleting
           // that row would silently reopen the period, so refuse instead.
           const [closure] = await db
@@ -432,7 +574,12 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
             const [voucher] = await tx
               .select()
               .from(vouchers)
-              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)));
+              .where(and(eq(vouchers.id, itemId), eq(vouchers.companyId, companyId)))
+              .for("update");
+            // Wave 18 (B): a voucher the system retired (renamed ~DEL) stays.
+            if (isRetiredVoucherNumber(voucher?.voucherNumber)) {
+              throw new PermanentDeleteRefused(RETIRED_VOUCHER_NOT_DELETABLE_MESSAGE);
+            }
             const entries = await tx.select().from(voucherEntries).where(eq(voucherEntries.voucherId, itemId));
 
             // ── Step 1: Null out nullable FKs in tables with onDelete: "restrict" ──
@@ -500,9 +647,6 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
           break;
         }
         case "orphanedPosSale": {
-          if (!VOUCHER_PERMANENT_DELETE_ROLES.has(req.user?.role ?? "")) {
-            return res.status(403).json({ message: "Forbidden" });
-          }
           // Wave 12: refused when posted (ledger or stock lines); otherwise the
           // empty voucher goes in one transaction, audited.
           await db.transaction(async (tx) => {
@@ -540,67 +684,140 @@ export function registerDeletedItemsPermanentDeleteRoutes(app: Express) {
         // attempt to reverse historical financial vouchers/daybook entries — that
         // would require running the original cascade logic and is left for a future
         // wave. For full financial unwind, perform a manual reversal voucher.
+        // Wave 18 (B): each one is a single transaction with its audit row.
         case "factoryCategory":
-          await db
-            .delete(factoryCategories)
-            .where(and(eq(factoryCategories.id, itemId), eq(factoryCategories.companyId, companyId)));
+          await removeOne(factoryCategories, "factory_categories", (tx) =>
+            tx
+              .delete(factoryCategories)
+              .where(and(eq(factoryCategories.id, itemId), eq(factoryCategories.companyId, companyId)))
+          );
           break;
         case "factoryBaleProduct":
-          await db
-            .delete(factoryBaleProducts)
-            .where(and(eq(factoryBaleProducts.id, itemId), eq(factoryBaleProducts.companyId, companyId)));
+          await removeOne(factoryBaleProducts, "factory_bale_products", (tx) =>
+            tx
+              .delete(factoryBaleProducts)
+              .where(and(eq(factoryBaleProducts.id, itemId), eq(factoryBaleProducts.companyId, companyId)))
+          );
           break;
         case "factoryContainer": {
           // Delete child rows in FK dependency order before the parent.
           // RESTRICT tables must be cleared manually; CASCADE tables
           // (factory_offload_additional_charges, factory_container_other_charges,
           //  factory_container_profit_snapshots) are handled automatically.
-          await db.delete(factoryWasteEntries).where(eq(factoryWasteEntries.containerId, itemId));
-          await db.delete(factoryDutyAuditLog).where(eq(factoryDutyAuditLog.containerId, itemId));
-          await db.delete(factoryFxAllocations).where(eq(factoryFxAllocations.containerId, itemId));
-          await db.delete(factoryContainerCommissions).where(eq(factoryContainerCommissions.containerId, itemId));
-          // mix_batch_sources refs both container and raw_stock — delete before raw_stock
-          await db.delete(factoryMixBatchSources).where(eq(factoryMixBatchSources.containerId, itemId));
-          await db.delete(factoryRawStock).where(eq(factoryRawStock.containerId, itemId));
-          await db
-            .delete(factoryContainers)
-            .where(and(eq(factoryContainers.id, itemId), eq(factoryContainers.companyId, companyId)));
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT 1 FROM ${factoryContainers} t WHERE t.id = ${itemId} FOR UPDATE`);
+            const row = await snapshotRow(tx, factoryContainers, itemId);
+            const ids = (rows: { id: number }[]) => rows.map((r) => r.id);
+            const dependents = {
+              wasteEntryIds: ids(
+                await tx
+                  .delete(factoryWasteEntries)
+                  .where(eq(factoryWasteEntries.containerId, itemId))
+                  .returning({ id: factoryWasteEntries.id })
+              ),
+              dutyAuditLogIds: ids(
+                await tx
+                  .delete(factoryDutyAuditLog)
+                  .where(eq(factoryDutyAuditLog.containerId, itemId))
+                  .returning({ id: factoryDutyAuditLog.id })
+              ),
+              fxAllocationIds: ids(
+                await tx
+                  .delete(factoryFxAllocations)
+                  .where(eq(factoryFxAllocations.containerId, itemId))
+                  .returning({ id: factoryFxAllocations.id })
+              ),
+              commissionIds: ids(
+                await tx
+                  .delete(factoryContainerCommissions)
+                  .where(eq(factoryContainerCommissions.containerId, itemId))
+                  .returning({ id: factoryContainerCommissions.id })
+              ),
+              // mix_batch_sources refs both container and raw_stock — delete before raw_stock
+              mixBatchSourceIds: ids(
+                await tx
+                  .delete(factoryMixBatchSources)
+                  .where(eq(factoryMixBatchSources.containerId, itemId))
+                  .returning({ id: factoryMixBatchSources.id })
+              ),
+              rawStockIds: ids(
+                await tx
+                  .delete(factoryRawStock)
+                  .where(eq(factoryRawStock.containerId, itemId))
+                  .returning({ id: factoryRawStock.id })
+              ),
+            };
+            await tx
+              .delete(factoryContainers)
+              .where(and(eq(factoryContainers.id, itemId), eq(factoryContainers.companyId, companyId)));
+            await audit(tx, "factory_containers", row, dependents);
+          });
           break;
         }
         case "factoryRawStock":
-          await db
-            .delete(factoryRawStock)
-            .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)));
+          await removeOne(factoryRawStock, "factory_raw_stock", (tx) =>
+            tx
+              .delete(factoryRawStock)
+              .where(and(eq(factoryRawStock.id, itemId), eq(factoryRawStock.companyId, companyId)))
+          );
           break;
         case "factoryRawMaterialAdjustment":
-          await db
-            .delete(factoryRawMaterialAdjustments)
-            .where(
-              and(eq(factoryRawMaterialAdjustments.id, itemId), eq(factoryRawMaterialAdjustments.companyId, companyId))
-            );
+          await removeOne(factoryRawMaterialAdjustments, "factory_raw_material_adjustments", (tx) =>
+            tx
+              .delete(factoryRawMaterialAdjustments)
+              .where(
+                and(
+                  eq(factoryRawMaterialAdjustments.id, itemId),
+                  eq(factoryRawMaterialAdjustments.companyId, companyId)
+                )
+              )
+          );
           break;
         case "factoryMixBatch":
-          await db
-            .delete(factoryMixBatches)
-            .where(and(eq(factoryMixBatches.id, itemId), eq(factoryMixBatches.companyId, companyId)));
+          await removeOne(factoryMixBatches, "factory_mix_batches", (tx) =>
+            tx
+              .delete(factoryMixBatches)
+              .where(and(eq(factoryMixBatches.id, itemId), eq(factoryMixBatches.companyId, companyId)))
+          );
           break;
         case "factoryBale":
-          await db.delete(factoryBales).where(and(eq(factoryBales.id, itemId), eq(factoryBales.companyId, companyId)));
+          await removeOne(factoryBales, "factory_bales", (tx) =>
+            tx.delete(factoryBales).where(and(eq(factoryBales.id, itemId), eq(factoryBales.companyId, companyId)))
+          );
           break;
         case "customerProforma":
-          await db.delete(customerProformaLines).where(eq(customerProformaLines.proformaId, itemId));
-          await db.delete(proformaStockReservations).where(eq(proformaStockReservations.proformaId, itemId));
-          await db
-            .delete(customerProformas)
-            .where(and(eq(customerProformas.id, itemId), eq(customerProformas.companyId, companyId)));
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT 1 FROM ${customerProformas} t WHERE t.id = ${itemId} FOR UPDATE`);
+            const row = await snapshotRow(tx, customerProformas, itemId);
+            const lines = await tx
+              .delete(customerProformaLines)
+              .where(eq(customerProformaLines.proformaId, itemId))
+              .returning();
+            const reservations = await tx
+              .delete(proformaStockReservations)
+              .where(eq(proformaStockReservations.proformaId, itemId))
+              .returning();
+            await tx
+              .delete(customerProformas)
+              .where(and(eq(customerProformas.id, itemId), eq(customerProformas.companyId, companyId)));
+            await audit(tx, "customer_proformas", row, { lines, reservations });
+          });
           break;
         case "customerOrder":
-          await db.delete(customerOrderBales).where(eq(customerOrderBales.orderId, itemId));
-          await db.delete(customerOrderLines).where(eq(customerOrderLines.orderId, itemId));
-          await db.delete(customerOrderCharges).where(eq(customerOrderCharges.orderId, itemId));
-          await db
-            .delete(customerOrders)
-            .where(and(eq(customerOrders.id, itemId), eq(customerOrders.companyId, companyId)));
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`SELECT 1 FROM ${customerOrders} t WHERE t.id = ${itemId} FOR UPDATE`);
+            const row = await snapshotRow(tx, customerOrders, itemId);
+            const bales = await tx.delete(customerOrderBales).where(eq(customerOrderBales.orderId, itemId)).returning();
+            const lines = await tx.delete(customerOrderLines).where(eq(customerOrderLines.orderId, itemId)).returning();
+            const charges = await tx
+              .delete(customerOrderCharges)
+              .where(eq(customerOrderCharges.orderId, itemId))
+              .returning();
+            await tx
+              .delete(customerOrders)
+              .where(and(eq(customerOrders.id, itemId), eq(customerOrders.companyId, companyId)));
+            await audit(tx, "customer_orders", row, { bales, lines, charges });
+          });
           break;
         default:
           return res.status(400).json({ message: "Invalid item type" });

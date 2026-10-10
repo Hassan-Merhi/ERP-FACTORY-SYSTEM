@@ -21,9 +21,9 @@ describe("Phase 4 hot-path performance regressions", () => {
   it("aggregates /api/accounts/all movements in PostgreSQL instead of materializing voucher rows", () => {
     const source = read("server/routes/accounts/all.ts");
 
-    expect(source).toContain("voucherEntries.fixedAssetId");
-    expect(source).toContain("voucherEntries.employeeId");
-    expect(source).toContain(".groupBy(");
+    // Wave 18 C: one grouped engine scan (loadBalanceRows aggregates in SQL)
+    // gives the ledger, bank, fixed-asset and employee rows.
+    expect(source).toContain("loadBalanceRows(db,");
     expect(source).not.toContain("companyVoucherIds");
     expect(source).not.toContain("const allEntries =");
     expect(source).toContain("suppliers.length === 0");

@@ -10,7 +10,6 @@ import type { FactoryWorker } from "@shared/schema";
 import type { ProductionBonusDecisionResult } from "./ProductionBonusDecisionPanel";
 import type { Company, PayrollRecord } from "./types";
 import { amount } from "./utils";
-import { confirmAction } from "@/components/ConfirmHost";
 
 interface PayCashAccount {
   id: number;
@@ -31,12 +30,6 @@ interface WorkerImportResult {
   updated: number;
   skipped: number;
   errors?: unknown[];
-  message?: string;
-}
-
-interface PayrollMigrationResult {
-  vouchersUpdated: number;
-  bonusEntriesCreated: number;
   message?: string;
 }
 
@@ -99,7 +92,6 @@ export function useFactoryPayrollModel() {
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
-  const [migrating, setMigrating] = useState(false);
 
   const [workerSearch, setWorkerSearch] = useState("");
   const [workerImporting, setWorkerImporting] = useState(false);
@@ -299,36 +291,6 @@ export function useFactoryPayrollModel() {
     }
   };
 
-  const handleMigrateCitySplit = async () => {
-    if (!selectedCompanyId) return;
-    if (
-      !(await confirmAction({
-        title:
-          "This will split historical salary/bonus expense entries by city (Lubumbashi / Kolwezi). Run once only. Continue?",
-      }))
-    )
-      return;
-    setMigrating(true);
-    try {
-      const response = await fetch("/api/factory/payroll/migrate-city-split", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ companyId: selectedCompanyId }),
-      });
-      const data = (await response.json()) as PayrollMigrationResult;
-      if (!response.ok) throw new Error(data.message || "Migration failed");
-      toast({
-        title: "Migration complete",
-        description: `${data.vouchersUpdated} payroll vouchers split by city, ${data.bonusEntriesCreated} bonus entries created.`,
-      });
-    } catch (error: unknown) {
-      toast({ title: "Migration failed", description: errorMessage(error), variant: "destructive" });
-    } finally {
-      setMigrating(false);
-    }
-  };
-
   const handleExportPdf = async () => {
     if (!selectedCompanyId) return;
     if (!navigator.onLine) {
@@ -462,7 +424,6 @@ export function useFactoryPayrollModel() {
     payCashAccounts,
     exportingPdf,
     exportingExcel,
-    migrating,
     workerSearch,
     setWorkerSearch,
     workerImporting,
@@ -481,7 +442,6 @@ export function useFactoryPayrollModel() {
     handleAdjustSubmit,
     handleConfirmPayment,
     handleWorkerImport,
-    handleMigrateCitySplit,
     handleExportPdf,
     handleExportExcel,
     totals,

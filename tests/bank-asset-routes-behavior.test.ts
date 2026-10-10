@@ -74,6 +74,8 @@ vi.mock("../server/storage", () => ({ storage: harness.storage }));
 vi.mock("../server/auth", () => ({
   requireAuth: (_req: any, _res: any, next: any) => next(),
   requireNonPOS: (_req: any, _res: any, next: any) => next(),
+  // Wave 18 (B): bank PUT and DELETE are Admin/Owner (route-level requireRole).
+  requireRole: () => (_req: any, _res: any, next: any) => next(),
 }));
 vi.mock("../server/routes/_helpers", () => ({
   upload: { single: () => (_req: any, _res: any, next: any) => next() },

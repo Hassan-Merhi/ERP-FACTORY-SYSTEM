@@ -1,7 +1,7 @@
 /**
  * AR/AP aging on the one balance engine (accounting audit wave 17 A).
  *
- * GET /api/reports/aging?kind=customer|supplier&asOf=YYYY-MM-DD
+ * GET /api/reports/aging?kind=customer|supplier|factorySupplier&asOf=YYYY-MM-DD
  *
  *   - each party's balance is the engine's closing (getPartyBalances) as of
  *     `asOf` (everything posted without it), in this company's vouchers, by
@@ -18,6 +18,13 @@
  *     aged: its balance is in `unappliedCredit` (negative);
  *   - lines dated after the reference date are in `future`.
  * The buckets of a party always add up to its engine balance.
+ *
+ * Wave 18 C: factory suppliers are aged too (the engine's kind
+ * `factorySupplier`, credit owed like an ERP supplier); amounts are the
+ * engine's USD base amounts, COALESCE(base_debit_amount, debit_amount) and
+ * the credit likewise (the engine's `historicalBaseClosing`), so a
+ * foreign-currency line ages at its posting-rate USD value; the reference date
+ * is the company's business date (its timezone), not UTC.
  */
 import { sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
@@ -31,9 +38,10 @@ import {
   intLiteral,
   noNonCustomerTarget,
 } from "../accounting/balances/partyLineRules";
-import { getCompanyBusinessDate } from "../../lib/dateUtils";
+import { companyBusinessDate } from "../accounting/companyBusinessDate";
 
-export type AgingKind = "customer" | "supplier";
+export type AgingKind = "customer" | "supplier" | "factorySupplier";
+export const AGING_KINDS: readonly AgingKind[] = ["customer", "supplier", "factorySupplier"];
 
 export const AGING_BUCKETS = [
   "future",
@@ -59,6 +67,8 @@ export interface AgingReport {
   companyId: number;
   kind: AgingKind;
   basis: "ledger";
+  /** The amounts aged: the engine's historical USD base amounts (base columns, else debit/credit). */
+  amountBasis: "historicalBase";
   asOf: string | null;
   /** The date ages are counted from. */
   referenceDate: string;
@@ -66,6 +76,10 @@ export interface AgingReport {
   parties: AgingPartyRow[];
   totals: { balance: string; buckets: Record<AgingBucket, string> };
 }
+
+/** The engine's USD base amounts of a line (ledgerBalanceEngine's base_net), alias `ve`. */
+const BASE_DEBIT = sql.raw("COALESCE(ve.base_debit_amount, ve.debit_amount, 0)");
+const BASE_CREDIT = sql.raw("COALESCE(ve.base_credit_amount, ve.credit_amount, 0)");
 
 interface IncreaseRow {
   party_id: number;
@@ -88,7 +102,7 @@ async function loadIncreases(
         SELECT COALESCE(cl.customer_id,
                         CASE WHEN ${sql.raw(noNonCustomerTarget("ve"))} THEN ve.customer_id END) AS party_id,
                ${VOUCHER_BOOKED_ON} AS booked_on,
-               COALESCE(ve.debit_amount, 0) - COALESCE(ve.credit_amount, 0) AS net
+               ${BASE_DEBIT} - ${BASE_CREDIT} AS net
           FROM voucher_entries ve
           JOIN vouchers v ON v.id = ve.voucher_id
           LEFT JOIN customer_links cl ON cl.ledger_account_id = ve.ledger_account_id
@@ -102,16 +116,20 @@ async function loadIncreases(
     `);
     return result.rows;
   }
+  // Suppliers and factory suppliers: the lines the engine attributes to them
+  // (no target of higher priority), credits raise what is owed.
+  const column = kind === "supplier" ? sql.raw("ve.supplier_id") : sql.raw("ve.factory_supplier_id");
+  const owned = sql.raw(higherPriorityTargetsAbsent("ve", kind === "supplier" ? "supplier_id" : "factory_supplier_id"));
   const result = await executor.execute<IncreaseRow & Record<string, unknown>>(sql`
-    SELECT ve.supplier_id AS party_id, (${VOUCHER_BOOKED_ON})::text AS booked_on,
-           SUM(GREATEST(COALESCE(ve.credit_amount, 0) - COALESCE(ve.debit_amount, 0), 0))::text AS increase
+    SELECT ${column} AS party_id, (${VOUCHER_BOOKED_ON})::text AS booked_on,
+           SUM(GREATEST(${BASE_CREDIT} - ${BASE_DEBIT}, 0))::text AS increase
       FROM voucher_entries ve
       JOIN vouchers v ON v.id = ve.voucher_id
      WHERE v.company_id = ${companyId} AND ${live}
-       AND ve.supplier_id IS NOT NULL
-       AND ${sql.raw(higherPriorityTargetsAbsent("ve", "supplier_id"))}
-     GROUP BY ve.supplier_id, ${VOUCHER_BOOKED_ON}
-    HAVING SUM(GREATEST(COALESCE(ve.credit_amount, 0) - COALESCE(ve.debit_amount, 0), 0)) > 0
+       AND ${column} IS NOT NULL
+       AND ${owned}
+     GROUP BY ${column}, ${VOUCHER_BOOKED_ON}
+    HAVING SUM(GREATEST(${BASE_CREDIT} - ${BASE_DEBIT}, 0)) > 0
   `);
   return result.rows;
 }
@@ -149,7 +167,7 @@ export async function getAgingReport(
   asOf: string | null,
   executor: DatabaseOrTransaction = db
 ): Promise<AgingReport> {
-  const referenceDate = asOf ?? getCompanyBusinessDate(null);
+  const referenceDate = asOf ?? (await companyBusinessDate(companyId, executor));
   const [balances, increases] = await Promise.all([
     getPartyBalances(executor, { companyId, kind, asOf }),
     loadIncreases(executor, companyId, kind, asOf),
@@ -167,7 +185,8 @@ export async function getAgingReport(
   let totalBalance = new MoneyDecimal(0);
   const parties: AgingPartyRow[] = [];
   for (const party of balances.parties) {
-    const owed = kind === "customer" ? toMoney(party.closing) : toMoney(party.closing).negated();
+    const base = toMoney(party.historicalBaseClosing);
+    const owed = kind === "customer" ? base : base.negated();
     if (owed.isZero()) continue;
     const buckets = emptyBuckets();
     if (owed.isNegative()) {
@@ -202,6 +221,7 @@ export async function getAgingReport(
     companyId,
     kind,
     basis: "ledger",
+    amountBasis: "historicalBase",
     asOf,
     referenceDate,
     bucketDays: { current: "0-30", days31to60: "31-60", days61to90: "61-90", over90: ">90" },

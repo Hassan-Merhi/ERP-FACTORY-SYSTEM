@@ -7,6 +7,8 @@ import { registerRentalPaymentsAccrualRoutes } from "./rental/rentalPaymentsAccr
 import { registerRentalAccrualConfigRoutes } from "./rental/rentalAccrualConfigRoutes";
 import { runRentalReconciliation } from "../services/rental/rentalReconciliationService";
 import { registerDeferredRentReclassificationRoutes } from "./rental/deferredRentReclassificationRoutes";
+import { registerDueRentalPostingRoutes } from "./rental/dueRentalPostingRoutes";
+import { registerLegacyPrepaidRecognitionRoutes } from "./rental/legacyPrepaidRecognitionRoutes";
 import { requireAuth } from "../auth";
 import { getClientDate } from "../lib/dateUtils";
 import { getCompanyId } from "./rental/shared";
@@ -26,6 +28,13 @@ export function registerRentalRoutes(
   // requests (accounting audit wave 16 A, owner decision of 2026-10-09): it is an
   // Owner preview/apply tool (deferredRentReclassificationRoutes.ts).
   if (module === "PROPERTIES") registerDeferredRentReclassificationRoutes(app, urlPrefix);
+  // Wave 18 A: the legacy prepaid shop rent recognition left the daily job and is
+  // an Owner preview/apply tool; "post due accruals now" replaces the posting the
+  // units page load did (Admin/Owner, same code path as the daily job).
+  if (module === "ERP" || module === "FACTORY") {
+    registerLegacyPrepaidRecognitionRoutes(app, module, urlPrefix, shopExpenseAccountName);
+  }
+  registerDueRentalPostingRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
 
   registerRentalUnitsContractsRoutes(app, module, urlPrefix, incomeAccountName, shopExpenseAccountName);
   // The central route owns DELETE /payments/:id. Registration order keeps the

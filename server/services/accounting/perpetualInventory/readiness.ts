@@ -12,6 +12,10 @@
  *     mixes among them (a mix source with no USD rate);
  *   - stock bales from a stock entry with no mix, costed at the catalogue
  *     production price (wave 17 B, owner decision 2), listed as unvalued;
+ *   - stock brought in by a spreadsheet import (bale import and reimport,
+ *     raw-stock import) still held, listed as imported at the spreadsheet's
+ *     cost (wave 18 C owner decision: allowed before the cut-over, not a
+ *     blocker; refused once the cut-over is applied);
  *   - finalized factory invoices on or after the cut-over with no ledger
  *     journal;
  *   - legacy factory foreign-currency lines the wave 6 repair has not
@@ -30,6 +34,7 @@ import { toMoney } from "../../../lib/money";
 import { planFactoryFxLegacyRepair } from "../../factory/factoryFxLegacyRepair";
 import { planReadinessResolutionTx } from "../../inventory/inventoryReadinessResolution";
 import { assertTransactionCompanyScope } from "../../security/transactionCompanyScope";
+import { importedAtSpreadsheetCostTx, type ImportedAtSpreadsheetCost } from "../../factory/stockImportPolicy";
 import { DEFAULT_PERPETUAL_INVENTORY_FROM, PERPETUAL_INVENTORY_POSTING_READY, getInventoryCutover } from "./cutover";
 import { noMixCataloguePricedBales } from "./factoryCutoverBlockers";
 import { listUnpostedFactoryInvoices } from "./factoryInvoice";
@@ -82,6 +87,8 @@ export interface PerpetualReadinessReport {
   openMixesWithoutUsdRate: number;
   /** Stock bales with no mix, costed at the catalogue production price (decision 2): unvalued. */
   noMixCataloguePricedBales: { count: number; cost: string; baleIds: number[] };
+  /** Stock still held that a spreadsheet import brought in, at the spreadsheet's cost (wave 18 C, not a blocker). */
+  importedAtSpreadsheetCost: ImportedAtSpreadsheetCost;
   unpostedFactoryInvoices: number;
   legacyFxLines: { unrepaired: number; repairable: number; withoutDatedRate: number };
   documentsOnOrAfterCutover: DocumentsOnOrAfterCutover | null;
@@ -111,6 +118,7 @@ export async function perpetualReadinessReport(
       // had no USD rate when it was mixed (factoryStockValuation lists them).
       const openMixesWithoutUsdRate = unvaluedBySource("factory_mix_batches");
       const noMixBales = await noMixCataloguePricedBales(tx, companyId);
+      const imported = await importedAtSpreadsheetCostTx(tx, companyId);
       const unposted = await listUnpostedFactoryInvoices(tx, companyId);
       const documents = cutover ? null : await documentsOnOrAfterCutover(tx, companyId, effectiveFrom);
       const opening = cutover ? null : await planOpeningInventoryJournal(companyId, effectiveFrom, tx);
@@ -126,6 +134,7 @@ export async function perpetualReadinessReport(
         unvaluedBySource,
         openMixesWithoutUsdRate,
         noMixBales,
+        imported,
         unposted,
         documents,
         opening,
@@ -252,6 +261,7 @@ export async function perpetualReadinessReport(
     },
     openMixesWithoutUsdRate: report.openMixesWithoutUsdRate,
     noMixCataloguePricedBales: report.noMixBales,
+    importedAtSpreadsheetCost: report.imported,
     unpostedFactoryInvoices: report.unposted.length,
     legacyFxLines: { unrepaired: fx.legacyLines, repairable: fx.repairableLines, withoutDatedRate },
     documentsOnOrAfterCutover: report.documents,

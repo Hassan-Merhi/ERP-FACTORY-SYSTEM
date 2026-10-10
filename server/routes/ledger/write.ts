@@ -15,7 +15,9 @@ import { eq } from "drizzle-orm";
 import { toMoney } from "../../lib/money";
 import { buildAuditChanges } from "../../services/audit";
 import { defaultOpeningSide } from "../../services/accounting/accountClassification";
+import { isSystemResolvedAccountCode } from "../../services/accounting/systemAccounts";
 import {
+  ACCOUNT_HISTORY_EDIT_ROLES,
   accountHistoryErrorResponse,
   assertAccountChangeAllowed,
   countAccountLines,
@@ -52,6 +54,16 @@ const VALID_LEDGER_SUBTYPES: Record<string, string[]> = {
   Loans: ["gc_hassan_savings"],
   Intercompany: ["sp_hadi_intercompany", "hadi_sp_intercompany"],
 };
+
+export const LEDGER_ACCOUNT_DELETE_VIA_EDIT_CODE = "LEDGER_ACCOUNT_DELETE_VIA_EDIT_REFUSED" as const;
+export const LEDGER_ACCOUNT_DELETE_VIA_EDIT_MESSAGE =
+  "An account is deleted with the delete action, not by editing it.";
+export const LEDGER_ACCOUNT_CODE_ACTIVE_FORBIDDEN_CODE = "LEDGER_ACCOUNT_CODE_ACTIVE_CHANGE_FORBIDDEN" as const;
+export const LEDGER_ACCOUNT_CODE_ACTIVE_FORBIDDEN_MESSAGE =
+  "Only an Admin or Owner can change an account's code or active status.";
+export const SYSTEM_ACCOUNT_CODE_RESERVED_CODE = "SYSTEM_ACCOUNT_CODE_RESERVED" as const;
+export const SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE =
+  "The system finds an account by this code, so an account cannot be re-coded to it or away from it.";
 
 export function registerLedgerAccountWriteRoutes(app: Express) {
   app.post("/api/ledger-accounts", requireAuth, requireNonPOS, async (req, res) => {
@@ -183,10 +195,36 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
         });
       }
 
+      // Wave 18 (B): deletedAt is never written by an edit (the delete route
+      // retires and audits an account); code and active are Admin/Owner only,
+      // and a code the system resolves accounts by cannot be taken or given up.
+      if (req.body && typeof req.body === "object" && "deletedAt" in req.body) {
+        return res
+          .status(400)
+          .json({ message: LEDGER_ACCOUNT_DELETE_VIA_EDIT_MESSAGE, code: LEDGER_ACCOUNT_DELETE_VIA_EDIT_CODE });
+      }
+
       const parsed = updateLedgerAccountSchema.parse({
         ...req.body,
         id: accountId,
       });
+
+      const codeChanges = parsed.code !== undefined && parsed.code !== existingAccount.code;
+      const activeChanges = parsed.active !== undefined && parsed.active !== existingAccount.active;
+      if ((codeChanges || activeChanges) && !ACCOUNT_HISTORY_EDIT_ROLES.has(String(requestRole(req) ?? ""))) {
+        return res.status(403).json({
+          message: LEDGER_ACCOUNT_CODE_ACTIVE_FORBIDDEN_MESSAGE,
+          code: LEDGER_ACCOUNT_CODE_ACTIVE_FORBIDDEN_CODE,
+        });
+      }
+      if (
+        codeChanges &&
+        (isSystemResolvedAccountCode(parsed.code) || isSystemResolvedAccountCode(existingAccount.code))
+      ) {
+        return res
+          .status(409)
+          .json({ message: SYSTEM_ACCOUNT_CODE_RESERVED_MESSAGE, code: SYSTEM_ACCOUNT_CODE_RESERVED_CODE });
+      }
 
       // Check for duplicate code if code is being changed
       if (parsed.code && parsed.code !== existingAccount.code) {
@@ -225,6 +263,7 @@ export function registerLedgerAccountWriteRoutes(app: Express) {
       // and the audit row is written in the same transaction.
       const updates: Partial<typeof parsed> = { ...parsed };
       delete updates.id;
+      delete updates.deletedAt;
       if (updates.companyId === existingAccount.companyId) delete updates.companyId;
       const updatedAccount = await db.transaction(async (tx) => {
         await lockAccountRow(tx, "ledger_accounts", accountId);

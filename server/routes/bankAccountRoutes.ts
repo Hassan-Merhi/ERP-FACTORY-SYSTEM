@@ -6,12 +6,19 @@
  * (services/accounting/accountHistoryPolicy.ts); every create, edit and
  * delete is audited in the transaction that makes it, and the opening-balance
  * lock refuses an opening change after a close.
+ *
+ * Wave 18 (B): PUT and DELETE are Admin/Owner (Developer passes). DELETE is
+ * refused while the bank has a non-zero opening or any voucher line on it or
+ * on its linked ledger (the engine counts a line naming both on the ledger, so
+ * both are the bank's history); the database refuses soft-deleting a bank with
+ * a balance (erp_bank_account_delete_guard). The linked ledger cannot change
+ * once the bank or its linked ledger has lines.
  */
 import type { Express } from "express";
-import { and, eq, ne } from "drizzle-orm";
-import { bankAccounts, insertBankAccountSchema } from "@shared/schema";
+import { and, eq, isNull, ne } from "drizzle-orm";
+import { bankAccounts, insertBankAccountSchema, ledgerAccounts } from "@shared/schema";
 
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { db } from "../db";
 import { errorStatus, getErrorMessage } from "../lib/httpHandlers";
 import { toMoney } from "../lib/money";
@@ -29,11 +36,26 @@ import { logAudit } from "./_helpers";
 class BankAccountRouteError extends Error {
   constructor(
     readonly status: number,
-    message: string
+    message: string,
+    readonly code?: string
   ) {
     super(message);
   }
 }
+
+export const BANK_LINKED_LEDGER_CHANGE_REFUSED_CODE = "BANK_LINKED_LEDGER_CHANGE_REFUSED" as const;
+export const BANK_LINKED_LEDGER_CHANGE_REFUSED_MESSAGE =
+  "This bank account or its linked ledger already has voucher entries, so the linked ledger cannot be changed.";
+export const BANK_ACCOUNT_DELETE_HAS_OPENING_CODE = "BANK_ACCOUNT_HAS_OPENING" as const;
+export const BANK_ACCOUNT_DELETE_HAS_OPENING_MESSAGE =
+  "Cannot delete bank account: it has a non-zero opening balance. Move the balance with a journal entry first, or deactivate it instead.";
+export const BANK_ACCOUNT_DELETE_HAS_LINES_CODE = "BANK_ACCOUNT_HAS_ENTRIES" as const;
+
+function bankRouteErrorBody(error: BankAccountRouteError) {
+  return error.code ? { message: error.message, code: error.code } : { message: error.message };
+}
+
+const BANK_ACCOUNT_ADMIN_ROLES = ["Admin", "Owner"] as const;
 
 const BANK_ACCOUNT_AUDIT_FIELDS = [
   "name",
@@ -135,7 +157,7 @@ export function registerBankAccountRoutes(app: Express) {
   // Admin or Owner, never moves company, and every change is audited in the
   // transaction that makes it (the opening-balance lock refuses an opening
   // change after a close).
-  app.put("/api/bank-accounts/:id", requireAuth, async (req, res) => {
+  app.put("/api/bank-accounts/:id", requireAuth, requireRole(...BANK_ACCOUNT_ADMIN_ROLES), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -184,6 +206,38 @@ export function registerBankAccountRoutes(app: Express) {
           company: { before: existing.companyId, after: updates.companyId },
         });
 
+        const linkedLedgerChanges =
+          updates.linkedLedgerId !== undefined &&
+          (updates.linkedLedgerId ?? null) !== (existing.linkedLedgerId ?? null);
+        if (linkedLedgerChanges) {
+          if (lines.any > 0) {
+            throw new BankAccountRouteError(
+              409,
+              BANK_LINKED_LEDGER_CHANGE_REFUSED_MESSAGE,
+              BANK_LINKED_LEDGER_CHANGE_REFUSED_CODE
+            );
+          }
+          if (updates.linkedLedgerId != null) {
+            const [linkedLedger] = await tx
+              .select({ id: ledgerAccounts.id, accountType: ledgerAccounts.accountType })
+              .from(ledgerAccounts)
+              .where(
+                and(
+                  eq(ledgerAccounts.id, updates.linkedLedgerId),
+                  eq(ledgerAccounts.companyId, companyId),
+                  isNull(ledgerAccounts.deletedAt)
+                )
+              );
+            if (!linkedLedger) throw new BankAccountRouteError(400, "Linked ledger account not found");
+            if (linkedLedger.accountType !== "Bank" && linkedLedger.accountType !== "Cash") {
+              throw new BankAccountRouteError(
+                400,
+                `Linked ledger must be Bank or Cash type. Found: ${linkedLedger.accountType}`
+              );
+            }
+          }
+        }
+
         if (updates.code && updates.code !== existing.code) {
           const [duplicate] = await tx
             .select({ id: bankAccounts.id })
@@ -218,18 +272,19 @@ export function registerBankAccountRoutes(app: Express) {
     } catch (error: unknown) {
       const refused = accountHistoryErrorResponse(error);
       if (refused) return res.status(refused.status).json(refused.body);
-      if (error instanceof BankAccountRouteError) return res.status(error.status).json({ message: error.message });
+      if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
       res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 
-  app.delete("/api/bank-accounts/:id", requireAuth, async (req, res) => {
+  app.delete("/api/bank-accounts/:id", requireAuth, requireRole(...BANK_ACCOUNT_ADMIN_ROLES), async (req, res) => {
     try {
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
       }
 
       const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid bank account ID" });
       const companyId = req.session.currentCompanyId;
       // Wave 16 (B): checked, retired and audited in one transaction.
       await db.transaction(async (tx) => {
@@ -239,9 +294,24 @@ export function registerBankAccountRoutes(app: Express) {
           .from(bankAccounts)
           .where(and(eq(bankAccounts.id, id), eq(bankAccounts.companyId, companyId)));
         if (!existing) throw new BankAccountRouteError(404, "Bank account not found");
-        const lines = await countAccountLines(tx, [["bank_account_id", id]]);
+        // Wave 18 (B): the opening and the linked ledger's lines count too.
+        if (!toMoney(existing.openingBalance).isZero()) {
+          throw new BankAccountRouteError(
+            409,
+            BANK_ACCOUNT_DELETE_HAS_OPENING_MESSAGE,
+            BANK_ACCOUNT_DELETE_HAS_OPENING_CODE
+          );
+        }
+        const lines = await countAccountLines(tx, [
+          ["bank_account_id", id],
+          ["ledger_account_id", existing.linkedLedgerId],
+        ]);
         if (lines.any > 0) {
-          throw new BankAccountRouteError(400, `Cannot delete bank account: ${lines.any} voucher entries exist`);
+          throw new BankAccountRouteError(
+            409,
+            `Cannot delete bank account: ${lines.any} voucher entries exist`,
+            BANK_ACCOUNT_DELETE_HAS_LINES_CODE
+          );
         }
         await tx
           .update(bankAccounts)
@@ -268,8 +338,8 @@ export function registerBankAccountRoutes(app: Express) {
       });
       res.status(204).send();
     } catch (error: unknown) {
-      if (error instanceof BankAccountRouteError) return res.status(error.status).json({ message: error.message });
-      res.status(400).json({ message: getErrorMessage(error) });
+      if (error instanceof BankAccountRouteError) return res.status(error.status).json(bankRouteErrorBody(error));
+      res.status(errorStatus(error, 400)).json({ message: getErrorMessage(error) });
     }
   });
 }

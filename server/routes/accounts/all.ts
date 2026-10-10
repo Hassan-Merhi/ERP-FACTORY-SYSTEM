@@ -10,10 +10,15 @@ import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
 import { getSupplierBalanceForContext, isSupplierVisibleToCompany } from "../helpers/supplierBalanceHelpers";
-import { vouchers, voucherEntries } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
-import { eq, and, sql, isNull, lt, lte, inArray } from "drizzle-orm";
-import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { and, sql, isNull, inArray } from "drizzle-orm";
+import {
+  getPartyBalances,
+  loadBalanceRows,
+  openingSideOf,
+  toPartyBalance,
+  type PartyBalance,
+} from "../../services/accounting/balances/ledgerBalanceEngine";
 import { requireFactoryPageAccess } from "../../lib/factoryAccessControl";
 import { getClientDate } from "../../lib/dateUtils";
 import { loadPartyOpeningSides } from "../helpers/partyOpeningSide";
@@ -134,107 +139,50 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
         .map((party) => [party.linkedLedgerAccountId as number, party])
     );
 
-    // Every posted voucher up to the end date counts. With a start date the
-    // lines before it are carried into the opening (opening + movements before
-    // startDate) instead of being dropped, so the balance is still the balance
-    // at the end date.
-    const voucherDay = sql`COALESCE(${vouchers.effectiveDate}, ${vouchers.voucherDate})`;
-    const voucherDateConditions = [
-      eq(vouchers.companyId, companyId),
-      eq(vouchers.optional, false),
-      isNull(vouchers.deletedAt),
-      ...(effectiveEndDate ? [lte(voucherDay, effectiveEndDate)] : []),
-    ];
-    const prePeriodCase = (column: typeof voucherEntries.debitAmount | typeof voucherEntries.creditAmount) =>
-      balStartDate
-        ? sql`COALESCE(SUM(CASE WHEN ${lt(voucherDay, balStartDate)} THEN CAST(${column} AS numeric) ELSE 0 END), 0)`.mapWith(
-            String
-          )
-        : sql`0`.mapWith(String);
-
-    const ledgerIds = ledgers.map((a) => a.id);
-    const ledgerIdSet = new Set(ledgerIds);
-
-    // Phase 4: one aggregate scan replaces the previous three-step
-    // voucher-id -> raw-entry -> ledger-entry read path. The old endpoint
-    // materialized every matching voucher entry in Node just to sum four
-    // account dimensions. PostgreSQL now returns only grouped totals.
-    const movementRows = await db
-      .select({
-        ledgerAccountId: voucherEntries.ledgerAccountId,
-        bankAccountId: voucherEntries.bankAccountId,
-        fixedAssetId: voucherEntries.fixedAssetId,
-        employeeId: voucherEntries.employeeId,
-        debits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric)), 0)`,
-        credits: sql<string>`COALESCE(SUM(CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-        preDebits: prePeriodCase(voucherEntries.debitAmount),
-        preCredits: prePeriodCase(voucherEntries.creditAmount),
-      })
-      .from(voucherEntries)
-      .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-      .where(and(...voucherDateConditions))
-      .groupBy(
-        voucherEntries.ledgerAccountId,
-        voucherEntries.bankAccountId,
-        voucherEntries.fixedAssetId,
-        voucherEntries.employeeId
-      );
-
-    type Movement = { debits: Decimal; credits: Decimal; preDebits: Decimal; preCredits: Decimal };
-    const ZERO = new MoneyDecimal(0);
-    const NO_MOVEMENT: Movement = { debits: ZERO, credits: ZERO, preDebits: ZERO, preCredits: ZERO };
-    const ledgerBalances = new Map<number, Movement>();
-    const bankBalances = new Map<number, Movement>();
-    const assetBalances = new Map<number, Movement>();
-    const employeeBalances = new Map<number, Movement>();
-
-    const addMovement = (target: Map<number, Movement>, id: number | null | undefined, movement: Movement) => {
-      if (!id) return;
-      const existing = target.get(id) || NO_MOVEMENT;
-      target.set(id, {
-        debits: existing.debits.plus(movement.debits),
-        credits: existing.credits.plus(movement.credits),
-        preDebits: existing.preDebits.plus(movement.preDebits),
-        preCredits: existing.preCredits.plus(movement.preCredits),
-      });
-    };
-
-    for (const row of movementRows) {
-      const movement: Movement = {
-        debits: toMoney(row.debits),
-        credits: toMoney(row.credits),
-        preDebits: toMoney(row.preDebits),
-        preCredits: toMoney(row.preCredits),
-      };
-      if (row.ledgerAccountId && ledgerIdSet.has(row.ledgerAccountId)) {
-        addMovement(ledgerBalances, row.ledgerAccountId, movement);
+    // Wave 18 C: ledger, bank, fixed-asset and employee balances are the
+    // balance engine's rows (one scan of the company's lines): each line
+    // counted once by the engine's ownership (a line naming a ledger and a
+    // bank is the ledger's, no longer also the bank's), this company's
+    // vouchers only, effective-date basis, and openings with the engine's side
+    // rule (a sideless ledger opening takes its type's usual side). With a
+    // start date the engine carries the earlier lines into the opening.
+    const engineRows = await loadBalanceRows(db, {
+      companyId,
+      asOf: effectiveEndDate ?? null,
+      from: balStartDate ?? null,
+    });
+    const engineByKind = new Map<string, PartyBalance>();
+    for (const row of engineRows) {
+      if (row.id === null) continue;
+      if (row.kind === "ledger" || row.kind === "bank" || row.kind === "fixedAsset" || row.kind === "employee") {
+        engineByKind.set(`${row.kind}:${row.id}`, toPartyBalance(row));
       }
-      addMovement(bankBalances, row.bankAccountId, movement);
-      addMovement(assetBalances, row.fixedAssetId, movement);
-      addMovement(employeeBalances, row.employeeId, movement);
     }
-
-    // Dr-positive balance at the end date, and the opening carried into the
-    // period (the stored opening when no start date is given).
-    const calculateBalance = (openingBalance: string, openingBalanceSide: string | null, movement: Movement) => {
-      let opening = toMoney(openingBalance);
-      if (openingBalanceSide === "Cr") opening = opening.negated();
-      const balance = opening.plus(movement.debits).minus(movement.credits);
-      const carried = opening.plus(movement.preDebits).minus(movement.preCredits);
+    const ZERO = new MoneyDecimal(0);
+    /** Dr-positive closing and the opening shown (carried with a start date, else the master's). */
+    const engineFigures = (kind: "ledger" | "bank" | "fixedAsset" | "employee", id: number) => {
+      const party = engineByKind.get(`${kind}:${id}`);
       return {
-        balance: balance.abs(),
-        balanceSide: balance.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
-        carriedOpening: carried.abs().toNumber(),
-        carriedOpeningSide: carried.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
+        closing: party ? toMoney(party.closing) : ZERO,
+        opening: party ? toMoney(balStartDate ? party.opening : party.masterOpening) : ZERO,
       };
     };
+    /** Dr-positive figures as the list shows them: an amount and its side. */
+    const drPositive = (kind: "ledger" | "bank" | "fixedAsset", id: number) => {
+      const { closing, opening } = engineFigures(kind, id);
+      return {
+        balance: closing.abs(),
+        balanceSide: closing.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
+        openingBalance: opening.abs().toNumber(),
+        openingBalanceSide: opening.greaterThanOrEqualTo(0) ? "Dr" : "Cr",
+      };
+    };
+    /** An opening of zero keeps its master's side (the engine's rule) for display. */
+    const masterSide = (kind: "ledger" | "bank", accountType: string | null | undefined, side: string | null) =>
+      openingSideOf(kind, accountType, side).side;
 
     const accounts = [
       ...ledgers.map((account) => {
-        const movements = ledgerBalances.get(account.id) || NO_MOVEMENT;
-        const effectiveOB = account.openingBalance ?? "0";
-        const effectiveOBSide = account.openingBalanceSide;
-
         const customerParty = customerByLedger.get(account.id);
         if (customerParty) {
           const closing = toMoney(customerParty.closing);
@@ -259,11 +207,7 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           };
         }
 
-        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
-          effectiveOB,
-          effectiveOBSide,
-          movements
-        );
+        const figures = drPositive("ledger", account.id);
         const workerTable = workerAdvanceTables.get(account.id);
         return {
           id: `ledger-${account.id}`,
@@ -273,71 +217,66 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           name: account.name,
           accountType: account.accountType,
           subType: account.subType,
-          balance: balance.toFixed(2),
-          balanceSide,
-          openingBalance: balStartDate ? carriedOpening : toMoney(effectiveOB).toNumber(),
-          openingBalanceSide: balStartDate ? carriedOpeningSide : effectiveOBSide || "Dr",
+          balance: figures.balance.toFixed(2),
+          balanceSide: figures.balanceSide,
+          openingBalance: figures.openingBalance,
+          openingBalanceSide:
+            figures.openingBalance === 0
+              ? masterSide("ledger", account.accountType, account.openingBalanceSide)
+              : figures.openingBalanceSide,
           active: account.active,
           parentId: account.parentId,
           ...(workerTable
-            ? { notInLedgerTotal: workerTable.minus(balanceSide === "Dr" ? balance : balance.negated()).toFixed(2) }
+            ? {
+                notInLedgerTotal: workerTable
+                  .minus(figures.balanceSide === "Dr" ? figures.balance : figures.balance.negated())
+                  .toFixed(2),
+              }
             : {}),
         };
       }),
       ...banks.map((account) => {
-        const movements = bankBalances.get(account.id) || NO_MOVEMENT;
-        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
-          account.openingBalance || "0",
-          account.openingBalanceSide,
-          movements
-        );
+        const figures = drPositive("bank", account.id);
         return {
           id: `bank-${account.id}`,
           accountId: account.id,
           type: "bank",
           code: account.code,
           name: `${account.name} (${account.bankName})`,
-          balance: balance.toFixed(2),
-          balanceSide,
-          openingBalance: balStartDate ? carriedOpening : toMoney(account.openingBalance).toNumber(),
-          openingBalanceSide: balStartDate ? carriedOpeningSide : account.openingBalanceSide || "Dr",
+          balance: figures.balance.toFixed(2),
+          balanceSide: figures.balanceSide,
+          openingBalance: figures.openingBalance,
+          openingBalanceSide:
+            figures.openingBalance === 0
+              ? masterSide("bank", "Bank", account.openingBalanceSide)
+              : figures.openingBalanceSide,
           active: account.active,
           parentId: null,
         };
       }),
       ...assets.map((asset) => {
-        const movements = assetBalances.get(asset.id) || NO_MOVEMENT;
-        const { balance, balanceSide, carriedOpening, carriedOpeningSide } = calculateBalance(
-          asset.openingBalance || "0",
-          "Dr",
-          movements
-        );
+        const figures = drPositive("fixedAsset", asset.id);
         return {
           id: `asset-${asset.id}`,
           accountId: asset.id,
           type: "fixedAsset",
           code: asset.code,
           name: asset.name,
-          balance: balance.toFixed(2),
-          balanceSide,
-          openingBalance: balStartDate ? carriedOpening : toMoney(asset.openingBalance).toNumber(),
-          openingBalanceSide: balStartDate ? carriedOpeningSide : "Dr",
+          balance: figures.balance.toFixed(2),
+          balanceSide: figures.balanceSide,
+          openingBalance: figures.openingBalance,
+          openingBalanceSide: figures.openingBalance === 0 ? "Dr" : figures.openingBalanceSide,
           active: asset.active,
           parentId: null,
         };
       }),
       ...employees.map((employee) => {
-        const movements = employeeBalances.get(employee.id) || NO_MOVEMENT;
-        // Employees are credit-normal (Cr positive); the opening follows
-        // employees.opening_balance_side (null → Cr).
+        // Employees are credit-normal (Cr positive); the engine's opening side
+        // rule applies (a sideless employee opening is Cr).
+        const { closing, opening } = engineFigures("employee", employee.id);
+        const netBalance = closing.negated();
+        const openingCr = opening.negated();
         const storedSide = employeeOpeningSides.get(employee.id) ?? "Cr";
-        const openingAmount = toMoney(employee.openingBalance);
-        const openingSigned = storedSide === "Dr" ? openingAmount.negated() : openingAmount;
-        const netBalance = openingSigned.plus(movements.credits).minus(movements.debits);
-        const balanceSide = netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr";
-        const carried = openingSigned.plus(movements.preCredits).minus(movements.preDebits);
-        const openingBalance = balStartDate ? carried.abs().toNumber() : openingAmount.toNumber();
-        const openingBalanceSide = balStartDate ? (carried.greaterThanOrEqualTo(0) ? "Cr" : "Dr") : storedSide;
         return {
           id: `employee-${employee.id}`,
           accountId: employee.id,
@@ -345,9 +284,9 @@ export async function serveAccountListForCompany(req: Request, res: Response, co
           code: employee.code,
           name: `${employee.firstName} ${employee.lastName}`,
           balance: netBalance.abs().toFixed(2),
-          balanceSide,
-          openingBalance,
-          openingBalanceSide,
+          balanceSide: netBalance.greaterThanOrEqualTo(0) ? "Cr" : "Dr",
+          openingBalance: openingCr.abs().toNumber(),
+          openingBalanceSide: openingCr.isZero() ? storedSide : openingCr.greaterThan(0) ? "Cr" : "Dr",
           active: employee.active,
           parentId: null,
         };

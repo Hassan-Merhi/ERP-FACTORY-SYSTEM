@@ -27,13 +27,13 @@ import {
   bankAccounts,
   vouchers,
   voucherEntries,
-  suppliers,
   customers,
   locations,
   employees,
   ledgerAccounts,
 } from "@shared/schema";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import { syncPurchaseOrderGitForVoucherTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 import { syncStockAdjustmentInventoryTx } from "../../../services/accounting/perpetualInventory/stockAdjustments";
 import { syncFactoryInvoiceForChargeVoucherTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
@@ -109,7 +109,11 @@ export function registerDeletedItemsRestoreRoutes(app: Express) {
             .where(and(eq(customers.id, itemId), eq(customers.companyId, companyId)));
           break;
         case "supplier":
-          await db.update(suppliers).set({ deletedAt: null, active: true }).where(eq(suppliers.id, itemId));
+          // Wave 18 (B): the active company's supplier only.
+          await db
+            .update(companyScopedSuppliers)
+            .set({ deletedAt: null, active: true })
+            .where(and(eq(companyScopedSuppliers.id, itemId), eq(companyScopedSuppliers.companyId, companyId)));
           break;
         case "bankAccount":
           await db

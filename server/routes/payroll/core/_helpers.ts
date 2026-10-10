@@ -125,21 +125,10 @@ export async function findOrCreateLedger(
       );
   }
   if (existing) {
-    // Payroll control accounts are system-owned accounting contracts. Repair any
-    // stale legacy type/visibility metadata when the account is reused so future
-    // postings and balance-sheet classification cannot silently lose them.
-    const normalizedName = accountName.trim().toLowerCase().replace(/\s+/g, " ");
-    const isPayrollControlAccount =
-      normalizedName === "payroll payable" || normalizedName === "factory worker advances";
-    if (
-      isPayrollControlAccount &&
-      (existing.accountType !== accountType || existing.active !== true || existing.isHidden === true)
-    ) {
-      await db
-        .update(ledgerAccounts)
-        .set({ accountType, active: true, isHidden: false })
-        .where(eq(ledgerAccounts.id, existing.id));
-    }
+    // Wave 18 B: an existing account is reused as it is. This helper never retypes,
+    // renames, reactivates, unhides or restores an account (it only skips
+    // soft-deleted rows when looking one up); a stale type is listed by the
+    // accounting integrity diagnostic and is corrected through the audited editor.
     return { id: existing.id };
   }
 

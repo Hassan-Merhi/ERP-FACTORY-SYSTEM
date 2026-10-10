@@ -13,6 +13,8 @@ import {
 import { db, pool } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { isClosedPeriodError } from "../../lib/closedPeriodError";
+import { writeAuditEvent } from "../audit";
 import {
   propertyPayments,
   propertyMonthlyLedger,
@@ -596,6 +598,25 @@ export async function createRentalPaymentGroup(opts: RentalPaymentGroupOptions) 
   return { paymentGroupId, scheduled: true, payments: scheduledRows };
 }
 
+/** Who posts due scheduled payments, and the company's closed-books date (wave 18 A). */
+export interface DueScheduledPaymentOptions {
+  /** Groups dated on or before this date are skipped (PERIOD_CLOSED), never forced. */
+  closedThrough?: string | null;
+  actor?: { userId: string; username: string };
+  trigger?: "scheduler" | "manual" | "route";
+}
+
+export interface DueScheduledPaymentResult {
+  posted: number;
+  skipped: Array<{
+    paymentGroupId: string;
+    paymentDate: string;
+    reason: "PERIOD_CLOSED";
+    closedThrough: string | null;
+  }>;
+  failed: number;
+}
+
 export async function postDueScheduledRentalPayments(
   companyId: number,
   module: RentalModule,
@@ -603,6 +624,31 @@ export async function postDueScheduledRentalPayments(
   shopExpenseAccountName: string = "Rent Expense - Shops",
   incomeAccountName: string = "Rental Income"
 ): Promise<number> {
+  const result = await postDueScheduledRentalPaymentsDetailed(
+    companyId,
+    module,
+    asOfDate,
+    shopExpenseAccountName,
+    incomeAccountName,
+    { trigger: "route" }
+  );
+  return result.posted;
+}
+
+/**
+ * Posts every SCHEDULED payment group of the company/module dated on or before
+ * asOfDate. A group dated in a closed period is skipped and reported; a
+ * closed-period rejection from the database guard is reported the same way.
+ * Each posted group has an audit row in its posting transaction.
+ */
+export async function postDueScheduledRentalPaymentsDetailed(
+  companyId: number,
+  module: RentalModule,
+  asOfDate: string,
+  shopExpenseAccountName: string,
+  incomeAccountName: string,
+  options: DueScheduledPaymentOptions
+): Promise<DueScheduledPaymentResult> {
   const { rows } = await pool.query<{
     payment_group_id: string;
     payment_date: string;
@@ -610,7 +656,9 @@ export async function postDueScheduledRentalPayments(
     currency: string;
     exchange_rate: string | null;
   }>(
-    `SELECT DISTINCT payment_group_id, payment_date, cash_account_id,
+    // payment_date as text: node-postgres returns a DATE as a JS Date, which the
+    // posting code (voucher numbers, closed-period check) cannot use (wave 18 A).
+    `SELECT DISTINCT payment_group_id, payment_date::text AS payment_date, cash_account_id,
             COALESCE(currency, 'USD') AS currency,
             COALESCE(exchange_rate::text, '1') AS exchange_rate
      FROM property_payments
@@ -624,7 +672,15 @@ export async function postDueScheduledRentalPayments(
   );
 
   let posted = 0;
+  let failed = 0;
+  const skipped: DueScheduledPaymentResult["skipped"] = [];
+  const closedThrough = options.closedThrough ?? null;
   for (const row of rows) {
+    const paymentDate = String(row.payment_date).slice(0, 10);
+    if (closedThrough !== null && paymentDate <= closedThrough) {
+      skipped.push({ paymentGroupId: row.payment_group_id, paymentDate, reason: "PERIOD_CLOSED", closedThrough });
+      continue;
+    }
     try {
       const groupRows = await db
         .select()
@@ -657,17 +713,25 @@ export async function postDueScheduledRentalPayments(
         firstRow.notes as string | null,
         shopExpenseAccountName,
         incomeAccountName,
-        isShared
+        isShared,
+        { actor: options.actor ?? SCHEDULED_PAYMENT_ACTOR, trigger: options.trigger ?? "route" }
       );
       if (didPost) posted++;
     } catch (err: unknown) {
+      if (isClosedPeriodError(err)) {
+        skipped.push({ paymentGroupId: row.payment_group_id, paymentDate, reason: "PERIOD_CLOSED", closedThrough });
+        continue;
+      }
+      failed++;
       logger.error(`[rentalPostingService] Failed to post group ${row.payment_group_id}:`, {
         error: getErrorMessage(err).split("\n")[0],
       });
     }
   }
-  return posted;
+  return { posted, skipped, failed };
 }
+
+const SCHEDULED_PAYMENT_ACTOR = { userId: "system", username: "rental-scheduled-payments" } as const;
 
 async function postScheduledGroup(
   companyId: number,
@@ -684,7 +748,8 @@ async function postScheduledGroup(
   notes: string | null,
   shopExpenseAccountName: string,
   incomeAccountName: string,
-  isSharedPayment: boolean
+  isSharedPayment: boolean,
+  audit?: { actor: { userId: string; username: string }; trigger: string }
 ): Promise<boolean> {
   const lockKey = hashGroupId(groupId);
   let groupRows: (typeof propertyPayments.$inferSelect)[] = [];
@@ -755,6 +820,30 @@ async function postScheduledGroup(
         voucherId: voucherId ?? null,
       })
       .where(inArray(propertyPayments.id, rowIds));
+
+    if (audit) {
+      await writeAuditEvent(
+        {
+          userId: audit.actor.userId,
+          username: audit.actor.username,
+          companyId,
+          action: "update",
+          tableName: "property_payments",
+          recordId: voucherId ?? null,
+          recordIdentifier: `rental-scheduled-payment:${groupId}`,
+          changes: {
+            payments: {
+              old: groupRows.map((r) => ({ id: r.id, postingStatus: "SCHEDULED", voucherId: r.voucherId ?? null })),
+              new: groupRows.map((r) => ({ id: r.id, postingStatus: "POSTED", voucherId: voucherId ?? null })),
+            },
+            paymentDate: { new: paymentDate },
+            totalAmount: { new: totalAmountStr },
+            trigger: { new: audit.trigger },
+          },
+        },
+        tx
+      );
+    }
   });
 
   if (groupRows.length === 0) return false;

@@ -46,7 +46,10 @@ export interface FactoryCutoverBlockers {
  * Stock bales (the statuses factoryStockValuation values, not on an invoiced
  * order) with no mix and a cost: costed at the catalogue production price by a
  * stock entry with no mix (baleCostBasis.stockEntryBaleCost). Bales with no
- * cost are already listed as unvalued.
+ * cost are already listed as unvalued. Bales of a spreadsheet import batch
+ * (bale import and reimport) carry the spreadsheet's cost, not the catalogue
+ * price: the owner allows them before the cut-over and the readiness report
+ * lists them as imported at spreadsheet cost (wave 18 C, stockImportPolicy.ts).
  */
 export async function noMixCataloguePricedBales(
   executor: DatabaseOrTransaction,
