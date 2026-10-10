@@ -241,7 +241,16 @@ Verified with the rendered harness on phone, phone landscape, tablet and desktop
 | POS checkout bar | Make the totals/Checkout bar `sticky bottom-0` inside `#main-content` (reuse `.mobile-action-bar`) instead of `position: fixed` across the viewport. | Bar no longer paints over the sidebar at 768×1024. |
 | Voucher landscape ghost footer | Give the sticky totals footer an opaque `bg-background` and remove the duplicated "lines" layer. | No ghost text under "LINES" at 844×390. |
 
-### Phase 3 — Breakpoints and sidebar default (one day)
+### Phase 3 — Breakpoints and sidebar default (one day) — DONE
+
+Shipped on this branch:
+
+- **Sidebar starts collapsed below `lg`.** `SidebarProvider` reads the `sidebar_state` cookie first (the user's last choice, which was written but never read before) and otherwise pins the sidebar only from 1024px. A tablet in portrait now opens with the full ~740px content column: the Vouchers entry inputs are ~260px wide instead of 50px, the account picker stacks below the form, and the Factory payroll table has room. The user can still pin it with the toggle, and that choice sticks. The collapsed off-canvas sidebar is also `inert`, so its parked links (previously 11–23 focusable controls 244px past the left edge) leave the tab order and accessibility tree.
+- **Phone CSS stops at 767px.** The `index.css` phone block and the two blocks in `erp-mobile-operations.css` / `factory-mobile-operations.css` that undo it moved from `max-width: 768px` to `767px`, so nothing from the phone layer applies at the same width as Tailwind `md:`. The ERP-only rule that hid the user name between 768 and 1023px was removed; Phase 1 already moved the name to `lg`.
+- **One breakpoint source.** `client/src/lib/breakpoints.ts` exports the phone/mobile/pinned-sidebar widths and media queries; `useIsMobile`, `useErpPhoneLayout` (which re-exports `ERP_PHONE_LAYOUT_QUERY`) and the sidebar read from it. The stylesheets cannot import it (no custom-media PostCSS step), so the module documents the 639/767/1023 values the CSS must match.
+
+Verified with the rendered harness: tablet portrait captures show the sidebar collapsed and the content column full width on ERP, Factory and Properties; tablet landscape and desktop keep it pinned. `tsc --noEmit`, prettier, eslint and the related suites (22 files) pass; a unit test covers the cookie-over-viewport default.
+
 
 | Item | Change | Done when |
 | --- | --- | --- |

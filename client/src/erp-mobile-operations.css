@@ -339,11 +339,11 @@
   }
 }
 
-/* index.css wraps every `.flex.gap-*` row at ≤768px so button rows cannot clip. On a column
+/* index.css wraps every `.flex.gap-*` row at ≤767px so button rows cannot clip. On a column
    container that wrap does nothing useful and sizes each child to its max-content width, so
    tablet pages grew wider than the content area beside the sidebar. Columns (not those that
    become rows at sm/md), and rows that ask for `flex-nowrap` (the sidebar), stay single-line. */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   [data-erp-shell] .flex.flex-col:is(.gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]),
   [data-erp-shell] .flex.flex-nowrap:is(.gap-2, .gap-3, .gap-4) {
     flex-wrap: nowrap;
@@ -365,14 +365,6 @@
     :is([data-slot="sheet-content"], [data-slot="dialog-content"], [data-slot="alert-dialog-content"])
     .flex.flex-col:is(.gap-1, .gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]) {
     flex-wrap: nowrap;
-  }
-}
-
-/* Tablet widths keep the desktop sidebar, leaving 512–767px for the workspace. The account
-   chip drops to its initials there so the top bar fits; the menu still names the user. */
-@media (min-width: 768px) and (max-width: 1023px) {
-  [data-erp-shell] [data-testid="button-user-menu"] > span:nth-child(2) {
-    display: none;
   }
 }
 

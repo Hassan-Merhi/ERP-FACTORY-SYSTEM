@@ -1,6 +1,6 @@
 import * as React from "react";
 
-const MOBILE_BREAKPOINT = 768;
+import { MOBILE_BREAKPOINT, MOBILE_QUERY } from "@/lib/breakpoints";
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined);
@@ -16,7 +16,7 @@ export function useIsMobile() {
       return () => window.removeEventListener("resize", updateFromWidth);
     }
 
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
+    const mql = window.matchMedia(MOBILE_QUERY);
     const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
 
     setIsMobile(mql.matches);

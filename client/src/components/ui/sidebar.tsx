@@ -6,6 +6,7 @@ import { cva, VariantProps } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { SIDEBAR_PINNED_QUERY } from "@/lib/breakpoints";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -44,8 +45,24 @@ function useSidebar() {
   return context;
 }
 
+/**
+ * Initial pinned state. The user's last choice (the `sidebar_state` cookie, written by setOpen)
+ * wins; otherwise the sidebar starts pinned from `lg` and collapsed below it, because a tablet
+ * in portrait has only ~440px left beside a 256px sidebar.
+ */
+export function readInitialSidebarOpen(): boolean {
+  if (typeof document === "undefined" || typeof window === "undefined") return true;
+  const saved = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${SIDEBAR_COOKIE_NAME}=`));
+  if (saved) return saved.slice(SIDEBAR_COOKIE_NAME.length + 1) === "true";
+  if (typeof window.matchMedia !== "function") return true;
+  return window.matchMedia(SIDEBAR_PINNED_QUERY).matches;
+}
+
 function SidebarProvider({
-  defaultOpen = true,
+  defaultOpen,
   open: openProp,
   onOpenChange: setOpenProp,
   className,
@@ -65,7 +82,7 @@ function SidebarProvider({
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
-  const [_open, _setOpen] = React.useState(defaultOpen);
+  const [_open, _setOpen] = React.useState(() => defaultOpen ?? readInitialSidebarOpen());
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
@@ -221,6 +238,9 @@ function Sidebar({
       />
       <div
         data-slot="sidebar-container"
+        // An off-canvas sidebar is parked 256px past the viewport edge; without `inert` its links
+        // stay in the tab order and the accessibility tree while invisible.
+        inert={state === "collapsed" && collapsible === "offcanvas"}
         className={cn(
           "fixed inset-y-0 z-10 hidden h-svh w-[var(--sidebar-width)] transition-[left,right,width] duration-200 ease-linear md:flex",
           side === "left"

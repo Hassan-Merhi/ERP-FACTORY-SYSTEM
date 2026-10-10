@@ -64,14 +64,14 @@
 }
 
 /*
- * index.css wraps every `.flex.gap-*` row at ≤768px so button rows cannot clip. On a column
+ * index.css wraps every `.flex.gap-*` row at ≤767px so button rows cannot clip. On a column
  * container that wrap does nothing useful and sizes each child to its max-content width, so a
  * page column grew to the width of its widest tab strip (Stock Entry reached 502px on a 320px
  * phone) and the phone drawer split its sections into side-by-side columns. Same fix as the ERP
  * shell (`erp-mobile-operations.css`): columns, and rows that ask for `flex-nowrap`, stay
  * single-line; so do the sheets and dialogs Factory portals outside the workspace.
  */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   [data-factory-workspace]
     .flex.flex-col:is(.gap-2, .gap-3, .gap-4):not([class*="sm:flex-row"], [class*="md:flex-row"]),
   [data-factory-workspace] .flex.flex-nowrap:is(.gap-2, .gap-3, .gap-4) {

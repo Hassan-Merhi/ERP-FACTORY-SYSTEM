@@ -701,12 +701,12 @@
 
 /* ─────────────────────────────────────────────────────────────────────────
    MOBILE RESPONSIVENESS — Phase 1
-   All rules are scoped to max-width: 768px.
+   All rules are scoped to max-width: 767px (below Tailwind `md`, so they never overlap it).
    Desktop layout (≥769px) is completely unaffected.
    No table display type is globally overridden.
    No business logic, API, or auth logic is touched.
    ───────────────────────────────────────────────────────────────────────── */
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   /* ── 1. Page-level overflow protection ──────────────────────────────────
      Prevents any child element from causing the whole page to scroll
      horizontally. Scoped to html/body only — does NOT use overflow:hidden
