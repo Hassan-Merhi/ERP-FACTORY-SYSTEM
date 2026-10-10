@@ -1,4 +1,4 @@
-import type { LabelData } from "./labelHtml";
+import { resolvePriorityLabelColor, type LabelData } from "./labelHtml";
 
 export const PRIORITY_PRINT_BATCH_URL = "/api/factory/customer-orders/loading-list/automatic-print-preflight-batch";
 
@@ -88,6 +88,9 @@ export async function preparePriorityPrintLabels(
     if (label.priorityOrderId && label.priorityOrderId !== assignment.orderId) {
       throw new Error(`Loading changed for ${label.referenceNumber}. Refresh before printing.`);
     }
+    if (label.priorityColor && resolvePriorityLabelColor(label.priorityColor) !== resolvePriorityLabelColor(assignment.color)) {
+      throw new Error(`Priority color changed for ${label.referenceNumber}. Refresh before printing.`);
+    }
     return {
       ...label,
       priorityColor: assignment.color,
@@ -128,10 +131,18 @@ export function withRecordedPriorityAllocations<T extends LabelData>(
 export async function assertReprintMatchesPrepared(response: Response, label: LabelData): Promise<void> {
   if (!response.ok) throw new Error("Could not record label reprint");
   const body = (await response.json().catch(() => null)) as {
-    priorityAllocation?: { orderId?: number | null } | null;
+    priorityAllocation?: { orderId?: number | null; color?: string | null } | null;
   } | null;
-  const recordedOrderId = body?.priorityAllocation?.orderId ?? null;
+  if (!body || !Object.prototype.hasOwnProperty.call(body, "priorityAllocation")) {
+    throw new Error(`Incomplete priority reprint audit for ${label.referenceNumber}.`);
+  }
+  const recordedOrderId = body.priorityAllocation?.orderId ?? null;
   if (recordedOrderId !== (label.priorityOrderId ?? null)) {
     throw new Error(`Loading changed for ${label.referenceNumber}. Refresh before printing.`);
+  }
+  const savedColor = resolvePriorityLabelColor(label.priorityColor);
+  const recordedColor = resolvePriorityLabelColor(body.priorityAllocation?.color);
+  if ((label.priorityColor && !savedColor) || (body.priorityAllocation?.color && !recordedColor) || savedColor !== recordedColor) {
+    throw new Error(`Priority color changed for ${label.referenceNumber}. Refresh before printing.`);
   }
 }
