@@ -14,7 +14,7 @@ concurrency:
 jobs:
   inspect:
     name: Find trusted PR failure
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       actions: read
@@ -156,7 +156,7 @@ jobs:
 
   disable-trusted-automerge:
     name: Keep trusted PR merges manual
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -200,7 +200,7 @@ jobs:
     name: Sync latest main before repair
     needs: inspect
     if: needs.inspect.outputs.eligible == 'true' && needs.inspect.outputs.limit_exhausted != 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -280,7 +280,7 @@ jobs:
     name: Diagnose failed check without push credentials
     needs: [inspect, sync-main]
     if: needs.inspect.outputs.eligible == 'true' && needs.inspect.outputs.limit_exhausted != 'true' && needs.sync-main.outputs.pushed != 'true' && needs.sync-main.outputs.blocked != 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       actions: read
@@ -464,7 +464,7 @@ jobs:
     name: Rerun failed jobs only
     needs: [inspect, sync-main, diagnose]
     if: needs.diagnose.outputs.status == 'retry' && needs.diagnose.outputs.changed == 'false' && needs.inspect.outputs.failed_run_id != '' && needs.inspect.outputs.failed_run_attempt == '1'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       actions: write
@@ -487,7 +487,7 @@ jobs:
     name: Push proven patch without OpenAI credential
     needs: [inspect, diagnose]
     if: needs.diagnose.outputs.status == 'fixed' && needs.diagnose.outputs.changed == 'true' && needs.diagnose.outputs.patch_b64 != ''
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -587,7 +587,7 @@ jobs:
     name: Report meaningful repair state
     needs: [inspect, sync-main, diagnose, retry-failed, push-repair]
     if: always() && needs.inspect.outputs.eligible == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     permissions:
       issues: write

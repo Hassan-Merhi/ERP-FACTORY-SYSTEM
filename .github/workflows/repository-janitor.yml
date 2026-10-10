@@ -12,7 +12,7 @@ permissions:
 jobs:
   janitor:
     name: Safe repository cleanup
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Delete branches only when merged head still matches
         env:

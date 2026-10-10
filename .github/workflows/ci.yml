@@ -30,7 +30,7 @@ env:
 jobs:
   changes:
     name: Detect Changes
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     outputs:
       repo_audits: ${{ steps.filter.outputs.repo_audits }}
@@ -155,7 +155,7 @@ jobs:
     name: Repository Audits
     needs: changes
     if: needs.changes.outputs.repo_audits == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
@@ -220,7 +220,7 @@ jobs:
     name: Type-check
     needs: changes
     if: needs.changes.outputs.typecheck == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
@@ -260,7 +260,7 @@ jobs:
     name: Lint / Format
     needs: changes
     if: needs.changes.outputs.lint_format == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
@@ -327,7 +327,7 @@ jobs:
     name: Build
     needs: changes
     if: needs.changes.outputs.build == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     steps:
       - name: Harden Runner (audit mode)
@@ -367,7 +367,7 @@ jobs:
     name: Backend / Database Tests
     needs: changes
     if: needs.changes.outputs.backend == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 80
     services:
       postgres:
@@ -510,7 +510,7 @@ jobs:
     name: Frontend Tests
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 35
     steps:
       - name: Harden Runner (audit mode)
@@ -566,7 +566,7 @@ jobs:
       needs.changes.outputs.frontend == 'true' &&
       needs.backend-tests.result == 'success' &&
       needs.frontend-tests.result == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     steps:
       - name: Harden Runner (audit mode)
@@ -611,7 +611,7 @@ jobs:
       - backend-tests
       - frontend-tests
       - coverage-ratchet
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 5
     steps:
       - name: Evaluate applicable CI jobs
