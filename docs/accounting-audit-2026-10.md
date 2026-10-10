@@ -1291,3 +1291,118 @@ Fixed since section 11: the scheduler posts per company in tenant scope and resp
 - Render now auto-deploys **`main`** (live `5a17020`, 08:41; the printing feature was merged as #2134). A manual deploy of branch commit `715f8cd` at 08:08 was cancelled. Nothing from this branch is live; merging the PR into `main` will deploy it.
 - Unchanged since section 11: 0 unbalanced vouchers; plug writer last wrote 10-09 18:58; FX-REVAL last 10-09; no new guards; every cut-over blocker the same to the cent. Five new vouchers with no lines in two days (companies 1, 9, 10).
 - The month-start rental run on 10-01 created 34 back-dated LEGACY-PREPAID-RECLASS vouchers (companies 1, 12, 17); it will run again on 11-01 unless this branch is deployed first.
+
+## 13. Road to 100/100 (full gap audit, 2026-10-10, branch at `f9be601`)
+
+Method: five read-only reviews. Four swept the code category by category (not only the known findings) and listed every gap that keeps a category below 100, with evidence, fix, owner decision and size. A fifth listed every production data condition that must be resolved after deploy. The full reports are kept with the session; this section is the consolidated plan. IDs refer to those reports: C (chart of accounts), D (double entry), G (general ledger), PE (posting engine), DI (data integrity), AT (audit trail), I (inventory), F (factory), M (multi-currency), AR, MC (multi-company), RP (reporting), and A/B/C-prod (production).
+
+**Totals: about 165 code gaps (1 new CRITICAL in code, F1 critical by design) and 33 production data conditions, in 11 phases.** Size: S under an hour of agent work, M a few hours, L a day or more.
+
+### What 100/100 means
+
+- **Ledger (CoA, double entry, GL):** a versioned chart of accounts for every company with a constrained type taxonomy and a cycle-free tree; system accounts by code only; every live voucher (history included) balances exactly, with rounding to a declared account; posted vouchers are corrected only by reversal, numbered gaplessly per company; openings are journals; no orphan, deleted-account, cross-company or no-target line; all constraints validated.
+- **Posting, integrity, audit:** every posting goes through the engine in one transaction with a source identity, Decimal math, role, company scope and closed-period check; no GET, boot step or scheduler posts outside tenant scope; every financial change writes one audit row in its own transaction with the real actor; the audit log is append-only and cannot be altered by the application role.
+- **Inventory and factory:** perpetual inventory on, applied from a clean readiness report, reconciled to the ledger account by account as of any date; every stock writer moves value exactly with its journal; factory revenue, receivables, payables, commission, freight and payroll reach the ledger independent of the inventory switch; every bale at USD material cost from a costed mix.
+- **Currency:** one rate resolver and one rate store; every non-USD line native plus base at a recorded rate dated on or before the document; realized FX on settlement; a reviewed month-end revaluation of monetary balances; functional and reporting currency defined per company.
+- **AR/AP, companies, reporting:** open items with due dates and allocation; aging tied to control accounts; every figure from the one engine on one amount basis; intercompany postings through one service in one transaction with IC accounts on the link; translated, eliminated consolidation; trial balance, balance sheet, P&L and cash flow pages and exports with comparatives; the balance sheet balances by construction and a diagnostic fails if not.
+
+### Phase 19 — Stop the writers that bypass the books (code, all S; do before or with deploy)
+
+| ID | Fix |
+|---|---|
+| G1 (CRITICAL) | Remove `POST /api/sales-import/backfill` (rewrites every company Sales voucher not shaped as 2 ledger lines; floats; no audit) or make it an Owner preview/apply over named vouchers. Check production for past runs. |
+| PE1 | Take `factoryChargeVoucherRepairBridge` and `workerBonusExpenseRepairBridge` off boot (they rewrite CHARGE-PRE vouchers, repoint lines, hard-delete accounts in maintenance scope); Owner tools if still needed. |
+| PE3 | Delete `POST /api/test-data/vouchers`. |
+| PE4, PE5 | Retire `migrate-group-expenses` and `migrate-worker-names` (rewrite posted payroll lines, floats, no audit). |
+| PE6, PE7 | Factory supplier permanent delete and fixed-asset delete: Admin only, refuse with history, one transaction, retire vouchers, audit. |
+| PE2 | Rental: GET detail and statement export read-only; `/accrue`, `/post-scheduled`, `/run-monthly` Admin/Owner, business date, real actor. |
+| G2, G3, G14, G19, DI9 | EMP account repoint, daybook void (hard-deletes lines), payroll backfill, narration and description rewrites: one transaction, period check, audit, Admin; or retire. |
+| DI2, PE11 | Maintenance scope stops bypassing the closed-period guard and opening lock; historical sales cost repair in tenant scope. |
+| DI4, D5, D1 | Opening lock on DELETE; refuse active vouchers with fewer than 2 lines; balance-check history vouchers when their lines change. |
+| C5, C6 | Parent tree: FK plus trigger refusing cycles, cross-company and cross-class parents; reserved codes refused on create; registry accounts cannot be renamed or deleted. |
+| F2, F3 | Retire `POST /raw-stock/update-cost`; bale status/bulk-status/delete only for value-neutral statuses, Admin, audited. |
+| F7, DI10, I2 | Every import (bale Excel, company data, opening raw stock, reimport mix id, location cost-price import) Admin/Owner, one transaction, audited, refused after the cut-over. |
+| M2, M3 | No posting at fetched, unrecorded rates (containers, offloads, receipts); remove every rate-1 fallback (deduct-received, 8 daybook copies, rental). |
+| MC-2 | Editing a Payment/Receipt intercompany transfer leg only through one service that rewrites both legs and the link in one transaction (access to both companies checked). |
+| RP-16, I9 | Remove the committed production CSV; delete the unreachable legacy offload PATCH. |
+
+### Phase 20 — Deploy and first production clean-up (owner steps; deadline 2026-11-01)
+
+| ID | Step |
+|---|---|
+| A1 | Merge the PR into `main` (Render auto-deploys `main`). Before 11-01, or the month-start rental run posts more back-dated reclass vouchers (A3). |
+| B19 | Create RETAINED_EARNINGS in every company (`POST /api/accounting/system-accounts/ensure`). |
+| A2 | Plug values (12: −26.8M, 1: −6.3M, 13: +1.5M, 8: −542K, 17: −149K, 10: −69K, 9: +4.9K, 7: −115): investigate each import-cycle difference, post reviewed corrections, then clear the stored value. **Needs a new Owner clear tool (code, S).** |
+| B1 | Company 9 FX-REVAL vouchers (9, 3,513.21): reverse or keep. |
+| B2 | Main's boot backfill INVENTORY lines: accept for companies 1, 8, 9, 17 (absorbed by the opening plan); reverse for company 10 (supplier partner) — **needs a reversal tool (code, S)**; teach the sync to recognise the backfill narration. |
+| B14–B17 | Review and apply the Owner tools: insurance journal direction, legacy prepaid recognition (34 back-dated vouchers), deferred rent (should be empty), phase 3 historical repair per company. |
+| B4–B8, B10, B21 | Vouchers with no lines (retire non-transfer headers; find the writer creating them), lines with no target (14), lines on missing accounts (25), company 10's 149 lines on deleted accounts (2.7M), duplicated customer openings (4), future-dated vouchers (3), master openings and sides — each through the reviewed edit/restore/transfer-account flows. |
+| B11 / M9 | Enter dated EUR/AUD rates (ECB table prepared; confirm coverage back to 2026-02-01), then preview and apply the wave 6 FX repair (462 lines). |
+
+### Phase 21 — Audit trail complete (code)
+
+AT1a/AT1b: move the 46 money-path audit calls into their transactions (POS sale create/edit/replace, purchase update, transfers, stock-transfer revisions, stock adjustment lifecycle, factory payroll generation, fiscal reopen, bales/orders/mix batches/raw stock routes) — M. AT1c: the 48 master/settings calls — M. AT2: every posting audited — **decision: database trigger on vouchers and lines reading an actor setting (recommended) or an engine hook** — L. AT3: created/updated/deleted-by columns on vouchers and the original number kept on retirement — M. AT4: real actor instead of "system" — S. AT5: retention as an allow-list of non-financial tables, revoke DDL on the trigger from the app role, hash chain — M. AT6: request id, IP, session, reason on audit rows — S.
+
+### Phase 22 — One posting engine (code)
+
+D2: route the 101 direct `voucher_entries` writers through `postBalancedVoucherTx`, highest volume first — L. PE8/G9: gapless voucher numbers per company/type/year and a posting identity for every source (replaces ~99 `Date.now()` numbers) — **decision: number format** — L. PE9/G4/G10: posted vouchers corrected by reversal and re-post, never edited in place (about 25 edit paths and 36 in-place line writers); refuse posted→optional — **decision: immutability vs edit in open periods** — L. PE10/F13: counterpart, order-charge, daybook and invoice syncs inside the transaction — M. D3/M10: rounding remainder to a ROUNDING account, guard tolerance 0, one amount column for every reader — **decision: rounding account** — M. PE13: Decimal in the posting paths (918 `parseFloat`, ~600 outside chat reports) — L. D6, D7, D8, DI7: Golden Coast withdrawal rewrite, intercompany daily running journal, per-line counterpart rounding, `customer_balances` row locks — M.
+
+### Phase 23 — Chart of accounts and general ledger model (code + owner)
+
+C1: full chart-of-accounts template provisioned at company create — **decision: template** — M. C2/C8: move ~60 name-based account creators to the registry by code; no restore/retype by code — L. C3/C4: account class column with a CHECK (type kept as subtype), Intercompany and tax accounts classified correctly, 112 raw `accountType ===` comparisons replaced — **decision: taxonomy** — M. C7: post only to active leaf accounts and live parties — **decision: leaf-only** — S. C9: AR/AP/payroll control accounts with party detail on the line instead of one account per worker or customer — **decision: control-account model** — L. C10: bank/fixed-asset codes unique per company. G6/RP-3/RP-5: openings as a reviewed opening journal per company against Opening Balance Equity; P&L-account openings moved to retained earnings — **decision: cut-over date and OBE treatment** — L. G7: reviewed repair of legacy orphan, deleted-account, cross-company and no-target lines, then `VALIDATE CONSTRAINT` everywhere — M. G12/G13: fiscal close refuses unknown-type balances and an unbalanced trial balance, requires RETAINED_EARNINGS, keeps closure history, reopen audited in the transaction; delete the unused second close model — S. G15/M12: functional currency per company — **decision** — M. G17: parent's suppliers through due-to/due-from accounts — **decision** — M. DI3: period lock on the sub-ledgers (`customer_balances`, factory supplier payments, inventory, payroll, rental, sales cost) — **decision: which** — M. DI5/M8: currency trigger v3 (line currency matches voucher, rate matches recorded rate, legacy exemption ends after the repair) — M. G5: account migration via intercompany journals or audited — **decision: keep or retire** — M. G18: period general ledger report — M.
+
+### Phase 24 — Multi-currency complete (code + owner)
+
+M1: one rate resolver (recorded rate on or before the document date, manual over auto on the same date) replacing six resolvers and three precedence rules — **decision: precedence** — M. M4: server-side dated rates for ERP vouchers and POS, client rates checked — **decision: tolerance** — M. M5: non-USD purchase orders with native amount and rate, normalized lines, one transaction — **decision: allow non-USD POs** — M. M6: realized FX gain/loss on settlement — **decision: matching method** — L. M7: reviewed month-end revaluation of all monetary balances (preview, hash, Owner apply, reversing on day 1) — L. M11: retail in non-USD companies at the dated rate — S. MC-5: rates on intercompany transfers between companies with different base currencies — **decision: group presentation currency** — M. M13: `asOf` on the multi-currency report and cash summary — S.
+
+### Phase 25 — Receivables and payables as open items (code + owner)
+
+AR-4: allocation table (receipts, credit notes, advances to invoices), due dates from payment terms, aging by due date, unapplied credits listed; overdue check fixed — **decision: automatic FIFO vs manual allocation; terms** — L. AR-1/AR-6: employee balances and statements from the engine; retire or freeze the `customer_balances` cache — **decision: keep as memo or drop** — M. AR-2/G16: on-screen bank, fixed-asset and employee statements on owned lines — S. AR-3: one book amount column with a diagnostic — **decision: which column** — M. AR-7: AR/AP credit and debit notes referencing invoices — **decision: returns/tax policy** — M. AR-8/AR-10: factory supplier statement rows are the ledger lines (operational view as memo); one SP supplier definition — M. AR-9, AR-11, AR-12, AR-13: factory supplier opening side/currency, aging for employees with control tie-out and a page, chat aging and overdue WhatsApp on the aging service — S each.
+
+### Phase 26 — Multi-company and consolidation (code + owner)
+
+MC-1: IC account ids on transfer links, IC accounts typed Intercompany, elimination of IC-TO/IC-FROM — M. MC-3/MC-4: rental auto-transfer and POS mirror inside their transactions through the intercompany service, audited, accounts by configured id — **decision: is the SP one-sided mirror intended** — M. MC-6: consolidation (per-company engine, translate, eliminate by pair, consolidate with a balance check; revenue/COGS/unrealized profit eliminations) — **decision: group structure, ownership, elimination rules** — L. MC-7: one parent model — **decision: which** — M. MC-8: RLS on every company-owned table (suppliers, employees, factory suppliers, `customer_balances`, transfers, closures, factory tables) and the 36 id-only lookups — M. MC-9, MC-10, MC-11, MC-12: PO-import pair by id, company 13's 8 lines reclassified, transfer link soft-deleted and updated on edit, global unique on ledger code checked — S each.
+
+### Phase 27 — Reporting complete (code)
+
+RP-1: pages and Excel/PDF exports for the trial balance, balance sheet, P&L, aging and ratios — M. RP-2: cash flow statement (indirect method) — **decision: definition of cash** — M. RP-4/RP-6: fiscal-year earnings with a retained earnings line, current/non-current split, correct current ratio, overdrawn banks as liabilities — **decision: fiscal year and classification map** — M. RP-7/RP-8: period trial balance, comparatives, business-date default with future lines flagged — M. RP-9–RP-13: ledger monthly summary, dashboard cards, sales report and margins, net position (reconciled to balance-sheet net assets) and chat shards on the engine in Decimal — M each. RP-14: tie-out diagnostics (balance-sheet earnings = P&L, aging = control, net position = balance sheet) — S. RP-15: report access roles aligned — S.
+
+### Phase 28 — Factory accounting complete (code + owner)
+
+F1 (CRITICAL by design): factory revenue and receivables posted independently of the inventory switch, with a reviewed back-post or opening-AR plan from finalized orders — **decision: back-post history or opening AR at the cut-over** — L. F4/F5/F6: resolution tool for no-mix bales (assign to a costed mix, write off to waste, or accept with sign-off), HMD16 zero-cost bales excluded from the unvalued list, imported bales re-costed — **decision per option** — M. F8: raw-material ADD/REMOVE and over-use valued — M. F9: dated factory value-event ledger, catch-up for missed runs, company business date — L. F10/F11: plans for pre-wave-17 V3 loads, the 48 commissions, 39 containers without import journals, 13 no-target freight lines — **decision: back-fill or leave** — M. F12: legacy payroll mark-paid, bulk generate and backfill through the reviewed services — M. I8: ERP bale-mirror values written off, reduced on factory invoice — M.
+
+### Phase 29 — Perpetual inventory go-live and first close (owner, in order)
+
+1. Inventory code gaps: I3 (COGS on effective date), I4 (landed charges capitalised), I5 (merge evidence, as-of from the cut-over), I6/I7 (retail GRNI cleared by supplier invoices; retail opening signed off) — M each.
+2. Factory: enter rates (Phase 20), FX repair, mark HMD16 garbage bales, resolve no-mix bales (F4), bale re-cost preview and apply (C4-prod), 78 other unvalued bales costed (C5-prod).
+3. ERP companies: readiness resolution — write off the 21.4M of stock at the 71 missing locations (owner decision taken), anomalous values, negative rows (C1–C3-prod); company 10 backfill reversal; the 39 containers' journals (B13).
+4. Readiness endpoint shows no blockers; opening plan per company applied on the cut-over date (suggested 2026-11-01) before any document is dated on or after it (C8-prod).
+5. Reconciliation zero, account by account (C9-prod); then set `PERPETUAL_INVENTORY_POSTING_READY = true` and drop the one-sided stock exemption from the balance guard (D4).
+6. First fiscal close with RETAINED_EARNINGS (B19, B20), which turns the period lock on.
+
+### Owner decisions, in the order they are needed
+
+1. Merge/deploy before 2026-11-01 (Phase 20).
+2. Plug values: post corrections per company, then clear (A2); FX-REVAL reverse or keep (B1); company 10 backfill reversal (B2).
+3. Audit: database trigger or application hook (AT2); retention period (AT5, DI8).
+4. Posted vouchers: reversal only, or edits in open periods (PE9); voucher number format (PE8); rounding account (D3).
+5. Chart of accounts template (C1), type taxonomy (C3), leaf-only posting (C7), control accounts with party detail (C9), functional currency per company (G15), parent supplier treatment (G17), which sub-ledgers get the period lock (DI3), keep or retire account migration (G5).
+6. Rate precedence (M1), client-rate tolerance (M4), non-USD purchase orders (M5), realized-FX matching (M6), legacy revaluation (M7), group presentation currency (MC-5).
+7. Allocation method and payment terms (AR-4), `customer_balances` memo or drop (AR-6), book amount column (AR-3), credit-note/returns policy (AR-7).
+8. Group structure and elimination rules (MC-6), parent model (MC-7), SP one-sided mirror (MC-4).
+9. Cash definition for the cash flow (RP-2), fiscal year and classification map (RP-4).
+10. Factory revenue recognition before the cut-over (F1), no-mix bale option (F4), HMD16 zero cost (F5), back-fill legacy factory items (F11).
+11. Cut-over date (suggested 2026-11-01) and the first close.
+
+### Expected scores after each phase (estimates)
+
+| After phase | Branch code | Production |
+|---|---|---|
+| Now | 61 | ~30 |
+| 19 | 66 | ~30 |
+| 20 | 66 | ~60 |
+| 21–22 | 76 | ~65 |
+| 23–24 | 85 | ~72 |
+| 25–27 | 93 | ~80 |
+| 28 | 96 | ~85 |
+| 29 | 100 | ~100 once the cut-over reconciles and the first close is done |
