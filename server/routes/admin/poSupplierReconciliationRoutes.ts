@@ -18,6 +18,7 @@ import {
   expectedPoSupplierPayable,
   parentImportVoucherNumberPattern,
 } from "../../services/accounting/poSupplierReconciliation";
+import { retireVouchersWithClient, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 /**
  * PO supplier-payable reconciliation and its rollback, split out of
@@ -543,13 +544,14 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
               }
 
               if (generatedVoucherIds.length > 0) {
-                await client.query("DELETE FROM voucher_entries WHERE voucher_id = ANY($1::int[])", [
-                  generatedVoucherIds,
-                ]);
-                const deleteVouchers = await client.query("DELETE FROM vouchers WHERE id = ANY($1::int[])", [
-                  generatedVoucherIds,
-                ]);
-                removedGeneratedVouchers = deleteVouchers.rowCount ?? 0;
+                // Wave 16 (A): retired (soft delete with their lines, audited in
+                // this transaction, numbers released), not hard-deleted.
+                const retired = await retireVouchersWithClient(client, {
+                  voucherIds: generatedVoucherIds,
+                  reason: "po-supplier-reconciliation-rollback",
+                  actor: sessionRetirementActor(req),
+                });
+                removedGeneratedVouchers = retired.length;
               }
 
               await client.query(
@@ -564,6 +566,7 @@ export function registerPoSupplierReconciliationRoutes(app: Express) {
                   JSON.stringify({
                     generatedVouchers: generatedVoucherIds.length,
                     insertedEntries: insertedEntryRows.rows.length,
+                    removedInsertedEntries: insertedEntryRows.rows,
                     resetPoLinks,
                     reroutedCandidates: reroutedCandidates.rows.length,
                   }),

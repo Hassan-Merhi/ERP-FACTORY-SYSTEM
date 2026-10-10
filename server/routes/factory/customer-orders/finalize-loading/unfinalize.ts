@@ -19,11 +19,12 @@ import {
   customerOrderCharges,
   customerBalances,
   customers,
-  voucherEntries,
   factoryDaybookEntries,
   vouchers,
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
+import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
+import { retireVouchersTx, sessionRetirementActor } from "../../../../services/accounting/voucherRetirement";
 
 export function registerOrderUnfinalizeRoutes(app: Express) {
   app.post(
@@ -158,8 +159,13 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
         const linkedVoucherIds = linkedChargeRows.map((r) => r.voucherId).filter((v): v is number => v != null);
 
         if (linkedVoucherIds.length > 0) {
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, linkedVoucherIds));
-          await tx.update(vouchers).set({ deletedAt: new Date() }).where(inArray(vouchers.id, linkedVoucherIds));
+          // Wave 16 (A): retired with their lines (they used to be stripped), audited here.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: linkedVoucherIds,
+            reason: "customer-order-unfinalize",
+            actor: sessionRetirementActor(req),
+          });
           await tx
             .update(customerOrderCharges)
             .set({ voucherId: null })
@@ -178,10 +184,12 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
                 sql`${vouchers.voucherNumber} LIKE ${"CHARGE-" + order.invoiceNumber + "-%"}`
               )
             );
-          for (const cv of legacyChargeVouchers) {
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, cv.id));
-            await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, cv.id));
-          }
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: legacyChargeVouchers.map((cv) => cv.id),
+            reason: "customer-order-unfinalize",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         // Revert bales from SOLD → RESERVED_FOR_ORDER (order still exists, just un-finalized)
@@ -202,6 +210,9 @@ export function registerOrderUnfinalizeRoutes(app: Express) {
             updatedAt: new Date(),
           })
           .where(eq(customerOrders.id, orderId));
+
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, orderId);
 
         // Daybook entry
         const [unfCustomer] = await tx

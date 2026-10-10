@@ -11,17 +11,17 @@ import { getClientDate } from "../../../lib/dateUtils";
 import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  resolveStoredFxRate,
-  resolveStoredFxRateOrThrow,
-  UnresolvedExchangeRateError,
-} from "../../../services/factory/currencyConversion";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factorySuppliers, factoryContainers, voucherEntries, factoryDaybookEntries, vouchers } from "@shared/schema";
 import { eq, and, or, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import type Decimal from "decimal.js";
 import { parseMoneyInput, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerFactoryContainerUpdateRoutes(app: Express) {
   app.patch("/api/factory/containers/:id", requireAuth, async (req: Request, res: Response) => {
@@ -141,13 +141,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
             }
             commFxResolved = containerFxNum;
           } else {
-            try {
-              commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, effCommCcy, effDate));
-            } catch (err: unknown) {
-              return res.status(400).json({
-                message: `Cannot resolve FX rate for commission currency ${effCommCcy} on ${effDate}. ${getErrorMessage(err)}`,
-              });
-            }
+            // Phase 19 C (M2): the recorded factory rate on or before the date, or 409.
+            commFxResolved = toMoney((await factoryDocumentRate(db, companyId, effCommCcy, effDate)).rate);
           }
           updateData.commissionFxRateToUsd = commFxResolved.toFixed();
           updateData.commissionFxRateConfirmed = true;
@@ -168,12 +163,15 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         const importDate = updateData.arrivalDate || existing.arrivalDate || getClientDate(req);
 
         if (fxRateSource === "auto") {
-          const fxRate = await getOrFetchFxRateToUsd(companyId, currencyCode, importDate);
+          // Phase 19 C (M2): the recorded factory rate on or before the date (manual,
+          // else recorded auto), or 409 FACTORY_FX_RATE_REQUIRED. It used to fetch an
+          // external rate, never record it, and mark it confirmed.
+          const fxRate = (await factoryDocumentRate(db, companyId, currencyCode, importDate)).rate;
           updateData.fxRateToUsd = fxRate;
           updateData.fxRateToUsdImport = fxRate;
           updateData.fxRateDateImport = importDate;
           updateData.fxRateSource = "auto";
-          updateData.fxRateConfirmed = true; // real auto-fetch, not a guess
+          updateData.fxRateConfirmed = true; // a recorded dated rate
           const ratePerKg = toMoney(updateData.ratePerKg || existing.ratePerKg);
           updateData.ratePerKgUsd = (currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate))).toFixed();
         } else {
@@ -184,6 +182,8 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
           const explicitRate = b.fxRateToUsd !== undefined ? parseMoneyInput(dec(b.fxRateToUsd) ?? "") : null;
           let fxRateNum: Decimal;
           if (explicitRate && explicitRate.greaterThan(0)) {
+            // A manual rate is accepted only where a recorded dated rate exists (the factory document rule).
+            await factoryDocumentRate(db, companyId, currencyCode, importDate);
             fxRateNum = explicitRate;
             updateData.fxRateConfirmed = true; // freshly supplied by this request
           } else {
@@ -256,14 +256,6 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         }
       }
 
-      const [updated] = await db
-        .update(factoryContainers)
-        .set(updateData)
-        .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)))
-        .returning();
-
-      if (!updated) return res.status(404).json({ message: "Container not found" });
-
       // ── Sync freight voucher ───────────────────────────────────────────────
       // Guard: only re-run FX-dependent freight entry computation when a
       // freight-relevant field was actually included in this request body.
@@ -299,136 +291,170 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
         )
         .limit(1);
 
-      const newFreightAmt = toMoney(updated.freight);
-      const newFreightAcctId = updated.freightAccountId ?? null;
-      const newFreightPaidBy = updated.freightPaidBy || "supplier";
-      const newFreightOwnAcctId = updated.freightOwnAccountId ?? null;
-      const freightCcy = updated.freightCurrencyCode || updated.currencyCode || "USD";
+      // Wave 8.4 continuation: the commission journal FACTORY-COMM-{container}
+      // follows every change to the commission or what it is posted at.
+      const commissionNeedsSync = [
+        "commissionAmount",
+        "commissionCurrencyCode",
+        "commissionAccountId",
+        "commissionSupplierId",
+        "supplierId",
+        "currencyCode",
+        "fxRateToUsd",
+        "fxRateSource",
+        "ratePerKg",
+        "arrivalDate",
+      ].some((f) => f in b);
 
-      if (newFreightAmt.greaterThan(0) && newFreightAcctId) {
-        if (existingFV) {
-          if (freightNeedsSync) {
-            // Full re-sync: update voucher amount/type and re-compute entries with FX
-            await db
-              .update(vouchers)
-              .set({
-                totalAmount: newFreightAmt.toFixed(),
-                voucherType: newFreightPaidBy === "own" ? "Payment" : "Journal",
-              })
-              .where(eq(vouchers.id, existingFV.id));
-            // Compute normalized amounts for the updated freight entries
-            const updateFreightFactoryFxRate =
-              freightCcy === (updated.currencyCode || "USD")
-                ? resolveStoredFxRateOrThrow(updated.currencyCode, updated.fxRateToUsd, updated.fxRateConfirmed)
-                : 1;
-            const normFreightDr = normFactoryEntry(
-              freightCcy,
-              newFreightAmt.toFixed(),
-              "0",
-              updateFreightFactoryFxRate
-            );
-            const normFreightCr = normFactoryEntry(
-              freightCcy,
-              "0",
-              newFreightAmt.toFixed(),
-              updateFreightFactoryFxRate
-            );
-            // Update entries
-            const fEntries = await db.select().from(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
-            for (const fe of fEntries) {
-              if (toMoney(fe.debitAmount).greaterThan(0)) {
-                // Dr Freight Expense — update amount and account
-                await db
-                  .update(voucherEntries)
-                  .set({ ledgerAccountId: newFreightAcctId, ...normFreightDr })
-                  .where(eq(voucherEntries.id, fe.id));
-              } else if (newFreightPaidBy === "own" && newFreightOwnAcctId) {
-                // Cr Own account
-                await db
-                  .update(voucherEntries)
-                  .set({
-                    ledgerAccountId: newFreightOwnAcctId,
-                    factorySupplierId: null,
-                    ...normFreightCr,
-                  })
-                  .where(eq(voucherEntries.id, fe.id));
-              } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
-                // Cr Supplier
-                await db
-                  .update(voucherEntries)
-                  .set({
-                    factorySupplierId: updated.supplierId,
-                    ledgerAccountId: null,
-                    ...normFreightCr,
-                  })
-                  .where(eq(voucherEntries.id, fe.id));
+      // The container row, its freight voucher and its commission journal are
+      // written in one transaction.
+      const updated = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(factoryContainers)
+          .set(updateData)
+          .where(and(eq(factoryContainers.id, id), eq(factoryContainers.companyId, companyId)))
+          .returning();
+        if (!updated) return null;
+
+        const newFreightAmt = toMoney(updated.freight);
+        const newFreightAcctId = updated.freightAccountId ?? null;
+        const newFreightPaidBy = updated.freightPaidBy || "supplier";
+        const newFreightOwnAcctId = updated.freightOwnAccountId ?? null;
+        const freightCcy = updated.freightCurrencyCode || updated.currencyCode || "USD";
+
+        if (newFreightAmt.greaterThan(0) && newFreightAcctId) {
+          if (existingFV) {
+            if (freightNeedsSync) {
+              // Full re-sync: update voucher amount/type and re-compute entries with FX
+              await tx
+                .update(vouchers)
+                .set({
+                  totalAmount: newFreightAmt.toFixed(),
+                  voucherType: newFreightPaidBy === "own" ? "Payment" : "Journal",
+                })
+                .where(eq(vouchers.id, existingFV.id));
+              // Compute normalized amounts for the updated freight entries
+              const updateFreightFactoryFxRate = containerFreightFxRateToUsd(updated);
+              const normFreightDr = normFactoryEntry(
+                freightCcy,
+                newFreightAmt.toFixed(),
+                "0",
+                updateFreightFactoryFxRate
+              );
+              const normFreightCr = normFactoryEntry(
+                freightCcy,
+                "0",
+                newFreightAmt.toFixed(),
+                updateFreightFactoryFxRate
+              );
+              // Update entries
+              const fEntries = await tx
+                .select()
+                .from(voucherEntries)
+                .where(eq(voucherEntries.voucherId, existingFV.id));
+              for (const fe of fEntries) {
+                if (toMoney(fe.debitAmount).greaterThan(0)) {
+                  // Dr Freight Expense — update amount and account
+                  await tx
+                    .update(voucherEntries)
+                    .set({ ledgerAccountId: newFreightAcctId, ...normFreightDr })
+                    .where(eq(voucherEntries.id, fe.id));
+                } else if (newFreightPaidBy === "own" && newFreightOwnAcctId) {
+                  // Cr Own account
+                  await tx
+                    .update(voucherEntries)
+                    .set({
+                      ledgerAccountId: newFreightOwnAcctId,
+                      factorySupplierId: null,
+                      ...normFreightCr,
+                    })
+                    .where(eq(voucherEntries.id, fe.id));
+                } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
+                  // Cr Supplier
+                  await tx
+                    .update(voucherEntries)
+                    .set({
+                      factorySupplierId: updated.supplierId,
+                      ledgerAccountId: null,
+                      ...normFreightCr,
+                    })
+                    .where(eq(voucherEntries.id, fe.id));
+                }
               }
+            } else if (updateData.arrivalDate) {
+              // Date-only PATCH: keep existing entries as-is, just update the voucher date
+              // so the freight voucher stays in sync with the new ETA.
+              await tx
+                .update(vouchers)
+                .set({ voucherDate: updateData.arrivalDate })
+                .where(eq(vouchers.id, existingFV.id));
             }
-          } else if (updateData.arrivalDate) {
-            // Date-only PATCH: keep existing entries as-is, just update the voucher date
-            // so the freight voucher stays in sync with the new ETA.
-            await db
-              .update(vouchers)
-              .set({ voucherDate: updateData.arrivalDate })
-              .where(eq(vouchers.id, existingFV.id));
+            // else: nothing freight-related changed and no date → no-op
+          } else if (freightNeedsSync) {
+            // Create new freight voucher — only when freight fields were explicitly set.
+            // A date-only PATCH should never create a freight voucher from scratch.
+            // Use arrivalDate if set, else fall back to the container's own createdAt
+            // (NOT today) so an edit made months later doesn't stamp a new voucher
+            // with the current date.
+            const today = getClientDate(req);
+            const containerCreatedDate = updated.createdAt
+              ? new Date(updated.createdAt).toISOString().slice(0, 10)
+              : today;
+            const [newFV] = await tx
+              .insert(vouchers)
+              .values({
+                companyId,
+                voucherType: newFreightPaidBy === "own" ? "Payment" : "Journal",
+                voucherNumber: `FACTORY-FREIGHT-${id}`,
+                voucherDate: updated.arrivalDate || containerCreatedDate,
+                description: `Freight on container ${updated.containerNumber}`,
+                totalAmount: newFreightAmt.toFixed(),
+                currency: freightCcy,
+                exchangeRate: String(containerFreightFxRateToUsd(updated)),
+                sourceModule: "FACTORY",
+              })
+              .returning();
+            const newFreightFactoryFxRate = containerFreightFxRateToUsd(updated);
+            await tx.insert(voucherEntries).values({
+              voucherId: newFV.id,
+              ledgerAccountId: newFreightAcctId,
+              ...normFactoryEntry(freightCcy, newFreightAmt.toFixed(), "0", newFreightFactoryFxRate),
+              narration: `Freight expense - container ${updated.containerNumber}`,
+            });
+            if (newFreightPaidBy === "own" && newFreightOwnAcctId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: newFV.id,
+                ledgerAccountId: newFreightOwnAcctId,
+                ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
+                narration: `Freight paid via own account - container ${updated.containerNumber}`,
+              });
+            } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
+              await tx.insert(voucherEntries).values({
+                voucherId: newFV.id,
+                factorySupplierId: updated.supplierId,
+                ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
+                narration: `Freight payable to supplier - container ${updated.containerNumber}`,
+              });
+            }
           }
-          // else: nothing freight-related changed and no date → no-op
-        } else if (freightNeedsSync) {
-          // Create new freight voucher — only when freight fields were explicitly set.
-          // A date-only PATCH should never create a freight voucher from scratch.
-          // Use arrivalDate if set, else fall back to the container's own createdAt
-          // (NOT today) so an edit made months later doesn't stamp a new voucher
-          // with the current date.
-          const today = getClientDate(req);
-          const containerCreatedDate = updated.createdAt
-            ? new Date(updated.createdAt).toISOString().slice(0, 10)
-            : today;
-          const [newFV] = await db
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherType: newFreightPaidBy === "own" ? "Payment" : "Journal",
-              voucherNumber: `FACTORY-FREIGHT-${id}`,
-              voucherDate: updated.arrivalDate || containerCreatedDate,
-              description: `Freight on container ${updated.containerNumber}`,
-              totalAmount: newFreightAmt.toFixed(),
-              currency: freightCcy,
-              sourceModule: "FACTORY",
-            })
-            .returning();
-          const newFreightFactoryFxRate =
-            freightCcy === (updated.currencyCode || "USD")
-              ? resolveStoredFxRateOrThrow(updated.currencyCode, updated.fxRateToUsd, updated.fxRateConfirmed)
-              : 1;
-          await db.insert(voucherEntries).values({
-            voucherId: newFV.id,
-            ledgerAccountId: newFreightAcctId,
-            ...normFactoryEntry(freightCcy, newFreightAmt.toFixed(), "0", newFreightFactoryFxRate),
-            narration: `Freight expense - container ${updated.containerNumber}`,
+        } else if (existingFV && freightNeedsSync) {
+          // Freight amount dropped to zero AND freight fields were explicitly changed →
+          // delete the now-empty freight voucher.
+          // (A date-only PATCH must never delete an existing freight voucher.)
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: [existingFV.id],
+            reason: "factory-container-freight-resync",
+            actor: sessionRetirementActor(req),
           });
-          if (newFreightPaidBy === "own" && newFreightOwnAcctId) {
-            await db.insert(voucherEntries).values({
-              voucherId: newFV.id,
-              ledgerAccountId: newFreightOwnAcctId,
-              ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
-              narration: `Freight paid via own account - container ${updated.containerNumber}`,
-            });
-          } else if (newFreightPaidBy === "supplier" && updated.supplierId) {
-            await db.insert(voucherEntries).values({
-              voucherId: newFV.id,
-              factorySupplierId: updated.supplierId,
-              ...normFactoryEntry(freightCcy, "0", newFreightAmt.toFixed(), newFreightFactoryFxRate),
-              narration: `Freight payable to supplier - container ${updated.containerNumber}`,
-            });
-          }
         }
-      } else if (existingFV && freightNeedsSync) {
-        // Freight amount dropped to zero AND freight fields were explicitly changed →
-        // delete the now-empty freight voucher.
-        // (A date-only PATCH must never delete an existing freight voucher.)
-        await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
-        await db.delete(vouchers).where(eq(vouchers.id, existingFV.id));
-      }
+
+        if (commissionNeedsSync) await syncContainerCommissionJournalTx(tx, companyId, id);
+        return updated;
+      });
+
+      if (!updated) return res.status(404).json({ message: "Container not found" });
 
       // ── Sync CONTAINER_IMPORT daybook entry ────────────────────────────────
       // If any description-relevant fields were changed (container number, supplier,
@@ -497,6 +523,7 @@ export function registerFactoryContainerUpdateRoutes(app: Express) {
       });
       res.json(updated);
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("factory container update failed", {
         module: "factoryContainers",
         action: "update",

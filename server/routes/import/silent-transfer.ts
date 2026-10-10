@@ -18,7 +18,14 @@ import { inventory } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { allStockItemsOwned, ownLocationIds } from "../helpers/companyOwnership";
 import { readExcel, sheetToJson, createWorkbook, jsonToSheet, writeWorkbook } from "../../excelHelper";
-import { adjustInventory } from "../../inventoryHelper";
+import type Decimal from "decimal.js";
+import { postInventoryMovementJournalTx } from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
+import { moveTransferLegConservedTx } from "../../services/inventory/conservedStockTransfer";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import { sumDecimals } from "../../services/inventory/valueExactReversal";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
 
@@ -207,6 +214,14 @@ export function registerSilentTransferRoutes(app: Express) {
       let applied = 0;
 
       await db.transaction(async (tx) => {
+        // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+        await assertNoBaleMirrorMovementTx(
+          tx,
+          companyId,
+          items.map((item: { stockItemId?: unknown }) => item?.stockItemId),
+          "silent-transfer"
+        );
+        const deltas: Decimal[] = [];
         for (let index = 0; index < items.length; index++) {
           const item = items[index];
           const parsedQty = parseMoneyInput(item.quantity);
@@ -229,8 +244,17 @@ export function registerSilentTransferRoutes(app: Express) {
             ? Math.max(toInventoryDecimal(sourceInventory.averageRate).toNumber(), 0)
             : fallbackRate;
 
-          await adjustInventory(tx, srcId, stockItemId, -qty, companyId);
-          await adjustInventory(tx, dstId, stockItemId, qty, companyId, rate);
+          // Wave 11: the destination receives exactly the value the source
+          // relieved, so the company's stock value is conserved.
+          const moved = await moveTransferLegConservedTx(tx, {
+            companyId,
+            sourceLocationId: srcId,
+            destinationLocationId: dstId,
+            stockItemId,
+            quantity: qty,
+            fallbackRate: rate,
+          });
+          deltas.push(moved.sourceDelta, moved.destinationDelta);
           await postStockMovementTx(
             tx,
             {
@@ -238,7 +262,7 @@ export function registerSilentTransferRoutes(app: Express) {
               stockItemId,
               kind: "transfer",
               quantity: inventoryQuantity(qty),
-              unitCost: String(rate),
+              unitCost: moved.rate.toString(),
               fromLocationId: srcId,
               toLocationId: dstId,
               occurredAt,
@@ -253,10 +277,23 @@ export function registerSilentTransferRoutes(app: Express) {
           );
           applied++;
         }
+        // A shortage settled at the destination is the only source of a net.
+        await postInventoryMovementJournalTx(tx, {
+          companyId,
+          sourceType: "silent-transfer",
+          sourceId: operationId,
+          date: occurredAt.slice(0, 10),
+          reference: `Silent transfer ${operationId.slice(0, 8)}`,
+          lines: [{ valueDelta: sumDecimals(deltas).toFixed(2) }],
+          offsetAccountCode: "COGS",
+          narration: "Silent transfer shortage settlement",
+          locationId: dstId,
+        });
       });
 
       res.json({ success: true, itemsTransferred: applied });
     } catch (err: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, err)) return;
       logger.error("Silent transfer apply error:", { error: err });
       res.status(500).json({ message: getErrorMessage(err) });
     }

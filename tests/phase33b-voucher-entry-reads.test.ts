@@ -177,13 +177,23 @@ describe("Phase 33B voucher entry finance reads", () => {
 
   it("redacts generic financial amounts for POS view-entry reads", async () => {
     const voucher = await makeVoucher("Journal");
-    await db.insert(schema.voucherEntries).values({
-      voucherId: voucher.id,
-      ledgerAccountId: ctx.cashAccountId,
-      debitAmount: "25.00",
-      creditAmount: "0",
-      narration: "Sensitive accounting narration",
-    });
+    // Both legs in one statement: the voucher balance guard refuses a one-sided voucher.
+    await db.insert(schema.voucherEntries).values([
+      {
+        voucherId: voucher.id,
+        ledgerAccountId: ctx.cashAccountId,
+        debitAmount: "25.00",
+        creditAmount: "0",
+        narration: "Sensitive accounting narration",
+      },
+      {
+        voucherId: voucher.id,
+        ledgerAccountId: ctx.salesAccountId,
+        debitAmount: "0",
+        creditAmount: "25.00",
+        narration: "Sensitive accounting narration",
+      },
+    ]);
 
     await db
       .update(schema.userCompanyRoles)
@@ -202,11 +212,13 @@ describe("Phase 33B voucher entry finance reads", () => {
 
     const response = await posAgent.get(`/api/vouchers/${voucher.id}/view-entries`);
     expect(response.status).toBe(200);
-    expect(response.body).toHaveLength(1);
-    expect(response.body[0]).toMatchObject({
-      debitAmount: "0",
-      creditAmount: "0",
-    });
-    expect(response.body[0].narration).not.toBe("Sensitive accounting narration");
+    expect(response.body).toHaveLength(2);
+    for (const entry of response.body) {
+      expect(entry).toMatchObject({
+        debitAmount: "0",
+        creditAmount: "0",
+      });
+      expect(entry.narration).not.toBe("Sensitive accounting narration");
+    }
   });
 });

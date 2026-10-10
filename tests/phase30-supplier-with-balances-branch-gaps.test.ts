@@ -23,6 +23,14 @@ vi.mock("../server/db", () => ({
   },
 }));
 
+// Wave 13 (owner decision 3): the primary balances are the ledger's (balance
+// engine, raw SQL this harness cannot run); this file pins the operational
+// container formula, now returned as `operationalMemo`.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../server/routes/factory/suppliers/balance/factorySupplierLedger")>();
+  return { ...actual, loadFactorySupplierLedgerViews: async () => new Map() };
+});
 vi.mock("../server/routes/factory/suppliers/balance/_helpers", () => ({
   buildBrokerStatement: harness.buildBrokerStatement,
   isPayableContainer: harness.isPayableContainer,
@@ -325,9 +333,9 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
 
     const brokerResult = res.body[0];
     expect(brokerResult.totalContainers).toBe(3);
-    expect(brokerResult.brokerPoolUsd).toBe("300.00");
-    expect(brokerResult.totalValue).toBe("560.00");
-    expect(brokerResult.exposureCurrencyBalances).toEqual([
+    expect(brokerResult.operationalMemo.brokerPoolUsd).toBe("300.00");
+    expect(brokerResult.operationalMemo.totalValue).toBe("560.00");
+    expect(brokerResult.operationalMemo.exposureCurrencyBalances).toEqual([
       { currencyCode: "EUR", balance: 100, fxRateToUsd: 1.1 },
       { currencyCode: "AUD", balance: 200, fxRateToUsd: 0.75 },
     ]);
@@ -337,13 +345,13 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
     const childResult = res.body[1];
     expect(childResult.pendingContainers).toBe(1);
     expect(childResult.autoSettledFreightUsd).toBe("50.00");
-    expect(childResult.fxUnresolved).toBe(true);
+    expect(childResult.operationalMemo.fxUnresolved).toBe(true);
 
     const leafResult = res.body[2];
     expect(leafResult.receivedContainers).toBe(1);
     expect(leafResult.pendingContainers).toBe(1);
     expect(leafResult.totalPaid).toBe("25.00");
-    expect(leafResult.currencyBalances.some((row: any) => row.currencyCode === "EUR")).toBe(true);
+    expect(leafResult.operationalMemo.currencyBalances.some((row: any) => row.currencyCode === "EUR")).toBe(true);
     expect(leafResult.dueContainersCount).toBeGreaterThan(0);
     expect(harness.buildBrokerStatement).toHaveBeenCalledWith(1, 7, false);
   });
@@ -370,8 +378,8 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
     const withOtw = responseHarness();
     await handler({ session: { currentCompanyId: 7 }, query: { includeOtw: "true" } }, withOtw);
 
-    expect(withoutOtw.body[0].totalValue).toBe("0.00");
-    expect(withOtw.body[0].totalValue).toBe("55.00");
+    expect(withoutOtw.body[0].operationalMemo.totalValue).toBe("0.00");
+    expect(withOtw.body[0].operationalMemo.totalValue).toBe("55.00");
     expect(withOtw.body[0].otwByCurrency).toEqual({ USD: 1 });
   });
 
@@ -394,7 +402,7 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
 
     expect(res.body[0].dueContainers[0].value).toBe("350.01");
     expect(res.body[0].totalPaid).toBe("0.61");
-    expect(res.body[0].totalValue).toBe("349.40");
+    expect(res.body[0].operationalMemo.totalValue).toBe("349.40");
   });
 
   it("falls back to computed broker exposure when the broker statement is unavailable", async () => {
@@ -419,9 +427,11 @@ describe("Phase 30 supplier with-balances branch gaps", () => {
     await handler({ session: { currentCompanyId: 7 }, query: {} }, res);
 
     const parentResult = res.body.find((row: any) => row.id === 20);
-    expect(parentResult.brokerPoolUsd).toBe("0.00");
-    expect(parentResult.exposureCurrencyBalances).toEqual([{ currencyCode: "EUR", balance: 100, fxRateToUsd: 1.2 }]);
-    expect(parentResult.totalValue).toBe("120.00");
+    expect(parentResult.operationalMemo.brokerPoolUsd).toBe("0.00");
+    expect(parentResult.operationalMemo.exposureCurrencyBalances).toEqual([
+      { currencyCode: "EUR", balance: 100, fxRateToUsd: 1.2 },
+    ]);
+    expect(parentResult.operationalMemo.totalValue).toBe("120.00");
   });
 
   it("returns a controlled 500 response when a balance query fails", async () => {

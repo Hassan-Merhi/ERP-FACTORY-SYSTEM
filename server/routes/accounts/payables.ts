@@ -8,40 +8,57 @@ import { punctuationInsensitiveSearch } from "../../lib/searchNormalization";
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
-import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { resolveParentCompanyId, getSupplierBalanceForContext } from "../helpers/supplierBalanceHelpers";
+import { toMoney } from "../../lib/money";
+import { getPartyBalances } from "../../services/accounting/balances/ledgerBalanceEngine";
 import { vouchers } from "@shared/schema";
-import { eq, and, or, desc, sql, isNull } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { eq, and, or, desc, sql, isNull, inArray } from "drizzle-orm";
 
 export function registerAccountPayableRoutes(app: Express) {
-  // Get payable accounts (creditors - suppliers with positive balance)
+  // Get payable accounts (creditors - suppliers with a Cr balance), from the one
+  // balance engine (wave 13): the company's suppliers plus any supplier of
+  // another company this company posted to, each line counted once in its
+  // voucher company.
   app.get("/api/accounts/payables", requireAuth, async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-      const suppliers = await storage.getAllSuppliers();
-      const parentCompanyId = await resolveParentCompanyId(companyId);
-      const isChildCompany = companyId !== parentCompanyId;
+      const { parties } = await getPartyBalances(db, { companyId, kind: "supplier" });
+      const ids = parties.map((party) => party.id).filter((id): id is number => id !== null);
+      const masters =
+        ids.length === 0
+          ? []
+          : await db
+              .select({
+                id: companyScopedSuppliers.id,
+                code: companyScopedSuppliers.code,
+                legalName: companyScopedSuppliers.legalName,
+                companyId: companyScopedSuppliers.companyId,
+              })
+              .from(companyScopedSuppliers)
+              .where(inArray(companyScopedSuppliers.id, ids));
+      const byId = new Map(masters.map((supplier) => [supplier.id, supplier]));
 
-      const payableAccounts = (
-        await Promise.all(
-          suppliers.map(async (supplier) => {
-            const { balance, hasActivity } = await getSupplierBalanceForContext(supplier, companyId);
-            if (isChildCompany && !hasActivity) return null;
-            return {
-              id: supplier.id,
-              accountId: supplier.id,
-              code: supplier.code,
-              name: supplier.legalName,
-              balance,
-            };
-          })
-        )
-      )
-        .filter((account): account is NonNullable<typeof account> => account !== null && account.balance > 0)
-        .sort((a, b) => b.balance - a.balance);
+      const payableAccounts = parties
+        .map((party) => {
+          const supplier = party.id === null ? undefined : byId.get(party.id);
+          const balance = toMoney(party.closing).negated();
+          return {
+            id: party.id,
+            accountId: party.id,
+            code: supplier?.code ?? party.code,
+            name: supplier?.legalName ?? party.name,
+            balance: balance.toNumber(),
+            balanceBasis: "ledger" as const,
+            postedFromOtherCompany: supplier ? supplier.companyId !== companyId : false,
+            exact: balance,
+          };
+        })
+        .filter((account) => account.id !== null && account.exact.greaterThan(0))
+        .sort((a, b) => b.exact.comparedTo(a.exact))
+        .map(({ exact: _exact, ...account }) => account);
 
       res.json(payableAccounts);
     } catch (error: unknown) {

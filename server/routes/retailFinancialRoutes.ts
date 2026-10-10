@@ -4,9 +4,25 @@ import { z } from "zod";
 import { bankAccounts, ledgerAccounts, posShifts, retailCashMovements } from "@shared/schema";
 import { requireAuth, requireNonPOS } from "../auth";
 import { db } from "../db";
-import { getErrorMessage } from "../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../lib/httpHandlers";
+import { closedPeriodErrorResponse } from "../lib/closedPeriodError";
+import {
+  RETAIL_CASH_AMOUNT_CENTS_MESSAGE,
+  RETAIL_CASH_REASON_CODE,
+  RetailCashReasonUnmappedError,
+  assertRetailCashReasonPostableTx,
+  isCashAmountInCents,
+  postRetailCashMovementTx,
+} from "../services/retail/retailCashJournal";
+import { registerRetailLedgerRoutes } from "./retailLedgerRoutes";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./pos/retailPosContext";
-import { getRetailAccountingSettings, saveRetailAccountingSettings } from "../services/retail/retailFinancialService";
+import {
+  getRetailAccountingSettings,
+  RetailAccountConflictError,
+  saveRetailAccountingSettings,
+} from "../services/retail/retailFinancialService";
+import { writeAuditEvent } from "../services/audit";
+import { parseMoneyInput, toMoney } from "../lib/money";
 import {
   getRetailFinancialReconciliation,
   getRetailShiftSummary,
@@ -31,10 +47,27 @@ const settingsSchema = z.object({
   storeCreditLedgerAccountId: nullableId,
 });
 
+/** A positive amount up to 1,000,000,000, read exactly (never through a float). */
+const exactAmountSchema = z.union([z.number(), z.string().trim()]).transform((value, ctx) => {
+  const parsed =
+    typeof value === "string" ? (/^\d+(\.\d+)?$/.test(value) ? parseMoneyInput(value) : null) : parseMoneyInput(value);
+  if (!parsed) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Invalid amount" });
+    return z.NEVER;
+  }
+  if (!parsed.gt(0) || parsed.gt(1000000000)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Amount must be positive and at most 1,000,000,000" });
+    return z.NEVER;
+  }
+  return parsed.toDecimalPlaces(6);
+});
+
 const cashMovementSchema = z.object({
   movementType: z.enum(["cash_in", "cash_out"]),
-  amount: z.coerce.number().finite().positive().max(1000000000),
+  amount: exactAmountSchema,
   reason: z.string().trim().min(2).max(500),
+  // Wave 17 (D): chooses the counter-account; a movement without one is "other" (refused until mapped).
+  reasonCode: z.string().trim().regex(RETAIL_CASH_REASON_CODE).optional(),
   idempotencyKey: z.string().trim().min(8).max(191),
 });
 
@@ -118,8 +151,17 @@ export function registerRetailFinancialRoutes(app: Express): void {
       const parsed = settingsSchema.parse(req.body);
       await assertAccountOwnership(companyId, parsed);
       const { locationId = null, ...patch } = parsed;
-      res.json(await saveRetailAccountingSettings(companyId, locationId ?? null, patch));
+      // Saved and audited in one transaction (wave 17 C).
+      res.json(
+        await saveRetailAccountingSettings(companyId, locationId ?? null, patch, {
+          userId: currentUserId(req),
+          username: req.user?.username ?? req.session.username ?? "unknown",
+        })
+      );
     } catch (error) {
+      if (error instanceof RetailAccountConflictError) {
+        return res.status(409).json({ message: error.message, code: error.code, conflicts: error.conflicts });
+      }
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
@@ -172,7 +214,10 @@ export function registerRetailFinancialRoutes(app: Express): void {
       const shift = await loadAuthorizedShift(companyId, shiftId, req.user);
       if (shift.status !== "open") return res.status(409).json({ message: "Shift is already closed" });
       const body = cashMovementSchema.parse(req.body);
+      if (!isCashAmountInCents(body.amount)) return res.status(400).json({ message: RETAIL_CASH_AMOUNT_CENTS_MESSAGE });
+      const reasonCode = body.reasonCode ?? "other";
       const userId = currentUserId(req);
+      const username = req.user?.username ?? req.session.username ?? "unknown";
 
       // Shared lock on the shift: closeShift locks it FOR UPDATE, so a movement either
       // commits before the close totals are read or sees the shift closed.
@@ -192,11 +237,58 @@ export function registerRetailFinancialRoutes(app: Express): void {
             movementType: body.movementType,
             amount: body.amount.toFixed(6),
             reason: body.reason,
+            reasonCode,
             idempotencyKey: body.idempotencyKey,
             createdBy: userId,
           })
           .onConflictDoNothing({ target: [retailCashMovements.companyId, retailCashMovements.idempotencyKey] })
           .returning();
+        // Wave 17 (D): journalled in the movement's transaction (shift cash against the
+        // reason's account); an unmapped reason refuses the movement and nothing is written.
+        let voucherId: number | null = null;
+        if (created) {
+          const target = await assertRetailCashReasonPostableTx(tx, companyId, reasonCode, body.movementType);
+          voucherId = await postRetailCashMovementTx(tx, {
+            companyId,
+            shift: { id: shiftId, locationId: shift.locationId, cashAccountId: shift.cashAccountId ?? null },
+            movement: {
+              id: created.id,
+              movementType: body.movementType,
+              amount: body.amount,
+              reason: body.reason,
+            },
+            target,
+            actor: { userId, username },
+          });
+        }
+        // Audited in the movement's transaction (wave 17 C); a replay writes nothing.
+        if (created) {
+          await writeAuditEvent(
+            {
+              userId,
+              username,
+              companyId,
+              action: "create",
+              tableName: "retail_cash_movements",
+              recordId: created.id,
+              recordIdentifier: `shift ${shiftId} ${body.movementType}`,
+              changes: {
+                movement: {
+                  new: {
+                    shiftId,
+                    locationId: shift.locationId,
+                    movementType: body.movementType,
+                    amount: String(created.amount),
+                    reason: body.reason,
+                    reasonCode,
+                    voucherId,
+                  },
+                },
+              },
+            },
+            tx
+          );
+        }
 
         const row =
           created ??
@@ -221,8 +313,9 @@ export function registerRetailFinancialRoutes(app: Express): void {
         !created &&
         (row.shiftId !== shiftId ||
           row.movementType !== body.movementType ||
-          Math.abs(Number(row.amount) - body.amount) > 0.000001 ||
-          row.reason !== body.reason)
+          !toMoney(row.amount).eq(body.amount) ||
+          row.reason !== body.reason ||
+          (row.reasonCode ?? "other") !== reasonCode)
       ) {
         return res.status(409).json({ message: "Cash movement idempotency key was reused with different data" });
       }
@@ -232,8 +325,18 @@ export function registerRetailFinancialRoutes(app: Express): void {
         summary: await getRetailShiftSummary(companyId, shiftId),
       });
     } catch (error) {
+      if (error instanceof RetailCashReasonUnmappedError) return res.status(409).json(error.body);
+      if (error instanceof RetailAccountConflictError) {
+        return res.status(409).json({ message: error.message, code: error.code, conflicts: error.conflicts });
+      }
+      if (error instanceof HttpError) return res.status(error.statusCode).json({ message: error.message });
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
       const message = getErrorMessage(error);
       res.status(message.includes("only access") ? 403 : 400).json({ message });
     }
   });
+
+  // Wave 17 (D): cash movement reasons, the Retail inventory opening and its reconciliation.
+  registerRetailLedgerRoutes(app);
 }

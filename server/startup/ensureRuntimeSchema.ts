@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { logger } from "../lib/logger";
 import { scheduledWhatsAppDeliveryTracking } from "../startup-schema/030-scheduled-whatsapp-delivery-tracking";
+import { ensureRetailLedgerSchema } from "../services/retail/retailLedgerSchema";
 
 export async function ensureScheduledWhatsAppDeliveryTrackingSchema(pool: Pool): Promise<void> {
   for (const statement of scheduledWhatsAppDeliveryTracking) {
@@ -163,6 +164,8 @@ export async function ensureRetailFinancialSchema(pool: Pool): Promise<void> {
       ON retail_accounting_settings(company_id) WHERE location_id IS NULL;
   `);
   logger.info("[startup] ✓ Retail financial core schema ensured");
+  // Wave 17 (D): Retail cash movement journals and the Retail inventory opening.
+  await ensureRetailLedgerSchema(pool);
 }
 
 /**
@@ -415,6 +418,10 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
       ADD COLUMN IF NOT EXISTS opening_balance_native_amount    NUMERIC(20,6),
       ADD COLUMN IF NOT EXISTS category                         TEXT;
 
+    -- Phase 19 (B), PE7: fixed assets are soft-deleted.
+    ALTER TABLE fixed_assets
+      ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+
     ALTER TABLE bank_accounts
       ADD COLUMN IF NOT EXISTS opening_balance_currency         VARCHAR(10),
       ADD COLUMN IF NOT EXISTS opening_balance_historical_rate  NUMERIC(20,10),
@@ -576,11 +583,11 @@ export async function ensureRuntimeSchema(pool: Pool): Promise<void> {
   // always-on pre-listen schema guard.
   await ensureScheduledWhatsAppDeliveryTrackingSchema(pool);
 
-  // Phase 3 historical repairs are part of the blocking pre-listen path. Both
-  // passes are idempotent and evidence-gated; ambiguous accounting causes a
-  // throw so Render keeps the previous healthy instance live.
-  const { runPhase3HistoricalRepair } = await import("../services/accounting/phase3HistoricalRepair");
-  await runPhase3HistoricalRepair();
+  // Wave 16 (A): the Phase 3 historical accounting repair no longer runs here.
+  // It added and deleted lines of posted vouchers of every company before each
+  // listen, with no audit; it is now the Owner preview/apply at
+  // /api/accounting/phase3-historical/plan and /apply. The payroll daybook pass below
+  // rewrites the factory daybook mirror only (no voucher, line or account).
   const { runPhase3PayrollDaybookRepair } = await import("../services/accounting/phase3PayrollDaybookRepair");
   await runPhase3PayrollDaybookRepair();
 

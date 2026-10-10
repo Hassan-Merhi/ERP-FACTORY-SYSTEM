@@ -93,7 +93,10 @@ describe("Phase 7 company access boundary", () => {
       "server/routes/stats/statsDataRoutes.ts",
       "server/routes/helpers/supplierBalanceHelpers.ts",
       "server/routes/reportsContainerTrackingRoutes.ts",
-      "server/routes/reportsClosingStockRoutes.ts",
+      // server/routes/reportsClosingStockRoutes.ts left this list in wave 11:
+      // its only cross-company read was the target-company check of the
+      // closing-stock transfer, which is retired (410). Its reports read the
+      // session company only.
     ];
 
     for (const routeFile of routeFiles) {

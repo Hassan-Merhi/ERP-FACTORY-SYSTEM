@@ -111,7 +111,8 @@ export async function handleLocationSummaryBandwidthProfile(req: Request, res: R
           groupCode: sql<string>`COALESCE(${stockGroups.code}, 'UNGROUPED')`,
           groupName: sql<string>`COALESCE(${stockGroups.name}, 'Ungrouped Items')`,
           quantity: sql<string>`SUM(COALESCE(${inventory.quantity}, '0')::numeric)::text`,
-          value: sql<string>`SUM(COALESCE(${inventory.quantity}, '0')::numeric * COALESCE(${inventory.averageRate}, '0')::numeric)::text`,
+          // Stored value (wave 11), not quantity × the rounded average rate.
+          value: sql<string>`SUM(COALESCE(${inventory.totalValue}, '0')::numeric)::text`,
         })
         .from(inventory)
         .innerJoin(
@@ -212,6 +213,7 @@ export async function handleLocationSummaryBandwidthProfile(req: Request, res: R
           locationId: inventory.locationId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .innerJoin(
@@ -253,7 +255,8 @@ export async function handleLocationSummaryBandwidthProfile(req: Request, res: R
         item.locationData[Number(row.locationId)] = {
           quantity,
           rate,
-          value: quantity * rate,
+          // The stored value (wave 11), not quantity × the rounded rate.
+          value: numeric(row.totalValue),
         };
       }
 
@@ -277,6 +280,7 @@ export async function handleLocationSummaryBandwidthProfile(req: Request, res: R
         locationId: inventory.locationId,
         quantity: inventory.quantity,
         averageRate: inventory.averageRate,
+        totalValue: inventory.totalValue,
       })
       .from(inventory)
       .innerJoin(
@@ -321,7 +325,8 @@ export async function handleLocationSummaryBandwidthProfile(req: Request, res: R
       const locationId = Number(row.locationId);
       const quantity = numeric(row.quantity);
       const rate = numeric(row.averageRate);
-      const value = quantity * rate;
+      // The stored value (wave 11), not quantity × the rounded rate.
+      const value = numeric(row.totalValue);
 
       let group = groups.get(groupId);
       if (!group) {

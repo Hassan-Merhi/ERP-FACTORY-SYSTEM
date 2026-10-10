@@ -20,6 +20,7 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { addMovement, lockInventoryRow, setInventoryQuantity } from "./retailStockLedger";
+import { trackRetailStockValueTx } from "./retailInventoryJournal";
 import {
   computeRetailStockCountLineStatus,
   finalizeRetailStockCountLine,
@@ -728,11 +729,15 @@ export async function finalizeRetailStockCount(input: {
     let varianceQuantityTotal = 0;
     let varianceValueTotal = 0;
     const now = new Date();
+    // Wave 17 (D) Retail inventory ledger: from the Retail inventory opening on,
+    // the value the count moves is journalled in this transaction (merge of main 365cf55).
+    const stockValue = await trackRetailStockValueTx(tx, input.companyId, []);
 
     for (const line of counted) {
       const countedQuantity = toNumber(line.countedQuantity);
       const expectedQuantity = toNumber(line.expectedQuantity);
       const stock = await lockInventoryRow(tx, input.companyId, line.variantId, session.locationId);
+      await stockValue.include([{ variantId: line.variantId, locationId: session.locationId }]);
       // A post-count sale, transfer or return must never be undone by writing the
       // stale physical quantity. Stock writers take this same inventory row lock.
       if (!line.countedAt) {
@@ -808,6 +813,13 @@ export async function finalizeRetailStockCount(input: {
         })
         .where(eq(retailStockCountLines.id, line.id));
     }
+
+    await stockValue.post({
+      kind: "count",
+      sourceId: session.id,
+      description: `Retail stock count ${session.code}`,
+      actor: { userId: input.userId },
+    });
 
     if (uncounted.length > 0) {
       await tx

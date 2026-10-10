@@ -66,64 +66,68 @@ export function registerPayrollWithdrawalRoutes(app: Express) {
 
       // Create voucher
       const voucherNumber = `SAL-WD-${Date.now()}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId: req.session.currentCompanyId,
-          voucherNumber,
-          voucherType: "Payment",
-          voucherDate: date,
-          description: notes || `Salary withdrawal for ${employee.firstName} ${employee.lastName}`,
-          totalAmount: withdrawalAmount.toFixed(2),
-        })
-        .returning();
+      const voucher = await db.transaction(async (tx) => {
+        const [voucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId: req.session.currentCompanyId!,
+            voucherNumber,
+            voucherType: "Payment",
+            voucherDate: date,
+            description: notes || `Salary withdrawal for ${employee.firstName} ${employee.lastName}`,
+            totalAmount: withdrawalAmount.toFixed(2),
+          })
+          .returning();
 
-      // Create voucher entries (double-entry)
-      // Debit: Employee (using employeeId field directly instead of separate ledger account)
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: employee.id,
-        debitAmount: withdrawalAmount.toFixed(2),
-        creditAmount: "0",
-        narration: `Salary withdrawal - ${voucherNumber}`,
+        // Create voucher entries (double-entry)
+        // Debit: Employee (using employeeId field directly instead of separate ledger account)
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: null,
+          employeeId: employee.id,
+          debitAmount: withdrawalAmount.toFixed(2),
+          creditAmount: "0",
+          narration: `Salary withdrawal - ${voucherNumber}`,
+        });
+
+        // Credit: Bank/Cash Account
+        const creditEntry: {
+          voucherId: number;
+          debitAmount: string;
+          creditAmount: string;
+          narration: string;
+          ledgerAccountId?: number;
+          bankAccountId?: number;
+        } = {
+          voucherId: voucher.id,
+          debitAmount: "0",
+          creditAmount: withdrawalAmount.toFixed(2),
+          narration: `Salary withdrawal - ${voucherNumber}`,
+        };
+
+        if (accountType === "cash") {
+          creditEntry.ledgerAccountId = accountId;
+        } else {
+          creditEntry.bankAccountId = accountId;
+        }
+
+        await tx.insert(voucherEntries).values(creditEntry);
+        // Wave 12: the balance moves in the voucher's transaction.
+        await syncEmployeeBalancesFromEntries(
+          [
+            {
+              ledgerAccountId: null,
+              employeeId: employee.id,
+              debitAmount: withdrawalAmount.toFixed(2),
+              creditAmount: "0",
+            },
+          ],
+          req.session.currentCompanyId!,
+          false,
+          tx
+        );
+        return voucher;
       });
-
-      // Credit: Bank/Cash Account
-      const creditEntry: {
-        voucherId: number;
-        debitAmount: string;
-        creditAmount: string;
-        narration: string;
-        ledgerAccountId?: number;
-        bankAccountId?: number;
-      } = {
-        voucherId: voucher.id,
-        debitAmount: "0",
-        creditAmount: withdrawalAmount.toFixed(2),
-        narration: `Salary withdrawal - ${voucherNumber}`,
-      };
-
-      if (accountType === "cash") {
-        creditEntry.ledgerAccountId = accountId;
-      } else {
-        creditEntry.bankAccountId = accountId;
-      }
-
-      await db.insert(voucherEntries).values(creditEntry);
-
-      // Sync employee balance from voucher entries (instead of direct update)
-      await syncEmployeeBalancesFromEntries(
-        [
-          {
-            ledgerAccountId: null,
-            employeeId: employee.id,
-            debitAmount: withdrawalAmount.toFixed(2),
-            creditAmount: "0",
-          },
-        ],
-        req.session.currentCompanyId!
-      );
 
       // Get updated employee balance
       const [updatedEmployee] = await db.select().from(employees).where(eq(employees.id, employee.id));

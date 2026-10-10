@@ -96,7 +96,9 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
       <div className="rounded-xl border divide-y">
         {model.filteredTopLevel.map((supplier) => {
+          // Ledger balance (wave 13); the amounts not yet in the ledger are a separate memo.
           const balanceValue = parseFloat(supplier.totalValue || "0");
+          const notInLedgerValue = parseFloat(supplier.notInLedgerTotal || "0");
           const isBroker = !!model.subAccountsByParent[supplier.id]?.length || !!supplier.isBroker;
           const otwCount = supplier.otwByCurrency
             ? Object.values(supplier.otwByCurrency).reduce((left, right) => left + right, 0)
@@ -160,7 +162,7 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
 
               <div className="text-right shrink-0 space-y-0.5">
                 {(Math.abs(balanceValue) > 0.005 || nonUsdBalances.length > 0) && (
-                  <div className="text-xs text-muted-foreground mb-0.5">Balance</div>
+                  <div className="text-xs text-muted-foreground mb-0.5">Ledger balance</div>
                 )}
                 <div
                   className={`font-semibold text-sm ${balanceValue < 0 ? "text-green-600" : balanceValue > 0 ? "" : "text-muted-foreground"}`}
@@ -171,6 +173,12 @@ export function FactorySuppliersDirectory({ model }: { model: SuppliersModel }) 
                     `$${model.formatNum(String(Math.abs(balanceValue)))}${balanceValue < 0 ? " CR" : ""}`
                   )}
                 </div>
+                {Math.abs(notInLedgerValue) > 0.005 && (
+                  <div className="text-[11px] text-muted-foreground" data-testid={`text-not-in-ledger-${supplier.id}`}>
+                    <span>Not yet in the ledger (memo)</span>{" "}
+                    {`$${model.formatNum(String(Math.abs(notInLedgerValue).toFixed(2)))}${notInLedgerValue < 0 ? " CR" : ""}`}
+                  </div>
+                )}
                 {nonUsdBalances.map((balance) => (
                   <div key={balance.currencyCode} className="flex items-center justify-end gap-1">
                     <span

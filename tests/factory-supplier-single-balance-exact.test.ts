@@ -19,6 +19,14 @@ vi.mock("../server/db", () => {
   return { db: { select: () => query(harness.queue.shift() ?? []) } };
 });
 
+// Wave 13 (owner decision 3): `balance` is the ledger's (balance engine); the
+// container formula this test pins is returned as `operationalMemo`.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../server/routes/factory/suppliers/balance/factorySupplierLedger")>();
+  return { ...actual, loadFactorySupplierLedgerViews: async () => new Map() };
+});
+
 import { registerSupplierBalanceSingleRoutes } from "../server/routes/factory/suppliers/balance/single";
 
 function balanceHandler() {
@@ -37,13 +45,14 @@ describe("factory supplier single balance", () => {
     const payments = ["0.1", "0.2"].map((amountUsd, i) => ({ id: i + 1, supplierId: 5, amountUsd }));
     // suppliers, containers, payments, voucher payments, FX transfers, post-offload charges
     harness.queue = [[supplier], [], payments, [], [], []];
-    let body: { balance: number; outstandingUsd: number } | undefined;
+    let body: { balance: number; outstandingUsd: number; operationalMemo: { outstandingUsd: string } } | undefined;
     await balanceHandler()(
       { session: { factoryCompanyId: 7 }, params: { id: "5" } },
       { set: () => undefined, status: () => ({ json: () => undefined }), json: (b: typeof body) => (body = b) }
     );
 
-    expect(body?.balance).toBe(-0.3);
-    expect(body?.outstandingUsd).toBe(-0.3);
+    expect(body?.operationalMemo.outstandingUsd).toBe("-0.30");
+    // No ledger lines in this harness: the ledger balance is zero.
+    expect(body?.balance).toBe(0);
   });
 });

@@ -1,10 +1,9 @@
 /**
- * A rate change revalues every Cash account: each account's adjustment is
- * posted at cents. The voucher total used to be the float sum of the
- * unrounded adjustments, rounded once, so with balances of 100.00 and 33.33
- * moving from 600 to 650 the lines carried 7.69 + 2.56 = 10.25 while the
- * header said 10.26. The adjustments are now exact and the total is the sum
- * of the cents actually posted.
+ * Saving a rate only saves the rate (accounting audit wave 9,
+ * docs/accounting-audit-2026-10.md): main's exact-cents FX revaluation posting
+ * was superseded by removing the automatic FX-REVAL journal from
+ * POST /api/exchange-rates altogether, so a rate change on Cash balances of
+ * 100.00 and 33.33 posts nothing. Revaluation is report-time only.
  *
  * Bulk worker advances read each amount as a float: 1.005 is 1.00499… and
  * was stored as 1.00.
@@ -48,7 +47,7 @@ afterAll(async () => {
 }, 60000);
 
 describe("FX revaluation on a rate change", () => {
-  it("posts adjustments at cents and a voucher total equal to them", async () => {
+  it("posts no FX-REVAL journal when the rate changes", async () => {
     const first = await agent
       .post("/api/exchange-rates")
       .send({ fromCurrency: "USD", toCurrency: "XOF", rate: "600", effectiveDate: "2026-09-01" });
@@ -58,22 +57,11 @@ describe("FX revaluation on a rate change", () => {
       .send({ fromCurrency: "USD", toCurrency: "XOF", rate: "650", effectiveDate: "2026-09-02" });
     expect(second.status).toBeLessThan(300);
 
-    const voucher = await pool.query<{ id: number; total_amount: string }>(
-      `SELECT id, total_amount FROM vouchers WHERE company_id = $1 AND voucher_number LIKE 'FX-REVAL-%'`,
+    const voucher = await pool.query(
+      `SELECT id FROM vouchers WHERE company_id = $1 AND voucher_number LIKE 'FX-REVAL-%'`,
       [ctx.companyId]
     );
-    expect(voucher.rowCount).toBe(1);
-    const legs = await pool.query<{ code: string | null; credit: string }>(
-      `SELECT la.code, ve.credit_amount AS credit
-       FROM voucher_entries ve JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-       WHERE ve.voucher_id = $1 AND ve.credit_amount::numeric > 0 ORDER BY la.code`,
-      [voucher.rows[0].id]
-    );
-    expect(legs.rows).toEqual([
-      { code: "MX18-C1", credit: "7.69" },
-      { code: "MX18-C2", credit: "2.56" },
-    ]);
-    expect(voucher.rows[0].total_amount).toBe("10.25");
+    expect(voucher.rowCount).toBe(0);
   });
 });
 

@@ -8,6 +8,8 @@ import {
 } from "./centralPostingEngine";
 import { assertTransactionCompanyScope, type CompanyScopedTransaction } from "../security/transactionCompanyScope";
 import type { DbTransaction } from "../../db";
+import { sql } from "drizzle-orm";
+import { assertNoInventoryCutoverTx } from "./perpetualInventory/cutoverRefusal";
 
 /**
  * The immutable original voucher row, as locked inside the caller's
@@ -237,4 +239,85 @@ export async function reverseVoucherExactlyTx<TTransaction extends CompanyScoped
     },
     dependencies
   );
+}
+
+/** Voucher types that move stock (wave 11). */
+export const STOCK_DOCUMENT_VOUCHER_TYPES: ReadonlySet<string> = new Set([
+  "Stock Transfer",
+  "StockTransfer",
+  "Transfer",
+  "Production",
+  "Consumption",
+  "Mixed",
+  "Stock Adjustment",
+  "Sales",
+  "Credit Note",
+  "Debit Note",
+]);
+
+/** Number prefixes of the linked journals that carry stock (wave 8 / 11). */
+export const STOCK_JOURNAL_PREFIXES: readonly string[] = [
+  "COGS-",
+  "STOCK-IN-",
+  "GIT-PO-",
+  "GL-FACTORY-STOCK-",
+  "INV-GL-",
+  "FPOS-COGS-",
+  "INV-MOVE-",
+  "GL-INVENTORY-OPENING-",
+];
+
+/** Ledger accounts that carry stock value under perpetual inventory. */
+const STOCK_ACCOUNT_CODES = [
+  "INVENTORY",
+  "GOODS_IN_TRANSIT",
+  "FACTORY_RAW_MATERIAL_STOCK",
+  "FACTORY_WIP",
+  "FACTORY_FINISHED_GOODS",
+] as const;
+
+/**
+ * Whether a voucher is a stock document or a linked stock journal: a stock
+ * voucher type, a stock journal number, a voucher with sales items, or any
+ * voucher with a line on a stock account.
+ */
+export async function isStockVoucherTx(tx: DbTransaction, companyId: number, voucherId: number): Promise<boolean> {
+  const result = await tx.execute(sql`
+    SELECT v.voucher_type, v.voucher_number,
+           EXISTS (SELECT 1 FROM sales_items si WHERE si.voucher_id = v.id) AS has_sales_items,
+           EXISTS (
+             SELECT 1 FROM voucher_entries ve JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+              WHERE ve.voucher_id = v.id AND la.company_id = v.company_id AND la.code IN (${sql.join(
+                STOCK_ACCOUNT_CODES.map((code) => sql`${code}`),
+                sql`, `
+              )})
+           ) AS has_stock_lines
+      FROM vouchers v WHERE v.id = ${voucherId} AND v.company_id = ${companyId}
+  `);
+  const row = result.rows[0] as
+    | { voucher_type: string; voucher_number: string | null; has_sales_items: boolean; has_stock_lines: boolean }
+    | undefined;
+  if (!row) return false;
+  return (
+    STOCK_DOCUMENT_VOUCHER_TYPES.has(row.voucher_type) ||
+    STOCK_JOURNAL_PREFIXES.some((prefix) => (row.voucher_number ?? "").startsWith(prefix)) ||
+    row.has_sales_items ||
+    row.has_stock_lines
+  );
+}
+
+/**
+ * Wave 11: an exact reversal of a stock document or a linked stock journal
+ * swaps its ledger lines but moves no stock, so after the company's
+ * perpetual-inventory cut-over it would part the ledger from the sub-ledger.
+ * It is refused then (409 PERPETUAL_INVENTORY_ACTIVE); other vouchers, and
+ * every voucher before the cut-over, reverse as before.
+ */
+export async function assertExactReversalAllowedTx(
+  tx: DbTransaction,
+  companyId: number,
+  voucherId: number
+): Promise<void> {
+  if (!(await isStockVoucherTx(tx, companyId, voucherId))) return;
+  await assertNoInventoryCutoverTx(tx, companyId, "exact-voucher-reversal");
 }

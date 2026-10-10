@@ -374,6 +374,7 @@ export function registerOrderCrudRoutes(app: Express) {
         totalMarginPct: hideCostData ? null : totalMarginPct,
         partialCostData: !totalCostKnown,
         costHidden: hideCostData,
+        costBasis: "catalogue-production-price-per-bale", // Wave 11: a selling value, not the bales' recorded cost.
       });
     } catch (error: unknown) {
       logger.error("Error fetching order profitability:", { error: error });
@@ -769,7 +770,6 @@ export function registerOrderCrudRoutes(app: Express) {
       if (!companyId) return res.status(400).json({ message: "No company selected" });
 
       const orderId = parseId(req.params.id);
-
       if (orderId === null) return res.status(400).json({ message: "Invalid id" });
       const { containerNumber, shippingCompany, containerNotes, bookingInfo, destination } = req.body;
 

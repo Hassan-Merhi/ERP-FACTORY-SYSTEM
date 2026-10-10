@@ -264,6 +264,22 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
           companyId,
           entries: posted.entries,
         });
+        // Wave 16 (B): the rich voucher audit is written in the posting
+        // transaction; an audit failure rolls the journal back.
+        const auditEntries = await snapshotVoucherEntries(posted.entries, tx);
+        await logAudit(
+          {
+            userId: userId!,
+            username: req.session.username || "unknown",
+            companyId,
+            action: "create",
+            tableName: "vouchers",
+            recordId: posted.voucher.id,
+            recordIdentifier: posted.voucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(posted.voucher, auditEntries),
+          },
+          tx
+        );
       }
 
       return posted;
@@ -321,23 +337,6 @@ async function createActiveJournal(req: Request, res: Response, next: NextFuncti
           voucherId: result.voucher.id,
           error,
         });
-      }
-
-      try {
-        const auditEntries = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "create",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(result.voucher, auditEntries),
-        });
-      } catch {
-        // The transaction-owned central posting audit already exists. Preserve
-        // the old rich audit as best-effort compatibility only.
       }
     }
 

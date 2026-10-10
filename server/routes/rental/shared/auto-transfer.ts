@@ -10,16 +10,29 @@ import {
   companies,
 } from "@shared/schema";
 import { eq, and, inArray, isNull } from "drizzle-orm";
-import { softDeleteVoucherTx } from "../../../services/accounting/voucherSoftDelete";
+import { retireVouchersTx, type VoucherRetirementActor } from "../../../services/accounting/voucherRetirement";
 import { runWithAutoTransferCounterparties } from "../../../services/rental/autoTransferScope";
 import { RentalModule } from "./ledger";
 
 /**
  * The company's TRANSFER-CLEARING account. A soft-deleted row still owns the
- * unique (company_id, code) key, so it is revived rather than duplicated.
+ * unique (company_id, code) key; it is not revived here (accounting audit,
+ * wave 18 B: account helpers reuse an account as it is and never unhide a
+ * deleted one), so the transfer is not posted (null, logged) until an Admin
+ * restores the account from Deleted Items.
  */
 async function getOrCreateClearingTx(tx: DbTransaction, companyId: number) {
-  const [account] = await tx
+  const [existing] = await tx
+    .select()
+    .from(ledgerAccounts)
+    .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, "TRANSFER-CLEARING")))
+    .limit(1);
+  if (existing && !existing.deletedAt) return existing;
+  if (existing) {
+    logger.error("[RentalAutoTransfer] TRANSFER-CLEARING account is deleted; transfer not posted", { companyId });
+    return null;
+  }
+  const [created] = await tx
     .insert(ledgerAccounts)
     .values({
       companyId,
@@ -28,21 +41,22 @@ async function getOrCreateClearingTx(tx: DbTransaction, companyId: number) {
       accountType: "Equity",
       active: true,
     })
-    .onConflictDoUpdate({
-      target: [ledgerAccounts.companyId, ledgerAccounts.code],
-      set: { active: true, deletedAt: null },
-    })
     .returning();
-  return account;
+  return created;
 }
 
 /**
- * Soft-delete both sides of every auto-transfer posted for these payments and
- * drop the links. Run inside `runWithAutoTransferCounterparties` so the
- * receiving company's voucher is in scope; under the paying company's scope
- * alone it was silently left live.
+ * Retire both sides of every auto-transfer posted for these payments and drop
+ * the links. Run inside `runWithAutoTransferCounterparties` so the receiving
+ * company's voucher is in scope; under the paying company's scope alone it was
+ * silently left live. Wave 16 (A): each leg is retired (soft delete with its
+ * lines, audited in this transaction, number released), not hard-deleted.
  */
-export async function reverseAutoTransfersTx(tx: DbTransaction, sourcePaymentIds: readonly number[]): Promise<void> {
+export async function reverseAutoTransfersTx(
+  tx: DbTransaction,
+  sourcePaymentIds: readonly number[],
+  retirement: { reason: string; actor?: VoucherRetirementActor | null }
+): Promise<void> {
   if (sourcePaymentIds.length === 0) return;
   const linked = await tx
     .select()
@@ -51,8 +65,20 @@ export async function reverseAutoTransfersTx(tx: DbTransaction, sourcePaymentIds
   for (const transfer of linked) {
     // Drop the link first: it holds restrict foreign keys on both vouchers.
     await tx.delete(interCompanyTransfers).where(eq(interCompanyTransfers.id, transfer.id));
-    if (transfer.fromVoucherId) await softDeleteVoucherTx(tx, transfer.fromVoucherId);
-    if (transfer.toVoucherId) await softDeleteVoucherTx(tx, transfer.toVoucherId);
+    if (transfer.fromVoucherId) {
+      await retireVouchersTx(tx, {
+        companyId: transfer.fromCompanyId,
+        voucherIds: [transfer.fromVoucherId],
+        ...retirement,
+      });
+    }
+    if (transfer.toVoucherId) {
+      await retireVouchersTx(tx, {
+        companyId: transfer.toCompanyId,
+        voucherIds: [transfer.toVoucherId],
+        ...retirement,
+      });
+    }
   }
 }
 
@@ -129,6 +155,7 @@ export async function maybeRunAutoTransfer(
 
         const fromClearing = await getOrCreateClearingTx(tx, companyId);
         const toClearing = await getOrCreateClearingTx(tx, cfg.destCompanyId);
+        if (!fromClearing || !toClearing) return;
         const baseDesc = `Auto rent transfer - ${unitLabel}`;
         const desc = notes ? `${baseDesc} - ${notes}` : baseDesc;
         const txId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

@@ -1,23 +1,32 @@
+import Decimal from "decimal.js";
 import { eq, and, inArray, isNull } from "drizzle-orm";
-import { db } from "../../db";
+import { db, type DbTransaction } from "../../db";
 import {
   addInventoryValues,
   inventoryMoney,
   inventoryQuantity,
   inventoryUnitCost,
   multiplyInventoryValues,
-  subtractInventoryValues,
   toInventoryDecimal,
-  weightedAverageInventoryCost,
 } from "../../lib/inventoryMath";
 import * as schema from "@shared/schema";
 import type { StockTransferItem, StockAdjustmentItem } from "@shared/schema";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
-import { insertStockAdjustmentLedgerEntriesTx } from "./adjustmentLedgerEntries";
-import { stockAdjustmentHeaderTotal } from "./stockAdjustmentTotals";
+import { shouldInsertAdjustmentVoucherEntry } from "./adjustmentVoucherEntryGuard";
+import { stockAdjustmentHeaderTotal, stockAdjustmentNetLine } from "./stockAdjustmentTotals";
 import { lockInventoryRow } from "../inventoryRowLock";
 import { adjustInventory } from "../../inventoryHelper";
+import { assertNoBaleMirrorMovementTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
+import { syncStockAdjustmentInventoryTx } from "../../services/accounting/perpetualInventory/stockAdjustments";
+import { insertInfrastructureVoucherTx } from "../../services/accounting/infrastructureVoucherIdentity";
+import type { PostingSourceIdentity } from "../../services/accounting/centralPostingEngine";
+import {
+  moveTransferLegConservedTx,
+  postTransferResidualTx,
+  recordTransferValueMovedTx,
+  transferVoucherDateTx,
+} from "../../services/inventory/conservedStockTransfer";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -174,6 +183,13 @@ export async function applyStockTransferInventoryTx(
 ): Promise<void> {
   const movementItems = groupTransferMovementItems(input.items);
   await assertTransferCompanyScopeTx(tx, input.companyId, input.destinationLocationId, movementItems);
+  // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+  await assertNoBaleMirrorMovementTx(
+    tx,
+    input.companyId,
+    movementItems.map((item) => item.stockItemId),
+    "stock-transfer"
+  );
 
   const lockKeys = new Map<string, { locationId: number; stockItemId: number }>();
   for (const item of movementItems) {
@@ -209,53 +225,36 @@ export async function applyStockTransferInventoryTx(
     }
   }
 
+  // Wave 11: the destination receives exactly the value the source relieved,
+  // and each line records it as value_moved (see conservedStockTransfer).
+  const relievedByGroup = new Map<string, Decimal>();
+  const deltas: Decimal[] = [];
   for (const item of movementItems) {
     const quantity = toInventoryDecimal(item.quantity);
     const rate = toInventoryDecimal(item.rate);
 
     const sourceWasMissing = !lockedRows.get(`${item.sourceLocationId}:${item.stockItemId}`);
 
-    // Passing the historical transfer rate creates the negative layer with the
-    // correct valuation basis. adjustInventory intentionally seeds a first-touch
-    // negative inventory row at a zero average rate, so for transfers only we
-    // restore the transfer's historical rate as the row's cost memory as well.
-    await adjustInventory(
-      tx,
-      item.sourceLocationId,
-      item.stockItemId,
-      quantity.negated().toNumber(),
-      input.companyId,
-      rate.toNumber(),
-      "Stock Transfer",
-      input.sourceVoucherId
-    );
-    if (sourceWasMissing) {
-      await tx
-        .update(schema.inventory)
-        .set({
-          averageRate: inventoryUnitCost(rate),
-          totalValue: inventoryMoney(toInventoryDecimal(0)),
-          lastUpdated: new Date(),
-        })
-        .where(
-          and(
-            eq(schema.inventory.companyId, input.companyId),
-            eq(schema.inventory.locationId, item.sourceLocationId),
-            eq(schema.inventory.stockItemId, item.stockItemId)
-          )
-        );
-    }
-
-    await adjustInventory(
-      tx,
-      input.destinationLocationId,
-      item.stockItemId,
-      quantity.toNumber(),
-      input.companyId,
-      rate.toNumber(),
-      "Stock Transfer",
-      input.sourceVoucherId
-    );
+    // The transfer's historical rate is only the cost memory of a source that
+    // has no row (the negative layer's provisional rate); the destination is
+    // valued at what the source relieved.
+    const moved = await moveTransferLegConservedTx(tx, {
+      companyId: input.companyId,
+      sourceLocationId: item.sourceLocationId,
+      destinationLocationId: input.destinationLocationId,
+      stockItemId: item.stockItemId,
+      quantity,
+      fallbackRate: rate,
+      sourceVoucherType: "Stock Transfer",
+      sourceVoucherId: input.sourceVoucherId,
+    });
+    relievedByGroup.set(`${item.sourceLocationId}:${item.stockItemId}`, moved.relieved);
+    deltas.push(moved.sourceDelta, moved.destinationDelta);
+    // Wave 15 (H3): a source with no row goes short at the transfer's rate
+    // and keeps that negative value (negative-stock policy), exactly what the
+    // destination received. It used to be reset to zero after the move, which
+    // left the destination's value standing on nothing: value created from a
+    // transfer, with no journal.
 
     await postStockMovementTx(
       tx,
@@ -264,7 +263,7 @@ export async function applyStockTransferInventoryTx(
         stockItemId: item.stockItemId,
         kind: "transfer",
         quantity: inventoryQuantity(quantity),
-        unitCost: inventoryUnitCost(rate),
+        unitCost: inventoryUnitCost(sourceWasMissing ? rate : moved.rate),
         fromLocationId: item.sourceLocationId,
         toLocationId: input.destinationLocationId,
         occurredAt: new Date().toISOString(),
@@ -278,6 +277,14 @@ export async function applyStockTransferInventoryTx(
       canonicalStockMovementAdapter
     );
   }
+  await recordTransferValueMovedTx(tx, input.transferId, relievedByGroup);
+  await postTransferResidualTx(tx, {
+    companyId: input.companyId,
+    transferId: input.transferId,
+    date: await transferVoucherDateTx(tx, input.companyId, input.sourceVoucherId),
+    reference: `Transfer ${input.transferId}`,
+    deltas,
+  });
 }
 
 export async function createStockTransfer(
@@ -397,17 +404,91 @@ export async function createStockTransfer(
   });
 }
 
+type StockAdjustmentType = "Production" | "Consumption" | "Mixed";
+type StockAdjustmentInputItem = { stockItemId: number; quantity: string; rate: string };
+
 export async function createStockAdjustment(
   voucherId: number,
   locationId: number,
-  adjustmentType: "Production" | "Consumption" | "Mixed",
+  adjustmentType: StockAdjustmentType,
   notes: string,
-  items: Array<{ stockItemId: number; quantity: string; rate: string }>,
+  items: StockAdjustmentInputItem[],
   _consumptionAccountOverride?: { code: string; name: string },
   voucherHeader?: { currency?: string; voucherDate?: string; description?: string },
   storedAdjustmentType?: string
 ) {
-  return await db.transaction(async (tx) => {
+  return await db.transaction((tx) =>
+    createStockAdjustmentTx(
+      tx,
+      voucherId,
+      locationId,
+      adjustmentType,
+      notes,
+      items,
+      voucherHeader,
+      storedAdjustmentType
+    )
+  );
+}
+
+/**
+ * Creates a stock adjustment voucher and its adjustment in one transaction
+ * (wave 12): the stock adjustment writers are the only creators of the stock
+ * voucher types, so the voucher, its stock document and its one-sided line
+ * commit together and the balance guard sees the stock document that exempts it.
+ */
+export async function createStockAdjustmentWithVoucher(
+  voucher: Omit<schema.InsertVoucher, "voucherType"> & { voucherType: StockAdjustmentType },
+  postingSource: PostingSourceIdentity,
+  locationId: number,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string }
+) {
+  return await db.transaction((tx) =>
+    createStockAdjustmentWithVoucherTx(tx, voucher, postingSource, locationId, notes, items, voucherHeader)
+  );
+}
+
+/**
+ * createStockAdjustmentWithVoucher in the caller's transaction (wave 15): the
+ * waste dispatch writes its dispatch rows in the same transaction as the
+ * voucher and its adjustment.
+ */
+export async function createStockAdjustmentWithVoucherTx(
+  tx: DbTransaction,
+  voucher: Omit<schema.InsertVoucher, "voucherType"> & { voucherType: StockAdjustmentType },
+  postingSource: PostingSourceIdentity,
+  locationId: number,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string }
+) {
+  const { voucher: created } = await insertInfrastructureVoucherTx(tx, voucher, postingSource, voucher);
+  const result = await createStockAdjustmentTx(
+    tx,
+    created.id,
+    locationId,
+    voucher.voucherType,
+    notes,
+    items,
+    voucherHeader
+  );
+  const [stored] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, created.id));
+  return { ...result, voucher: stored ?? result.voucher };
+}
+
+async function createStockAdjustmentTx(
+  tx: DbTransaction,
+  voucherId: number,
+  locationId: number,
+  adjustmentType: StockAdjustmentType,
+  notes: string,
+  items: StockAdjustmentInputItem[],
+  voucherHeader?: { currency?: string; voucherDate?: string; description?: string },
+  storedAdjustmentType?: string
+) {
+  {
     // Locking the voucher row serialises everyone who wants to adjust it, so the
     // duplicate check below cannot be overtaken between reading and inserting.
     const [voucher] = await tx.select().from(schema.vouchers).where(eq(schema.vouchers.id, voucherId)).for("update");
@@ -491,6 +572,7 @@ export async function createStockAdjustment(
       return account.id;
     };
 
+    // Production and consumption both post to STOCK_ADJUSTMENT.
     let adjustmentAccountId: number | null = null;
 
     if (!isOptional) {
@@ -515,71 +597,48 @@ export async function createStockAdjustment(
       let actualRate = rate;
       let actualTotalAmount = multiplyInventoryValues(absoluteQuantity, rate);
 
+      let valueMoved: Decimal | null = null;
       if (!isOptional) {
+        // Wave 11: every line moves stock through adjustInventory, so value is
+        // inventory.total_value (never rebuilt from the rounded rate), a short
+        // row holds no value and keeps a negative layer, and the line records
+        // the exact value it moved.
         const currentInventory = await lockInventoryRow(tx, locationId, item.stockItemId);
-
-        if (currentInventory) {
-          const currentQty = toInventoryDecimal(currentInventory.quantity);
-          const currentRate = toInventoryDecimal(currentInventory.average_rate);
-          let newQty;
-          let newValue;
-          let newRate;
-
-          if (isProduction) {
-            newQty = addInventoryValues(currentQty, absoluteQuantity);
-            newRate = weightedAverageInventoryCost(currentQty, currentRate, absoluteQuantity, rate);
-            newValue = multiplyInventoryValues(newQty, newRate);
-            totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
+        let incomingRate: number | undefined = isProduction ? rate.toNumber() : undefined;
+        if (!isProduction) {
+          if (currentInventory) {
+            actualRate = Decimal.max(toInventoryDecimal(currentInventory.average_rate), 0);
           } else {
-            newQty = subtractInventoryValues(currentQty, absoluteQuantity);
-            newValue = newQty.isPositive() ? multiplyInventoryValues(newQty, currentRate) : toInventoryDecimal(0);
-            newRate = currentRate;
-            actualRate = currentRate;
-            actualTotalAmount = multiplyInventoryValues(absoluteQuantity, currentRate);
-            totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
+            const [stockItem] = await tx
+              .select()
+              .from(schema.stockItems)
+              .where(eq(schema.stockItems.id, item.stockItemId));
+            if (!stockItem) throw new Error(`Stock item ${item.stockItemId} not found.`);
+            const fallbackRate = toInventoryDecimal(stockItem.openingRate);
+            if (!fallbackRate.isPositive()) throw new Error(`Stock item "${stockItem.name}" has no opening rate set.`);
+            // The opening rate is the provisional cost of the shortage.
+            actualRate = fallbackRate;
+            incomingRate = fallbackRate.toNumber();
           }
-
-          await tx
-            .update(schema.inventory)
-            .set({
-              quantity: inventoryQuantity(newQty),
-              averageRate: inventoryUnitCost(newRate),
-              totalValue: inventoryMoney(newValue),
-              lastUpdated: new Date(),
-            })
-            .where(eq(schema.inventory.id, currentInventory.id));
-        } else if (isProduction) {
-          await tx.insert(schema.inventory).values({
-            companyId: location.companyId,
-            locationId,
-            stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(absoluteQuantity),
-            averageRate: inventoryUnitCost(rate),
-            totalValue: inventoryMoney(actualTotalAmount),
-            lastUpdated: new Date(),
-          });
-          totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
-        } else {
-          const [stockItem] = await tx
-            .select()
-            .from(schema.stockItems)
-            .where(eq(schema.stockItems.id, item.stockItemId));
-          if (!stockItem) throw new Error(`Stock item ${item.stockItemId} not found.`);
-          const fallbackRate = toInventoryDecimal(stockItem.openingRate);
-          if (!fallbackRate.isPositive()) throw new Error(`Stock item "${stockItem.name}" has no opening rate set.`);
-          actualRate = fallbackRate;
-          actualTotalAmount = multiplyInventoryValues(absoluteQuantity, fallbackRate);
-          totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
-          await tx.insert(schema.inventory).values({
-            companyId: location.companyId,
-            locationId,
-            stockItemId: item.stockItemId,
-            quantity: inventoryQuantity(absoluteQuantity.negated()),
-            averageRate: inventoryUnitCost(fallbackRate),
-            totalValue: inventoryMoney(actualTotalAmount.negated()),
-            lastUpdated: new Date(),
-          });
+          actualTotalAmount = multiplyInventoryValues(absoluteQuantity, actualRate);
         }
+        const moved = await adjustInventory(
+          tx,
+          locationId,
+          item.stockItemId,
+          isProduction ? absoluteQuantity.toNumber() : absoluteQuantity.negated().toNumber(),
+          location.companyId,
+          incomingRate,
+          "Stock Adjustment",
+          voucherId
+        );
+        const delta = toInventoryDecimal(moved.valueDelta);
+        valueMoved = delta.abs();
+        // The voucher's STOCK_ADJUSTMENT lines keep the document value
+        // (quantity × rate); syncStockAdjustmentInventoryTx posts Inventory at
+        // the recorded value_moved and any difference to INVENTORY_ADJUSTMENT.
+        if (isProduction) totalProductionValue = addInventoryValues(totalProductionValue, actualTotalAmount);
+        else totalConsumptionValue = addInventoryValues(totalConsumptionValue, actualTotalAmount);
       }
 
       // Canonical evidence for the applied adjustment, on the same transaction
@@ -624,20 +683,19 @@ export async function createStockAdjustment(
           quantity: inventoryQuantity(quantity),
           rate: inventoryUnitCost(actualRate),
           totalAmount: inventoryMoney(actualTotalAmount),
+          valueMoved: valueMoved === null ? null : inventoryMoney(valueMoved),
         })
         .returning();
       adjustmentItems.push(adjustmentItem);
     }
 
     if (!isOptional) {
-      await insertStockAdjustmentLedgerEntriesTx(tx, {
-        voucherId,
-        companyId: location.companyId,
-        adjustmentAccountId,
-        adjustmentType,
-        productionValue: totalProductionValue,
-        consumptionValue: totalConsumptionValue,
-      });
+      // Production and consumption post to the same STOCK_ADJUSTMENT account: one net line.
+      const netLine = stockAdjustmentNetLine(totalProductionValue, totalConsumptionValue, adjustmentType);
+      const netValue = totalProductionValue.minus(totalConsumptionValue).abs();
+      if (netLine && shouldInsertAdjustmentVoucherEntry(netValue, adjustmentAccountId)) {
+        await tx.insert(schema.voucherEntries).values({ voucherId, ledgerAccountId: adjustmentAccountId, ...netLine });
+      }
     }
 
     const headerTotal = stockAdjustmentHeaderTotal(adjustmentType, adjustmentItems);
@@ -655,6 +713,9 @@ export async function createStockAdjustment(
 
     if (!updatedVoucher) throw new Error(`Voucher ${voucherId} not found`);
 
+    // Perpetual inventory (wave 8.3): the voucher carries the inventory side of the adjustment.
+    await syncStockAdjustmentInventoryTx(tx, voucher.companyId, voucherId);
+
     return { adjustment, items: adjustmentItems, voucher: updatedVoucher };
-  });
+  }
 }

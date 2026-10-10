@@ -7,20 +7,39 @@
  */
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { logger } from "../lib/logger";
 import { eq, and, isNull } from "drizzle-orm";
 import { db, pool } from "../db";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
 import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
 import { authorizeCompanyIdParam } from "./helpers/supplierBalanceHelpers";
-import { getClientDate } from "../lib/dateUtils";
-import { buildFactoryCustomerLedgerEntries, getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
+import { flagFutureDated, serverBusinessDate, statementWindow } from "./helpers/statementWindow";
+import { higherPriorityTargetsAbsent } from "../services/accounting/balances/partyLineRules";
+import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
+import {
+  customerLedgerNetBefore,
+  loadCustomerLedgerLines,
+  loadCustomerNotInLedger,
+} from "../services/accounting/balances/customerLedgerStatement";
 import { summarizeAccountStatementCurrency } from "../services/accounting/accountStatementCurrency";
 
+/**
+ * The statement body. Lines dated after the server's business date are
+ * flagged `futureDated` (wave 17 A); `endDate` is null when the statement
+ * lists everything posted.
+ */
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
-  return { transactions, currencySummary: summarizeAccountStatementCurrency(transactions), ...fields };
+  const businessDate = serverBusinessDate();
+  const flagged = flagFutureDated(transactions, businessDate);
+  return {
+    transactions: flagged.rows,
+    currencySummary: summarizeAccountStatementCurrency(flagged.rows),
+    ...fields,
+    endDate: fields.endDate ?? null,
+    businessDate,
+    futureDatedCount: flagged.futureDatedCount,
+  };
 }
 
 export function registerAccountTransactionRoutes(app: Express) {
@@ -33,14 +52,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid ledger account ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      // Cap the end date at today so future-dated vouchers are never shown
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // 1. Load the ledger account to get its authoritative company scope.
       //    Using ledgerAccount.companyId (not req.session.currentCompanyId) so the
@@ -59,27 +73,30 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      // 2. If this ledger is linked to a factory customer, return the unified
-      //    factory-customer ledger view (plain array — frontend handles both shapes).
-      try {
-        const linkedCust = await getCustomerByLedgerId(ledgerAccountId);
-        if (linkedCust) {
-          const company = await storage.getCompanyById(linkedCust.companyId);
-          if (company?.companyType === "factory") {
-            const entries = await buildFactoryCustomerLedgerEntries(
-              linkedCust.id,
-              ledgerAccountId,
-              linkedCust.companyId,
-              rawStart,
-              effectiveEndDate
-            );
-            return res.json(entries);
-          }
-        }
-      } catch (e) {
-        // If the factory-customer lookup fails for any reason, fall back to
-        // the regular ledger entries so the page never breaks.
-        logger.error("[ledger transactions] factory-customer lookup failed:", { error: e });
+      // 2. A ledger account linked to a customer has no balance of its own: the
+      //    balance engine rolls its lines into the customer it belongs to (the
+      //    lowest customer id linking it), whatever the company type. Return the
+      //    customer's ledger statement, with amounts not yet in the ledger in a
+      //    separate `notInLedger` section (the factory composite used to mix
+      //    finalized orders and the customer_balances cache into the rows).
+      const owner = await getCustomerByLedgerId(ledgerAccountId);
+      if (owner && owner.companyId === companyId) {
+        const window = { companyId, customerId: owner.id, from: rawStart ?? null, to: effectiveEndDate };
+        const [lines, preNetBalance, notInLedger] = await Promise.all([
+          loadCustomerLedgerLines(db, window),
+          customerLedgerNetBefore(db, companyId, owner.id, rawStart),
+          loadCustomerNotInLedger(db, window),
+        ]);
+        return res.json(
+          statementResponse(lines, {
+            preNetBalance,
+            asOfDate,
+            startDate: rawStart ?? null,
+            endDate: effectiveEndDate,
+            customerId: owner.id,
+            notInLedger,
+          })
+        );
       }
 
       // 3. Main query: period transactions capped at today
@@ -142,13 +159,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid bank account ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load account to get authoritative company scope
       const [bankAccount] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, bankAccountId));
@@ -212,13 +225,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid fixed asset ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load account to get authoritative company scope
       const [fixedAsset] = await db.select().from(fixedAssets).where(eq(fixedAssets.id, fixedAssetId));
@@ -284,13 +293,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       const requestedCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
 
@@ -303,11 +308,13 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this company" });
       }
 
+      // The supplier's own lines, as the balance engine attributes them (wave 13).
       const transactions = await storage.getVoucherEntriesBySupplier(
         supplierId,
         filterCompanyId ?? undefined,
         rawStart,
-        effectiveEndDate
+        effectiveEndDate,
+        { ownedOnly: true }
       );
 
       let preNetBalance = 0;
@@ -317,6 +324,8 @@ export function registerAccountTransactionRoutes(app: Express) {
         // company's history for this (globally shared) supplier record.
         const conditions = [
           `ve.supplier_id = $1`,
+          // The supplier's own lines, as the balance engine attributes them (wave 13).
+          higherPriorityTargetsAbsent("ve", "supplier_id"),
           `v.optional = false`,
           `v.deleted_at IS NULL`,
           `COALESCE(v.effective_date::date, v.voucher_date::date) < $2::date`,
@@ -357,13 +366,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid employee ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load employee to get authoritative company scope
       const [employee] = await db.select().from(employees).where(eq(employees.id, employeeId));
@@ -422,13 +427,9 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid customer ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // no endDate lists everything posted; future-dated lines are flagged.
+      const { rawStart, effectiveEndDate, asOfDate } = statementWindow(req);
 
       // Load customer to get authoritative company scope
       const [customer] = await db.select().from(customers).where(eq(customers.id, customerId));
@@ -441,40 +442,18 @@ export function registerAccountTransactionRoutes(app: Express) {
         return res.status(403).json({ message: "No access to this account's company" });
       }
 
-      const statement = await storage.getCustomerStatement(customerId, companyId, rawStart, effectiveEndDate);
-      // Map CustomerBalance rows to the same shape the Accounts page expects for transactions
-      const mapped = statement.map((row) => ({
-        id: row.id,
-        voucherId: row.referenceId ?? row.id,
-        voucherNumber: row.referenceType ? `${row.referenceType}-${row.referenceId}` : `CB-${row.id}`,
-        voucherType: row.transactionType,
-        voucherDate: row.transactionDate,
-        voucherDescription: row.description || "",
-        narration: row.description || "",
-        debitAmount: row.debitAmount,
-        creditAmount: row.creditAmount,
-        transactionCurrency: row.currency,
-        transactionDebitAmount: row.debitAmount,
-        transactionCreditAmount: row.creditAmount,
-        baseDebitAmount: row.currency === "USD" ? row.debitAmount : null,
-        baseCreditAmount: row.currency === "USD" ? row.creditAmount : null,
-        historicalExchangeRate: row.currency === "USD" ? "1.0000000000" : null,
-        rateConvention: row.currency === "USD" ? "IDENTITY" : null,
-        currency: row.currency,
-      }));
-
-      let preNetBalance = 0;
-      if (rawStart) {
-        const bfResult = await pool.query(
-          `SELECT COALESCE(SUM(cb.debit_amount::numeric - cb.credit_amount::numeric), 0) AS net
-           FROM customer_balances cb
-           WHERE cb.customer_id = $1
-             AND cb.company_id = $2
-             AND cb.transaction_date < $3::date`,
-          [customerId, companyId, rawStart]
-        );
-        preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
-      }
+      // The customer's ledger lines under the balance engine's rules, so
+      // opening + preNetBalance + these rows is the engine closing (the
+      // trial balance's customer row, /api/customers/stats, the voucher
+      // sidebar). Amounts not yet in the ledger (factory POS credit sales,
+      // unposted factory invoices, cache-only rows) are listed separately in
+      // `notInLedger` and never added to the rows or preNetBalance.
+      const window = { companyId, customerId, from: rawStart ?? null, to: effectiveEndDate };
+      const [mapped, preNetBalance, notInLedger] = await Promise.all([
+        loadCustomerLedgerLines(db, window),
+        customerLedgerNetBefore(db, companyId, customerId, rawStart),
+        loadCustomerNotInLedger(db, window),
+      ]);
 
       return res.json(
         statementResponse(mapped, {
@@ -482,6 +461,7 @@ export function registerAccountTransactionRoutes(app: Express) {
           asOfDate,
           startDate: rawStart ?? null,
           endDate: effectiveEndDate,
+          notInLedger,
         })
       );
     } catch (error: unknown) {

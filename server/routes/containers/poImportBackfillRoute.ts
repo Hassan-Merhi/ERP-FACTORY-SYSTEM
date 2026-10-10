@@ -1,7 +1,13 @@
-import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
+import {
+  infrastructurePostingIdentity,
+  insertInfrastructureVoucherTx,
+} from "../../services/accounting/infrastructureVoucherIdentity";
 import type { Express } from "express";
+import { purchaseOrders, voucherEntries } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 import { requireAuth } from "../../auth";
+import { db } from "../../db";
 import { storage } from "../../storage";
 import { logger } from "../../lib/logger";
 import { getErrorMessage } from "../../lib/httpHandlers";
@@ -59,44 +65,49 @@ export function registerPoImportBackfillRoute(app: Express) {
         const backfillSupplier = po.supplierId ? await storage.getSupplierById(po.supplierId) : null;
 
         // Create voucher for this PO with double-entry bookkeeping
-        const voucher = await storage.createVoucher({
-          companyId: req.session.currentCompanyId!,
-          postingSource: infrastructurePostingIdentity(
-            "po-import-backfill",
-            `${req.session.currentCompanyId!}:${po.id}`,
-            "purchase"
-          ),
-          currency: "USD",
-          voucherNumber: `PO-${po.poNumber}-BACKFILL-${Date.now()}`,
-          voucherType: "Purchase",
-          voucherDate: container.importDate,
-          description: `${container.containerNumber} ${backfillSupplier?.legalName || "Unknown Supplier"}`,
-          totalAmount: po.itemsTotal || "0",
-          optional: false,
-          sourceModule: "ERP",
-        });
+        await db.transaction(async (tx) => {
+          const voucherFields = {
+            companyId: req.session.currentCompanyId!,
+            currency: "USD",
+            voucherNumber: `PO-${po.poNumber}-BACKFILL-${Date.now()}`,
+            voucherType: "Purchase",
+            voucherDate: container.importDate,
+            description: `${container.containerNumber} ${backfillSupplier?.legalName || "Unknown Supplier"}`,
+            totalAmount: po.itemsTotal || "0",
+            optional: false,
+            sourceModule: "ERP",
+          };
+          const { voucher: created } = await insertInfrastructureVoucherTx(
+            tx,
+            voucherFields,
+            infrastructurePostingIdentity(
+              "po-import-backfill",
+              `${req.session.currentCompanyId!}:${po.id}`,
+              "purchase"
+            ),
+            voucherFields,
+            { replaceEntriesOnReplay: false }
+          );
 
-        // Debit: Purchases account (Expense increases)
-        await storage.createVoucherEntry({
-          voucherId: voucher.id,
-          ledgerAccountId: purchasesAccount.id,
-          debitAmount: po.itemsTotal || "0",
-          creditAmount: "0",
-          narration: `PO ${po.poNumber} - Container ${container.containerNumber} (Backfilled)`,
-        });
+          // Debit: Purchases account (Expense increases)
+          await tx.insert(voucherEntries).values({
+            voucherId: created.id,
+            ledgerAccountId: purchasesAccount.id,
+            debitAmount: po.itemsTotal || "0",
+            creditAmount: "0",
+            narration: `PO ${po.poNumber} - Container ${container.containerNumber} (Backfilled)`,
+          });
 
-        // Credit: Supplier account (Accounts Payable increases)
-        await storage.createVoucherEntry({
-          voucherId: voucher.id,
-          supplierId: po.supplierId,
-          debitAmount: "0",
-          creditAmount: po.itemsTotal || "0",
-          narration: `PO ${po.poNumber} - Container ${container.containerNumber} (Backfilled)`,
-        });
-
-        // Update PO with voucher ID
-        await storage.updatePurchaseOrder(po.id, {
-          voucherId: voucher.id,
+          // Credit: Supplier account (Accounts Payable increases)
+          await tx.insert(voucherEntries).values({
+            voucherId: created.id,
+            supplierId: po.supplierId,
+            debitAmount: "0",
+            creditAmount: po.itemsTotal || "0",
+            narration: `PO ${po.poNumber} - Container ${container.containerNumber} (Backfilled)`,
+          });
+          // The PO's voucher link commits with the voucher (wave 7).
+          await tx.update(purchaseOrders).set({ voucherId: created.id }).where(eq(purchaseOrders.id, po.id));
         });
 
         backfilledCount++;

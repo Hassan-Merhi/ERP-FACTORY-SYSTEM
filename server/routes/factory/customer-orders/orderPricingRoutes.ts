@@ -18,6 +18,7 @@ import {
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+import { syncFactoryInvoiceTx } from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderPricingRoutes(app: Express) {
   app.post("/api/factory/customer-orders/:id/reprice", requireAuth, async (req: Request, res: Response) => {
@@ -150,6 +151,8 @@ export function registerOrderPricingRoutes(app: Express) {
           })
           .where(eq(customerBalances.id, existingLedgerEntry.id));
       }
+      // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+      await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
       const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
       const updatedLines = await db.select().from(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
@@ -273,6 +276,8 @@ export function registerOrderPricingRoutes(app: Express) {
           .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
           .where(eq(customerBalances.id, existingLedgerEntry.id));
       }
+      // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+      await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
       const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
       const updatedLines = await db.select().from(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
@@ -381,6 +386,8 @@ export function registerOrderPricingRoutes(app: Express) {
             .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
         const updatedBales = await db.select().from(customerOrderBales).where(eq(customerOrderBales.orderId, orderId));
         const updatedLines = await db.select().from(customerOrderLines).where(eq(customerOrderLines.orderId, orderId));
@@ -457,6 +464,8 @@ export function registerOrderPricingRoutes(app: Express) {
             .set({ debitAmount: newGrandTotal, balance: newGrandTotal })
             .where(eq(customerBalances.id, existingLedgerEntry.id));
         }
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await db.transaction((tx) => syncFactoryInvoiceTx(tx, companyId, orderId));
 
         res.json(updatedOrder);
       } catch (error: unknown) {

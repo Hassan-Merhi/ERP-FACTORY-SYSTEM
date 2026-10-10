@@ -9,12 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard } from "lucide-react";
+import { Plus, ChevronRight, RefreshCw, Trash2, ClipboardList, CreditCard, BookCheck } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 import { PageHeader } from "@/components/PageHeader";
 import { useAppMode } from "@/contexts/AppModeContext";
 import { useErpPhoneLayout } from "@/hooks/use-erp-phone-layout";
+import { authenticatedUserQueryOptions } from "@/contracts/sessionQueryContracts";
 
 import type { CashAccount, Props, Unit } from "./property-rental/types";
 import { fmtMoney, fmtMoneyCurrency } from "./property-rental/utils";
@@ -102,6 +103,29 @@ export default function PropertyRentalPage({
     },
   });
 
+  // Wave 18 A: the units page no longer posts on load. Due scheduled payments and
+  // accruals post from the daily job; Admin/Owner can post them now (same code
+  // path, dated by the company's business date, audited).
+  const { data: currentUser } = useQuery(authenticatedUserQueryOptions());
+  const currentRole = currentUser?.currentRole ?? currentUser?.role ?? "";
+  const canPostDue = currentRole === "Admin" || currentRole === "Owner" || currentRole === "Developer";
+  const postDue = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", apiBase + "/accruals/post-due");
+      return (await res.json()) as { accrued: number; scheduledPaymentsPosted: number; skipped: unknown[] };
+    },
+    onSuccess: (result) => {
+      toast({
+        title: "Due rent posted",
+        description: `Rows accrued: ${result.accrued}; scheduled payments posted: ${result.scheduledPaymentsPosted}; skipped (closed period): ${result.skipped.length}`,
+      });
+      queryClient.invalidateQueries({ queryKey: [apiBase + "/units"] });
+    },
+    onError: (e: ClientErrorLike) => {
+      toast({ title: "Could not post due accruals", description: e.message, variant: "destructive" });
+    },
+  });
+
   const deleteUnit = useMutation({
     mutationFn: (id: number) => apiRequest("DELETE", `${apiBase}/units/${id}`),
     onSuccess: () => {
@@ -181,6 +205,13 @@ export default function PropertyRentalPage({
             disabled: runMonthly.isPending,
             testId: `button-${testIdPrefix}-run-monthly`,
           },
+          canPostDue && {
+            label: "Post due accruals now",
+            icon: BookCheck,
+            onSelect: () => postDue.mutate(),
+            disabled: postDue.isPending,
+            testId: `button-${testIdPrefix}-post-due`,
+          },
           contractedUnits.length > 0 && {
             label: selectedContractIds.size === contractedUnits.length ? "Clear selection" : "Select all",
             onSelect: toggleSelectAll,
@@ -220,6 +251,18 @@ export default function PropertyRentalPage({
         <RefreshCw className={`h-4 w-4 mr-1 ${runMonthly.isPending ? "animate-spin" : ""}`} />
         Run Monthly Update
       </Button>
+      {canPostDue && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => postDue.mutate()}
+          disabled={postDue.isPending}
+          data-testid={`button-${testIdPrefix}-post-due`}
+        >
+          <BookCheck className="h-4 w-4 mr-1" />
+          Post due accruals now
+        </Button>
+      )}
       <Button onClick={() => setCreateUnitOpen(true)} size="sm" data-testid={`button-${testIdPrefix}-add-unit`}>
         <Plus className="h-4 w-4 mr-1" />
         {unitType === "WAREHOUSE" ? "Add Warehouse" : "Add Shop"}

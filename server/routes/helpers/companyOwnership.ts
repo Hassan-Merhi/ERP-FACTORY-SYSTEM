@@ -8,7 +8,7 @@
  * backstop rather than the application's check.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { ledgerAccounts, locations, stockItems } from "@shared/schema";
+import { customers, ledgerAccounts, locations, stockItems } from "@shared/schema";
 import { db } from "../../db";
 
 /**
@@ -121,4 +121,16 @@ export async function allLedgerAccountsOwned(
     .where(and(eq(ledgerAccounts.companyId, companyId), inArray(ledgerAccounts.id, ids)));
   const owned = new Set(rows.map((row) => row.id));
   return ids.every((id) => owned.has(id));
+}
+
+/** True when `customerId` is absent or a canonical id of a customer of `companyId`. */
+export async function isCompanyCustomerOrAbsent(companyId: number, customerId: unknown): Promise<boolean> {
+  const ids = strictIds([customerId]);
+  if (ids === null) return false;
+  if (ids.length === 0) return true;
+  const rows = await db
+    .select({ id: customers.id })
+    .from(customers)
+    .where(and(eq(customers.companyId, companyId), inArray(customers.id, ids)));
+  return rows.length === ids.length;
 }

@@ -248,16 +248,19 @@ export function auditPhase3Accounting(input: Phase3AccountingAuditInput): Phase3
     }
 
     if (expectation === "single-sided") {
+      // Under perpetual inventory the voucher carries its inventory line too,
+      // so both sides posted is valid when they are equal.
       const debitPosted = !baseDebit.isZero();
       const creditPosted = !baseCredit.isZero();
-      if (debitPosted === creditPosted) {
+      const perpetualBalanced = debitPosted && creditPosted && baseDebit.eq(baseCredit);
+      if (debitPosted === creditPosted && !perpetualBalanced) {
         addIssue(
           issues,
           "vouchers",
           identity,
           "SINGLE_SIDED_VOUCHER_INVALID",
-          "exactly one ledger side",
-          debitPosted ? "both ledger sides" : "no ledger side"
+          "exactly one ledger side, or both equal",
+          debitPosted ? "both ledger sides, unequal" : "no ledger side"
         );
       }
       continue;

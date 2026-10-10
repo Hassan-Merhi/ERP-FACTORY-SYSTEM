@@ -22,11 +22,16 @@ import {
   subtractInventoryValues,
   toInventoryDecimal,
 } from "../../../lib/inventoryMath";
+import type Decimal from "decimal.js";
+import { MoneyDecimal } from "../../../lib/money";
+import { relievedValue } from "../../accounting/perpetualInventory/saleCogs";
 
 export interface RebuildSaleItemsResult {
   grandTotal: number;
   totalSupplierCostEdit: number;
   totalQtySoldEdit: number;
+  /** The exact value the rebuilt sale took out of inventory (its COGS). */
+  relieved: Decimal;
 }
 
 export async function rebuildSaleItems(
@@ -49,6 +54,7 @@ export async function rebuildSaleItems(
   );
   let grandTotal = toInventoryDecimal(0);
   let totalSupplierCostEdit = toInventoryDecimal(0);
+  let relieved: Decimal = new MoneyDecimal(0);
   let totalQtySoldEdit = toInventoryDecimal(0);
   const issueOrdinalByStockItem = new Map<number, number>();
 
@@ -96,6 +102,16 @@ export async function rebuildSaleItems(
       .limit(1);
     const configuredPrice = toInventoryDecimal(editLocPrice?.sellingPrice);
 
+    const issued = await adjustInventory(
+      tx,
+      targetLocationId,
+      stockItemId,
+      sellQty.negated().toNumber(),
+      companyId,
+      undefined,
+      "pos-sale",
+      voucherId
+    );
     await tx.insert(salesItems).values({
       voucherId,
       stockItemId,
@@ -106,18 +122,11 @@ export async function rebuildSaleItems(
       totalCost: inventoryMoney(totalCost),
       profit: inventoryMoney(profit),
       configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
+      // Wave 11: the exact value the issue relieved, what a reversal restores.
+      valueMoved: inventoryMoney(relievedValue(issued)),
     });
 
-    await adjustInventory(
-      tx,
-      targetLocationId,
-      stockItemId,
-      sellQty.negated().toNumber(),
-      companyId,
-      undefined,
-      "pos-sale",
-      voucherId
-    );
+    relieved = relieved.plus(relievedValue(issued));
 
     if (canonicalRevision !== undefined && !sellQty.isZero()) {
       const issueOrdinal = (issueOrdinalByStockItem.get(stockItemId) ?? 0) + 1;
@@ -152,5 +161,6 @@ export async function rebuildSaleItems(
     grandTotal: grandTotal.toNumber(),
     totalSupplierCostEdit: totalSupplierCostEdit.toNumber(),
     totalQtySoldEdit: totalQtySoldEdit.toNumber(),
+    relieved,
   };
 }

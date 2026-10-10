@@ -26,6 +26,8 @@ export function isClosedPeriodError(error: unknown): boolean {
 }
 
 const LOCK_DETAIL = /closed through (\d{4}-\d{2}-\d{2}), so an entry dated (\d{4}-\d{2}-\d{2})/;
+/** The opening-balance lock's text (services/accounting/openingBalanceLock.ts, wave 12). */
+const OPENING_LOCK_DETAIL = /closed through (\d{4}-\d{2}-\d{2}), so an opening balance cannot/;
 
 /**
  * HTTP mapping for routes: 409 Conflict. The message is rebuilt from the two
@@ -39,6 +41,17 @@ export function closedPeriodErrorResponse(
   let current: unknown = error;
   for (let depth = 0; depth < 4 && current; depth += 1) {
     const candidate = errorField(current, "message");
+    const opening = typeof candidate === "string" ? candidate.match(OPENING_LOCK_DETAIL) : null;
+    if (opening) {
+      const [, closedThrough] = opening;
+      return {
+        status: 409,
+        body: {
+          message: `Accounting period closed: the books are closed through ${closedThrough}, so an opening balance cannot be created or changed. Post an adjusting journal dated after the closed period instead.`,
+          code: "ACCOUNTING_PERIOD_CLOSED",
+        },
+      };
+    }
     const detail = typeof candidate === "string" ? candidate.match(LOCK_DETAIL) : null;
     if (detail) {
       const [, closedThrough, entryDate] = detail;

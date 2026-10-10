@@ -8,6 +8,7 @@ import type { Express, Request, Response } from "express";
 import { logger } from "../../lib/logger";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
+import { inventoryCutoverRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { requireAuth, requireRole } from "../../auth";
 import { sql } from "drizzle-orm";
 import {
@@ -130,6 +131,10 @@ export function registerSpMigrationStockRoutes(app: Express) {
       }
       const depError = await requireCompletedMigrationAction(sourceId, targetId, "gc_stock_opening");
       if (depError) return res.status(409).json({ message: depError });
+      // Wave 11: writing opening stock with no journal is refused once the
+      // target company has its perpetual-inventory cut-over applied.
+      const inventoryRefusal = await inventoryCutoverRefusal(db, targetId, "sp-migration-stock-opening");
+      if (inventoryRefusal) return res.status(inventoryRefusal.status).json(inventoryRefusal.body);
 
       const runId = await logRun(
         sourceId,

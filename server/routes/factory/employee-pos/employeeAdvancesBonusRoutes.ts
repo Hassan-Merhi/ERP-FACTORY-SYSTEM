@@ -8,6 +8,7 @@ import { ledgerAccounts, voucherEntries, employees, factoryWorkers, vouchers } f
 import { eq, and, sql } from "drizzle-orm";
 import { findOrCreateLedger } from "../../payroll/core/_helpers";
 import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerEmployeeAdvancesBonusRoutes(app: Express) {
   app.get("/api/factory/employee-advances", requireAuth, async (req: Request, res: Response) => {
@@ -191,32 +192,35 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
 
       const voucherNumber = `EMP-BON-${Date.now()}`;
       const desc = notes || `Bonus for ${emp.firstName} ${emp.lastName}`;
-      const [voucher] = await db
-        .insert(vouchers)
-        .values({
-          companyId,
-          voucherNumber,
-          voucherType: "Journal",
-          voucherDate: bonusDate,
-          description: desc,
-          totalAmount: moneyString(amt),
-        })
-        .returning();
+      const voucher = await db.transaction(async (tx) => {
+        const [voucher] = await tx
+          .insert(vouchers)
+          .values({
+            companyId,
+            voucherNumber,
+            voucherType: "Journal",
+            voucherDate: bonusDate,
+            description: desc,
+            totalAmount: moneyString(amt),
+          })
+          .returning();
 
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: payrollExpenseAccount.id,
-        debitAmount: moneyString(amt),
-        creditAmount: "0",
-        narration: desc,
-      });
-      await db.insert(voucherEntries).values({
-        voucherId: voucher.id,
-        ledgerAccountId: null,
-        employeeId: parseInt(employeeId),
-        debitAmount: "0",
-        creditAmount: moneyString(amt),
-        narration: desc,
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: payrollExpenseAccount.id,
+          debitAmount: moneyString(amt),
+          creditAmount: "0",
+          narration: desc,
+        });
+        await tx.insert(voucherEntries).values({
+          voucherId: voucher.id,
+          ledgerAccountId: null,
+          employeeId: parseInt(employeeId),
+          debitAmount: "0",
+          creditAmount: moneyString(amt),
+          narration: desc,
+        });
+        return voucher;
       });
 
       const newBalance = toMoney(emp.currentBalance).plus(moneyString(amt));
@@ -271,8 +275,13 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
           sql`DELETE FROM employee_bonuses WHERE id = ${parseInt(req.params.id)} AND company_id = ${companyId}`
         );
         if (bonus.voucher_id) {
-          await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${bonus.voucher_id}`);
-          await tx.execute(sql`DELETE FROM vouchers WHERE id = ${bonus.voucher_id}`);
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds: [Number(bonus.voucher_id)],
+            reason: "employee-bonus-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
       });
       res.json({ message: "Bonus deleted and reversed" });
@@ -455,10 +464,13 @@ export function registerEmployeeAdvancesBonusRoutes(app: Express) {
         const voucherRows = await tx.execute(
           sql`SELECT id FROM vouchers WHERE company_id = ${companyId} AND voucher_number LIKE ${"WBONUS-" + id + "-%"}`
         );
-        for (const v of voucherRows.rows) {
-          await tx.execute(sql`DELETE FROM voucher_entries WHERE voucher_id = ${v.id}`);
-          await tx.execute(sql`DELETE FROM vouchers WHERE id = ${v.id}`);
-        }
+        // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+        await retireVouchersTx(tx, {
+          companyId,
+          voucherIds: voucherRows.rows.map((v) => Number(v.id)),
+          reason: "worker-bonus-delete",
+          actor: sessionRetirementActor(req),
+        });
 
         await tx.execute(sql`DELETE FROM worker_bonuses WHERE id = ${id} AND company_id = ${companyId}`);
       });

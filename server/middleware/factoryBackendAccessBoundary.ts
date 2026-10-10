@@ -304,11 +304,10 @@ export function resolveFactoryBackendAccessRequirement(req: Request): FactoryApi
     path === "/admin-verify" ||
     path === "/import-company-data" ||
     path === "/export-company-data" ||
-    path === "/migrate-voucher-descriptions" ||
-    path === "/payroll/migrate-city-split" ||
-    path === "/payroll/migrate-worker-names" ||
-    path === "/payroll/migrate-salary-groups" ||
-    path === "/bales/backfill-costs" ||
+    // The reviewed bale/mix re-cost (preview and Owner apply, wave 11) is a cost
+    // repair like /repair-perkg-prices; the retired /bales/backfill-costs (410)
+    // now falls to the Bales parent below.
+    hasPrefix(path, "/bale-cost") ||
     path === "/bilingual-snapshots/backfill" ||
     path === "/bilingual-snapshots/diagnose" ||
     (hasPrefix(path, "/settings") && isWrite(req)) ||

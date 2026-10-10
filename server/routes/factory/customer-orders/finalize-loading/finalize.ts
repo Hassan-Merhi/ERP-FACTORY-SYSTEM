@@ -30,6 +30,10 @@ import {
 import { eq, and, sql, inArray } from "drizzle-orm";
 import { firstRow } from "../../../../lib/queryResult";
 import { freezeCanonicalInvoiceDocument } from "../../../../services/factoryInvoiceDocumentService";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 import { toMoney } from "../../../../lib/money";
 
 export function registerOrderFinalizeRoutes(app: Express) {
@@ -245,6 +249,9 @@ export function registerOrderFinalizeRoutes(app: Express) {
           }
         }
 
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, orderId);
+
         const [finalOrder] = await tx
           .select({
             id: customerOrders.id,
@@ -329,6 +336,8 @@ export function registerOrderFinalizeRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed rate is refused (nothing committed).
+      if (error instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(error.body);
       logger.error("Error finalizing order:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
     }

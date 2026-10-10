@@ -22,6 +22,10 @@ import {
 import { getCompanyId } from "./_helpers";
 import { acquireProformaCapacityTransactionLock } from "../customer-orders/proformaCapacityConcurrency";
 import { firstRow, resultRows } from "../../../lib/queryResult";
+import {
+  FactoryInvoiceRateRefusalError,
+  syncFactoryInvoiceTx,
+} from "../../../services/accounting/perpetualInventory/factoryInvoice";
 
 type RawProformaLineRow = { article_code: string; quantity: number };
 
@@ -384,6 +388,9 @@ export function registerDispatchInvoiceRoutes(app: Express) {
           VALUES (${companyId}, ${batch.customer_id}, ${orderDate}, 'SALE', 'INVOICE', ${orderId}, ${grandTotal.toFixed(2)}, '0', ${grandTotal.toFixed(2)}, ${batch.currency || "USD"}, ${"Invoice " + invoiceNumber}, now())
         `);
 
+        // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+        await syncFactoryInvoiceTx(tx, companyId, Number(orderId));
+
         // 12. Update batch: INVOICED + finalOrderId
         await tx.execute(sql`
           UPDATE customer_dispatch_batches
@@ -451,6 +458,8 @@ export function registerDispatchInvoiceRoutes(app: Express) {
 
       res.status(201).json({ ok: true, ...result });
     } catch (err: unknown) {
+      // Wave 17 B: a non-USD invoice with no confirmed factory rate on or before its date is refused.
+      if (err instanceof FactoryInvoiceRateRefusalError) return res.status(409).json(err.body);
       const msg = getErrorMessage(err) || "";
       const is400 =
         msg.includes("not found") ||

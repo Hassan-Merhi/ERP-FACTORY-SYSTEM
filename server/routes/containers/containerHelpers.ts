@@ -86,16 +86,39 @@ interface SyncIntercoResult {
   oldAmount?: string;
 }
 
+type IntercoFreightOpts = {
+  freightAmount: MoneyInput;
+  freightParentAccountId: number;
+  subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
+};
+
 export async function syncIntercoParentVoucher(
   dbOrTx: DatabaseOrTransaction,
   poNumbers: string | string[],
   grossTotal: MoneyInput,
   containerNumber?: string,
-  freightOpts?: {
-    freightAmount: MoneyInput;
-    freightParentAccountId: number;
-    subsidiaryCompanyId?: number; // needed for fallback freight journal when no INTERCO-PARENT exists
+  freightOpts?: IntercoFreightOpts
+): Promise<SyncIntercoResult> {
+  // A voucher's entry rewrites must commit together (balanced-voucher check runs at COMMIT).
+  if ("rollback" in dbOrTx) {
+    return syncIntercoParentVoucherOn(dbOrTx, poNumbers, grossTotal, containerNumber, freightOpts);
   }
+  try {
+    return await dbOrTx.transaction((tx) =>
+      syncIntercoParentVoucherOn(tx, poNumbers, grossTotal, containerNumber, freightOpts)
+    );
+  } catch (err) {
+    logger.error("[syncIntercoParentVoucher] Error syncing parent INTERCO voucher:", { error: err });
+    return { found: false, updated: false, amount: toMoney(grossTotal).toFixed(2) };
+  }
+}
+
+async function syncIntercoParentVoucherOn(
+  dbOrTx: DatabaseOrTransaction,
+  poNumbers: string | string[],
+  grossTotal: MoneyInput,
+  containerNumber?: string,
+  freightOpts?: IntercoFreightOpts
 ): Promise<SyncIntercoResult> {
   // Amounts stay exact: numeric(20, 2) totals above about 10^15 have no cents left as numbers.
   const gross = toMoney(grossTotal);

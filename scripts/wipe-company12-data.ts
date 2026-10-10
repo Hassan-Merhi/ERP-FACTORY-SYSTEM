@@ -29,7 +29,7 @@ const ROOTS = [
   "customer_order_expected_lines",
   "customer_balances",
   "customer_invoice_sequences",
-  "audit_log",
+  // audit_log is append-only (wave 12): its rows are never wiped.
   "login_history",
   "user_activity_log",
   "user_presence",

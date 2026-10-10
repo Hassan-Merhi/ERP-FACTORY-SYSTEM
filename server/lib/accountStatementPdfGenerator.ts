@@ -8,26 +8,23 @@
 
 import { db } from "../db";
 import { storage } from "../storage";
-import {
-  ledgerAccounts,
-  bankAccounts,
-  fixedAssets,
-  suppliers,
-  customers,
-  employees,
-  vouchers,
-  voucherEntries,
-} from "@shared/schema";
-import { eq, and, isNull, sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { ledgerAccounts, bankAccounts, fixedAssets, customers, employees } from "@shared/schema";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { eq, and } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { sumMoney, toMoney } from "./money";
-import {
-  buildFactoryCustomerLedgerEntries,
-  getCustomerByLedgerId,
-  getFactoryCustomerLedgerPrePeriodTotals,
-} from "./factoryCustomerLedger";
-import { isParentCompanyContext } from "../routes/helpers/supplierBalanceHelpers";
+import { getCustomerByLedgerId } from "./factoryCustomerLedger";
+import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
+import { loadCustomerLedgerLines } from "../services/accounting/balances/customerLedgerStatement";
+
+/** The account is not a master of this company (wave 18 C): the route answers 404. */
+export class StatementAccountNotFoundError extends Error {
+  readonly status = 404;
+  constructor(accountType: string, accountId: number) {
+    super(`Account not found: ${accountType} ${accountId}`);
+    this.name = "StatementAccountNotFoundError";
+  }
+}
 
 export interface StatementPdfOptions {
   accountType: string;
@@ -53,6 +50,16 @@ interface StatementSourceEntry {
   narration: string | null;
   debitAmount: string | null;
   creditAmount: string | null;
+}
+
+/** The customer's ledger lines (balance engine rules) as statement rows. */
+async function customerStatementEntries(
+  companyId: number,
+  customerId: number,
+  startDate: string | undefined,
+  endDate: string | undefined
+): Promise<StatementSourceEntry[]> {
+  return loadCustomerLedgerLines(db, { companyId, customerId, from: startDate ?? null, to: endDate ?? null });
 }
 
 export async function generateAccountStatementPdf(opts: StatementPdfOptions): Promise<Buffer> {
@@ -139,156 +146,116 @@ export async function generateAccountStatementPdf(opts: StatementPdfOptions): Pr
   const isSupplier = accountType === "supplier";
 
   // ── 1. Fetch raw entries ──
+  // Wave 18 C: every master is read with the company check (a supplier also
+  // when this company posted to it), every list holds this company's vouchers
+  // by COALESCE(effective_date, voucher_date) and only the lines the balance
+  // engine attributes to the account, so opening + lines foots to the engine.
   let rawEntries: StatementSourceEntry[];
   let accountName: string;
-  let rawOB: number;
-  let obSide: string;
+
+  // A customer, or a ledger account a customer owns, is the customer's ledger
+  // statement on the balance engine: the lines the engine attributes to the
+  // customer, opened at the engine's period opening.
+  let customerOwnerId: number | null = null;
+  if (accountType === "customer") {
+    customerOwnerId = accountId;
+  } else if (accountType === "ledger") {
+    const owner = await getCustomerByLedgerId(accountId);
+    if (owner && owner.companyId === companyId) customerOwnerId = owner.id;
+  }
 
   if (accountType === "ledger") {
-    const [acct] = await db.select().from(ledgerAccounts).where(eq(ledgerAccounts.id, accountId));
-    accountName = acct?.name ?? "Ledger Account";
-    const [linkedCust] = await db
-      .select({
-        id: customers.id,
-        companyId: customers.companyId,
-        openingBalance: customers.openingBalance,
-        openingBalanceSide: customers.openingBalanceSide,
-      })
-      .from(customers)
-      .where(eq(customers.ledgerAccountId, accountId))
-      .limit(1);
-    rawOB = toMoney(linkedCust?.openingBalance ?? acct?.openingBalance).toNumber();
-    obSide = linkedCust?.openingBalanceSide ?? acct?.openingBalanceSide ?? "Dr";
-
-    let useFactoryView = false;
-    if (linkedCust) {
-      const company = await storage.getCompanyById(linkedCust.companyId);
-      if (company?.companyType === "factory") useFactoryView = true;
-    }
-    if (useFactoryView && linkedCust) {
-      rawEntries = await buildFactoryCustomerLedgerEntries(
-        linkedCust.id,
-        accountId,
-        linkedCust.companyId,
-        startDate,
-        endDate
-      );
-    } else {
-      rawEntries = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
-    }
-  } else if (accountType === "bank") {
-    rawEntries = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate);
-    const [acct] = await db.select().from(bankAccounts).where(eq(bankAccounts.id, accountId));
-    accountName = acct?.name ?? "Bank Account";
-    rawOB = toMoney(acct?.openingBalance).toNumber();
-    obSide = acct?.openingBalanceSide ?? "Dr";
-  } else if (accountType === "fixed-asset") {
-    rawEntries = await storage.getVoucherEntriesByFixedAsset(accountId, startDate, endDate);
-    const [acct] = await db.select().from(fixedAssets).where(eq(fixedAssets.id, accountId));
-    accountName = acct?.name ?? "Fixed Asset";
-    rawOB = toMoney(acct?.openingBalance).toNumber();
-    obSide = "Dr";
-  } else if (accountType === "supplier") {
-    rawEntries = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate);
-    const [acct] = await db.select().from(suppliers).where(eq(suppliers.id, accountId));
-    accountName = acct?.legalName ?? "Supplier";
-    // The supplier opening balance only belongs to the explicitly configured
-    // parent company's books — never guessed via "lowest company ID".
-    const isParentForSupplier = await isParentCompanyContext(companyId);
-    rawOB = isParentForSupplier ? toMoney(acct?.openingBalance).toNumber() : 0;
-    obSide = "Cr";
-  } else if (accountType === "employee") {
-    rawEntries = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate);
     const [acct] = await db
-      .select({
-        firstName: employees.firstName,
-        lastName: employees.lastName,
-        openingBalance: employees.openingBalance,
-      })
+      .select({ name: ledgerAccounts.name })
+      .from(ledgerAccounts)
+      .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
+    if (!acct) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = acct.name ?? "Ledger Account";
+    rawEntries = customerOwnerId
+      ? await customerStatementEntries(companyId, customerOwnerId, startDate, endDate)
+      : await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
+  } else if (accountType === "bank") {
+    const [acct] = await db
+      .select({ name: bankAccounts.name })
+      .from(bankAccounts)
+      .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
+    if (!acct) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = acct.name ?? "Bank Account";
+    rawEntries = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId, {
+      ownedOnly: true,
+    });
+  } else if (accountType === "fixed-asset") {
+    const [acct] = await db
+      .select({ name: fixedAssets.name })
+      .from(fixedAssets)
+      .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
+    if (!acct) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = acct.name ?? "Fixed Asset";
+    rawEntries = await storage.getVoucherEntriesByFixedAsset(accountId, startDate, endDate, companyId, {
+      ownedOnly: true,
+    });
+  } else if (accountType === "supplier") {
+    const [acct] = await db
+      .select({ legalName: companyScopedSuppliers.legalName, companyId: companyScopedSuppliers.companyId })
+      .from(companyScopedSuppliers)
+      .where(eq(companyScopedSuppliers.id, accountId));
+    // A supplier of another company is shown only when this company posted to it.
+    const postedHere =
+      acct && acct.companyId && acct.companyId !== companyId
+        ? (await getPartyBalance(db, { companyId, kind: "supplier", id: accountId })) !== null
+        : true;
+    if (!acct || !postedHere) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = acct.legalName ?? "Supplier";
+    rawEntries = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate, {
+      ownedOnly: true,
+    });
+  } else if (accountType === "employee") {
+    const [acct] = await db
+      .select({ firstName: employees.firstName, lastName: employees.lastName })
       .from(employees)
-      .where(eq(employees.id, accountId));
-    accountName = acct ? `${acct.firstName} ${acct.lastName}` : "Employee";
-    rawOB = toMoney(acct?.openingBalance).toNumber();
-    obSide = "Cr";
+      .where(and(eq(employees.id, accountId), eq(employees.companyId, companyId)));
+    if (!acct) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = `${acct.firstName} ${acct.lastName}`;
+    rawEntries = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate, {
+      ownedOnly: true,
+    });
   } else if (accountType === "customer") {
-    const customerStmt = await storage.getCustomerStatement(accountId, companyId, startDate, endDate);
-    rawEntries = customerStmt.map((row) => ({
-      voucherId: row.referenceId ?? row.id,
-      voucherNumber: row.referenceType ? `${row.referenceType}-${row.referenceId}` : `CB-${row.id}`,
-      voucherType: row.transactionType,
-      voucherDate: row.transactionDate,
-      voucherDescription: row.description || "",
-      narration: row.description || "",
-      debitAmount: row.debitAmount,
-      creditAmount: row.creditAmount,
-    }));
-    const [acct] = await db.select().from(customers).where(eq(customers.id, accountId));
-    accountName = acct?.legalName ?? "Customer";
-    rawOB = toMoney(acct?.openingBalance).toNumber();
-    obSide = "Dr";
+    const [acct] = await db
+      .select({ legalName: customers.legalName })
+      .from(customers)
+      .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
+    if (!acct) throw new StatementAccountNotFoundError(accountType, accountId);
+    accountName = acct.legalName ?? "Customer";
+    rawEntries = await customerStatementEntries(companyId, accountId, startDate, endDate);
   } else {
     throw new Error(`Unknown account type: ${accountType}`);
   }
 
-  // ── 2. Opening balance (pre-period if startDate given) ──
-  let openingBalanceExact: Decimal = toMoney(isSupplier ? rawOB : obSide === "Cr" ? -rawOB : rawOB);
-
-  if (startDate) {
-    let factoryPrePeriodApplied = false;
-    if (accountType === "ledger") {
-      const linkedCust = await getCustomerByLedgerId(accountId);
-      if (linkedCust) {
-        const company = await storage.getCompanyById(linkedCust.companyId);
-        if (company?.companyType === "factory") {
-          const tot = await getFactoryCustomerLedgerPrePeriodTotals(
-            linkedCust.id,
-            accountId,
-            linkedCust.companyId,
-            startDate
-          );
-          openingBalanceExact = openingBalanceExact.plus(tot.debit).minus(tot.credit);
-          factoryPrePeriodApplied = true;
-        }
-      }
-    }
-
-    const typeToColumn: Record<string, AnyPgColumn | undefined> = {
-      bank: voucherEntries.bankAccountId,
-      "fixed-asset": voucherEntries.fixedAssetId,
-      supplier: voucherEntries.supplierId,
-      employee: voucherEntries.employeeId,
-      customer: voucherEntries.customerId,
-    };
-    if (accountType === "ledger" && !factoryPrePeriodApplied) {
-      typeToColumn.ledger = voucherEntries.ledgerAccountId;
-    }
-    const col = typeToColumn[accountType];
-    if (col) {
-      // Suppliers and ledger accounts are scoped to this company's own
-      // vouchers only to prevent cross-company entries from skewing the
-      // pre-period opening balance.
-      const scopeCondition = isSupplier || accountType === "ledger" ? eq(vouchers.companyId, companyId) : sql`true`;
-      const [tot] = await db
-        .select({
-          d: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}),0)`,
-          c: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}),0)`,
-        })
-        .from(voucherEntries)
-        .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(
-          and(
-            eq(col, accountId),
-            eq(vouchers.optional, false),
-            isNull(vouchers.deletedAt),
-            sql`${vouchers.voucherDate} < ${startDate}`,
-            scopeCondition
-          )
-        );
-      const d = toMoney(tot?.d);
-      const c = toMoney(tot?.c);
-      openingBalanceExact = isSupplier ? openingBalanceExact.plus(c).minus(d) : openingBalanceExact.plus(d).minus(c);
-    }
-  }
+  // ── 2. Opening balance: the balance engine's period opening ──
+  // The master's opening with the engine's side rule (a sideless opening takes
+  // its account type's usual side: a ledger by its type, an employee or
+  // supplier Cr, a bank, fixed asset or customer Dr) plus the lines the engine
+  // attributes to the account before startDate — the on-screen statement's
+  // pre-period balance. Suppliers run Cr positive, every other family Dr.
+  const engineKind = customerOwnerId
+    ? "customer"
+    : (
+        {
+          ledger: "ledger",
+          bank: "bank",
+          "fixed-asset": "fixedAsset",
+          supplier: "supplier",
+          employee: "employee",
+        } as const
+      )[accountType as "ledger" | "bank" | "fixed-asset" | "supplier" | "employee"];
+  const party = await getPartyBalance(db, {
+    companyId,
+    kind: engineKind,
+    id: customerOwnerId ?? accountId,
+    from: startDate ?? null,
+  });
+  const engineOpening = toMoney(party?.opening);
+  const openingBalanceExact: Decimal = isSupplier ? engineOpening.negated() : engineOpening;
 
   const openingBalance = openingBalanceExact.toNumber();
 

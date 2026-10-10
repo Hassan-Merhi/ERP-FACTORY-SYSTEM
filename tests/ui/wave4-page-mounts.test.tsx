@@ -118,7 +118,6 @@ const PAGES: PageCase[] = [
   },
   { name: "StockItemVouchers", load: () => import("@/pages/StockItemVouchers"), landmark: "period-filter" },
   { name: "StockTransfers", load: () => import("@/pages/StockTransfers"), landmark: "period-filter-dropdown" },
-  { name: "TestDataImport", load: () => import("@/pages/TestDataImport"), landmark: "input-test-date" },
   { name: "TransporterStatement", load: () => import("@/pages/TransporterStatement"), landmark: "trigger-transporter" },
   { name: "TabSummary", load: () => import("@/pages/git-mockup/TabSummary"), landmark: "summary-mode-selector" },
   {

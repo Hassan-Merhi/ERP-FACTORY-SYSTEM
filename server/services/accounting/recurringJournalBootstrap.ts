@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { vouchers } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
-import { runWithDatabaseMaintenanceScope } from "../security/databaseScopeRuntimeContext";
+import { runInCompanyPostingScope } from "./scheduledPostingScope";
 import { upsertRecurringJournalFromVoucher } from "./recurringJournalService";
 
 const BOOTSTRAP_COMPANY_ID_ENV = "RECURRING_JOURNAL_BOOTSTRAP_COMPANY_ID";
@@ -36,7 +36,9 @@ export async function bootstrapRecurringJournalFromEnvironment(): Promise<void> 
   const timezone = process.env[BOOTSTRAP_TIMEZONE_ENV]?.trim() || "UTC";
 
   try {
-    await runWithDatabaseMaintenanceScope("startup:recurring-journal-bootstrap", async () => {
+    // Phase 19 (B): in the named company's tenant scope (never maintenance), so
+    // the closed-period guard applies to whatever the recurring service writes.
+    await runInCompanyPostingScope(companyId, async () => {
       const [voucher] = await db
         .select({
           id: vouchers.id,

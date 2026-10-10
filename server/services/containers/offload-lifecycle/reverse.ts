@@ -1,50 +1,70 @@
+import Decimal from "decimal.js";
 import type { DbTransaction } from "../../../db";
 import { and, eq, sql } from "drizzle-orm";
 import { reverseInventoryByExactValue } from "../../../inventoryHelper";
 import * as schema from "@shared/schema";
-import { deleteInfrastructurePostingIdentityForVoucherTx } from "../../accounting/infrastructureVoucherIdentity";
+import { retireVouchersTx } from "../../accounting/voucherRetirement";
 import { createDatabaseStockMovementAdapter } from "../../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../inventory/stockMovementIntegrityService";
 
-import { amount, buildItemMap } from "./types";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+
+import { buildItemMap } from "./types";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
-async function deleteVoucherWithEntries(tx: DbTransaction, voucherId: number): Promise<void> {
-  // The voucher row and its durable posting identity must be retired together.
-  // Otherwise a later re-offload replays a marker that points at a deleted
-  // voucher and the accounting writer either blocks or rebuilds against stale
-  // state instead of creating the new duties/transport/etc. posting.
-  await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-  await tx.delete(schema.voucherEntries).where(eq(schema.voucherEntries.voucherId, voucherId));
-  await tx.delete(schema.vouchers).where(eq(schema.vouchers.id, voucherId));
+async function deleteVoucherWithEntries(tx: DbTransaction, companyId: number, voucherId: number): Promise<void> {
+  // Wave 16 (A): retired — soft-deleted with its lines, audited, its number and
+  // durable posting identity released together, so a later re-offload posts a
+  // new identity generation instead of replaying the old marker.
+  await retireVouchersTx(tx, { companyId, voucherIds: [voucherId], reason: "container-offload-reversed" });
 }
 
+/**
+ * Reverses an offload's stock and removes its vouchers and record. Returns the
+ * signed change of the stock sub-ledger it made (the sum of the reversals'
+ * valueDelta), for the pre-cut-over movement journal (wave 15, C1).
+ */
 export async function reverseExistingOffload(
   tx: DbTransaction,
   container: typeof schema.containers.$inferSelect,
   existingOffload: typeof schema.containerOffloads.$inferSelect,
   lineItems: Array<{ stockItemId: number; quantity: string; rate: string }>
-): Promise<void> {
+): Promise<Decimal> {
+  let subLedgerDelta: Decimal = new MoneyDecimal(0);
   const storedItems = await tx
     .select()
     .from(schema.containerOffloadItems)
     .where(eq(schema.containerOffloadItems.offloadId, existingOffload.id));
   const occurredAt = new Date().toISOString();
 
+  // The stock comes back out at exactly the value the offload moved into the
+  // sub-ledger (value_moved; the line value on a legacy line), so the
+  // sub-ledger and the stock-in journal (removed with the offload) agree.
+  // The company is passed so a reversal that takes the row short records its
+  // negative layer.
   if (storedItems.length > 0) {
     for (const item of storedItems) {
-      const quantity = amount(item.quantity);
-      const totalValue = amount(item.totalValue);
-      await reverseInventoryByExactValue(tx, existingOffload.locationId, item.stockItemId, quantity, totalValue);
+      const quantity = toMoney(item.quantity);
+      const totalValue = toMoney(item.valueMoved ?? item.totalValue);
+      const reversed = await reverseInventoryByExactValue(
+        tx,
+        existingOffload.locationId,
+        item.stockItemId,
+        quantity.toNumber(),
+        totalValue.toFixed(2),
+        container.companyId,
+        `container-offload-reverse:${existingOffload.id}`
+      );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
       await postStockMovementTx(
         tx,
         {
           companyId: container.companyId,
           stockItemId: item.stockItemId,
           kind: "adjustment",
-          quantity: String(quantity),
-          unitCost: String(quantity > 0 ? Math.max(totalValue / quantity, 0) : 0),
+          quantity: quantity.toString(),
+          unitCost: quantity.gt(0) ? Decimal.max(totalValue.dividedBy(quantity), 0).toDecimalPlaces(6).toString() : "0",
           fromLocationId: existingOffload.locationId,
           occurredAt,
           source: {
@@ -58,25 +78,32 @@ export async function reverseExistingOffload(
       );
     }
   } else {
-    const legacyAdditionalCost = amount(existingOffload.additionalCostPerBale);
+    const legacyAdditionalCost = toMoney(existingOffload.additionalCostPerBale);
     const legacyItems = buildItemMap(lineItems);
     for (const [stockItemId, item] of legacyItems) {
-      const estimatedValue = item.weightedRateSum + item.totalQuantity * legacyAdditionalCost;
-      await reverseInventoryByExactValue(
+      const estimatedValue = item.weightedRateSum
+        .plus(item.totalQuantity.times(legacyAdditionalCost))
+        .toDecimalPlaces(2);
+      const reversed = await reverseInventoryByExactValue(
         tx,
         existingOffload.locationId,
         stockItemId,
-        item.totalQuantity,
-        estimatedValue
+        item.totalQuantity.toNumber(),
+        estimatedValue.toFixed(2),
+        container.companyId,
+        `container-offload-reverse:${existingOffload.id}`
       );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
       await postStockMovementTx(
         tx,
         {
           companyId: container.companyId,
           stockItemId,
           kind: "adjustment",
-          quantity: String(item.totalQuantity),
-          unitCost: String(item.totalQuantity > 0 ? Math.max(estimatedValue / item.totalQuantity, 0) : 0),
+          quantity: item.totalQuantity.toString(),
+          unitCost: item.totalQuantity.gt(0)
+            ? Decimal.max(estimatedValue.dividedBy(item.totalQuantity), 0).toDecimalPlaces(6).toString()
+            : "0",
           fromLocationId: existingOffload.locationId,
           occurredAt,
           source: {
@@ -119,7 +146,7 @@ export async function reverseExistingOffload(
     );
 
   for (const voucher of localVouchers) {
-    await deleteVoucherWithEntries(tx, voucher.id);
+    await deleteVoucherWithEntries(tx, container.companyId, voucher.id);
   }
 
   const parentAgentVouchers = await tx
@@ -132,8 +159,9 @@ export async function reverseExistingOffload(
       )
     );
   for (const voucher of parentAgentVouchers) {
-    await deleteVoucherWithEntries(tx, voucher.id);
+    await deleteVoucherWithEntries(tx, 1, voucher.id);
   }
 
   await tx.delete(schema.containerOffloads).where(eq(schema.containerOffloads.id, existingOffload.id));
+  return subLedgerDelta;
 }

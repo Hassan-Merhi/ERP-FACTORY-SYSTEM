@@ -93,6 +93,8 @@ function assertStoredIdentityMatches(input: {
  * still build voucher entries themselves. The durable identity lives in the
  * same accounting_posting_requests table used by the Phase 2 central engine.
  *
+ * A replay whose voucher was deleted is refused (POSTING_SOURCE_VOUCHER_DELETED).
+ *
  * Transaction-owned writers default to replace-in-transaction on replay: the
  * same voucher row is reused, old entry rows are cleared, and the caller's
  * existing code rebuilds them. If rebuilding fails, rollback restores the old
@@ -141,15 +143,17 @@ export async function insertInfrastructureVoucherTx(
       .where(and(eq(vouchers.id, Number(marker.voucherId)), eq(vouchers.companyId, companyId)))
       .limit(1);
 
-    // A reversal/correction may intentionally retire the old voucher while an
-    // older code path leaves the durable idempotency marker behind. Replaying
-    // that marker must never attach fresh entries to a soft-deleted voucher or
-    // permanently block because the old voucher was hard-deleted. Retire only
-    // the stale marker here; the caller then creates a fresh active voucher and
-    // marker in the same transaction. Active vouchers keep strict replay and
-    // payload-conflict protection below.
+    // Wave 16 (A): a replay of a request whose voucher was deleted returns
+    // nothing new: the request is refused, so an old request replayed after a
+    // delete cannot post the voucher again. The marker used to be dropped
+    // here and the voucher re-posted. A deliberate re-post (a rebuild) first
+    // retires the old voucher through voucherRetirement.ts, which releases
+    // this marker, so the rebuild is a new identity generation.
     if (!existing || existing.deletedAt) {
-      await tx.delete(accountingPostingRequests).where(eq(accountingPostingRequests.id, marker.id));
+      throw new PostingValidationError(
+        "POSTING_SOURCE_VOUCHER_DELETED",
+        `Idempotency key ${source.idempotencyKey} was posted as a voucher that has since been deleted; it is not posted again`
+      );
     } else {
       // Historical failed infrastructure writes can leave a voucher shell and
       // durable idempotency marker behind with zero voucher entries. A corrected

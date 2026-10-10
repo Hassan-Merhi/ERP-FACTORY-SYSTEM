@@ -6,6 +6,10 @@ import { db } from "../../db";
 import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
+import {
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { storage } from "../../storage";
 import type { VoucherEntryInsertFields } from "../../services/accounting/accountingTypes";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
@@ -95,6 +99,17 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
     if (blockedVoucherReason) {
       res.status(403).json({ message: blockedVoucherReason });
       return;
+    }
+
+    // Phase 19 C (MC-2): an intercompany transfer leg is not edited here or on
+    // the legacy route this one falls through to (409): the transfer is deleted
+    // (both legs) and recorded again. This editor changed one leg and left the
+    // other company's voucher and the link as they were.
+    try {
+      await assertNotIntercompanyTransferLeg(voucherId);
+    } catch (legError: unknown) {
+      if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+      throw legError;
     }
 
     const body = req.body as CentralPaymentReceiptBody;
@@ -211,11 +226,45 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         newTotal: updatedVoucher.totalAmount,
       });
 
+      // Wave 16 (B): the edit replaces the voucher's lines (delete and
+      // re-insert, the legacy edit contract). The before and after lines are
+      // audited in this transaction, so a failed audit rolls the edit back.
+      const oldSnapshot = await snapshotVoucherEntries(oldEntries, tx);
+      const newSnapshot = await snapshotVoucherEntries(createdEntries, tx);
+      await logAudit(
+        {
+          userId: userId!,
+          username: req.session.username || "unknown",
+          companyId,
+          action: "update",
+          tableName: "vouchers",
+          recordId: voucherId,
+          recordIdentifier: updatedVoucher.voucherNumber,
+          changes: buildVoucherChangesForUpdate(
+            {
+              voucherType: lockedVoucher.voucherType,
+              voucherDate: lockedVoucher.voucherDate,
+              totalAmount: lockedVoucher.totalAmount,
+              description: lockedVoucher.description,
+              optional: lockedVoucher.optional,
+            },
+            {
+              voucherType: updatedVoucher.voucherType,
+              voucherDate: updatedVoucher.voucherDate,
+              totalAmount: updatedVoucher.totalAmount,
+              description: updatedVoucher.description,
+              optional: updatedVoucher.optional,
+            },
+            oldSnapshot,
+            newSnapshot
+          ),
+        },
+        tx
+      );
+
       return {
         voucher: updatedVoucher,
         entries: createdEntries,
-        oldEntries,
-        existingVoucher: lockedVoucher,
       };
     });
 
@@ -239,40 +288,6 @@ async function updateActivePaymentReceipt(req: Request, res: Response, next: Nex
         voucherId,
         error,
       });
-    }
-
-    try {
-      const oldSnapshot = await snapshotVoucherEntries(result.oldEntries);
-      const newSnapshot = await snapshotVoucherEntries(result.entries);
-      await logAudit({
-        userId: userId!,
-        username: req.session.username || "unknown",
-        companyId,
-        action: "update",
-        tableName: "vouchers",
-        recordId: voucherId,
-        recordIdentifier: result.voucher.voucherNumber,
-        changes: buildVoucherChangesForUpdate(
-          {
-            voucherType: result.existingVoucher.voucherType,
-            voucherDate: result.existingVoucher.voucherDate,
-            totalAmount: result.existingVoucher.totalAmount,
-            description: result.existingVoucher.description,
-            optional: result.existingVoucher.optional,
-          },
-          {
-            voucherType: result.voucher.voucherType,
-            voucherDate: result.voucher.voucherDate,
-            totalAmount: result.voucher.totalAmount,
-            description: result.voucher.description,
-            optional: result.voucher.optional,
-          },
-          oldSnapshot,
-          newSnapshot
-        ),
-      });
-    } catch {
-      // Voucher rows and employee effects are already transactionally consistent.
     }
 
     logger.info("central Payment/Receipt update succeeded", {

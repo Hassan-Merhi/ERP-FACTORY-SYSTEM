@@ -12,6 +12,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryMixBatches, factoryMixBatchSources, factoryDailyUsages } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
+import { toMoney } from "../../../lib/money";
 
 export function registerFactoryMixBatchConsumeRoutes(app: Express) {
   app.post("/api/factory/mix-batches/consume", requireAuth, async (req: Request, res: Response) => {
@@ -52,11 +53,15 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
             .for("update");
           if (!batch) throw new Error(`Batch ${batchId} not found`);
 
-          const total = parseFloat(batch.totalWeightKg) || 0;
-          const alreadyUsed = parseFloat(batch.usedKg) || 0;
-          const remaining = total - alreadyUsed;
+          // Decimal arithmetic (wave 11): the carry-forward batch takes exactly
+          // the leftover kg at exactly the closed batch's cost per kg, so
+          // carrying a mix forward does not change the factory valuation (the
+          // float path drifted it, and the drift landed in production variance).
+          const total = toMoney(batch.totalWeightKg);
+          const remaining = total.minus(toMoney(batch.usedKg));
+          const used = toMoney(kgUsed);
 
-          if (kgUsed > remaining + 0.001) {
+          if (used.gt(remaining.plus("0.001"))) {
             throw new Error(
               `Cannot consume ${kgUsed} kg from batch ${batch.batchCode}: only ${remaining.toFixed(3)} kg remaining`
             );
@@ -72,7 +77,7 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
             notes: notes || null,
           });
 
-          const isFullyConsumed = kgUsed >= remaining - 0.001;
+          const isFullyConsumed = used.gte(remaining.minus("0.001"));
 
           if (isFullyConsumed) {
             await tx
@@ -81,13 +86,14 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
               .where(eq(factoryMixBatches.id, batchId));
             results.push({ batchId, action: "closed", carryForwardId: null });
           } else {
-            const leftoverKg = remaining - kgUsed;
-            const costPerKg = parseFloat(batch.costPerKg) || 0;
-            const leftoverCost = leftoverKg * costPerKg;
+            // total_weight_kg holds 3dp.
+            const leftoverKg = remaining.minus(used).toDecimalPlaces(3);
+            const costPerKg = toMoney(batch.costPerKg);
+            const leftoverCost = leftoverKg.times(costPerKg);
 
             await tx
               .update(factoryMixBatches)
-              .set({ usedKg: String(total), status: "CLOSED", updatedAt: now })
+              .set({ usedKg: batch.totalWeightKg, status: "CLOSED", updatedAt: now })
               .where(eq(factoryMixBatches.id, batchId));
 
             const year = new Date().getFullYear();
@@ -115,9 +121,9 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
                 batchCode: newBatchCode,
                 batchNumber: newBatchCode,
                 name: batch.name || null,
-                totalWeightKg: String(leftoverKg),
-                costPerKg: String(costPerKg),
-                totalCost: String(leftoverCost),
+                totalWeightKg: leftoverKg.toFixed(3),
+                costPerKg: costPerKg.toFixed(),
+                totalCost: leftoverCost.toFixed(),
                 notes: batch.notes || null,
                 operatorUser: operatorUser || batch.operatorUser || null,
                 batchDate: usedDate || null,
@@ -131,7 +137,7 @@ export function registerFactoryMixBatchConsumeRoutes(app: Express) {
               action: "carry_forward",
               carryForwardId: cfBatch.id,
               carryForwardCode: cfBatch.batchCode,
-              leftoverKg,
+              leftoverKg: leftoverKg.toNumber(),
             });
           }
         }

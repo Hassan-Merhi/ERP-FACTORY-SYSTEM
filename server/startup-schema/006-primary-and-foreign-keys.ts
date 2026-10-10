@@ -248,11 +248,11 @@ export const primaryAndForeignKeys: string[] = [
   // The sweep is idempotent — once enforced by the FK, no rows will ever match the WHERE again.
   `DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM migrations_log WHERE key = 'orphan-factory-supplier-id-sweep-v1') THEN
-        UPDATE voucher_entries SET factory_supplier_id = NULL WHERE factory_supplier_id IS NOT NULL AND factory_supplier_id NOT IN (SELECT id FROM factory_suppliers);
+        -- Wave 16 (A): no longer clears factory_supplier_id on posted lines; the key below is NOT VALID.
         INSERT INTO migrations_log(key) VALUES ('orphan-factory-supplier-id-sweep-v1');
       END IF;
     END $$`,
-  `DO $$ BEGIN ALTER TABLE voucher_entries ADD CONSTRAINT voucher_entries_factory_supplier_id_fkey FOREIGN KEY (factory_supplier_id) REFERENCES factory_suppliers(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+  `DO $$ BEGIN ALTER TABLE voucher_entries ADD CONSTRAINT voucher_entries_factory_supplier_id_fkey FOREIGN KEY (factory_supplier_id) REFERENCES factory_suppliers(id) ON DELETE RESTRICT NOT VALID; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 
   // ── F-Phase 4g (May 2026) — cash_account_id columns → ledger_accounts ──
   // No `cash_accounts` table exists; these 12 dangling cash_account_id (and 1 paid_from_account_id) columns all really point to ledger_accounts (444 rows).
@@ -278,7 +278,7 @@ export const primaryAndForeignKeys: string[] = [
   // RESTRICT on all — HR/payroll/audit history; deleting an employee with payroll/advances/bonuses/attendance must be blocked.
   `DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM migrations_log WHERE key = 'orphan-employee-id-sweep-v1') THEN
-        UPDATE voucher_entries SET employee_id = NULL WHERE employee_id IS NOT NULL AND employee_id NOT IN (SELECT id FROM employees);
+        -- Wave 16 (A): no longer clears employee_id on posted lines; the key below is NOT VALID.
         INSERT INTO migrations_log(key) VALUES ('orphan-employee-id-sweep-v1');
       END IF;
     END $$`,
@@ -292,7 +292,7 @@ export const primaryAndForeignKeys: string[] = [
   `DO $$ BEGIN ALTER TABLE erp_payroll_run_items ADD CONSTRAINT erp_payroll_run_items_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
   `DO $$ BEGIN ALTER TABLE erp_worker_docs ADD CONSTRAINT erp_worker_docs_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
   `DO $$ BEGIN ALTER TABLE salary_advances ADD CONSTRAINT salary_advances_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
-  `DO $$ BEGIN ALTER TABLE voucher_entries ADD CONSTRAINT voucher_entries_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
+  `DO $$ BEGIN ALTER TABLE voucher_entries ADD CONSTRAINT voucher_entries_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE RESTRICT NOT VALID; EXCEPTION WHEN duplicate_object THEN NULL; END $$;`,
 
   // ── F-Phase 4i (May 2026) — vouchers long-tail FKs (11 clean + 1 sweep) ──
   // vouchers has 3,787 rows (ids 28–5416); 12 of 13 candidate child columns clean. purchase_orders.voucher_id had 3 orphans (ids 56/57/104 → missing voucher_ids 67/68/120, all PO-36 from Nov 2025) — defensive sweep NULLs them.
@@ -405,7 +405,10 @@ export const primaryAndForeignKeys: string[] = [
   //   This is the same pattern used for bales.erp_location_id in F-Phase 4b.
   // Idempotent: ALTER guarded by EXCEPTION duplicate_object. NOT VALID preserves chat_messages orphans.
   `DO $$ BEGIN ALTER TABLE agent_accounts ADD CONSTRAINT agent_accounts_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL;  END $$;`,
-  `DO $$ BEGIN ALTER TABLE audit_log ADD CONSTRAINT audit_log_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL;  END $$;`,
+  // Wave 12: audit_log outlives the company it describes (append-only, and an
+  // empty company's deletion keeps its audit rows), so it carries no foreign key
+  // to companies; any earlier constraint is dropped.
+  `ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_company_id_fkey`,
   `DO $$ BEGIN ALTER TABLE bale_label_prints ADD CONSTRAINT bale_label_prints_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL;  END $$;`,
   `DO $$ BEGIN ALTER TABLE bale_product_categories ADD CONSTRAINT bale_product_categories_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL;  END $$;`,
   `DO $$ BEGIN ALTER TABLE bale_products ADD CONSTRAINT bale_products_company_id_fkey FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT; EXCEPTION WHEN duplicate_object THEN NULL;  END $$;`,
@@ -469,7 +472,7 @@ export const primaryAndForeignKeys: string[] = [
   `ALTER TABLE factory_fx_rates ADD COLUMN IF NOT EXISTS source VARCHAR(10) NOT NULL DEFAULT 'auto'`,
   `DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM migrations_log WHERE key = 'accrued-rent-soft-delete-v1') THEN
-        UPDATE ledger_accounts SET deleted_at = NOW() WHERE (name ILIKE '%Accrued Rent Payable%' OR code = 'ACCR-RENT-PAY') AND deleted_at IS NULL;
+        -- Wave 16 (A): no longer soft-deletes accounts by name at boot (one with history would leave every report).
         INSERT INTO migrations_log(key) VALUES ('accrued-rent-soft-delete-v1');
       END IF;
     END $$`,

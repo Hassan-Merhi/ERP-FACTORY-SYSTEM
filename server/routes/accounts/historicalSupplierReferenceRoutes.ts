@@ -2,11 +2,12 @@ import type { Express } from "express";
 import { pool } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import { getClientDate } from "../../lib/dateUtils";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getAccessibleCompanyIds } from "../../security/companyAccessBoundary";
 import { summarizeAccountStatementCurrency } from "../../services/accounting/accountStatementCurrency";
-import { authorizeCompanyIdParam, isParentCompanyContext } from "../helpers/supplierBalanceHelpers";
+import { higherPriorityTargetsAbsent } from "../../services/accounting/balances/partyLineRules";
+import { authorizeCompanyIdParam, getSupplierBalanceForContext } from "../helpers/supplierBalanceHelpers";
+import { flagFutureDated, statementWindow } from "../helpers/statementWindow";
 
 /**
  * A row on a supplier statement: either a real voucher entry, or one of the
@@ -16,7 +17,6 @@ import { authorizeCompanyIdParam, isParentCompanyContext } from "../helpers/supp
  */
 type SupplierTransactionRow = Awaited<ReturnType<typeof storage.getVoucherEntriesBySupplier>>[number];
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HISTORICAL_REFERENCE_TYPE = "Historical PO Reference";
 
 function statementResponse(transactions: unknown[], fields: Record<string, unknown>) {
@@ -47,6 +47,16 @@ function searchableEntryText(entry: {
  * changed. Modern imports are excluded because their child voucher no longer has
  * a supplier credit, and any PO that already has a parent counterpart is also
  * excluded.
+ *
+ * Wave 14 (one supplier rule, the posting company): the statement lists the
+ * lines the balance engine attributes to the supplier in the company read
+ * (partyLineRules ownership: a supplier-tagged line on a ledger account, bank
+ * or fixed asset is that account's line), the brought-forward balance counts
+ * the same lines, and the response carries the engine's opening with its side
+ * (counted only in the supplier's own company) and period opening. The child
+ * PO references are added when the company read has linked children
+ * (companies.parent_company_id); the global parentCompanyId setting no longer
+ * decides anything here.
  */
 export function registerHistoricalSupplierReferenceRoutes(app: Express) {
   app.get("/api/accounts/supplier/:id/transactions", requireAuth, async (req, res) => {
@@ -56,12 +66,12 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid supplier ID" });
       }
 
-      const asOfDate = getClientDate(req);
-      const rawStart =
-        typeof req.query.startDate === "string" && ISO_DATE.test(req.query.startDate) ? req.query.startDate : undefined;
-      const rawEnd =
-        typeof req.query.endDate === "string" && ISO_DATE.test(req.query.endDate) ? req.query.endDate : undefined;
-      const effectiveEndDate = rawEnd && rawEnd < asOfDate ? rawEnd : asOfDate;
+      // One end-date rule with the balance engine (wave 17 A, statementWindow.ts):
+      // an explicit endDate cuts the statement; without one it lists
+      // everything posted, like the supplier's balance, and flags the lines
+      // dated after the server's business date. It used to stop at the
+      // client's today, so the statement did not foot to the balance.
+      const { rawStart, effectiveEndDate, asOfDate, businessDate } = statementWindow(req);
 
       const requestedCompanyId = req.query.companyId ? parseInt(req.query.companyId as string) : undefined;
       const filterCompanyId = await authorizeCompanyIdParam(req, requestedCompanyId);
@@ -79,11 +89,12 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
         supplierId,
         filterCompanyId,
         rawStart,
-        effectiveEndDate
+        effectiveEndDate,
+        { ownedOnly: true }
       );
       const transactions: SupplierTransactionRow[] = [...baseTransactions];
 
-      if (filterCompanyId && (await isParentCompanyContext(filterCompanyId)) && req.session.userId) {
+      if (filterCompanyId && req.session.userId) {
         const accessibleCompanyIds = await getAccessibleCompanyIds(req.session.userId);
         const allCompanies = await storage.getAllCompanies();
         const linkedChildren = allCompanies.filter(
@@ -95,7 +106,7 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
         for (const child of linkedChildren) {
           const [purchaseOrders, childSupplierEntries] = await Promise.all([
             storage.getPurchaseOrdersBySupplier(supplierId, child.id),
-            storage.getVoucherEntriesBySupplier(supplierId, child.id, rawStart, effectiveEndDate),
+            storage.getVoucherEntriesBySupplier(supplierId, child.id, rawStart, effectiveEndDate, { ownedOnly: true }),
           ]);
 
           const entriesByVoucher = new Map<number, typeof childSupplierEntries>();
@@ -182,6 +193,7 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
            JOIN vouchers v ON ve.voucher_id = v.id
            WHERE v.company_id = $3
              AND ve.supplier_id = $1
+             AND ${higherPriorityTargetsAbsent("ve", "supplier_id")}
              AND v.optional = false
              AND v.deleted_at IS NULL
              AND COALESCE(v.effective_date::date, v.voucher_date::date) < $2::date`,
@@ -190,12 +202,29 @@ export function registerHistoricalSupplierReferenceRoutes(app: Express) {
         preNetBalance = parseFloat(bfResult.rows[0]?.net ?? "0");
       }
 
+      // The engine's opening (its side, the supplier's own company only) and
+      // period opening for the same window.
+      const supplier = await storage.getSupplierById(supplierId);
+      const engine =
+        supplier && !(rawStart && effectiveEndDate && rawStart > effectiveEndDate)
+          ? await getSupplierBalanceForContext(supplier, filterCompanyId, {
+              startDate: rawStart,
+              endDate: effectiveEndDate,
+            })
+          : null;
+
+      const flagged = flagFutureDated(transactions, businessDate);
       return res.json(
-        statementResponse(transactions, {
+        statementResponse(flagged.rows, {
+          openingBalance: engine?.openingBalance ?? 0,
+          openingBalanceSide: engine?.openingBalanceSide ?? "Cr",
+          periodOpeningBalance: engine?.periodOpeningBalance ?? 0,
           preNetBalance,
           asOfDate,
           startDate: rawStart ?? null,
-          endDate: effectiveEndDate,
+          endDate: effectiveEndDate ?? null,
+          businessDate,
+          futureDatedCount: flagged.futureDatedCount,
         })
       );
     } catch (error: unknown) {

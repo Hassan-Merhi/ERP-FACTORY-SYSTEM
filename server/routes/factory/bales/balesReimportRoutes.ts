@@ -12,7 +12,9 @@ import { toArrayBuffer } from "../../../lib/bufferCompatibility";
 import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireRole } from "../../../auth";
+import { writeAuditEvent } from "../../../services/audit/auditService";
+import { assertStockImportAllowedTx, sendStockImportRefusal } from "../../../services/factory/stockImportPolicy";
 
 import { adjustInventory } from "../../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
@@ -22,373 +24,455 @@ import {
   factoryCategories,
   factoryBaleProducts,
   factoryBales,
+  factoryBaleImportBatches,
+  factoryMixBatches,
   stockItems,
   stockGroups,
   locations,
 } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, gt, inArray, isNull } from "drizzle-orm";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export function registerBalesReimportRoutes(app: Express) {
-  app.post("/api/factory/bales/reimport", requireAuth, async (req: Request, res: Response) => {
-    const multer = (await import("multer")).default;
-    const upload = multer({ storage: multer.memoryStorage() });
-    upload.single("file")(req, res, async (err: string) => {
-      if (err) return res.status(400).json({ message: "File upload error" });
-      if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  // Wave 18 C (owner decision): a spreadsheet creates stock value with no
+  // journal, so the reimport is Admin/Owner only (Developer passes), refused
+  // once the perpetual cut-over is applied, and audited in its transaction; its
+  // bales belong to an import batch the readiness report lists at the
+  // spreadsheet's cost (stockImportPolicy.ts).
+  app.post(
+    "/api/factory/bales/reimport",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req: Request, res: Response) => {
+      const multer = (await import("multer")).default;
+      const upload = multer({ storage: multer.memoryStorage() });
+      upload.single("file")(req, res, async (err: string) => {
+        if (err) return res.status(400).json({ message: "File upload error" });
+        if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
-      try {
-        const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-        if (!companyId) return res.status(400).json({ message: "No company selected" });
+        try {
+          const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
+          if (!companyId) return res.status(400).json({ message: "No company selected" });
 
-        const ExcelJS = (await import("exceljs")).default;
-        const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(toArrayBuffer(req.file.buffer));
-        const sheet = workbook.getWorksheet(1);
-        if (!sheet) return res.status(400).json({ message: "No worksheet found in file" });
+          const ExcelJS = (await import("exceljs")).default;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(toArrayBuffer(req.file.buffer));
+          const sheet = workbook.getWorksheet(1);
+          if (!sheet) return res.status(400).json({ message: "No worksheet found in file" });
 
-        const headers: string[] = [];
-        sheet.getRow(1).eachCell((cell, colNumber) => {
-          headers[colNumber] = String(cell.value || "")
-            .trim()
-            .toLowerCase();
-        });
-
-        const refIdx = headers.findIndex((h) => h.includes("reference"));
-        const articleIdx = headers.findIndex((h) => h.includes("article"));
-        const nameIdx = headers.findIndex((h) => h.includes("product name"));
-        const catIdx = headers.findIndex((h) => h.includes("category"));
-        const weightIdx = headers.findIndex((h) => h.includes("weight"));
-        const costPerKgIdx = headers.findIndex((h) => h.includes("cost per kg"));
-        const totalCostIdx = headers.findIndex((h) => h.includes("total cost"));
-        const locIdIdx = headers.findIndex((h) => h.includes("location id"));
-        const statusIdx = headers.findIndex((h) => h.includes("status"));
-        const mixBatchIdx = headers.findIndex((h) => h.includes("mix batch"));
-        const baleCodeIdx = headers.findIndex((h) => h.includes("bale code"));
-        const gradeIdx = headers.findIndex((h) => h.includes("grade"));
-        const finalizedIdx = headers.findIndex((h) => h.includes("finalized"));
-
-        if (refIdx < 0 || nameIdx < 0 || weightIdx < 0) {
-          return res
-            .status(400)
-            .json({ message: "Excel must have at least: Reference Number, Product Name, Weight (kg) columns" });
-        }
-
-        type BaleImportRow = {
-          referenceNumber: string;
-          articleCode: string;
-          productName: string;
-          category: string;
-          weightKg: string;
-          costPerKg: string;
-          totalCost: string;
-          erpLocationId: number | null;
-          status: string;
-          mixBatchId: number | null;
-          baleCode: string;
-          grade: string;
-          finalizedAt: string;
-        };
-        const rows: BaleImportRow[] = [];
-        const fileRefSet = new Set<string>();
-        const fileDuplicates: string[] = [];
-
-        sheet.eachRow((row, rowNumber) => {
-          if (rowNumber === 1) return;
-          const refNum = String(row.getCell(refIdx + 1).value || "").trim();
-          if (!refNum) return;
-
-          if (fileRefSet.has(refNum)) {
-            fileDuplicates.push(refNum);
-          }
-          fileRefSet.add(refNum);
-
-          rows.push({
-            referenceNumber: refNum,
-            articleCode: articleIdx >= 0 ? String(row.getCell(articleIdx + 1).value || "").trim() : "",
-            productName: nameIdx >= 0 ? String(row.getCell(nameIdx + 1).value || "").trim() : "",
-            category: catIdx >= 0 ? String(row.getCell(catIdx + 1).value || "").trim() : "",
-            weightKg: weightIdx >= 0 ? String(parseFloat(String(row.getCell(weightIdx + 1).value || "0")) || "0") : "0",
-            costPerKg:
-              costPerKgIdx >= 0 ? String(parseFloat(String(row.getCell(costPerKgIdx + 1).value || "0")) || "0") : "0",
-            totalCost:
-              totalCostIdx >= 0 ? String(parseFloat(String(row.getCell(totalCostIdx + 1).value || "0")) || "0") : "0",
-            erpLocationId: locIdIdx >= 0 ? parseInt(String(row.getCell(locIdIdx + 1).value || "0")) || null : null,
-            status: statusIdx >= 0 ? String(row.getCell(statusIdx + 1).value || "IN_STOCK").trim() : "IN_STOCK",
-            mixBatchId: mixBatchIdx >= 0 ? parseInt(String(row.getCell(mixBatchIdx + 1).value || "0")) || null : null,
-            baleCode: baleCodeIdx >= 0 ? String(row.getCell(baleCodeIdx + 1).value || "").trim() : "",
-            grade: gradeIdx >= 0 ? String(row.getCell(gradeIdx + 1).value || "").trim() : "",
-            finalizedAt: finalizedIdx >= 0 ? String(row.getCell(finalizedIdx + 1).value || "").trim() : "",
+          // 0-based, so the indexes below are getCell(index + 1). (Keyed by the
+          // 1-based column number, the array had a hole at 0 and every
+          // findIndex threw; the lookups were also one column off.)
+          const headers: string[] = [];
+          sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            headers[colNumber - 1] = String(cell.value || "")
+              .trim()
+              .toLowerCase();
           });
-        });
 
-        if (rows.length === 0) {
-          return res.status(400).json({ message: "No bale rows found in Excel" });
-        }
+          const refIdx = headers.findIndex((h) => h.includes("reference"));
+          const articleIdx = headers.findIndex((h) => h.includes("article"));
+          const nameIdx = headers.findIndex((h) => h.includes("product name"));
+          const catIdx = headers.findIndex((h) => h.includes("category"));
+          const weightIdx = headers.findIndex((h) => h.includes("weight"));
+          const costPerKgIdx = headers.findIndex((h) => h.includes("cost per kg"));
+          const totalCostIdx = headers.findIndex((h) => h.includes("total cost"));
+          const locIdIdx = headers.findIndex((h) => h.includes("location id"));
+          const statusIdx = headers.findIndex((h) => h.includes("status"));
+          const mixBatchIdx = headers.findIndex((h) => h.includes("mix batch"));
+          const baleCodeIdx = headers.findIndex((h) => h.includes("bale code"));
+          const gradeIdx = headers.findIndex((h) => h.includes("grade"));
+          const finalizedIdx = headers.findIndex((h) => h.includes("finalized"));
 
-        if (fileDuplicates.length > 0) {
-          return res.status(400).json({
-            message: `Duplicate reference numbers within the file: ${fileDuplicates.slice(0, 10).join(", ")}`,
-          });
-        }
-
-        const result = await db.transaction(async (tx) => {
-          const existingBarcodes = await tx
-            .select({ referenceNumber: factoryBales.referenceNumber })
-            .from(factoryBales)
-            .where(eq(factoryBales.companyId, companyId));
-          const existingRefSet = new Set(existingBarcodes.map((b) => b.referenceNumber));
-
-          const duplicates = rows.filter((r) => existingRefSet.has(r.referenceNumber));
-          if (duplicates.length > 0) {
-            throw new Error(
-              `These reference numbers already exist: ${duplicates
-                .slice(0, 10)
-                .map((d) => d.referenceNumber)
-                .join(", ")}${duplicates.length > 10 ? ` and ${duplicates.length - 10} more` : ""}`
-            );
+          if (refIdx < 0 || nameIdx < 0 || weightIdx < 0) {
+            return res
+              .status(400)
+              .json({ message: "Excel must have at least: Reference Number, Product Name, Weight (kg) columns" });
           }
 
-          const validLocIds = new Set<number>();
-          const allLocs = await tx
-            .select({ id: locations.id })
-            .from(locations)
-            .where(eq(locations.companyId, companyId));
-          allLocs.forEach((l) => validLocIds.add(l.id));
-
-          const invalidLocRows = rows.filter((r) => r.erpLocationId && !validLocIds.has(r.erpLocationId));
-          if (invalidLocRows.length > 0) {
-            throw new Error(
-              `Invalid location IDs found: ${invalidLocRows
-                .map((r) => `${r.referenceNumber} (loc ${r.erpLocationId})`)
-                .slice(0, 5)
-                .join(", ")}`
-            );
-          }
-
-          const allProducts = await tx
-            .select()
-            .from(factoryBaleProducts)
-            .where(eq(factoryBaleProducts.companyId, companyId));
-          type ImportedBaleProduct = (typeof allProducts)[number];
-          const productByName = new Map<string, ImportedBaleProduct>(
-            allProducts.map((p: ImportedBaleProduct) => [p.name.toLowerCase(), p] as const)
-          );
-          const productByArticle = new Map<string | undefined, ImportedBaleProduct>(
-            allProducts.map((p: ImportedBaleProduct) => [p.articleCode?.toLowerCase(), p] as const)
-          );
-
-          const allCategories = await tx
-            .select()
-            .from(factoryCategories)
-            .where(eq(factoryCategories.companyId, companyId));
-          type ImportedBaleCategory = (typeof allCategories)[number];
-          const categoryByName = new Map<string | undefined, ImportedBaleCategory>(
-            allCategories.map((c: ImportedBaleCategory) => [c.name?.toLowerCase(), c] as const)
-          );
-
-          type ReimportBaleRow = typeof factoryBales.$inferSelect & {
-            _product?: typeof factoryBaleProducts.$inferSelect;
+          type BaleImportRow = {
+            referenceNumber: string;
+            articleCode: string;
+            productName: string;
+            category: string;
+            weightKg: string;
+            costPerKg: string;
+            totalCost: string;
+            erpLocationId: number | null;
+            status: string;
+            mixBatchId: number | null;
+            baleCode: string;
+            grade: string;
+            finalizedAt: string;
           };
-          const createdBales: ReimportBaleRow[] = [];
-          let totalWeight = 0;
+          const rows: BaleImportRow[] = [];
+          const fileRefSet = new Set<string>();
+          const fileDuplicates: string[] = [];
 
-          for (const row of rows) {
-            let product =
-              (row.articleCode ? productByArticle.get(row.articleCode.toLowerCase()) : null) ||
-              productByName.get(row.productName.toLowerCase());
-            if (!product) {
-              const autoCode =
-                row.articleCode ||
-                "IMP-" +
-                  row.productName
-                    .replace(/[^a-zA-Z0-9]/g, "")
-                    .toUpperCase()
-                    .substring(0, 20) +
-                  "-" +
-                  Date.now().toString(36).slice(-4).toUpperCase();
-              const categoryObj = row.category ? categoryByName.get(row.category.toLowerCase()) : null;
-              const [newProduct] = await tx
-                .insert(factoryBaleProducts)
-                .values({
-                  companyId,
-                  code: autoCode,
-                  articleCode: row.articleCode || autoCode,
-                  name: row.productName,
-                  active: true,
-                  ...(categoryObj ? { categoryId: categoryObj.id } : {}),
-                })
-                .returning();
-              product = newProduct;
-              productByName.set(row.productName.toLowerCase(), product);
-              if (row.articleCode) productByArticle.set(row.articleCode.toLowerCase(), product);
+          sheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return;
+            const refNum = String(row.getCell(refIdx + 1).value || "").trim();
+            if (!refNum) return;
+
+            if (fileRefSet.has(refNum)) {
+              fileDuplicates.push(refNum);
+            }
+            fileRefSet.add(refNum);
+
+            rows.push({
+              referenceNumber: refNum,
+              articleCode: articleIdx >= 0 ? String(row.getCell(articleIdx + 1).value || "").trim() : "",
+              productName: nameIdx >= 0 ? String(row.getCell(nameIdx + 1).value || "").trim() : "",
+              category: catIdx >= 0 ? String(row.getCell(catIdx + 1).value || "").trim() : "",
+              weightKg:
+                weightIdx >= 0 ? String(parseFloat(String(row.getCell(weightIdx + 1).value || "0")) || "0") : "0",
+              costPerKg:
+                costPerKgIdx >= 0 ? String(parseFloat(String(row.getCell(costPerKgIdx + 1).value || "0")) || "0") : "0",
+              totalCost:
+                totalCostIdx >= 0 ? String(parseFloat(String(row.getCell(totalCostIdx + 1).value || "0")) || "0") : "0",
+              erpLocationId: locIdIdx >= 0 ? parseInt(String(row.getCell(locIdIdx + 1).value || "0")) || null : null,
+              status: statusIdx >= 0 ? String(row.getCell(statusIdx + 1).value || "IN_STOCK").trim() : "IN_STOCK",
+              mixBatchId: mixBatchIdx >= 0 ? parseInt(String(row.getCell(mixBatchIdx + 1).value || "0")) || null : null,
+              baleCode: baleCodeIdx >= 0 ? String(row.getCell(baleCodeIdx + 1).value || "").trim() : "",
+              grade: gradeIdx >= 0 ? String(row.getCell(gradeIdx + 1).value || "").trim() : "",
+              finalizedAt: finalizedIdx >= 0 ? String(row.getCell(finalizedIdx + 1).value || "").trim() : "",
+            });
+          });
+
+          if (rows.length === 0) {
+            return res.status(400).json({ message: "No bale rows found in Excel" });
+          }
+
+          if (fileDuplicates.length > 0) {
+            return res.status(400).json({
+              message: `Duplicate reference numbers within the file: ${fileDuplicates.slice(0, 10).join(", ")}`,
+            });
+          }
+
+          const result = await db.transaction(async (tx) => {
+            await assertStockImportAllowedTx(tx, companyId);
+            const existingBarcodes = await tx
+              .select({ referenceNumber: factoryBales.referenceNumber })
+              .from(factoryBales)
+              .where(eq(factoryBales.companyId, companyId));
+            const existingRefSet = new Set(existingBarcodes.map((b) => b.referenceNumber));
+
+            const duplicates = rows.filter((r) => existingRefSet.has(r.referenceNumber));
+            if (duplicates.length > 0) {
+              throw new Error(
+                `These reference numbers already exist: ${duplicates
+                  .slice(0, 10)
+                  .map((d) => d.referenceNumber)
+                  .join(", ")}${duplicates.length > 10 ? ` and ${duplicates.length - 10} more` : ""}`
+              );
             }
 
-            let finalizedAt: Date | null = null;
-            if (row.finalizedAt) {
-              const parsed = new Date(row.finalizedAt);
-              if (!isNaN(parsed.getTime())) finalizedAt = parsed;
+            const validLocIds = new Set<number>();
+            const allLocs = await tx
+              .select({ id: locations.id })
+              .from(locations)
+              .where(eq(locations.companyId, companyId));
+            allLocs.forEach((l) => validLocIds.add(l.id));
+
+            const invalidLocRows = rows.filter((r) => r.erpLocationId && !validLocIds.has(r.erpLocationId));
+            if (invalidLocRows.length > 0) {
+              throw new Error(
+                `Invalid location IDs found: ${invalidLocRows
+                  .map((r) => `${r.referenceNumber} (loc ${r.erpLocationId})`)
+                  .slice(0, 5)
+                  .join(", ")}`
+              );
             }
-            if (!finalizedAt) finalizedAt = new Date();
 
-            const originalStatus = row.status || "IN_STOCK";
+            const allProducts = await tx
+              .select()
+              .from(factoryBaleProducts)
+              .where(eq(factoryBaleProducts.companyId, companyId));
+            type ImportedBaleProduct = (typeof allProducts)[number];
+            const productByName = new Map<string, ImportedBaleProduct>(
+              allProducts.map((p: ImportedBaleProduct) => [p.name.toLowerCase(), p] as const)
+            );
+            const productByArticle = new Map<string | undefined, ImportedBaleProduct>(
+              allProducts.map((p: ImportedBaleProduct) => [p.articleCode?.toLowerCase(), p] as const)
+            );
 
-            const [bale] = await tx
-              .insert(factoryBales)
+            const allCategories = await tx
+              .select()
+              .from(factoryCategories)
+              .where(eq(factoryCategories.companyId, companyId));
+            type ImportedBaleCategory = (typeof allCategories)[number];
+            const categoryByName = new Map<string | undefined, ImportedBaleCategory>(
+              allCategories.map((c: ImportedBaleCategory) => [c.name?.toLowerCase(), c] as const)
+            );
+
+            const [batch] = await tx
+              .insert(factoryBaleImportBatches)
               .values({
                 companyId,
-                productId: product.id,
-                erpLocationId: row.erpLocationId,
-                baleCode: row.baleCode || product.code,
-                referenceNumber: row.referenceNumber,
-                articleCode: row.articleCode || product.articleCode,
-                productName: row.productName,
-                category: row.category || null,
-                grade: row.grade || null,
-                weightKg: row.weightKg,
-                costPerKg: row.costPerKg,
-                totalCost: row.totalCost,
-                status: originalStatus,
-                mixBatchId: row.mixBatchId,
-                finalizedAt,
+                fileName: req.file?.originalname || "reimport.xlsx",
+                baleCount: 0,
+                errorCount: 0,
+                totalWeightKg: "0",
+                importedByUserId: String(req.session?.userId || ""),
+                importedByName: req.session?.username || null,
+                notes: "Bale reimport (original reference numbers)",
               })
               .returning();
 
-            createdBales.push({ ...bale, _product: product });
-            totalWeight += parseFloat(row.weightKg);
-          }
+            // Phase 19 C (F7/DI10): a mix-batch id from the sheet is kept only when the
+            // mix is this company's, live and costed (cost per kg above zero);
+            // any other id is dropped (the bale has no mix), and listed in the audit.
+            const sheetMixIds = [...new Set(rows.map((r) => r.mixBatchId).filter((id): id is number => id != null))];
+            const costedMixIds = new Set<number>(
+              sheetMixIds.length === 0
+                ? []
+                : (
+                    await tx
+                      .select({ id: factoryMixBatches.id })
+                      .from(factoryMixBatches)
+                      .where(
+                        and(
+                          eq(factoryMixBatches.companyId, companyId),
+                          inArray(factoryMixBatches.id, sheetMixIds),
+                          isNull(factoryMixBatches.deletedAt),
+                          gt(factoryMixBatches.costPerKg, "0")
+                        )
+                      )
+                  ).map((mix) => mix.id)
+            );
+            const droppedMixBatchIds = sheetMixIds.filter((id) => !costedMixIds.has(id));
 
-          const stockGroupCache = new Map<string, number>();
-          const stockItemCache = new Map<string, number>();
+            type ReimportBaleRow = typeof factoryBales.$inferSelect & {
+              _product?: typeof factoryBaleProducts.$inferSelect;
+            };
+            const createdBales: ReimportBaleRow[] = [];
+            let totalWeight = 0;
 
-          for (const bale of createdBales) {
-            if (bale.status === "REMOVED" || bale.status === "DELETED") continue;
-
-            const itemCode: string = bale.articleCode || bale.baleCode;
-            if (!itemCode) continue;
-            const locId = bale.erpLocationId;
-            if (!locId) continue;
-
-            const product = bale._product;
-            let stockGroupId: number | null = null;
-            if (bale.category) {
-              const catName = bale.category as string;
-              const catId = product?.categoryId as number | undefined;
-              const cacheKey = catId ? String(catId) : catName;
-              const cached = stockGroupCache.get(cacheKey);
-              if (cached) {
-                stockGroupId = cached;
-              } else {
-                const [existingGroup] = await tx
-                  .select({ id: stockGroups.id })
-                  .from(stockGroups)
-                  .where(and(eq(stockGroups.companyId, companyId), eq(stockGroups.name, catName)));
-                if (existingGroup) {
-                  stockGroupId = existingGroup.id;
-                } else {
-                  // Use the category's own ID for a collision-free code
-                  const groupCode = catId
-                    ? `FCAT-${catId}`
-                    : "F-" +
-                      catName
-                        .replace(/[^A-Z0-9]/gi, "")
-                        .substring(0, 10)
-                        .toUpperCase();
-                  const [created] = await tx
-                    .insert(stockGroups)
-                    .values({ companyId, name: catName, code: groupCode })
-                    .onConflictDoNothing()
-                    .returning({ id: stockGroups.id });
-                  if (created) {
-                    stockGroupId = created.id;
-                  } else {
-                    const [byCode] = await tx
-                      .select({ id: stockGroups.id })
-                      .from(stockGroups)
-                      .where(and(eq(stockGroups.companyId, companyId), eq(stockGroups.code, groupCode)));
-                    stockGroupId = byCode?.id;
-                  }
-                }
-                stockGroupCache.set(cacheKey, stockGroupId!);
-              }
-            }
-
-            let erpStockItemId = stockItemCache.get(itemCode);
-            if (!erpStockItemId) {
-              const [existing] = await tx
-                .select({ id: stockItems.id, stockGroupId: stockItems.stockGroupId })
-                .from(stockItems)
-                .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, itemCode)));
-
-              if (existing) {
-                erpStockItemId = existing.id;
-                if (stockGroupId && !existing.stockGroupId) {
-                  await tx.update(stockItems).set({ stockGroupId }).where(eq(stockItems.id, existing.id));
-                }
-              } else {
-                const [created] = await tx
-                  .insert(stockItems)
+            for (const row of rows) {
+              let product =
+                (row.articleCode ? productByArticle.get(row.articleCode.toLowerCase()) : null) ||
+                productByName.get(row.productName.toLowerCase());
+              if (!product) {
+                const autoCode =
+                  row.articleCode ||
+                  "IMP-" +
+                    row.productName
+                      .replace(/[^a-zA-Z0-9]/g, "")
+                      .toUpperCase()
+                      .substring(0, 20) +
+                    "-" +
+                    Date.now().toString(36).slice(-4).toUpperCase();
+                const categoryObj = row.category ? categoryByName.get(row.category.toLowerCase()) : null;
+                const [newProduct] = await tx
+                  .insert(factoryBaleProducts)
                   .values({
                     companyId,
-                    code: itemCode,
-                    name: bale.productName as string,
-                    uom: "BALE",
+                    code: autoCode,
+                    articleCode: row.articleCode || autoCode,
+                    name: row.productName,
                     active: true,
-                    ...(stockGroupId ? { stockGroupId } : {}),
+                    ...(categoryObj ? { categoryId: categoryObj.id } : {}),
                   })
-                  .returning({ id: stockItems.id });
-                erpStockItemId = created.id;
+                  .returning();
+                product = newProduct;
+                productByName.set(row.productName.toLowerCase(), product);
+                if (row.articleCode) productByArticle.set(row.articleCode.toLowerCase(), product);
               }
-              stockItemCache.set(itemCode, erpStockItemId!);
+
+              let finalizedAt: Date | null = null;
+              if (row.finalizedAt) {
+                const parsed = new Date(row.finalizedAt);
+                if (!isNaN(parsed.getTime())) finalizedAt = parsed;
+              }
+              if (!finalizedAt) finalizedAt = new Date();
+
+              const originalStatus = row.status || "IN_STOCK";
+
+              const [bale] = await tx
+                .insert(factoryBales)
+                .values({
+                  companyId,
+                  productId: product.id,
+                  erpLocationId: row.erpLocationId,
+                  baleCode: row.baleCode || product.code,
+                  referenceNumber: row.referenceNumber,
+                  articleCode: row.articleCode || product.articleCode,
+                  productName: row.productName,
+                  category: row.category || null,
+                  grade: row.grade || null,
+                  weightKg: row.weightKg,
+                  costPerKg: row.costPerKg,
+                  totalCost: row.totalCost,
+                  status: originalStatus,
+                  mixBatchId: row.mixBatchId != null && costedMixIds.has(row.mixBatchId) ? row.mixBatchId : null,
+                  finalizedAt,
+                  importBatchId: batch.id,
+                })
+                .returning();
+
+              createdBales.push({ ...bale, _product: product });
+              totalWeight += parseFloat(row.weightKg);
             }
 
-            const baleCost = lineAmount(bale.weightKg, bale.costPerKg);
-            await adjustInventory(tx, locId, erpStockItemId!, 1, companyId, baleCost.toNumber());
-            await postStockMovementTx(
-              tx,
+            const stockGroupCache = new Map<string, number>();
+            const stockItemCache = new Map<string, number>();
+
+            for (const bale of createdBales) {
+              if (bale.status === "REMOVED" || bale.status === "DELETED") continue;
+
+              const itemCode: string = bale.articleCode || bale.baleCode;
+              if (!itemCode) continue;
+              const locId = bale.erpLocationId;
+              if (!locId) continue;
+
+              const product = bale._product;
+              let stockGroupId: number | null = null;
+              if (bale.category) {
+                const catName = bale.category as string;
+                const catId = product?.categoryId as number | undefined;
+                const cacheKey = catId ? String(catId) : catName;
+                const cached = stockGroupCache.get(cacheKey);
+                if (cached) {
+                  stockGroupId = cached;
+                } else {
+                  const [existingGroup] = await tx
+                    .select({ id: stockGroups.id })
+                    .from(stockGroups)
+                    .where(and(eq(stockGroups.companyId, companyId), eq(stockGroups.name, catName)));
+                  if (existingGroup) {
+                    stockGroupId = existingGroup.id;
+                  } else {
+                    // Use the category's own ID for a collision-free code
+                    const groupCode = catId
+                      ? `FCAT-${catId}`
+                      : "F-" +
+                        catName
+                          .replace(/[^A-Z0-9]/gi, "")
+                          .substring(0, 10)
+                          .toUpperCase();
+                    const [created] = await tx
+                      .insert(stockGroups)
+                      .values({ companyId, name: catName, code: groupCode })
+                      .onConflictDoNothing()
+                      .returning({ id: stockGroups.id });
+                    if (created) {
+                      stockGroupId = created.id;
+                    } else {
+                      const [byCode] = await tx
+                        .select({ id: stockGroups.id })
+                        .from(stockGroups)
+                        .where(and(eq(stockGroups.companyId, companyId), eq(stockGroups.code, groupCode)));
+                      stockGroupId = byCode?.id;
+                    }
+                  }
+                  stockGroupCache.set(cacheKey, stockGroupId!);
+                }
+              }
+
+              let erpStockItemId = stockItemCache.get(itemCode);
+              if (!erpStockItemId) {
+                const [existing] = await tx
+                  .select({ id: stockItems.id, stockGroupId: stockItems.stockGroupId })
+                  .from(stockItems)
+                  .where(and(eq(stockItems.companyId, companyId), eq(stockItems.code, itemCode)));
+
+                if (existing) {
+                  erpStockItemId = existing.id;
+                  if (stockGroupId && !existing.stockGroupId) {
+                    await tx.update(stockItems).set({ stockGroupId }).where(eq(stockItems.id, existing.id));
+                  }
+                } else {
+                  const [created] = await tx
+                    .insert(stockItems)
+                    .values({
+                      companyId,
+                      code: itemCode,
+                      name: bale.productName as string,
+                      uom: "BALE",
+                      active: true,
+                      ...(stockGroupId ? { stockGroupId } : {}),
+                    })
+                    .returning({ id: stockItems.id });
+                  erpStockItemId = created.id;
+                }
+                stockItemCache.set(itemCode, erpStockItemId!);
+              }
+
+              const baleCost = lineAmount(bale.weightKg, bale.costPerKg);
+              await adjustInventory(tx, locId, erpStockItemId!, 1, companyId, baleCost.toNumber());
+              await postStockMovementTx(
+                tx,
+                {
+                  companyId,
+                  stockItemId: erpStockItemId!,
+                  kind: "receipt",
+                  quantity: "1",
+                  unitCost: MoneyDecimal.max(baleCost, 0).toFixed(),
+                  toLocationId: locId,
+                  occurredAt: (bale.finalizedAt instanceof Date ? bale.finalizedAt : new Date()).toISOString(),
+                  source: {
+                    sourceType: "factory_bale_reimport",
+                    sourceId: String(bale.id),
+                    idempotencyKey: `factory-bale-reimport:${companyId}:${bale.id}`,
+                  },
+                  actor: {
+                    userId: req.session.userId,
+                    username: req.session.username,
+                    reason: `Bale reimport ${bale.referenceNumber}`,
+                  },
+                  allowNegativeStock: true,
+                },
+                canonicalStockMovementAdapter
+              );
+            }
+
+            await tx
+              .update(factoryBaleImportBatches)
+              .set({ baleCount: createdBales.length, totalWeightKg: totalWeight.toFixed(3) })
+              .where(eq(factoryBaleImportBatches.id, batch.id));
+            await writeAuditEvent(
               {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
                 companyId,
-                stockItemId: erpStockItemId!,
-                kind: "receipt",
-                quantity: "1",
-                unitCost: MoneyDecimal.max(baleCost, 0).toFixed(),
-                toLocationId: locId,
-                occurredAt: (bale.finalizedAt instanceof Date ? bale.finalizedAt : new Date()).toISOString(),
-                source: {
-                  sourceType: "factory_bale_reimport",
-                  sourceId: String(bale.id),
-                  idempotencyKey: `factory-bale-reimport:${companyId}:${bale.id}`,
+                action: "import",
+                tableName: "factory_bale_import_batches",
+                recordId: batch.id,
+                recordIdentifier: `bale reimport: ${createdBales.length} bale(s) at spreadsheet cost`,
+                metadata: {
+                  source: "factory_bale_reimport",
+                  fileName: req.file?.originalname ?? null,
+                  baleIds: createdBales.map((bale) => bale.id),
+                  droppedMixBatchIds,
+                  totalCost: createdBales
+                    .reduce((sum, bale) => sum.plus(lineAmount(bale.weightKg, bale.costPerKg)), new MoneyDecimal(0))
+                    .toFixed(2),
                 },
-                actor: {
-                  userId: req.session.userId,
-                  username: req.session.username,
-                  reason: `Bale reimport ${bale.referenceNumber}`,
-                },
-                allowNegativeStock: true,
               },
-              canonicalStockMovementAdapter
+              tx
             );
-          }
 
-          return { count: createdBales.length, totalWeight };
-        });
+            return { count: createdBales.length, totalWeight, batchId: batch.id };
+          });
 
-        const today = req.body.txDate || getClientDate(req);
-        await writeDaybookEntry(db, {
-          companyId,
-          txDate: today,
-          txType: "BALE_REIMPORT",
-          description: `Reimported ${result.count} bale(s) with original reference numbers (${result.totalWeight.toFixed(1)} kg)`,
-        });
+          const today = req.body.txDate || getClientDate(req);
+          await writeDaybookEntry(db, {
+            companyId,
+            txDate: today,
+            txType: "BALE_REIMPORT",
+            description: `Reimported ${result.count} bale(s) with original reference numbers (${result.totalWeight.toFixed(1)} kg)`,
+          });
 
-        res.json({ imported: result.count, totalWeight: result.totalWeight });
-      } catch (error: unknown) {
-        logger.error("Error reimporting bales:", { error: error });
-        res.status(400).json({ message: getErrorMessage(error) });
-      }
-    });
-  });
+          res.json({ imported: result.count, totalWeight: result.totalWeight, batchId: result.batchId });
+        } catch (error: unknown) {
+          if (sendStockImportRefusal(res, error)) return;
+          logger.error("Error reimporting bales:", { error: error });
+          res.status(400).json({ message: getErrorMessage(error) });
+        }
+      });
+    }
+  );
 
   // GET /api/factory/bales/export-names.xlsx — Export all bales for bulk product-name editing
   app.get("/api/factory/bales/export-names.xlsx", requireAuth, async (req: Request, res: Response) => {

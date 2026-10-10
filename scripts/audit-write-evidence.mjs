@@ -36,6 +36,11 @@ const STOCK_BALANCE_HELPER = /\b(?:adjustInventory|reverseInventoryByExactValue|
 const STOCK_BALANCE_HELPER_MODULES = new Set([
   "server/inventoryHelper.ts",
   "server/services/inventory/exactValueInventory.ts",
+  // Wave 11 value-exact wrappers over the helpers above: like them they move a
+  // balance only, and every caller posts the canonical movement journal.
+  "server/services/inventory/valueExactReversal.ts",
+  "server/services/inventory/conservedStockTransfer.ts",
+  "server/services/inventory/creditNoteInventory.ts",
 ]);
 
 function mutatesStock(file, source) {
@@ -106,15 +111,12 @@ export const PHASE5_OPERATIONAL_REQUEST_BOUNDARY_WRITERS = new Set([
 export const PHASE6_SPECIAL_PURPOSE_COMPLETED_WRITERS = new Set([
   "server/routes/admin/adminPoFixRoutes.ts",
   "server/routes/creditSalesImportRoutes.ts",
-  "server/routes/erp-payroll/runs-migration.ts",
   "server/routes/exchangeRateRoutes.ts",
   "server/routes/factory/docs-users/companyImportRoutes.ts",
-  "server/routes/payroll/worker-statement/backfill.ts",
   "server/routes/posImportRoutes.ts",
   "server/routes/rental/rentalAccrualConfigRoutes.ts",
   "server/routes/sp-migration/spMigrationSetupRoutes.ts",
   "server/routes/stockTransferImportRoutes.ts",
-  "server/services/rental/reclassifyDeferredRentService.ts",
 ]);
 
 function sourceFiles(directory, collected = []) {

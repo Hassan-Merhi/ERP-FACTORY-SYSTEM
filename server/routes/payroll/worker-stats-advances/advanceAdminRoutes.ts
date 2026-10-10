@@ -54,7 +54,7 @@ export function registerWorkerAdvanceAdminRoutes(app: Express) {
             const maxCodeResult = await tx
               .select({ maxCode: sql<number | null>`MAX(CAST(code AS INTEGER))` })
               .from(ledgerAccounts)
-              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^\d+$'`));
+              .where(and(eq(ledgerAccounts.companyId, companyId), sql`code ~ '^[0-9]+$'`));
             const nextCode = String((maxCodeResult[0]?.maxCode ?? 0) + 1);
             [advancesAccount] = await tx
               .insert(ledgerAccounts)

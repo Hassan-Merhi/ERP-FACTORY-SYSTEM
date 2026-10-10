@@ -17,20 +17,23 @@ import {
 } from "../lib/accountStatementExportSafety";
 import path from "path";
 import fs from "fs";
-import { eq, and, desc, isNull, isNotNull, sql, type SQL } from "drizzle-orm";
+import { eq, and, desc, isNotNull, type SQL } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import { db } from "../db";
-import { MoneyDecimal, sumMoney, toMoney } from "../lib/money";
+import { MoneyDecimal, toMoney } from "../lib/money";
 import { storage } from "../storage";
 import { requireAuth } from "../auth";
+import { getPartyBalance } from "../services/accounting/balances/ledgerBalanceEngine";
+import {
+  loadCustomerLedgerEntryRows,
+  loadCustomerNotInLedger,
+} from "../services/accounting/balances/customerLedgerStatement";
+import { getCustomerByLedgerId } from "../lib/factoryCustomerLedger";
 import { requireFactoryAgentStatementAccount } from "../middleware/factoryAgentAccountScope";
-import { isParentCompanyContext } from "./helpers/supplierBalanceHelpers";
 import { projectExportCurrencyRow, summarizeExportCurrencyRows } from "../services/accounting/exportCurrency";
 import {
   bankAccounts,
   companies,
-  customerBalances,
-  customerOrders,
   customers,
   employees,
   fixedAssets,
@@ -40,6 +43,7 @@ import {
   vouchers,
 } from "@shared/schema";
 import type { AccountStatementEntryRow } from "../storage/accounting/vouchers";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 
 export function registerAccountStatementRoutes(app: Express) {
   app.get("/api/accounts/:type/:id/deleted-vouchers", requireAuth, async (req, res) => {
@@ -125,160 +129,74 @@ export function registerAccountStatementRoutes(app: Express) {
       const entryColumn = typeToColumn[accountType];
       if (!entryColumn) return res.status(400).json({ message: "Unknown account type" });
 
-      let rawOB = new MoneyDecimal(0);
-      let obSide = "Dr";
-      if (accountType === "ledger") {
-        const [acct] = await db
-          .select({ ob: ledgerAccounts.openingBalance, side: ledgerAccounts.openingBalanceSide })
-          .from(ledgerAccounts)
-          .where(eq(ledgerAccounts.id, accountId));
-        const [linkedCust] = await db
-          .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
-          .from(customers)
-          .where(eq(customers.ledgerAccountId, accountId))
-          .limit(1);
-        rawOB = toMoney(linkedCust?.ob ?? acct?.ob);
-        obSide = linkedCust?.side ?? acct?.side ?? "Dr";
-
-        if (linkedCust) {
-          const currentCompany = await storage.getCompanyById(companyId);
-          if (currentCompany?.companyType === "factory") {
-            const custId = linkedCust.id;
-            const dateFilter = endDate ? sql`${vouchers.voucherDate} < ${endDate}` : sql`1=1`;
-            const orderDateFilter = endDate ? sql`${customerOrders.orderDate} < ${endDate}` : sql`1=1`;
-            const cbDateFilter = endDate ? sql`${customerBalances.transactionDate} < ${endDate}` : sql`1=1`;
-
-            const [salesRows, cbRows, lVRows, cVRows] = await Promise.all([
-              db
-                .select({ total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)` })
-                .from(customerOrders)
-                .where(
-                  and(
-                    eq(customerOrders.customerId, custId),
-                    eq(customerOrders.companyId, companyId),
-                    eq(customerOrders.status, "FINALIZED"),
-                    orderDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-                })
-                .from(customerBalances)
-                .where(
-                  and(
-                    eq(customerBalances.customerId, custId),
-                    eq(customerBalances.companyId, companyId),
-                    sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`,
-                    cbDateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.ledgerAccountId, accountId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-                    dateFilter
-                  )
-                ),
-              db
-                .select({
-                  net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-                })
-                .from(voucherEntries)
-                .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-                .where(
-                  and(
-                    eq(voucherEntries.customerId, custId),
-                    isNull(voucherEntries.ledgerAccountId),
-                    eq(vouchers.optional, false),
-                    isNull(vouchers.deletedAt),
-                    sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-                    dateFilter
-                  )
-                ),
-            ]);
-
-            const ob = toMoney(linkedCust.ob);
-            const side = linkedCust.side || "Dr";
-            const prePeriodBalance = (side === "Dr" ? ob : ob.negated()).plus(
-              sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVRows[0]?.net, cVRows[0]?.net])
-            );
-            return res.json({ balance: prePeriodBalance.toNumber() });
-          }
-        }
-      } else if (accountType === "bank") {
-        const [acct] = await db
-          .select({ ob: bankAccounts.openingBalance, side: bankAccounts.openingBalanceSide })
-          .from(bankAccounts)
-          .where(eq(bankAccounts.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = acct?.side ?? "Dr";
-      } else if (accountType === "supplier") {
-        const isParentForSupplier = await isParentCompanyContext(companyId);
-        if (isParentForSupplier) {
-          const [acct] = await db
-            .select({ ob: suppliers.openingBalance })
-            .from(suppliers)
-            .where(eq(suppliers.id, accountId));
-          rawOB = toMoney(acct?.ob);
+      // A customer, or a ledger account a customer owns, opens at the balance
+      // engine's period opening: the customer's opening plus the lines the
+      // engine attributes to it before endDate (effective-date basis). Amounts
+      // not yet in the ledger before endDate are reported separately.
+      let customerOwnerId: number | null = null;
+      if (accountType === "customer" || accountType === "ledger") {
+        if (accountType === "customer") {
+          const [cust] = await db
+            .select({ id: customers.id })
+            .from(customers)
+            .where(and(eq(customers.id, accountId), eq(customers.companyId, companyId)));
+          if (!cust) return res.status(404).json({ message: "Account not found" });
+          customerOwnerId = cust.id;
         } else {
-          rawOB = new MoneyDecimal(0);
+          const [acct] = await db
+            .select({ id: ledgerAccounts.id })
+            .from(ledgerAccounts)
+            .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
+          if (!acct) return res.status(404).json({ message: "Account not found" });
+          const owner = await getCustomerByLedgerId(accountId);
+          if (owner && owner.companyId === companyId) customerOwnerId = owner.id;
         }
-        obSide = "Cr";
-      } else if (accountType === "employee") {
-        const [acct] = await db
-          .select({ ob: employees.openingBalance })
-          .from(employees)
-          .where(eq(employees.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Cr";
-      } else if (accountType === "customer") {
-        const [acct] = await db
-          .select({ ob: customers.openingBalance })
-          .from(customers)
-          .where(eq(customers.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Dr";
-      } else if (accountType === "fixed-asset") {
-        const [acct] = await db
-          .select({ ob: fixedAssets.openingBalance })
-          .from(fixedAssets)
-          .where(eq(fixedAssets.id, accountId));
-        rawOB = toMoney(acct?.ob);
-        obSide = "Dr";
+      }
+      if (customerOwnerId !== null) {
+        const window = { companyId, customerId: customerOwnerId, from: endDate ?? null, to: null };
+        const [party, notInLedger] = await Promise.all([
+          getPartyBalance(db, { companyId, kind: "customer", id: customerOwnerId, from: endDate ?? null }),
+          loadCustomerNotInLedger(db, window),
+        ]);
+        return res.json({
+          balance: toMoney(party?.opening).toNumber(),
+          notInLedgerBefore: endDate ? notInLedger.prePeriodTotal : "0.00",
+        });
       }
 
-      const isSupplier = accountType === "supplier";
-      let balance = isSupplier ? rawOB : obSide === "Cr" ? rawOB.negated() : rawOB;
-
-      if (endDate) {
-        const conditions = [
-          eq(entryColumn, accountId),
-          eq(vouchers.optional, false),
-          isNull(vouchers.deletedAt),
-          sql`${vouchers.voucherDate} < ${endDate}`,
-        ];
-        if (isSupplier) conditions.push(eq(vouchers.companyId, companyId));
-        const [totals] = await db
-          .select({
-            totalDebit: sql<string>`COALESCE(SUM(${voucherEntries.debitAmount}), 0)`,
-            totalCredit: sql<string>`COALESCE(SUM(${voucherEntries.creditAmount}), 0)`,
-          })
-          .from(voucherEntries)
-          .leftJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-          .where(and(...conditions));
-
-        const net = toMoney(totals?.totalDebit).minus(toMoney(totals?.totalCredit));
-        balance = balance.plus(isSupplier ? net.negated() : net);
+      if (accountType === "supplier") {
+        // The balance engine's period opening (wave 13): the supplier's opening
+        // with its side, counted in the supplier's own company only, plus the
+        // lines the engine attributes to it before endDate. Cr positive.
+        const party = await getPartyBalance(db, { companyId, kind: "supplier", id: accountId, from: endDate ?? null });
+        return res.json({ balance: toMoney(party?.opening).negated().toNumber() });
       }
+
+      // Every other family opens at the balance engine's period opening (wave
+      // 17 A), Dr positive: the master's opening with its side (a sideless
+      // ledger opening takes its type's usual side, it was Dr), plus the lines
+      // the engine attributes to it before endDate, in this company's vouchers,
+      // by COALESCE(effective_date, voucher_date). Line ownership is the
+      // engine's (ledger > bank > fixed asset > employee): a line naming both a
+      // ledger account and a bank is the ledger account's, so it is no longer
+      // counted on the bank as well.
+      const engineKind = (
+        { ledger: "ledger", bank: "bank", "fixed-asset": "fixedAsset", employee: "employee" } as const
+      )[accountType as "ledger" | "bank" | "fixed-asset" | "employee"];
+      if (!engineKind) return res.json({ balance: 0 });
+      const masterTable = {
+        ledger: { table: ledgerAccounts, id: ledgerAccounts.id, company: ledgerAccounts.companyId },
+        bank: { table: bankAccounts, id: bankAccounts.id, company: bankAccounts.companyId },
+        fixedAsset: { table: fixedAssets, id: fixedAssets.id, company: fixedAssets.companyId },
+        employee: { table: employees, id: employees.id, company: employees.companyId },
+      }[engineKind];
+      const [master] = await db
+        .select({ id: masterTable.id })
+        .from(masterTable.table)
+        .where(and(eq(masterTable.id, accountId), eq(masterTable.company, companyId)));
+      if (!master) return res.status(404).json({ message: "Account not found" });
+      const party = await getPartyBalance(db, { companyId, kind: engineKind, id: accountId, from: endDate ?? null });
+      const balance = toMoney(party?.opening);
 
       res.json({ balance: balance.toNumber() });
     } catch (error: unknown) {
@@ -372,6 +290,10 @@ export function registerAccountStatementRoutes(app: Express) {
       res.end(pdfBuf);
       return;
     } catch (err: unknown) {
+      if (err instanceof Error && err.name === "StatementAccountNotFoundError") {
+        if (!res.headersSent) res.status(404).json({ message: "Account not found" });
+        return;
+      }
       logger.error("Statement PDF error:", { error: err });
       if (!res.headersSent) res.status(500).json({ message: getErrorMessage(err) });
     }
@@ -410,24 +332,28 @@ export function registerAccountStatementRoutes(app: Express) {
       if (!dateRange.ok) return res.status(400).json({ message: dateRange.message });
 
       let accountName = "Account";
-      let openingBalanceExact = new MoneyDecimal(0);
-      let openingBalanceSide = "Dr";
+      let ownedCustomerId: number | null = null;
 
       const [company] = await db.select({ name: companies.name }).from(companies).where(eq(companies.id, companyId));
 
+      // Wave 18 C: every master is read with the company check, and every
+      // family opens at the balance engine's period opening (the on-screen
+      // statement's pre-period balance): the master's opening with the
+      // engine's side rule (sideless by account type) plus the lines the engine
+      // attributes to it before startDate, in this company's vouchers, by
+      // COALESCE(effective_date, voucher_date). Bank, fixed-asset and employee
+      // exports carry that opening forward (they opened at zero).
       if (accountType === "ledger") {
         const [acct] = await db
-          .select({
-            name: ledgerAccounts.name,
-            openingBalance: ledgerAccounts.openingBalance,
-            openingBalanceSide: ledgerAccounts.openingBalanceSide,
-          })
+          .select({ name: ledgerAccounts.name })
           .from(ledgerAccounts)
           .where(and(eq(ledgerAccounts.id, accountId), eq(ledgerAccounts.companyId, companyId)));
         if (!acct) return res.status(404).json({ message: "Account not found" });
         accountName = acct.name;
-        openingBalanceExact = toMoney(acct.openingBalance);
-        openingBalanceSide = acct.openingBalanceSide || "Dr";
+        // A ledger a customer owns exports that customer's ledger statement
+        // (balance engine lines and the customer-owned opening).
+        const owner = await getCustomerByLedgerId(accountId);
+        if (owner && owner.companyId === companyId) ownedCustomerId = owner.id;
       } else if (accountType === "bank") {
         const [acct] = await db
           .select({ name: bankAccounts.name })
@@ -435,12 +361,24 @@ export function registerAccountStatementRoutes(app: Express) {
           .where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.companyId, companyId)));
         if (!acct) return res.status(404).json({ message: "Bank account not found" });
         accountName = acct.name;
+      } else if (accountType === "fixed-asset") {
+        const [acct] = await db
+          .select({ name: fixedAssets.name })
+          .from(fixedAssets)
+          .where(and(eq(fixedAssets.id, accountId), eq(fixedAssets.companyId, companyId)));
+        if (!acct) return res.status(404).json({ message: "Fixed asset not found" });
+        accountName = acct.name;
       } else if (accountType === "supplier") {
         const [acct] = await db
-          .select({ name: suppliers.legalName })
-          .from(suppliers)
-          .where(eq(suppliers.id, accountId));
-        if (!acct) return res.status(404).json({ message: "Supplier not found" });
+          .select({ name: companyScopedSuppliers.legalName, companyId: companyScopedSuppliers.companyId })
+          .from(companyScopedSuppliers)
+          .where(eq(companyScopedSuppliers.id, accountId));
+        // A supplier of another company is exported only when this company posted to it.
+        const postedHere =
+          acct && acct.companyId && acct.companyId !== companyId
+            ? (await getPartyBalance(db, { companyId, kind: "supplier", id: accountId })) !== null
+            : true;
+        if (!acct || !postedHere) return res.status(404).json({ message: "Supplier not found" });
         accountName = acct.name ?? "Supplier";
       } else if (accountType === "employee") {
         const [acct] = await db
@@ -451,36 +389,70 @@ export function registerAccountStatementRoutes(app: Express) {
         accountName = `${acct.firstName} ${acct.lastName}`.trim();
       }
 
+      const engineKind =
+        ownedCustomerId !== null
+          ? ("customer" as const)
+          : (
+              {
+                ledger: "ledger",
+                bank: "bank",
+                "fixed-asset": "fixedAsset",
+                supplier: "supplier",
+                employee: "employee",
+              } as const
+            )[accountType as "ledger" | "bank" | "fixed-asset" | "supplier" | "employee"];
+      const party = engineKind
+        ? await getPartyBalance(db, {
+            companyId,
+            kind: engineKind,
+            id: ownedCustomerId ?? accountId,
+            from: startDate ?? null,
+          })
+        : null;
+      // Dr positive (the worksheet's balance column).
+      const masterOpening = toMoney(party?.masterOpening);
+      const openingBalanceExact = masterOpening.abs();
+      const openingBalanceSide = masterOpening.isNegative() ? "Cr" : "Dr";
+
       let txRows: AccountStatementEntryRow[] = [];
-      if (accountType === "ledger") {
+      if (ownedCustomerId !== null) {
+        txRows = await loadCustomerLedgerEntryRows(db, {
+          companyId,
+          customerId: ownedCustomerId,
+          from: startDate ?? null,
+          to: endDate ?? null,
+        });
+      } else if (accountType === "ledger") {
         txRows = await storage.getVoucherEntriesByLedger(accountId, startDate, endDate, companyId);
       } else if (accountType === "bank") {
-        txRows = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId);
+        txRows = await storage.getVoucherEntriesByBankAccount(accountId, startDate, endDate, companyId, {
+          ownedOnly: true,
+        });
+      } else if (accountType === "fixed-asset") {
+        txRows = await storage.getVoucherEntriesByFixedAsset(accountId, startDate, endDate, companyId, {
+          ownedOnly: true,
+        });
       } else if (accountType === "supplier") {
-        txRows = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate);
+        txRows = await storage.getVoucherEntriesBySupplier(accountId, companyId, startDate, endDate, {
+          ownedOnly: true,
+        });
       } else if (accountType === "employee") {
-        txRows = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate);
+        txRows = await storage.getVoucherEntriesByEmployee(accountId, companyId, startDate, endDate, {
+          ownedOnly: true,
+        });
       }
+      // The supplier and employee lists come newest first; the running balance needs them in date order.
+      txRows = [...txRows].sort(
+        (x, y) =>
+          (statementDateKey(x.voucherDate) ?? "").localeCompare(statementDateKey(y.voucherDate) ?? "") ||
+          Number(x.voucherId) - Number(y.voucherId)
+      );
 
-      let allTxForBF: AccountStatementEntryRow[] = [];
-      if (startDate && accountType === "ledger") {
-        allTxForBF = await storage.getVoucherEntriesByLedger(accountId, undefined, undefined, companyId);
-      }
       // Balances are kept exact and become numbers only for the worksheet cells.
       const openingBalance = openingBalanceExact.toNumber();
-      const signedOpening = openingBalanceSide === "Dr" ? openingBalanceExact : openingBalanceExact.negated();
-      let bfExact = signedOpening;
-      if (startDate && allTxForBF.length > 0) {
-        for (const r of allTxForBF) {
-          const rDate = statementDateKey(r.voucherDate);
-          if (rDate && rDate < startDate) {
-            const projected = projectExportCurrencyRow(r as Record<string, unknown>);
-            bfExact = bfExact
-              .plus(toMoney(projected.historicalBaseDebit))
-              .minus(toMoney(projected.historicalBaseCredit));
-          }
-        }
-      }
+      const signedOpening = masterOpening;
+      // Brought forward: the engine's period opening (masterOpening without a start date).
+      const bfExact = toMoney(party?.opening);
       const bfBalance = bfExact.toNumber();
 
       let runExact = startDate ? bfExact : signedOpening;
@@ -567,7 +539,7 @@ export function registerAccountStatementRoutes(app: Express) {
       ]);
       sheet.mergeCells(`A${rAcct.number}:F${rAcct.number}`);
 
-      if (openingBalance !== 0 && accountType === "ledger") {
+      if (openingBalance !== 0) {
         const rOb = sheet.addRow([
           `Opening Balance: ${openingBalance.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${openingBalanceSide}`,
         ]);
@@ -605,7 +577,7 @@ export function registerAccountStatementRoutes(app: Express) {
         },
       ];
 
-      if (!startDate && openingBalance > 0 && accountType === "ledger") {
+      if (!startDate && openingBalance !== 0) {
         const obRow = sheet.addRow([
           "",
           "—",
@@ -625,7 +597,7 @@ export function registerAccountStatementRoutes(app: Express) {
         obRow.getCell(4).alignment = { horizontal: "right", vertical: "middle" };
         obRow.getCell(5).alignment = { horizontal: "right", vertical: "middle" };
         obRow.getCell(6).alignment = { horizontal: "right", vertical: "middle" };
-      } else if (startDate && Math.abs(bfBalance) > 0.005 && accountType === "ledger") {
+      } else if (startDate && !bfExact.isZero()) {
         const bfAbs = Math.abs(bfBalance);
         const bfSide = bfBalance >= 0 ? "Dr" : "Cr";
         const bfRow = sheet.addRow([

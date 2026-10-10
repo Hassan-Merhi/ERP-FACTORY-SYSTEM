@@ -1,6 +1,15 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { db } from "../db";
-import { adjustInventory } from "../inventoryHelper";
+import { assertNoBaleMirrorMovementTx } from "./accounting/perpetualInventory/cutoverRefusal";
+import {
+  moveTransferLegConservedTx,
+  postTransferResidualTx,
+  recordTransferValueMovedTx,
+  reverseTransferLegExactTx,
+  transferVoucherDateTx,
+} from "./inventory/conservedStockTransfer";
+import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import { locations, stockItems, stockTransferItems, stockTransferVouchers, vouchers } from "@shared/schema";
 import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
 import type { DbTransaction } from "../db";
@@ -192,16 +201,47 @@ async function assertCompanyScope(
   }
 }
 
+/** The exact value each (source, item) group of a transfer's rows moved (legacy rows: their total). */
+function rowValuesByGroup(
+  rows: Array<typeof stockTransferItems.$inferSelect>,
+  fallbackSourceLocationId: number | null | undefined
+): Map<string, Decimal> {
+  const values = new Map<string, Decimal>();
+  for (const row of rows) {
+    const key = `${row.sourceLocationId ?? fallbackSourceLocationId}:${row.stockItemId}`;
+    const value = lineValueMoved({ valueMoved: row.valueMoved, total: row.totalAmount });
+    values.set(key, (values.get(key) ?? new MoneyDecimal(0)).plus(value));
+  }
+  return values;
+}
+
+/**
+ * Moves the applied items back exactly (wave 11): the destination gives back
+ * the value each group moved and the source takes it. Returns the signed
+ * sub-ledger changes.
+ */
 async function reverseAppliedItems(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   companyId: number,
   destinationLocationId: number,
   items: StockTransferLifecycleItem[],
+  values: ReadonlyMap<string, Decimal>,
   journal?: { transferId: number; revision: number }
-) {
+): Promise<Decimal[]> {
+  const deltas: Decimal[] = [];
   for (const item of items) {
-    await adjustInventory(tx, item.sourceLocationId, item.stockItemId, item.quantity, companyId, item.rate);
-    await adjustInventory(tx, destinationLocationId, item.stockItemId, -item.quantity, companyId);
+    const value =
+      values.get(`${item.sourceLocationId}:${item.stockItemId}`) ??
+      new MoneyDecimal(item.quantity).times(item.rate).toDecimalPlaces(2);
+    const reversed = await reverseTransferLegExactTx(tx, {
+      companyId,
+      sourceLocationId: item.sourceLocationId,
+      destinationLocationId,
+      stockItemId: item.stockItemId,
+      quantity: item.quantity,
+      value,
+    });
+    deltas.push(reversed.sourceDelta, reversed.destinationDelta);
 
     if (journal) {
       await journalStockTransferLeg(tx, {
@@ -215,23 +255,46 @@ async function reverseAppliedItems(
       });
     }
   }
+  return deltas;
 }
 
+/**
+ * Applies the items so the destination receives exactly the value the source
+ * relieved (wave 11), and returns that value per (source, item) group and the
+ * signed sub-ledger changes.
+ */
 async function validateAndApplyItems(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   companyId: number,
   destinationLocationId: number,
   items: StockTransferLifecycleItem[],
   journal?: { transferId: number; revision: number }
-) {
+): Promise<{ relievedByGroup: Map<string, Decimal>; deltas: Decimal[] }> {
   await assertCompanyScope(tx, companyId, destinationLocationId, items);
+  // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+  await assertNoBaleMirrorMovementTx(
+    tx,
+    companyId,
+    items.map((item) => item.stockItemId),
+    "stock-transfer"
+  );
 
   // Negative inventory is intentionally allowed for stock transfers. This keeps
   // operational transfers unblocked when physical stock is moved before the
   // corresponding source receipt or correction has been entered in the ERP.
+  const relievedByGroup = new Map<string, Decimal>();
+  const deltas: Decimal[] = [];
   for (const item of items) {
-    await adjustInventory(tx, item.sourceLocationId, item.stockItemId, -item.quantity, companyId);
-    await adjustInventory(tx, destinationLocationId, item.stockItemId, item.quantity, companyId, item.rate);
+    const moved = await moveTransferLegConservedTx(tx, {
+      companyId,
+      sourceLocationId: item.sourceLocationId,
+      destinationLocationId,
+      stockItemId: item.stockItemId,
+      quantity: item.quantity,
+      fallbackRate: item.rate,
+    });
+    relievedByGroup.set(`${item.sourceLocationId}:${item.stockItemId}`, moved.relieved);
+    deltas.push(moved.sourceDelta, moved.destinationDelta);
 
     if (journal) {
       await journalStockTransferLeg(tx, {
@@ -245,6 +308,7 @@ async function validateAndApplyItems(
       });
     }
   }
+  return { relievedByGroup, deltas };
 }
 
 async function replaceTransferItems(
@@ -326,22 +390,39 @@ export async function saveStockTransferLifecycle(
     // movements that happen to be adjacent.
     const canonicalRevision = await nextStockTransferRevision(tx, companyId, transferId);
 
+    const deltas: Decimal[] = [];
     if (wasApplied && oldItems.length > 0) {
-      await reverseAppliedItems(tx, companyId, oldDestinationLocationId, oldItems, {
-        transferId,
-        revision: canonicalRevision,
-      });
+      deltas.push(
+        ...(await reverseAppliedItems(
+          tx,
+          companyId,
+          oldDestinationLocationId,
+          oldItems,
+          rowValuesByGroup(oldRows, locked.source_location_id ? Number(locked.source_location_id) : null),
+          { transferId, revision: canonicalRevision }
+        ))
+      );
     }
 
     await assertCompanyScope(tx, companyId, destinationLocationId, normalizedItems);
-    const savedItems = await replaceTransferItems(tx, transferId, normalizedItems);
+    let savedItems = await replaceTransferItems(tx, transferId, normalizedItems);
     const shouldApply = !willBeOptional;
     if (shouldApply) {
-      await validateAndApplyItems(tx, companyId, destinationLocationId, normalizedItems, {
+      const applied = await validateAndApplyItems(tx, companyId, destinationLocationId, normalizedItems, {
         transferId,
         revision: canonicalRevision,
       });
+      deltas.push(...applied.deltas);
+      await recordTransferValueMovedTx(tx, transferId, applied.relievedByGroup);
+      savedItems = await loadTransferItems(tx, transferId);
     }
+    await postTransferResidualTx(tx, {
+      companyId,
+      transferId,
+      date: reversalDate(),
+      reference: `Transfer ${transferId}`,
+      deltas,
+    });
 
     const totalAmount = normalizedItems.reduce(
       (sum, item) => sum.plus(lineAmount(item.quantity, item.rate)),
@@ -433,9 +514,22 @@ export async function finalizeOptionalStockTransfer(
 
     let transition: StockTransferLifecycleResult["transition"] = "post";
     if (!inventoryApplied) {
-      await validateAndApplyItems(tx, companyId, destinationLocationId, items, {
+      const applied = await validateAndApplyItems(tx, companyId, destinationLocationId, items, {
         transferId,
         revision: await nextStockTransferRevision(tx, companyId, transferId),
+      });
+      await recordTransferValueMovedTx(
+        tx,
+        transferId,
+        applied.relievedByGroup,
+        locked.source_location_id ? Number(locked.source_location_id) : null
+      );
+      await postTransferResidualTx(tx, {
+        companyId,
+        transferId,
+        date: await transferVoucherDateTx(tx, companyId, voucherId),
+        reference: `Transfer ${transferId}`,
+        deltas: applied.deltas,
       });
     } else {
       // Legacy mismatch: stock already moved while header remained optional.
@@ -505,9 +599,20 @@ export async function reopenStockTransferAsDraft(
     );
 
     if (locked.inventory_applied) {
-      await reverseAppliedItems(tx, companyId, destinationLocationId, items, {
+      const deltas = await reverseAppliedItems(
+        tx,
+        companyId,
+        destinationLocationId,
+        items,
+        rowValuesByGroup(persistedRows, locked.source_location_id ? Number(locked.source_location_id) : null),
+        { transferId, revision: await nextStockTransferRevision(tx, companyId, transferId) }
+      );
+      await postTransferResidualTx(tx, {
+        companyId,
         transferId,
-        revision: await nextStockTransferRevision(tx, companyId, transferId),
+        date: reversalDate(),
+        reference: `Transfer ${transferId}`,
+        deltas,
       });
     }
 

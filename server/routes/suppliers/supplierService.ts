@@ -1,4 +1,13 @@
+import { and, eq } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+
+import { db } from "../../db";
 import { logAudit } from "../_helpers";
+import {
+  assertAccountChangeAllowed,
+  countAccountLines,
+  lockAccountRow,
+} from "../../services/accounting/accountHistoryPolicy";
 import { getSupplierBalanceForContext, resolveParentCompanyId } from "../helpers/supplierBalanceHelpers";
 import { SupplierRouteError } from "./supplierErrors";
 import type { SupplierAuditActor } from "./supplierRequestContext";
@@ -83,9 +92,16 @@ export const supplierService = {
         suppliers = await supplierRepository.listAll(parentCompanyId);
       }
     }
+    // A supplier of another company that this company posted to (owner
+    // decision 2): its payable counts here, so it is listed with the lines
+    // this company booked. Its opening stays in its own company.
+    const listedIds = new Set(suppliers.map((supplier) => supplier.id));
+    const postedHere = (await supplierRepository.listPostedFromOtherCompanies(companyId)).filter(
+      (supplier) => !listedIds.has(supplier.id)
+    );
 
     return Promise.all(
-      suppliers.map(async (supplier) => {
+      [...suppliers, ...postedHere].map(async (supplier) => {
         const [containerCount, balanceResult, purchaseOrders] = await Promise.all([
           supplierRepository.getContainerCount(supplier.id, companyId),
           getSupplierBalanceForContext(supplier, companyId),
@@ -97,6 +113,10 @@ export const supplierService = {
           containerCount,
           balance: balanceResult.balance,
           openingBalance: balanceResult.openingBalance,
+          openingBalanceSide: balanceResult.openingBalanceSide,
+          balanceBasis: balanceResult.balanceBasis,
+          // True for a supplier owned by another company: only this company's postings are counted.
+          postedFromOtherCompany: supplier.companyId !== companyId,
           hasActivity: containerCount > 0 || balanceResult.hasActivity || purchaseOrders.length > 0,
         };
       })
@@ -109,41 +129,50 @@ export const supplierService = {
 
   async balance(supplierId: number, companyId: number) {
     const supplier = await requireSupplier(supplierId, companyId);
-    const { balance, openingBalance, balancesByCurrency, historicalBaseBalance } = await getSupplierBalanceForContext(
-      supplier,
-      companyId
-    );
-    return { balance, openingBalance, balancesByCurrency, historicalBaseBalance };
+    const { balance, openingBalance, openingBalanceSide, balancesByCurrency, historicalBaseBalance, balanceBasis } =
+      await getSupplierBalanceForContext(supplier, companyId);
+    return { balance, openingBalance, openingBalanceSide, balancesByCurrency, historicalBaseBalance, balanceBasis };
   },
 
   async create(companyId: number, input: unknown, actor: SupplierAuditActor) {
     const parsed = parseCreateSupplierInput(input, companyId);
     const code = await createUniqueSupplierCode(companyId, parsed.legalName, parsed.code);
-    const supplier = await supplierRepository.create({
-      ...parsed,
-      code,
-      email: parsed.email || "",
-      phone: parsed.phone || "",
-      address: parsed.address || "",
-      taxId: parsed.taxId || "",
-      paymentTerms: parsed.paymentTerms || "",
-    });
-
-    await logAudit({
-      ...actor,
-      companyId,
-      action: "create",
-      tableName: "suppliers",
-      recordId: supplier.id,
-      recordIdentifier: supplier.legalName,
-      changes: {
-        companyId: { old: null, new: companyId },
-        name: { old: null, new: supplier.legalName },
-        code: { old: null, new: supplier.code },
-        phone: { old: null, new: supplier.phone || null },
-        email: { old: null, new: supplier.email || null },
-        address: { old: null, new: supplier.address || null },
-      },
+    const { role: _role, ...auditActor } = actor;
+    // Wave 16 (B): created and audited in one transaction.
+    const supplier = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(companyScopedSuppliers)
+        .values({
+          ...parsed,
+          code,
+          email: parsed.email || "",
+          phone: parsed.phone || "",
+          address: parsed.address || "",
+          taxId: parsed.taxId || "",
+          paymentTerms: parsed.paymentTerms || "",
+        })
+        .returning();
+      await logAudit(
+        {
+          ...auditActor,
+          companyId,
+          action: "create",
+          tableName: "suppliers",
+          recordId: created.id,
+          recordIdentifier: created.legalName,
+          changes: {
+            companyId: { old: null, new: companyId },
+            name: { old: null, new: created.legalName },
+            code: { old: null, new: created.code },
+            phone: { old: null, new: created.phone || null },
+            email: { old: null, new: created.email || null },
+            address: { old: null, new: created.address || null },
+            openingBalance: { old: null, new: created.openingBalance || "0" },
+          },
+        },
+        tx
+      );
+      return created;
     });
 
     return supplier;
@@ -160,35 +189,79 @@ export const supplierService = {
       }
     }
 
-    const updated = await supplierRepository.update(supplierId, parsed, companyId);
-    await logAudit({
-      ...actor,
-      companyId,
-      action: "update",
-      tableName: "suppliers",
-      recordId: updated.id,
-      recordIdentifier: updated.legalName,
-      changes: supplierAuditChanges(existing, updated),
+    // Wave 16 (B): the history rules (a supplier with posted lines changes its
+    // opening only by an Admin or Owner) and the audit row in the transaction
+    // of the change; the opening-balance lock refuses it after a close.
+    const { role, ...auditActor } = actor;
+    const updated = await db.transaction(async (tx) => {
+      await lockAccountRow(tx, "suppliers", supplierId);
+      const [before] = await tx
+        .select()
+        .from(companyScopedSuppliers)
+        .where(and(eq(companyScopedSuppliers.id, supplierId), eq(companyScopedSuppliers.companyId, companyId)));
+      if (!before) throw new SupplierRouteError(404, "Supplier not found");
+      const after = { ...before, ...parsed };
+      assertAccountChangeAllowed({
+        role,
+        lines: await countAccountLines(tx, [["supplier_id", supplierId]]),
+        opening: {
+          // This schema does not write the side, so only the amount can change here.
+          before: { amount: before.openingBalance },
+          after: { amount: after.openingBalance },
+          defaultSide: "Cr",
+        },
+      });
+      const [row] = await tx
+        .update(companyScopedSuppliers)
+        .set(parsed)
+        .where(and(eq(companyScopedSuppliers.id, supplierId), eq(companyScopedSuppliers.companyId, companyId)))
+        .returning();
+      await logAudit(
+        {
+          ...auditActor,
+          companyId,
+          action: "update",
+          tableName: "suppliers",
+          recordId: row.id,
+          recordIdentifier: row.legalName,
+          changes: supplierAuditChanges(before, row),
+        },
+        tx
+      );
+      return row;
     });
     return updated;
   },
 
   async delete(supplierId: number, companyId: number, actor: SupplierAuditActor) {
     const existing = await requireSupplier(supplierId, companyId);
-    await supplierRepository.delete(supplierId, companyId);
-    await logAudit({
-      ...actor,
-      companyId,
-      action: "delete",
-      tableName: "suppliers",
-      recordId: existing.id,
-      recordIdentifier: existing.legalName,
-      changes: {
-        name: { old: existing.legalName, new: null },
-        code: { old: existing.code, new: null },
-        phone: { old: existing.phone || null, new: null },
-        email: { old: existing.email || null, new: null },
-      },
+    const { role: _role, ...auditActor } = actor;
+    // Wave 16 (B): retired and audited in one transaction.
+    await db.transaction(async (tx) => {
+      const [deleted] = await tx
+        .update(companyScopedSuppliers)
+        .set({ deletedAt: new Date(), active: false })
+        .where(and(eq(companyScopedSuppliers.id, supplierId), eq(companyScopedSuppliers.companyId, companyId)))
+        .returning({ id: companyScopedSuppliers.id });
+      if (!deleted) throw new SupplierRouteError(404, "Supplier not found");
+      await logAudit(
+        {
+          ...auditActor,
+          companyId,
+          action: "delete",
+          tableName: "suppliers",
+          recordId: existing.id,
+          recordIdentifier: existing.legalName,
+          changes: {
+            name: { old: existing.legalName, new: null },
+            code: { old: existing.code, new: null },
+            phone: { old: existing.phone || null, new: null },
+            email: { old: existing.email || null, new: null },
+            openingBalance: { old: existing.openingBalance || "0", new: null },
+          },
+        },
+        tx
+      );
     });
   },
 

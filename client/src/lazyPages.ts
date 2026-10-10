@@ -71,7 +71,6 @@ export const VoucherDetail = lazy(() => import("@/pages/VoucherDetail"));
 export const PressingBales = lazy(() => import("@/pages/PressingBales"));
 export const BarcodeLookup = lazy(() => import("@/pages/BarcodeLookup"));
 export const BarcodeManager = lazy(() => import("@/pages/BarcodeManager"));
-export const TestDataImport = lazy(() => import("@/pages/TestDataImport"));
 export const ImportCycleDiagnostics = lazy(() => import("@/pages/ImportCycleDiagnostics"));
 export const InventoryRepair = lazy(() => import("@/pages/InventoryRepair"));
 export const BalanceRepair = lazy(() => import("@/pages/BalanceRepair"));

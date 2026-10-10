@@ -38,6 +38,9 @@ const voucherReview = JSON.parse(
     initialReviewed: number;
     activeReviewed: number;
     explicitReplayGuard: number;
+    wave16NoLongerCreates: number;
+    wave18NoLongerCreates: number;
+    phase19NoLongerCreates: number;
     migrationImportRepair: number;
     operationalWithoutRequestIdentity: number;
     phase3InfrastructureCompleted: number;
@@ -131,15 +134,18 @@ describe("write evidence ratchet", () => {
     expect(baseline.stockWritesWithoutJournalEvidence.reviewed.unjournalled.files).toEqual([]);
   });
 
-  it("keeps only the exact 14 reviewed compatibility writers in the active voucher backlog", () => {
+  // Wave 16 (A): balance-repair/undo.ts no longer inserts vouchers (it restores
+  // the retired one). Wave 18 (B): the retired payroll migrate-city-split route
+  // was the payroll migrations file's only voucher creator, so the active backlog is 12.
+  it("keeps only the exact 12 reviewed compatibility writers in the active voucher backlog", () => {
     const classified = Object.values(voucherReview.reviewed).flatMap((group) => group.files);
 
     expect(voucherReview.reviewState).toBe("REVIEWED FILE BY FILE");
-    expect(voucherReview.summary.activeReviewed).toBe(14);
-    expect(voucherReview.summary.explicitReplayGuard).toBe(14);
+    expect(voucherReview.summary.activeReviewed).toBe(12);
+    expect(voucherReview.summary.explicitReplayGuard).toBe(12);
     expect(voucherReview.summary.migrationImportRepair).toBe(0);
     expect(voucherReview.summary.operationalWithoutRequestIdentity).toBe(0);
-    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(14);
+    expect(baseline.voucherWritesWithoutRequestIdentity.ceiling).toBe(12);
     expect([...classified, ...voucherReview.unreviewed].sort()).toEqual(
       [...baseline.voucherWritesWithoutRequestIdentity.files].sort()
     );
@@ -171,7 +177,7 @@ describe("write evidence ratchet", () => {
       "phase-4-operational-writers": 22,
       "phase-5-operational-writers": 22,
       "phase-6-deterministic-source-writers": 6,
-      "phase-6-intrinsic-replay-safe-writers": 5,
+      "phase-6-intrinsic-replay-safe-writers": 2,
       "phase-7-post-review-safe-writers": 1,
       "phase-8-request-identity-writers": 1,
     };
@@ -189,7 +195,12 @@ describe("write evidence ratchet", () => {
     expect(voucherReview.summary.phase3InfrastructureCompleted).toBe(11);
     expect(voucherReview.summary.phase4OperationalCompleted).toBe(22);
     expect(voucherReview.summary.phase5OperationalCompleted).toBe(22);
-    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(11);
+    // Wave 16 (A): the deferred-rent reclassification left the phase 6 intrinsic
+    // writers (an Owner tool posting through the central engine), counted in
+    // wave16NoLongerCreates.
+    // Phase 19 (A): the payroll group-expense migration and the payroll voucher
+    // backfill are retired, counted in phase19NoLongerCreates.
+    expect(voucherReview.summary.phase6SpecialPurposeCompleted).toBe(8);
     expect(voucherReview.summary.phase7PostReviewSafeWriters).toBe(1);
     expect(voucherReview.summary.phase8RequestIdentityCompleted).toBe(1);
   });
@@ -205,7 +216,10 @@ describe("write evidence ratchet", () => {
         voucherReview.summary.phase4OperationalCompleted +
         voucherReview.summary.phase5OperationalCompleted +
         voucherReview.summary.phase6SpecialPurposeCompleted +
-        voucherReview.summary.phase8RequestIdentityCompleted
+        voucherReview.summary.phase8RequestIdentityCompleted +
+        voucherReview.summary.wave16NoLongerCreates +
+        voucherReview.summary.wave18NoLongerCreates +
+        voucherReview.summary.phase19NoLongerCreates
     ).toBe(voucherReview.summary.initialReviewed);
   });
 

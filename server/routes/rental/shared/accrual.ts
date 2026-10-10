@@ -6,6 +6,61 @@ import { propertyUnits, propertyContracts, propertyMonthlyLedger, vouchers, vouc
 import { eq, and, sql, inArray, isNull, isNotNull, ne } from "drizzle-orm";
 import { RentalModule, findOrCreateLedgerAccount } from "./ledger";
 import { ensureMonthlyLedgerRows } from "./monthly-rows";
+import type { DbTransaction } from "../../../db";
+import { writeAuditEvent } from "../../../services/audit";
+
+/** Who posts an accrual run, and from where (wave 18 A: audited in the posting transaction). */
+export interface RentAccrualPostingOptions {
+  actor?: { userId: string; username: string };
+  trigger?: "scheduler" | "manual" | "route";
+}
+
+const SYSTEM_RENTAL_ACTOR = { userId: "system", username: "rental-accrual-scheduler" } as const;
+
+/** One audit row per accrual voucher, written in the transaction that posts it. */
+async function auditAccrualVoucherTx(
+  tx: DbTransaction,
+  input: {
+    companyId: number;
+    module: string;
+    pass: string;
+    voucher: { id: number; voucherNumber: string; voucherDate: string; totalAmount: string | null };
+    lines: Array<{ ledgerAccountId: number | null; debitAmount: string; creditAmount: string; narration: string }>;
+    ledgerRowIds: number[];
+    options: RentAccrualPostingOptions;
+  }
+): Promise<void> {
+  const actor = input.options.actor ?? SYSTEM_RENTAL_ACTOR;
+  await writeAuditEvent(
+    {
+      userId: actor.userId,
+      username: actor.username,
+      companyId: input.companyId,
+      action: "create",
+      tableName: "vouchers",
+      recordId: input.voucher.id,
+      recordIdentifier: input.voucher.voucherNumber,
+      changes: {
+        voucher: {
+          new: {
+            voucherNumber: input.voucher.voucherNumber,
+            voucherDate: input.voucher.voucherDate,
+            totalAmount: input.voucher.totalAmount,
+            module: input.module,
+            pass: input.pass,
+          },
+        },
+        lines: { new: input.lines },
+        entryRows: {
+          old: input.ledgerRowIds.map((id) => ({ id, accrualVoucherId: null })),
+          new: input.ledgerRowIds.map((id) => ({ id, accrualVoucherId: input.voucher.id })),
+        },
+        trigger: { new: input.options.trigger ?? "route" },
+      },
+    },
+    tx
+  );
+}
 
 export async function ensureMonthlyForCompany(companyId: number, module: RentalModule, asOfDate?: string) {
   const active = await db
@@ -71,7 +126,8 @@ export async function postRentAccrualForCompany(
   shopExpenseAccountName: string,
   moduleParam: string = "ERP",
   incomeAccountName: string = "Rental Income",
-  asOfDate?: string
+  asOfDate?: string,
+  options: RentAccrualPostingOptions = {}
 ): Promise<{ accrued: number; skipped: number }> {
   // FIX #4: use explicit asOfDate instead of hidden new Date() so accruals
   //          are reproducible and safe to call from any date context.
@@ -274,7 +330,7 @@ export async function postRentAccrualForCompany(
             )
           );
           const actualPaidByRowId = new Map<number, number>(
-            ((paidQueryResult.rows)).map((r) => [Number(r.ledger_row_id), Number(r.total_paid)])
+            paidQueryResult.rows.map((r) => [Number(r.ledger_row_id), Number(r.total_paid)])
           );
 
           type Entry = { id: number; amount: number; unitId: number; month: number; year: number };
@@ -362,6 +418,23 @@ export async function postRentAccrualForCompany(
                 entries.map((e) => e.id)
               )
             );
+          await auditAccrualVoucherTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "accrual",
+            voucher: v,
+            lines: [
+              ...debitEntries,
+              {
+                ledgerAccountId: liabilityAccountId,
+                debitAmount: "0",
+                creditAmount: String(totalAmount),
+                narration: voucherDesc,
+              },
+            ],
+            ledgerRowIds: entries.map((e) => e.id),
+            options,
+          });
 
           accrued += entries.length;
         });
@@ -512,6 +585,15 @@ export async function postRentAccrualForCompany(
                 locked15.map((r) => Number(r.id))
               )
             );
+          await auditAccrualVoucherTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "advance-recognition",
+            voucher: v15,
+            lines: allEntries15,
+            ledgerRowIds: locked15.map((r) => Number(r.id)),
+            options,
+          });
           accrued += locked15.length;
         });
       }
@@ -628,6 +710,15 @@ export async function postRentAccrualForCompany(
                 duePrepaid.map((r) => r.id)
               )
             );
+          await auditAccrualVoucherTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "prepaid-recognition",
+            voucher: v,
+            lines: entries,
+            ledgerRowIds: duePrepaid.map((r) => r.id),
+            options,
+          });
           accrued += duePrepaid.length;
         });
       }
@@ -745,7 +836,7 @@ export async function postRentAccrualForCompany(
               creditAmount: "0",
               narration: `Deferred rent recognized - ${e.label}`,
             }));
-          await tx.insert(voucherEntries).values([
+          const deferredLines = [
             ...debitEntries,
             {
               voucherId: v.id,
@@ -754,7 +845,8 @@ export async function postRentAccrualForCompany(
               creditAmount: totalDeferred.toFixed(2),
               narration: vDesc,
             },
-          ]);
+          ];
+          await tx.insert(voucherEntries).values(deferredLines);
           await tx
             .update(propertyMonthlyLedger)
             .set({ accrualVoucherId: v.id })
@@ -764,6 +856,15 @@ export async function postRentAccrualForCompany(
                 dueDeferred.map((r) => r.id)
               )
             );
+          await auditAccrualVoucherTx(tx, {
+            companyId,
+            module: moduleParam,
+            pass: "deferred-recognition",
+            voucher: v,
+            lines: deferredLines,
+            ledgerRowIds: dueDeferred.map((r) => r.id),
+            options,
+          });
         });
       }
     }

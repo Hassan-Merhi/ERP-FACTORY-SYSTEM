@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { eq, and, asc, sql } from "drizzle-orm";
 import { z } from "zod";
+import { retireVouchersTx, sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 
 function getCompanyId(req: Request): number | null {
   const s = req.session;
@@ -365,8 +366,13 @@ export function registerFactoryTransporterRoutes(app: Express) {
         // had a voucher, meaning all of them.
         await trx.delete(factoryTransporterTransactions).where(eq(factoryTransporterTransactions.id, txId));
         if (tx.voucherId) {
-          await trx.delete(voucherEntries).where(eq(voucherEntries.voucherId, tx.voucherId));
-          await trx.delete(vouchers).where(eq(vouchers.id, tx.voucherId));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(trx, {
+            companyId,
+            voucherIds: [tx.voucherId],
+            reason: "factory-transporter-transaction-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
       });
 

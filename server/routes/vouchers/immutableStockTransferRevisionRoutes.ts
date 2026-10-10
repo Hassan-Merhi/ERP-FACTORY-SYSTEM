@@ -14,6 +14,7 @@ import {
 } from "../../services/immutableStockTransferRevisionLifecycle";
 import { sendRevisedTransferWhatsApp } from "../../helpers/sendRevisedTransferWhatsApp";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 
 const revisionSchema = z.object({
   note: z.string().optional().nullable(),
@@ -60,6 +61,8 @@ function statusForError(error: unknown): number {
 }
 
 function sendError(res: Response, error: unknown, context: string) {
+  // Wave 15: a factory bale-mirror item after the cut-over (409, translated).
+  if (sendBaleMirrorMovementRefusal(res, error)) return res;
   const status = statusForError(error);
   if (status === 500) logger.error(`[ImmutableStockTransferRevision ${context}]`, { error });
   const payload: Record<string, unknown> = {
@@ -290,7 +293,7 @@ export function registerImmutableStockTransferRevisionRoutes(app: Express) {
                 : { old: "pending", new: "approved" },
             changedItemCount: { new: result.changedItemCount },
             appliedRevisionCount: {
-              new: result.transition === "no-op" ? 0 : result.appliedRevisionCount ?? 1,
+              new: result.transition === "no-op" ? 0 : (result.appliedRevisionCount ?? 1),
             },
             totalAmount: { new: result.totalAmount },
             items: { new: result.items },

@@ -195,7 +195,10 @@ afterAll(async () => {
   // (po_line_items cascades), then the containers the import created, then the
   // supplier-credit voucher entries raised in the parent company. Those entries
   // would be removed by cleanupTestData's voucher delete anyway, but that
-  // happens per company and cannot be interleaved from here.
+  // happens per company and cannot be interleaved from here. Every line of a
+  // voucher carrying the supplier goes in the same statement: deleting only the
+  // supplier leg would leave the voucher one-sided, which the voucher balance
+  // guard refuses at commit.
   for (const id of [supplierId, childSupplierId]) {
     if (!id) continue;
     await pool.query("DELETE FROM purchase_orders WHERE supplier_id = $1", [id]);
@@ -204,7 +207,10 @@ afterAll(async () => {
       [id]
     );
     await pool.query("DELETE FROM containers WHERE supplier_id = $1", [id]);
-    await pool.query("DELETE FROM voucher_entries WHERE supplier_id = $1", [id]);
+    await pool.query(
+      "DELETE FROM voucher_entries WHERE voucher_id IN (SELECT voucher_id FROM voucher_entries WHERE supplier_id = $1)",
+      [id]
+    );
     await pool.query("DELETE FROM suppliers WHERE id = $1", [id]);
   }
 

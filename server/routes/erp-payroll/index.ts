@@ -13,7 +13,6 @@ import { registerPayrollWithdrawalRoutes } from "./withdrawals";
 import { registerPayrollWorkerPaymentRoutes } from "./worker-payments";
 import { registerPayrollRunRoutes } from "./runs";
 import { registerPayrollRunLifecycleRoutes } from "./runs-lifecycle";
-import { registerPayrollRunMigrationRoutes } from "./runs-migration";
 import { registerPayrollSummaryRoutes } from "./summaries";
 
 export function registerPayrollRoutes(app: Express) {
@@ -24,6 +23,7 @@ export function registerPayrollRoutes(app: Express) {
   registerPayrollWorkerPaymentRoutes(app);
   registerPayrollRunRoutes(app);
   registerPayrollRunLifecycleRoutes(app);
-  registerPayrollRunMigrationRoutes(app);
+  // Phase 19 (A): POST /api/payroll/runs/migrate-group-expenses is retired (it rewrote
+  // posted payroll lines over several transactions with floats and no audit).
   registerPayrollSummaryRoutes(app);
 }

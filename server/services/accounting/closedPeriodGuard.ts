@@ -20,10 +20,13 @@ import { CLOSED_PERIOD_ERROR_CODE } from "../../lib/closedPeriodError";
  * Descriptions and narrations stay editable. Both voucher_date and
  * effective_date are checked because reports date by either.
  *
- * Bypass is limited to process-owned work: the maintenance database scope
- * (startup repairs and schedulers; request handlers can never elevate into it,
- * see runWithDatabaseMaintenanceScope) or an explicit transaction-local
- * `SET LOCAL app.closed_period_override = 'on'`.
+ * Bypass: only an explicit transaction-local
+ * `SET LOCAL app.closed_period_override = 'on'`, which only the fiscal reopen
+ * sets (storage/accounting/fiscal-periods.ts, audited with the reopen).
+ * Phase 19 (B), DI2: the maintenance database scope (boot steps, scheduler
+ * ticks, repairs) no longer bypasses it; process-owned writers post in a
+ * company's tenant scope and skip a closed date themselves
+ * (scheduledPostingScope.ts), and the trigger stays the backstop.
  *
  * Concurrency: every guarded write takes a shared advisory lock on the company
  * and closeFiscalPeriod takes the exclusive one, so a close cannot compute its
@@ -33,14 +36,16 @@ import { CLOSED_PERIOD_ERROR_CODE } from "../../lib/closedPeriodError";
 export { CLOSED_PERIOD_ERROR_CODE };
 export const CLOSED_PERIOD_LOCK_NAMESPACE = 74_122;
 
+/** Version of CLOSED_PERIOD_GUARD_DDL (comment on erp_closed_period_guard_bypassed). */
+export const CLOSED_PERIOD_GUARD_VERSION = "2026-10-closed-period-v2";
+
 export const CLOSED_PERIOD_GUARD_DDL: readonly string[] = [
   `CREATE OR REPLACE FUNCTION erp_closed_period_guard_bypassed()
    RETURNS boolean
    LANGUAGE sql
    STABLE
    AS $bypass$
-     SELECT lower(btrim(coalesce(current_setting('app.company_scope_maintenance', true), ''))) = 'on'
-         OR lower(btrim(coalesce(current_setting('app.closed_period_override', true), ''))) = 'on'
+     SELECT lower(btrim(coalesce(current_setting('app.closed_period_override', true), ''))) = 'on'
    $bypass$`,
 
   `CREATE OR REPLACE FUNCTION erp_assert_accounting_date_open(p_company_id integer, p_date date)
@@ -195,6 +200,7 @@ export async function ensureClosedPeriodGuard(pool: Pool): Promise<void> {
     for (const statement of CLOSED_PERIOD_GUARD_DDL) {
       await client.query(statement);
     }
+    await client.query(`COMMENT ON FUNCTION erp_closed_period_guard_bypassed() IS '${CLOSED_PERIOD_GUARD_VERSION}'`);
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
@@ -202,7 +208,7 @@ export async function ensureClosedPeriodGuard(pool: Pool): Promise<void> {
   } finally {
     client.release();
   }
-  logger.info("[startup] ✓ Closed fiscal period guard ensured");
+  logger.info(`[startup] ✓ Closed fiscal period guard ensured (${CLOSED_PERIOD_GUARD_VERSION})`);
 }
 
 export { isClosedPeriodError, closedPeriodErrorResponse } from "../../lib/closedPeriodError";

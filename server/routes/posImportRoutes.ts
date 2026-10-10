@@ -35,6 +35,12 @@ import {
   stockItemLocationPrices,
   type Voucher,
 } from "@shared/schema";
+import { MoneyDecimal } from "../lib/money";
+import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 /**
  * One POS-import line: what the parse endpoint emits, and what the validate and
@@ -242,6 +248,7 @@ export function registerPosImportRoutes(app: Express) {
       // `let` keeps the voucher's type: TypeScript cannot see that a callback ran.
       const createdVoucher = await db.transaction(async (tx): Promise<Voucher> => {
         const voucherNumber = `SALES-${Date.now()}`;
+        let relieved = new MoneyDecimal(0);
         const [voucher] = await tx
           .insert(vouchers)
           .values({
@@ -261,6 +268,8 @@ export function registerPosImportRoutes(app: Express) {
           if (!stockItem) {
             throw new HttpError(400, `Stock item not found for barcode: ${item.barcode}`);
           }
+          // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+          await assertNoBaleMirrorMovementTx(tx, req.session.currentCompanyId!, [stockItem.id], "pos-import");
 
           const [inventoryRecord] = await tx
             .select()
@@ -288,6 +297,13 @@ export function registerPosImportRoutes(app: Express) {
             .limit(1);
           const configuredPrice = toInventoryDecimal(locationPrice?.sellingPrice || stockItem.sellingPrice);
 
+          const issued = await adjustInventory(
+            tx,
+            locationId,
+            stockItem.id,
+            quantity.negated().toNumber(),
+            req.session.currentCompanyId!
+          );
           const [saleItem] = await tx
             .insert(salesItems)
             .values({
@@ -300,16 +316,12 @@ export function registerPosImportRoutes(app: Express) {
               totalCost: inventoryMoney(itemCost),
               profit: inventoryMoney(profit),
               configuredPrice: configuredPrice.isPositive() ? inventoryUnitCost(configuredPrice) : null,
+              // Wave 11: the exact value the issue relieved, what a reversal restores.
+              valueMoved: inventoryMoney(relievedValue(issued)),
             })
             .returning({ id: salesItems.id });
 
-          await adjustInventory(
-            tx,
-            locationId,
-            stockItem.id,
-            quantity.negated().toNumber(),
-            req.session.currentCompanyId!
-          );
+          relieved = relieved.plus(relievedValue(issued));
           await postStockMovementTx(
             tx,
             {
@@ -352,6 +364,15 @@ export function registerPosImportRoutes(app: Express) {
           narration: `Sales Revenue - ${items.length} items`,
         });
         await tx.update(vouchers).set({ totalAmount: totalSalesAmount }).where(eq(vouchers.id, voucher.id));
+        // Perpetual inventory (wave 8.1): the exact value the import took out of stock.
+        await postSaleCogsTx(tx, {
+          companyId: req.session.currentCompanyId!,
+          saleVoucherId: voucher.id,
+          saleVoucherNumber: voucherNumber,
+          voucherDate: saleDate,
+          locationId,
+          relieved,
+        });
         return voucher;
       });
 
@@ -430,6 +451,7 @@ export function registerPosImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof HttpError && error.statusCode === 400) {
         return res.status(400).json({ message: getErrorMessage(error) });
       }

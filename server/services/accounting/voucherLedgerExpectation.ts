@@ -12,14 +12,12 @@
  *                   ledger-side total. Credit/Debit Notes are the important case:
  *                   the refund/receipt header can differ from inventory cost and
  *                   the variance account makes the ledger balance at cost value.
- *                   Stock adjustments (Production, Consumption, Mixed) are
- *                   here too: each side posts Stock Adjustment against the
- *                   Inventory account, and a Mixed header is the net value.
- * "single-sided"    Exactly one GL side is posted. Inventory is the contra side.
- *                   No voucher type uses it since stock adjustments started
- *                   posting their Inventory side.
+ * "single-sided"    Exactly one GL side is posted and inventory is the contra
+ *                   side; or, once the company's perpetual-inventory cut-over
+ *                   applies, the voucher also carries its inventory line and
+ *                   both sides are posted and equal.
  * "inventory-sided" One or both GL sides can be posted and inventory carries the
- *                   net contra. No voucher type uses it either, for the same reason.
+ *                   net contra. Mixed production/consumption documents use this.
  * "none"            The document posts no ledger entry at all; stock evidence is
  *                   reconciled separately.
  */
@@ -34,14 +32,15 @@ const VOUCHER_LEDGER_EXPECTATIONS: Record<string, VoucherLedgerExpectation> = {
   Journal: "balanced",
   Payment: "balanced",
   Receipt: "balanced",
+  Contra: "balanced",
   Sales: "balanced",
   Purchase: "balanced",
   "Credit Note": "balanced-only",
   "Debit Note": "balanced-only",
-  "Stock Adjustment": "balanced-only",
-  Production: "balanced-only",
-  Consumption: "balanced-only",
-  Mixed: "balanced-only",
+  "Stock Adjustment": "single-sided",
+  Production: "single-sided",
+  Consumption: "single-sided",
+  Mixed: "inventory-sided",
   "Stock Transfer": "none",
   StockTransfer: "none",
   Transfer: "none",
@@ -61,4 +60,12 @@ export function classifyVoucherLedgerExpectation(voucherType: unknown): VoucherL
 /** The classified types, for tests and documentation. */
 export function classifiedVoucherTypes(): string[] {
   return Object.keys(VOUCHER_LEDGER_EXPECTATIONS).sort();
+}
+
+/** The voucher types classified with `expectation`, sorted (the balance guard builds its exemptions from them). */
+export function voucherTypesWithLedgerExpectation(expectation: VoucherLedgerExpectation): string[] {
+  return Object.entries(VOUCHER_LEDGER_EXPECTATIONS)
+    .filter(([, value]) => value === expectation)
+    .map(([type]) => type)
+    .sort();
 }

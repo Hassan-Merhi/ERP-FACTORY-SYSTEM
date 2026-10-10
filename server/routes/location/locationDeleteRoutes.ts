@@ -30,7 +30,8 @@ export function registerLocationDeleteRoutes(app: Express) {
              FROM inventory
             WHERE location_id = $1
               AND company_id = $2
-              AND ABS(COALESCE(NULLIF(quantity::text, '')::numeric, 0)) > 0`,
+              AND (ABS(COALESCE(NULLIF(quantity::text, '')::numeric, 0)) > 0
+                   OR ABS(COALESCE(total_value, 0)) > 0)`,
           [locationId, companyId]
         ),
         pool.query(
@@ -60,6 +61,13 @@ export function registerLocationDeleteRoutes(app: Express) {
           WHERE id = $1
             AND company_id = $2
             AND deleted_at IS NULL
+            -- Wave 11: re-checked in the same statement, so stock that arrives
+            -- between the check above and this update still blocks the delete.
+            AND NOT EXISTS (
+              SELECT 1 FROM inventory
+               WHERE location_id = $1
+                 AND (ABS(COALESCE(quantity, 0)) > 0 OR ABS(COALESCE(total_value, 0)) > 0)
+            )
         RETURNING id, name, code, active, deleted_at`,
         [locationId, companyId]
       );

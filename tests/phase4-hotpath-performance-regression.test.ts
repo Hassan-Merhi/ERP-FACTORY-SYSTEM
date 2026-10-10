@@ -21,9 +21,9 @@ describe("Phase 4 hot-path performance regressions", () => {
   it("aggregates /api/accounts/all movements in PostgreSQL instead of materializing voucher rows", () => {
     const source = read("server/routes/accounts/all.ts");
 
-    expect(source).toContain("voucherEntries.fixedAssetId");
-    expect(source).toContain("voucherEntries.employeeId");
-    expect(source).toContain(".groupBy(");
+    // Wave 18 C: one grouped engine scan (loadBalanceRows aggregates in SQL)
+    // gives the ledger, bank, fixed-asset and employee rows.
+    expect(source).toContain("loadBalanceRows(db,");
     expect(source).not.toContain("companyVoucherIds");
     expect(source).not.toContain("const allEntries =");
     expect(source).toContain("suppliers.length === 0");
@@ -37,7 +37,8 @@ describe("Phase 4 hot-path performance regressions", () => {
     expect(source).toContain("excludedLedgerVoucherIds");
     expect(source).toContain("eq(voucherEntries.companyId, companyId)");
     expect(source).toContain("notInArray(voucherEntries.voucherId, excludedLedgerVoucherIds)");
-    expect(source).toContain("supplierPureCredits");
+    // Wave 10: ERP supplier lines net credit − debit in one aggregate column.
+    expect(source).toContain("supplierNet");
     expect(source).toContain("factorySupplierVoucherPaidUsd");
     expect(source).toContain(".groupBy(");
     expect(source).not.toContain("const factoryPayVoucherIds");
@@ -62,12 +63,14 @@ describe("Phase 4 hot-path performance regressions", () => {
   });
 
   it("aggregates customer balance history in PostgreSQL for voucher-sidebar and customer reads", () => {
-    const source = read("server/routes/customers/customerBalanceQuery.ts");
+    // Wave 10: customer balances come from the one balance engine, which
+    // aggregates every line in one grouped PostgreSQL query.
+    const wrapper = read("server/routes/customers/customerBalanceQuery.ts");
+    expect(wrapper).toContain("getPartyBalances");
+    const source = read("server/services/accounting/balances/ledgerBalanceEngine.ts");
 
-    expect(source).toContain("netBalanceSql");
-    expect(source).toContain("historicalBaseBalanceSql");
-    expect(source).toContain(".groupBy(voucherEntries.ledgerAccountId)");
-    expect(source).toContain(".groupBy(voucherEntries.customerId)");
+    expect(source).toContain("GROUP BY a.kind, a.target_id");
+    expect(source).toContain("base_movement");
     expect(source).not.toContain("for (const entry of ledgerEntries)");
     expect(source).not.toContain("for (const entry of customerEntries)");
   });

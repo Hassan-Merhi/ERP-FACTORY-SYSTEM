@@ -5,7 +5,7 @@
  * first-match, so that order is behaviour.
  */
 import type { Express } from "express";
-import { getErrorMessage } from "../../../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../../../lib/httpHandlers";
 import { storage } from "../../../storage";
 import { requireAuth } from "../../../auth";
 import { logAudit } from "../../_helpers";
@@ -43,7 +43,7 @@ export function registerStockItemEditRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockTransferItem(itemId, req.body);
+      const updated = await storage.updateStockTransferItem(itemId, req.body, req.session.currentCompanyId);
       try {
         const _sti: Record<string, { new: string }> = {};
         if (req.body.quantity !== undefined) _sti.quantity = { new: String(req.body.quantity) };
@@ -64,7 +64,7 @@ export function registerStockItemEditRoutes(app: Express) {
       }
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 
@@ -100,10 +100,10 @@ export function registerStockItemEditRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockAdjustmentItem(itemId, req.body);
+      const updated = await storage.updateStockAdjustmentItem(itemId, req.body, req.session.currentCompanyId);
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 }

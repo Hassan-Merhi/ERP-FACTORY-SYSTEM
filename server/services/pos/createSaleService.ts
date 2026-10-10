@@ -42,6 +42,9 @@ import { insertSaleVoucher } from "./createSaleVoucher";
 import { lockAndDeductInventoryForSaleItem } from "./deductSaleInventory";
 import { lockAndFindExistingPosSaleTx, POS_CLIENT_SALE_ID_MAX_LENGTH } from "./posSaleIdempotency";
 import { isGoldenCoastPosCompany, postGoldenCoastPosAccountingTx } from "./goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../accounting/perpetualInventory/cutoverRefusal";
+import { MoneyDecimal } from "../../lib/money";
 import { spDeductionAmount, spPayableAfterDeduction } from "./spDeduction";
 
 function err(result: HandlerErrorResult): CreatePosSaleResult {
@@ -177,6 +180,15 @@ export async function createPosSale(
   const stockExistsError = await validateStockItemsExist(currentCompanyId, items);
   if (stockExistsError) return err(stockExistsError.error);
 
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    db,
+    currentCompanyId,
+    items.map((item: { stockItemId?: unknown }) => item?.stockItemId),
+    "pos-sale"
+  );
+  if (mirrorRefusal) return err({ status: mirrorRefusal.status, body: { ...mirrorRefusal.body } });
+
   let inventoryValidation: Awaited<ReturnType<typeof validateInventoryAvailability>>;
   try {
     inventoryValidation = await validateInventoryAvailability(parsedLocationId, items, canSellNegativeStock);
@@ -243,13 +255,14 @@ export async function createPosSale(
 
       const txSaleItems = [];
       const issueOrdinalByStockItem = new Map<number, number>();
+      let relievedTotal = new MoneyDecimal(0);
 
       for (const validatedItem of inventoryValidation) {
         const { item } = validatedItem;
         const issueOrdinal = (issueOrdinalByStockItem.get(item.stockItemId) ?? 0) + 1;
         issueOrdinalByStockItem.set(item.stockItemId, issueOrdinal);
 
-        const { costPrice } = await lockAndDeductInventoryForSaleItem(
+        const { costPrice, relieved } = await lockAndDeductInventoryForSaleItem(
           tx,
           parsedLocationId,
           parsedLocationId,
@@ -262,6 +275,7 @@ export async function createPosSale(
           }
         );
 
+        relievedTotal = relievedTotal.plus(relieved);
         const [stockItem] = await tx.select().from(stockItems).where(eq(stockItems.id, item.stockItemId));
 
         const qty = toInventoryDecimal(item.quantity);
@@ -293,6 +307,11 @@ export async function createPosSale(
           totalCost: inventoryMoney(totalCost),
           profit: inventoryMoney(profit),
           configuredPrice: inventoryUnitCost(configuredPrice),
+          // Wave 11: the exact value the issue relieved (the COGS journal's
+          // amount), what a reversal restores. cost_price / total_cost stay the
+          // sale's costing at the pre-sale average rate, a display and profit
+          // figure; the sub-ledger and the ledger move by value_moved.
+          valueMoved: inventoryMoney(relieved),
         });
 
         const profitPerUnit = subtractInventoryValues(sellingPrice, configuredPrice);
@@ -328,6 +347,20 @@ export async function createPosSale(
           supplierPayableAccountId: spCtx.spPosPayableAccountId!,
           payableAmountUsd: payableAmount,
           actor: { userId, username, reason: "Golden Coast itemized POS sale settlement" },
+        });
+      }
+
+      // Perpetual inventory (wave 8.1): the exact value this sale took out of
+      // stock, as its COGS journal. Supplier-partner companies carry their stock
+      // in their own sp_stock accounts and are not posted here.
+      if (!isSpCompany) {
+        await postSaleCogsTx(tx, {
+          companyId: currentCompanyId,
+          saleVoucherId: txVoucher.id,
+          saleVoucherNumber: voucherNumber,
+          voucherDate: String(txVoucher.voucherDate),
+          locationId: parsedLocationId,
+          relieved: relievedTotal,
         });
       }
 

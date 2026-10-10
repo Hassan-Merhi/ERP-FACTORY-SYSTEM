@@ -12,17 +12,16 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { checkFactoryAdmin } from "../../_helpers";
 import { logAudit } from "../../../helpers/auditHelpers";
+import { FACTORY_BALE_RECOST_MOVED_MESSAGE, planBaleRecost } from "../../../../services/factory/baleRecost";
 import {
   factorySuppliers,
   factoryContainers,
   factoryRawStock,
   factoryMixBatches,
   factoryMixBatchSources,
-  factoryBales,
 } from "@shared/schema";
 import { eq, and, or, sql, inArray, ne, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
-import { toMoney } from "../../../../lib/money";
 
 export function registerRawStockRecalculateUsedRoutes(app: Express) {
   // Recalculate usedKg for all factory_raw_stock records based on ACTIVE (non-deleted) mix batch sources.
@@ -248,100 +247,34 @@ export function registerRawStockRecalculateUsedRoutes(app: Express) {
     }
   });
 
-  // ── Recalculate bale costs from current mix batch cost/kg (one-time historical fix) ──
-  // Dangerous one-time historical fix — bulk-overwrites costPerKg/totalCost on every bale
-  // in every mix batch for the company. Admin-only, defaults to a dry-run diff preview,
-  // and audit-logs every apply.
+  // ── Recalculate bale costs (retired as a direct write, wave 11) ──
+  // It bulk-overwrote every bale of every mix batch, sold bales included, at
+  // the batch's cost per kg. Bales and open mixes are now re-costed only through
+  // the reviewed preview → Owner confirm → apply (services/factory/baleRecost.ts,
+  // /api/factory/bale-cost/recost-*). A dry run still answers, with that plan;
+  // { confirm: true } is refused with 410.
   app.post("/api/factory/raw-stock/recalculate-bale-costs", requireAuth, async (req: Request, res: Response) => {
     try {
       if (!checkFactoryAdmin(req, res)) return;
       const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const dryRun = req.body?.confirm !== true;
-
-      const allBatches = await db
-        .select({ id: factoryMixBatches.id, costPerKg: factoryMixBatches.costPerKg })
-        .from(factoryMixBatches)
-        .where(and(eq(factoryMixBatches.companyId, companyId), sql`${factoryMixBatches.status} != 'DELETED'`));
-
-      const changes: {
-        baleId: number;
-        mixBatchId: number;
-        oldCostPerKg: string | null;
-        newCostPerKg: string;
-        oldTotalCost: string | null;
-        newTotalCost: string;
-      }[] = [];
-
-      for (const batch of allBatches) {
-        const batchCost = toMoney(batch.costPerKg);
-        if (batchCost.lte(0)) continue;
-
-        const bales = await db
-          .select({
-            id: factoryBales.id,
-            weightKg: factoryBales.weightKg,
-            costPerKg: factoryBales.costPerKg,
-            totalCost: factoryBales.totalCost,
-          })
-          .from(factoryBales)
-          .where(
-            and(
-              eq(factoryBales.mixBatchId, batch.id),
-              eq(factoryBales.companyId, companyId),
-              sql`${factoryBales.status} NOT IN ('DELETED','REMOVED')`
-            )
-          );
-
-        for (const bale of bales) {
-          // Exact: 3 kg x 1.115 is 3.345, which the float product (3.3449...) rounded to 3.34.
-          const baleWt = toMoney(bale.weightKg as string);
-          const newCostPerKg = batchCost.toFixed(4);
-          const newTotalCost = baleWt.times(batchCost).toFixed(2);
-          if (String(bale.costPerKg) === newCostPerKg && String(bale.totalCost) === newTotalCost) continue;
-          changes.push({
-            baleId: bale.id,
-            mixBatchId: batch.id,
-            oldCostPerKg: bale.costPerKg,
-            newCostPerKg,
-            oldTotalCost: bale.totalCost,
-            newTotalCost,
-          });
-        }
+      if (req.body?.confirm === true) {
+        return res.status(410).json({ code: "FACTORY_BALE_RECOST_MOVED", message: FACTORY_BALE_RECOST_MOVED_MESSAGE });
       }
-
-      if (dryRun) {
-        return res.json({
-          dryRun: true,
-          wouldUpdate: changes.length,
-          changes,
-          message: `Dry run: ${changes.length} bale(s) across ${allBatches.length} batch(es) would change. Re-submit with { confirm: true } to apply.`,
-        });
-      }
-
-      const now = new Date();
-      for (const c of changes) {
-        await db
-          .update(factoryBales)
-          .set({ costPerKg: c.newCostPerKg, totalCost: c.newTotalCost, updatedAt: now })
-          .where(eq(factoryBales.id, c.baleId));
-      }
-
-      await logAudit({
-        userId: requireSessionUserId(req),
-        username: req.session.username || requireSessionUserId(req),
-        companyId,
-        action: "update",
-        tableName: "factory_bales",
-        recordIdentifier: "bulk recalculate-bale-costs",
-        changes: { updated: { new: changes.length }, rows: { new: changes } },
-      });
-
+      const plan = await planBaleRecost(companyId);
       res.json({
-        dryRun: false,
-        balesUpdated: changes.length,
-        changes,
-        message: `Updated cost/kg on ${changes.length} bale(s) across ${allBatches.length} batch(es).`,
+        dryRun: true,
+        wouldUpdate: plan.bales.length,
+        changes: plan.bales.map((bale) => ({
+          baleId: bale.id,
+          mixBatchId: bale.mixBatchId,
+          oldCostPerKg: bale.oldCostPerKg,
+          newCostPerKg: bale.newCostPerKg,
+          oldTotalCost: bale.oldTotalCost,
+          newTotalCost: bale.newTotalCost,
+        })),
+        recostPlan: plan,
+        message: FACTORY_BALE_RECOST_MOVED_MESSAGE,
       });
     } catch (error: unknown) {
       logger.error("Error recalculating bale costs:", { error: error });

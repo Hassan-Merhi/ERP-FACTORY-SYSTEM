@@ -12,11 +12,20 @@ import {
 } from "@shared/schema";
 import { db } from "../../db";
 import { logger } from "../../lib/logger";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { isClosedPeriodError } from "../../lib/closedPeriodError";
+import { writeAuditEvent } from "../audit";
 import { erpRateToDaybookFxRateToUsd } from "./currencyAmounts";
 import { applyEmployeeBalanceDeltasTx } from "./employeeBalancePosting";
 import { buildManualJournalPostingRequest } from "./manualJournalPosting";
 import { postBalancedVoucherTx } from "./centralPostingEngine";
 import { createDatabasePostingDependencies } from "./databasePostingDependencies";
+import {
+  companyClosedThrough,
+  isDateInClosedPeriod,
+  runInCompanyPostingScope,
+  type ScheduledPostingSkip,
+} from "./scheduledPostingScope";
 
 const postingDependencies = createDatabasePostingDependencies();
 
@@ -162,8 +171,7 @@ function persistedEntryAmount(entry: typeof voucherEntries.$inferSelect, side: "
       : [entry.transactionCreditAmount, entry.baseCreditAmount, entry.creditAmount];
 
   for (const raw of candidates) {
-    const value = Number(raw ?? 0);
-    if (Number.isFinite(value) && value > 0) return String(raw);
+    if (toMoney(raw).gt(0)) return String(raw);
   }
 
   throw new RecurringJournalError(
@@ -181,9 +189,9 @@ function entryToTemplate(entry: typeof voucherEntries.$inferSelect): RecurringJo
     );
   }
 
-  const debit = Number(entry.transactionDebitAmount ?? entry.baseDebitAmount ?? entry.debitAmount ?? 0);
-  const credit = Number(entry.transactionCreditAmount ?? entry.baseCreditAmount ?? entry.creditAmount ?? 0);
-  if (debit > 0 === credit > 0) {
+  const debit = toMoney(entry.transactionDebitAmount ?? entry.baseDebitAmount ?? entry.debitAmount ?? 0);
+  const credit = toMoney(entry.transactionCreditAmount ?? entry.baseCreditAmount ?? entry.creditAmount ?? 0);
+  if (debit.gt(0) === credit.gt(0)) {
     throw new RecurringJournalError(
       "RECURRING_ENTRY_SIDE_INVALID",
       `Voucher entry ${entry.id} must contain exactly one debit or credit amount`
@@ -191,7 +199,7 @@ function entryToTemplate(entry: typeof voucherEntries.$inferSelect): RecurringJo
   }
 
   const target = populated[0];
-  const side: "DR" | "CR" = debit > 0 ? "DR" : "CR";
+  const side: "DR" | "CR" = debit.gt(0) ? "DR" : "CR";
   return {
     type: side,
     accountType: target.type,
@@ -263,13 +271,9 @@ export async function upsertRecurringJournalFromVoucher(
     }
 
     const entryTemplate = entries.map(entryToTemplate);
-    const debitTotal = entryTemplate
-      .filter((entry) => entry.type === "DR")
-      .reduce((sum, entry) => sum + Number(entry.amount), 0);
-    const creditTotal = entryTemplate
-      .filter((entry) => entry.type === "CR")
-      .reduce((sum, entry) => sum + Number(entry.amount), 0);
-    if (Math.abs(debitTotal - creditTotal) > 0.000001 || debitTotal <= 0) {
+    const debitTotal = sumMoney(entryTemplate.filter((entry) => entry.type === "DR").map((entry) => entry.amount));
+    const creditTotal = sumMoney(entryTemplate.filter((entry) => entry.type === "CR").map((entry) => entry.amount));
+    if (!debitTotal.eq(creditTotal) || debitTotal.lte(0)) {
       throw new RecurringJournalError(
         "RECURRING_SOURCE_UNBALANCED",
         "Source journal must be balanced before it can recur"
@@ -491,12 +495,39 @@ export async function getRecurringJournalHistory(companyId: number, recurringJou
   return rows.filter((row) => row.sourceId.startsWith(prefix)).map(({ sourceId: _sourceId, ...row }) => row);
 }
 
-export async function runRecurringJournal(recurring: RecurringJournal): Promise<{
+export interface RecurringJournalRunResult {
   posted: boolean;
   replayed: boolean;
   voucherId: number | null;
   scheduledFor: string;
-}> {
+  /** Set when the scheduled date is in a closed period: nothing posted, nothing advanced. */
+  skipped?: ScheduledPostingSkip;
+}
+
+const RECURRING_ACTOR = { userId: "system", username: "recurring-journal-scheduler" } as const;
+
+function periodClosedSkip(recurring: RecurringJournal, closedThrough: string | null): ScheduledPostingSkip {
+  return {
+    companyId: recurring.companyId,
+    reference: `recurring-journal:${recurring.id}`,
+    date: recurring.nextRunDate,
+    reason: "PERIOD_CLOSED",
+    closedThrough,
+  };
+}
+
+/**
+ * Posts one recurrence. It runs in the template company's tenant database
+ * scope (wave 18 A): the closed-period guard and the opening lock apply. A
+ * scheduled date in a closed period is skipped (PERIOD_CLOSED, recorded in
+ * lastError, the recurrence not advanced) and never forced; Pause/Resume moves
+ * it to the next open month end.
+ */
+export function runRecurringJournal(recurring: RecurringJournal): Promise<RecurringJournalRunResult> {
+  return runInCompanyPostingScope(recurring.companyId, () => runRecurringJournalInScope(recurring));
+}
+
+async function runRecurringJournalInScope(recurring: RecurringJournal): Promise<RecurringJournalRunResult> {
   const scheduledFor = recurring.nextRunDate;
 
   try {
@@ -541,6 +572,20 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
           voucherId: null,
           scheduledFor,
         };
+      }
+
+      const closedThrough = await companyClosedThrough(locked.companyId, tx);
+      if (isDateInClosedPeriod(closedThrough, scheduledFor)) {
+        const skipped = periodClosedSkip(locked, closedThrough);
+        await tx
+          .update(recurringJournals)
+          .set({
+            lastAttemptAt: new Date(),
+            lastError: `PERIOD_CLOSED: the books are closed through ${closedThrough}; the run of ${scheduledFor} was skipped`,
+            updatedAt: new Date(),
+          })
+          .where(eq(recurringJournals.id, locked.id));
+        return { posted: false as const, replayed: false, voucherId: null, scheduledFor, skipped };
       }
 
       const entries = locked.entryTemplate as RecurringJournalEntryTemplate[];
@@ -592,9 +637,9 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
 
         if (factorySetting) {
           const currency = posted.voucher.currency || "USD";
-          const baseTotal = Number(posted.voucher.totalAmount || 0);
-          const rate = posted.voucher.exchangeRate ? Number(posted.voucher.exchangeRate) : 1;
-          const transactionTotal = currency !== "USD" && rate > 0 ? baseTotal * rate : baseTotal;
+          const baseTotal = toMoney(posted.voucher.totalAmount);
+          const rate = posted.voucher.exchangeRate ? toMoney(posted.voucher.exchangeRate) : new MoneyDecimal(1);
+          const transactionTotal = currency !== "USD" && rate.gt(0) ? baseTotal.times(rate) : baseTotal;
 
           await tx.insert(factoryDaybookEntries).values({
             companyId: locked.companyId,
@@ -604,9 +649,9 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
             referenceTable: "vouchers",
             description: posted.voucher.description || `Journal voucher #${posted.voucher.voucherNumber}`,
             currencyCode: currency,
-            amountCurrency: String(transactionTotal),
+            amountCurrency: transactionTotal.toFixed(),
             fxRateToUsd: erpRateToDaybookFxRateToUsd(currency, "USD", posted.voucher.exchangeRate),
-            amountUsd: String(baseTotal),
+            amountUsd: baseTotal.toFixed(),
             createdBy: null,
           });
         }
@@ -627,6 +672,34 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
         })
         .where(eq(recurringJournals.id, locked.id));
 
+      await writeAuditEvent(
+        {
+          ...RECURRING_ACTOR,
+          companyId: locked.companyId,
+          action: "update",
+          tableName: "recurring_journals",
+          recordId: locked.id,
+          recordIdentifier: requestKey,
+          changes: {
+            lastRunDate: { old: locked.lastRunDate, new: scheduledFor },
+            nextRunDate: { old: locked.nextRunDate, new: nextRunDate },
+            active: { old: locked.active, new: shouldRemainActive },
+            lastGeneratedVoucherId: { old: locked.lastGeneratedVoucherId, new: posted.voucher.id },
+            voucher: {
+              new: {
+                voucherId: posted.voucher.id,
+                voucherNumber: posted.voucher.voucherNumber,
+                voucherDate: posted.voucher.voucherDate,
+                totalAmount: posted.voucher.totalAmount,
+                replayed: posted.replayed,
+              },
+            },
+            trigger: { new: "scheduler" },
+          },
+        },
+        tx
+      );
+
       return {
         posted: true as const,
         replayed: posted.replayed,
@@ -635,7 +708,19 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
       };
     });
 
-    if (!result.posted) return result;
+    if (!result.posted) {
+      if (result.skipped) {
+        logger.warn("Recurring journal skipped: scheduled date in a closed period", {
+          module: "accounting",
+          action: "runRecurringJournal",
+          recurringJournalId: recurring.id,
+          companyId: recurring.companyId,
+          scheduledFor,
+          closedThrough: result.skipped.closedThrough,
+        });
+      }
+      return result;
+    }
 
     logger.info("Recurring journal posted", {
       module: "accounting",
@@ -650,16 +735,42 @@ export async function runRecurringJournal(recurring: RecurringJournal): Promise<
     return result;
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
+    const closed = isClosedPeriodError(error);
     await db
       .update(recurringJournals)
-      .set({ lastAttemptAt: new Date(), lastError: message.slice(0, 2000), updatedAt: new Date() })
+      .set({
+        lastAttemptAt: new Date(),
+        lastError: (closed ? `PERIOD_CLOSED: ${message}` : message).slice(0, 2000),
+        updatedAt: new Date(),
+      })
       .where(eq(recurringJournals.id, recurring.id))
       .catch(() => undefined);
+    // The database guard is the backstop: a closed-period rejection is a skip, not a failure.
+    if (closed) {
+      return {
+        posted: false,
+        replayed: false,
+        voucherId: null,
+        scheduledFor,
+        skipped: periodClosedSkip(recurring, null),
+      };
+    }
     throw error;
   }
 }
 
-export async function runDueRecurringJournals(): Promise<void> {
+export interface RecurringJournalSchedulerResult {
+  candidates: number;
+  posted: number;
+  failed: number;
+  skipped: ScheduledPostingSkip[];
+}
+
+/**
+ * The hourly pass. Candidates are read across companies (the scheduler's
+ * maintenance scope); each recurrence posts in its own company's tenant scope.
+ */
+export async function runDueRecurringJournals(): Promise<RecurringJournalSchedulerResult> {
   // This is only a broad prefilter. Each row is re-checked against its own
   // timezone before posting, so month-end boundaries remain correct worldwide.
   const tomorrow = new Date();
@@ -673,11 +784,13 @@ export async function runDueRecurringJournals(): Promise<void> {
 
   let posted = 0;
   let failed = 0;
+  const skipped: ScheduledPostingSkip[] = [];
 
   for (const recurring of candidates) {
     try {
       const result = await runRecurringJournal(recurring);
       if (result.posted) posted += 1;
+      if (result.skipped) skipped.push(result.skipped);
     } catch (error: unknown) {
       failed += 1;
       logger.error("Recurring journal run failed", {
@@ -698,6 +811,8 @@ export async function runDueRecurringJournals(): Promise<void> {
       candidates: candidates.length,
       posted,
       failed,
+      skipped,
     });
   }
+  return { candidates: candidates.length, posted, failed, skipped };
 }

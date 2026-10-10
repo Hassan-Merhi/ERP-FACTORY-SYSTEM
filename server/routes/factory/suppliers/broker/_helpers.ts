@@ -19,6 +19,7 @@ import {
   factorySupplierFxTransfers,
 } from "@shared/schema";
 import { eq, and, sql, inArray, isNull } from "drizzle-orm";
+import { entryNativeAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
 
 export const PAYABLE_CONTAINER_STATUSES = new Set(["OFFLOADED", "RECEIVED", "PARTIALLY_RECEIVED"]);
 
@@ -91,12 +92,11 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
       ? await db
           .select({
             id: voucherEntries.id,
-            debitAmount: voucherEntries.debitAmount,
+            ...voucherEntryCurrencyColumns,
             supplierId: voucherEntries.factorySupplierId,
             voucherDate: vouchers.voucherDate,
             description: vouchers.description,
             voucherNumber: vouchers.voucherNumber,
-            currency: vouchers.currency,
             optional: vouchers.optional,
           })
           .from(voucherEntries)
@@ -104,6 +104,11 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
           .where(
             and(
               inArray(voucherEntries.factorySupplierId, allSupplierIds),
+              // A voucher line belongs to its voucher's company; deleted and optional
+              // vouchers never reach a balance (soft delete keeps the lines).
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
               sql`${voucherEntries.debitAmount}::numeric > 0`,
               sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
             )
@@ -290,7 +295,9 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
   // Skip optional vouchers — they are informational only and don't affect the balance.
   for (const p of allVoucherPayments) {
     if (p.optional) continue;
-    const cc = p.currency || "USD";
+    // In the entry's own currency (a normalized entry's debit_amount is USD).
+    const native = entryNativeAmounts(p);
+    const cc = native.currency;
     const suppId = p.supplierId;
     const supplierName = suppId ? supplierNameMap[suppId] || "Unknown" : "Unknown";
     addRow(cc, {
@@ -298,7 +305,7 @@ export async function buildBrokerStatement(brokerId: number, companyId: number, 
       type: "payment",
       description: `Payment — ${supplierName}`,
       ref: p.voucherNumber || "Voucher Payment",
-      amount: toMoney(p.debitAmount).negated(),
+      amount: native.debit.negated(),
       commissionAmount: null,
       commissionCurrency: null,
     });

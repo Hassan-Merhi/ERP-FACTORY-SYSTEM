@@ -7,19 +7,12 @@
 import type { Express } from "express";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { db } from "../../db";
-import { storage } from "../../storage";
 import { requireAuth } from "../../auth";
-import {
-  bankAccounts,
-  ledgerAccounts,
-  vouchers,
-  voucherEntries,
-  customers,
-  customerBalances,
-  customerOrders,
-} from "@shared/schema";
+import { bankAccounts, ledgerAccounts, vouchers, voucherEntries } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
-import { MoneyDecimal, debitMinusCredit, signedOpeningBalance, sumMoney, toMoney } from "../../lib/money";
+import { toMoney } from "../../lib/money";
+import { getPartyBalance } from "../../services/accounting/balances/ledgerBalanceEngine";
+import { getCustomerByLedgerId } from "../../lib/factoryCustomerLedger";
 
 export function registerAccountLedgerBalanceRoutes(app: Express) {
   // Get balance for a specific ledger account
@@ -36,13 +29,24 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
         return res.status(400).json({ message: "No company selected" });
       }
 
-      // Resolve the account inside the active tenant. Looking up by global ID
-      // first leaked balances for accounts owned by another company.
+      // Optional as-of date (inclusive): without it, everything posted.
+      const asOfRaw = req.query?.asOf;
+      if (asOfRaw !== undefined && (typeof asOfRaw !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(asOfRaw))) {
+        return res.status(400).json({ message: "asOf must be a single YYYY-MM-DD value" });
+      }
+      const asOf = asOfRaw ?? null;
+
+      // The balance engine (wave 17 A), company-scoped: this company's vouchers
+      // only, COALESCE(effective_date, voucher_date) <= asOf, the master's own
+      // opening with its side (a sideless ledger opening takes its type's
+      // usual side; it was Dr), each line counted once by the engine's
+      // ownership priority. A bank linked to this ledger (linked_ledger_id) is
+      // its own row: its opening and its bank-only lines are no longer folded
+      // into the ledger's balance (they were, so the bank was counted twice
+      // against the trial balance), and every company's bank lines are no
+      // longer read.
       const [account] = await db
-        .select({
-          openingBalance: ledgerAccounts.openingBalance,
-          openingBalanceSide: ledgerAccounts.openingBalanceSide,
-        })
+        .select({ id: ledgerAccounts.id })
         .from(ledgerAccounts)
         .where(and(eq(ledgerAccounts.id, ledgerAccountId), eq(ledgerAccounts.companyId, companyId)))
         .limit(1);
@@ -51,7 +55,7 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
       // ID in this company (entries are stored in voucherEntries.bankAccountId).
       if (!account) {
         const [bankAcct] = await db
-          .select({ openingBalance: bankAccounts.openingBalance, openingBalanceSide: bankAccounts.openingBalanceSide })
+          .select({ id: bankAccounts.id })
           .from(bankAccounts)
           .where(and(eq(bankAccounts.id, ledgerAccountId), eq(bankAccounts.companyId, companyId)))
           .limit(1);
@@ -62,126 +66,33 @@ export function registerAccountLedgerBalanceRoutes(app: Express) {
           return res.status(404).json({ message: "Account not found" });
         }
 
-        const bankTxs = await storage.getVoucherEntriesByBankAccount(ledgerAccountId);
-        const bankBalance = signedOpeningBalance(bankAcct.openingBalance, bankAcct.openingBalanceSide).plus(
-          debitMinusCredit(bankTxs)
-        );
-        return res.json({ balance: bankBalance.toNumber() });
+        const bank = await getPartyBalance(db, { companyId, kind: "bank", id: bankAcct.id, asOf });
+        return res.json({ balance: toMoney(bank?.closing).toNumber(), asOf });
       }
 
-      // Check if this ledger account is linked to a customer in the same tenant.
-      const [linkedCustomer] = await db
-        .select({ id: customers.id, ob: customers.openingBalance, side: customers.openingBalanceSide })
-        .from(customers)
-        .where(and(eq(customers.ledgerAccountId, ledgerAccountId), eq(customers.companyId, companyId)))
-        .limit(1);
-
-      // For factory customer-linked ledger accounts, use the same combined formula
-      // as /api/factory/customers so the Accounts page balance matches the Customers page.
-      if (linkedCustomer) {
-        const currentCompany = await storage.getCompanyById(companyId);
-        if (currentCompany?.companyType === "factory") {
-          const custId = linkedCustomer.id;
-          const [salesRows, cbRows, lVoucherRows, cVoucherRows] = await Promise.all([
-            db
-              .select({
-                total: sql<string>`COALESCE(SUM(CAST(${customerOrders.grandTotal} AS numeric)), 0)`,
-              })
-              .from(customerOrders)
-              .where(
-                and(
-                  eq(customerOrders.customerId, custId),
-                  eq(customerOrders.companyId, companyId),
-                  eq(customerOrders.status, "FINALIZED")
-                )
-              ),
-
-            db
-              .select({
-                net: sql<string>`COALESCE(SUM(CAST(${customerBalances.debitAmount} AS numeric) - CAST(${customerBalances.creditAmount} AS numeric)), 0)`,
-              })
-              .from(customerBalances)
-              .where(
-                and(
-                  eq(customerBalances.customerId, custId),
-                  eq(customerBalances.companyId, companyId),
-                  sql`${customerBalances.referenceType} IS DISTINCT FROM 'INVOICE'`
-                )
-              ),
-
-            db
-              .select({
-                net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-              })
-              .from(voucherEntries)
-              .innerJoin(
-                vouchers,
-                and(
-                  eq(voucherEntries.voucherId, vouchers.id),
-                  eq(vouchers.companyId, companyId),
-                  eq(vouchers.optional, false),
-                  isNull(vouchers.deletedAt),
-                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
-                )
-              )
-              .where(eq(voucherEntries.ledgerAccountId, ledgerAccountId)),
-
-            db
-              .select({
-                net: sql<string>`COALESCE(SUM(CAST(${voucherEntries.debitAmount} AS numeric) - CAST(${voucherEntries.creditAmount} AS numeric)), 0)`,
-              })
-              .from(voucherEntries)
-              .innerJoin(
-                vouchers,
-                and(
-                  eq(voucherEntries.voucherId, vouchers.id),
-                  eq(vouchers.companyId, companyId),
-                  eq(vouchers.optional, false),
-                  isNull(vouchers.deletedAt),
-                  sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`
-                )
-              )
-              .where(and(eq(voucherEntries.customerId, custId), isNull(voucherEntries.ledgerAccountId))),
-          ]);
-
-          const ob = toMoney(linkedCustomer.ob);
-          // Anything but "Dr" (the default side) counts as a credit opening.
-          const signedOb = (linkedCustomer.side || "Dr") === "Dr" ? ob : ob.negated();
-          const balance = signedOb.plus(
-            sumMoney([salesRows[0]?.total, cbRows[0]?.net, lVoucherRows[0]?.net, cVoucherRows[0]?.net])
-          );
-          return res.json({ balance: balance.toNumber() });
-        }
+      // A ledger account a customer owns has no balance of its own: the
+      // balance engine rolls its lines into the customer (customer-owned
+      // opening, its linked-ledger lines and its customer-tagged lines with no
+      // other target). Amounts not yet in the ledger (the factory composite
+      // used to add finalized orders and the customer_balances cache here) are
+      // reported separately and never added to `balance`.
+      const owner = await getCustomerByLedgerId(ledgerAccountId);
+      if (owner && owner.companyId === companyId) {
+        const party = await getPartyBalance(db, { companyId, kind: "customer", id: owner.id, asOf, memo: true });
+        return res.json({
+          balance: toMoney(party?.closing).toNumber(),
+          customerId: owner.id,
+          notInLedgerTotal: toMoney(party?.memoTotal).toNumber(),
+          asOf,
+        });
       }
 
-      const transactions = await storage.getVoucherEntriesByLedger(ledgerAccountId, undefined, undefined, companyId);
-      let movement = debitMinusCredit(transactions);
-
-      // Some bank accounts have a linkedLedgerId pointing to this ledger account.
-      // Their voucher entries are stored under bankAccountId (not ledgerAccountId),
-      // so getVoucherEntriesByLedger misses them. Keep those bank lookups tenant-scoped.
-      const linkedBanks = await db
-        .select({
-          id: bankAccounts.id,
-          openingBalance: bankAccounts.openingBalance,
-          openingBalanceSide: bankAccounts.openingBalanceSide,
-        })
-        .from(bankAccounts)
-        .where(and(eq(bankAccounts.linkedLedgerId, ledgerAccountId), eq(bankAccounts.companyId, companyId)));
-
-      let linkedBankOB = new MoneyDecimal(0);
-      for (const bank of linkedBanks) {
-        const bankTxs = await storage.getVoucherEntriesByBankAccount(bank.id);
-        movement = movement.plus(debitMinusCredit(bankTxs));
-        linkedBankOB = linkedBankOB.plus(signedOpeningBalance(bank.openingBalance, bank.openingBalanceSide));
-      }
-
-      const rawSide = linkedCustomer?.side ?? account.openingBalanceSide;
-      const balance = signedOpeningBalance(linkedCustomer?.ob ?? account.openingBalance, rawSide)
-        .plus(linkedBankOB)
-        .plus(movement);
-
-      res.json({ balance: balance.toNumber() });
+      const ledger = await getPartyBalance(db, { companyId, kind: "ledger", id: ledgerAccountId, asOf });
+      res.json({
+        balance: toMoney(ledger?.closing).toNumber(),
+        asOf,
+        openingSideAssumed: ledger?.openingSideAssumed ?? false,
+      });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });
     }

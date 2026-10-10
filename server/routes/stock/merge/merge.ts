@@ -27,6 +27,7 @@ import {
   locations,
 } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
+import { repointMergedItemLinesTx } from "./repointDocumentLines";
 
 /** A stored inventory numeric as a plain number for the preview; missing is 0. */
 function previewNumber(value: string | null | undefined): number {
@@ -308,6 +309,8 @@ export function registerStockItemMergeRoutes(app: Express) {
           .update(poLineItems)
           .set({ stockItemId: keptId, itemName: keptItem.name })
           .where(eq(poLineItems.stockItemId, duplicateId));
+        // Wave 15 (M9): the stock document lines follow the stock (repointDocumentLines.ts).
+        const repointedLines = await repointMergedItemLinesTx(tx, companyId, duplicateId, keptId);
 
         await tx
           .update(stockItems)
@@ -335,7 +338,7 @@ export function registerStockItemMergeRoutes(app: Express) {
             totalValue: r.totalValue,
           };
         }
-        mergeSnapshotAfter = snapshotAfter;
+        mergeSnapshotAfter = { ...snapshotAfter, repointedLines };
       });
 
       try {

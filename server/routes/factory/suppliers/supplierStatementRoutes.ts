@@ -24,6 +24,17 @@ import {
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { isSupplierPaidFreight } from "./_supplierStatementHelpers";
 import { buildLinkedSupplierGroups } from "./linkedSupplierGroups";
+import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerLines,
+  loadFactorySupplierLedgerViews,
+} from "./balance/factorySupplierLedger";
+import {
+  entryNativeAmounts,
+  entryStoredUsdAmounts,
+  voucherEntryCurrencyColumns,
+} from "../../../services/factory/voucherEntryCurrency";
 
 // Amounts are summed as exact decimals (server/lib/money.ts) and only turned
 // into fixed-point strings when the response is built.
@@ -263,13 +274,11 @@ export function registerSupplierStatementRoutes(app: Express) {
         .select({
           id: voucherEntries.id,
           voucherId: voucherEntries.voucherId,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
+          ...voucherEntryCurrencyColumns,
           voucherDate: vouchers.voucherDate,
           description: vouchers.description,
           voucherType: vouchers.voucherType,
           voucherNumber: vouchers.voucherNumber,
-          currency: vouchers.currency,
           exchangeRate: vouchers.exchangeRate,
           optional: vouchers.optional,
         })
@@ -279,7 +288,9 @@ export function registerSupplierStatementRoutes(app: Express) {
           and(
             eq(voucherEntries.factorySupplierId, supplierId),
             sql`${voucherEntries.debitAmount}::numeric > 0`,
-            sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
+            sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`,
+            eq(vouchers.companyId, companyId),
+            isNull(vouchers.deletedAt)
           )
         )
         .orderBy(desc(vouchers.voucherDate));
@@ -287,9 +298,12 @@ export function registerSupplierStatementRoutes(app: Express) {
       // Convert voucher payments to USD for total calculation (exclude optional payments)
       const voucherPaymentsTotal = voucherPaymentRows.reduce((sum, p) => {
         if (p.optional) return sum; // optional payments don't affect the balance
+        // A normalized entry already holds its USD base; only a legacy
+        // foreign-currency entry is converted from the voucher's rate.
+        const stored = entryStoredUsdAmounts(p);
+        if (stored) return sum.plus(stored.debit);
         const amt = toMoney(p.debitAmount);
         const currency = p.currency || "USD";
-        if (currency === "USD") return sum.plus(amt);
         // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
         const { fxRate: fx, looksSet } = resolveStoredFxRate(currency, p.exchangeRate);
         if (!looksSet) return sum; // exclude from the total rather than guess at 1
@@ -413,7 +427,8 @@ export function registerSupplierStatementRoutes(app: Express) {
       // Voucher-based payments also reduce the per-currency balance
       for (const p of voucherPaymentRows) {
         if (p.optional) continue;
-        addTo(paidByCurrency, p.currency || "USD", toMoney(p.debitAmount));
+        const native = entryNativeAmounts(p);
+        addTo(paidByCurrency, native.currency, native.debit);
       }
       // FX transfers: out reduces original currency balance; self-FX creates a USD obligation
       for (const t of enrichedFxTransfers) {
@@ -660,17 +675,19 @@ export function registerSupplierStatementRoutes(app: Express) {
           amountIsNeg: true,
           notes: p.notes,
         })),
-        ...voucherPaymentRows.map((p) => ({
-          key: `vp-${p.id}`,
-          date: p.voucherDate,
-          type: "payment",
-          ref: p.voucherNumber || null,
-          detail: p.description || `${p.voucherType || "Payment"} voucher`,
-          amount: fmtAmt(p.debitAmount, p.currency || "USD", true),
-          amountIsNeg: !p.optional,
-          notes: null,
-          optional: !!p.optional,
-        })),
+        ...voucherPaymentRows
+          .map((p) => ({ p, native: entryNativeAmounts(p) }))
+          .map(({ p, native }) => ({
+            key: `vp-${p.id}`,
+            date: p.voucherDate,
+            type: "payment",
+            ref: p.voucherNumber || null,
+            detail: p.description || `${p.voucherType || "Payment"} voucher`,
+            amount: fmtAmt(native.debit.toFixed(), native.currency, true),
+            amountIsNeg: !p.optional,
+            notes: null,
+            optional: !!p.optional,
+          })),
         ...enrichedFxTransfers.map((t) => {
           const isOut = t.fromSupplierId === supplierId;
           const isSelf = t.fromSupplierId === t.toSupplierId;
@@ -720,8 +737,26 @@ export function registerSupplierStatementRoutes(app: Express) {
       });
       // ─────────────────────────────────────────────────────────────────────────
 
+      // Primary balance (wave 13, owner decision 3): the ledger from the balance
+      // engine with its lines, the native balance per currency, and the
+      // container amounts not yet in the ledger. The container statement above
+      // and its netPayable are the operational view, kept as a labelled memo.
+      const ledgerView =
+        (await loadFactorySupplierLedgerViews(db, companyId, { ids: [supplierId] })).get(supplierId) ??
+        emptyFactorySupplierLedgerView(supplierId);
+      const ledgerLines = await loadFactorySupplierLedgerLines(
+        db,
+        companyId,
+        supplierId,
+        toMoney(ledgerView.openingBalanceUsd)
+      );
+
       res.json({
         supplier,
+        balanceBasis: ledgerView.balanceBasis,
+        // `ledger` below is the operational unified list (kept for the page); this is the ledger.
+        ledgerView: { ...ledgerView, lines: ledgerLines },
+        operationalMemoLabel: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
         statement: enrichedStatement,
         currencyGroups,
         obCommissions,
@@ -741,7 +776,11 @@ export function registerSupplierStatementRoutes(app: Express) {
           totalObCommissions: totalObCommissions.toFixed(2),
           totalPayments: totalPayments.toFixed(2),
           totalBrokerCommission: totalBrokerCommission.toFixed(2),
-          netPayable: totalNetPayableUsd.toFixed(2),
+          // The ledger balance (USD base, Cr positive); the operational figure beside it.
+          netPayable: ledgerView.ledgerBalanceUsd,
+          ledgerBalance: ledgerView.ledgerBalanceUsd,
+          notInLedgerTotal: ledgerView.notInLedger.total,
+          operationalNetPayable: totalNetPayableUsd.toFixed(2),
           totalOwed: totalValue.plus(totalDirectCommissions).toFixed(2),
         },
       });

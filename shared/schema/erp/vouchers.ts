@@ -11,6 +11,7 @@ import {
   uniqueIndex,
   index,
   jsonb,
+  bigserial,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -222,6 +223,8 @@ export const creditNoteItems = pgTable("credit_note_items", {
   rate: decimal("rate", { precision: 20, scale: 2 }).notNull(),
   inventoryCost: decimal("inventory_cost", { precision: 20, scale: 2 }).notNull().default("0"),
   totalValue: decimal("total_value", { precision: 20, scale: 2 }).notNull(),
+  // Wave 11: the exact sub-ledger value the line moved; null on legacy lines.
+  valueMoved: decimal("value_moved", { precision: 20, scale: 2 }),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -304,3 +307,50 @@ export const insertFiscalPeriodClosureSchema = createInsertSchema(fiscalPeriodCl
 
 export type InsertFiscalPeriodClosure = z.infer<typeof insertFiscalPeriodClosureSchema>;
 export type FiscalPeriodClosure = typeof fiscalPeriodClosures.$inferSelect;
+
+/**
+ * Perpetual-inventory cut-over per company (2026-10 accounting audit, wave 8).
+ * One row once an Owner applies the opening inventory journal; documents dated
+ * on or after `effectiveFrom` then post under perpetual inventory. Also created
+ * at boot by ensureInventoryCutoverSchema (production skips schema pushes).
+ */
+export const glInventoryCutovers = pgTable("gl_inventory_cutovers", {
+  companyId: integer("company_id")
+    .primaryKey()
+    .references(() => companies.id, { onDelete: "restrict" }),
+  effectiveFrom: date("effective_from").notNull(),
+  status: text("status").notNull().default("ACTIVE"),
+  openingVoucherId: integer("opening_voucher_id").references(() => vouchers.id, { onDelete: "restrict" }),
+  openingPlan: jsonb("opening_plan").notNull(),
+  appliedBy: text("applied_by"),
+  appliedAt: timestamp("applied_at").notNull().defaultNow(),
+});
+
+/**
+ * Dated evidence of stock sub-ledger movements that leave no document line
+ * (wave 15): the lines of every INV-MOVE source (quick adjustments, archive and
+ * restore, location imports, cost corrections, readiness resolutions, ...),
+ * recorded before and after the cut-over and replaced whole with their source.
+ * The as-of stock valuation replays them by movement date. Also created at
+ * boot by ensureInventoryCutoverSchema (same names, no foreign keys).
+ */
+export const inventoryValueMovements = pgTable(
+  "inventory_value_movements",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    companyId: integer("company_id").notNull(),
+    sourceNumber: text("source_number").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    movementDate: date("movement_date").notNull(),
+    stockItemId: integer("stock_item_id"),
+    locationId: integer("location_id"),
+    quantityDelta: decimal("quantity_delta", { precision: 18, scale: 3 }),
+    valueDelta: decimal("value_delta", { precision: 20, scale: 2 }).notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyDateIdx: index("inventory_value_movements_company_date_idx").on(t.companyId, t.movementDate),
+    companySourceIdx: index("inventory_value_movements_company_source_idx").on(t.companyId, t.sourceNumber),
+  })
+);

@@ -52,7 +52,7 @@ describe("voucher with-entries edit balance", () => {
       ],
     });
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe("Total debits must equal total credits for active vouchers");
+    expect(response.body.message).toMatch(/^Total debits must equal total credits for active vouchers/);
   });
 
   it("refuses a leg that is not a finite number", async () => {
@@ -64,6 +64,6 @@ describe("voucher with-entries edit balance", () => {
       ],
     });
     expect(response.status).toBe(400);
-    expect(response.body.message).toBe("Invalid amount");
+    expect(response.body.message).toMatch(/must be a finite non-negative amount/);
   });
 });

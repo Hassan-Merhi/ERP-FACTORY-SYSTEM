@@ -3,10 +3,7 @@
  *
  * Extracted verbatim from the former single-file factoryPayrollRoutes.ts.
  */
-import { factoryDaybookEntries } from "@shared/schema";
-import type { DatabaseOrTransaction } from "../../db";
 import type { AttendanceStatusRow } from "../../services/payroll/factoryPayrollGenerationPolicy";
-import { daybookAmountUsd } from "../../lib/money";
 
 /**
  * Daybook writing and the pro-rata pay calculations shared by the payroll
@@ -14,44 +11,8 @@ import { daybookAmountUsd } from "../../lib/money";
  *
  * Declared at module scope so those handlers can live in separate modules.
  */
-export async function writeDaybookEntry(
-  dbOrTx: DatabaseOrTransaction,
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-    effectiveDate?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-    effectiveDate: opts.effectiveDate || null,
-  });
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../services/factory/factoryDaybookWriter";
 
 export function countWeekdays(start: string, end: string): number {
   const s = new Date(start);

@@ -9,156 +9,102 @@
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { vouchers, voucherEntries } from "@shared/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { eq, and, isNull, inArray, gte, sql } from "drizzle-orm";
+import { classifyAccountType, expenseCategory } from "../accounting/accountClassification";
+import { voucherBookedOnSql } from "../accounting/balances/partyLineRules";
+import { notFiscalClosingVoucherSql } from "../accounting/balances/periodReportRules";
 import { _getCached, _setCached } from "../shared/ttlCache";
+import { loadBalanceRows } from "../accounting/balances/ledgerBalanceEngine";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
 
 // ---------------------------------------------------------------------------
 // getMonthlyData — /api/stats/monthly-data
 // Returns last 6 months of sales volume and profit for dashboard charts.
+//
+// Wave 13 (R3), on the same rules as the P&L (getProfitLoss):
+//   - months are bucketed by year and month (`yearMonth`, "2026-10"); before,
+//     the bucket was the month name, so October of last year was added into
+//     this October;
+//   - a voucher counts from COALESCE(effective_date, voucher_date);
+//   - amounts are the posted base amounts (debit_amount / credit_amount, USD);
+//     `sales` used to be the Sales vouchers' totalAmount in each voucher's
+//     own currency. It is now the net income-class credit of Sales vouchers;
+//   - income and expense accounts by classifyAccountType, so every
+//     expense-class account (Purchases, Government Taxes, COGS, mis-cased
+//     types) counts as the P&L counts it; the old code/name exclusion list of
+//     "capitalised" import charges is gone: if those accounts are typed as
+//     expenses in the ledger, the P&L counts them, and so does the dashboard.
+// `profit` for a month is therefore getProfitLoss's net profit for that month.
 // ---------------------------------------------------------------------------
+function yearMonthOf(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export async function getMonthlyData(
   companyId: number
-): Promise<Array<{ month: string; sales: number; profit: number }>> {
-  // Get all Sales vouchers for this company (excluding optional)
-  const salesVouchers = await db
-    .select()
-    .from(vouchers)
-    .where(
-      and(
-        eq(vouchers.companyId, companyId),
-        eq(vouchers.voucherType, "Sales"),
-        isNull(vouchers.deletedAt),
-        eq(vouchers.optional, false)
-      )
-    )
-    .execute();
-
-  // Get all Income and Expense ledger accounts
+): Promise<Array<{ month: string; yearMonth: string; sales: number; profit: number }>> {
   const companyAccounts = await storage.getAllLedgerAccounts(companyId, true); // Include hidden accounts for financial calculations
-  const incomeAccountIds = companyAccounts.filter((acc) => acc.accountType === "Income").map((acc) => acc.id);
+  const classOf = new Map(
+    companyAccounts.map((acc) => [acc.id, classifyAccountType(acc.accountType, acc.subType)] as const)
+  );
+  const plAccountIds = [...classOf].filter(([, c]) => c === "income" || c === "expense").map(([id]) => id);
 
-  // Include ALL expenses in monthly profit calculation for consistency with P&L report
-  // PURCHASES are now included (previously excluded) to match P&L calculation
-  // Only exclude container-related import charges that are capitalized to inventory
-  const excludedExpenseCodes = [
-    "IMPORTCHARGES", // Old consolidated import charges (deprecated, capitalized)
-    "IMPORT_CHARGES", // Alternative format
-    "DUTIES", // Container import duties (capitalized)
-    "DUT", // Abbreviated duties code
-    "TRANSPORTCHARGES", // Container transport costs (capitalized)
-    "TRANSPORT", // Alternative transport account name (capitalized)
-    "TRA", // Abbreviated transport code
-    "TRANSFER_CHARGES", // Transfer charges (capitalized)
-    "CONTAINERLICENSES", // Container license fees (capitalized)
-    "CONLIC", // Abbreviated container licenses
-    "LICENSES", // Alternative license account name (capitalized)
-    "LIC", // Abbreviated licenses code
-  ];
-
-  // Name patterns to exclude (container-related costs only)
-  const excludedNamePatterns = ["duties", "transport charges", "container license", "import charge", "transfer charge"];
-
-  // Normalize function: uppercase + remove spaces/underscores for comparison
-  const normalizeCode = (code: string) => code.toUpperCase().replace(/[\s_-]/g, "");
-
-  const expenseAccounts = companyAccounts.filter((acc) => {
-    // Include Purchase accounts by code (for P&L consistency)
-    const isPurchaseAccount = acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES-");
-    if (isPurchaseAccount) return true;
-
-    // Support both correct format (accountType="Expense") and legacy format
-    // (accountType="Indirect Expense" or "Direct Expense")
-    const isExpenseAccount =
-      acc.accountType === "Expense" || acc.accountType === "Indirect Expense" || acc.accountType === "Direct Expense";
-
-    if (!isExpenseAccount) return false;
-
-    // Check if code matches exclusion list
-    const normalizedCode = normalizeCode(acc.code);
-    const codeExcluded = excludedExpenseCodes.some((excluded) => normalizeCode(excluded) === normalizedCode);
-
-    // Check if name contains excluded patterns
-    const nameLower = (acc.name || "").toLowerCase();
-    const nameExcluded = excludedNamePatterns.some((pattern) => nameLower.includes(pattern));
-
-    // Exclude if either code or name matches
-    return !codeExcluded && !nameExcluded;
-  });
-  const expenseAccountIds = expenseAccounts.map((acc) => acc.id);
-
-  // Single JOIN query: fetch entries with their voucher dates — replaces two-step
-  // (previously: fetch companyVouchers → extract IDs → inArray(voucherEntries))
-  const companyEntriesRaw = await db
-    .select({
-      ledgerAccountId: voucherEntries.ledgerAccountId,
-      debitAmount: voucherEntries.debitAmount,
-      creditAmount: voucherEntries.creditAmount,
-      voucherDate: vouchers.voucherDate,
-      voucherId: voucherEntries.voucherId,
-    })
-    .from(voucherEntries)
-    .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-    .where(and(eq(vouchers.companyId, companyId), eq(vouchers.optional, false), isNull(vouchers.deletedAt)))
-    .execute();
-
-  // Keep voucherDateMap for compatibility with code below that uses it
-  const voucherDateMap = new Map(companyEntriesRaw.map((e) => [e.voucherId, e.voucherDate]));
-
-  // companyEntriesRaw already fetched above via JOIN
-  const companyEntries = companyEntriesRaw;
-
-  // Group data by month (last 6 months)
-  const monthlyData = new Map<string, { sales: Decimal; profit: Decimal }>();
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-  // Initialize last 6 months
+  const monthlyData = new Map<string, { month: string; sales: Decimal; profit: Decimal }>();
   const currentDate = new Date();
   for (let i = 5; i >= 0; i--) {
     const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-    const monthKey = monthNames[date.getMonth()];
-    monthlyData.set(monthKey, { sales: new MoneyDecimal(0), profit: new MoneyDecimal(0) });
+    monthlyData.set(yearMonthOf(date), {
+      month: monthNames[date.getMonth()],
+      sales: new MoneyDecimal(0),
+      profit: new MoneyDecimal(0),
+    });
   }
+  const firstMonth = [...monthlyData.keys()][0];
 
-  // Calculate sales by month
-  for (const voucher of salesVouchers) {
-    const voucherDate = new Date(voucher.voucherDate);
-    const monthKey = monthNames[voucherDate.getMonth()];
-    const amount = toMoney(voucher.totalAmount);
+  const entries =
+    plAccountIds.length === 0
+      ? []
+      : await db
+          .select({
+            ledgerAccountId: voucherEntries.ledgerAccountId,
+            debitAmount: voucherEntries.debitAmount,
+            creditAmount: voucherEntries.creditAmount,
+            voucherType: vouchers.voucherType,
+            bookedOn: sql`${voucherBookedOnSql}::text`.mapWith(String),
+          })
+          .from(voucherEntries)
+          .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
+          .where(
+            and(
+              eq(vouchers.companyId, companyId),
+              eq(vouchers.optional, false),
+              isNull(vouchers.deletedAt),
+              // The fiscal closing journal is not a month's profit (wave 17 A).
+              notFiscalClosingVoucherSql,
+              gte(voucherBookedOnSql, `${firstMonth}-01`),
+              inArray(voucherEntries.ledgerAccountId, plAccountIds)
+            )
+          )
+          .execute();
 
-    if (monthlyData.has(monthKey)) {
-      const data = monthlyData.get(monthKey)!;
-      data.sales = data.sales.plus(amount);
+  for (const entry of entries) {
+    const data = monthlyData.get(String(entry.bookedOn ?? "").slice(0, 7));
+    if (!data || entry.ledgerAccountId === null) continue;
+    const credit = toMoney(entry.creditAmount).minus(toMoney(entry.debitAmount));
+    const accountClass = classOf.get(entry.ledgerAccountId);
+    if (accountClass === "income") {
+      data.profit = data.profit.plus(credit);
+      if (entry.voucherType === "Sales") data.sales = data.sales.plus(credit);
+    } else if (accountClass === "expense") {
+      data.profit = data.profit.plus(credit);
     }
   }
 
-  // Calculate profit by month (income - expenses)
-  for (const entry of companyEntries) {
-    const voucherDate = voucherDateMap.get(entry.voucherId);
-    if (!voucherDate) continue;
-
-    const date = new Date(voucherDate);
-    const monthKey = monthNames[date.getMonth()];
-
-    if (!monthlyData.has(monthKey)) continue;
-
-    const data = monthlyData.get(monthKey)!;
-
-    // Income accounts: credits increase profit, debits decrease it
-    if (entry.ledgerAccountId && incomeAccountIds.includes(entry.ledgerAccountId)) {
-      data.profit = data.profit.plus(toMoney(entry.creditAmount)).minus(toMoney(entry.debitAmount));
-    }
-
-    // Expense accounts (including Purchases): debits decrease profit, credits increase it
-    if (entry.ledgerAccountId && expenseAccountIds.includes(entry.ledgerAccountId)) {
-      data.profit = data.profit.minus(toMoney(entry.debitAmount)).plus(toMoney(entry.creditAmount));
-    }
-  }
-
-  // Convert map to array
-  return Array.from(monthlyData.entries()).map(([month, data]) => ({
-    month,
+  return Array.from(monthlyData.entries()).map(([yearMonth, data]) => ({
+    month: data.month,
+    yearMonth,
     sales: data.sales.toNumber(),
     profit: data.profit.toNumber(),
   }));
@@ -209,95 +155,62 @@ export async function getStockSummary(companyId: number): Promise<{
 
 // ---------------------------------------------------------------------------
 // getExpenseBreakdown — /api/stats/expense-breakdown
-// Returns aggregated expense totals by account type for dashboard donut chart.
-// Uses TTL cache (30 s) to avoid repeated expensive joins.
+// Expense totals by category for the dashboard donut chart, on the balance
+// engine (wave 17 A), consistent with the P&L (getProfitLoss):
+//   - each expense-class account's net debit − credit over the period
+//     (startDate..endDate, both optional, COALESCE(effective_date,
+//     voucher_date)), so reversals and refunds reduce the category (before,
+//     every line with a net credit was dropped and the range was all time);
+//   - the fiscal closing journal is left out (periodReportRules.ts);
+//   - hidden accounts count, as in the P&L (they were left out here);
+//   - this company's vouchers on its own accounts (engine rule 4).
+// A category whose net is zero is left out; a net-credit category is
+// returned with its negative value.
+// Uses TTL cache (30 s) per company and range.
 // ---------------------------------------------------------------------------
-export async function getExpenseBreakdown(companyId: number): Promise<Array<{ name: string; value: number }> | null> {
-  const _ebCacheKey = `expense-breakdown:${companyId}`;
+export async function getExpenseBreakdown(
+  companyId: number,
+  range: { startDate?: string | null; endDate?: string | null } = {}
+): Promise<Array<{ name: string; value: number }> | null> {
+  const startDate = range.startDate ?? null;
+  const endDate = range.endDate ?? null;
+  const _ebCacheKey = `expense-breakdown:${companyId}:${startDate ?? ""}:${endDate ?? ""}`;
   const _ebCached = _getCached(_ebCacheKey);
   // Only this function writes this cache key, always as Array<{name, value}>.
   if (_ebCached) return _ebCached as Array<{ name: string; value: number }>;
 
-  // Get all expense-related ledger accounts
-  const allAccounts = await storage.getAllLedgerAccounts(companyId);
-
-  // Find accounts to EXCLUDE from expenses:
-  // 1. IMPORT_CHARGES parent and children (import costs capitalized into inventory)
-  // 2. PURCHASES accounts (inventory cost, not expense until sold as COGS)
-  const importChargesParent = allAccounts.find((acc) => acc.code === "IMPORT_CHARGES");
-  const excludedFromExpenses = new Set<number>();
-
-  if (importChargesParent) {
-    excludedFromExpenses.add(importChargesParent.id);
-    // Also find all children of IMPORT_CHARGES
-    for (const acc of allAccounts) {
-      if (acc.parentId === importChargesParent.id) {
-        excludedFromExpenses.add(acc.id);
-      }
-    }
-  }
-
-  // Exclude PURCHASES accounts - these are inventory costs, not expenses
+  // Every expense-class account by the shared classifier, hidden ones included
+  // (the P&L's rule), bucketed by expenseCategory.
+  const allAccounts = await storage.getAllLedgerAccounts(companyId, true);
+  const categoryOf = new Map<number, string>();
   for (const acc of allAccounts) {
-    if (acc.code === "PURCHASES" || acc.code?.startsWith("PURCHASES_")) {
-      excludedFromExpenses.add(acc.id);
-    }
+    if (classifyAccountType(acc.accountType, acc.subType) !== "expense") continue;
+    categoryOf.set(acc.id, expenseCategory(acc.accountType, acc.subType) ?? "Expense");
   }
-
-  const expenseAccounts = allAccounts.filter(
-    (acc) =>
-      (acc.accountType === "Expense" ||
-        acc.accountType === "Direct Expense" ||
-        acc.accountType === "Indirect Expense") &&
-      !excludedFromExpenses.has(acc.id)
-  );
-
-  const expenseAccountIds = new Set(expenseAccounts.map((a) => a.id));
-  const accountTypeMap = new Map<number, string>();
-  for (const acc of expenseAccounts) {
-    accountTypeMap.set(acc.id, acc.accountType);
-  }
-
-  if (expenseAccountIds.size === 0) {
+  if (categoryOf.size === 0) {
     _setCached(_ebCacheKey, []);
     return [];
   }
 
-  // Single JOIN — replaces the two-query IN-clause anti-pattern.
-  // Directly filters entries to expense accounts for this company.
-  const expenseEntries = await db
-    .select({
-      ledgerAccountId: voucherEntries.ledgerAccountId,
-      debitAmount: voucherEntries.debitAmount,
-      creditAmount: voucherEntries.creditAmount,
-    })
-    .from(voucherEntries)
-    .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-    .where(
-      and(
-        eq(vouchers.companyId, companyId),
-        eq(vouchers.optional, false),
-        isNull(vouchers.deletedAt),
-        inArray(voucherEntries.ledgerAccountId, [...expenseAccountIds])
-      )
-    )
-    .execute();
+  const rows = await loadBalanceRows(db, {
+    companyId,
+    kind: "ledger",
+    ids: [...categoryOf.keys()],
+    from: startDate,
+    asOf: endDate,
+    excludeFiscalClose: true,
+  });
 
-  // Sum balances by expense type
   const expenseByType = new Map<string, Decimal>();
-
-  for (const entry of expenseEntries) {
-    if (!entry.ledgerAccountId) continue;
-    const accountType = accountTypeMap.get(entry.ledgerAccountId);
-    if (!accountType) continue;
-    const amount = toMoney(entry.debitAmount).minus(toMoney(entry.creditAmount));
-    if (amount.lte(0)) continue;
-    expenseByType.set(accountType, (expenseByType.get(accountType) ?? new MoneyDecimal(0)).plus(amount));
+  for (const row of rows) {
+    const category = row.id === null ? undefined : categoryOf.get(row.id);
+    if (!category) continue;
+    const net = row.periodDebit.minus(row.periodCredit);
+    expenseByType.set(category, (expenseByType.get(category) ?? new MoneyDecimal(0)).plus(net));
   }
 
-  // Convert to array format for chart
   const result = Array.from(expenseByType.entries())
-    .filter(([_, value]) => value.gt(0))
+    .filter(([, value]) => !value.isZero())
     .map(([name, value]) => ({
       name: name.replace(" Expense", ""),
       value: value.toDecimalPlaces(2).toNumber(),

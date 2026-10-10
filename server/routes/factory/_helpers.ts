@@ -1,10 +1,5 @@
 import { db } from "../../db";
-import { getErrorMessage } from "../../lib/httpHandlers";
-import { logger } from "../../lib/logger";
-import { AUTO_FILL_REF_TABLE } from "../../services/factory/daybookSourceIntegrity";
 import {
-  factoryFxRates,
-  factoryDaybookEntries,
   ledgerAccounts,
   customerOrderBales,
   customerOrderLines,
@@ -19,175 +14,73 @@ import {
   factoryContainerCommissions,
   factoryOffloadAdditionalCharges,
 } from "@shared/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../services/factory/currencyConversion";
 import type { DbTransaction, DatabaseOrTransaction } from "../../db";
 import type Decimal from "decimal.js";
-import { daybookAmountUsd, MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { MoneyDecimal, sumMoney, toMoney } from "../../lib/money";
+import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
+import { syncFactoryInvoiceTx } from "../../services/accounting/perpetualInventory/factoryInvoice";
+import { withFactoryValuationEventTx } from "../../services/factory/factoryStockValueEvents";
+import { resolveMixSourcePricingBasis } from "../../services/factory/mixSourcePricingBasis";
+import { resolveFactoryFxRateToUsd } from "../../services/factory/factoryFxRateReadOnly";
 
-function buildValidatedUrl(baseUrl: string, dateISO: string, currencyCode: string): string {
-  try {
-    const url = new URL(baseUrl);
-    const allowedDomains = ["api.frankfurter.app"];
-    if (!allowedDomains.includes(url.hostname)) throw new Error("Invalid host");
-    if (!["http:", "https:"].includes(url.protocol)) throw new Error("Invalid protocol");
-    if (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dateISO)) throw new Error("Invalid parameter");
-    if (!/^[A-Z]{3}$/.test(currencyCode)) throw new Error("Invalid parameter");
-    url.pathname = `/${dateISO}`;
-    url.searchParams.set("from", currencyCode);
-    url.searchParams.set("to", "USD");
-    return url.href;
-  } catch {
-    throw new Error("Invalid URL");
-  }
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../services/factory/factoryDaybookWriter";
 
-export async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-    effectiveDate?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const amtCurrency = opts.amountCurrency || 0;
-  // This helper backs many non-raw-material daybook entries (payroll, sales, etc.)
-  // as well as raw-material cost entries, so an unresolved rate here must not
-  // block the write the way it does on the dedicated raw-material cost-recompute
-  // paths (rawStockBalanceRoutes/rawStockContainerRoutes/recalculateContainerCosts)
-  // — instead flag it loudly so it surfaces in logs/diagnostics rather than
-  // silently mispricing.
-  const { looksSet: daybookFxLooksSet } = resolveStoredFxRate(currency, opts.fxRateToUsd ?? null);
-  if (!daybookFxLooksSet && currency !== "USD") {
-    logger.warn(
-      `[writeDaybookEntry] Unresolved exchange rate for ${currency} on txType=${opts.txType} companyId=${opts.companyId} — amountUsd may be inaccurate`
-    );
-  }
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  const [inserted] = await dbOrTx
-    .insert(factoryDaybookEntries)
-    .values({
-      companyId: opts.companyId,
-      txDate: opts.txDate,
-      txType: opts.txType,
-      referenceId: opts.referenceId ?? null,
-      referenceTable:
-        opts.referenceTable ?? (opts.referenceId != null ? (AUTO_FILL_REF_TABLE[opts.txType] ?? null) : null),
-      description: opts.description,
-      metaJson: opts.metaJson || null,
-      currencyCode: currency,
-      amountCurrency: String(amtCurrency),
-      fxRateToUsd: String(fxRate),
-      amountUsd: amtUsd,
-      createdBy: opts.createdBy || null,
-      effectiveDate: opts.effectiveDate || null,
-    })
-    .returning({ id: factoryDaybookEntries.id });
-  return inserted; // { id: number } — callers that ignore the return value continue to work
-}
-
+/**
+ * The factory rate (USD per unit) for a currency on a date, for posting flows.
+ * Precedence (resolveFactoryFxRateToUsd): the latest manual rate dated on or
+ * before `dateISO`; the rate recorded (auto) for exactly that date; the
+ * external historical rate for that date; when the external source fails, the
+ * latest recorded rate dated on or before `dateISO`. A rate dated after the
+ * transaction is never used; with none of the above it throws.
+ *
+ * Wave 17 C (owner decision 1): it never writes. A fetched external rate used
+ * to be recorded as an `auto` row by this lookup (and by the GET routes that
+ * call it); the posting now carries the rate it used on its own document, and
+ * a fetched rate becomes a recorded rate only through the audited Admin/Owner
+ * action (POST /api/factory/fx-rates/fetched, saveFetchedFactoryFxRate).
+ */
 export async function getOrFetchFxRateToUsd(companyId: number, currencyCode: string, dateISO: string): Promise<string> {
   if (currencyCode === "USD") return "1";
-
-  // Manual rates always take priority — use the most recent one for this currency.
-  const [manualRate] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, currencyCode.toUpperCase()),
-        eq(factoryFxRates.source, "manual")
-      )
-    )
-    .orderBy(desc(factoryFxRates.effectiveDate))
-    .limit(1);
-
-  if (manualRate) return manualRate.rateToUsd;
-
-  // No manual rate — check for an auto-cached row for this exact date.
-  const [existing] = await db
-    .select()
-    .from(factoryFxRates)
-    .where(
-      and(
-        eq(factoryFxRates.companyId, companyId),
-        eq(factoryFxRates.currencyCode, currencyCode.toUpperCase()),
-        eq(factoryFxRates.effectiveDate, dateISO),
-        eq(factoryFxRates.source, "auto")
-      )
-    )
-    .limit(1);
-
-  if (existing) return existing.rateToUsd;
-
-  try {
-    const response = await fetch(buildValidatedUrl("https://api.frankfurter.app", dateISO, currencyCode.toUpperCase()));
-    if (!response.ok) throw new Error(`FX API returned ${response.status}`);
-    const data = await response.json();
-    const rate = data?.rates?.USD;
-    if (!rate || isNaN(rate)) throw new Error("Invalid rate from FX API");
-
-    const rateStr = String(rate);
-    await db.insert(factoryFxRates).values({
-      companyId,
-      currencyCode: currencyCode.toUpperCase(),
-      rateToUsd: rateStr,
-      effectiveDate: dateISO,
-      source: "auto",
-    });
-
-    return rateStr;
-  } catch (err: unknown) {
-    const [fallback] = await db
-      .select()
-      .from(factoryFxRates)
-      .where(and(eq(factoryFxRates.companyId, companyId), eq(factoryFxRates.currencyCode, currencyCode.toUpperCase())))
-      .orderBy(desc(factoryFxRates.effectiveDate))
-      .limit(1);
-
-    if (fallback) return fallback.rateToUsd;
-    throw new Error(
-      `No FX rate available for ${dateISO}/${currencyCode}. External API error: ${getErrorMessage(err)}`,
-      { cause: err }
-    );
-  }
+  return (await resolveFactoryFxRateToUsd(companyId, currencyCode, dateISO)).rate;
 }
 
 export async function getOrCreateLedgerAccount(
   companyId: number,
   code: string,
   name: string,
-  accountType: string = "EXPENSE"
+  accountType?: string
 ): Promise<number> {
   const safeCode = code.slice(0, 50);
+  // A registry account is created with its registry type; anything else defaults
+  // to "Expense". The old default, "EXPENSE", is a type no report recognises, and
+  // it made FACTORY_CHARGES_PAYABLE (a payable) an expense.
+  const resolvedType = systemAccountDefinition(safeCode)?.accountType ?? accountType ?? "Expense";
   const [existing] = await db
-    .select({ id: ledgerAccounts.id })
+    .select({ id: ledgerAccounts.id, deletedAt: ledgerAccounts.deletedAt })
     .from(ledgerAccounts)
     .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, safeCode)))
     .limit(1);
-  if (existing) return existing.id;
+  if (existing) {
+    // A system account the posting needs is restored rather than posted to
+    // while deleted: the ledger integrity guard refuses lines on deleted
+    // accounts, and reports hide them.
+    if (existing.deletedAt) {
+      await db.update(ledgerAccounts).set({ deletedAt: null, active: true }).where(eq(ledgerAccounts.id, existing.id));
+    }
+    return existing.id;
+  }
   const [created] = await db
     .insert(ledgerAccounts)
     .values({
       companyId,
       code: safeCode,
       name,
-      accountType,
+      accountType: resolvedType,
       active: true,
       isHidden: false,
     })
@@ -313,6 +206,16 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
       updatedAt: new Date(),
     })
     .where(eq(customerOrders.id, orderId));
+
+  // Perpetual inventory (wave 8.4): a finalized order's invoice journal follows its new totals.
+  const [owner] = await dbConn
+    .select({ companyId: customerOrders.companyId, status: customerOrders.status })
+    .from(customerOrders)
+    .where(eq(customerOrders.id, orderId));
+  if (owner?.status === "FINALIZED") {
+    const sync = (tx: DbTransaction) => syncFactoryInvoiceTx(tx, owner.companyId, orderId);
+    await ("rollback" in dbConn ? sync(dbConn as DbTransaction) : db.transaction(sync));
+  }
 }
 
 /**
@@ -322,9 +225,29 @@ export async function recalculateOrderTotals(dbConn: DatabaseOrTransaction, orde
  * Call this inside a db.transaction() after mutating any single cost component
  * (freight, duty, commission, otherCharges, ratePerKg, or an additional charge).
  *
+ * Wave 11: mix sources and batches are held in USD. A source priced from this
+ * container alone (CONTAINER_DIRECT) takes the container's USD cost per kg; a
+ * source priced at its supplier's locked rate keeps it. The change this makes
+ * to the factory valuation is recorded as a REVALUATION event for the daily
+ * factory stock journal.
+ *
  * Returns the new { totalCost, inclusiveCostPerKg, costPerKgUsd, rawStockId }.
  */
 export async function recalculateContainerCosts(
+  tx: DbTransaction,
+  companyId: number,
+  containerId: number
+): Promise<{ totalCost: number; inclusiveCostPerKg: number; costPerKgUsd: number; rawStockId: number | null }> {
+  return withFactoryValuationEventTx(
+    tx,
+    companyId,
+    "REVALUATION",
+    { sourceType: "factory-container-cost-recalculation", sourceId: containerId },
+    () => recalculateContainerCostsInner(tx, companyId, containerId)
+  );
+}
+
+async function recalculateContainerCostsInner(
   tx: DbTransaction,
   companyId: number,
   containerId: number
@@ -460,10 +383,13 @@ export async function recalculateContainerCosts(
 
   if (mixSources.length > 0) {
     for (const src of mixSources) {
-      const newSrcCost = toMoney(src.weightKg).times(costPerKgExact);
+      // Only a source priced from this container alone follows its cost; a
+      // supplier-priced source keeps the supplier's locked rate (USD).
+      if (resolveMixSourcePricingBasis(src) !== "CONTAINER_DIRECT") continue;
+      const newSrcCost = toMoney(src.weightKg).times(costPerKgUsdExact);
       await tx
         .update(factoryMixBatchSources)
-        .set({ costPerKg: costPerKgExact.toFixed(7), totalCost: newSrcCost.toFixed(2) })
+        .set({ costPerKg: costPerKgUsdExact.toFixed(7), totalCost: newSrcCost.toFixed(7) })
         .where(eq(factoryMixBatchSources.id, src.id));
     }
 
@@ -484,8 +410,8 @@ export async function recalculateContainerCosts(
       await tx
         .update(factoryMixBatches)
         .set({
-          costPerKg: batchCostPerKg.toFixed(4),
-          totalCost: batchTotalCost.toFixed(2),
+          costPerKg: batchCostPerKg.toFixed(7),
+          totalCost: batchTotalCost.toFixed(7),
           updatedAt: new Date(),
         })
         .where(eq(factoryMixBatches.id, batchId));

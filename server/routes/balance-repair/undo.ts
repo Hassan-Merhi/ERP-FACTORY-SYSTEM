@@ -13,6 +13,8 @@ import { propertyMonthlyLedger, propertyContracts, propertyPayments } from "../.
 import { eq, and, sql } from "drizzle-orm";
 
 import { ApplySnapshot, parseNum } from "./_helpers";
+import { retiredVoucherNumber } from "../../services/accounting/voucherRetirement";
+import { writeAuditEvent } from "../../services/audit";
 
 export function registerBalanceRepairUndoRoutes(app: Express) {
   // ── POST /api/admin/repair-balances/undo ────────────────────────────────
@@ -34,29 +36,54 @@ export function registerBalanceRepairUndoRoutes(app: Express) {
         }
 
         // 2. Remove inserted voucher entries
-        for (const entryId of snapshot.voucherEntriesAdded ?? []) {
-          await db.execute(sql`DELETE FROM voucher_entries WHERE id = ${entryId}`);
-        }
-
         // 3. Re-soft-delete vouchers that were un-deleted
-        for (const v of snapshot.vouchersUndeleted ?? []) {
-          await db.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id}`);
-        }
-
-        // 4. Restore deleted orphaned vouchers + their entries, then re-link transfer
-        for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
-          // Re-insert voucher with same id (use raw SQL to preserve id)
-          await db.execute(sql`
-            INSERT INTO vouchers (id, company_id, voucher_number, voucher_type, voucher_date, description, total_amount)
-            VALUES (${ov.id}, ${ov.companyId}, ${ov.voucherNumber}, ${ov.voucherType}, ${ov.voucherDate}::date, ${ov.description}, ${ov.totalAmount})
-            ON CONFLICT (id) DO NOTHING
-          `);
-          for (const e of ov.entries) {
-            await db.execute(sql`
-              INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-              VALUES (${ov.id}, ${e.ledgerAccountId}, ${e.debitAmount}, ${e.creditAmount}, ${e.narration})
-            `);
+        // Both run in one transaction so no voucher is left half-reverted at commit.
+        await db.transaction(async (tx) => {
+          for (const entryId of snapshot.voucherEntriesAdded ?? []) {
+            await tx.execute(sql`DELETE FROM voucher_entries WHERE id = ${entryId}`);
           }
+
+          for (const v of snapshot.vouchersUndeleted ?? []) {
+            await tx.execute(sql`UPDATE vouchers SET deleted_at = NOW() WHERE id = ${v.id}`);
+          }
+        });
+
+        // 4. Restore the orphaned vouchers the apply retired. Wave 16 (A): the
+        // apply soft-deletes them with their lines, so the undo clears the
+        // delete and gives the number back, only for a voucher still retired
+        // under the number the snapshot names. It used to insert vouchers and
+        // lines from the request body.
+        for (const ov of snapshot.orphanedVouchersDeleted ?? []) {
+          const voucherId = Number(ov.id);
+          if (!Number.isInteger(voucherId) || voucherId <= 0 || typeof ov.voucherNumber !== "string") continue;
+          const voucherNumber = ov.voucherNumber;
+          await db.transaction(async (tx) => {
+            const restored = await tx.execute(sql`
+              UPDATE vouchers SET deleted_at = NULL, voucher_number = ${voucherNumber}
+               WHERE id = ${voucherId} AND deleted_at IS NOT NULL
+                 AND voucher_number = ${retiredVoucherNumber(voucherNumber, voucherId)}
+              RETURNING company_id
+            `);
+            const companyId = Number((restored.rows[0] as { company_id?: unknown } | undefined)?.company_id);
+            if (!companyId) return;
+            await writeAuditEvent(
+              {
+                userId: req.session.userId ?? "unknown",
+                username: req.session.username || "unknown",
+                companyId,
+                action: "restore",
+                tableName: "vouchers",
+                recordId: voucherId,
+                recordIdentifier: voucherNumber,
+                changes: {
+                  deletedAt: { new: null },
+                  voucherNumber: { old: retiredVoucherNumber(voucherNumber, voucherId), new: voucherNumber },
+                  reason: { new: "balance-repair-undo" },
+                },
+              },
+              tx
+            );
+          });
         }
 
         // 5. Re-insert deleted inter_company_transfers rows

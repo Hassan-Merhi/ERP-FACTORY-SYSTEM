@@ -4,7 +4,10 @@ import { factoryContainerCommissions } from "@shared/schema";
 
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { computeContainerLandedCost } from "../../../services/factory/containerLandedCost";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { db } from "../../../db";
+import { toMoney } from "../../../lib/money";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 
 /**
  * Everything POST /api/factory/raw-stock/offload works out before it opens its
@@ -64,7 +67,7 @@ export interface OffloadCostingContext {
 }
 
 export type OffloadCosting =
-  | { ok: false; httpStatus: number; body: { message: string } }
+  | { ok: false; httpStatus: number; body: { message: string; code?: string } }
   | {
       ok: true;
       commTotalVal: number;
@@ -134,9 +137,15 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     } else if (commCurrency === currencyCode.toUpperCase()) {
       resolvedCommFxRate = fxRate;
     } else {
+      // Phase 19 C (M2): the recorded factory rate on or before the offload date
+      // (manual, else recorded auto), or 409 FACTORY_FX_RATE_REQUIRED. It used to
+      // fetch an external rate (never recorded) and mark it confirmed.
       try {
-        resolvedCommFxRate = parseFloat(await getOrFetchFxRateToUsd(companyId, commCurrency, offloadDate));
+        resolvedCommFxRate = toMoney(
+          (await factoryDocumentRate(db, companyId, commCurrency, offloadDate)).rate
+        ).toNumber();
       } catch (err: unknown) {
+        if (err instanceof FactoryFxRateRequiredError) return { ok: false, httpStatus: 409, body: err.body };
         return {
           ok: false,
           httpStatus: 400,
@@ -286,17 +295,23 @@ export async function computeOffloadCosting(ctx: OffloadCostingContext): Promise
     "FACTORY_CHARGES_PAYABLE",
     "Factory Charges Payable"
   );
+  // The expense (debit) account of the freight / other-charges voucher. On the
+  // supplier path the request's account is the expense account; on the
+  // own-account path the request's account is the one that paid (the credit
+  // leg), so the expense goes to the system expense account. Resolving it only
+  // for the supplier path left own-account vouchers with an expense line that
+  // posted to no account (2026-10 accounting audit: 13 such lines in production).
   const freightExpenseAcctId =
-    freightVal > 0 && effectiveFreightSupplierId
-      ? reqFreightAccountId
+    freightVal > 0
+      ? effectiveFreightSupplierId && reqFreightAccountId
         ? parseInt(reqFreightAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_FREIGHT_EXPENSE", "Freight Expense", "Direct Expense")
       : null;
   const ocExpenseAcctId =
-    otherChargesVal > 0 && reqOtherChargesSupplierId
-      ? reqOtherChargesAccountId
+    otherChargesVal > 0
+      ? reqOtherChargesSupplierId && reqOtherChargesAccountId
         ? parseInt(reqOtherChargesAccountId)
-        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense")
+        : await getOrCreateLedgerAccount(companyId, "FACTORY_OC_EXPENSE", "Other Charges Expense", "Direct Expense")
       : null;
 
   return {

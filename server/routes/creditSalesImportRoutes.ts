@@ -42,6 +42,11 @@ import {
   financialOperationRequestPayload,
   resolveFinancialOperationKey,
 } from "../services/accounting/financialOperationRequest";
+import { postSaleCogsTx, relievedValue } from "../services/accounting/perpetualInventory/saleCogs";
+import {
+  assertNoBaleMirrorMovementTx,
+  sendBaleMirrorMovementRefusal,
+} from "../services/accounting/perpetualInventory/cutoverRefusal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -298,6 +303,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
         },
         async (tx) => {
           const voucherNumber = `CREDIT-SALES-${Date.now()}`;
+          let relieved = new MoneyDecimal(0);
 
           const [voucher] = await tx
             .insert(vouchers)
@@ -321,6 +327,13 @@ export function registerCreditSalesImportRoutes(app: Express) {
             if (!stockItem) {
               throw new Error(`Stock item not found for barcode: ${item.barcode}`);
             }
+            // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+            await assertNoBaleMirrorMovementTx(
+              tx,
+              req.session.currentCompanyId!,
+              [stockItem.id],
+              "credit-sales-import"
+            );
 
             const [inventoryRecord] = await tx
               .select()
@@ -352,6 +365,13 @@ export function registerCreditSalesImportRoutes(app: Express) {
               importCreditLocPrice?.sellingPrice || stockItem.sellingPrice || "0"
             );
 
+            const issued = await adjustInventory(
+              tx,
+              locationId,
+              stockItem.id,
+              -quantity.toNumber(),
+              req.session.currentCompanyId!
+            );
             const [saleItem] = await tx
               .insert(salesItems)
               .values({
@@ -364,10 +384,12 @@ export function registerCreditSalesImportRoutes(app: Express) {
                 totalCost: itemCost,
                 profit,
                 configuredPrice: importCreditConfiguredPrice.gt(0) ? importCreditConfiguredPrice.toFixed(6) : null,
+                // Wave 11: the exact value the issue relieved, what a reversal restores.
+                valueMoved: relievedValue(issued).toFixed(2),
               })
               .returning({ id: salesItems.id });
 
-            await adjustInventory(tx, locationId, stockItem.id, -quantity.toNumber(), req.session.currentCompanyId!);
+            relieved = relieved.plus(relievedValue(issued));
             await postStockMovementTx(
               tx,
               {
@@ -424,6 +446,15 @@ export function registerCreditSalesImportRoutes(app: Express) {
             .where(eq(vouchers.id, voucher.id));
 
           createdVoucher = voucher;
+          // Perpetual inventory (wave 8.1): the exact value the import took out of stock.
+          await postSaleCogsTx(tx, {
+            companyId: req.session.currentCompanyId!,
+            saleVoucherId: voucher.id,
+            saleVoucherNumber: voucherNumber,
+            voucherDate: saleDate,
+            locationId,
+            relieved,
+          });
 
           // Add customer balance transaction (credit sale = debit to customer = they owe us)
           // Get current running balance for this customer
@@ -544,6 +575,7 @@ export function registerCreditSalesImportRoutes(app: Express) {
         });
       }
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       logger.error("Credit Sales Import error:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

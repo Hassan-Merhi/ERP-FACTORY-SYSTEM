@@ -14,14 +14,9 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { pool, db } from "../server/db";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
-import {
-  seedTestData,
-  cleanupTestData,
-  closeTestServer,
-  type TestContext,
-} from "./setup";
+import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 
 const TEST_PREFIX = "spsalestest";
 
@@ -147,6 +142,14 @@ afterAll(async () => {
   await pool.query(`DELETE FROM sp_sale_lines WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM sp_sales WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM sp_stock_movements WHERE company_id = $1`, [ctx.companyId]);
+  // Lines on these bank accounts go first: voucher_entries.bank_account_id is a
+  // RESTRICT foreign key. Every line of their vouchers goes with them, in one
+  // statement, so no voucher is left one-sided for the voucher balance guard.
+  await db
+    .delete(schema.voucherEntries)
+    .where(
+      sql`${schema.voucherEntries.voucherId} IN (SELECT voucher_id FROM voucher_entries WHERE bank_account_id IN (SELECT id FROM bank_accounts WHERE company_id = ${ctx.companyId}))`
+    );
   await db.delete(schema.bankAccounts).where(eq(schema.bankAccounts.companyId, ctx.companyId));
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();
@@ -159,7 +162,16 @@ async function seedStockLot(qtyIn: number, baseUnitCost: number, finalUnitCost: 
        (company_id, article_code, description, stock_item_id, location_id, qty_in, qty_remaining, base_unit_cost_usd, landed_unit_cost_usd, final_unit_cost_usd)
      VALUES ($1, $2, $3, $4, $5, $6, $6, $7, $7, $8)
      RETURNING *`,
-    [ctx.companyId, `${TEST_PREFIX}-ART`, "Test Article", stockItemId, ctx.locationId, qtyIn, baseUnitCost, finalUnitCost],
+    [
+      ctx.companyId,
+      `${TEST_PREFIX}-ART`,
+      "Test Article",
+      stockItemId,
+      ctx.locationId,
+      qtyIn,
+      baseUnitCost,
+      finalUnitCost,
+    ]
   );
   return rows[0];
 }
@@ -172,7 +184,7 @@ describe("Supplier Partner sale accounting — POST /api/sp/sales", () => {
 
     const beforeQty = await pool.query(
       `SELECT COALESCE(SUM(qty_remaining::numeric), 0) AS qty FROM sp_stock_movements WHERE company_id = $1 AND stock_item_id = $2`,
-      [ctx.companyId, stockItemId],
+      [ctx.companyId, stockItemId]
     );
     const qtyBefore = parseFloat(beforeQty.rows[0].qty);
 
@@ -227,15 +239,12 @@ describe("Supplier Partner sale accounting — POST /api/sp/sales", () => {
     // Stock qty still decreases via sp_stock_movements.
     const afterQty = await pool.query(
       `SELECT COALESCE(SUM(qty_remaining::numeric), 0) AS qty FROM sp_stock_movements WHERE company_id = $1 AND stock_item_id = $2`,
-      [ctx.companyId, stockItemId],
+      [ctx.companyId, stockItemId]
     );
     expect(parseFloat(afterQty.rows[0].qty)).toBeCloseTo(qtyBefore - 1, 4);
 
     // Sale line retains the true final unit cost for downstream COGS/profit reporting.
-    const lines = await db
-      .select()
-      .from(schema.spSaleLines)
-      .where(eq(schema.spSaleLines.saleId, sale.id));
+    const lines = await db.select().from(schema.spSaleLines).where(eq(schema.spSaleLines.saleId, sale.id));
     expect(lines.length).toBe(1);
     expect(parseFloat(lines[0].finalUnitCostUsd as any)).toBeCloseTo(700, 4);
   });
@@ -266,7 +275,7 @@ describe("Supplier Partner sale accounting — POST /api/sp/sales", () => {
     // before any pre-transaction side effect, not just fail to balance afterward.
     const voucherCountForNoBankSale = await pool.query(
       `SELECT COUNT(*)::int AS c FROM vouchers WHERE company_id = $1 AND description = $2`,
-      [ctx.companyId, "Sale — Test Customer No Bank"],
+      [ctx.companyId, "Sale — Test Customer No Bank"]
     );
     expect(voucherCountForNoBankSale.rows[0].c).toBe(0);
   });

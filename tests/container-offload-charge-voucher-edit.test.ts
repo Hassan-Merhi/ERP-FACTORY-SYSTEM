@@ -84,7 +84,9 @@ async function offloadState(containerId: number) {
 
 async function inventoryAt(stockItemId: number) {
   const result = await pool.query<{ quantity: string; average_rate: string; total_value: string }>(
-    `SELECT quantity, average_rate, total_value FROM inventory WHERE location_id = $1 AND stock_item_id = $2`,
+    // average_rate is numeric(20,7) since wave 11; these rates are compared at the 2dp the writer uses.
+    `SELECT quantity, average_rate::numeric(20,2)::text AS average_rate, total_value
+       FROM inventory WHERE location_id = $1 AND stock_item_id = $2`,
     [ctx.locationId, stockItemId]
   );
   return result.rows[0];

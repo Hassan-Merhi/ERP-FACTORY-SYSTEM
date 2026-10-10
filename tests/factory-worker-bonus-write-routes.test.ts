@@ -55,7 +55,7 @@ async function bonusLegs(bonusId: number) {
     `SELECT ve.ledger_account_id, ve.debit_amount, ve.credit_amount
      FROM voucher_entries ve
      JOIN vouchers v ON v.id = ve.voucher_id
-     WHERE v.company_id = $1 AND v.voucher_number LIKE $2
+     WHERE v.company_id = $1 AND v.voucher_number LIKE $2 AND v.deleted_at IS NULL
      ORDER BY ve.id`,
     [ctx.companyId, `WBONUS-${bonusId}-%`]
   );
@@ -64,7 +64,7 @@ async function bonusLegs(bonusId: number) {
 
 async function bonusVoucherCount(bonusId: number): Promise<number> {
   const result = await pool.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2`,
+    `SELECT COUNT(*)::text AS count FROM vouchers WHERE company_id = $1 AND voucher_number LIKE $2 AND deleted_at IS NULL`,
     [ctx.companyId, `WBONUS-${bonusId}-%`]
   );
   return Number(result.rows[0].count);

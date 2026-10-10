@@ -1,342 +1,325 @@
+/**
+ * Insurance journal direction repair (accounting audit wave 16 A).
+ *
+ *   GET  /api/insurance/admin/journal-direction/plan    Owner, read-only plan
+ *   POST /api/insurance/admin/journal-direction/apply   Owner, { confirm: true, planHash }
+ *
+ * (It replaces POST /api/insurance/admin/repair-reversed-journals, Admin, whose
+ * apply took a typed confirmation and no plan hash. The paths carry no
+ * maintenance keyword, so the Owner is admitted: privilegedMaintenanceRoutePolicy
+ * admits only Admin and Developer to "repair" paths.)
+ *
+ * Old generated insurance journals were posted Dr Insurance Expense / Cr the
+ * member liability. The repair swaps debit and credit on such a voucher.
+ *
+ * It used to run when the routes registered (every boot), across every
+ * company in maintenance scope — which also bypassed the closed-period guard —
+ * with no audit. It now runs only from this reviewed tool:
+ * - the preview lists every voucher and line it would change, with the
+ *   amounts before and after, the vouchers it skips and why, and a plan hash;
+ * - the apply runs for the current company only, in one transaction (company
+ *   scope asserted, advisory lock), derives the plan again under row locks and
+ *   applies it only when its hash is the reviewed one (409 PLAN_CHANGED);
+ * - a voucher in a closed period (by its voucher date or effective date,
+ *   COALESCE(effective_date, voucher_date)) is skipped (PERIOD_CLOSED) and the
+ *   closed-period trigger still guards every line;
+ * - each line's debit and credit swap together with its transaction and base
+ *   amounts (the old swap left those on the old side of a non-USD line);
+ * - one audit row in the transaction holds every line before and after.
+ */
+import { createHash } from "node:crypto";
 import type { Express, Request, Response } from "express";
-import { and, eq, ilike } from "drizzle-orm";
-import { insuranceMembers, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
-import { db, pool } from "../../db";
+import { sql } from "drizzle-orm";
+
+import { db, type DatabaseOrTransaction } from "../../db";
 import { requireAuth, requireRole } from "../../auth";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
+import { getErrorMessage } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
+import { MoneyDecimal } from "../../lib/money";
+import { writeAuditEvent } from "../../services/audit";
 import { resolveRequestCompanyId } from "../../services/security/requestCompanyScope";
+import { assertTransactionCompanyScope } from "../../services/security/transactionCompanyScope";
 
-const APPLY_CONFIRMATION = "REPAIR_REVERSED_INSURANCE_JOURNALS";
-const AUTO_REPAIR_LOCK = "insurance-generated-journal-direction-v2";
+const PLAN_HASH = /^[0-9a-f]{64}$/;
+const PLAN_ROUTE = "/api/insurance/admin/journal-direction/plan";
+const APPLY_ROUTE = "/api/insurance/admin/journal-direction/apply";
 
-type InsuranceEntryRow = {
+export type InsuranceRepairSkipReason =
+  | "INSURANCE_LEDGER_PATTERN_NOT_PROVEN"
+  | "UNEXPECTED_EXTRA_LEDGER_ENTRY"
+  | "MIXED_OR_AMBIGUOUS_ENTRY_DIRECTION"
+  | "UNBALANCED_REVERSED_JOURNAL"
+  | "PERIOD_CLOSED";
+
+export interface InsuranceRepairLine {
   entryId: number;
-  voucherId: number;
-  voucherNumber: string;
-  voucherDate: string;
   ledgerAccountId: number | null;
   ledgerName: string | null;
-  accountType: string | null;
-  debitAmount: string;
-  creditAmount: string;
-};
+  debit: string;
+  credit: string;
+  newDebit: string;
+  newCredit: string;
+}
 
-type Candidate = {
+export interface InsuranceRepairVoucher {
   voucherId: number;
   voucherNumber: string;
   voucherDate: string;
-  total: number;
-  entries: InsuranceEntryRow[];
-};
-
-type Skipped = {
-  voucherId: number;
-  voucherNumber: string;
-  reason: string;
-};
-
-function money(value: string | null | undefined): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : Number.NaN;
+  effectiveDate: string | null;
+  total: string;
+  lines: InsuranceRepairLine[];
 }
 
-/**
- * Automatically repairs insurance journals that were generated with the old
- * direction (Dr Insurance Expense / Cr Insurance member liability).
- *
- * The repair is intentionally narrow and idempotent:
- * - only ERP INS-* vouchers are considered;
- * - each voucher must contain exactly one Insurance Expense leg and one or
- *   more recognized Insurance member liability legs, with no extra accounts;
- * - the old-side amounts must balance before anything is changed;
- * - a cross-process advisory lock prevents two app instances from flipping the
- *   same voucher twice during a rolling deploy.
- *
- * Once repaired, the voucher no longer matches the legacy-side predicate, so
- * later startups are no-ops.
- */
-export async function autoRepairHistoricalInsuranceJournalDirections(): Promise<number[]> {
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [AUTO_REPAIR_LOCK]);
-    // This is a process-owned, cross-company startup repair. Voucher, entry,
-    // and ledger RLS intentionally fail closed without an explicit scope, so
-    // enable transaction-local maintenance scope for this one reviewed repair.
-    await client.query(`
-      SELECT
-        set_config('app.company_scope_maintenance', 'on', true),
-        set_config('app.current_company_id', '', true),
-        set_config('app.authorized_company_ids', '', true)
-    `);
+export interface InsuranceRepairPlan {
+  companyId: number;
+  candidates: InsuranceRepairVoucher[];
+  skipped: { voucherId: number; voucherNumber: string; reason: InsuranceRepairSkipReason }[];
+  planHash: string;
+}
 
-    const repaired = await client.query<{ voucher_id: number }>(`
-      WITH classified AS (
-        SELECT
-          v.id AS voucher_id,
-          v.company_id,
-          ve.id AS entry_id,
-          COALESCE(ve.debit_amount, 0)::numeric AS debit_amount,
-          COALESCE(ve.credit_amount, 0)::numeric AS credit_amount,
-          (la.name = 'Insurance Expense' AND la.account_type = 'Expense') AS is_expense,
-          (
-            la.account_type = 'Liability'
-            AND (
-              la.name LIKE 'Insurance - %'
-              OR EXISTS (
-                SELECT 1
-                FROM insurance_members im
-                WHERE im.company_id = v.company_id
-                  AND im.ledger_account_id = la.id
-              )
-            )
-          ) AS is_liability
-        FROM vouchers v
-        JOIN voucher_entries ve ON ve.voucher_id = v.id
-        LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-        WHERE v.source_module = 'ERP'
-          AND v.voucher_number ILIKE 'INS-%'
-      ),
-      candidate_vouchers AS (
-        SELECT voucher_id
-        FROM classified
-        GROUP BY voucher_id
-        HAVING COUNT(*) FILTER (WHERE is_expense) = 1
-          AND COUNT(*) FILTER (WHERE is_liability) > 0
-          AND COUNT(*) = COUNT(*) FILTER (WHERE is_expense OR is_liability)
-          AND SUM(CASE WHEN is_expense THEN debit_amount ELSE 0 END) > 0
-          AND SUM(CASE WHEN is_expense THEN credit_amount ELSE 0 END) = 0
-          AND BOOL_AND(
-            CASE
-              WHEN is_liability THEN debit_amount = 0 AND credit_amount > 0
-              ELSE TRUE
-            END
-          )
-          AND ABS(
-            SUM(CASE WHEN is_expense THEN debit_amount ELSE 0 END)
-            - SUM(CASE WHEN is_liability THEN credit_amount ELSE 0 END)
-          ) <= 0.01
-      ),
-      updated AS (
-        UPDATE voucher_entries ve
-        SET
-          debit_amount = ve.credit_amount,
-          credit_amount = ve.debit_amount
-        FROM candidate_vouchers cv
-        WHERE ve.voucher_id = cv.voucher_id
-        RETURNING ve.voucher_id
-      )
-      SELECT DISTINCT voucher_id FROM updated ORDER BY voucher_id
-    `);
-
-    await client.query("COMMIT");
-    const voucherIds = repaired.rows.map((row) => row.voucher_id);
-    if (voucherIds.length > 0) {
-      logger.warn("Automatically repaired legacy insurance journal directions", {
-        repairedCount: voucherIds.length,
-        repairedVoucherIds: voucherIds,
-      });
-    }
-    return voucherIds;
-  } catch (error: unknown) {
-    await client.query("ROLLBACK").catch(() => undefined);
-    logger.error("Automatic historical insurance journal direction repair failed", { error });
-    return [];
-  } finally {
-    client.release();
+export class InsuranceRepairRefusal extends Error {
+  constructor(
+    readonly code: "PLAN_CHANGED" | "NOTHING_TO_APPLY",
+    message: string
+  ) {
+    super(message);
+    this.name = "InsuranceRepairRefusal";
   }
 }
 
-async function inspectHistoricalInsuranceJournals(companyId: number): Promise<{
-  candidates: Candidate[];
-  skipped: Skipped[];
-}> {
-  const rows = await db
-    .select({
-      entryId: voucherEntries.id,
-      voucherId: vouchers.id,
-      voucherNumber: vouchers.voucherNumber,
-      voucherDate: vouchers.voucherDate,
-      ledgerAccountId: voucherEntries.ledgerAccountId,
-      ledgerName: ledgerAccounts.name,
-      accountType: ledgerAccounts.accountType,
-      debitAmount: voucherEntries.debitAmount,
-      creditAmount: voucherEntries.creditAmount,
-    })
-    .from(vouchers)
-    .innerJoin(voucherEntries, eq(voucherEntries.voucherId, vouchers.id))
-    .leftJoin(ledgerAccounts, eq(ledgerAccounts.id, voucherEntries.ledgerAccountId))
-    .where(
-      and(eq(vouchers.companyId, companyId), eq(vouchers.sourceModule, "ERP"), ilike(vouchers.voucherNumber, "INS-%"))
-    );
+type EntryRow = {
+  entry_id: number;
+  voucher_id: number;
+  voucher_number: string;
+  voucher_date: string;
+  effective_date: string | null;
+  period_closed: boolean;
+  ledger_account_id: number | null;
+  ledger_name: string | null;
+  account_type: string | null;
+  debit: string;
+  credit: string;
+  member_linked: boolean;
+};
 
-  const linkedMemberLedgers = new Set(
-    (
-      await db
-        .select({ ledgerAccountId: insuranceMembers.ledgerAccountId })
-        .from(insuranceMembers)
-        .where(eq(insuranceMembers.companyId, companyId))
-    )
-      .map((row) => row.ledgerAccountId)
-      .filter((id): id is number => typeof id === "number")
-  );
+async function loadEntries(executor: DatabaseOrTransaction, companyId: number, lock: boolean): Promise<EntryRow[]> {
+  const result = await executor.execute<EntryRow & Record<string, unknown>>(sql`
+    SELECT ve.id AS entry_id, v.id AS voucher_id, v.voucher_number, v.voucher_date::text AS voucher_date,
+           v.effective_date::text AS effective_date,
+           COALESCE((
+             SELECT max(fc.period_end_date) FROM fiscal_period_closures fc
+              WHERE fc.company_id = v.company_id AND fc.status = 'CLOSED'
+           ) >= LEAST(v.voucher_date, COALESCE(v.effective_date, v.voucher_date)), false) AS period_closed,
+           ve.ledger_account_id, la.name AS ledger_name, la.account_type,
+           COALESCE(ve.debit_amount, 0)::text AS debit, COALESCE(ve.credit_amount, 0)::text AS credit,
+           EXISTS (SELECT 1 FROM insurance_members im
+                    WHERE im.company_id = v.company_id AND im.ledger_account_id = la.id) AS member_linked
+      FROM vouchers v
+      JOIN voucher_entries ve ON ve.voucher_id = v.id
+      LEFT JOIN ledger_accounts la ON la.id = ve.ledger_account_id
+     WHERE v.company_id = ${companyId}
+       AND v.deleted_at IS NULL
+       AND v.source_module = 'ERP'
+       AND v.voucher_number ILIKE 'INS-%'
+     ORDER BY v.id, ve.id
+     ${lock ? sql`FOR UPDATE OF ve` : sql``}
+  `);
+  return result.rows as unknown as EntryRow[];
+}
 
-  const byVoucher = new Map<number, InsuranceEntryRow[]>();
-  for (const row of rows as InsuranceEntryRow[]) {
-    const list = byVoucher.get(row.voucherId) ?? [];
+const isExpense = (row: EntryRow) => row.ledger_name === "Insurance Expense" && row.account_type === "Expense";
+const isLiability = (row: EntryRow) =>
+  row.account_type === "Liability" && ((row.ledger_name ?? "").startsWith("Insurance - ") || row.member_linked);
+
+/** The plan for one company: which INS- vouchers carry the old direction, provably, and what the swap writes. */
+async function derivePlan(
+  executor: DatabaseOrTransaction,
+  companyId: number,
+  lock: boolean
+): Promise<InsuranceRepairPlan> {
+  const byVoucher = new Map<number, EntryRow[]>();
+  for (const row of await loadEntries(executor, companyId, lock)) {
+    const list = byVoucher.get(row.voucher_id) ?? [];
     list.push(row);
-    byVoucher.set(row.voucherId, list);
+    byVoucher.set(row.voucher_id, list);
   }
 
-  const candidates: Candidate[] = [];
-  const skipped: Skipped[] = [];
-
+  const candidates: InsuranceRepairVoucher[] = [];
+  const skipped: InsuranceRepairPlan["skipped"] = [];
+  const zero = new MoneyDecimal(0);
   for (const [voucherId, entries] of byVoucher) {
     const first = entries[0];
-    const expenseEntries = entries.filter(
-      (entry) => entry.ledgerName === "Insurance Expense" && entry.accountType === "Expense"
-    );
-    const liabilityEntries = entries.filter(
-      (entry) =>
-        entry.accountType === "Liability" &&
-        ((entry.ledgerName ?? "").startsWith("Insurance - ") ||
-          (entry.ledgerAccountId != null && linkedMemberLedgers.has(entry.ledgerAccountId)))
-    );
-
-    if (expenseEntries.length !== 1 || liabilityEntries.length === 0) {
-      skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "INSURANCE_LEDGER_PATTERN_NOT_PROVEN" });
+    const skip = (reason: InsuranceRepairSkipReason) =>
+      skipped.push({ voucherId, voucherNumber: first.voucher_number, reason });
+    const expenses = entries.filter(isExpense);
+    const liabilities = entries.filter(isLiability);
+    if (expenses.length !== 1 || liabilities.length === 0) {
+      skip("INSURANCE_LEDGER_PATTERN_NOT_PROVEN");
       continue;
     }
-    if (expenseEntries.length + liabilityEntries.length !== entries.length) {
-      skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "UNEXPECTED_EXTRA_LEDGER_ENTRY" });
+    if (expenses.length + liabilities.length !== entries.length) {
+      skip("UNEXPECTED_EXTRA_LEDGER_ENTRY");
       continue;
     }
-
-    const expense = expenseEntries[0];
-    const expenseDebit = money(expense.debitAmount);
-    const expenseCredit = money(expense.creditAmount);
-    const liabilityDebits = liabilityEntries.reduce((sum, entry) => sum + money(entry.debitAmount), 0);
-    const liabilityCredits = liabilityEntries.reduce((sum, entry) => sum + money(entry.creditAmount), 0);
-
-    if (![expenseDebit, expenseCredit, liabilityDebits, liabilityCredits].every(Number.isFinite)) {
-      skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "NON_NUMERIC_ENTRY_AMOUNT" });
+    const expenseDebit = new MoneyDecimal(expenses[0].debit);
+    const expenseCredit = new MoneyDecimal(expenses[0].credit);
+    const liabilityDebits = liabilities.reduce((sum, row) => sum.plus(row.debit), zero);
+    const liabilityCredits = liabilities.reduce((sum, row) => sum.plus(row.credit), zero);
+    // Already in the corrected direction: nothing to do.
+    if (expenseDebit.isZero() && expenseCredit.gt(0) && liabilityDebits.gt(0) && liabilityCredits.isZero()) continue;
+    const legacy =
+      expenseDebit.gt(0) &&
+      expenseCredit.isZero() &&
+      liabilities.every((row) => new MoneyDecimal(row.debit).isZero() && new MoneyDecimal(row.credit).gt(0));
+    if (!legacy) {
+      skip("MIXED_OR_AMBIGUOUS_ENTRY_DIRECTION");
       continue;
     }
-
-    if (expenseDebit === 0 && expenseCredit > 0 && liabilityDebits > 0 && liabilityCredits === 0) {
+    if (!expenseDebit.eq(liabilityCredits)) {
+      skip("UNBALANCED_REVERSED_JOURNAL");
       continue;
     }
-
-    const allLiabilitiesOnLegacyCreditSide = liabilityEntries.every(
-      (entry) => money(entry.debitAmount) === 0 && money(entry.creditAmount) > 0
-    );
-    const isLegacyReversed = expenseDebit > 0 && expenseCredit === 0 && allLiabilitiesOnLegacyCreditSide;
-    if (!isLegacyReversed) {
-      skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "MIXED_OR_AMBIGUOUS_ENTRY_DIRECTION" });
+    if (first.period_closed) {
+      skip("PERIOD_CLOSED");
       continue;
     }
-
-    if (Math.abs(expenseDebit - liabilityCredits) > 0.01) {
-      skipped.push({ voucherId, voucherNumber: first.voucherNumber, reason: "UNBALANCED_REVERSED_JOURNAL" });
-      continue;
-    }
-
     candidates.push({
       voucherId,
-      voucherNumber: first.voucherNumber,
-      voucherDate: first.voucherDate,
-      total: expenseDebit,
-      entries,
+      voucherNumber: first.voucher_number,
+      voucherDate: first.voucher_date,
+      effectiveDate: first.effective_date,
+      total: expenseDebit.toFixed(2),
+      lines: entries.map((row) => ({
+        entryId: row.entry_id,
+        ledgerAccountId: row.ledger_account_id,
+        ledgerName: row.ledger_name,
+        debit: new MoneyDecimal(row.debit).toFixed(2),
+        credit: new MoneyDecimal(row.credit).toFixed(2),
+        newDebit: new MoneyDecimal(row.credit).toFixed(2),
+        newCredit: new MoneyDecimal(row.debit).toFixed(2),
+      })),
     });
   }
 
-  return { candidates, skipped };
+  const planHash = createHash("sha256").update(JSON.stringify({ candidates, skipped })).digest("hex");
+  return { companyId, candidates, skipped, planHash };
+}
+
+/** Read-only plan for the company. */
+export function planInsuranceJournalDirectionRepair(
+  companyId: number,
+  executor: DatabaseOrTransaction = db
+): Promise<InsuranceRepairPlan> {
+  return derivePlan(executor, companyId, false);
+}
+
+/** Applies the reviewed plan for the company in one transaction, audited in it. */
+export async function applyInsuranceJournalDirectionRepair(
+  companyId: number,
+  options: { planHash: string; actor: { userId: string | number; username: string } }
+): Promise<InsuranceRepairPlan & { repairedVoucherIds: number[] }> {
+  return db.transaction(async (tx) => {
+    await assertTransactionCompanyScope(tx, companyId);
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('insurance-journal-direction-repair'), ${companyId})`);
+    const plan = await derivePlan(tx, companyId, true);
+    if (plan.planHash !== options.planHash) {
+      throw new InsuranceRepairRefusal(
+        "PLAN_CHANGED",
+        "The insurance journal repair plan changed since it was reviewed; review it again before applying"
+      );
+    }
+    if (plan.candidates.length === 0) {
+      throw new InsuranceRepairRefusal("NOTHING_TO_APPLY", "There is nothing to repair");
+    }
+    for (const candidate of plan.candidates) {
+      for (const line of candidate.lines) {
+        const updated = await tx.execute(sql`
+          UPDATE voucher_entries
+             SET debit_amount = credit_amount, credit_amount = debit_amount,
+                 transaction_debit_amount = transaction_credit_amount,
+                 transaction_credit_amount = transaction_debit_amount,
+                 base_debit_amount = base_credit_amount, base_credit_amount = base_debit_amount
+           WHERE id = ${line.entryId} AND voucher_id = ${candidate.voucherId}
+             AND debit_amount = ${line.debit} AND credit_amount = ${line.credit}
+        `);
+        if (updated.rowCount !== 1) throw new Error("An insurance journal line changed during the repair");
+      }
+    }
+    await writeAuditEvent(
+      {
+        userId: options.actor.userId,
+        username: options.actor.username,
+        companyId,
+        action: "update",
+        tableName: "voucher_entries",
+        recordIdentifier: "insurance-journal-direction-repair",
+        changes: {
+          lines: {
+            old: plan.candidates.flatMap((candidate) =>
+              candidate.lines.map((line) => ({
+                voucherId: candidate.voucherId,
+                voucherNumber: candidate.voucherNumber,
+                entryId: line.entryId,
+                debit: line.debit,
+                credit: line.credit,
+              }))
+            ),
+            new: plan.candidates.flatMap((candidate) =>
+              candidate.lines.map((line) => ({
+                voucherId: candidate.voucherId,
+                entryId: line.entryId,
+                debit: line.newDebit,
+                credit: line.newCredit,
+              }))
+            ),
+          },
+        },
+        metadata: { planHash: plan.planHash, skipped: plan.skipped },
+      },
+      tx
+    );
+    return { ...plan, repairedVoucherIds: plan.candidates.map((candidate) => candidate.voucherId) };
+  });
 }
 
 export function registerInsuranceHistoricalRepairRoutes(app: Express): void {
-  // Run once when the route module is registered. This makes the old generated
-  // entries self-heal on the first deployment containing this fix.
-  void autoRepairHistoricalInsuranceJournalDirections();
-
-  app.post(
-    "/api/insurance/admin/repair-reversed-journals",
-    requireAuth,
-    requireRole("Admin"),
-    async (req: Request, res: Response) => {
-      try {
-        const companyId = resolveRequestCompanyId(req);
-        const dryRun = req.body?.dryRun !== false;
-        const inspection = await inspectHistoricalInsuranceJournals(companyId);
-
-        if (dryRun) {
-          return res.json({
-            dryRun: true,
-            confirmationRequired: APPLY_CONFIRMATION,
-            candidateCount: inspection.candidates.length,
-            candidates: inspection.candidates.map(({ entries: _entries, ...candidate }) => candidate),
-            skippedCount: inspection.skipped.length,
-            skipped: inspection.skipped,
-          });
-        }
-
-        if (req.body?.confirmation !== APPLY_CONFIRMATION) {
-          return res.status(400).json({
-            message: `Set confirmation to ${APPLY_CONFIRMATION} to apply the repair`,
-          });
-        }
-
-        const repairedVoucherIds = await db.transaction(async (tx) => {
-          const repaired: number[] = [];
-          for (const candidate of inspection.candidates) {
-            let updatedEntries = 0;
-            for (const entry of candidate.entries) {
-              const result = await tx
-                .update(voucherEntries)
-                .set({ debitAmount: entry.creditAmount, creditAmount: entry.debitAmount })
-                .where(
-                  and(
-                    eq(voucherEntries.id, entry.entryId),
-                    eq(voucherEntries.voucherId, candidate.voucherId),
-                    eq(voucherEntries.debitAmount, entry.debitAmount),
-                    eq(voucherEntries.creditAmount, entry.creditAmount)
-                  )
-                )
-                .returning({ id: voucherEntries.id });
-              updatedEntries += result.length;
-            }
-            if (updatedEntries !== candidate.entries.length) {
-              throw new Error(
-                `Insurance voucher ${candidate.voucherNumber} changed during repair; transaction rolled back`
-              );
-            }
-            repaired.push(candidate.voucherId);
-          }
-          return repaired;
-        });
-
-        logger.info(
-          JSON.stringify({
-            event: "historical_insurance_journal_repair_applied",
-            userId: req.session.userId ?? null,
-            companyId,
-            repairedVoucherIds,
-            repairedCount: repairedVoucherIds.length,
-          })
-        );
-
-        return res.json({
-          dryRun: false,
-          repairedCount: repairedVoucherIds.length,
-          repairedVoucherIds,
-          skippedCount: inspection.skipped.length,
-          skipped: inspection.skipped,
-        });
-      } catch (error: unknown) {
-        logger.error("POST /api/insurance/admin/repair-reversed-journals error", { error });
-        return res.status(500).json({
-          message: error instanceof Error ? error.message : "Failed to repair historical insurance journals",
-        });
-      }
+  // Wave 16 (A): no repair runs when the routes register (it ran at every boot).
+  app.get(PLAN_ROUTE, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
+    try {
+      const companyId = resolveRequestCompanyId(req);
+      res.json(await planInsuranceJournalDirectionRepair(companyId));
+    } catch (error: unknown) {
+      logger.error(`GET ${PLAN_ROUTE} error`, { error });
+      res.status(500).json({ message: getErrorMessage(error) });
     }
-  );
+  });
+
+  app.post(APPLY_ROUTE, requireAuth, requireRole("Owner"), async (req: Request, res: Response) => {
+    try {
+      const companyId = resolveRequestCompanyId(req);
+      if (req.body?.confirm !== true) return res.status(400).json({ message: "Confirmation is required" });
+      const planHash = req.body?.planHash;
+      if (typeof planHash !== "string" || !PLAN_HASH.test(planHash)) {
+        return res.status(400).json({ message: "The reviewed plan hash is required" });
+      }
+      const result = await applyInsuranceJournalDirectionRepair(companyId, {
+        planHash,
+        actor: {
+          userId: String(req.session.userId ?? ""),
+          username: req.session.username || String(req.session.userId ?? "unknown"),
+        },
+      });
+      res.json(result);
+    } catch (error: unknown) {
+      if (error instanceof InsuranceRepairRefusal) {
+        const status = error.code === "NOTHING_TO_APPLY" ? 400 : 409;
+        return res.status(status).json({ code: error.code, message: error.message });
+      }
+      const closed = closedPeriodErrorResponse(error);
+      if (closed) return res.status(closed.status).json(closed.body);
+      logger.error(`POST ${APPLY_ROUTE} error`, { error });
+      res.status(500).json({ message: getErrorMessage(error) });
+    }
+  });
 }

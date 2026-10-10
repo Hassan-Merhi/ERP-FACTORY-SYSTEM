@@ -1,16 +1,5 @@
 import { useState } from "react";
-import {
-  CheckCircle2,
-  Download,
-  DollarSign,
-  Edit,
-  FileText,
-  GitMerge,
-  Loader2,
-  Table2,
-  Upload,
-  Users,
-} from "lucide-react";
+import { CheckCircle2, Download, DollarSign, Edit, FileText, Loader2, Table2, Upload, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -63,6 +52,9 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     setShowPayDialog,
     paySource,
     setPaySource,
+    payCashAccountId,
+    setPayCashAccountId,
+    payCashAccounts,
     payDate,
     setPayDate,
     payReference,
@@ -71,7 +63,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     setPayEffectiveDate,
     exportingPdf,
     exportingExcel,
-    migrating,
     workerSearch,
     setWorkerSearch,
     workerImporting,
@@ -90,7 +81,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
     handleAdjustSubmit,
     handleConfirmPayment,
     handleWorkerImport,
-    handleMigrateCitySplit,
     handleExportPdf,
     handleExportExcel,
     totals,
@@ -163,16 +153,6 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                   <Download className="mr-1 h-4 w-4" />
                 )}{" "}
                 Export Excel
-              </Button>
-              <Button
-                variant="outline"
-                onClick={handleMigrateCitySplit}
-                disabled={!selectedCompanyId || migrating}
-                data-testid="button-migrate-city-split"
-                title="One-time: split historical salary/bonus by city"
-              >
-                {migrating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <GitMerge className="mr-1 h-4 w-4" />}{" "}
-                Split by City
               </Button>
             </>
           )}
@@ -456,6 +436,24 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                         </Select>
                       </div>
                       <div className="space-y-1">
+                        <Label>Paying Cash or Bank Account</Label>
+                        <Select value={payCashAccountId} onValueChange={setPayCashAccountId}>
+                          <SelectTrigger data-testid="select-pay-cash-account">
+                            <SelectValue placeholder="Choose the account that pays" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {payCashAccounts.map((account) => (
+                              <SelectItem key={account.id} value={String(account.id)}>
+                                {account.code ? `${account.code} — ${account.name}` : account.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Posts Dr Payroll Payable / Cr this account for the net salary.
+                        </p>
+                      </div>
+                      <div className="space-y-1">
                         <Label>Payment Date</Label>
                         <Input
                           type="date"
@@ -499,7 +497,7 @@ export function FactoryPayrollView({ model }: { model: ReturnType<typeof useFact
                     </Button>
                     <Button
                       onClick={handleConfirmPayment}
-                      disabled={adjustMutation.isPending || !payDate}
+                      disabled={adjustMutation.isPending || !payDate || !payCashAccountId}
                       data-testid="button-confirm-payment"
                     >
                       {adjustMutation.isPending ? (

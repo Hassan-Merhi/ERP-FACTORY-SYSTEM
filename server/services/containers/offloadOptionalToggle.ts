@@ -38,14 +38,20 @@
  * the recorded response and the canonical stock journal sees one movement key.
  */
 import { randomUUID } from "node:crypto";
+import Decimal from "decimal.js";
 import { and, eq, inArray, like, or, sql } from "drizzle-orm";
 
 import { containerOffloadItems, containerOffloads, containers, vouchers } from "@shared/schema";
 import type { db } from "../../db";
 import { resultRows } from "../../lib/queryResult";
-import { adjustInventory, reverseInventoryByExactValue } from "../../inventoryHelper";
+import { adjustInventory, receiveInventoryAtValue, reverseInventoryByExactValue } from "../../inventoryHelper";
+import { MoneyDecimal, toMoney } from "../../lib/money";
 import { createDatabaseStockMovementAdapter } from "../inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../inventory/stockMovementIntegrityService";
+import {
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../accounting/perpetualInventory/stockReceipts";
 
 /** The transaction handle drizzle passes to a `db.transaction` callback. */
 export type OffloadOptionalToggleTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -163,7 +169,12 @@ export async function applyOffloadOptionalToggleTx(
   // a concurrent offload, reversal, or toggle for the same container queues here
   // instead of interleaving its writes with this one.
   const [lockedContainer] = await tx
-    .select({ id: containers.id, containerNumber: containers.containerNumber, status: containers.status })
+    .select({
+      id: containers.id,
+      containerNumber: containers.containerNumber,
+      status: containers.status,
+      offloadDate: containers.offloadDate,
+    })
     .from(containers)
     .where(and(eq(containers.id, requested.containerId), eq(containers.companyId, companyId)))
     .for("update");
@@ -216,28 +227,75 @@ export async function applyOffloadOptionalToggleTx(
   // safe, and each genuine transition still journals separately.
   const operationId = input.requestId?.trim() || randomUUID();
   const occurredAt = new Date().toISOString();
+  // The date the offload is booked at (wave 15, C1): the container's offload
+  // date while it is active, the offload's own date while it is suspended.
+  const offloadOwnDate =
+    lockedOffload.offloadedAt instanceof Date ? lockedOffload.offloadedAt.toISOString().slice(0, 10) : null;
+  const bookedOffloadDate = (targetOptional ? lockedContainer.offloadDate : null) ?? offloadOwnDate;
+  let subLedgerDelta: Decimal = new MoneyDecimal(0);
 
   for (const item of offloadItems) {
-    const qty = parseFloat(item.quantity);
-    const value = parseFloat(item.totalValue);
-    const rate = parseFloat(item.rate);
+    const qty = toMoney(item.quantity);
+    const lineValue = toMoney(item.totalValue);
+    // What the sub-ledger holds of this line: value_moved (the line value on a
+    // legacy line written before wave 11).
+    const moved = toMoney(item.valueMoved ?? item.totalValue);
 
     if (targetOptional) {
-      // Suspending: remove the stock that was added at offload.
-      await reverseInventoryByExactValue(tx, lockedOffload.locationId, item.stockItemId, qty, value, companyId);
+      // Suspending: remove exactly the value the offload put into the
+      // sub-ledger; the stock-in journal (which only counts active offloads)
+      // takes the same value out of Inventory.
+      const reversed = await reverseInventoryByExactValue(
+        tx,
+        lockedOffload.locationId,
+        item.stockItemId,
+        qty.toNumber(),
+        moved.toFixed(2),
+        companyId,
+        `offload-optional-suspend:${offloadId}`
+      );
+      if (reversed) subLedgerDelta = subLedgerDelta.plus(toMoney(reversed.valueDelta));
     } else {
-      // Unsuspending: add the stock back at the original rate.
-      await adjustInventory(tx, lockedOffload.locationId, item.stockItemId, qty, companyId, rate);
+      // Restoring: receive the line again at its stored value (not its 2dp
+      // rate). Into negative stock the receipt settles the shortage first, so
+      // what the sub-ledger takes and the COGS variance are recorded again
+      // for the stock-in journal.
+      const received = qty.gt(0)
+        ? await receiveInventoryAtValue(tx, {
+            locationId: lockedOffload.locationId,
+            stockItemId: item.stockItemId,
+            quantity: qty,
+            value: lineValue,
+            companyId,
+            // Not a voucher id: the layer's source_voucher_id references vouchers.
+            sourceVoucherType: `offload-optional-restore:${offloadId}`,
+          })
+        : await adjustInventory(
+            tx,
+            lockedOffload.locationId,
+            item.stockItemId,
+            qty.toNumber(),
+            companyId,
+            undefined,
+            `offload-optional-restore:${offloadId}`
+          );
+      const valueMoved = toMoney(received.valueDelta);
+      subLedgerDelta = subLedgerDelta.plus(valueMoved);
+      await tx
+        .update(containerOffloadItems)
+        .set({ valueMoved: valueMoved.toFixed(2), cogsVariance: lineValue.minus(valueMoved).toFixed(2) })
+        .where(eq(containerOffloadItems.id, item.id));
     }
 
+    const unitCost = qty.isZero() ? toMoney(item.rate) : (targetOptional ? moved : lineValue).dividedBy(qty);
     await postStockMovementTx(
       tx,
       {
         companyId,
         stockItemId: item.stockItemId,
         kind: "adjustment",
-        quantity: String(Math.abs(qty)),
-        unitCost: String(Math.max(rate || (qty !== 0 ? value / qty : 0), 0)),
+        quantity: qty.abs().toString(),
+        unitCost: Decimal.max(unitCost, 0).toDecimalPlaces(6).toString(),
         fromLocationId: targetOptional ? lockedOffload.locationId : undefined,
         toLocationId: targetOptional ? undefined : lockedOffload.locationId,
         occurredAt,
@@ -285,6 +343,7 @@ export async function applyOffloadOptionalToggleTx(
 
   await tx.update(containerOffloads).set({ optional: targetOptional }).where(eq(containerOffloads.id, offloadId));
 
+  let backInTransit = false;
   if (targetOptional) {
     // Suspending: the container returns to OTW only when no active offload is
     // left on it, so a second offload keeps the container marked as arrived.
@@ -294,6 +353,7 @@ export async function applyOffloadOptionalToggleTx(
       .where(and(eq(containerOffloads.containerId, lockedContainer.id), eq(containerOffloads.optional, false)));
 
     if (remainingActive.length === 0) {
+      backInTransit = true;
       await tx
         .update(containers)
         .set({ status: "OTW", offloadDate: null })
@@ -310,6 +370,22 @@ export async function applyOffloadOptionalToggleTx(
       .set({ status: "OFFLOADED", offloadDate: restoredDate })
       .where(eq(containers.id, lockedContainer.id));
   }
+
+  // Perpetual inventory (wave 8.2): the stock-in journal follows the active offloads.
+  await syncContainerStockInTx(tx, companyId, lockedContainer.id);
+  // Wave 15 (C1): an offload dated before the cut-over has no stock-in
+  // journal; its suspension or restore is journalled now.
+  await postPreCutoverOffloadMovementTx(tx, {
+    companyId,
+    containerId: lockedContainer.id,
+    containerNumber: lockedContainer.containerNumber,
+    offloadDate: bookedOffloadDate,
+    locationId: lockedOffload.locationId,
+    valueDelta: subLedgerDelta,
+    mode: targetOptional ? (backInTransit ? "toTransit" : "inPlace") : "fromTransit",
+    reason: targetOptional ? "Offload suspended" : "Offload restored",
+    actor: input.actorUserId ? { userId: String(input.actorUserId), username: input.actorUsername ?? "unknown" } : null,
+  });
 
   return {
     optional: targetOptional,

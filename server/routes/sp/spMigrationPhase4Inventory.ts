@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { sqlArray } from "../../lib/sqlArray";
 import { db } from "../../db";
+import { assertNoInventoryCutoverTx } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import { loadStockItemMap, pn } from "./spMigrationPhase2Common";
 import { resolveTargetLocation } from "./spMigrationCutoverReadiness";
 import { ensureCutoverSchema } from "./spMigrationCutoverState";
@@ -285,6 +286,8 @@ async function snapshotDelta(
 }
 
 export async function synchronizeExactCutoverStock(cutoverId: number, sourceId: number, targetId: number) {
+  // Wave 11: stock rewrites with no journal are refused after the cut-over.
+  await assertNoInventoryCutoverTx(db, targetId, "sp-migration-stock");
   const plan = await buildExactInventoryPlan(sourceId, targetId);
   if (plan.blockers.length > 0) {
     throw new Error(
@@ -341,6 +344,8 @@ export async function restoreExactCutoverStock(
   cutoverId: number,
   targetId: number
 ): Promise<{ restored: number; deleted: number }> {
+  // Wave 11: stock rewrites with no journal are refused after the cut-over.
+  await assertNoInventoryCutoverTx(db, targetId, "sp-migration-stock");
   await ensurePhase4CutoverSchema();
   const result = await db.execute(sql`
     SELECT * FROM sp_migration_cutover_stock_deltas

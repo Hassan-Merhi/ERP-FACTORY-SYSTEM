@@ -153,12 +153,17 @@ export async function rebuildSaleAccountingEntries(
   if (paymentAccountType && paymentAccountId) {
     // User changed payment account - use new values. parseInt's coercion of
     // the raw JSON value is preserved by stringifying exactly what arrived.
-    if (paymentAccountType === "cash" || paymentAccountType === "credit") {
+    // Wave 16 (B): "ledger" is a ledger account like cash/credit; any other
+    // type used to leave the payment line with no account at all (the
+    // line-target guard now refuses that line).
+    if (paymentAccountType === "cash" || paymentAccountType === "credit" || paymentAccountType === "ledger") {
       newDebitEntry.ledgerAccountId = parseInt(String(paymentAccountId));
       newDebitEntry.bankAccountId = null;
     } else if (paymentAccountType === "bank") {
       newDebitEntry.bankAccountId = parseInt(String(paymentAccountId));
       newDebitEntry.ledgerAccountId = null;
+    } else {
+      throw new Error("Unsupported payment account type");
     }
     newDebitEntry.supplierId = null;
     newDebitEntry.employeeId = null;

@@ -33,6 +33,8 @@ import {
 import { eq, and, desc, sql } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, toMoney, type MoneyInput } from "../../../lib/money";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 /** A voucher's exchange rate; a missing, zero or unreadable one counts as 1. */
 const voucherFxRate = (rate: MoneyInput) => {
@@ -357,13 +359,17 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
             await tx
               .update(factoryContainerCommissions)
               .set({ commissionTotal: amountText })
-              .where(eq(factoryContainerCommissions.id, commId));
+              .where(
+                and(eq(factoryContainerCommissions.id, commId), eq(factoryContainerCommissions.companyId, companyId))
+              );
           }
           // Also sync the commissionAmount summary on the container
           await tx
             .update(factoryContainers)
             .set({ commissionAmount: amountText, updatedAt: new Date() })
             .where(eq(factoryContainers.id, containerId!));
+          // Wave 8.4 continuation: and its commission journal FACTORY-COMM-{container}.
+          await syncContainerCommissionJournalTx(tx, companyId, containerId!);
         } else if (sourceType === "DUTY" || entry.txType === "DUTY") {
           if (container.dutyStatus !== "CONFIRMED") {
             throw new Error(
@@ -592,11 +598,16 @@ export function registerFactoryDaybookEditRoutes(app: Express) {
           .from(voucherEntries)
           .where(and(eq(voucherEntries.voucherId, voucherId), sql`${voucherEntries.employeeId} IS NOT NULL`));
 
-        // 1. Delete voucher entries (double-entry lines)
-        await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, voucherId));
-
-        // 2. Soft-delete the voucher
-        await tx.update(vouchers).set({ deletedAt: new Date() }).where(eq(vouchers.id, voucherId));
+        // 1-2. Retire the voucher (phase 19 A, G3): soft-deleted with its lines
+        // kept, number given up, posting identity released, one audit row with
+        // the header and every line, in this transaction. It hard-deleted the
+        // lines before soft-deleting the voucher, so the history was lost.
+        await retireVouchersTx(tx, {
+          companyId,
+          voucherIds: [voucherId],
+          reason: "factory-daybook-void",
+          actor: sessionRetirementActor(req),
+        });
 
         // 3. Delete the real daybook entry if it exists
         if (daybookEntryId) {

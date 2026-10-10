@@ -96,7 +96,7 @@ export async function getAllFixedAssets(companyId: number): Promise<FixedAsset[]
   return await db
     .select()
     .from(schema.fixedAssets)
-    .where(eq(schema.fixedAssets.companyId, companyId))
+    .where(and(eq(schema.fixedAssets.companyId, companyId), isNull(schema.fixedAssets.deletedAt)))
     .orderBy(asc(schema.fixedAssets.code));
 }
 

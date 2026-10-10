@@ -35,6 +35,7 @@ import {
 } from "@shared/schema";
 import { parseId } from "../../../lib/parseId";
 import { parseMoneyInput } from "../../../lib/money";
+import { sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesContext) {
   const { module, urlPrefix, incomeAccountName, shopExpenseAccountName } = ctx;
@@ -606,9 +607,13 @@ export function registerRentalGuaranteeRoutes(app: Express, ctx: RentalRoutesCon
                 }
               }
 
-              // 3. Reverse any auto-transfers created for this payment (both sides
-              //    soft-deleted, as the other payment deletion paths do).
-              await reverseAutoTransfersTx(tx, [payment.id]);
+              // 3. Reverse any auto-transfers created for this payment: both sides,
+              //    the receiving company's included (main #2138), retired and
+              //    audited with the signed-in user (wave 16 A).
+              await reverseAutoTransfersTx(tx, [payment.id], {
+                reason: "guarantee-as-rent-undo-transfer",
+                actor: sessionRetirementActor(req),
+              });
 
               // 4. Delete the payment row
               await tx.delete(propertyPayments).where(eq(propertyPayments.id, payment.id));

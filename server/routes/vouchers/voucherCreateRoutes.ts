@@ -20,6 +20,7 @@ import { eq, and } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
 import { PostingValidationError } from "../../services/accounting/centralPostingEngine";
+import { stockVoucherTypeRefusal } from "../../services/accounting/stockVoucherTypes";
 import {
   validateManualVoucherEntryAmounts,
   type ValidatedManualVoucherTotals,
@@ -39,6 +40,9 @@ export function registerVoucherCreateRoutes(app: Express) {
       if (isPOS && voucherType !== "StockTransfer" && voucherType !== "Stock Transfer" && voucherType !== "Transfer") {
         return res.status(403).json({ message: "Access denied: This resource is not available for POS users" });
       }
+      // Wave 12: stock adjustment types come only from POST /api/stock-adjustments.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
       // vouchers.company_id, voucher_number, voucher_type, voucher_date and
       // total_amount are NOT NULL with no default, and none of them was
       // checked before the insert, so a body missing them failed the query as
@@ -135,6 +139,9 @@ export function registerVoucherCreateRoutes(app: Express) {
     });
     try {
       const { voucher, entries } = req.body;
+      // Wave 12: stock adjustment types come only from POST /api/stock-adjustments.
+      const stockTypeRefusal = stockVoucherTypeRefusal(voucher?.voucherType);
+      if (stockTypeRefusal) return res.status(stockTypeRefusal.status).json(stockTypeRefusal.body);
 
       if (!req.session.currentCompanyId) {
         return res.status(400).json({ message: "No company selected" });
@@ -296,36 +303,32 @@ export function registerVoucherCreateRoutes(app: Express) {
           txEntries.push(txEntry);
         }
 
+        // Sync employee balances from voucher entries (only for non-optional
+        // vouchers), in this transaction (wave 12).
+        if (!txVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(txEntries, req.session.currentCompanyId!, false, tx);
+        }
+
+        // Wave 16 (B): the creation is audited in this transaction.
+        const createEntriesSnap = await snapshotVoucherEntries(txEntries, tx);
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || "unknown",
+            companyId: req.session.currentCompanyId!,
+            action: "create",
+            tableName: "vouchers",
+            recordId: txVoucher.id,
+            recordIdentifier: txVoucher.voucherNumber,
+            changes: buildVoucherChangesForCreate(txVoucher, createEntriesSnap),
+          },
+          tx
+        );
+
         return { createdVoucher: txVoucher, createdEntries: txEntries };
       });
 
-      // Sync employee balances from voucher entries (only for non-optional vouchers)
-      if (!createdVoucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          createdEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
-
       const result = { voucher: createdVoucher, entries: createdEntries };
-
-      // Log the creation to audit log
-      const _createEntriesSnap = await snapshotVoucherEntries(createdEntries).catch(() => []);
-      await logAudit({
-        userId: req.session.userId!,
-        username: req.session.username || "unknown",
-        companyId: req.session.currentCompanyId!,
-        action: "create",
-        tableName: "vouchers",
-        recordId: createdVoucher.id,
-        recordIdentifier: createdVoucher.voucherNumber,
-        changes: buildVoucherChangesForCreate(createdVoucher, _createEntriesSnap),
-      });
 
       // Fire-and-forget intercompany notification check (Payment/Receipt only)
       triggerIntercompanyNotifications(

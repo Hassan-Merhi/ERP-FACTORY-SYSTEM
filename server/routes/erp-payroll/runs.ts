@@ -228,19 +228,9 @@ export function registerPayrollRunRoutes(app: Express) {
 
         const payDate = run.date;
         const voucherNumber = `SAL-${runId}-${Date.now()}`;
-        const [voucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherNumber,
-            voucherType: "Payment",
-            voucherDate: payDate,
-            description: run.notes || `Payroll run #${runId} — ${runItems.length} workers`,
-            totalAmount: moneyString(totalAmount),
-          })
-          .returning();
 
-        // Create one debit entry per worker group
+        // Resolve one expense account per worker group before posting
+        const runGroupDebits: { ledgerAccountId: number; debitAmount: string; narration: string }[] = [];
         for (const [grp, grpTotal] of itemsByGroup) {
           const isDefault = grp === "__default__";
           const expCode = isDefault
@@ -262,22 +252,47 @@ export function registerPayrollRunRoutes(app: Express) {
               active: true,
             });
           }
-          await db.insert(voucherEntries).values({
-            voucherId: voucher.id,
+          runGroupDebits.push({
             ledgerAccountId: expAccount.id,
             debitAmount: moneyString(grpTotal),
-            creditAmount: "0",
             narration: isDefault ? `Salary expense — payroll run #${runId}` : `Salary expense - ${grp} — run #${runId}`,
           });
         }
 
-        // Single credit entry for the total payment out
-        await db.insert(voucherEntries).values({
-          voucherId: voucher.id,
-          ledgerAccountId: parseInt(paymentAccountId),
-          debitAmount: "0",
-          creditAmount: moneyString(totalAmount),
-          narration: `Cash paid — payroll run #${runId}`,
+        // Voucher header and every entry commit together (balanced-voucher trigger).
+        const voucher = await db.transaction(async (tx) => {
+          const [voucher] = await tx
+            .insert(vouchers)
+            .values({
+              companyId,
+              voucherNumber,
+              voucherType: "Payment",
+              voucherDate: payDate,
+              description: run.notes || `Payroll run #${runId} — ${runItems.length} workers`,
+              totalAmount: moneyString(totalAmount),
+            })
+            .returning();
+
+          // Create one debit entry per worker group
+          for (const debit of runGroupDebits) {
+            await tx.insert(voucherEntries).values({
+              voucherId: voucher.id,
+              ledgerAccountId: debit.ledgerAccountId,
+              debitAmount: debit.debitAmount,
+              creditAmount: "0",
+              narration: debit.narration,
+            });
+          }
+
+          // Single credit entry for the total payment out
+          await tx.insert(voucherEntries).values({
+            voucherId: voucher.id,
+            ledgerAccountId: parseInt(paymentAccountId),
+            debitAmount: "0",
+            creditAmount: moneyString(totalAmount),
+            narration: `Cash paid — payroll run #${runId}`,
+          });
+          return voucher;
         });
         const [updated] = await db
           .update(erpPayrollRuns)

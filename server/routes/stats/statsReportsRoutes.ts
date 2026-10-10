@@ -4,7 +4,6 @@ import {
   addInventoryValues,
   divideInventoryValues,
   multiplyInventoryValues,
-  subtractInventoryValues,
   toInventoryDecimal,
 } from "../../lib/inventoryMath";
 import { db } from "../../db";
@@ -15,14 +14,15 @@ import {
   stockItems,
   containers,
   vouchers,
-  voucherEntries,
   salesItems,
   suppliers,
   locations,
   companies,
 } from "@shared/schema";
-import { eq, and, inArray, sql, isNotNull } from "drizzle-orm";
+import { eq, and, inArray, sql, isNull } from "drizzle-orm";
 import { _getCached, _setCached } from "../../services/shared/ttlCache";
+import { countedStockRowValue } from "../../services/inventory/stockValuation";
+import { getFinancialRatios } from "../../services/reports/financialReportsService";
 
 const numberValue = (value: unknown) =>
   toInventoryDecimal(value as unknown as Parameters<typeof toInventoryDecimal>[0]).toNumber();
@@ -106,7 +106,9 @@ export function registerStatsReportsRoutes(app: Express) {
       const stockItemsToReport = stockGroupId
         ? allStockItems.filter((item) => item.stockGroupId === parseInt(stockGroupId as string))
         : allStockItems;
-      const inventoryConditions = [eq(locations.companyId, companyId)];
+      // Wave 11: the stock valuation policy (stockValuation.ts): non-deleted
+      // locations, each row valued at its stored total_value.
+      const inventoryConditions = [eq(locations.companyId, companyId), isNull(locations.deletedAt)];
       if (locationId) inventoryConditions.push(eq(inventory.locationId, parseInt(locationId as string)));
       const inventoryRecords = await db
         .select({
@@ -115,6 +117,7 @@ export function registerStatsReportsRoutes(app: Express) {
           locationName: locations.name,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
         })
         .from(inventory)
         .innerJoin(locations, eq(inventory.locationId, locations.id))
@@ -133,7 +136,7 @@ export function registerStatsReportsRoutes(app: Express) {
           const itemInventory = inventoryByItem.get(item.id) || [];
           const totalQuantity = addInventoryValues(...itemInventory.map((record) => record.quantity));
           const totalValue = addInventoryValues(
-            ...itemInventory.map((record) => multiplyInventoryValues(record.quantity, record.averageRate))
+            ...itemInventory.map((record) => countedStockRowValue(record.quantity, record.totalValue))
           );
           return {
             stockItemId: item.id,
@@ -144,7 +147,7 @@ export function registerStatsReportsRoutes(app: Express) {
               locationName: record.locationName,
               quantity: numberValue(record.quantity),
               averageRate: numberValue(record.averageRate),
-              totalValue: multiplyInventoryValues(record.quantity, record.averageRate).toNumber(),
+              totalValue: countedStockRowValue(record.quantity, record.totalValue).toNumber(),
             })),
             totalQuantity: totalQuantity.toNumber(),
             totalValue: totalValue.toNumber(),
@@ -247,89 +250,14 @@ export function registerStatsReportsRoutes(app: Express) {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) return res.status(400).json({ message: "No company selected" });
-      const { startDate, endDate } = req.query;
-      const companyAccounts = await storage.getAllLedgerAccounts(companyId, true);
-      const incomeAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Income").map((account) => account.id)
-      );
-      const expenseAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Expense").map((account) => account.id)
-      );
-      const assetAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Asset").map((account) => account.id)
-      );
-      const liabilityAccountIds = new Set(
-        companyAccounts.filter((account) => account.accountType === "Liability").map((account) => account.id)
-      );
+      const startDate =
+        typeof req.query.startDate === "string" && req.query.startDate ? req.query.startDate : undefined;
+      const endDate = typeof req.query.endDate === "string" && req.query.endDate ? req.query.endDate : undefined;
       const cacheKey = `ratios:${companyId}:${startDate ?? ""}:${endDate ?? ""}`;
       const cached = _getCached(cacheKey);
       if (cached) return res.json(cached);
-
-      const entryConditions = [eq(vouchers.companyId, companyId)];
-      if (startDate) entryConditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
-      if (endDate) entryConditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
-      const companyEntries = await db
-        .select({
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          ledgerAccountId: voucherEntries.ledgerAccountId,
-        })
-        .from(voucherEntries)
-        .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-        .where(and(...entryConditions, isNotNull(voucherEntries.ledgerAccountId)))
-        .execute();
-
-      let totalIncome = toInventoryDecimal(0);
-      let totalExpenses = toInventoryDecimal(0);
-      let totalAssets = toInventoryDecimal(0);
-      let totalLiabilities = toInventoryDecimal(0);
-      for (const entry of companyEntries) {
-        if (!entry.ledgerAccountId) continue;
-        const debit = toInventoryDecimal(entry.debitAmount);
-        const credit = toInventoryDecimal(entry.creditAmount);
-        if (incomeAccountIds.has(entry.ledgerAccountId)) totalIncome = totalIncome.plus(credit.minus(debit));
-        if (expenseAccountIds.has(entry.ledgerAccountId)) totalExpenses = totalExpenses.plus(debit.minus(credit));
-        if (assetAccountIds.has(entry.ledgerAccountId)) totalAssets = totalAssets.plus(debit.minus(credit));
-        if (liabilityAccountIds.has(entry.ledgerAccountId))
-          totalLiabilities = totalLiabilities.plus(credit.minus(debit));
-      }
-
-      const salesConditions = [eq(vouchers.companyId, companyId)];
-      if (startDate) salesConditions.push(sql`${vouchers.voucherDate} >= ${startDate}`);
-      if (endDate) salesConditions.push(sql`${vouchers.voucherDate} <= ${endDate}`);
-      const salesData = await db
-        .select({ totalSales: salesItems.totalSales, totalCost: salesItems.totalCost })
-        .from(salesItems)
-        .innerJoin(vouchers, eq(salesItems.voucherId, vouchers.id))
-        .where(and(...salesConditions))
-        .execute();
-      const totalSales = addInventoryValues(...salesData.map((sale) => sale.totalSales));
-      const totalCost = addInventoryValues(...salesData.map((sale) => sale.totalCost));
-      const grossProfit = subtractInventoryValues(totalSales, totalCost);
-      const netProfit = subtractInventoryValues(totalIncome, totalExpenses);
-      const totalEquity = subtractInventoryValues(totalAssets, totalLiabilities);
-      const result = {
-        ratios: {
-          grossProfitMargin: percentage(grossProfit, totalSales),
-          netProfitMargin: percentage(netProfit, totalIncome),
-          currentRatio: totalLiabilities.isPositive()
-            ? divideInventoryValues(totalAssets, totalLiabilities).toNumber()
-            : 0,
-          debtToEquity: totalEquity.isPositive() ? divideInventoryValues(totalLiabilities, totalEquity).toNumber() : 0,
-        },
-        underlying: {
-          totalIncome: totalIncome.toNumber(),
-          totalExpenses: totalExpenses.toNumber(),
-          totalSales: totalSales.toNumber(),
-          totalCost: totalCost.toNumber(),
-          grossProfit: grossProfit.toNumber(),
-          netProfit: netProfit.toNumber(),
-          totalAssets: totalAssets.toNumber(),
-          totalLiabilities: totalLiabilities.toNumber(),
-          totalEquity: totalEquity.toNumber(),
-        },
-        filters: { startDate: startDate || null, endDate: endDate || null },
-      };
+      // Wave 13 (R4): on the P&L and the balance sheet (see getFinancialRatios).
+      const result = await getFinancialRatios(companyId, startDate, endDate);
       _setCached(cacheKey, result);
       res.json(result);
     } catch (error: unknown) {
@@ -349,6 +277,7 @@ export function registerStatsReportsRoutes(app: Express) {
           stockItemId: inventory.stockItemId,
           quantity: inventory.quantity,
           averageRate: inventory.averageRate,
+          totalValue: inventory.totalValue,
           locationId: inventory.locationId,
           locationName: locations.name,
         })
@@ -357,7 +286,8 @@ export function registerStatsReportsRoutes(app: Express) {
         .where(
           and(
             eq(inventory.companyId, companyId),
-            eq(locations.active, true),
+            // Wave 11: the stock valuation policy (non-deleted locations, active or not).
+            isNull(locations.deletedAt),
             ...(locationId && locationId !== "all" ? [eq(inventory.locationId, parseInt(locationId as string))] : [])
           )
         )
@@ -372,7 +302,7 @@ export function registerStatsReportsRoutes(app: Express) {
         existing.quantity = addInventoryValues(existing.quantity, record.quantity);
         existing.totalValue = addInventoryValues(
           existing.totalValue,
-          multiplyInventoryValues(record.quantity, record.averageRate)
+          countedStockRowValue(record.quantity, record.totalValue)
         );
         inventoryByItem.set(record.stockItemId, existing);
       }
@@ -442,12 +372,13 @@ export function registerStatsReportsRoutes(app: Express) {
         .where(and(eq(stockItems.companyId, companyId), eq(stockItems.stockGroupId, parseInt(stockGroupId))))
         .execute();
       const itemIds = groupItems.map((item) => item.id);
-      let inventoryData: Array<{ stockItemId: number; quantity: string; averageRate: string }> = [];
+      let inventoryData: Array<{ stockItemId: number; quantity: string; averageRate: string; totalValue: string }> = [];
       if (itemIds.length > 0) {
         const conditions = [
           eq(inventory.companyId, companyId),
           inArray(inventory.stockItemId, itemIds),
-          eq(locations.active, true),
+          // Wave 11: the stock valuation policy (non-deleted locations, active or not).
+          isNull(locations.deletedAt),
         ];
         if (locationId && locationId !== "all")
           conditions.push(eq(inventory.locationId, parseInt(locationId as string)));
@@ -456,6 +387,7 @@ export function registerStatsReportsRoutes(app: Express) {
             stockItemId: inventory.stockItemId,
             quantity: inventory.quantity,
             averageRate: inventory.averageRate,
+            totalValue: inventory.totalValue,
           })
           .from(inventory)
           .innerJoin(locations, eq(inventory.locationId, locations.id))
@@ -471,7 +403,7 @@ export function registerStatsReportsRoutes(app: Express) {
         existing.quantity = addInventoryValues(existing.quantity, record.quantity);
         existing.totalValue = addInventoryValues(
           existing.totalValue,
-          multiplyInventoryValues(record.quantity, record.averageRate)
+          countedStockRowValue(record.quantity, record.totalValue)
         );
         inventoryByItem.set(record.stockItemId, existing);
       }

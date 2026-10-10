@@ -3,16 +3,15 @@ import { getErrorMessage, errorStatus } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { voucherMutationBlockReason } from "../../lib/migratedVoucherGuard";
 import { requireAuth, requireNonPOS } from "../../auth";
+import { syncEmployeeBalancesFromEntries } from "../_helpers";
+import { writeVoucherAuditTx } from "../helpers/voucherAuditTrail";
 import {
-  logAudit,
-  syncEmployeeBalancesFromEntries,
-  snapshotVoucherEntries,
-  buildVoucherChangesForCreate,
-  buildVoucherChangesForUpdate,
-} from "../_helpers";
+  assertNotIntercompanyTransferLeg,
+  sendIntercompanyTransferLegRefusal,
+} from "../../services/accounting/intercompanyTransferLegGuard";
 import { logger } from "../../lib/logger";
-import { vouchers, voucherEntries, customerBalances, interCompanyTransfers } from "@shared/schema";
-import { eq, and, or, isNull } from "drizzle-orm";
+import { vouchers, voucherEntries, customerBalances } from "@shared/schema";
+import { eq, and, isNull } from "drizzle-orm";
 import { checkAccountWhatsAppRule } from "../factoryWhatsappRoutes";
 
 import { recalculateOrderTotals } from "../factory/_helpers";
@@ -298,21 +297,24 @@ export function registerVoucherJournalRoutes(app: Express) {
         // Batch insert all voucher entries
         const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
 
+        // Wave 12: employee balances and the audit row are written in this transaction.
+        if (!createdVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
+        }
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          action: "create",
+          voucherId: createdVoucher.id,
+          before: null,
+          after: { voucher: createdVoucher, entries: createdEntries },
+        });
+
         return { voucher: createdVoucher, entries: createdEntries };
       });
-
-      // Sync employee balances from voucher entries (only for non-optional vouchers)
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
 
       // Sync order charges automatically (non-fatal)
       await syncJournalToOrderCharge(req.session.currentCompanyId!, result.entries, result.voucher.id).catch(() => {});
@@ -383,21 +385,6 @@ export function registerVoucherJournalRoutes(app: Express) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
       }
 
-      try {
-        const auditEntries = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "create",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForCreate(result.voucher, auditEntries),
-        });
-      } catch {
-        /* non-fatal */
-      }
       logger.info("journal voucher create succeeded", {
         module: "vouchers",
         action: "createJournal",
@@ -457,6 +444,17 @@ export function registerVoucherJournalRoutes(app: Express) {
       // Validate required fields
       if (!voucherDate || !entries || !Array.isArray(entries) || entries.length === 0) {
         return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      // Phase 19 C (MC-2): an intercompany transfer leg (a Payment, Receipt or
+      // draft journal reaching this legacy editor) is not edited here (409): the
+      // transfer is deleted (both legs) and recorded again. This editor used to
+      // rescale the other company's voucher after commit, outside a transaction.
+      try {
+        await assertNotIntercompanyTransferLeg(voucherId);
+      } catch (legError: unknown) {
+        if (sendIntercompanyTransferLegRefusal(res, legError)) return;
+        throw legError;
       }
 
       // Determine voucher currency and rate for the PATCH handler.
@@ -553,6 +551,27 @@ export function registerVoucherJournalRoutes(app: Express) {
         // Batch insert all new voucher entries
         const createdEntries = await tx.insert(voucherEntries).values(voucherEntriesToCreate).returning();
 
+        // Wave 12: employee balances move in this transaction (reverse the old
+        // lines, apply the new), and the edit is audited with the full
+        // before/after snapshot before it commits.
+        if (!existingVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(oldEntries, req.session.currentCompanyId!, true, tx);
+        }
+        if (!updatedVoucher.optional) {
+          await syncEmployeeBalancesFromEntries(createdEntries, req.session.currentCompanyId!, false, tx);
+        }
+        await writeVoucherAuditTx(tx, {
+          actor: {
+            userId: req.session.userId,
+            username: req.session.username,
+            companyId: req.session.currentCompanyId,
+          },
+          action: "update",
+          voucherId,
+          before: { voucher: existingVoucher, entries: oldEntries },
+          after: { voucher: updatedVoucher, entries: createdEntries },
+        });
+
         return {
           voucher: updatedVoucher,
           entries: createdEntries,
@@ -562,83 +581,9 @@ export function registerVoucherJournalRoutes(app: Express) {
         };
       });
 
-      // Sync employee balances: reverse old entries if voucher was non-optional
-      if (!result.wasOptional) {
-        await syncEmployeeBalancesFromEntries(
-          result.oldEntries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!,
-          true // reverse
-        );
-      }
-
-      // Apply new entries if voucher is non-optional
-      if (!result.voucher.optional) {
-        await syncEmployeeBalancesFromEntries(
-          result.entries.map((e) => ({
-            ledgerAccountId: e.ledgerAccountId,
-            employeeId: e.employeeId,
-            debitAmount: e.debitAmount,
-            creditAmount: e.creditAmount,
-          })),
-          req.session.currentCompanyId!
-        );
-      }
-
       // Sync order charges: if the journal has a customer entry + a CR ledger entry
       // that matches a charge on one of their orders, update that charge automatically
       await syncJournalToOrderCharge(req.session.currentCompanyId!, result.entries, result.voucher.id).catch(() => {});
-
-      // ── Intercompany counterpart sync ─────────────────────────────────────
-      // If this voucher is one side of an intercompany transfer pair, scale the
-      // counterpart voucher's totalAmount and entries to match the new amount.
-      try {
-        const [ict] = await db
-          .select()
-          .from(interCompanyTransfers)
-          .where(
-            or(eq(interCompanyTransfers.fromVoucherId, voucherId), eq(interCompanyTransfers.toVoucherId, voucherId))
-          )
-          .limit(1);
-        if (ict) {
-          const otherVoucherId = ict.fromVoucherId === voucherId ? ict.toVoucherId : ict.fromVoucherId;
-          if (otherVoucherId) {
-            const newTotal = toMoney(result.voucher.totalAmount);
-            const [otherVoucher] = await db.select().from(vouchers).where(eq(vouchers.id, otherVoucherId));
-            if (otherVoucher) {
-              const oldTotal = toMoney(otherVoucher.totalAmount);
-              const ratio = oldTotal.greaterThan(0) ? newTotal.dividedBy(oldTotal) : new MoneyDecimal(1);
-              const otherEntries = await db
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, otherVoucherId));
-              for (const e of otherEntries) {
-                await db
-                  .update(voucherEntries)
-                  .set({
-                    debitAmount: toMoney(e.debitAmount).times(ratio).toFixed(2),
-                    creditAmount: toMoney(e.creditAmount).times(ratio).toFixed(2),
-                  })
-                  .where(eq(voucherEntries.id, e.id));
-              }
-              await db
-                .update(vouchers)
-                .set({ totalAmount: newTotal.toFixed(2) })
-                .where(eq(vouchers.id, otherVoucherId));
-              await db
-                .update(fde)
-                .set({ amountCurrency: newTotal.toFixed(2), amountUsd: newTotal.toFixed(2) })
-                .where(and(eq(fde.referenceTable, "vouchers"), eq(fde.referenceId, otherVoucherId)));
-            }
-          }
-        }
-      } catch (ictErr: unknown) {
-        logger.error("[ICT sync] Counterpart update failed (non-fatal):", { error: getErrorMessage(ictErr) });
-      }
 
       // WhatsApp rule check — prompt the frontend instead of auto-sending
       let waJournalPatch: { prompt: boolean; accountId?: number; voucherDate?: string; month?: string } = {
@@ -669,39 +614,6 @@ export function registerVoucherJournalRoutes(app: Express) {
         logger.error("WhatsApp rule check error (non-fatal):", { error: waErr });
       }
 
-      try {
-        const _oldSnapJ = await snapshotVoucherEntries(result.oldEntries);
-        const _newSnapJ = await snapshotVoucherEntries(result.entries);
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "vouchers",
-          recordId: result.voucher.id,
-          recordIdentifier: result.voucher.voucherNumber,
-          changes: buildVoucherChangesForUpdate(
-            {
-              voucherType: result.existingVoucher.voucherType,
-              voucherDate: result.existingVoucher.voucherDate,
-              totalAmount: result.existingVoucher.totalAmount,
-              description: result.existingVoucher.description,
-              optional: result.existingVoucher.optional,
-            },
-            {
-              voucherType: result.voucher.voucherType,
-              voucherDate: result.voucher.voucherDate,
-              totalAmount: result.voucher.totalAmount,
-              description: result.voucher.description,
-              optional: result.voucher.optional,
-            },
-            _oldSnapJ,
-            _newSnapJ
-          ),
-        });
-      } catch {
-        /* non-fatal */
-      }
       logger.info("journal voucher update succeeded", {
         module: "vouchers",
         action: "updateJournal",

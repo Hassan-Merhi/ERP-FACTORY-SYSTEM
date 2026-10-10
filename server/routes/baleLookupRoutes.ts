@@ -13,7 +13,7 @@ import { eq, and, or, desc, sql, inArray, isNull } from "drizzle-orm";
 import { db } from "../db";
 import { storage } from "../storage";
 import { requireAuth, requireRole } from "../auth";
-import { logAudit } from "./_helpers";
+import { writeAuditEvent } from "../services/audit/auditService";
 import { getClientDate } from "../lib/dateUtils";
 import { deletePhysicalFactoryBalesTx, PhysicalBaleDeletionError } from "./factory/stock/physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "./factory/customer-orders/priorityScanQueue";
@@ -717,18 +717,20 @@ export function registerBaleLookupRoutes(app: Express) {
             reason: "Bale deleted everywhere from Barcode Lookup",
             businessDate: getClientDate(req),
           });
-        });
-
-        // Write audit entry so "Deleted by" info is available on the barcode lookup
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId,
-          action: "delete",
-          tableName: "factory_bales",
-          recordId: bale.id,
-          recordIdentifier: referenceNumber,
-          changes: { status: { old: bale.status, new: "DELETED" } },
+          // Audit in the deletion's transaction ("Deleted by" on the barcode lookup).
+          await writeAuditEvent(
+            {
+              userId: String(req.session.userId ?? "unknown"),
+              username: req.session.username || "unknown",
+              companyId,
+              action: "delete",
+              tableName: "factory_bales",
+              recordId: baleId,
+              recordIdentifier: referenceNumber,
+              changes: { status: { old: bale.status, new: "DELETED" } },
+            },
+            tx
+          );
         });
 
         res.json({ message: "Bale deleted from linked records" });

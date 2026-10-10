@@ -1,3 +1,5 @@
+import type Decimal from "decimal.js";
+
 import {
   addInventoryValues,
   inventoryMoney,
@@ -29,4 +31,31 @@ export function stockAdjustmentHeaderTotal(adjustmentType: string, items: StockA
   }
 
   return inventoryMoney(total);
+}
+
+/**
+ * The ledger line of a periodic stock adjustment: production credits
+ * STOCK_ADJUSTMENT, consumption debits it. Both use the same account, so a
+ * Mixed adjustment posts the net on one line (wave 12): a two-sided stock
+ * voucher must balance, and these two lines never did. Returns null when the
+ * net is zero.
+ */
+export function stockAdjustmentNetLine(
+  productionValue: Decimal,
+  consumptionValue: Decimal,
+  adjustmentType: string
+): { debitAmount: string; creditAmount: string; narration: string } | null {
+  const net = productionValue.minus(consumptionValue);
+  if (net.isZero()) return null;
+  return net.isPositive()
+    ? {
+        debitAmount: "0",
+        creditAmount: inventoryMoney(net),
+        narration: `Production adjustment - ${adjustmentType} voucher`,
+      }
+    : {
+        debitAmount: inventoryMoney(net.negated()),
+        creditAmount: "0",
+        narration: `Consumption expense - ${adjustmentType} voucher`,
+      };
 }

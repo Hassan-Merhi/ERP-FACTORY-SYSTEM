@@ -46,11 +46,11 @@ describe("voucher ledger expectations", () => {
     expect(classifyVoucherLedgerExpectation("Debit Note")).toBe("balanced-only");
   });
 
-  it("holds stock adjustments to a balanced ledger now that they post their Inventory side", () => {
-    expect(classifyVoucherLedgerExpectation("Stock Adjustment")).toBe("balanced-only");
-    expect(classifyVoucherLedgerExpectation("Production")).toBe("balanced-only");
-    expect(classifyVoucherLedgerExpectation("Consumption")).toBe("balanced-only");
-    expect(classifyVoucherLedgerExpectation("Mixed")).toBe("balanced-only");
+  it("classifies inventory-sided stock documents without forcing false GL balance", () => {
+    expect(classifyVoucherLedgerExpectation("Stock Adjustment")).toBe("single-sided");
+    expect(classifyVoucherLedgerExpectation("Production")).toBe("single-sided");
+    expect(classifyVoucherLedgerExpectation("Consumption")).toBe("single-sided");
+    expect(classifyVoucherLedgerExpectation("Mixed")).toBe("inventory-sided");
     for (const type of ["Stock Transfer", "StockTransfer", "Transfer"]) {
       expect(classifyVoucherLedgerExpectation(type)).toBe("none");
     }
@@ -134,12 +134,23 @@ describe("reconciliation by ledger expectation", () => {
     expect(debited.discrepancies).toEqual([]);
   });
 
-  it("reports a single-sided type that posted both sides or neither", async () => {
+  it("accepts a single-sided type balanced by its perpetual-inventory line", async () => {
+    const balanced = await reconcileConvergenceTx(
+      tx,
+      7,
+      adapterFor([
+        snapshot({ voucherId: 17, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "50" }),
+      ])
+    );
+    expect(balanced.discrepancies).toEqual([]);
+  });
+
+  it("reports a single-sided type that posted unequal sides or neither", async () => {
     const both = await reconcileConvergenceTx(
       tx,
       7,
       adapterFor([
-        snapshot({ voucherId: 15, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "50" }),
+        snapshot({ voucherId: 15, ledgerExpectation: "single-sided", ledgerBaseDebit: "50", ledgerBaseCredit: "30" }),
       ])
     );
     const neither = await reconcileConvergenceTx(

@@ -6,6 +6,8 @@ import { logger } from "../lib/logger";
 import { getErrorMessage } from "../lib/httpHandlers";
 import { companies, locations, stockAdjustmentVouchers, vouchers } from "@shared/schema";
 import { DuplicateStockAdjustmentError } from "../storage/stock-ops/transfers-create";
+import { infrastructurePostingIdentity } from "../services/accounting/infrastructureVoucherIdentity";
+import { getCurrentExchangeRate } from "./_helpers";
 
 type AdjustmentType = "Production" | "Consumption" | "Mixed";
 
@@ -47,6 +49,98 @@ function normalizeAdjustmentItems(items: IncomingAdjustmentItem[]) {
   });
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Creates the stock voucher and its adjustment in one transaction
+ * (createStockAdjustmentWithVoucher): the generic voucher routes refuse the
+ * stock voucher types (wave 12), so this is how the form creates one.
+ */
+async function createWithVoucher(
+  req: Request,
+  res: Response,
+  input: {
+    header: Record<string, unknown>;
+    locationId: number;
+    adjustmentType: AdjustmentType;
+    notes: string;
+    items: ReturnType<typeof normalizeAdjustmentItems>;
+    startedAt: number;
+  }
+) {
+  const companyId = req.session.currentCompanyId;
+  if (!companyId) return res.status(400).json({ message: "No company selected" });
+  const { header } = input;
+  const voucherDate = typeof header.voucherDate === "string" ? header.voucherDate.trim() : "";
+  if (!ISO_DATE.test(voucherDate)) {
+    return res.status(400).json({ message: "Invalid request data", field: "voucherDate" });
+  }
+  if (header.optional !== undefined && typeof header.optional !== "boolean") {
+    return res.status(400).json({ message: "Invalid request data", field: "optional" });
+  }
+  const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+  if (!location) return res.status(404).json({ message: "Location not found" });
+  if (location.companyId !== companyId) {
+    return res.status(403).json({ message: "Voucher and location must belong to the selected company" });
+  }
+  const [company] = await db
+    .select({ baseCurrency: companies.baseCurrency })
+    .from(companies)
+    .where(eq(companies.id, companyId))
+    .limit(1);
+  const nativeCurrency = normalizeCurrency(company?.baseCurrency);
+  if (nativeCurrency.length > 3) {
+    return res.status(400).json({ message: `Unsupported voucher currency: ${nativeCurrency}` });
+  }
+  const voucherNumber =
+    typeof header.voucherNumber === "string" && header.voucherNumber.trim()
+      ? header.voucherNumber.trim()
+      : `${input.adjustmentType.toUpperCase()}-${Date.now()}`;
+  const exchangeRate = await getCurrentExchangeRate(companyId);
+  try {
+    const created = await storage.createStockAdjustmentWithVoucher(
+      {
+        companyId,
+        voucherNumber,
+        voucherType: input.adjustmentType,
+        voucherDate,
+        // The writer derives the header total from the persisted lines.
+        totalAmount: "0",
+        description: typeof header.description === "string" && header.description.trim() ? header.description : null,
+        optional: header.optional === true,
+        // The writer sets the company's native currency on the header (voucherHeader below).
+        currency: "USD",
+        exchangeRate: exchangeRate == null ? undefined : String(exchangeRate),
+        sourceModule: "ERP",
+      },
+      infrastructurePostingIdentity("stock-adjustment-voucher", `${companyId}:${voucherNumber}`, "create"),
+      input.locationId,
+      input.notes,
+      input.items,
+      { currency: nativeCurrency }
+    );
+    logger.info("stock adjustment create succeeded", {
+      module: "stockAdjustment",
+      action: "createWithVoucher",
+      userId: req.session.userId,
+      companyId,
+      voucherId: created.voucher.id,
+      adjustmentId: created.adjustment.id,
+      durationMs: Date.now() - input.startedAt,
+    });
+    return res.status(201).json(created);
+  } catch (error: unknown) {
+    if (error instanceof DuplicateStockAdjustmentError) {
+      return res.status(409).json({ code: error.code, message: "This voucher already has a stock adjustment" });
+    }
+    throw error;
+  }
+}
+
 /**
  * Corrected POST /api/stock-adjustments handler.
  *
@@ -67,7 +161,11 @@ export async function stockAdjustmentCreateHandler(req: Request, res: Response) 
     const notes = typeof req.body?.notes === "string" ? req.body.notes : "";
     const incomingItems = req.body?.items;
 
-    if (!Number.isInteger(voucherId) || voucherId <= 0) {
+    // Wave 12: the form sends the voucher header and the voucher is created here,
+    // with its adjustment, in one transaction. An existing voucherId is still
+    // accepted for a stock voucher that has no adjustment yet.
+    const newVoucherHeader = isRecord(req.body?.voucher) && req.body?.voucherId == null ? req.body.voucher : null;
+    if (!newVoucherHeader && (!Number.isInteger(voucherId) || voucherId <= 0)) {
       return res.status(400).json({ message: "Voucher ID is required" });
     }
     if (!Number.isInteger(locationId) || locationId <= 0) {
@@ -81,6 +179,17 @@ export async function stockAdjustmentCreateHandler(req: Request, res: Response) 
     }
 
     const normalizedItems = normalizeAdjustmentItems(incomingItems);
+
+    if (newVoucherHeader) {
+      return await createWithVoucher(req, res, {
+        header: newVoucherHeader,
+        locationId,
+        adjustmentType,
+        notes,
+        items: normalizedItems,
+        startedAt,
+      });
+    }
 
     const [voucher] = await db.select().from(vouchers).where(eq(vouchers.id, voucherId)).limit(1);
     if (!voucher) return res.status(404).json({ message: "Voucher not found" });

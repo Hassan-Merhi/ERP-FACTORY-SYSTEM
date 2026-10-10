@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { getErrorMessage } from "../../lib/httpHandlers";
+import { getErrorMessage, HttpError } from "../../lib/httpHandlers";
 import { db } from "../../db";
 import { storage } from "../../storage";
 import { requireAuth, requireNonPOS } from "../../auth";
@@ -445,7 +445,7 @@ export function registerStockItemManageRoutes(app: Express) {
         }
       }
 
-      const updated = await storage.updateStockTransferItem(itemId, req.body);
+      const updated = await storage.updateStockTransferItem(itemId, req.body, req.session.currentCompanyId);
       try {
         const _sti: Record<string, { new: string }> = {};
         if (req.body.quantity !== undefined) _sti.quantity = { new: String(req.body.quantity) };
@@ -466,7 +466,7 @@ export function registerStockItemManageRoutes(app: Express) {
       }
       res.json(updated);
     } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
+      res.status(error instanceof HttpError ? error.statusCode : 500).json({ message: getErrorMessage(error) });
     }
   });
 }

@@ -9,14 +9,23 @@ import {
   retailProductVariants,
   retailProducts,
 } from "@shared/schema";
+import type Decimal from "decimal.js";
 import type { RetailLineDiscountInputType, RetailOrderDiscountInput, RetailPricedCart } from "./retailPricing";
 import { priceRetailCart, roundRetailMoney } from "./retailPricing";
 import { RetailApprovalReuseError } from "./retailDiscountApproval";
 import { bestPromotionForLine, type RetailPromotionRow } from "./retailPromotions";
 import { DEFAULT_RETAIL_SELLING_SETTINGS, type RetailSellingSettings } from "./retailSettings";
-import { addMovement, lockInventoryRow, setInventoryQuantity, type RetailTransaction } from "./retailStockLedger";
+import {
+  addMovement,
+  lockInventoryRow,
+  nextAverageCost,
+  setInventoryQuantity,
+  type RetailTransaction,
+} from "./retailStockLedger";
+import { trackRetailStockValueTx, type RetailStockValueTracker } from "./retailInventoryJournal";
 import { nextRetailReturnQuantity, nextRetailSaleQuantity, validateRetailReturnQuantity } from "./retailStockMath";
 import { db } from "../../db";
+import { lineAmount, MoneyDecimal, toMoney } from "../../lib/money";
 import { settleRetailSaleTx, type RetailPaymentInput } from "./retailFinancialService";
 import { loadRetailSalePayments } from "./retailFinancialQueries";
 
@@ -318,7 +327,9 @@ export async function createRetailSaleInTx(
 
   const settings = input.settings ?? DEFAULT_RETAIL_SELLING_SETTINGS;
   const approval = input.approval ?? null;
-  let totalCost = 0;
+  // Exact money (wave 17 C): the cost is a Decimal sum, never a float sum; the
+  // priced cart is integer cents (retailPricing.ts).
+  let totalCost = new MoneyDecimal(0);
 
   // ── Price the cart from the database ──────────────────────────────────────
   const { priced, variantsById } = await prepareRetailSalePricing(tx, {
@@ -380,7 +391,7 @@ export async function createRetailSaleInTx(
       createdBy: input.userId,
       metadata: { saleItemId: saleItem.id },
     });
-    totalCost += toNumber(stock.averageCost > 0 ? stock.averageCost : variant.cost) * line.quantity;
+    totalCost = totalCost.plus(lineAmount(line.quantity, stock.averageCost > 0 ? stock.averageCost : variant.cost));
   }
 
   await tx
@@ -460,10 +471,12 @@ export async function createRetailReturnInTx(
 ): Promise<{
   returnId: number;
   replayed: boolean;
-  refundAmount: number;
-  refundTaxAmount: number;
-  refundValue: number;
-  costValue: number;
+  refundAmount: Decimal;
+  refundTaxAmount: Decimal;
+  refundValue: Decimal;
+  costValue: Decimal;
+  /** Wave 17 (D): journals the stock value returned, after the refund journal (null on a replay). */
+  stockValue?: RetailStockValueTracker;
 }> {
   const { companyId, saleId } = input;
   const [createdReturn] = await tx
@@ -491,10 +504,10 @@ export async function createRetailReturnInTx(
     return {
       returnId: existing.id,
       replayed: true,
-      refundAmount: toNumber(existing.refundAmount),
-      refundTaxAmount: toNumber(existing.refundTaxAmount),
-      refundValue: toNumber(existing.refundAmount),
-      costValue: 0,
+      refundAmount: toMoney(existing.refundAmount),
+      refundTaxAmount: toMoney(existing.refundTaxAmount),
+      refundValue: toMoney(existing.refundAmount),
+      costValue: new MoneyDecimal(0),
     };
   }
 
@@ -536,10 +549,15 @@ export async function createRetailReturnInTx(
     .orderBy(retailPosSaleItems.id)
     .for("update");
   const saleItemsById = new Map(saleItemRows.map((row) => [row.id, row]));
+  const stockValue = await trackRetailStockValueTx(
+    tx,
+    companyId,
+    saleItemRows.map((row) => ({ variantId: row.variantId, locationId: sale.locationId }))
+  );
 
-  let refundAmount = 0;
-  let refundTaxAmount = 0;
-  let costValue = 0;
+  let refundAmount = new MoneyDecimal(0);
+  let refundTaxAmount = new MoneyDecimal(0);
+  let costValue = new MoneyDecimal(0);
   for (const [saleItemId, quantity] of aggregate) {
     const saleItem = saleItemsById.get(saleItemId);
     if (!saleItem) throw new Error(`Sale item ${saleItemId} not found`);
@@ -549,21 +567,31 @@ export async function createRetailReturnInTx(
 
     const stock = await lockInventoryRow(tx, companyId, saleItem.variantId, sale.locationId);
     const after = nextRetailReturnQuantity(stock.quantity, quantity);
-    await setInventoryQuantity(tx, companyId, saleItem.variantId, sale.locationId, after);
+    // Wave 17 (D): the units come back at the cost they left with (value-exact), blended into the average.
+    await setInventoryQuantity(
+      tx,
+      companyId,
+      saleItem.variantId,
+      sale.locationId,
+      after,
+      nextAverageCost(stock.quantity, stock.averageCost, quantity, toNumber(saleItem.unitCost))
+    );
     await tx
       .update(retailPosSaleItems)
       .set({ returnedQuantity: String(nextReturnedQuantity) })
       .where(eq(retailPosSaleItems.id, saleItem.id));
 
     // Refund basis: the historic tax-inclusive price paid for this line.
-    const grossPerUnit =
-      toNumber(saleItem.grossUnitPrice) > 0 ? toNumber(saleItem.grossUnitPrice) : toNumber(saleItem.unitPrice);
-    const taxPerUnit = sold > 0 ? toNumber(saleItem.taxAmount) / sold : 0;
-    const lineRefund = roundRetailMoney(grossPerUnit * quantity, 6);
-    const lineRefundTax = roundRetailMoney(taxPerUnit * quantity, 6);
-    refundAmount += lineRefund;
-    refundTaxAmount += lineRefundTax;
-    costValue += quantity * toNumber(saleItem.unitCost);
+    // Exact money (wave 17 C): Decimal, never a float product.
+    const grossPerUnit = toMoney(saleItem.grossUnitPrice).gt(0)
+      ? toMoney(saleItem.grossUnitPrice)
+      : toMoney(saleItem.unitPrice);
+    const lineRefund = lineAmount(quantity, grossPerUnit).toDecimalPlaces(6);
+    const lineRefundTax =
+      sold > 0 ? toMoney(saleItem.taxAmount).times(quantity).div(sold).toDecimalPlaces(6) : new MoneyDecimal(0);
+    refundAmount = refundAmount.plus(lineRefund);
+    refundTaxAmount = refundTaxAmount.plus(lineRefundTax);
+    costValue = costValue.plus(lineAmount(quantity, saleItem.unitCost));
 
     const [returnItem] = await tx
       .insert(retailPosReturnItems)
@@ -576,8 +604,8 @@ export async function createRetailReturnInTx(
         quantity: String(quantity),
         unitPrice: saleItem.unitPrice,
         unitCost: saleItem.unitCost,
-        grossUnitPrice: String(grossPerUnit),
-        taxAmount: String(lineRefundTax),
+        grossUnitPrice: grossPerUnit.toFixed(),
+        taxAmount: lineRefundTax.toFixed(),
       })
       .returning({ id: retailPosReturnItems.id });
     await addMovement(tx, {
@@ -595,11 +623,11 @@ export async function createRetailReturnInTx(
       metadata: { saleId, saleItemId: saleItem.id, ...input.metadata },
     });
   }
-  refundAmount = roundRetailMoney(refundAmount, 6);
-  refundTaxAmount = roundRetailMoney(refundTaxAmount, 6);
+  refundAmount = refundAmount.toDecimalPlaces(6);
+  refundTaxAmount = refundTaxAmount.toDecimalPlaces(6);
   await tx
     .update(retailPosReturns)
-    .set({ refundAmount: String(refundAmount), refundTaxAmount: String(refundTaxAmount) })
+    .set({ refundAmount: refundAmount.toFixed(), refundTaxAmount: refundTaxAmount.toFixed() })
     .where(eq(retailPosReturns.id, createdReturn.id));
   return {
     returnId: createdReturn.id,
@@ -608,5 +636,6 @@ export async function createRetailReturnInTx(
     refundTaxAmount,
     refundValue: refundAmount,
     costValue,
+    stockValue,
   };
 }

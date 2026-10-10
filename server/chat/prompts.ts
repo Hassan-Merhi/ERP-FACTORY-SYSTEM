@@ -99,6 +99,7 @@ All data below is LIVE from the database - not cached. These numbers reflect the
 ### 🏦 ACCOUNTS SUMMARY:
 - Total Payables (to suppliers): $${context.financialSummary.totalPayables.toLocaleString()}
 - Total Receivables (from customers): $${context.financialSummary.totalReceivables.toLocaleString()}
+- Receivables not yet in the ledger (memo, not part of the total above): $${context.financialSummary.receivablesNotInLedger.toLocaleString()}
 - Open Purchase Orders: ${context.financialSummary.openPurchaseOrders}
 - Pending Container Sales: ${context.financialSummary.pendingContainerSales}
 

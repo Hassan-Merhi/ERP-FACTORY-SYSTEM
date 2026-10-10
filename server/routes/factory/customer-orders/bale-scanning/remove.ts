@@ -25,6 +25,7 @@ import {
   customerOrderBaleRemovals,
 } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
+import { syncFactoryInvoiceTx } from "../../../../services/accounting/perpetualInventory/factoryInvoice";
 
 export function registerOrderBaleRemovalRoutes(app: Express) {
   // POST /api/factory/customer-orders/:id/bales/empty — return every scanned bale to stock
@@ -363,6 +364,8 @@ export function registerOrderBaleRemovalRoutes(app: Express) {
               .set({ debitAmount: String(newGrandTotal), balance: String(newGrandTotal) })
               .where(eq(customerBalances.id, ledgerEntry.id));
           }
+          // Perpetual inventory (wave 8.4): the invoice journal follows the order.
+          await syncFactoryInvoiceTx(tx, companyId, orderId);
 
           const [daybookEntry] = await tx
             .select({ id: factoryDaybookEntries.id })

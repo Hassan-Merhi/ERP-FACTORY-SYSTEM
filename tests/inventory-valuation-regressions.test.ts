@@ -207,7 +207,10 @@ describe("inventory valuation regression guards", () => {
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-3);
-    expect(Number(state.inventory.total_value)).toBe(0);
+    // Wave 11 negative-stock policy (owner decision 2): the re-issue relieves
+    // the 2 units on hand (133.30) and the 3-unit shortage at the provisional
+    // cost, so the short row holds -3 × 66.65 (it used to be clamped to 0).
+    expect(Number(state.inventory.total_value)).toBeCloseTo(-199.95, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(state.layers).toHaveLength(1);
     expect(Number(state.layers[0].qty)).toBe(3);
@@ -254,7 +257,9 @@ describe("inventory valuation regression guards", () => {
 
     state = await readInventory(ctx.locationId, stockItemId);
     expect(Number(state.inventory.quantity)).toBe(-10);
-    expect(Number(state.inventory.total_value)).toBe(0);
+    // Wave 11 negative-stock policy: the re-issued shortage is costed
+    // provisionally (5 × 66.65); the legacy row's own -10 held no value.
+    expect(Number(state.inventory.total_value)).toBeCloseTo(-333.25, 2);
     expect(Number(state.inventory.average_rate)).toBeCloseTo(66.65, 2);
     expect(totalLayerQty(state.layers)).toBe(10);
   });

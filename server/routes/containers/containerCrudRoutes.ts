@@ -1,4 +1,9 @@
-import { infrastructurePostingIdentity } from "../../services/accounting/infrastructureVoucherIdentity";
+import {
+  infrastructurePostingIdentity,
+  insertInfrastructureVoucherTx,
+} from "../../services/accounting/infrastructureVoucherIdentity";
+import { systemAccountDefinition } from "../../services/accounting/systemAccounts";
+import { moneyString, toMoney } from "../../lib/money";
 import { parseId } from "../../lib/parseId";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { getClientDate } from "../../lib/dateUtils";
@@ -18,6 +23,8 @@ import {
   stockGrades,
   stockCategories,
   suppliers,
+  ledgerAccounts,
+  voucherEntries,
 } from "@shared/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { requireNonSP } from "./containerHelpers";
@@ -109,71 +116,73 @@ export function registerContainerCrudRoutes(app: Express) {
         });
       }
 
-      const container = await storage.createContainer(data);
+      // The container, its purchase voucher and both lines commit together. They
+      // used to be separate autocommit writes; a failure deleted the container but
+      // could leave a voucher header or a one-sided debit line behind.
+      const companyId = req.session.currentCompanyId;
+      const container = await db.transaction(async (tx) => {
+        const [container] = await tx.insert(containers).values(data).returning();
+        if (!hasManualCostData) return container;
 
-      // If this is a manual container with cost information, create a purchase voucher
-      if (hasManualCostData) {
-        try {
-          const totalAmount = ratePerKg * totalKg;
-          const voucherDate = data.importDate || getClientDate(req);
+        const totalAmount = moneyString(toMoney(req.body.ratePerKg).times(toMoney(req.body.totalKg)));
+        const voucherDate = data.importDate || getClientDate(req);
 
-          // Get or create PURCHASES ledger account
-          let purchasesAccount = await storage.getLedgerAccountByCode("PURCHASES", req.session.currentCompanyId);
-          if (!purchasesAccount) {
-            purchasesAccount = await storage.createLedgerAccount({
-              companyId: req.session.currentCompanyId,
-              code: "PURCHASES",
-              name: "Purchases",
-              accountType: "Expense",
-              openingBalance: "0",
-              openingBalanceSide: "Dr",
-              active: true,
-            });
-          }
+        // Get or create the PURCHASES ledger account, in the same transaction.
+        await tx
+          .insert(ledgerAccounts)
+          .values({
+            companyId,
+            code: "PURCHASES",
+            name: "Purchases",
+            accountType: systemAccountDefinition("PURCHASES")?.accountType ?? "Expense",
+            openingBalance: "0",
+            openingBalanceSide: "Dr",
+            active: true,
+          })
+          .onConflictDoNothing();
+        const [purchasesAccount] = await tx
+          .select({ id: ledgerAccounts.id })
+          .from(ledgerAccounts)
+          .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, "PURCHASES")))
+          .limit(1);
 
-          // Create purchase voucher
-          const voucher = await storage.createVoucher({
-            companyId: req.session.currentCompanyId,
-            postingSource: infrastructurePostingIdentity(
-              "manual-container",
-              `${req.session.currentCompanyId}:${container.id}`,
-              "purchase"
-            ),
+        const { voucher } = await insertInfrastructureVoucherTx(
+          tx,
+          {
+            companyId,
             currency: "USD",
             voucherNumber: `CONT-${container.containerNumber}-${Date.now()}`,
             voucherType: "Purchase",
             voucherDate: voucherDate,
             description: `Container ${container.containerNumber} - ${itemName}`,
-            totalAmount: totalAmount.toFixed(2),
+            totalAmount,
             optional: false,
             sourceModule: "ERP",
-          });
+          },
+          infrastructurePostingIdentity("manual-container", `${companyId}:${container.id}`, "purchase")
+        );
 
+        const narration = `Container ${container.containerNumber} - ${itemName} (${totalKg}kg @ $${ratePerKg}/kg)`;
+        await tx.insert(voucherEntries).values([
           // Debit: Purchases account (Expense increases)
-          await storage.createVoucherEntry({
+          {
             voucherId: voucher.id,
             ledgerAccountId: purchasesAccount.id,
-            debitAmount: totalAmount.toFixed(2),
+            debitAmount: totalAmount,
             creditAmount: "0",
-            narration: `Container ${container.containerNumber} - ${itemName} (${totalKg}kg @ $${ratePerKg}/kg)`,
-          });
-
+            narration,
+          },
           // Credit: Supplier account (Accounts Payable increases)
-          await storage.createVoucherEntry({
+          {
             voucherId: voucher.id,
             supplierId: data.supplierId,
             debitAmount: "0",
-            creditAmount: totalAmount.toFixed(2),
-            narration: `Container ${container.containerNumber} - ${itemName} (${totalKg}kg @ $${ratePerKg}/kg)`,
-          });
-        } catch (voucherError: unknown) {
-          // Rollback: Delete container if voucher creation fails
-          await storage.deleteContainer(container.id);
-          throw new Error(`Failed to create purchase voucher: ${getErrorMessage(voucherError)}`, {
-            cause: voucherError,
-          });
-        }
-      }
+            creditAmount: totalAmount,
+            narration,
+          },
+        ]);
+        return container;
+      });
 
       try {
         await logAudit({
@@ -276,7 +285,7 @@ export function registerContainerCrudRoutes(app: Express) {
         return res.status(404).json({ message: "Container not found" });
       }
 
-       const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
+      const pos = await storage.getPurchaseOrdersByContainerForCompany(containerId, req.session.currentCompanyId!);
       const charges = await storage.getChargesByContainer(containerId);
 
       // Get line items for all POs
@@ -331,7 +340,10 @@ export function registerContainerCrudRoutes(app: Express) {
         });
       }
 
-      await storage.deleteContainer(id);
+      await storage.deleteContainer(id, {
+        userId: req.session.userId ?? "unknown",
+        username: req.session.username || "unknown",
+      });
       try {
         await logAudit({
           userId: req.session.userId!,

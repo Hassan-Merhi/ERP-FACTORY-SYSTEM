@@ -1,7 +1,11 @@
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import type Decimal from "decimal.js";
 import { db } from "../db";
-import { adjustInventory } from "../inventoryHelper";
 import { firstRow } from "../lib/queryResult";
+import { assertNoBaleMirrorMovementTx } from "./accounting/perpetualInventory/cutoverRefusal";
+import { applyTransferRevisionDeltaTx, postTransferResidualTx } from "./inventory/conservedStockTransfer";
+import { journalStockTransferLeg, nextStockTransferRevision } from "./inventory/stockTransferJournal";
+import { lineValueMoved, reversalDate } from "./inventory/valueExactReversal";
 import {
   inventory,
   locations,
@@ -562,7 +566,55 @@ export async function approvePendingStockTransferRevision(
       }
     }
 
+    if (inventoryApplied) {
+      // Wave 11: a factory bale-mirror item is moved in the factory after the cut-over.
+      await assertNoBaleMirrorMovementTx(
+        tx,
+        companyId,
+        changes.filter((change) => Math.abs(change.delta) >= 0.0005).map((change) => change.stockItemId),
+        "stock-transfer-revision"
+      );
+    }
+
+    // Wave 15: an applied transfer's revision moves value conserved (more
+    // quantity: what the source relieves; less: the line's share of its
+    // value_moved, exactly) and the line keeps its value_moved, so a later
+    // edit or delete reverses exactly what moved.
+    const deltas: Decimal[] = [];
+    let canonicalRevision: number | undefined;
     for (const change of changes) {
+      let valueMoved: string | null | undefined = change.existing?.valueMoved;
+      if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
+        const applied = await applyTransferRevisionDeltaTx(tx, {
+          companyId,
+          sourceLocationId: change.sourceLocationId,
+          destinationLocationId,
+          stockItemId: change.stockItemId,
+          oldQuantity: change.existing?.quantity ?? 0,
+          newQuantity: change.newQuantity.toFixed(3),
+          lineValue: change.existing
+            ? lineValueMoved({ valueMoved: change.existing.valueMoved, total: change.existing.totalAmount })
+            : 0,
+          fallbackRate: change.rate,
+          sourceVoucherType: "Stock Transfer",
+          sourceVoucherId: voucherId,
+        });
+        deltas.push(...applied.deltas);
+        valueMoved = applied.valueMoved.toFixed(2);
+        // The canonical journal records the direction the stock travelled (as
+        // the immutable lifecycle does).
+        canonicalRevision ??= await nextStockTransferRevision(tx, companyId, transferId);
+        await journalStockTransferLeg(tx, {
+          companyId,
+          transferId,
+          revision: canonicalRevision,
+          phase: change.delta > 0 ? "issue" : "reverse",
+          fromLocationId: change.delta > 0 ? change.sourceLocationId : destinationLocationId,
+          toLocationId: change.delta > 0 ? destinationLocationId : change.sourceLocationId,
+          leg: { stockItemId: change.stockItemId, quantity: change.delta, rate: change.rate },
+        });
+      }
+
       if (change.existing) {
         if (change.newQuantity <= 0) {
           await tx.delete(stockTransferItems).where(eq(stockTransferItems.id, change.existing.id));
@@ -572,6 +624,7 @@ export async function approvePendingStockTransferRevision(
             .set({
               quantity: toMoney(change.newQuantity).toFixed(3),
               totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+              valueMoved: valueMoved ?? null,
             })
             .where(eq(stockTransferItems.id, change.existing.id));
         }
@@ -583,14 +636,17 @@ export async function approvePendingStockTransferRevision(
           quantity: toMoney(change.newQuantity).toFixed(3),
           rate: toMoney(change.rate).toFixed(2),
           totalAmount: lineAmount(change.newQuantity, change.rate).toFixed(2),
+          valueMoved: valueMoved ?? null,
         });
       }
-
-      if (inventoryApplied && Math.abs(change.delta) >= 0.0005) {
-        await adjustInventory(tx, change.sourceLocationId, change.stockItemId, -change.delta, companyId, change.rate);
-        await adjustInventory(tx, destinationLocationId, change.stockItemId, change.delta, companyId, change.rate);
-      }
     }
+    await postTransferResidualTx(tx, {
+      companyId,
+      transferId,
+      date: reversalDate(),
+      reference: `Transfer ${transferId}`,
+      deltas,
+    });
 
     const finalItems = await tx.select().from(stockTransferItems).where(eq(stockTransferItems.transferId, transferId));
     const totalAmount = finalItems

@@ -163,6 +163,10 @@ beforeAll(async () => {
 }, 120000);
 
 afterAll(async () => {
+  await pool.query(`DELETE FROM factory_physical_bale_deletions WHERE company_id = $1`, [ctx.companyId]);
+  await pool.query(`DELETE FROM factory_daybook_entries WHERE company_id = $1 AND tx_type = 'BALE_REMOVAL'`, [
+    ctx.companyId,
+  ]);
   await pool.query(`DELETE FROM factory_bale_production_attributions WHERE company_id IN ($1, $2)`, [
     ctx.companyId,
     foreignCompanyId,
@@ -222,13 +226,19 @@ describe("PATCH /api/factory/bales/:id/weight", () => {
 });
 
 describe("PATCH /api/factory/bales/:id/status", () => {
+  // Phase 19 C (F3): only a value-neutral change (within finished goods, or
+  // within the pre-stock statuses) is made here; others are 409.
   it("moves a bale to an allowed status", async () => {
     const id = await createBale({ status: "IN_STOCK" });
 
-    const response = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "RESERVED" });
+    const response = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "RESERVED_FOR_ORDER" });
 
     expect(response.status).toBe(200);
-    expect((await baleRow(id))?.status).toBe("RESERVED");
+    expect((await baleRow(id))?.status).toBe("RESERVED_FOR_ORDER");
+
+    const refused = await agent.patch(`/api/factory/bales/${id}/status`).send({ status: "RESERVED" });
+    expect(refused.status).toBe(409);
+    expect((await baleRow(id))?.status).toBe("RESERVED_FOR_ORDER");
   });
 
   it("refuses a status outside the allowed set", async () => {
@@ -243,7 +253,9 @@ describe("PATCH /api/factory/bales/:id/status", () => {
   });
 
   it("returns 404 for a bale in another company", async () => {
-    const response = await agent.patch(`/api/factory/bales/${foreignBaleId}/status`).send({ status: "RESERVED" });
+    const response = await agent
+      .patch(`/api/factory/bales/${foreignBaleId}/status`)
+      .send({ status: "RESERVED_FOR_ORDER" });
 
     expect(response.status).toBe(404);
     expect((await baleRow(foreignBaleId))?.status).toBe("IN_STOCK");
@@ -252,10 +264,16 @@ describe("PATCH /api/factory/bales/:id/status", () => {
 
 describe("DELETE /api/factory/bales/:id", () => {
   it("soft-deletes by setting status and deletedAt together", async () => {
-    const id = await createBale({ status: "IN_STOCK" });
+    // Phase 19 C (F3): a stock bale is removed through Stock Removal (409); a
+    // pre-stock bale (no value) is deleted here.
+    const stock = await createBale({ status: "IN_STOCK" });
+    expect((await agent.delete(`/api/factory/bales/${stock}`)).status).toBe(409);
+    expect((await baleRow(stock))?.deleted_at).toBeNull();
+
+    const id = await createBale({ status: "LABEL_PRINTED" });
 
     const response = await agent.delete(`/api/factory/bales/${id}`);
-    expect(response.status).toBe(200);
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
 
     const row = await baleRow(id);
     // Both have to move. Stock queries exclude on one or the other depending on
@@ -276,28 +294,54 @@ describe("PATCH /api/factory/bales/bulk-status", () => {
   it("updates every listed bale and reports how many moved", async () => {
     const ids = [await createBale(), await createBale()];
 
-    const response = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "PRESSED" });
+    const response = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "RESERVED_FOR_ORDER" });
 
     expect(response.status).toBe(200);
     expect(response.body.updated).toBe(2);
-    for (const id of ids) expect((await baleRow(id))?.status).toBe("PRESSED");
+    for (const id of ids) expect((await baleRow(id))?.status).toBe("RESERVED_FOR_ORDER");
   });
 
-  it("sets deletedAt when the bulk status is DELETED, and never revives it by a status edit", async () => {
+  // Phase 19 C (F3): deleting or restoring stock changes its value, so the bulk
+  // route refuses both (409, nothing written); Stock Removal does it instead.
+  it("refuses a bulk DELETED, and a bulk restore of a deleted bale", async () => {
     const id = await createBale();
 
-    await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "DELETED" });
-    expect((await baleRow(id))?.deleted_at).not.toBeNull();
+    expect((await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "DELETED" })).status).toBe(
+      409
+    );
+    expect((await baleRow(id))?.deleted_at).toBeNull();
 
-    // A physical deletion goes through the controlled deletion service (one
-    // inventory decrement + audit). Flipping the bale back to IN_STOCK by a
-    // status edit would recreate stock without a receipt, so it is refused and
-    // the tombstone stays.
-    const revive = await agent.patch("/api/factory/bales/bulk-status").send({ ids: [id], status: "IN_STOCK" });
-    expect(revive.status).toBe(400);
-    const row = await baleRow(id);
-    expect(row?.status).toBe("DELETED");
-    expect(row?.deleted_at).not.toBeNull();
+    const deleted = await createBale({ status: "DELETED" });
+    expect(
+      (await agent.patch("/api/factory/bales/bulk-status").send({ ids: [deleted], status: "IN_STOCK" })).status
+    ).toBe(409);
+    expect((await baleRow(deleted))?.status).toBe("DELETED");
+  });
+
+  // Merge of main #2134: a bulk DELETED of pre-stock bales runs the one
+  // physical-deletion service (deletion record), audited per bale in its transaction.
+  it("deletes pre-stock bales through the physical-deletion service, audited", async () => {
+    const ids = [await createBale({ status: "LABEL_PRINTED" }), await createBale({ status: "PRESSED" })];
+
+    const response = await agent.patch("/api/factory/bales/bulk-status").send({ ids, status: "DELETED" });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.updated).toBe(2);
+    for (const id of ids) {
+      const row = await baleRow(id);
+      expect(row?.status).toBe("DELETED");
+      expect(row?.deleted_at).not.toBeNull();
+    }
+    const deletions = await pool.query(
+      `SELECT bale_id FROM factory_physical_bale_deletions WHERE company_id = $1 AND bale_id = ANY($2::int[])`,
+      [ctx.companyId, ids]
+    );
+    expect(deletions.rows).toHaveLength(2);
+    const audit = await pool.query(
+      `SELECT record_id FROM audit_log WHERE table_name = 'factory_bales' AND action = 'delete'
+          AND record_id = ANY($1::int[])`,
+      [ids]
+    );
+    expect(audit.rows).toHaveLength(2);
   });
 
   it("rejects an empty id list or a status outside the allowed set", async () => {
@@ -314,12 +358,12 @@ describe("PATCH /api/factory/bales/bulk-status", () => {
     const mine = await createBale();
     const response = await agent
       .patch("/api/factory/bales/bulk-status")
-      .send({ ids: [mine, foreignBaleId], status: "PRESSED" });
+      .send({ ids: [mine, foreignBaleId], status: "RESERVED_FOR_ORDER" });
 
     expect(response.status).toBe(200);
     // Only the caller's own bale counts, and the other tenant's is untouched.
     expect(response.body.updated).toBe(1);
-    expect((await baleRow(mine))?.status).toBe("PRESSED");
+    expect((await baleRow(mine))?.status).toBe("RESERVED_FOR_ORDER");
     expect((await baleRow(foreignBaleId))?.status).toBe("IN_STOCK");
   });
 });

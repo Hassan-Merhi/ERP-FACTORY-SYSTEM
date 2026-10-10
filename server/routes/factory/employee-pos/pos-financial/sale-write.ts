@@ -10,7 +10,6 @@ import { getErrorMessage } from "../../../../lib/httpHandlers";
 import { logger } from "../../../../lib/logger";
 import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
-import { getOrCreateLedgerAccount } from "../../_helpers";
 import {
   financialOperationFingerprint,
   withDurableFinancialOperation,
@@ -22,20 +21,31 @@ import {
 import {
   factoryBales,
   customerBalances,
-  voucherEntries,
   factoryDaybookEntries,
-  vouchers,
   factoryPosSales,
   factoryPosSaleItems,
 } from "@shared/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../../../lib/money";
+import { postFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
 import {
-  findFactoryPosSaleVouchersTx,
-  removeFactoryPosCustomerBalancesTx,
-  retireFactoryPosVoucherTx,
-} from "./sale-financials";
-import { allLedgerAccountsOwned, isFactorySessionLocation } from "../../../helpers/companyOwnership";
+  posSaleBalesCostTx,
+  recordPosSaleBalesTx,
+  releasePosSaleBalesTx,
+} from "../../../../services/factory/factoryPosSaleBales";
+import {
+  allLedgerAccountsOwned,
+  isCompanyCustomerOrAbsent,
+  isFactorySessionLocation,
+} from "../../../helpers/companyOwnership";
+import {
+  FactoryPosSaleRefusalError,
+  factoryPosSaleRate,
+  factoryPosSaleRefusal,
+  postFactoryPosReceiptTx,
+  type FactoryPosSaleAmounts,
+} from "../../../../services/accounting/factoryPosReceipt";
+import { removeFactoryPosCustomerBalancesTx } from "./sale-financials";
 
 /** A request amount at cents, read as parseFloat reads it; blank is zero, anything else unparsable is null. */
 function requestCents(value: unknown) {
@@ -80,16 +90,91 @@ function saleAmounts(body: {
   }
   const depositAmt = MoneyDecimal.max(0, deposit);
   const totalAmount = sumMoney(lines.map((line) => line.price.times(line.qty)));
-  const totalExpenses = sumMoney(expenseRows.map((e) => e.amount));
-  // For cash: netCash = total - expenses. For credit: deposit may come in as cash.
-  const netCash = (isCredit ? depositAmt : totalAmount).minus(totalExpenses);
+  // What the ledger voucher posts (services/accounting/factoryPosReceipt.ts).
+  const posting: FactoryPosSaleAmounts = {
+    isCredit,
+    total: totalAmount,
+    deposit: depositAmt,
+    deductions: expenseRows.map((row) => ({ ...row, amount: toMoney(row.amount) })),
+  };
   return {
     isCredit,
     depositAmt: depositAmt.toNumber(),
     lines,
     totalAmount: totalAmount.toNumber(),
     expenseRows,
-    netCash: netCash.toNumber(),
+    posting,
+  };
+}
+
+/** A native amount in USD at the sale's factory rate, at cents (the daybook's amount_usd). */
+function usdAtRate(amount: number, rate: string): string {
+  return toMoney(amount).times(toMoney(rate)).toFixed(2);
+}
+
+/**
+ * Wave 8.4 continuation: a sale the ledger cannot carry is refused before any
+ * write — a customer of another company, a cash leg with no cash account, an
+ * unpaid credit sale with no customer, a non-USD sale with no confirmed rate
+ * on or before its date (409). Returns the sale's rate, or sends the refusal.
+ */
+async function saleRateOrRefuse(
+  res: Response,
+  companyId: number,
+  sale: {
+    customerId: number | null;
+    cashAccountId: unknown;
+    currencyCode: unknown;
+    saleDate: string;
+    posting: FactoryPosSaleAmounts;
+  }
+): Promise<string | null> {
+  if (!(await isCompanyCustomerOrAbsent(companyId, sale.customerId))) {
+    res.status(400).json({ message: "Customer not found" });
+    return null;
+  }
+  const refusal = factoryPosSaleRefusal(sale.posting, {
+    cashAccountId: sale.cashAccountId ? Number(sale.cashAccountId) : null,
+    customerId: sale.customerId,
+  });
+  if (refusal) {
+    res.status(refusal.statusCode).json(refusal.body);
+    return null;
+  }
+  try {
+    return await factoryPosSaleRate(db, companyId, String(sale.currencyCode || "USD"), sale.saleDate);
+  } catch (error: unknown) {
+    if (!(error instanceof FactoryPosSaleRefusalError)) throw error;
+    res.status(error.statusCode).json(error.body);
+    return null;
+  }
+}
+
+/** The route's error response: a posting refusal keeps its status and code. */
+function sendSaleError(res: Response, error: unknown) {
+  if (error instanceof FactoryPosSaleRefusalError) return res.status(error.statusCode).json(error.body);
+  return res.status(400).json({ message: getErrorMessage(error) });
+}
+
+function postingInput(
+  companyId: number,
+  sale: { id: number; saleNumber: string; txDate: string | Date },
+  body: { customerName?: string | null; currencyCode?: unknown; cashAccountId?: unknown },
+  customerId: number | null,
+  rate: string,
+  posting: FactoryPosSaleAmounts
+) {
+  return {
+    ...posting,
+    companyId,
+    saleId: sale.id,
+    saleNumber: sale.saleNumber,
+    voucherDate: String(sale.txDate),
+    currency: String(body.currencyCode || "USD"),
+    rate,
+    customerName: body.customerName ?? null,
+    customerId,
+    cashAccountId: body.cashAccountId ? Number(body.cashAccountId) : null,
   };
 }
 
@@ -146,9 +231,18 @@ export function registerPosSaleWriteRoutes(app: Express) {
       // Expense deductions (optional array of {accountId, description, amount})
       const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
       if (!amounts) return res.status(400).json({ message: "Invalid amount" });
-      const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const { isCredit, depositAmt, lines, totalAmount, expenseRows, posting } = amounts;
       const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
       if (refused) return res.status(400).json({ message: refused });
+      const saleDate = txDate || getClientDate(req);
+      const rate = await saleRateOrRefuse(res, companyId, {
+        customerId: parsedCustomerId,
+        cashAccountId,
+        currencyCode,
+        saleDate,
+        posting,
+      });
+      if (rate === null) return;
 
       // Generate sale number
       const [seqRow] = await db
@@ -172,13 +266,14 @@ export function registerPosSaleWriteRoutes(app: Express) {
           }),
         },
         async (tx) => {
+          const soldBaleIds: number[] = [];
           // 1. Create sale record
           const [sale] = await tx
             .insert(factoryPosSales)
             .values({
               companyId,
               saleNumber,
-              txDate: txDate || getClientDate(req),
+              txDate: saleDate,
               locationId: locationId || null,
               customerName: customerName || null,
               customerId: parsedCustomerId,
@@ -241,21 +336,22 @@ export function registerPosSaleWriteRoutes(app: Express) {
                 .update(factoryBales)
                 .set({ status: "SOLD", updatedAt: new Date() })
                 .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+              soldBaleIds.push(...baleIds);
             }
           }
 
-          // 4. Create daybook entry for the sale
+          // 4. Create daybook entry for the sale (USD at the sale-date factory rate)
           await tx.insert(factoryDaybookEntries).values({
             companyId,
-            txDate: txDate || getClientDate(req),
+            txDate: saleDate,
             txType: "BALE_SALE",
             referenceId: sale.id,
             referenceTable: "factory_pos_sales",
             description: `Factory POS Sale ${saleNumber}${customerName ? ` – ${customerName}` : ""}${isCredit ? " [CREDIT]" : ""}`,
             currencyCode: currencyCode || "USD",
             amountCurrency: totalAmount.toFixed(2),
-            fxRateToUsd: "1",
-            amountUsd: totalAmount.toFixed(2),
+            fxRateToUsd: rate,
+            amountUsd: usdAtRate(totalAmount, rate),
             // factory_daybook_entries.created_by is a varchar column.
             createdBy: userId === null ? null : String(userId),
           });
@@ -264,15 +360,15 @@ export function registerPosSaleWriteRoutes(app: Express) {
           for (const exp of expenseRows) {
             await tx.insert(factoryDaybookEntries).values({
               companyId,
-              txDate: txDate || getClientDate(req),
+              txDate: saleDate,
               txType: "POS_EXPENSE",
               referenceId: sale.id,
               referenceTable: "factory_pos_sales",
               description: `${exp.description || "Deduction"} – POS ${saleNumber}${customerName ? ` (${customerName})` : ""}`,
               currencyCode: currencyCode || "USD",
               amountCurrency: exp.amount.toFixed(2),
-              fxRateToUsd: "1",
-              amountUsd: exp.amount.toFixed(2),
+              fxRateToUsd: rate,
+              amountUsd: usdAtRate(exp.amount, rate),
               createdBy: userId === null ? null : String(userId),
             });
           }
@@ -291,7 +387,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
             await tx.insert(customerBalances).values({
               companyId,
               customerId: parsedCustomerId,
-              transactionDate: txDate || getClientDate(req),
+              transactionDate: saleDate,
               transactionType: "SALE",
               referenceId: sale.id,
               referenceType: "FACTORY_POS_SALE",
@@ -308,7 +404,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               await tx.insert(customerBalances).values({
                 companyId,
                 customerId: parsedCustomerId,
-                transactionDate: txDate || getClientDate(req),
+                transactionDate: saleDate,
                 transactionType: "PAYMENT",
                 referenceId: sale.id,
                 referenceType: "FACTORY_POS_DEPOSIT",
@@ -321,63 +417,31 @@ export function registerPosSaleWriteRoutes(app: Express) {
             }
           }
 
-          // 5b. Cash receipt ERP voucher
-          // For cash sales: full amount. For credit sales with deposit: deposit only.
-          const voucherCashAmt = isCredit ? depositAmt : totalAmount;
-          if (cashAccountId && voucherCashAmt > 0) {
-            const voucherNum = `FPOS-${sale.id}-${Date.now()}`;
-            const [vch] = await tx
-              .insert(vouchers)
-              .values({
-                companyId,
-                voucherType: "Receipt",
-                voucherNumber: voucherNum,
-                voucherDate: txDate || getClientDate(req),
-                description: `Factory POS Sale ${saleNumber}${customerName ? ` – ${customerName}` : ""}`,
-                totalAmount: voucherCashAmt.toFixed(2),
-                currency: currencyCode || "USD",
-                exchangeRate: "1",
-                sourceModule: "FACTORY_POS",
-              })
-              .returning();
-            // DR Cash (net of deposit after expense deductions)
-            const netDeposit = Math.max(0, netCash);
-            if (netDeposit > 0) {
-              await tx.insert(voucherEntries).values({
-                voucherId: vch.id,
-                ledgerAccountId: cashAccountId,
-                debitAmount: netDeposit.toFixed(2),
-                creditAmount: "0",
-                narration: isCredit
-                  ? `Deposit on credit sale – ${saleNumber}`
-                  : `Factory POS cash receipt – ${saleNumber}`,
-              });
-            }
-            // DR each expense account
-            for (const exp of expenseRows) {
-              await tx.insert(voucherEntries).values({
-                voucherId: vch.id,
-                ledgerAccountId: exp.accountId,
-                debitAmount: exp.amount.toFixed(2),
-                creditAmount: "0",
-                narration: exp.description || `POS deduction – ${saleNumber}`,
-              });
-            }
-            // CR Factory Sales Income (gross amount entering cash)
-            const salesIncomeAccId = await getOrCreateLedgerAccount(
+          // 5b. The sale's ledger voucher FPOS-RCPT-{sale} (wave 8.4 continuation):
+          // Cr sales income for the full sale; Dr cash for what was received less
+          // the deductions, Dr each deduction, Dr the customer's ledger for the
+          // unpaid part of a credit sale; normalized at the sale-date rate.
+          await postFactoryPosReceiptTx(
+            tx,
+            postingInput(
               companyId,
-              "FACTORY_BALE_SALES_INCOME",
-              "Factory Bale Sales Income",
-              "Revenue"
-            );
-            await tx.insert(voucherEntries).values({
-              voucherId: vch.id,
-              ledgerAccountId: salesIncomeAccId,
-              debitAmount: "0",
-              creditAmount: voucherCashAmt.toFixed(2),
-              narration: `Factory POS sales income – ${saleNumber}`,
-            });
-          }
+              sale,
+              { customerName, currencyCode, cashAccountId },
+              parsedCustomerId,
+              rate,
+              posting
+            )
+          );
+
+          // Wave 11: the sale records the bales it took, so a void or an edit puts
+          // back exactly those; its cost of sales is their cost (wave 8.4 journal).
+          await recordPosSaleBalesTx(tx, companyId, sale.id, soldBaleIds);
+          await postFactoryPosCogsTx(tx, {
+            companyId,
+            saleId: sale.id,
+            voucherDate: String(sale.txDate),
+            cost: await posSaleBalesCostTx(tx, companyId, sale.id),
+          });
 
           return { value: sale, resultReference: sale.id };
         }
@@ -386,7 +450,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
       res.json(operation.value);
     } catch (error: unknown) {
       logger.error("Error creating factory POS sale:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      sendSaleError(res, error);
     }
   });
 
@@ -424,14 +488,26 @@ export function registerPosSaleWriteRoutes(app: Express) {
       const parsedCustomerId = customerId ? parseInt(customerId) : null;
       const amounts = saleAmounts({ paymentType, depositAmount, items, expenses });
       if (!amounts) return res.status(400).json({ message: "Invalid amount" });
-      const { isCredit, depositAmt, lines, totalAmount, expenseRows, netCash } = amounts;
+      const { isCredit, depositAmt, lines, totalAmount, expenseRows, posting } = amounts;
       const refused = await refusedSaleBodyId(req.session, companyId, locationId, cashAccountId, expenseRows);
       if (refused) return res.status(400).json({ message: refused });
+      const saleDate = String(txDate || existingSale.txDate);
+      const rate = await saleRateOrRefuse(res, companyId, {
+        customerId: parsedCustomerId,
+        cashAccountId,
+        currencyCode,
+        saleDate,
+        posting,
+      });
+      if (rate === null) return;
 
       const result = await db.transaction(async (tx: Parameters<Parameters<typeof db.transaction>[0]>[0]) => {
-        // Step 1: Restore bales for old items
+        // Step 1: Restore the bales the sale took (wave 11: exactly those it
+        // recorded; a sale from before the record falls back to the most recent
+        // SOLD bales of each product at its location).
+        const released = await releasePosSaleBalesTx(tx, companyId, saleId);
         const oldItems = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
-        for (const oldItem of oldItems) {
+        for (const oldItem of released.legacy ? oldItems : []) {
           if (oldItem.productId && existingSale.locationId) {
             const soldBales = await tx
               .select({ id: factoryBales.id })
@@ -479,6 +555,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
           .where(and(eq(factoryPosSales.id, saleId), eq(factoryPosSales.companyId, companyId)))
           .returning();
 
+        const soldBaleIds: number[] = [];
         // Step 4: Insert new items and mark bales as SOLD
         for (const [index, item] of items.entries()) {
           const { qty, price } = lines[index];
@@ -519,6 +596,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
               .update(factoryBales)
               .set({ status: "SOLD", updatedAt: new Date() })
               .where(and(eq(factoryBales.companyId, companyId), inArray(factoryBales.id, baleIds)));
+            soldBaleIds.push(...baleIds);
           }
         }
 
@@ -526,8 +604,10 @@ export function registerPosSaleWriteRoutes(app: Express) {
         await tx
           .update(factoryDaybookEntries)
           .set({
+            currencyCode: currencyCode || "USD",
             amountCurrency: totalAmount.toFixed(2),
-            amountUsd: totalAmount.toFixed(2),
+            fxRateToUsd: rate,
+            amountUsd: usdAtRate(totalAmount, rate),
             txDate: txDate || existingSale.txDate,
             description: `Factory POS Sale ${existingSale.saleNumber}${customerName ? ` – ${customerName}` : ""}${isCredit ? " [CREDIT]" : ""}`,
           })
@@ -559,8 +639,8 @@ export function registerPosSaleWriteRoutes(app: Express) {
             description: `${exp.description || "Deduction"} – POS ${existingSale.saleNumber}${customerName ? ` (${customerName})` : ""}`,
             currencyCode: currencyCode || "USD",
             amountCurrency: exp.amount.toFixed(2),
-            fxRateToUsd: "1",
-            amountUsd: exp.amount.toFixed(2),
+            fxRateToUsd: rate,
+            amountUsd: usdAtRate(exp.amount, rate),
           });
         }
 
@@ -606,75 +686,29 @@ export function registerPosSaleWriteRoutes(app: Express) {
           }
         }
 
-        // Step 7: Keep the ERP receipt voucher in step with the cash the edited sale
-        // takes in: update it, post one if the sale now takes cash, or retire it if not.
-        const [existingVoucher, ...staleVouchers] = await findFactoryPosSaleVouchersTx(tx, companyId, saleId);
-        for (const stale of staleVouchers) await retireFactoryPosVoucherTx(tx, companyId, stale.id);
-        const voucherCashAmt = isCredit ? depositAmt : totalAmount;
-        if (!(cashAccountId && voucherCashAmt > 0)) {
-          if (existingVoucher) await retireFactoryPosVoucherTx(tx, companyId, existingVoucher.id);
-        } else {
-          const voucherFields = {
-            voucherDate: txDate || existingSale.txDate,
-            description: `Factory POS Sale ${existingSale.saleNumber}${customerName ? ` – ${customerName}` : ""}`,
-            totalAmount: voucherCashAmt.toFixed(2),
-            currency: currencyCode || "USD",
-          };
-          let vchId: number;
-          if (existingVoucher) {
-            vchId = existingVoucher.id;
-            await tx.update(vouchers).set(voucherFields).where(eq(vouchers.id, vchId));
-            // Replace voucher entries
-            await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, vchId));
-          } else {
-            const [created] = await tx
-              .insert(vouchers)
-              .values({
-                ...voucherFields,
-                companyId,
-                voucherType: "Receipt",
-                voucherNumber: `FPOS-${saleId}-${Date.now()}`,
-                exchangeRate: "1",
-                sourceModule: "FACTORY_POS",
-              })
-              .returning();
-            vchId = created.id;
-          }
-          const netDeposit = Math.max(0, netCash);
-          if (netDeposit > 0) {
-            await tx.insert(voucherEntries).values({
-              voucherId: vchId,
-              ledgerAccountId: parseInt(cashAccountId),
-              debitAmount: netDeposit.toFixed(2),
-              creditAmount: "0",
-              narration: isCredit
-                ? `Deposit on credit sale – ${existingSale.saleNumber}`
-                : `Factory POS cash receipt – ${existingSale.saleNumber}`,
-            });
-          }
-          for (const exp of expenseRows) {
-            await tx.insert(voucherEntries).values({
-              voucherId: vchId,
-              ledgerAccountId: exp.accountId,
-              debitAmount: exp.amount.toFixed(2),
-              creditAmount: "0",
-              narration: exp.description || `POS deduction – ${existingSale.saleNumber}`,
-            });
-          }
-          const salesIncomeAccId = await getOrCreateLedgerAccount(
+        // Step 7: Replace the sale's ledger voucher whole (the legacy
+        // FPOS-{sale}-{timestamp} one included) with FPOS-RCPT-{sale}.
+        await postFactoryPosReceiptTx(
+          tx,
+          postingInput(
             companyId,
-            "FACTORY_BALE_SALES_INCOME",
-            "Factory Bale Sales Income",
-            "Revenue"
-          );
-          await tx.insert(voucherEntries).values({
-            voucherId: vchId,
-            ledgerAccountId: salesIncomeAccId,
-            debitAmount: "0",
-            creditAmount: voucherCashAmt.toFixed(2),
-            narration: `Factory POS sales income – ${existingSale.saleNumber}`,
-          });
-        }
+            { id: saleId, saleNumber: existingSale.saleNumber, txDate: updatedSale.txDate },
+            { customerName, currencyCode, cashAccountId },
+            parsedCustomerId,
+            rate,
+            posting
+          )
+        );
+
+        // The edited sale records the bales it now takes; its cost of sales is
+        // their cost (perpetual inventory, wave 8.4).
+        await recordPosSaleBalesTx(tx, companyId, saleId, soldBaleIds);
+        await postFactoryPosCogsTx(tx, {
+          companyId,
+          saleId,
+          voucherDate: String(updatedSale.txDate),
+          cost: await posSaleBalesCostTx(tx, companyId, saleId),
+        });
 
         return updatedSale;
       });
@@ -682,7 +716,7 @@ export function registerPosSaleWriteRoutes(app: Express) {
       res.json(result);
     } catch (error: unknown) {
       logger.error("Error editing factory POS sale:", { error: error });
-      res.status(400).json({ message: getErrorMessage(error) });
+      sendSaleError(res, error);
     }
   });
 }

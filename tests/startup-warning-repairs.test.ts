@@ -33,9 +33,10 @@ describe("startup warning repairs", () => {
       "ALTER TABLE sp_containers ADD COLUMN goods_otw_voucher_id INTEGER",
       "ALTER TABLE ledger_accounts ADD COLUMN sub_type TEXT",
       "sp-supplier-voucher-sync-schema-v1",
-      "sp-supplier-voucher-sync-trigger-v1",
-      "sp-supplier-voucher-link-repair-v1",
-      "UPDATE vouchers v",
+      // Wave 16 (A): trigger v2 (no rewrite of posted lines) and the reviewed,
+      // company-scoped link repair replace the v1 trigger and global repair.
+      "sp-supplier-voucher-sync-trigger-v2",
+      "sp-supplier-voucher-link-repair-v2",
       "UPDATE voucher_entries ve",
     ]) {
       expect(source).toContain(required);

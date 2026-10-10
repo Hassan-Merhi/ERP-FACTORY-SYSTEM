@@ -87,32 +87,31 @@ export function registerFactoryPayrollDeleteRoutes(app: Express, requireAuth: Re
         await rebuildPayrollGenVoucher(tx, companyId, existing.periodStart, existing.periodEnd, id);
 
         await tx.delete(factoryPayrolls).where(eq(factoryPayrolls.id, id));
-      });
 
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: getClientDate(req),
-        txType: "PAYROLL_DELETED",
-        referenceId: id,
-        referenceTable: "factory_payrolls",
-        description: `Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${toMoney(existing.netSalary).toFixed(2)})`,
-        createdBy: req.session.userId ?? undefined,
-      });
-
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || req.session.userId!,
+        // Wave 7: the deletion's daybook and audit rows commit with it.
+        await writeDaybookEntry(tx, {
           companyId,
-          action: "delete",
-          tableName: "factory_payrolls",
-          recordId: id,
-          recordIdentifier: `Payroll #${id} (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd})`,
-          changes: { status: { old: existing.status, new: "DELETED" } },
+          txDate: getClientDate(req),
+          txType: "PAYROLL_DELETED",
+          referenceId: id,
+          referenceTable: "factory_payrolls",
+          description: `Draft payroll #${id} deleted (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd}, net $${toMoney(existing.netSalary).toFixed(2)})`,
+          createdBy: req.session.userId ?? undefined,
         });
-      } catch (auditErr) {
-        logger.error("[payroll delete audit] non-fatal:", { error: auditErr });
-      }
+        await logAudit(
+          {
+            userId: req.session.userId!,
+            username: req.session.username || req.session.userId!,
+            companyId,
+            action: "delete",
+            tableName: "factory_payrolls",
+            recordId: id,
+            recordIdentifier: `Payroll #${id} (Worker #${existing.workerId}, period ${existing.periodStart}–${existing.periodEnd})`,
+            changes: { status: { old: existing.status, new: "DELETED" } },
+          },
+          tx
+        );
+      });
 
       res.json({ message: "Payroll record deleted" });
     } catch (error: unknown) {

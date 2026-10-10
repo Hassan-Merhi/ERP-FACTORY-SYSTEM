@@ -11,6 +11,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { seedTestData, cleanupTestData, closeTestServer, type TestContext } from "./setup";
 import { pool } from "../server/db";
+import { withFixtureTransaction } from "./helpers/voucherFixtureTransaction";
 
 const TEST_PREFIX = "revroute";
 
@@ -19,26 +20,30 @@ let agent: request.SuperAgentTest;
 let ledgerAccountId: number;
 let bankAccountId: number;
 
+// The voucher and both legs go in one transaction: the voucher balance guard
+// checks the voucher at COMMIT.
 async function createPostedVoucher(amount: string) {
-  const { rows: voucherRows } = await pool.query(
-    `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, optional, currency)
-     VALUES ($1, 'Journal', $2, CURRENT_DATE, 'reversal source', $3, false, 'USD')
-     RETURNING id`,
-    [ctx.companyId, `JV-REV-${Date.now()}-${Math.floor(Math.random() * 1000)}`, amount]
-  );
-  const voucherId = Number(voucherRows[0].id);
+  return withFixtureTransaction(async (client) => {
+    const { rows: voucherRows } = await client.query(
+      `INSERT INTO vouchers (company_id, voucher_type, voucher_number, voucher_date, description, total_amount, optional, currency)
+       VALUES ($1, 'Journal', $2, CURRENT_DATE, 'reversal source', $3, false, 'USD')
+       RETURNING id`,
+      [ctx.companyId, `JV-REV-${Date.now()}-${Math.floor(Math.random() * 1000)}`, amount]
+    );
+    const voucherId = Number(voucherRows[0].id);
 
-  await pool.query(
-    `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, $3, '0', 'debit leg')`,
-    [voucherId, ledgerAccountId, amount]
-  );
-  await pool.query(
-    `INSERT INTO voucher_entries (voucher_id, bank_account_id, debit_amount, credit_amount, narration)
-     VALUES ($1, $2, '0', $3, 'credit leg')`,
-    [voucherId, bankAccountId, amount]
-  );
-  return voucherId;
+    await client.query(
+      `INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, $3, '0', 'debit leg')`,
+      [voucherId, ledgerAccountId, amount]
+    );
+    await client.query(
+      `INSERT INTO voucher_entries (voucher_id, bank_account_id, debit_amount, credit_amount, narration)
+       VALUES ($1, $2, '0', $3, 'credit leg')`,
+      [voucherId, bankAccountId, amount]
+    );
+    return voucherId;
+  });
 }
 
 async function entriesFor(voucherId: number) {
@@ -75,6 +80,17 @@ beforeAll(async () => {
 }, 60000);
 
 afterAll(async () => {
+  // Lines on the bank account go first: voucher_entries.bank_account_id is a
+  // RESTRICT foreign key. Every line of their vouchers goes with them, in one
+  // statement, so no voucher is left one-sided for the voucher balance guard.
+  await pool.query(
+    `DELETE FROM voucher_entries
+      WHERE voucher_id IN (
+        SELECT voucher_id FROM voucher_entries
+         WHERE bank_account_id IN (SELECT id FROM bank_accounts WHERE company_id = $1)
+      )`,
+    [ctx.companyId]
+  );
   await pool.query(`DELETE FROM bank_accounts WHERE company_id = $1`, [ctx.companyId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();

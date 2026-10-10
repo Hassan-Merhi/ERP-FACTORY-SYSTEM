@@ -1,4 +1,9 @@
-import { pool } from "../../db";
+import { db, pool } from "../../db";
+import {
+  customerLedgerNetBefore,
+  loadCustomerNotInLedger,
+} from "../../services/accounting/balances/customerLedgerStatement";
+import { customerOwnedLinePredicate, liveVoucherPredicate } from "../../services/accounting/balances/partyLineRules";
 import {
   ContinuousCursorError,
   continuousCursorScope,
@@ -33,34 +38,49 @@ export async function runCustomerBalanceStatement(options: {
   continuous?: ContinuousWindow;
 }): Promise<StatementPage> {
   const { customerId, companyId, pagination, dates, continuous } = options;
+  // The statement lists the lines the balance engine attributes to the
+  // customer (services/accounting/balances/partyLineRules.ts), so opening +
+  // these rows equals the engine closing: the trial balance's customer row,
+  // /api/customers/stats and the voucher sidebar. Amounts not yet in the
+  // ledger come in a separate `notInLedger` section on the first page/chunk.
   const values: unknown[] = [customerId, companyId];
-  const conditions = ["cb.customer_id = $1", "cb.company_id = $2"];
+  const bindBase = (value: unknown): string => {
+    values.push(value);
+    return `$${values.length}`;
+  };
+  const conditions = [customerOwnedLinePredicate("ve", "$2", "$1"), liveVoucherPredicate("v", "$2")];
   if (dates.rawStart) {
-    values.push(dates.rawStart);
-    conditions.push(`cb.transaction_date >= $${values.length}::date`);
+    conditions.push(`COALESCE(v.effective_date::date, v.voucher_date::date) >= ${bindBase(dates.rawStart)}::date`);
   }
-  values.push(dates.effectiveEndDate);
-  conditions.push(`cb.transaction_date <= $${values.length}::date`);
+  if (dates.effectiveEndDate) {
+    conditions.push(
+      `COALESCE(v.effective_date::date, v.voucher_date::date) <= ${bindBase(dates.effectiveEndDate)}::date`
+    );
+  }
 
   const cte = `filtered AS (
     SELECT
-      cb.id AS "entryId",
-      COALESCE(cb.reference_id, cb.id) AS "voucherId",
-      CASE
-        WHEN cb.reference_type IS NOT NULL
-          THEN cb.reference_type || '-' || COALESCE(cb.reference_id, cb.id)::text
-        ELSE 'CB-' || cb.id::text
-      END AS "voucherNumber",
-      cb.transaction_type AS "voucherType",
-      cb.transaction_date::text AS "voucherDate",
-      COALESCE(cb.description, '') AS "voucherDescription",
-      COALESCE(cb.description, '') AS narration,
-      cb.debit_amount AS "debitAmount",
-      cb.credit_amount AS "creditAmount",
-      cb.currency AS currency,
-      cb.transaction_date AS sort_date,
-      cb.id AS sort_id
-    FROM customer_balances cb
+      ve.id AS "entryId",
+      ve.voucher_id AS "voucherId",
+      v.voucher_number AS "voucherNumber",
+      v.voucher_type AS "voucherType",
+      COALESCE(v.effective_date::date, v.voucher_date::date)::text AS "voucherDate",
+      COALESCE(v.description, '') AS "voucherDescription",
+      COALESCE(ve.narration, v.description, '') AS narration,
+      ve.debit_amount AS "debitAmount",
+      ve.credit_amount AS "creditAmount",
+      ve.transaction_currency AS "transactionCurrency",
+      ve.transaction_debit_amount AS "transactionDebitAmount",
+      ve.transaction_credit_amount AS "transactionCreditAmount",
+      ve.base_debit_amount AS "baseDebitAmount",
+      ve.base_credit_amount AS "baseCreditAmount",
+      ve.historical_exchange_rate AS "historicalExchangeRate",
+      ve.rate_convention AS "rateConvention",
+      v.currency AS currency,
+      COALESCE(v.effective_date::date, v.voucher_date::date) AS sort_date,
+      ve.id AS sort_id
+    FROM voucher_entries ve
+    JOIN vouchers v ON v.id = ve.voucher_id
     WHERE ${conditions.join(" AND ")}
   )`;
   const baseCount = values.length;
@@ -71,21 +91,16 @@ export async function runCustomerBalanceStatement(options: {
       COALESCE(SUM("creditAmount"::numeric), 0)::text AS "creditTotal"
     FROM filtered`;
 
-  const loadPrePeriodNet = async (): Promise<number> => {
-    if (!dates.rawStart) return 0;
-    const preResult = await pool.query(
-      `SELECT COALESCE(
-         SUM(cb.debit_amount::numeric - cb.credit_amount::numeric),
-         0
-       )::text AS net
-       FROM customer_balances cb
-       WHERE cb.customer_id = $1
-         AND cb.company_id = $2
-         AND cb.transaction_date < $3::date`,
-      [customerId, companyId, dates.rawStart]
-    );
-    return Number.parseFloat(preResult.rows[0]?.net || "0") || 0;
-  };
+  // The engine's carried-forward movement before the period (0 without a start).
+  const loadPrePeriodNet = (): Promise<number> =>
+    customerLedgerNetBefore(db, companyId, customerId, dates.rawStart ?? null);
+  const loadNotInLedger = () =>
+    loadCustomerNotInLedger(db, {
+      companyId,
+      customerId,
+      from: dates.rawStart ?? null,
+      to: dates.effectiveEndDate,
+    });
 
   if (continuous) {
     const scope = continuousCursorScope("customer-statement", {
@@ -151,7 +166,7 @@ export async function runCustomerBalanceStatement(options: {
         meta,
       } satisfies CustomerCursor);
     }
-    return buildContinuousResponse({
+    const response = buildContinuousResponse({
       rows,
       summary: summaryFromContinuousMeta(meta),
       prePeriodNet: meta.prePeriodNet,
@@ -162,6 +177,7 @@ export async function runCustomerBalanceStatement(options: {
       hasMore,
       nextCursor,
     });
+    return cursor ? response : { ...response, notInLedger: await loadNotInLedger() };
   }
 
   const pageQuery = `WITH ${cte}
@@ -182,21 +198,25 @@ export async function runCustomerBalanceStatement(options: {
            LIMIT $${baseCount + 1}
          ) previous`;
 
-  const [pageResult, summaryResult, precedingResult, prePeriodNet] = await Promise.all([
+  const [pageResult, summaryResult, precedingResult, prePeriodNet, notInLedger] = await Promise.all([
     pool.query(pageQuery, [...values, pagination.limit, pagination.offset]),
     pool.query(summaryQuery, values),
     precedingQuery
       ? pool.query(precedingQuery, [...values, pagination.offset])
       : Promise.resolve({ rows: [{ net: "0" }] }),
     loadPrePeriodNet(),
+    loadNotInLedger(),
   ]);
   const rows = pageResult.rows.map(({ sort_date: _date, sort_id: _id, ...row }) => row);
-  return buildPageResponse(
-    rows,
-    summaryResult.rows[0],
-    Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
-    prePeriodNet,
-    pagination,
-    dates
-  );
+  return {
+    ...buildPageResponse(
+      rows,
+      summaryResult.rows[0],
+      Number.parseFloat(precedingResult.rows[0]?.net || "0") || 0,
+      prePeriodNet,
+      pagination,
+      dates
+    ),
+    notInLedger,
+  };
 }

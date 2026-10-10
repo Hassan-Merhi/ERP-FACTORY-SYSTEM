@@ -1,59 +1,57 @@
 import { createHash } from "node:crypto";
-import Decimal from "decimal.js";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import {
-  companies,
-  ledgerAccounts,
-  posShifts,
-  retailAccountingSettings,
-  retailPosPayments,
-  retailPosSales,
-} from "@shared/schema";
+import type Decimal from "decimal.js";
+import { and, asc, eq } from "drizzle-orm";
+import { companies, posShifts, retailPosPayments, retailPosSales } from "@shared/schema";
 import type { RetailPaymentMethod } from "@shared/schema/retailPos";
 import type { DbTransaction } from "../../db";
-import { db } from "../../db";
+import { allocateCents, MoneyDecimal, toMoney, type MoneyInput } from "../../lib/money";
 import { postBalancedVoucherTx } from "../accounting/centralPostingEngine";
 import { createDatabasePostingDependencies } from "../accounting/databasePostingDependencies";
+import { companyBusinessDate } from "../accounting/companyBusinessDate";
+
+import {
+  ensureRetailAccountingSettingsTx,
+  type RetailAccountingSettingsResolved,
+} from "./retailAccountingSettingsService";
+
+// The Retail accounting settings (defaults, conflicts, save) live in
+// retailAccountingSettingsService.ts; re-exported for existing importers.
+export {
+  ensureRetailAccountingSettingsTx,
+  getRetailAccountingSettings,
+  RetailAccountConflictError,
+  saveRetailAccountingSettings,
+  type RetailAccountConflict,
+  type RetailAccountingSettingsPatch,
+  type RetailAccountingSettingsResolved,
+} from "./retailAccountingSettingsService";
 
 const postingDependencies = createDatabasePostingDependencies();
-const EPSILON = new Decimal("0.000001");
+const EPSILON = new MoneyDecimal("0.000001");
 
+/**
+ * Money is exact end to end (wave 17 C): request amounts arrive as numbers or
+ * strings and are read once into a Decimal; nothing here passes through a
+ * binary float.
+ */
 export interface RetailPaymentInput {
   method: RetailPaymentMethod;
-  amount: number;
-  tenderedAmount?: number | null;
+  amount: Decimal.Value;
+  tenderedAmount?: Decimal.Value | null;
   reference?: string | null;
 }
 
 export interface RetailResolvedPayment {
   id: number;
   method: RetailPaymentMethod;
-  amount: number;
-  tenderedAmount: number | null;
-  changeAmount: number;
+  amount: Decimal;
+  tenderedAmount: Decimal | null;
+  changeAmount: Decimal;
   reference: string | null;
   ledgerAccountId: number | null;
   bankAccountId: number | null;
   shiftId: number | null;
   paymentType: string;
-}
-
-export interface RetailAccountingSettingsResolved {
-  id: number;
-  companyId: number;
-  locationId: number | null;
-  cashLedgerAccountId: number;
-  cardLedgerAccountId: number;
-  bankLedgerAccountId: number;
-  bankAccountId: number | null;
-  mobileLedgerAccountId: number;
-  otherLedgerAccountId: number;
-  salesRevenueLedgerAccountId: number;
-  inventoryAssetLedgerAccountId: number;
-  cogsLedgerAccountId: number;
-  discountsLedgerAccountId: number;
-  taxPayableLedgerAccountId: number;
-  storeCreditLedgerAccountId: number;
 }
 
 /**
@@ -66,21 +64,49 @@ export function deriveRetailIdempotencyKey(base: string, suffix: string): string
   return `${createHash("sha256").update(base).digest("hex")}:${suffix}`;
 }
 
+/** An exact Decimal for a money input; a value that is not a finite number is refused. */
+function exactMoney(value: MoneyInput, label: string): Decimal {
+  let parsed: Decimal;
+  try {
+    parsed = new MoneyDecimal(value ?? 0);
+  } catch {
+    throw new Error(`${label} is not a valid amount`);
+  }
+  if (!parsed.isFinite()) throw new Error(`${label} is not a valid amount`);
+  return parsed;
+}
+
 function money(value: Decimal.Value): string {
-  return new Decimal(value).toDecimalPlaces(6).toFixed(6);
+  return new MoneyDecimal(value).toDecimalPlaces(6).toFixed(6);
 }
 
-function accountingMoney(value: Decimal.Value): string {
-  return new Decimal(value).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2);
+function accountingMoney(value: Decimal.Value): Decimal {
+  return new MoneyDecimal(value).toDecimalPlaces(2, MoneyDecimal.ROUND_HALF_UP);
 }
 
-function allocateAccountingAmounts(amounts: number[], targetTotal: Decimal.Value): string[] {
-  if (!amounts.length) return [];
-  const rounded = amounts.map((amount) => new Decimal(accountingMoney(amount)));
-  const target = new Decimal(accountingMoney(targetTotal));
-  const current = rounded.reduce((sum, amount) => sum.plus(amount), new Decimal(0));
-  rounded[rounded.length - 1] = rounded[rounded.length - 1].plus(target.minus(current));
-  return rounded.map((amount) => amount.toFixed(2));
+/** The tax included in an amount, in cents: never negative and never more than the amount. */
+function includedTax(total: Decimal, tax: MoneyInput | undefined, label: string): Decimal {
+  const taxAmount = accountingMoney(exactMoney(tax ?? 0, label));
+  return MoneyDecimal.min(total, MoneyDecimal.max(0, taxAmount));
+}
+
+/**
+ * Splits a voucher amount (cents) across payment lines in proportion to the
+ * payments, by largest remainder (allocateCents): the shares add up to the
+ * amount exactly and none is negative. The old split rounded each payment and
+ * pushed the whole difference onto the last line, which could turn it
+ * negative. A payment whose share rounds to zero gets no line.
+ */
+function allocatePaymentLines<T extends { amount: Decimal }>(
+  payments: T[],
+  targetTotal: Decimal
+): { payment: T; amount: Decimal }[] {
+  if (!payments.length) return [];
+  const shares = allocateCents(
+    payments.map((payment) => payment.amount),
+    accountingMoney(targetTotal)
+  );
+  return payments.map((payment, index) => ({ payment, amount: shares[index] })).filter((line) => line.amount.gt(0));
 }
 
 async function companyCurrency(tx: DbTransaction, companyId: number): Promise<string> {
@@ -92,204 +118,6 @@ async function companyCurrency(tx: DbTransaction, companyId: number): Promise<st
   return String(company?.baseCurrency || "USD")
     .slice(0, 3)
     .toUpperCase();
-}
-
-function toNumber(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-async function ensureLedgerAccount(
-  tx: DbTransaction,
-  companyId: number,
-  code: string,
-  name: string,
-  accountType: string,
-  subType?: string
-): Promise<number> {
-  const [existing] = await tx
-    .select({ id: ledgerAccounts.id, deletedAt: ledgerAccounts.deletedAt })
-    .from(ledgerAccounts)
-    .where(and(eq(ledgerAccounts.companyId, companyId), eq(ledgerAccounts.code, code)))
-    .limit(1);
-  if (existing) {
-    await tx
-      .update(ledgerAccounts)
-      .set({
-        name,
-        accountType,
-        subType: subType ?? null,
-        active: true,
-        deletedAt: null,
-      })
-      .where(eq(ledgerAccounts.id, existing.id));
-    return existing.id;
-  }
-
-  const [created] = await tx
-    .insert(ledgerAccounts)
-    .values({
-      companyId,
-      code,
-      name,
-      accountType,
-      subType: subType ?? null,
-      active: true,
-    })
-    .returning({ id: ledgerAccounts.id });
-  if (!created) throw new Error(`Could not resolve Retail accounting account ${code}`);
-  return created.id;
-}
-
-async function defaultRetailAccountIds(tx: DbTransaction, companyId: number) {
-  const [
-    cashLedgerAccountId,
-    cardLedgerAccountId,
-    bankLedgerAccountId,
-    mobileLedgerAccountId,
-    otherLedgerAccountId,
-    salesRevenueLedgerAccountId,
-    inventoryAssetLedgerAccountId,
-    cogsLedgerAccountId,
-    discountsLedgerAccountId,
-    taxPayableLedgerAccountId,
-    storeCreditLedgerAccountId,
-  ] = await Promise.all([
-    ensureLedgerAccount(tx, companyId, "RETAIL-CASH", "Retail Cash", "Cash"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-CARD", "Retail Card Clearing", "Asset"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-BANK", "Retail Bank Clearing", "Asset"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-MOBILE", "Retail Mobile Clearing", "Asset"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-OTHER", "Retail Other Clearing", "Asset"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-SALES", "Retail Sales Revenue", "Income", "Direct Income"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-INVENTORY", "Retail Inventory Asset", "Asset"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-COGS", "Retail Cost of Goods Sold", "Direct Expense"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-DISCOUNTS", "Retail Discounts", "Expense"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-TAX", "Retail Tax Payable", "Liability"),
-    ensureLedgerAccount(tx, companyId, "RETAIL-STORE-CREDIT", "Retail Store Credit", "Liability"),
-  ]);
-  return {
-    cashLedgerAccountId,
-    cardLedgerAccountId,
-    bankLedgerAccountId,
-    mobileLedgerAccountId,
-    otherLedgerAccountId,
-    salesRevenueLedgerAccountId,
-    inventoryAssetLedgerAccountId,
-    cogsLedgerAccountId,
-    discountsLedgerAccountId,
-    taxPayableLedgerAccountId,
-    storeCreditLedgerAccountId,
-  };
-}
-
-export async function ensureRetailAccountingSettingsTx(
-  tx: DbTransaction,
-  companyId: number,
-  locationId?: number | null
-): Promise<RetailAccountingSettingsResolved> {
-  const generated = await defaultRetailAccountIds(tx, companyId);
-  let [defaultRow] = await tx
-    .select()
-    .from(retailAccountingSettings)
-    .where(and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId)))
-    .limit(1);
-
-  if (!defaultRow) {
-    [defaultRow] = await tx
-      .insert(retailAccountingSettings)
-      .values({ companyId, locationId: null, ...generated })
-      .onConflictDoNothing()
-      .returning();
-    if (!defaultRow) {
-      [defaultRow] = await tx
-        .select()
-        .from(retailAccountingSettings)
-        .where(and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId)))
-        .limit(1);
-    }
-  }
-  if (!defaultRow) throw new Error("Retail accounting settings could not be created");
-
-  let current = defaultRow;
-  if (locationId) {
-    const [specific] = await tx
-      .select()
-      .from(retailAccountingSettings)
-      .where(
-        and(eq(retailAccountingSettings.companyId, companyId), eq(retailAccountingSettings.locationId, locationId))
-      )
-      .limit(1);
-    if (specific) {
-      current = specific;
-    } else {
-      const [createdSpecific] = await tx
-        .insert(retailAccountingSettings)
-        .values({
-          companyId,
-          locationId,
-          cashLedgerAccountId: defaultRow.cashLedgerAccountId,
-          cardLedgerAccountId: defaultRow.cardLedgerAccountId,
-          bankLedgerAccountId: defaultRow.bankLedgerAccountId,
-          bankAccountId: defaultRow.bankAccountId,
-          mobileLedgerAccountId: defaultRow.mobileLedgerAccountId,
-          otherLedgerAccountId: defaultRow.otherLedgerAccountId,
-          salesRevenueLedgerAccountId: defaultRow.salesRevenueLedgerAccountId,
-          inventoryAssetLedgerAccountId: defaultRow.inventoryAssetLedgerAccountId,
-          cogsLedgerAccountId: defaultRow.cogsLedgerAccountId,
-          discountsLedgerAccountId: defaultRow.discountsLedgerAccountId,
-          taxPayableLedgerAccountId: defaultRow.taxPayableLedgerAccountId,
-          storeCreditLedgerAccountId: defaultRow.storeCreditLedgerAccountId,
-        })
-        .onConflictDoNothing()
-        .returning();
-      current =
-        createdSpecific ??
-        (
-          await tx
-            .select()
-            .from(retailAccountingSettings)
-            .where(
-              and(
-                eq(retailAccountingSettings.companyId, companyId),
-                eq(retailAccountingSettings.locationId, locationId)
-              )
-            )
-            .limit(1)
-        )[0];
-    }
-  }
-  if (!current) throw new Error("Retail accounting settings could not be resolved");
-
-  const patch = {
-    cashLedgerAccountId: current.cashLedgerAccountId ?? generated.cashLedgerAccountId,
-    cardLedgerAccountId: current.cardLedgerAccountId ?? generated.cardLedgerAccountId,
-    bankLedgerAccountId: current.bankLedgerAccountId ?? generated.bankLedgerAccountId,
-    mobileLedgerAccountId: current.mobileLedgerAccountId ?? generated.mobileLedgerAccountId,
-    otherLedgerAccountId: current.otherLedgerAccountId ?? generated.otherLedgerAccountId,
-    salesRevenueLedgerAccountId: current.salesRevenueLedgerAccountId ?? generated.salesRevenueLedgerAccountId,
-    inventoryAssetLedgerAccountId: current.inventoryAssetLedgerAccountId ?? generated.inventoryAssetLedgerAccountId,
-    cogsLedgerAccountId: current.cogsLedgerAccountId ?? generated.cogsLedgerAccountId,
-    discountsLedgerAccountId: current.discountsLedgerAccountId ?? generated.discountsLedgerAccountId,
-    taxPayableLedgerAccountId: current.taxPayableLedgerAccountId ?? generated.taxPayableLedgerAccountId,
-    storeCreditLedgerAccountId: current.storeCreditLedgerAccountId ?? generated.storeCreditLedgerAccountId,
-  };
-  if (
-    Object.entries(patch).some(([key, value]) => (current as Record<string, unknown>)[key] == null && value != null)
-  ) {
-    [current] = await tx
-      .update(retailAccountingSettings)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(eq(retailAccountingSettings.id, current.id))
-      .returning();
-  }
-
-  return {
-    id: current.id,
-    companyId,
-    locationId: current.locationId ?? null,
-    ...patch,
-    bankAccountId: current.bankAccountId ?? null,
-  };
 }
 
 export async function validateRetailShiftTx(
@@ -316,32 +144,65 @@ export async function validateRetailShiftTx(
   return shift;
 }
 
-function normalizePayments(totalAmount: number, requested?: RetailPaymentInput[]): RetailPaymentInput[] {
-  const total = new Decimal(totalAmount);
+interface NormalizedPayment {
+  method: RetailPaymentMethod;
+  amount: Decimal;
+  tenderedAmount: Decimal | null;
+  reference?: string | null;
+}
+
+function normalizePayments(total: Decimal, requested?: RetailPaymentInput[]): NormalizedPayment[] {
   if (total.isNegative()) throw new Error("Retail sale total cannot be negative");
   if (total.isZero()) return [];
-  const payments = requested?.length ? requested : [{ method: "cash" as const, amount: total.toNumber() }];
-  let sum = new Decimal(0);
+  const payments: RetailPaymentInput[] = requested?.length ? requested : [{ method: "cash", amount: total }];
+  let sum = new MoneyDecimal(0);
+  const normalized: NormalizedPayment[] = [];
   for (const payment of payments) {
     if (!["cash", "card", "bank", "mobile", "other"].includes(payment.method)) {
       throw new Error(`Unsupported Retail payment method: ${payment.method}`);
     }
-    const amount = new Decimal(payment.amount);
-    if (!amount.isFinite() || !amount.isPositive()) throw new Error("Every Retail payment amount must be positive");
-    if (payment.method === "cash" && payment.tenderedAmount != null) {
-      const tendered = new Decimal(payment.tenderedAmount);
-      if (!tendered.isFinite() || tendered.lessThan(amount)) {
+    const amount = exactMoney(payment.amount, "Retail payment amount");
+    if (!amount.isPositive() || amount.isZero()) throw new Error("Every Retail payment amount must be positive");
+    let tendered: Decimal | null = null;
+    if (payment.tenderedAmount != null) {
+      tendered = exactMoney(payment.tenderedAmount, "Cash tendered");
+      if (payment.method === "cash" && tendered.lessThan(amount)) {
         throw new Error("Cash tendered cannot be less than the cash payment amount");
       }
     }
     sum = sum.plus(amount);
+    normalized.push({ method: payment.method, amount, tenderedAmount: tendered, reference: payment.reference });
   }
   if (sum.minus(total).abs().greaterThan(EPSILON)) {
     throw new Error(`Retail payments (${sum.toFixed(2)}) must equal sale total (${total.toFixed(2)})`);
   }
-  return payments;
+  return normalized;
 }
 
+/** A stored payment row as the service returns it (amounts exact). */
+function resolvedPayment(row: typeof retailPosPayments.$inferSelect): RetailResolvedPayment {
+  return {
+    id: row.id,
+    method: row.method as RetailPaymentMethod,
+    amount: toMoney(row.amount),
+    tenderedAmount: row.tenderedAmount == null ? null : toMoney(row.tenderedAmount),
+    changeAmount: toMoney(row.changeAmount),
+    reference: row.reference ?? null,
+    ledgerAccountId: row.ledgerAccountId ?? null,
+    bankAccountId: row.bankAccountId ?? null,
+    shiftId: row.shiftId ?? null,
+    paymentType: row.paymentType,
+  };
+}
+
+/**
+ * A payment line's target. A bank payment posts to the bank account alone
+ * (bank_account_id, no ledger account), as the other bank postings do (POS
+ * sales, central payments): the balance engine attributes a line to its
+ * ledger account first, then its bank (partyLineRules.ts), so a bank-only
+ * line is the bank's row in the trial balance; adding the clearing ledger to
+ * it would move the line off the bank.
+ */
 function paymentTarget(
   settings: RetailAccountingSettingsResolved,
   method: RetailPaymentMethod,
@@ -367,10 +228,10 @@ export async function settleRetailSaleTx(
     locationId: number;
     saleId: number;
     saleIdempotencyKey: string;
-    totalAmount: number;
+    totalAmount: Decimal.Value;
     /** Tax included in totalAmount; credited to tax payable instead of revenue. */
-    taxAmount?: number;
-    totalCost: number;
+    taxAmount?: Decimal.Value;
+    totalCost: Decimal.Value;
     userId: string;
     username?: string | null;
     shiftId?: number | null;
@@ -379,14 +240,17 @@ export async function settleRetailSaleTx(
 ): Promise<{ payments: RetailResolvedPayment[]; voucherId: number | null }> {
   const shift = await validateRetailShiftTx(tx, input);
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
-  const requested = normalizePayments(input.totalAmount, input.payments);
+  const saleTotal = exactMoney(input.totalAmount, "Retail sale total");
+  const totalCost = exactMoney(input.totalCost, "Retail sale cost");
+  const requested = normalizePayments(saleTotal, input.payments);
   const resolved: RetailResolvedPayment[] = [];
 
   for (const [index, payment] of requested.entries()) {
     const target = paymentTarget(settings, payment.method, shift?.cashAccountId ?? null);
-    const amount = new Decimal(payment.amount);
-    const tendered = payment.tenderedAmount == null ? null : new Decimal(payment.tenderedAmount);
-    const change = payment.method === "cash" && tendered ? Decimal.max(0, tendered.minus(amount)) : new Decimal(0);
+    const amount = payment.amount;
+    const tendered = payment.tenderedAmount;
+    const change =
+      payment.method === "cash" && tendered ? MoneyDecimal.max(0, tendered.minus(amount)) : new MoneyDecimal(0);
     const key = deriveRetailIdempotencyKey(input.saleIdempotencyKey, `payment:${index}`);
     const [inserted] = await tx
       .insert(retailPosPayments)
@@ -418,38 +282,21 @@ export async function settleRetailSaleTx(
           .limit(1)
       )[0];
     if (!row) throw new Error("Retail payment could not be persisted");
-    resolved.push({
-      id: row.id,
-      method: row.method as RetailPaymentMethod,
-      amount: toNumber(row.amount),
-      tenderedAmount: row.tenderedAmount == null ? null : toNumber(row.tenderedAmount),
-      changeAmount: toNumber(row.changeAmount),
-      reference: row.reference ?? null,
-      ledgerAccountId: row.ledgerAccountId ?? null,
-      bankAccountId: row.bankAccountId ?? null,
-      shiftId: row.shiftId ?? null,
-      paymentType: row.paymentType,
-    });
+    resolved.push(resolvedPayment(row));
   }
 
-  const saleTotal = new Decimal(input.totalAmount);
-  const totalCost = new Decimal(input.totalCost);
   if (saleTotal.isZero() && totalCost.isZero()) return { payments: resolved, voucherId: null };
 
-  const saleAccountingAmount = new Decimal(accountingMoney(saleTotal));
-  const costAccountingAmount = new Decimal(accountingMoney(totalCost));
-  const taxAccountingAmount = Decimal.min(saleAccountingAmount, new Decimal(accountingMoney(input.taxAmount ?? 0)));
+  const saleAccountingAmount = accountingMoney(saleTotal);
+  const costAccountingAmount = accountingMoney(totalCost);
+  const taxAccountingAmount = includedTax(saleAccountingAmount, input.taxAmount, "Retail sale tax");
   const revenueAccountingAmount = saleAccountingAmount.minus(taxAccountingAmount);
-  const paymentAccountingAmounts = allocateAccountingAmounts(
-    resolved.map((payment) => payment.amount),
-    saleAccountingAmount
-  );
   const entries = [
-    ...resolved.map((payment, index) => ({
+    ...allocatePaymentLines(resolved, saleAccountingAmount).map(({ payment, amount }) => ({
       ...(payment.bankAccountId
         ? { bankAccountId: payment.bankAccountId }
         : { ledgerAccountId: payment.ledgerAccountId }),
-      debitAmount: paymentAccountingAmounts[index],
+      debitAmount: amount.toFixed(2),
       creditAmount: "0",
       narration: `Retail sale #${input.saleId} · ${payment.method}`,
     })),
@@ -500,7 +347,8 @@ export async function settleRetailSaleTx(
         companyId: input.companyId,
         voucherNumber: `RETAIL-SALE-${input.saleId}`,
         voucherType: "Journal",
-        voucherDate: new Date().toISOString().slice(0, 10),
+        // The company's business date (its timezone), not the UTC date.
+        voucherDate: await companyBusinessDate(input.companyId, tx),
         totalAmount: debitTotal.toFixed(2),
         description: `Retail POS sale #${input.saleId}`,
         locationId: input.locationId,
@@ -531,12 +379,12 @@ export async function refundRetailPaymentsTx(
     saleId: number;
     locationId: number;
     shiftId?: number | null;
-    refundAmount: number;
+    refundAmount: Decimal.Value;
     idempotencyKey: string;
     userId: string;
   }
 ): Promise<RetailResolvedPayment[]> {
-  let remaining = new Decimal(input.refundAmount);
+  let remaining = exactMoney(input.refundAmount, "Retail refund amount");
   if (remaining.lessThanOrEqualTo(0)) return [];
   let payments = await tx
     .select()
@@ -560,8 +408,8 @@ export async function refundRetailPaymentsTx(
       .where(and(eq(retailPosSales.companyId, input.companyId), eq(retailPosSales.id, input.saleId)))
       .limit(1);
     if (!sale) throw new Error("Retail sale not found");
-    const legacyTotal = new Decimal(sale.totalAmount ?? 0);
-    if (legacyTotal.lessThan(input.refundAmount)) {
+    const legacyTotal = toMoney(sale.totalAmount);
+    if (legacyTotal.lessThan(remaining)) {
       throw new Error("Original Retail sale does not have enough paid value to refund");
     }
     const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
@@ -613,16 +461,16 @@ export async function refundRetailPaymentsTx(
     if (!row.relatedPaymentId) continue;
     refundedByPayment.set(
       row.relatedPaymentId,
-      (refundedByPayment.get(row.relatedPaymentId) ?? new Decimal(0)).plus(row.amount)
+      (refundedByPayment.get(row.relatedPaymentId) ?? new MoneyDecimal(0)).plus(toMoney(row.amount))
     );
   }
 
   const created: RetailResolvedPayment[] = [];
   for (const original of payments) {
     if (remaining.lessThanOrEqualTo(EPSILON)) break;
-    const available = Decimal.max(0, new Decimal(original.amount).minus(refundedByPayment.get(original.id) ?? 0));
+    const available = MoneyDecimal.max(0, toMoney(original.amount).minus(refundedByPayment.get(original.id) ?? 0));
     if (available.isZero()) continue;
-    const amount = Decimal.min(available, remaining);
+    const amount = MoneyDecimal.min(available, remaining);
     const key = deriveRetailIdempotencyKey(input.idempotencyKey, `refund:${original.id}`);
     const [inserted] = await tx
       .insert(retailPosPayments)
@@ -656,18 +504,7 @@ export async function refundRetailPaymentsTx(
           .limit(1)
       )[0];
     if (!row) throw new Error("Retail refund payment could not be persisted");
-    created.push({
-      id: row.id,
-      method: row.method as RetailPaymentMethod,
-      amount: toNumber(row.amount),
-      tenderedAmount: null,
-      changeAmount: 0,
-      reference: row.reference ?? null,
-      ledgerAccountId: row.ledgerAccountId ?? null,
-      bankAccountId: row.bankAccountId ?? null,
-      shiftId: row.shiftId ?? null,
-      paymentType: row.paymentType,
-    });
+    created.push(resolvedPayment(row));
     remaining = remaining.minus(amount);
   }
   if (remaining.greaterThan(EPSILON)) {
@@ -685,10 +522,10 @@ export async function postRetailRefundAccountingTx(
     sourceType: "retail-pos-return" | "retail-pos-cancel";
     sourceId: string;
     idempotencyKey: string;
-    refundAmount: number;
+    refundAmount: Decimal.Value;
     /** Tax included in refundAmount; debited to tax payable instead of revenue. */
-    refundTaxAmount?: number;
-    restoredCost: number;
+    refundTaxAmount?: Decimal.Value;
+    restoredCost: Decimal.Value;
     refunds: RetailResolvedPayment[];
     userId: string;
     username?: string | null;
@@ -704,21 +541,14 @@ export async function postRetailRefundAccountingTx(
   // refund safe; reconciliation continues to flag the missing historical journal.
   if (!originalSale?.accountingVoucherId) return null;
 
-  const refundTotal = new Decimal(input.refundAmount);
-  const restoredCost = new Decimal(input.restoredCost);
+  const refundTotal = exactMoney(input.refundAmount, "Retail refund amount");
+  const restoredCost = exactMoney(input.restoredCost, "Retail restored cost");
   if (refundTotal.isZero() && restoredCost.isZero()) return null;
   const settings = await ensureRetailAccountingSettingsTx(tx, input.companyId, input.locationId);
-  const refundAccountingAmount = new Decimal(accountingMoney(refundTotal));
-  const restoredCostAccountingAmount = new Decimal(accountingMoney(restoredCost));
-  const refundTaxAccountingAmount = Decimal.min(
-    refundAccountingAmount,
-    new Decimal(accountingMoney(input.refundTaxAmount ?? 0))
-  );
+  const refundAccountingAmount = accountingMoney(refundTotal);
+  const restoredCostAccountingAmount = accountingMoney(restoredCost);
+  const refundTaxAccountingAmount = includedTax(refundAccountingAmount, input.refundTaxAmount, "Retail refund tax");
   const refundRevenueAccountingAmount = refundAccountingAmount.minus(refundTaxAccountingAmount);
-  const refundPaymentAccountingAmounts = allocateAccountingAmounts(
-    input.refunds.map((payment) => payment.amount),
-    refundAccountingAmount
-  );
   const entries = [
     ...(refundAccountingAmount.isZero()
       ? []
@@ -743,12 +573,12 @@ export async function postRetailRefundAccountingTx(
                   narration: `Retail sale #${input.saleId} · refund tax reversal`,
                 },
               ]),
-          ...input.refunds.map((payment, index) => ({
+          ...allocatePaymentLines(input.refunds, refundAccountingAmount).map(({ payment, amount }) => ({
             ...(payment.bankAccountId
               ? { bankAccountId: payment.bankAccountId }
               : { ledgerAccountId: payment.ledgerAccountId }),
             debitAmount: "0",
-            creditAmount: refundPaymentAccountingAmounts[index],
+            creditAmount: amount.toFixed(2),
             narration: `Retail sale #${input.saleId} · ${payment.method} refund`,
           })),
         ]),
@@ -778,7 +608,7 @@ export async function postRetailRefundAccountingTx(
         companyId: input.companyId,
         voucherNumber: `RETAIL-${input.sourceType === "retail-pos-cancel" ? "CANCEL" : "RETURN"}-${input.sourceId}`,
         voucherType: "Journal",
-        voucherDate: new Date().toISOString().slice(0, 10),
+        voucherDate: await companyBusinessDate(input.companyId, tx),
         totalAmount: total.toFixed(2),
         description:
           input.sourceType === "retail-pos-cancel"
@@ -799,40 +629,4 @@ export async function postRetailRefundAccountingTx(
     postingDependencies
   );
   return posted.voucher.id;
-}
-
-export async function getRetailAccountingSettings(companyId: number, locationId?: number | null) {
-  return db.transaction((tx) => ensureRetailAccountingSettingsTx(tx, companyId, locationId));
-}
-
-export async function saveRetailAccountingSettings(
-  companyId: number,
-  locationId: number | null,
-  patch: Partial<{
-    cashLedgerAccountId: number | null;
-    cardLedgerAccountId: number | null;
-    bankLedgerAccountId: number | null;
-    bankAccountId: number | null;
-    mobileLedgerAccountId: number | null;
-    otherLedgerAccountId: number | null;
-    salesRevenueLedgerAccountId: number | null;
-    inventoryAssetLedgerAccountId: number | null;
-    cogsLedgerAccountId: number | null;
-    discountsLedgerAccountId: number | null;
-    taxPayableLedgerAccountId: number | null;
-    storeCreditLedgerAccountId: number | null;
-  }>
-) {
-  return db.transaction(async (tx) => {
-    await ensureRetailAccountingSettingsTx(tx, companyId, locationId);
-    const condition = locationId
-      ? and(eq(retailAccountingSettings.companyId, companyId), eq(retailAccountingSettings.locationId, locationId))
-      : and(eq(retailAccountingSettings.companyId, companyId), isNull(retailAccountingSettings.locationId));
-    const [updated] = await tx
-      .update(retailAccountingSettings)
-      .set({ ...patch, updatedAt: new Date() })
-      .where(condition)
-      .returning();
-    return updated;
-  });
 }

@@ -27,6 +27,10 @@ const po = {
   freightOwnAccountId: null,
 };
 
+// Perpetual inventory journals are covered by their own suite; this harness has no SQL executor.
+vi.mock("../server/services/accounting/perpetualInventory/stockReceipts", () => ({
+  syncPurchaseOrderGitTx: async () => null,
+}));
 vi.mock("../server/auth", () => {
   const pass = (_q: unknown, _s: unknown, next: () => void) => next();
   return { requireAuth: pass, requireRole: () => pass };
@@ -50,10 +54,15 @@ vi.mock("../server/db", async () => {
       { id: 2, ledgerAccountId: 20, debitAmount: "0", creditAmount: "100.00" },
     ],
     containers: [{ containerNumber: "C3" }],
+    // Wave 7: the edit locks and re-reads the PO inside its one transaction
+    // (a getter: the mock factory runs before `po` is initialised).
+    get purchase_orders() {
+      return [po];
+    },
   };
   const chain = (value: unknown) => {
     const q: Record<string, unknown> = {};
-    for (const step of ["where", "limit", "returning"]) q[step] = () => q;
+    for (const step of ["where", "limit", "returning", "for"]) q[step] = () => q;
     q.then = (resolve: (v: unknown) => unknown, reject: (r: unknown) => unknown) =>
       Promise.resolve(value).then(resolve, reject);
     return q;

@@ -20,6 +20,8 @@ import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./po
 import { allocateRetailBarcodes } from "../services/retail/retailBarcodeService";
 import { getOrCreateBrand } from "../services/retail/retailBrands";
 import { addMovement, lockInventoryRow, setInventoryQuantity } from "../services/retail/retailStockLedger";
+import { RETAIL_GRNI_ACCOUNT, trackRetailStockValueTx } from "../services/retail/retailInventoryJournal";
+import { lineAmount } from "../lib/money";
 
 const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
 const toNumber = (value: unknown) => {
@@ -302,6 +304,10 @@ export function registerRetailFashionRoutes(app: Express): void {
           variantIds.push(created.id);
 
           const stock = await lockInventoryRow(tx, companyId, created.id, input.locationId);
+          // Wave 17 (D): the intake is journalled (Dr Retail inventory / Cr RETAIL-GRNI) once the opening is applied.
+          const stockValue = await trackRetailStockValueTx(tx, companyId, [
+            { variantId: created.id, locationId: input.locationId },
+          ]);
           const after = stock.quantity + variant.quantity;
           await setInventoryQuantity(tx, companyId, created.id, input.locationId, after, variant.cost);
           if (variant.quantity > 0) {
@@ -320,6 +326,19 @@ export function registerRetailFashionRoutes(app: Express): void {
               metadata: { reason: "New item intake", productId, barcode },
             });
           }
+          await stockValue.post({
+            kind: "intake",
+            sourceId: `${operation.id}-${created.id}`,
+            description: `Retail new item intake #${operation.id} · variant ${created.id}`,
+            actor: { userId, username: req.user?.username ?? null },
+            contra: [
+              {
+                accountCode: RETAIL_GRNI_ACCOUNT,
+                amount: lineAmount(variant.quantity, variant.cost).negated(),
+                narration: `Retail new item intake #${operation.id} · received not invoiced`,
+              },
+            ],
+          });
         }
 
         await tx

@@ -54,6 +54,11 @@ export function createSchedulerTick(
       // Scheduled jobs are process-owned rather than request-owned. They may
       // legitimately enumerate multiple companies, but that access must be an
       // explicit maintenance capability now that missing RLS scope fails closed.
+      // Maintenance scope bypasses the closed-period guard and the opening lock,
+      // so jobs that write vouchers (recurring journals, rental accruals and
+      // scheduled payments, factory stock journal) only list companies here and
+      // post each company in its tenant scope (accounting/scheduledPostingScope.ts,
+      // wave 18 A).
       await runWithDatabaseMaintenanceScope(`scheduler:${action}`, run);
       if (!options.quiet) {
         logger.info(`cron ${action} succeeded`, {

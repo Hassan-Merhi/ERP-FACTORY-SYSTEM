@@ -1,4 +1,4 @@
-import { db } from "../../db";
+import { db, type DatabaseOrTransaction } from "../../db";
 import { logger } from "../../lib/logger";
 import {
   auditLog,
@@ -123,13 +123,15 @@ export async function snapshotVoucherEntries(
     debitAmount?: string | null;
     creditAmount?: string | null;
     narration?: string | null;
-  }>
+  }>,
+  // Wave 12: an audit written in a transaction resolves names on that transaction.
+  reader: DatabaseOrTransaction = db
 ): Promise<EntrySnap[]> {
   // Resolve ledger account names
   const ledgerIds = [...new Set(entries.map((e) => e.ledgerAccountId).filter((id): id is number => id != null))];
   const ledgerNames: Record<number, string> = {};
   if (ledgerIds.length > 0) {
-    const accts = await db
+    const accts = await reader
       .select({ id: ledgerAccounts.id, name: ledgerAccounts.name })
       .from(ledgerAccounts)
       .where(inArray(ledgerAccounts.id, ledgerIds));
@@ -142,7 +144,7 @@ export async function snapshotVoucherEntries(
   const bankIds = [...new Set(entries.map((e) => e.bankAccountId).filter((id): id is number => id != null))];
   const bankNames: Record<number, string> = {};
   if (bankIds.length > 0) {
-    const bnks = await db
+    const bnks = await reader
       .select({ id: bankAccounts.id, name: bankAccounts.name })
       .from(bankAccounts)
       .where(inArray(bankAccounts.id, bankIds));
@@ -155,7 +157,7 @@ export async function snapshotVoucherEntries(
   const supplierIds = [...new Set(entries.map((e) => e.supplierId).filter((id): id is number => id != null))];
   const supplierNames: Record<number, string> = {};
   if (supplierIds.length > 0) {
-    const supps = await db
+    const supps = await reader
       .select({ id: suppliers.id, name: suppliers.legalName })
       .from(suppliers)
       .where(inArray(suppliers.id, supplierIds));
@@ -168,7 +170,7 @@ export async function snapshotVoucherEntries(
   const employeeIds = [...new Set(entries.map((e) => e.employeeId).filter((id): id is number => id != null))];
   const employeeNames: Record<number, string> = {};
   if (employeeIds.length > 0) {
-    const emps = await db
+    const emps = await reader
       .select({ id: employees.id, firstName: employees.firstName, lastName: employees.lastName })
       .from(employees)
       .where(inArray(employees.id, employeeIds));
@@ -181,7 +183,7 @@ export async function snapshotVoucherEntries(
   const customerIds = [...new Set(entries.map((e) => e.customerId).filter((id): id is number => id != null))];
   const customerNames: Record<number, string> = {};
   if (customerIds.length > 0) {
-    const custs = await db
+    const custs = await reader
       .select({ id: customers.id, name: customers.legalName })
       .from(customers)
       .where(inArray(customers.id, customerIds));
@@ -196,7 +198,7 @@ export async function snapshotVoucherEntries(
   ];
   const factorySupplierNames: Record<number, string> = {};
   if (factorySupplierIds.length > 0) {
-    const fsupps = await db
+    const fsupps = await reader
       .select({ id: factorySuppliers.id, name: factorySuppliers.name })
       .from(factorySuppliers)
       .where(inArray(factorySuppliers.id, factorySupplierIds));

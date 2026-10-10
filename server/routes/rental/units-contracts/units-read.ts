@@ -8,8 +8,7 @@ import type { RentalRoutesContext } from "./_helpers";
 import type { Express, Request, Response } from "express";
 import { getErrorMessage } from "../../../lib/httpHandlers";
 import { logger } from "../../../lib/logger";
-import { getCompanyId, ensureMonthlyForCompany, postRentAccrualForCompany } from "../shared";
-import { postDueScheduledRentalPayments } from "../../../services/rental/rentalPaymentPostingService";
+import { getCompanyId } from "../shared";
 import { getRentalBillingDay, getRentalPeriodDueDate } from "../../../services/rental/rentalPeriodService";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db, pool } from "../../../db";
@@ -19,7 +18,7 @@ import { propertyUnits, propertyContracts, propertyMonthlyLedger, propertyPaymen
 import { computeNextBillingDate } from "./_helpers";
 
 export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesContext) {
-  const { module, urlPrefix, incomeAccountName, shopExpenseAccountName, tag } = ctx;
+  const { module, urlPrefix, tag } = ctx;
 
   app.get(`${urlPrefix}/units`, requireAuth, async (req: Request, res: Response) => {
     try {
@@ -27,24 +26,12 @@ export function registerRentalUnitsReadRoutes(app: Express, ctx: RentalRoutesCon
       if (!companyId) return res.status(400).json({ message: "No company selected" });
       const unitType = (req.query.unitType as string) || "WAREHOUSE";
 
+      // Read only (accounting audit wave 18 A): this page load no longer creates
+      // monthly rows or posts scheduled payments and accruals. They post from the
+      // daily scheduled job and the Admin/Owner "post due accruals now" action
+      // (POST {prefix}/accruals/post-due), dated by the company's business date.
+      // The client date only sets what the page shows as due.
       const asOf = getClientDate(req);
-      await ensureMonthlyForCompany(companyId, module, asOf);
-
-      // FIX #5: sequential awaited processing so scheduled posting runs before
-      //          accrual classification (avoids a race where an already-posted
-      //          payment is re-classified as due-unaccrued in the same request).
-      if ((module === "ERP" || module === "FACTORY") && unitType === "SHOP") {
-        try {
-          await postDueScheduledRentalPayments(companyId, module, asOf, shopExpenseAccountName);
-        } catch (e: unknown) {
-          logger.warn(`${tag} page-load scheduled-posting failed:`, { error: getErrorMessage(e).split("\n")[0] });
-        }
-        try {
-          await postRentAccrualForCompany(companyId, shopExpenseAccountName, module, incomeAccountName, asOf);
-        } catch (e: unknown) {
-          logger.warn(`${tag} page-load accrual failed:`, { error: getErrorMessage(e).split("\n")[0] });
-        }
-      }
 
       const regularUnits = await db
         .select()

@@ -10,6 +10,8 @@ import { logger } from "../../../lib/logger";
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
+// The physical-deletion service also records the WASTE write-off value event
+// (wave 11) for the valued bales it removes, in the same transaction.
 import { deletePhysicalFactoryBalesTx } from "./physicalBaleDeletion";
 import { PRIORITY_SCAN_LOCK_NAMESPACE } from "../customer-orders/priorityScanQueue";
 import { verifySupervisorPassword } from "../_helpers";

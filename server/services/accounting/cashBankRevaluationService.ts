@@ -1,8 +1,9 @@
 import Decimal from "decimal.js";
-import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db, pool } from "../../db";
-import { bankAccounts, exchangeRates, ledgerAccounts } from "@shared/schema";
+import { bankAccounts, ledgerAccounts } from "@shared/schema";
 import { normalizeCurrencyCode } from "./currencyAmounts";
+import { getLatestCfaPerUsd } from "./latestCfaPerUsd";
 
 const DP_AMOUNT = 6;
 const DP_RATE = 10;
@@ -84,28 +85,28 @@ function normalizeStoredCurrency(value: string | null | undefined): string | nul
   }
 }
 
-async function getLatestCfaPerUsd(companyId: number): Promise<Decimal | null> {
-  const rows = await db
-    .select({ rate: exchangeRates.rate })
-    .from(exchangeRates)
-    .where(
-      and(
-        eq(exchangeRates.companyId, companyId),
-        or(
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "CFA")),
-          and(eq(exchangeRates.fromCurrency, "USD"), eq(exchangeRates.toCurrency, "XOF")),
-        ),
-      ),
-    )
-    .orderBy(desc(exchangeRates.effectiveDate))
-    .limit(1);
+/**
+ * How bank lines are attributed.
+ *
+ *   - "legacy" (the account pages' default): a bank's aggregate is every line
+ *     naming the bank, and a bank linked to a Cash/Bank ledger
+ *     (bank_accounts.linked_ledger_id) is represented by that ledger account,
+ *     its own row dropped — with its opening and bank-only lines.
+ *   - "engine" (net position, wave 10 part 3): the balance engine's rule
+ *     (balances/ledgerBalanceEngine.ts). A line naming a ledger account belongs
+ *     to the ledger account, so a bank's aggregate is only the lines that name
+ *     the bank and no ledger account, and every bank keeps its own row (linked
+ *     or not): the ledger and the bank never share a line or an opening.
+ */
+export type CashBankAttribution = "legacy" | "engine";
 
-  if (!rows[0]?.rate) return null;
-  const rate = amount(rows[0].rate);
-  return rate.gt(0) ? rate : null;
+export interface CashBankRevaluationOptions {
+  attribution?: CashBankAttribution;
+  /** The date of the current CFA rate (default: the company's business date); a later rate is never used. */
+  asOf?: string;
 }
 
-async function loadAccounts(companyId: number): Promise<AccountRow[]> {
+async function loadAccounts(companyId: number, attribution: CashBankAttribution): Promise<AccountRow[]> {
   const [ledgers, banks] = await Promise.all([
     db
       .select({
@@ -125,8 +126,8 @@ async function loadAccounts(companyId: number): Promise<AccountRow[]> {
         and(
           eq(ledgerAccounts.companyId, companyId),
           isNull(ledgerAccounts.deletedAt),
-          or(eq(ledgerAccounts.accountType, "Bank"), eq(ledgerAccounts.accountType, "Cash")),
-        ),
+          or(eq(ledgerAccounts.accountType, "Bank"), eq(ledgerAccounts.accountType, "Cash"))
+        )
       ),
     db
       .select({
@@ -163,7 +164,7 @@ async function loadAccounts(companyId: number): Promise<AccountRow[]> {
   // A linked bank is represented by its ledger account to avoid double-counting.
   const representedLedgerIds = new Set(rows.map((row) => row.id));
   for (const row of banks) {
-    if (row.linkedLedgerId && representedLedgerIds.has(row.linkedLedgerId)) continue;
+    if (attribution === "legacy" && row.linkedLedgerId && representedLedgerIds.has(row.linkedLedgerId)) continue;
     rows.push({
       accountKind: "bank",
       id: row.id,
@@ -186,9 +187,12 @@ async function loadAggregates(
   companyId: number,
   accountKind: "ledger" | "bank",
   accountIds: number[],
+  attribution: CashBankAttribution
 ): Promise<AggregateRow[]> {
   if (accountIds.length === 0) return [];
   const accountColumn = accountKind === "ledger" ? "ve.ledger_account_id" : "ve.bank_account_id";
+  // Engine attribution: a line naming a ledger account belongs to the ledger account.
+  const bankOnly = accountKind === "bank" && attribution === "engine" ? "AND ve.ledger_account_id IS NULL" : "";
 
   const result = await pool.query<AggregateRow>(
     `WITH classified AS (
@@ -256,6 +260,7 @@ async function loadAggregates(
          AND v.optional = false
          AND v.deleted_at IS NULL
          AND ${accountColumn} = ANY($2::int[])
+         ${bankOnly}
      )
      SELECT
        account_id::text,
@@ -268,30 +273,37 @@ async function loadAggregates(
        COALESCE(SUM(unresolved_raw_net), 0)::text AS unresolved_raw_net
      FROM classified
      GROUP BY account_id, entry_currency`,
-    [companyId, accountIds],
+    [companyId, accountIds]
   );
   return result.rows;
 }
 
-export async function getCashBankRevaluation(companyId: number): Promise<{
+export async function getCashBankRevaluation(
+  companyId: number,
+  options: CashBankRevaluationOptions = {}
+): Promise<{
   accounts: CashBankCurrencySummary[];
   currentCfaPerUsd: string | null;
   unresolvedAccountCount: number;
 }> {
+  const attribution = options.attribution ?? "legacy";
   const [accounts, currentCfaPerUsd] = await Promise.all([
-    loadAccounts(companyId),
-    getLatestCfaPerUsd(companyId),
+    loadAccounts(companyId, attribution),
+    getLatestCfaPerUsd(companyId, options.asOf),
   ]);
 
   const ledgerIds = accounts.filter((row) => row.accountKind === "ledger").map((row) => row.id);
   const bankIds = accounts.filter((row) => row.accountKind === "bank").map((row) => row.id);
   const [ledgerRows, bankRows] = await Promise.all([
-    loadAggregates(companyId, "ledger", ledgerIds),
-    loadAggregates(companyId, "bank", bankIds),
+    loadAggregates(companyId, "ledger", ledgerIds, attribution),
+    loadAggregates(companyId, "bank", bankIds, attribution),
   ]);
 
   const rowMap = new Map<string, AggregateRow[]>();
-  for (const [kind, rows] of [["ledger", ledgerRows], ["bank", bankRows]] as const) {
+  for (const [kind, rows] of [
+    ["ledger", ledgerRows],
+    ["bank", bankRows],
+  ] as const) {
     for (const row of rows) {
       const key = `${kind}:${row.account_id}`;
       const list = rowMap.get(key) || [];
@@ -314,7 +326,10 @@ export async function getCashBankRevaluation(companyId: number): Promise<{
         continue;
       }
       const currency = normalizeStoredCurrency(row.entry_currency) || "USD";
-      native.set(currency, (native.get(currency) || new Decimal(0)).plus(amount(row.native_debit).minus(row.native_credit)));
+      native.set(
+        currency,
+        (native.get(currency) || new Decimal(0)).plus(amount(row.native_debit).minus(row.native_credit))
+      );
       historicalBase = historicalBase.plus(row.hist_base_debit).minus(row.hist_base_credit);
     }
 
@@ -324,11 +339,7 @@ export async function getCashBankRevaluation(companyId: number): Promise<{
     let unresolvedOpeningBalanceRaw: string | null = null;
 
     if (!openingRaw.isZero()) {
-      if (
-        openingCurrency &&
-        account.openingBalanceNativeAmount != null &&
-        account.openingBalanceBaseAmount != null
-      ) {
+      if (openingCurrency && account.openingBalanceNativeAmount != null && account.openingBalanceBaseAmount != null) {
         native.set(openingCurrency, (native.get(openingCurrency) || new Decimal(0)).plus(openingRaw));
         const openingBase = amount(account.openingBalanceBaseAmount);
         historicalBase = historicalBase.plus(account.openingBalanceSide === "Cr" ? openingBase.neg() : openingBase);
@@ -407,7 +418,7 @@ export async function getCashBankRevaluation(companyId: number): Promise<{
 export async function getCashBankAccountSummary(
   companyId: number,
   accountKind: "ledger" | "bank",
-  accountId: number,
+  accountId: number
 ): Promise<CashBankCurrencySummary | null> {
   const result = await getCashBankRevaluation(companyId);
   return result.accounts.find((row) => row.accountKind === accountKind && row.id === accountId) || null;

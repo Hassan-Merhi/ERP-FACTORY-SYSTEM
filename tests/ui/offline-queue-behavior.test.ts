@@ -31,7 +31,7 @@ describe("offline mutation queue behavior", () => {
     updateItemStatus(firstId, "failed", "HTTP 409");
     expect(getQueue()[0]).toMatchObject({ status: "failed", failReason: "HTTP 409" });
 
-    const pendingId = enqueueRequest("/api/suppliers/12", "PATCH", "{}", "Supplier edit", "2026-08-11");
+    enqueueRequest("/api/suppliers/12", "PATCH", "{}", "Supplier edit", "2026-08-11");
     enqueueRequest("/api/suppliers/12", "DELETE", "", "Supplier delete");
     expect(getQueue().some((item) => item.url === "/api/suppliers/12" && item.method === "PATCH")).toBe(false);
     expect(getQueue().at(-1)).toMatchObject({ method: "DELETE" });

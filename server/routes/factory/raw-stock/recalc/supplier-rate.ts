@@ -110,7 +110,7 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
 
           const oldRate = parseFloat((existing.currentRawMaterialCostPerKgUsd as string) || "0");
           const supplierName = existing.name || `Supplier #${sid}`;
-          const { costPerKgUsd, totalReceivedKg, rows } = await db.transaction(async (tx) => {
+          const { costPerKgUsd, totalReceivedKg, rows, unvaluedRowIds } = await db.transaction(async (tx) => {
             return getStableSupplierCost(tx, companyId, sid);
           });
 
@@ -122,7 +122,11 @@ export function registerRawStockSupplierRateRoutes(app: Express) {
               newRate: 0,
               rowCount: 0,
               totalReceivedKg: 0,
-              skipped: "No usable raw-stock rows",
+              // Wave 11: a row costed only in its native currency is never read as USD.
+              skipped:
+                unvaluedRowIds.length > 0
+                  ? `Raw-stock rows without a USD cost: ${unvaluedRowIds.join(", ")}`
+                  : "No usable raw-stock rows",
             });
             continue;
           }

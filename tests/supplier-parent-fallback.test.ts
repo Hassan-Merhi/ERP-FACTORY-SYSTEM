@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("../server/routes/helpers/partyOpeningSide", () => ({
+  loadPartyOpeningSides: async () => new Map(),
+}));
 vi.mock("../server/routes/_helpers", () => ({
   logAudit: vi.fn(),
 }));
@@ -13,6 +16,7 @@ vi.mock("../server/routes/suppliers/supplierRepository", () => ({
   supplierRepository: {
     list: vi.fn(),
     listAll: vi.fn(),
+    listPostedFromOtherCompanies: vi.fn(async () => []),
     getById: vi.fn(),
     getByCode: vi.fn(),
     create: vi.fn(),
@@ -60,10 +64,14 @@ describe("supplier parent fallback scope", () => {
     vi.mocked(getSupplierBalanceForContext).mockResolvedValue({
       balance: 0,
       openingBalance: 0,
+      openingBalanceSide: "Cr",
+      periodOpeningBalance: 0,
       hasActivity: false,
       entries: [],
       balancesByCurrency: {},
       historicalBaseBalance: 0,
+      balanceBasis: "ledger",
+      voucherCompanyId: activeCompanyId,
     });
 
     const result = await supplierService.stats(activeCompanyId);
@@ -72,7 +80,10 @@ describe("supplier parent fallback scope", () => {
     expect(result[0].id).toBe(statsSupplier.id);
     expect(supplierRepository.listAll).toHaveBeenNthCalledWith(1, activeCompanyId);
     expect(supplierRepository.listAll).toHaveBeenNthCalledWith(2, parentCompanyId);
+    // Wave 13: the balance is the engine's in the active (voucher) company; the
+    // engine reads the opening side itself, so stats no longer preloads it.
     expect(getSupplierBalanceForContext).toHaveBeenCalledWith(statsSupplier, activeCompanyId);
+    expect(result[0]).toMatchObject({ balanceBasis: "ledger", postedFromOtherCompany: true });
   });
 
   it("keeps the normal supplier list empty when the active company has no suppliers", async () => {

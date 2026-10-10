@@ -131,10 +131,7 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
     factory_v2: "Factory V2",
     supplier_partner: "Supplier Partner",
   };
-  summary.addRow([
-    "Excluded",
-    snapshot.excludedCompanyTypes.map((type) => excludedLabels[type] ?? type).join(", "),
-  ]);
+  summary.addRow(["Excluded", snapshot.excludedCompanyTypes.map((type) => excludedLabels[type] ?? type).join(", ")]);
   summary.addRow([]);
 
   const totalRows: Array<[string, number]> = [
@@ -153,15 +150,20 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
   const header = summary.addRow(["Company", "What We Have", "What We Owe", "Net Position"]);
   header.eachCell((cell) => styleHeader(cell, COLORS.blue));
   for (const company of snapshot.companies) {
-    const row = summary.addRow([
-      company.companyName,
-      company.forUsTotal,
-      company.onUsTotal,
-      company.netPosition,
-    ]);
+    const row = summary.addRow([company.companyName, company.forUsTotal, company.onUsTotal, company.netPosition]);
     styleAmount(row.getCell(2), company.forUsTotal);
     styleAmount(row.getCell(3), company.onUsTotal);
     styleAmount(row.getCell(4), company.netPosition, true);
+  }
+  // Intercompany differences (wave 13, paired elimination): the unmatched part
+  // of the intercompany balances, part of the group totals.
+  for (const line of snapshot.intercompany.differences) {
+    const have = line.side === "forUs" ? line.value : 0;
+    const owe = line.side === "onUs" ? line.value : 0;
+    const row = summary.addRow([line.label, have, owe, have - owe]);
+    styleAmount(row.getCell(2), have);
+    styleAmount(row.getCell(3), owe);
+    styleAmount(row.getCell(4), have - owe, true);
   }
   const groupRow = summary.addRow([
     "GROUP TOTAL",
@@ -196,6 +198,10 @@ export async function generateGroupNetPositionExcel(snapshot: GroupNetPositionSn
         const row = ws.addRow([company.companyName, line.category || "Other", line.label, line.value]);
         styleAmount(row.getCell(4), line.value);
       }
+    }
+    for (const line of snapshot.intercompany.differences.filter((difference) => difference.side === side)) {
+      const row = ws.addRow(["Group", line.category, line.label, line.value]);
+      styleAmount(row.getCell(4), line.value);
     }
     ws.views = [{ state: "frozen", ySplit: 1 }];
   }

@@ -46,6 +46,99 @@ type PgLikeError = Error & {
 };
 
 const RESTRICTIVE_DELETE_ACTIONS = new Set(["a", "r"]); // NO ACTION / RESTRICT
+
+/**
+ * Tables company deletion never touches. audit_log is append-only (wave 12,
+ * owner decision 3): the company's audit rows, including the row recording
+ * this deletion, outlive the company and keep its id as a retained reference
+ * (audit_log.company_id has no foreign key).
+ */
+const RETAINED_TABLES: ReadonlySet<string> = new Set(["audit_log"]);
+
+/**
+ * Wave 12 (owner decision 4): a company with accounting history can never be
+ * erased. Each check names what it found (a machine code returned as
+ * `blockers` in the 409 body); any hit refuses the delete with 409
+ * and the company should be deactivated instead. Tables a database may not
+ * have yet are skipped.
+ */
+const COMPANY_HISTORY_CHECKS: readonly { table: string; blocker: string; where: string }[] = [
+  { table: "vouchers", blocker: "vouchers", where: "company_id = $1" },
+  { table: "fiscal_period_closures", blocker: "fiscal_period_closures", where: "company_id = $1" },
+  {
+    table: "inventory",
+    blocker: "inventory_stock",
+    where: "company_id = $1 AND (COALESCE(quantity, 0) <> 0 OR COALESCE(total_value, 0) <> 0)",
+  },
+  { table: "factory_raw_stock", blocker: "factory_raw_stock", where: "company_id = $1" },
+  { table: "factory_bales", blocker: "factory_bales", where: "company_id = $1" },
+  {
+    table: "ledger_accounts",
+    blocker: "ledger_account_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+  {
+    table: "bank_accounts",
+    blocker: "bank_account_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+  {
+    table: "customers",
+    blocker: "customer_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+  { table: "customer_balances", blocker: "customer_balances", where: "company_id = $1 AND COALESCE(balance, 0) <> 0" },
+  {
+    table: "suppliers",
+    blocker: "supplier_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+  {
+    table: "factory_suppliers",
+    blocker: "factory_supplier_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+  {
+    table: "employees",
+    blocker: "employee_balances",
+    where: "company_id = $1 AND (COALESCE(opening_balance, 0) <> 0 OR COALESCE(current_balance, 0) <> 0)",
+  },
+  {
+    table: "fixed_assets",
+    blocker: "fixed_asset_openings",
+    where: "company_id = $1 AND COALESCE(opening_balance, 0) <> 0",
+  },
+];
+
+export const COMPANY_HAS_HISTORY_MESSAGE =
+  "This company has accounting history (vouchers, stock, fiscal closures or balances) and cannot be deleted. Deactivate it instead.";
+
+export class CompanyHasHistoryError extends Error {
+  readonly status = 409;
+  readonly code = "COMPANY_HAS_HISTORY";
+  constructor(readonly blockers: string[]) {
+    super(COMPANY_HAS_HISTORY_MESSAGE);
+    this.name = "CompanyHasHistoryError";
+  }
+}
+
+export type CompanyDeletionActor = { userId?: string | null; username?: string | null };
+
+async function findCompanyHistory(
+  client: PoolClient,
+  columnsByTable: Map<string, Map<string, { notNull: boolean }>>,
+  companyId: number
+): Promise<string[]> {
+  const found: string[] = [];
+  for (const check of COMPANY_HISTORY_CHECKS) {
+    if (!columnsByTable.get(check.table)?.has("company_id")) continue;
+    const result = await client.query(`SELECT 1 FROM ${quoteIdent(check.table)} WHERE ${check.where} LIMIT 1`, [
+      companyId,
+    ]);
+    if (result.rowCount && result.rowCount > 0) found.push(check.blocker);
+  }
+  return found;
+}
 const MAX_DERIVED_CONDITIONS = 10_000;
 
 function quoteIdent(value: string): string {
@@ -183,6 +276,7 @@ function buildDeletionConditions(
   };
 
   for (const [table, columns] of columnsByTable) {
+    if (RETAINED_TABLES.has(table)) continue;
     if (table !== "companies" && columns.has("company_id")) {
       addCondition(conditions, queue, table, `${quoteIdent("company_id")} = $1`, [table]);
     }
@@ -382,6 +476,7 @@ function buildDeletionOrder(activeTables: Set<string>, foreignKeys: ForeignKey[]
 }
 
 function mapDeletionError(error: unknown): Error {
+  if (error instanceof CompanyHasHistoryError) return error;
   const pgError = error as PgLikeError;
   if (pgError?.code !== "23503") {
     return error instanceof Error ? error : new Error(String(error));
@@ -396,14 +491,20 @@ function mapDeletionError(error: unknown): Error {
 }
 
 /**
- * Permanently removes one company and data owned by it.
+ * Permanently removes one EMPTY company and its configuration rows.
+ *
+ * Wave 12 (owner decision 4): refused with CompanyHasHistoryError (409) while
+ * the company has any voucher, stock, fiscal closure or non-zero opening or
+ * balance (COMPANY_HISTORY_CHECKS); such a company is deactivated instead.
+ * The deletion is audited in the same transaction, before anything is
+ * removed, and audit_log is never deleted (RETAINED_TABLES).
  *
  * The deletion plan is derived from the live PostgreSQL FK graph so newly added
  * child tables do not silently make this endpoint stale. All work happens in a
  * single transaction and restrictive links outside the target company are
  * detached only when nullable; otherwise the operation fails closed.
  */
-export async function deleteCompany(id: number): Promise<void> {
+export async function deleteCompany(id: number, actor: CompanyDeletionActor = {}): Promise<void> {
   if (!Number.isSafeInteger(id) || id <= 0) {
     throw new Error("Company ID must be a positive integer.");
   }
@@ -416,12 +517,31 @@ export async function deleteCompany(id: number): Promise<void> {
     await client.query("SET LOCAL lock_timeout = '15s'");
     await client.query("SET LOCAL statement_timeout = '120s'");
 
-    const company = await client.query<{ id: number }>("SELECT id FROM companies WHERE id = $1 FOR UPDATE", [id]);
+    const company = await client.query<Record<string, unknown>>("SELECT * FROM companies WHERE id = $1 FOR UPDATE", [
+      id,
+    ]);
     if (company.rowCount !== 1) {
       throw new Error("Company not found.");
     }
 
     const { columnsByTable, foreignKeys } = await loadSchemaMetadata(client);
+
+    const history = await findCompanyHistory(client, columnsByTable, id);
+    if (history.length > 0) throw new CompanyHasHistoryError(history);
+
+    // Audited first, in this transaction: if the audit row cannot be written
+    // nothing is deleted. It keeps the company id and survives the delete.
+    await client.query(
+      `INSERT INTO audit_log (user_id, username, company_id, action, table_name, record_id, record_identifier, changes)
+       VALUES ($1, $2, $3, 'delete', 'companies', $3, $4, $5::jsonb)`,
+      [
+        String(actor.userId ?? "system"),
+        String(actor.username || "system"),
+        id,
+        String(company.rows[0].code ?? company.rows[0].name ?? id),
+        JSON.stringify({ company: { old: company.rows[0] }, permanentDelete: { new: true } }),
+      ]
+    );
     const { conditions, nullableReferences } = buildDeletionConditions(columnsByTable, foreignKeys);
 
     // Child companies are configuration, not owned transaction rows. Preserve

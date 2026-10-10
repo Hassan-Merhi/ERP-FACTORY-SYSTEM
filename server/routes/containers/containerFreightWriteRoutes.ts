@@ -1,12 +1,12 @@
 import { parseId } from "../../lib/parseId";
-import { getErrorMessage, sendHttpError } from "../../lib/httpHandlers";
+import { HttpError, sendHttpError } from "../../lib/httpHandlers";
 import { logger } from "../../lib/logger";
 import type { Express } from "express";
 import { db } from "../../db";
 import { storage } from "../../storage";
-import { requireAuth, requireRole } from "../../auth";
+import { requireAuth } from "../../auth";
 import { logAudit } from "../_helpers";
-import { containers, containerCharges, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
+import { containers, purchaseOrders, vouchers, voucherEntries, ledgerAccounts } from "@shared/schema";
 import type { InsertPurchaseOrder } from "@shared/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import {
@@ -16,51 +16,15 @@ import {
   isDebitOnlyEntry as isDebitOnly,
   syncIntercoParentVoucher,
 } from "./containerHelpers";
-import { MoneyDecimal, moneyString, sumMoney, toMoney, type MoneyInput } from "../../lib/money";
+import { moneyString, sumMoney, toMoney } from "../../lib/money";
 import type Decimal from "decimal.js";
-import type { DatabaseOrTransaction } from "../../db";
+import { retireVouchersForRequestTx } from "../../services/accounting/voucherRetirement";
 
-/**
- * A charge as the purchase_orders numeric(20, 2) column stores it: Postgres
- * rounds half away from zero, so vouchers and container totals derived from
- * this value agree with the PO to the cent.
- */
-const storedCents = (value: unknown) =>
-  toMoney((typeof value === "string" ? value.trim() : value) as MoneyInput).toDecimalPlaces(
-    2,
-    MoneyDecimal.ROUND_HALF_UP
-  );
-
-/** Mirror a PO's charges into container_charges: one row per charge type, none when zero. */
-async function syncContainerCharges(
-  executor: DatabaseOrTransaction,
-  containerId: number,
-  charges: { chargeType: string; amount: Decimal }[]
-) {
-  for (const { chargeType, amount } of charges) {
-    const existingCharge = await executor
-      .select()
-      .from(containerCharges)
-      .where(and(eq(containerCharges.containerId, containerId), eq(containerCharges.chargeType, chargeType)))
-      .limit(1);
-
-    if (amount.isZero()) {
-      // Delete entry if charge is 0
-      if (existingCharge.length > 0) {
-        await executor.delete(containerCharges).where(eq(containerCharges.id, existingCharge[0].id));
-      }
-    } else if (existingCharge.length > 0) {
-      await executor
-        .update(containerCharges)
-        .set({ amount: moneyString(amount) })
-        .where(eq(containerCharges.id, existingCharge[0].id));
-    } else {
-      await executor.insert(containerCharges).values({ containerId, chargeType, amount: moneyString(amount) });
-    }
-  }
-}
 import { applyPurchaseOrderItemsUpdate } from "./purchaseOrderItemsUpdate";
+import { storedCents, syncContainerCharges } from "./containerChargeSync";
+import { registerPurchaseOrderDeleteRoute } from "./purchaseOrderDeleteRoute";
 import { registerPoImportBackfillRoute } from "./poImportBackfillRoute";
+import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 export function registerContainerFreightWriteRoutes(app: Express) {
   app.patch("/api/purchase-orders/:id", requireAuth, async (req, res) => {
@@ -272,211 +236,289 @@ export function registerContainerFreightWriteRoutes(app: Express) {
         freightParentAccountChanged ||
         (newFreightPaidBy === "parent" && differs(newFreight, oldFreight));
 
-      // Update PO
-      const updated = await storage.updatePurchaseOrder(id, allowedUpdates);
-
-      // Fetch actual current voucher total from DB so we catch vouchers that were
-      // created before the freight-embedding fix (their stored total is wrong even
-      // though the PO fields haven't "changed").
-      let actualDbVoucherTotal: Decimal | null = null;
-      if (existingPO.voucherId) {
-        const [currentVoucher] = await db
-          .select({ totalAmount: vouchers.totalAmount })
-          .from(vouchers)
-          .where(eq(vouchers.id, existingPO.voucherId))
-          .limit(1);
-        if (currentVoucher) {
-          actualDbVoucherTotal = toMoney(currentVoucher.totalAmount);
+      // Wave 7: the PO row, its voucher and lines, the freight voucher, the
+      // container totals and charges, goods in transit, the inter-company
+      // counterpart and the audit row commit together or not at all (they used
+      // to be separate autocommit writes, so a failure part-way left the PO and
+      // its ledger disagreeing).
+      const updatedPO = await db.transaction(async (tx) => {
+        // Serialize with other edits and the offload lifecycle on this PO, in the
+        // offload lifecycle's lock order: container, then purchase order.
+        if (existingPO.containerId != null) {
+          await tx
+            .select({ id: containers.id })
+            .from(containers)
+            .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
+            .limit(1)
+            .for("update");
         }
-      }
-      const voucherTotalMismatch = actualDbVoucherTotal !== null && differs(newLocalVoucherTotal, actualDbVoucherTotal);
+        const [lockedPO] = await tx
+          .select({ id: purchaseOrders.id })
+          .from(purchaseOrders)
+          .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.companyId, existingPO.companyId)))
+          .limit(1)
+          .for("update");
+        if (!lockedPO) throw new HttpError(404, "Purchase order not found");
 
-      // Determine whether the PO is on the parent company (or no interco at all).
-      // Used inside the transaction to pick the right voucher structure.
-      const _pfParentId = await storage.getParentCompanyId();
-      const _isSameCompanyOrNoInterco = !_pfParentId || existingPO.companyId === _pfParentId;
-      const _poContainerNum = existingPO.containerId
-        ? ((
-            await db
-              .select({ containerNumber: containers.containerNumber })
-              .from(containers)
-              .where(eq(containers.id, existingPO.containerId))
-              .limit(1)
-          )[0]?.containerNumber ?? null)
-        : null;
-      const _freightNarration = `Freight - ${existingPO.poNumber}${_poContainerNum ? ` (${_poContainerNum})` : ""}`;
+        // Update PO
+        const [updated] =
+          Object.keys(allowedUpdates).length > 0
+            ? await tx.update(purchaseOrders).set(allowedUpdates).where(eq(purchaseOrders.id, id)).returning()
+            : await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, id)).limit(1);
 
-      // Update voucher entries when local voucher total, freight payer, or own-account changes,
-      // OR when the actual DB voucher total doesn't match the expected total.
-      if (
-        voucherTotalMismatch ||
-        differs(newLocalVoucherTotal, oldLocalVoucherTotal) ||
-        freightPaidByChanged ||
-        freightOwnAccountChanged ||
-        freightVoucherNeedsUpdate ||
-        freightParentVoucherNeedsUpdate
-      ) {
-        await db.transaction(async (tx) => {
-          // Update the purchase voucher linked to the PO
-          if (
-            existingPO.voucherId &&
-            (voucherTotalMismatch ||
-              differs(newLocalVoucherTotal, oldLocalVoucherTotal) ||
-              freightPaidByChanged ||
-              freightOwnAccountChanged ||
-              freightParentVoucherNeedsUpdate)
-          ) {
-            // Update voucher total amount
-            await tx
-              .update(vouchers)
-              .set({ totalAmount: moneyString(newLocalVoucherTotal) })
-              .where(eq(vouchers.id, existingPO.voucherId));
+        // Fetch actual current voucher total from DB so we catch vouchers that were
+        // created before the freight-embedding fix (their stored total is wrong even
+        // though the PO fields haven't "changed").
+        let actualDbVoucherTotal: Decimal | null = null;
+        if (existingPO.voucherId) {
+          const [currentVoucher] = await tx
+            .select({ totalAmount: vouchers.totalAmount })
+            .from(vouchers)
+            .where(eq(vouchers.id, existingPO.voucherId))
+            .limit(1);
+          if (currentVoucher) {
+            actualDbVoucherTotal = toMoney(currentVoucher.totalAmount);
+          }
+        }
+        const voucherTotalMismatch =
+          actualDbVoucherTotal !== null && differs(newLocalVoucherTotal, actualDbVoucherTotal);
 
-            const existingEntries = await tx
-              .select()
-              .from(voucherEntries)
-              .where(eq(voucherEntries.voucherId, existingPO.voucherId));
+        // Determine whether the PO is on the parent company (or no interco at all).
+        // Used inside the transaction to pick the right voucher structure.
+        const _pfParentId = await storage.getParentCompanyId();
+        const _isSameCompanyOrNoInterco = !_pfParentId || existingPO.companyId === _pfParentId;
+        const _poContainerNum = existingPO.containerId
+          ? ((
+              await tx
+                .select({ containerNumber: containers.containerNumber })
+                .from(containers)
+                .where(eq(containers.id, existingPO.containerId))
+                .limit(1)
+            )[0]?.containerNumber ?? null)
+          : null;
+        const _freightNarration = `Freight - ${existingPO.poNumber}${_poContainerNum ? ` (${_poContainerNum})` : ""}`;
 
-            if (newHasParentFreight && newFreightParentAccountId) {
-              logger.info(
-                `[PO-PATCH charges] Freight posting: PO=${existingPO.poNumber} company=${existingPO.companyId} freightAcct=${newFreightParentAccountId} parentCoId=${_pfParentId} sameCompany=${_isSameCompanyOrNoInterco} freightAmt=${newFreight}`
-              );
+        // Update voucher entries when local voucher total, freight payer, or own-account changes,
+        // OR when the actual DB voucher total doesn't match the expected total.
+        if (
+          voucherTotalMismatch ||
+          differs(newLocalVoucherTotal, oldLocalVoucherTotal) ||
+          freightPaidByChanged ||
+          freightOwnAccountChanged ||
+          freightVoucherNeedsUpdate ||
+          freightParentVoucherNeedsUpdate
+        ) {
+          {
+            // Update the purchase voucher linked to the PO
+            if (
+              existingPO.voucherId &&
+              (voucherTotalMismatch ||
+                differs(newLocalVoucherTotal, oldLocalVoucherTotal) ||
+                freightPaidByChanged ||
+                freightOwnAccountChanged ||
+                freightParentVoucherNeedsUpdate)
+            ) {
+              // Update voucher total amount
+              await tx
+                .update(vouchers)
+                .set({ totalAmount: moneyString(newLocalVoucherTotal) })
+                .where(eq(vouchers.id, existingPO.voucherId));
 
-              if (_isSameCompanyOrNoInterco) {
-                // ── Same-company parent freight ──────────────────────────────────────
-                // The PO is on the parent company itself (or there is no interco config).
-                // The user pays freight themselves (not via the supplier), so freight is
-                // credited to the freight account (a payable) and the supplier is only
-                // credited for the goods amount.
-                // Structure:
-                //   DR Purchases (newGrandTotal — full cost incl. freight)
-                //   CR (supplier/payable entry) (supplierTotal — goods only)
-                //   CR freightParentAccountId (newFreight — freight payable)
-                //
-                // Strategy: keep first DR (purchases), keep first non-freight CR (supplier),
-                // keep/create freight CR at freightParentAccountId, delete extras.
-                let purchasesEntryId: number | null = null;
-                let mainCrEntryId: number | null = null;
-                const toDeleteIds: number[] = [];
-                const freightCrCandidatesPatch: number[] = [];
+              const existingEntries = await tx
+                .select()
+                .from(voucherEntries)
+                .where(eq(voucherEntries.voucherId, existingPO.voucherId));
 
-                for (const entry of existingEntries) {
-                  const acctId = entry.ledgerAccountId as number | null;
-                  const isDebit = isDebitOnly(entry);
-                  const isCredit = isCreditOnly(entry);
+              if (newHasParentFreight && newFreightParentAccountId) {
+                logger.info(
+                  `[PO-PATCH charges] Freight posting: PO=${existingPO.poNumber} company=${existingPO.companyId} freightAcct=${newFreightParentAccountId} parentCoId=${_pfParentId} sameCompany=${_isSameCompanyOrNoInterco} freightAmt=${newFreight}`
+                );
 
-                  if (isCredit && acctId === newFreightParentAccountId) {
-                    freightCrCandidatesPatch.push(entry.id);
-                  } else if (isDebit && purchasesEntryId === null) {
-                    purchasesEntryId = entry.id; // first DR = purchases
-                  } else if (isCredit && mainCrEntryId === null) {
-                    mainCrEntryId = entry.id; // first non-freight CR = supplier payable
+                if (_isSameCompanyOrNoInterco) {
+                  // ── Same-company parent freight ──────────────────────────────────────
+                  // The PO is on the parent company itself (or there is no interco config).
+                  // The user pays freight themselves (not via the supplier), so freight is
+                  // credited to the freight account (a payable) and the supplier is only
+                  // credited for the goods amount.
+                  // Structure:
+                  //   DR Purchases (newGrandTotal — full cost incl. freight)
+                  //   CR (supplier/payable entry) (supplierTotal — goods only)
+                  //   CR freightParentAccountId (newFreight — freight payable)
+                  //
+                  // Strategy: keep first DR (purchases), keep first non-freight CR (supplier),
+                  // keep/create freight CR at freightParentAccountId, delete extras.
+                  let purchasesEntryId: number | null = null;
+                  let mainCrEntryId: number | null = null;
+                  const toDeleteIds: number[] = [];
+                  const freightCrCandidatesPatch: number[] = [];
+
+                  for (const entry of existingEntries) {
+                    const acctId = entry.ledgerAccountId as number | null;
+                    const isDebit = isDebitOnly(entry);
+                    const isCredit = isCreditOnly(entry);
+
+                    if (isCredit && acctId === newFreightParentAccountId) {
+                      freightCrCandidatesPatch.push(entry.id);
+                    } else if (isDebit && purchasesEntryId === null) {
+                      purchasesEntryId = entry.id; // first DR = purchases
+                    } else if (isCredit && mainCrEntryId === null) {
+                      mainCrEntryId = entry.id; // first non-freight CR = supplier payable
+                    } else {
+                      toDeleteIds.push(entry.id); // extras — delete
+                    }
+                  }
+                  const freightCrEntryId: number | null = freightCrCandidatesPatch[0] ?? null;
+                  toDeleteIds.push(...freightCrCandidatesPatch.slice(1));
+
+                  if (toDeleteIds.length > 0) {
+                    await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+                  }
+
+                  // Update purchases DR to full gross amount (goods + freight)
+                  if (purchasesEntryId !== null) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({ debitAmount: moneyString(newGrandTotal), creditAmount: "0" })
+                      .where(eq(voucherEntries.id, purchasesEntryId));
+                  }
+
+                  // Update main CR to goods-only amount (supplier payable)
+                  if (mainCrEntryId !== null) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({ creditAmount: moneyString(supplierTotal), debitAmount: "0" })
+                      .where(eq(voucherEntries.id, mainCrEntryId));
+                  }
+
+                  // Update or insert freight CR entry pointing at freightParentAccountId
+                  if (freightCrEntryId !== null) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({
+                        creditAmount: moneyString(newFreight),
+                        debitAmount: "0",
+                        ledgerAccountId: newFreightParentAccountId,
+                        narration: _freightNarration,
+                      })
+                      .where(eq(voucherEntries.id, freightCrEntryId));
                   } else {
-                    toDeleteIds.push(entry.id); // extras — delete
+                    await tx.insert(voucherEntries).values({
+                      voucherId: existingPO.voucherId,
+                      ledgerAccountId: newFreightParentAccountId,
+                      debitAmount: "0",
+                      creditAmount: moneyString(newFreight),
+                      narration: _freightNarration,
+                    });
+                  }
+                } else {
+                  // ── Interco parent freight (subsidiary → parent company) ────────────
+                  // Child's voucher never references freightParentAccountId directly.
+                  // Structure:
+                  //   DR Purchases (supplierTotal — goods)
+                  //   DR Purchases (newFreight — freight, same purchases account)
+                  //   CR parentCreditAccountId (newGrandTotal — full intercompany payable)
+                  //
+                  // Strategy: keep the parentCredit CR, delete everything else, rebuild DRs.
+                  const childSettings = await storage.getCompanySettings(existingPO.companyId);
+                  const parentCreditAcctId = childSettings?.parentCreditAccountId ?? null;
+
+                  let parentCreditEntryId: number | null = null;
+                  let purchasesAcctId: number | null = null;
+                  const toDeleteIds: number[] = [];
+
+                  for (const entry of existingEntries) {
+                    const acctId = entry.ledgerAccountId as number | null;
+                    const isDebit = isDebitOnly(entry);
+                    const isCredit = isCreditOnly(entry);
+
+                    if (isCredit && acctId === parentCreditAcctId && parentCreditEntryId === null) {
+                      parentCreditEntryId = entry.id;
+                    } else {
+                      toDeleteIds.push(entry.id);
+                      if (isDebit && acctId !== newFreightParentAccountId && !purchasesAcctId) {
+                        purchasesAcctId = acctId;
+                      }
+                    }
+                  }
+
+                  if (toDeleteIds.length > 0) {
+                    await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+                  }
+
+                  if (parentCreditEntryId !== null) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({ creditAmount: moneyString(newGrandTotal), debitAmount: "0" })
+                      .where(eq(voucherEntries.id, parentCreditEntryId));
+                  } else if (parentCreditAcctId) {
+                    await tx.insert(voucherEntries).values({
+                      voucherId: existingPO.voucherId,
+                      ledgerAccountId: parentCreditAcctId,
+                      debitAmount: "0",
+                      creditAmount: moneyString(newGrandTotal),
+                      narration: `PO ${existingPO.poNumber} - Credit to parent`,
+                    });
+                  }
+
+                  if (purchasesAcctId) {
+                    await tx.insert(voucherEntries).values([
+                      {
+                        voucherId: existingPO.voucherId,
+                        ledgerAccountId: purchasesAcctId,
+                        debitAmount: moneyString(supplierTotal),
+                        creditAmount: "0",
+                        narration: `${existingPO.poNumber}`,
+                      },
+                      {
+                        voucherId: existingPO.voucherId,
+                        ledgerAccountId: purchasesAcctId,
+                        debitAmount: moneyString(newFreight),
+                        creditAmount: "0",
+                        narration: _freightNarration,
+                      },
+                    ]);
                   }
                 }
-                const freightCrEntryId: number | null = freightCrCandidatesPatch[0] ?? null;
-                toDeleteIds.push(...freightCrCandidatesPatch.slice(1));
-
-                if (toDeleteIds.length > 0) {
-                  await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-                }
-
-                // Update purchases DR to full gross amount (goods + freight)
-                if (purchasesEntryId !== null) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ debitAmount: moneyString(newGrandTotal), creditAmount: "0" })
-                    .where(eq(voucherEntries.id, purchasesEntryId));
-                }
-
-                // Update main CR to goods-only amount (supplier payable)
-                if (mainCrEntryId !== null) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ creditAmount: moneyString(supplierTotal), debitAmount: "0" })
-                    .where(eq(voucherEntries.id, mainCrEntryId));
-                }
-
-                // Update or insert freight CR entry pointing at freightParentAccountId
-                if (freightCrEntryId !== null) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({
-                      creditAmount: moneyString(newFreight),
-                      debitAmount: "0",
-                      ledgerAccountId: newFreightParentAccountId,
-                      narration: _freightNarration,
-                    })
-                    .where(eq(voucherEntries.id, freightCrEntryId));
-                } else {
-                  await tx.insert(voucherEntries).values({
-                    voucherId: existingPO.voucherId,
-                    ledgerAccountId: newFreightParentAccountId,
-                    debitAmount: "0",
-                    creditAmount: moneyString(newFreight),
-                    narration: _freightNarration,
-                  });
-                }
-              } else {
-                // ── Interco parent freight (subsidiary → parent company) ────────────
-                // Child's voucher never references freightParentAccountId directly.
-                // Structure:
-                //   DR Purchases (supplierTotal — goods)
-                //   DR Purchases (newFreight — freight, same purchases account)
-                //   CR parentCreditAccountId (newGrandTotal — full intercompany payable)
-                //
-                // Strategy: keep the parentCredit CR, delete everything else, rebuild DRs.
-                const childSettings = await storage.getCompanySettings(existingPO.companyId);
-                const parentCreditAcctId = childSettings?.parentCreditAccountId ?? null;
-
-                let parentCreditEntryId: number | null = null;
+              } else if (newHasOwnFreight && newFreightOwnAccountId) {
+                // Own-paid freight: split inside purchase voucher
+                //   DR Purchases (supplierTotal) + DR FreightOwn (newFreight)
+                //   CR Supplier (supplierTotal)  + CR FreightOwn (newFreight)
                 let purchasesAcctId: number | null = null;
-                const toDeleteIds: number[] = [];
-
+                let freightCrFound = false;
                 for (const entry of existingEntries) {
-                  const acctId = entry.ledgerAccountId as number | null;
                   const isDebit = isDebitOnly(entry);
                   const isCredit = isCreditOnly(entry);
-
-                  if (isCredit && acctId === parentCreditAcctId && parentCreditEntryId === null) {
-                    parentCreditEntryId = entry.id;
-                  } else {
-                    toDeleteIds.push(entry.id);
-                    if (isDebit && acctId !== newFreightParentAccountId && !purchasesAcctId) {
-                      purchasesAcctId = acctId;
+                  if (isDebit) {
+                    if (!purchasesAcctId) purchasesAcctId = entry.ledgerAccountId ?? null;
+                    if (entry.ledgerAccountId !== newFreightOwnAccountId) {
+                      await tx
+                        .update(voucherEntries)
+                        .set({ debitAmount: moneyString(supplierTotal), creditAmount: "0" })
+                        .where(eq(voucherEntries.id, entry.id));
+                    } else {
+                      // Existing freight DR entry — keep/update
+                      await tx
+                        .update(voucherEntries)
+                        .set({ debitAmount: moneyString(newFreight) })
+                        .where(eq(voucherEntries.id, entry.id));
+                    }
+                  } else if (isCredit) {
+                    if (entry.ledgerAccountId === newFreightOwnAccountId) {
+                      freightCrFound = true;
+                      await tx
+                        .update(voucherEntries)
+                        .set({ creditAmount: moneyString(newFreight), ledgerAccountId: newFreightOwnAccountId })
+                        .where(eq(voucherEntries.id, entry.id));
+                    } else {
+                      await tx
+                        .update(voucherEntries)
+                        .set({ creditAmount: moneyString(supplierTotal), debitAmount: "0" })
+                        .where(eq(voucherEntries.id, entry.id));
                     }
                   }
                 }
-
-                if (toDeleteIds.length > 0) {
-                  await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-                }
-
-                if (parentCreditEntryId !== null) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ creditAmount: moneyString(newGrandTotal), debitAmount: "0" })
-                    .where(eq(voucherEntries.id, parentCreditEntryId));
-                } else if (parentCreditAcctId) {
-                  await tx.insert(voucherEntries).values({
-                    voucherId: existingPO.voucherId,
-                    ledgerAccountId: parentCreditAcctId,
-                    debitAmount: "0",
-                    creditAmount: moneyString(newGrandTotal),
-                    narration: `PO ${existingPO.poNumber} - Credit to parent`,
-                  });
-                }
-
-                if (purchasesAcctId) {
+                if (!freightCrFound && purchasesAcctId) {
                   await tx.insert(voucherEntries).values([
-                    {
-                      voucherId: existingPO.voucherId,
-                      ledgerAccountId: purchasesAcctId,
-                      debitAmount: moneyString(supplierTotal),
-                      creditAmount: "0",
-                      narration: `${existingPO.poNumber}`,
-                    },
                     {
                       voucherId: existingPO.voucherId,
                       ledgerAccountId: purchasesAcctId,
@@ -484,366 +526,287 @@ export function registerContainerFreightWriteRoutes(app: Express) {
                       creditAmount: "0",
                       narration: _freightNarration,
                     },
+                    {
+                      voucherId: existingPO.voucherId,
+                      ledgerAccountId: newFreightOwnAccountId,
+                      debitAmount: "0",
+                      creditAmount: moneyString(newFreight),
+                      narration: _freightNarration,
+                    },
                   ]);
                 }
-              }
-            } else if (newHasOwnFreight && newFreightOwnAccountId) {
-              // Own-paid freight: split inside purchase voucher
-              //   DR Purchases (supplierTotal) + DR FreightOwn (newFreight)
-              //   CR Supplier (supplierTotal)  + CR FreightOwn (newFreight)
-              let purchasesAcctId: number | null = null;
-              let freightCrFound = false;
-              for (const entry of existingEntries) {
-                const isDebit = isDebitOnly(entry);
-                const isCredit = isCreditOnly(entry);
-                if (isDebit) {
-                  if (!purchasesAcctId) purchasesAcctId = entry.ledgerAccountId ?? null;
-                  if (entry.ledgerAccountId !== newFreightOwnAccountId) {
+              } else {
+                // Standard: all entries to newLocalVoucherTotal (no embedded freight)
+                // If switching away from embedded freight, remove freight entries first
+                const freightEntryIds = existingEntries
+                  .filter((e) => {
+                    const acct = e.ledgerAccountId;
+                    return (
+                      acct === (existingPO.freightOwnAccountId ?? -1) ||
+                      acct === (existingPO.freightParentAccountId ?? -1)
+                    );
+                  })
+                  .map((e) => e.id);
+                if (freightEntryIds.length > 0) {
+                  await tx.delete(voucherEntries).where(inArray(voucherEntries.id, freightEntryIds));
+                }
+                // Also remove the matching freight DR entries (identified by narration)
+                const remainingEntries = existingEntries.filter((e) => !freightEntryIds.includes(e.id));
+                for (const entry of remainingEntries) {
+                  if (toMoney(entry.debitAmount).gt(0)) {
                     await tx
                       .update(voucherEntries)
-                      .set({ debitAmount: moneyString(supplierTotal), creditAmount: "0" })
+                      .set({ debitAmount: moneyString(newLocalVoucherTotal) })
                       .where(eq(voucherEntries.id, entry.id));
-                  } else {
-                    // Existing freight DR entry — keep/update
+                  } else if (toMoney(entry.creditAmount).gt(0)) {
+                    await tx
+                      .update(voucherEntries)
+                      .set({ creditAmount: moneyString(newLocalVoucherTotal) })
+                      .where(eq(voucherEntries.id, entry.id));
+                  }
+                }
+              }
+            }
+
+            // (interco sync moved to unconditional block below the transaction)
+
+            // Update container totals if applicable
+            const [container] = await tx
+              .select()
+              .from(containers)
+              .where(and(eq(containers.id, existingPO.containerId), eq(containers.companyId, existingPO.companyId)))
+              .limit(1);
+            if (container) {
+              // Get all POs for this container and recalculate totals
+              const containerPOs = await tx
+                .select()
+                .from(purchaseOrders)
+                .where(
+                  and(
+                    eq(purchaseOrders.companyId, existingPO.companyId),
+                    eq(purchaseOrders.containerId, existingPO.containerId)
+                  )
+                );
+              // Use the new values for this PO, the stored ones for the others.
+              const poAmounts = containerPOs.map((po) =>
+                po.id === id
+                  ? {
+                      itemsTotal: newItemsTotal,
+                      freight: newFreight,
+                      surcharge: newSurcharge,
+                      fumigation: newFumigation,
+                      documentCharges: newDocumentCharges,
+                      discount: newDiscount,
+                      otherCharges: newOtherCharges,
+                    }
+                  : po
+              );
+              const totalItemsCost = sumMoney(poAmounts.map((po) => po.itemsTotal));
+              const totalCharges = sumMoney(
+                poAmounts.flatMap((po) => [
+                  po.freight,
+                  po.surcharge,
+                  po.fumigation,
+                  po.documentCharges,
+                  toMoney(po.discount).negated(),
+                  po.otherCharges,
+                ])
+              );
+
+              // Update container totals
+              await tx
+                .update(containers)
+                .set({
+                  itemsTotal: moneyString(totalItemsCost),
+                  chargesTotal: moneyString(totalCharges),
+                  grandTotal: moneyString(totalItemsCost.plus(totalCharges)),
+                })
+                .where(eq(containers.id, existingPO.containerId));
+            }
+
+            // Sync container_charges table when PO charges are edited
+            if (chargesWereEdited && existingPO.containerId) {
+              await syncContainerCharges(tx, existingPO.containerId, poChargeRows);
+            }
+
+            // ── Freight own-account voucher ───────────────────────────────────
+            // When the user pays freight themselves, we create/update a separate
+            // Payment voucher (Debit Purchases / Credit own account) so the
+            // freight cost never touches the supplier's balance.
+            const freightVoucherNum = `FREIGHT-${container?.containerNumber ?? existingPO.containerId}-${existingPO.poNumber}`;
+            if (freightVoucherNeedsUpdate && newFreight.gt(0) && newFreightOwnAccountId) {
+              // Find the Purchases account used as debit in the supplier voucher
+              let purchasesAcctId: number | null = null;
+              if (existingPO.voucherId) {
+                const svEntries = await tx
+                  .select()
+                  .from(voucherEntries)
+                  .where(eq(voucherEntries.voucherId, existingPO.voucherId));
+                purchasesAcctId = svEntries.find((e) => toMoney(e.debitAmount).gt(0))?.ledgerAccountId ?? null;
+              }
+              const [existingFV] = await tx
+                .select()
+                .from(vouchers)
+                .where(and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
+                .limit(1);
+              if (existingFV) {
+                // Update existing freight voucher
+                await tx
+                  .update(vouchers)
+                  .set({ totalAmount: moneyString(newFreight) })
+                  .where(eq(vouchers.id, existingFV.id));
+                const fEntries = await tx
+                  .select()
+                  .from(voucherEntries)
+                  .where(eq(voucherEntries.voucherId, existingFV.id));
+                for (const fe of fEntries) {
+                  if (toMoney(fe.debitAmount).gt(0)) {
                     await tx
                       .update(voucherEntries)
                       .set({ debitAmount: moneyString(newFreight) })
-                      .where(eq(voucherEntries.id, entry.id));
-                  }
-                } else if (isCredit) {
-                  if (entry.ledgerAccountId === newFreightOwnAccountId) {
-                    freightCrFound = true;
-                    await tx
-                      .update(voucherEntries)
-                      .set({ creditAmount: moneyString(newFreight), ledgerAccountId: newFreightOwnAccountId })
-                      .where(eq(voucherEntries.id, entry.id));
+                      .where(eq(voucherEntries.id, fe.id));
                   } else {
                     await tx
                       .update(voucherEntries)
-                      .set({ creditAmount: moneyString(supplierTotal), debitAmount: "0" })
-                      .where(eq(voucherEntries.id, entry.id));
+                      .set({ creditAmount: moneyString(newFreight), ledgerAccountId: newFreightOwnAccountId })
+                      .where(eq(voucherEntries.id, fe.id));
                   }
                 }
-              }
-              if (!freightCrFound && purchasesAcctId) {
+              } else if (purchasesAcctId) {
+                // Create new freight payment voucher
+                const today = new Date().toISOString().split("T")[0];
+                const [newFV] = await tx
+                  .insert(vouchers)
+                  .values({
+                    companyId: existingPO.companyId,
+                    voucherNumber: freightVoucherNum,
+                    voucherType: "Payment",
+                    voucherDate: today,
+                    description: `Freight (own account) - ${container?.containerNumber} / ${existingPO.poNumber}`,
+                    totalAmount: moneyString(newFreight),
+                    sourceModule: "FACTORY",
+                  })
+                  .returning();
                 await tx.insert(voucherEntries).values([
                   {
-                    voucherId: existingPO.voucherId,
+                    voucherId: newFV.id,
                     ledgerAccountId: purchasesAcctId,
                     debitAmount: moneyString(newFreight),
                     creditAmount: "0",
-                    narration: _freightNarration,
+                    narration: `Freight - ${container?.containerNumber}`,
                   },
                   {
-                    voucherId: existingPO.voucherId,
+                    voucherId: newFV.id,
                     ledgerAccountId: newFreightOwnAccountId,
                     debitAmount: "0",
                     creditAmount: moneyString(newFreight),
-                    narration: _freightNarration,
+                    narration: `Freight - ${container?.containerNumber}`,
                   },
                 ]);
               }
-            } else {
-              // Standard: all entries to newLocalVoucherTotal (no embedded freight)
-              // If switching away from embedded freight, remove freight entries first
-              const freightEntryIds = existingEntries
-                .filter((e) => {
-                  const acct = e.ledgerAccountId;
-                  return (
-                    acct === (existingPO.freightOwnAccountId ?? -1) ||
-                    acct === (existingPO.freightParentAccountId ?? -1)
-                  );
-                })
-                .map((e) => e.id);
-              if (freightEntryIds.length > 0) {
-                await tx.delete(voucherEntries).where(inArray(voucherEntries.id, freightEntryIds));
-              }
-              // Also remove the matching freight DR entries (identified by narration)
-              const remainingEntries = existingEntries.filter((e) => !freightEntryIds.includes(e.id));
-              for (const entry of remainingEntries) {
-                if (toMoney(entry.debitAmount).gt(0)) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ debitAmount: moneyString(newLocalVoucherTotal) })
-                    .where(eq(voucherEntries.id, entry.id));
-                } else if (toMoney(entry.creditAmount).gt(0)) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ creditAmount: moneyString(newLocalVoucherTotal) })
-                    .where(eq(voucherEntries.id, entry.id));
-                }
-              }
+            } else if (oldFreightPaidBy === "own" && newFreightPaidBy === "supplier") {
+              // Switched back to supplier — remove the standalone freight voucher
+              const [existingFV] = await tx
+                .select()
+                .from(vouchers)
+                .where(and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
+                .limit(1);
+              // Wave 16 (A): retired (soft delete with its lines, audited), not hard-deleted.
+              const fvIds = existingFV ? [existingFV.id] : [];
+              await retireVouchersForRequestTx(tx, req, existingPO.companyId, fvIds, "po-freight-voucher-removed");
             }
           }
+        } else if (chargesWereEdited && existingPO.containerId) {
+          // If charges were edited but grand total didn't change (or no voucher), still sync container_charges
+          await syncContainerCharges(tx, existingPO.containerId, poChargeRows);
+        }
 
-          // (interco sync moved to unconditional block below the transaction)
+        // Perpetual inventory (wave 8.2): goods in transit follows the edited PO voucher.
+        await syncPurchaseOrderGitTx(tx, existingPO.companyId, existingPO.id);
 
-          // Update container totals if applicable
-          const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
-          if (container) {
-            // Get all POs for this container and recalculate totals
-            const allPOs = await storage.getAllPurchaseOrders(existingPO.companyId);
-            const containerPOs = allPOs.filter((po) => po.containerId === existingPO.containerId);
-            // Use the new values for this PO, the stored ones for the others.
-            const poAmounts = containerPOs.map((po) =>
-              po.id === id
+        // ── Inter-company sync — runs unconditionally after every charges-only update.
+        // (Branch 1/items path runs its own sync inside the transaction above.)
+        // Pass grossTotal (not supplierTotal) so the DR subsidiary entry is correct,
+        // and include freight opts so the parent CR is split between supplier + freight account.
+        {
+          const _b2ParentId = await storage.getParentCompanyId();
+          if (_b2ParentId && existingPO.companyId !== _b2ParentId) {
+            const _b2NewPoNum =
+              req.body.poNumber && req.body.poNumber !== existingPO.poNumber ? (req.body.poNumber as string) : null;
+            const _b2PoNums = _b2NewPoNum ? [existingPO.poNumber, _b2NewPoNum] : existingPO.poNumber;
+            const _b2ContainerRow = existingPO.containerId
+              ? (
+                  await tx
+                    .select({ containerNumber: containers.containerNumber })
+                    .from(containers)
+                    .where(eq(containers.id, existingPO.containerId))
+                    .limit(1)
+                )[0]
+              : undefined;
+            const _b2Sync = await syncIntercoParentVoucher(
+              tx,
+              _b2PoNums,
+              newGrandTotal,
+              _b2ContainerRow?.containerNumber,
+              newHasParentFreight && newFreightParentAccountId
                 ? {
-                    itemsTotal: newItemsTotal,
-                    freight: newFreight,
-                    surcharge: newSurcharge,
-                    fumigation: newFumigation,
-                    documentCharges: newDocumentCharges,
-                    discount: newDiscount,
-                    otherCharges: newOtherCharges,
+                    freightAmount: newFreight,
+                    freightParentAccountId: newFreightParentAccountId,
+                    subsidiaryCompanyId: existingPO.companyId,
                   }
-                : po
+                : undefined
             );
-            const totalItemsCost = sumMoney(poAmounts.map((po) => po.itemsTotal));
-            const totalCharges = sumMoney(
-              poAmounts.flatMap((po) => [
-                po.freight,
-                po.surcharge,
-                po.fumigation,
-                po.documentCharges,
-                toMoney(po.discount).negated(),
-                po.otherCharges,
-              ])
-            );
-
-            // Update container totals
-            await tx
-              .update(containers)
-              .set({
-                itemsTotal: moneyString(totalItemsCost),
-                chargesTotal: moneyString(totalCharges),
-                grandTotal: moneyString(totalItemsCost.plus(totalCharges)),
-              })
-              .where(eq(containers.id, existingPO.containerId));
-          }
-
-          // Sync container_charges table when PO charges are edited
-          if (chargesWereEdited && existingPO.containerId) {
-            await syncContainerCharges(tx, existingPO.containerId, poChargeRows);
-          }
-
-          // ── Freight own-account voucher ───────────────────────────────────
-          // When the user pays freight themselves, we create/update a separate
-          // Payment voucher (Debit Purchases / Credit own account) so the
-          // freight cost never touches the supplier's balance.
-          const freightVoucherNum = `FREIGHT-${container?.containerNumber ?? existingPO.containerId}-${existingPO.poNumber}`;
-          if (freightVoucherNeedsUpdate && newFreight.gt(0) && newFreightOwnAccountId) {
-            // Find the Purchases account used as debit in the supplier voucher
-            let purchasesAcctId: number | null = null;
-            if (existingPO.voucherId) {
-              const svEntries = await tx
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, existingPO.voucherId));
-              purchasesAcctId = svEntries.find((e) => toMoney(e.debitAmount).gt(0))?.ledgerAccountId ?? null;
-            }
-            const [existingFV] = await tx
-              .select()
-              .from(vouchers)
-              .where(and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
-              .limit(1);
-            if (existingFV) {
-              // Update existing freight voucher
-              await tx
-                .update(vouchers)
-                .set({ totalAmount: moneyString(newFreight) })
-                .where(eq(vouchers.id, existingFV.id));
-              const fEntries = await tx
-                .select()
-                .from(voucherEntries)
-                .where(eq(voucherEntries.voucherId, existingFV.id));
-              for (const fe of fEntries) {
-                if (toMoney(fe.debitAmount).gt(0)) {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ debitAmount: moneyString(newFreight) })
-                    .where(eq(voucherEntries.id, fe.id));
-                } else {
-                  await tx
-                    .update(voucherEntries)
-                    .set({ creditAmount: moneyString(newFreight), ledgerAccountId: newFreightOwnAccountId })
-                    .where(eq(voucherEntries.id, fe.id));
-                }
-              }
-            } else if (purchasesAcctId) {
-              // Create new freight payment voucher
-              const today = new Date().toISOString().split("T")[0];
-              const [newFV] = await tx
-                .insert(vouchers)
-                .values({
-                  companyId: existingPO.companyId,
-                  voucherNumber: freightVoucherNum,
-                  voucherType: "Payment",
-                  voucherDate: today,
-                  description: `Freight (own account) - ${container?.containerNumber} / ${existingPO.poNumber}`,
-                  totalAmount: moneyString(newFreight),
-                  sourceModule: "FACTORY",
-                })
-                .returning();
-              await tx.insert(voucherEntries).values([
-                {
-                  voucherId: newFV.id,
-                  ledgerAccountId: purchasesAcctId,
-                  debitAmount: moneyString(newFreight),
-                  creditAmount: "0",
-                  narration: `Freight - ${container?.containerNumber}`,
-                },
-                {
-                  voucherId: newFV.id,
-                  ledgerAccountId: newFreightOwnAccountId,
-                  debitAmount: "0",
-                  creditAmount: moneyString(newFreight),
-                  narration: `Freight - ${container?.containerNumber}`,
-                },
-              ]);
-            }
-          } else if (oldFreightPaidBy === "own" && newFreightPaidBy === "supplier") {
-            // Switched back to supplier — remove the standalone freight voucher
-            const [existingFV] = await tx
-              .select()
-              .from(vouchers)
-              .where(and(eq(vouchers.companyId, existingPO.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
-              .limit(1);
-            if (existingFV) {
-              await tx.delete(voucherEntries).where(eq(voucherEntries.voucherId, existingFV.id));
-              await tx.delete(vouchers).where(eq(vouchers.id, existingFV.id));
+            if (!_b2Sync.found) {
+              logger.warn(
+                `[PO-PATCH charges] No INTERCO-PARENT voucher for PO(s): ${Array.isArray(_b2PoNums) ? _b2PoNums.join(", ") : _b2PoNums}`
+              );
             }
           }
-        });
-      } else if (chargesWereEdited && existingPO.containerId) {
-        // If charges were edited but grand total didn't change (or no voucher), still sync container_charges
-        await syncContainerCharges(db, existingPO.containerId, poChargeRows);
-      }
+        }
 
-      // ── Inter-company sync — runs unconditionally after every charges-only update.
-      // (Branch 1/items path runs its own sync inside the transaction above.)
-      // Pass grossTotal (not supplierTotal) so the DR subsidiary entry is correct,
-      // and include freight opts so the parent CR is split between supplier + freight account.
-      {
-        const _b2ParentId = await storage.getParentCompanyId();
-        if (_b2ParentId && existingPO.companyId !== _b2ParentId) {
-          const _b2NewPoNum =
-            req.body.poNumber && req.body.poNumber !== existingPO.poNumber ? (req.body.poNumber as string) : null;
-          const _b2PoNums = _b2NewPoNum ? [existingPO.poNumber, _b2NewPoNum] : existingPO.poNumber;
-          const _b2ContainerRow = existingPO.containerId
-            ? (
-                await db
-                  .select({ containerNumber: containers.containerNumber })
-                  .from(containers)
-                  .where(eq(containers.id, existingPO.containerId))
-                  .limit(1)
-              )[0]
-            : undefined;
-          const _b2Sync = await syncIntercoParentVoucher(
-            db,
-            _b2PoNums,
-            newGrandTotal,
-            _b2ContainerRow?.containerNumber,
-            newHasParentFreight && newFreightParentAccountId
-              ? {
-                  freightAmount: newFreight,
-                  freightParentAccountId: newFreightParentAccountId,
-                  subsidiaryCompanyId: existingPO.companyId,
-                }
-              : undefined
+        // INTERCO-FREIGHT sync removed — freight is now inside the purchase voucher itself.
+
+        {
+          const _poChanges: Record<string, { old: unknown; new: unknown }> = {};
+          for (const _f of [
+            "poNumber",
+            "currency",
+            "status",
+            "freight",
+            "surcharge",
+            "fumigation",
+            "documentCharges",
+            "discount",
+            "otherCharges",
+            "itemsTotal",
+          ] as const) {
+            if (String(existingPO[_f] ?? "") !== String(updated[_f] ?? "")) {
+              _poChanges[_f] = { old: existingPO[_f], new: updated[_f] };
+            }
+          }
+          await logAudit(
+            {
+              userId: req.session.userId!,
+              username: req.session.username || "unknown",
+              companyId: req.session.currentCompanyId!,
+              action: "update",
+              tableName: "purchase_orders",
+              recordId: id,
+              recordIdentifier: existingPO.poNumber || `PO #${id}`,
+              changes: _poChanges,
+            },
+            tx
           );
-          if (!_b2Sync.found) {
-            logger.warn(
-              `[PO-PATCH charges] No INTERCO-PARENT voucher for PO(s): ${Array.isArray(_b2PoNums) ? _b2PoNums.join(", ") : _b2PoNums}`
-            );
-          }
         }
-      }
-
-      // INTERCO-FREIGHT sync removed — freight is now inside the purchase voucher itself.
-
-      try {
-        const _poChanges: Record<string, { old: unknown; new: unknown }> = {};
-        for (const _f of [
-          "poNumber",
-          "currency",
-          "status",
-          "freight",
-          "surcharge",
-          "fumigation",
-          "documentCharges",
-          "discount",
-          "otherCharges",
-          "itemsTotal",
-        ] as const) {
-          if (String(existingPO[_f] ?? "") !== String(updated[_f] ?? "")) {
-            _poChanges[_f] = { old: existingPO[_f], new: updated[_f] };
-          }
-        }
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "update",
-          tableName: "purchase_orders",
-          recordId: id,
-          recordIdentifier: existingPO.poNumber || `PO #${id}`,
-          changes: _poChanges,
-        });
-      } catch {
-        /* non-fatal */
-      }
-      res.json(updated);
+        return updated;
+      });
+      res.json(updatedPO);
     } catch (error: unknown) {
       sendHttpError(res, error);
     }
   });
 
-  // Delete a purchase order (Admin only)
-  app.delete("/api/purchase-orders/:id", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const id = parseId(req.params.id);
-      if (id === null) return res.status(400).json({ message: "Invalid id" });
-      if (isNaN(id)) {
-        return res.status(400).json({ message: "Invalid purchase order ID" });
-      }
-
-      const existingPO = await storage.getPurchaseOrderByIdForCompany(id, req.session.currentCompanyId!);
-      if (!existingPO) {
-        return res.status(404).json({ message: "Purchase order not found" });
-      }
-
-      // Verify purchase order belongs to current company
-      if (existingPO.companyId !== req.session.currentCompanyId) {
-        return res.status(403).json({
-          message: "Access denied: Purchase order belongs to a different company",
-        });
-      }
-
-      await storage.deletePurchaseOrder(id);
-      try {
-        await logAudit({
-          userId: req.session.userId!,
-          username: req.session.username || "unknown",
-          companyId: req.session.currentCompanyId!,
-          action: "delete",
-          tableName: "purchase_orders",
-          recordId: existingPO.id,
-          recordIdentifier: existingPO.poNumber || `PO #${id}`,
-          changes: {
-            poNumber: { old: existingPO.poNumber },
-            supplier: { old: existingPO.supplierId },
-            itemsTotal: { old: existingPO.itemsTotal || "0" },
-            status: { old: existingPO.status },
-          },
-        });
-      } catch {
-        /* non-fatal */
-      }
-      res.json({ message: "Purchase order deleted successfully" });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
+  registerPurchaseOrderDeleteRoute(app);
 
   // Delete a container (Admin only)
 

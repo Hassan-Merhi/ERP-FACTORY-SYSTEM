@@ -22,8 +22,14 @@ import {
   factorySupplierPayments,
   factorySupplierFxTransfers,
 } from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, sql, inArray, isNull } from "drizzle-orm";
 import { isSupplierPaidFreight } from "./_helpers";
+import {
+  emptyFactorySupplierLedgerView,
+  FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+  loadFactorySupplierLedgerViews,
+} from "./factorySupplierLedger";
+import { entryStoredUsdAmounts, voucherEntryCurrencyColumns } from "../../../../services/factory/voucherEntryCurrency";
 
 export function registerSupplierBalanceSingleRoutes(app: Express) {
   app.get("/api/factory/suppliers/:id/balance", requireAuth, async (req: Request, res: Response) => {
@@ -66,8 +72,7 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
       const voucherPaymentRows = await db
         .select({
           factorySupplierId: voucherEntries.factorySupplierId,
-          debitAmount: voucherEntries.debitAmount,
-          currency: vouchers.currency,
+          ...voucherEntryCurrencyColumns,
           exchangeRate: vouchers.exchangeRate,
           optional: vouchers.optional,
         })
@@ -76,6 +81,11 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         .where(
           and(
             inArray(voucherEntries.factorySupplierId, supplierIds),
+            // A voucher line belongs to its voucher's company; deleted and optional
+            // vouchers never reach a balance (soft delete keeps the lines).
+            eq(vouchers.companyId, companyId),
+            eq(vouchers.optional, false),
+            isNull(vouchers.deletedAt),
             sql`${voucherEntries.debitAmount}::numeric > 0`,
             sql`${vouchers.voucherNumber} NOT LIKE 'FACTORY-PAY-%'`
           )
@@ -86,9 +96,12 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
         if (row.optional) continue; // optional vouchers don't affect the balance
         const amt = toMoney(row.debitAmount);
         const curr = row.currency || "USD";
+        // A normalized entry already holds its USD base; only a legacy
+        // foreign-currency entry is converted from the voucher's rate.
+        const stored = entryStoredUsdAmounts(row);
         let usdAmt: Decimal;
-        if (curr === "USD") {
-          usdAmt = amt;
+        if (stored) {
+          usdAmt = stored.debit;
         } else {
           // vouchers.exchangeRate has no fxRateConfirmed column yet — legacy heuristic stopgap.
           const { fxRate: fx, looksSet } = resolveStoredFxRate(curr, row.exchangeRate);
@@ -150,9 +163,17 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
           );
           if (!fxLooksSet) balanceFxUnresolved.add(sid);
           const freightCc = c.freightCurrencyCode || containerCc;
-          // Freight in the same currency as the container → multiply by fx; otherwise treat separately
+          // Freight in the same currency as the container → multiply by fx; USD freight
+          // as is; freight in a third currency at its own confirmed freight rate. Before
+          // wave 13 third-currency freight was silently dropped; with no confirmed
+          // freight rate it is now flagged unresolved instead.
           const freightInContainerCurr = freightCc === containerCc ? freight : zero;
-          const freightDirectUsd = freightCc === "USD" && freightCc !== containerCc ? freight : zero;
+          let freightDirectUsd = freightCc === "USD" && freightCc !== containerCc ? freight : zero;
+          if (freightCc !== containerCc && freightCc !== "USD" && freight.gt(0)) {
+            const own = resolveStoredFxRate(freightCc, c.freightFxRateToUsd, c.freightFxRateConfirmed);
+            if (own.looksSet) freightDirectUsd = freight.times(own.fxRate);
+            else balanceFxUnresolved.add(sid);
+          }
           if (!fxLooksSet) return sum.plus(freightDirectUsd); // skip the unresolved-rate portion, don't guess
           return sum.plus(kg.times(rate).plus(freightInContainerCurr).times(fx)).plus(freightDirectUsd);
         }, zero);
@@ -183,6 +204,13 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
           if (oc.lte(0)) return sum;
           const ocCcy = c.otherChargesCurrencyCode || "USD";
           if (ocCcy === "USD") return sum.plus(oc);
+          // The container's rate converts only the container's own currency; other
+          // charges in another currency have no stored rate and are flagged unresolved
+          // (before wave 13 they were converted at the container's rate).
+          if (ocCcy !== (c.currencyCode || "USD")) {
+            balanceFxUnresolved.add(sid);
+            return sum;
+          }
           const { fxRate: fx, looksSet } = resolveStoredFxRate(ocCcy, c.fxRateToUsd, c.fxRateConfirmed);
           if (!looksSet) {
             balanceFxUnresolved.add(sid);
@@ -223,14 +251,36 @@ export function registerSupplierBalanceSingleRoutes(app: Express) {
           .minus(voucherPaid);
       };
 
-      // True broker balance: only the broker's own balance (NOT children aggregated in)
-      // The response stays a number; it is exact up to the final conversion.
-      const outstandingUsd = computeBalance(supplierId, toMoney(supplier.openingBalance)).toNumber();
+      // Operational container formula (true broker model: the broker's own
+      // figure, children not aggregated in) — kept only as a labelled memo.
+      const operationalUsd = computeBalance(supplierId, toMoney(supplier.openingBalance));
+
+      // Primary balance (wave 13, owner decision 3): the ledger, from the balance
+      // engine, in USD base; the native balance per currency of the same lines;
+      // and the container amounts with no journal as "not yet in the ledger".
+      const asOfRaw = req.query?.asOf;
+      const asOf = typeof asOfRaw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw) ? asOfRaw : null;
+      const view =
+        (await loadFactorySupplierLedgerViews(db, companyId, { ids: [supplierId], asOf })).get(supplierId) ??
+        emptyFactorySupplierLedgerView(supplierId);
+      const ledgerBalance = toMoney(view.ledgerBalanceUsd).toNumber();
 
       res.json({
-        balance: outstandingUsd,
-        outstandingUsd,
-        fxUnresolved: balanceFxUnresolved.has(supplierId),
+        balance: ledgerBalance,
+        outstandingUsd: ledgerBalance,
+        balanceBasis: view.balanceBasis,
+        ledgerBalance,
+        ledgerBalanceSide: view.ledgerBalanceSide,
+        nativeBalances: view.nativeBalances,
+        // The ledger's USD figure is unresolved only where a legacy line holds a native amount.
+        fxUnresolved: view.ledgerFxUnresolved,
+        notInLedger: view.notInLedger,
+        notInLedgerTotal: view.notInLedger.total,
+        operationalMemo: {
+          label: FACTORY_SUPPLIER_OPERATIONAL_MEMO_LABEL,
+          outstandingUsd: operationalUsd.toFixed(2),
+          fxUnresolved: balanceFxUnresolved.has(supplierId),
+        },
       });
     } catch (error: unknown) {
       res.status(500).json({ message: getErrorMessage(error) });

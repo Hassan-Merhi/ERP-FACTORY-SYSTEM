@@ -11,31 +11,12 @@ import { buildSafeFilename, contentDisposition } from "../../../lib/contentDispo
 import { getClientDate } from "../../../lib/dateUtils";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
-import {
-  customerOrders,
-  customerBalances,
-  customers,
-  voucherEntries,
-  companies,
-  companySettings,
-  vouchers,
-} from "@shared/schema";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { customerOrders, customers, companies, companySettings } from "@shared/schema";
+import { eq, and, inArray } from "drizzle-orm";
+import { MoneyDecimal } from "../../../lib/money";
+import { buildFactoryCustomerStatement } from "./statementRows";
 import path from "path";
 import fs from "fs";
-
-type StatementVoucherRow = {
-  transactionDate: string;
-  transactionType: string;
-  referenceType: string;
-  referenceNumber: string;
-  description: string | null;
-  debitAmount: string;
-  creditAmount: string;
-  referenceId?: number | null;
-  rowNote?: string | null;
-  _fromVoucher: boolean;
-};
 
 export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
   // ── Customer Statement: PDF Export ──────────────────────────────────────
@@ -55,68 +36,21 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
       const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
       const [settings] = await db.select().from(companySettings).where(eq(companySettings.companyId, companyId));
 
-      const balanceRows = await db
-        .select()
-        .from(customerBalances)
-        .where(and(eq(customerBalances.companyId, companyId), eq(customerBalances.customerId, customerId)))
-        .orderBy(customerBalances.transactionDate, customerBalances.id);
-
-      // Pull voucher entries (same logic as statement endpoint)
-      const voucherRowsPdf: StatementVoucherRow[] = [];
-      const ledgerAccountIdPdf = customer.ledgerAccountId;
-      const voucherCondPdf = ledgerAccountIdPdf
-        ? sql`(${voucherEntries.ledgerAccountId} = ${ledgerAccountIdPdf} OR ${voucherEntries.customerId} = ${customerId})`
-        : sql`${voucherEntries.customerId} = ${customerId}`;
-      const rawVePdf = await db
-        .select({
-          id: voucherEntries.id,
-          voucherId: voucherEntries.voucherId,
-          voucherNumber: vouchers.voucherNumber,
-          voucherType: vouchers.voucherType,
-          voucherDate: vouchers.voucherDate,
-          description: vouchers.description,
-          debitAmount: voucherEntries.debitAmount,
-          creditAmount: voucherEntries.creditAmount,
-          narration: voucherEntries.narration,
-          optional: vouchers.optional,
-        })
-        .from(voucherEntries)
-        .innerJoin(
-          vouchers,
-          and(
-            eq(voucherEntries.voucherId, vouchers.id),
-            eq(vouchers.companyId, companyId),
-            sql`${vouchers.voucherNumber} NOT LIKE 'CHARGE-%'`,
-            sql`${vouchers.voucherNumber} NOT LIKE 'INV-%'`
-          )
-        )
-        .where(voucherCondPdf)
-        .orderBy(vouchers.voucherDate, voucherEntries.id);
-      for (const ve of rawVePdf) {
-        if (ve.optional) continue; // optional vouchers don't affect the balance
-        voucherRowsPdf.push({
-          transactionDate: ve.voucherDate,
-          transactionType: ve.voucherType || "VOUCHER",
-          referenceType: "VOUCHER",
-          referenceNumber: ve.voucherNumber,
-          description: ve.narration || ve.description || ve.voucherType,
-          debitAmount: ve.debitAmount ?? "0",
-          creditAmount: ve.creditAmount ?? "0",
-          _fromVoucher: true,
-        });
-      }
-      const allRowsPdf = [...balanceRows.map((r) => ({ ...r, _fromVoucher: false })), ...voucherRowsPdf].sort(
-        (a, b) => {
-          const da = (a.transactionDate || "").toString(),
-            db2 = (b.transactionDate || "").toString();
-          if (da !== db2) return da < db2 ? -1 : 1;
-          return (a._fromVoucher ? 1 : 0) - (b._fromVoucher ? 1 : 0);
-        }
-      );
-
-      const openingBalance = parseFloat(customer.openingBalance || "0");
-      const openingSide = customer.openingBalanceSide || "Dr";
-      let _runningBalance = openingSide === "Dr" ? openingBalance : -openingBalance;
+      // Ledger rows from the balance engine plus the amounts not yet in the
+      // ledger, flagged (statementRows.ts); the closing is split below.
+      const statement = await buildFactoryCustomerStatement(companyId, customerId);
+      const allRowsPdf = statement.rows.map((row) => ({
+        transactionDate: row.transactionDate,
+        transactionType: row.transactionType,
+        referenceType: row.referenceType,
+        referenceId: row.referenceId,
+        description: row.description,
+        rowNote: row.rowNote,
+        notInLedger: row.notInLedger,
+        combinedEffect: row.combinedEffect,
+        ledgerEffect: row.ledgerEffect,
+      }));
+      const openingExact = statement.opening;
 
       // Read filter params (forwarded from the frontend export button)
       const dateFromParam = ((req.query.dateFrom as string) || "").trim();
@@ -146,11 +80,10 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
         }
       }
 
-      // First pass: enrich ALL rows with running balance (needed before filtering)
+      // First pass: enrich ALL rows (needed before filtering)
       const allEnrichedPdf = allRowsPdf.map((row) => {
-        const debit = parseFloat(row.debitAmount || "0");
-        const credit = parseFloat(row.creditAmount || "0");
-        _runningBalance += debit - credit;
+        const debit = row.combinedEffect.greaterThan(0) ? row.combinedEffect.toNumber() : 0;
+        const credit = row.combinedEffect.lessThan(0) ? row.combinedEffect.negated().toNumber() : 0;
         let container = "";
         let particulars: string;
         if (row.referenceType === "INVOICE" && row.referenceId) {
@@ -159,18 +92,22 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
         } else {
           particulars = row.description || "";
         }
+        if (row.notInLedger) particulars = `${particulars} (not yet in the ledger)`.trim();
         return { ...row, debit, credit, container, particulars };
       });
 
-      // Compute "brought forward" balance (running balance at the start of the filter period)
-      let bfRunning = openingSide === "Dr" ? openingBalance : -openingBalance;
+      // "Brought forward" balances at the start of the filter period: combined and ledger
+      let bfCombined = openingExact;
+      let bfLedger = openingExact;
       if (dateFromParam) {
         for (const r of allEnrichedPdf) {
           const rDate = (r.transactionDate || "").toString().slice(0, 10);
-          if (rDate < dateFromParam) bfRunning += r.debit - r.credit;
-          else break;
+          if (rDate >= dateFromParam) break;
+          bfCombined = bfCombined.plus(r.combinedEffect);
+          bfLedger = bfLedger.plus(r.ledgerEffect);
         }
       }
+      const bfRunning = bfCombined.toNumber();
 
       // Apply filters (mirrors frontend filteredHistory logic)
       const rows = allEnrichedPdf.filter((row) => {
@@ -186,11 +123,21 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
         return true;
       });
 
-      const totalDr = rows.reduce((s: number, r) => s + r.debit, 0);
-      const totalCr = rows.reduce((s: number, r) => s + r.credit, 0);
-      const closingRaw = bfRunning + (totalDr - totalCr);
-      const closingBalance = Math.abs(closingRaw);
-      const closingBalanceSide = closingRaw >= 0 ? "Dr" : "Cr";
+      const totalDrExact = rows.reduce(
+        (sum, r) => sum.plus(MoneyDecimal.max(r.combinedEffect, 0)),
+        new MoneyDecimal(0)
+      );
+      const totalCrExact = rows.reduce(
+        (sum, r) => sum.plus(MoneyDecimal.max(r.combinedEffect.negated(), 0)),
+        new MoneyDecimal(0)
+      );
+      const totalDr = totalDrExact.toNumber();
+      const totalCr = totalCrExact.toNumber();
+      const closingCombined = bfCombined.plus(totalDrExact).minus(totalCrExact);
+      const closingLedger = rows.reduce((sum, r) => sum.plus(r.ledgerEffect), bfLedger);
+      const closingNotInLedger = closingCombined.minus(closingLedger);
+      const closingBalance = closingCombined.abs().toNumber();
+      const closingBalanceSide = closingCombined.lessThan(0) ? "Cr" : "Dr";
 
       // Format: $1,234 (no .00 for whole numbers)
       const fmtAmt = (n: number) => {
@@ -558,6 +505,22 @@ export function registerFactoryCustomerStatementPdfRoutes(app: Express) {
         doc.text(closingStr, colX[5] + CP, y + 4, { width: colW[5] - CP * 2, align: "right", lineBreak: false });
       }
       y += 20;
+
+      // ── Closing split: in the ledger / not yet in the ledger ──
+      for (const [label, value] of [
+        ["of which in the ledger", closingLedger],
+        ["of which not yet in the ledger", closingNotInLedger],
+      ] as const) {
+        ensureSpace(14);
+        doc.fillColor("#333333").font("Helvetica-Oblique").fontSize(FS);
+        doc.text(label, colX[2] + CP, y + 2, { width: colW[2] - CP * 2, lineBreak: false });
+        const splitStr = fmtBalance(value.abs().toNumber(), value.lessThan(0) ? "Cr" : "Dr");
+        const col = value.lessThan(0) ? 5 : 4;
+        doc.text(splitStr, colX[col] + CP, y + 2, { width: colW[col] - CP * 2, align: "right", lineBreak: false });
+        doc.fillColor("#000000");
+        y += 14;
+      }
+      y += 4;
 
       // ── Statement note ──
       if (customer.statementNote) {

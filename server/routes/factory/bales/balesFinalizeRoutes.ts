@@ -17,9 +17,7 @@ import { writeDaybookEntry, checkFactoryAdmin } from "../_helpers";
 import {
   factoryCategories,
   factoryBaleProducts,
-  factoryRawStock,
   factoryMixBatches,
-  factoryMixBatchSources,
   factoryPressingBatches,
   factoryBales,
   stockItems,
@@ -27,31 +25,14 @@ import {
   locations,
 } from "@shared/schema";
 import { eq, and, sql, inArray } from "drizzle-orm";
-import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../../lib/money";
-
-/** Bale cost columns are numeric(20, 7). */
-const BALE_COST_SCALE = 7;
-
-/**
- * Blended cost per kg of a mix batch's sources, each priced at its
- * container's raw-stock cost when there is one; null when the sources
- * weigh nothing.
- */
-function blendedSourceCost(
-  sources: Array<{ weightKg: string; costPerKg: string; containerId: number | null }>,
-  rawStockCostMap: Map<number, Decimal>
-): Decimal | null {
-  let totalCost = new MoneyDecimal(0);
-  let totalWeight = new MoneyDecimal(0);
-  for (const src of sources) {
-    const w = toMoney(src.weightKg);
-    const c = (src.containerId && rawStockCostMap.get(src.containerId)) || toMoney(src.costPerKg);
-    totalCost = totalCost.plus(w.times(c));
-    totalWeight = totalWeight.plus(w);
-  }
-  return totalWeight.greaterThan(0) ? totalCost.dividedBy(totalWeight) : null;
-}
+import {
+  baleCostFromMix,
+  FACTORY_COST_SCALE,
+  mixCostForPressing,
+  sendFactoryCostBasisRefusal,
+} from "../../../services/factory/baleCostBasis";
+import { FACTORY_BALE_RECOST_MOVED_MESSAGE } from "../../../services/factory/baleRecost";
 import { createDatabaseStockMovementAdapter } from "../../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../../services/inventory/stockMovementIntegrityService";
 
@@ -125,40 +106,19 @@ export function registerBalesFinalizeRoutes(app: Express) {
           );
         }
 
-        // Derive bale cost from raw stock source prices (not mix batch blended cost).
-        // This ensures duty updates after mix batch creation are reflected in bale costs.
-        const mixSources = await tx
-          .select({
-            weightKg: factoryMixBatchSources.weightKg,
-            costPerKg: factoryMixBatchSources.costPerKg,
-            containerId: factoryMixBatchSources.containerId,
-          })
-          .from(factoryMixBatchSources)
-          .where(eq(factoryMixBatchSources.mixBatchId, mixBatchId));
-
-        let costPerKg: Decimal;
-        if (mixSources.length > 0) {
-          const sourceContainerIds = mixSources.map((s) => s.containerId).filter(Boolean) as number[];
-          const rawStockCostMap = new Map<number, Decimal>();
-          if (sourceContainerIds.length > 0) {
-            const rawStockRecs = await tx
-              .select({ containerId: factoryRawStock.containerId, costPerKg: factoryRawStock.costPerKg })
-              .from(factoryRawStock)
-              .where(inArray(factoryRawStock.containerId, sourceContainerIds));
-            for (const r of rawStockRecs) {
-              rawStockCostMap.set(r.containerId, toMoney(r.costPerKg));
-            }
-          }
-          costPerKg = blendedSourceCost(mixSources, rawStockCostMap) ?? toMoney(mixBatch.costPerKg);
-        } else {
-          costPerKg = toMoney(mixBatch.costPerKg);
-        }
+        // Wave 11: a pressed bale costs weight × its mix's USD cost per kg, so
+        // the work in progress pressing relieves (usedKg × the mix cost) is
+        // exactly the finished-goods value it adds. The mix cost is held in USD
+        // (its sources at their USD rates; container cost recalculations and
+        // the reviewed re-cost keep it current). A mix with no cost refuses
+        // under perpetual inventory and gives unvalued bales before it.
+        const costPerKg = await mixCostForPressing(tx, companyId, req.body.txDate || getClientDate(req), mixBatch);
 
         const now = new Date();
         const updatedBales = [];
 
         for (const bale of balesToFinalize) {
-          const baleTotalCost = toMoney(bale.weightKg).times(costPerKg);
+          const baleCost = baleCostFromMix(bale.weightKg, costPerKg);
 
           const [updated] = await tx
             .update(factoryBales)
@@ -166,8 +126,8 @@ export function registerBalesFinalizeRoutes(app: Express) {
               status: "IN_STOCK",
               erpLocationId,
               mixBatchId,
-              costPerKg: costPerKg.toFixed(BALE_COST_SCALE),
-              totalCost: baleTotalCost.toFixed(BALE_COST_SCALE),
+              costPerKg: baleCost.costPerKg.toFixed(FACTORY_COST_SCALE),
+              totalCost: baleCost.totalCost.toFixed(FACTORY_COST_SCALE),
               finalizedAt: now,
               updatedAt: now,
             })
@@ -303,9 +263,9 @@ export function registerBalesFinalizeRoutes(app: Express) {
             stockItemCache.set(itemCode, erpStockItemId!);
           }
 
-          const baleRate = toMoney(bale.weightKg).times(toMoney(bale.costPerKg));
-
-          await adjustInventory(tx, erpLocationId, erpStockItemId!, 1, companyId, baleRate.toNumber());
+          // The ERP mirror of factory bales is quantity only (wave 11): the
+          // factory values its bales, so the mirror receives at rate 0.
+          await adjustInventory(tx, erpLocationId, erpStockItemId!, 1, companyId, 0);
 
           // Canonical evidence for the bale this finalisation brought into ERP
           // stock, on the same transaction that raised the inventory. A bale is
@@ -318,7 +278,7 @@ export function registerBalesFinalizeRoutes(app: Express) {
               stockItemId: erpStockItemId!,
               kind: "receipt",
               quantity: "1",
-              unitCost: baleRate.toFixed(6),
+              unitCost: "0",
               toLocationId: erpLocationId,
               occurredAt: new Date().toISOString(),
               source: {
@@ -362,90 +322,18 @@ export function registerBalesFinalizeRoutes(app: Express) {
 
       res.json(result);
     } catch (error: unknown) {
+      if (sendFactoryCostBasisRefusal(res, error)) return;
       logger.error("Error finalizing pressing batch:", { error: error });
       res.status(400).json({ message: getErrorMessage(error) });
     }
   });
 
-  // Backfill historical bale costs from raw stock source prices
-  app.post("/api/factory/bales/backfill-costs", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const companyId = req.session.factoryCompanyId || req.session.currentCompanyId;
-      if (!companyId) return res.status(400).json({ message: "No company selected" });
-
-      const balesWithMix = await db
-        .select({
-          id: factoryBales.id,
-          weightKg: factoryBales.weightKg,
-          mixBatchId: factoryBales.mixBatchId,
-          articleCode: factoryBales.articleCode,
-        })
-        .from(factoryBales)
-        .where(
-          and(
-            eq(factoryBales.companyId, companyId),
-            eq(factoryBales.status, "IN_STOCK"),
-            sql`${factoryBales.mixBatchId} IS NOT NULL`
-          )
-        );
-
-      if (balesWithMix.length === 0) return res.json({ updated: 0 });
-
-      const uniqueMixIds = [...new Set(balesWithMix.map((b) => b.mixBatchId))] as number[];
-
-      const allSources = await db
-        .select({
-          mixBatchId: factoryMixBatchSources.mixBatchId,
-          weightKg: factoryMixBatchSources.weightKg,
-          costPerKg: factoryMixBatchSources.costPerKg,
-          containerId: factoryMixBatchSources.containerId,
-        })
-        .from(factoryMixBatchSources)
-        .where(inArray(factoryMixBatchSources.mixBatchId, uniqueMixIds));
-
-      const allContainerIds = [...new Set(allSources.map((s) => s.containerId).filter(Boolean))] as number[];
-      const rawStockCostMap = new Map<number, Decimal>();
-      if (allContainerIds.length > 0) {
-        const rawStockRecs = await db
-          .select({ containerId: factoryRawStock.containerId, costPerKg: factoryRawStock.costPerKg })
-          .from(factoryRawStock)
-          .where(inArray(factoryRawStock.containerId, allContainerIds));
-        for (const r of rawStockRecs) {
-          rawStockCostMap.set(r.containerId, toMoney(r.costPerKg));
-        }
-      }
-
-      const mixCostMap = new Map<number, Decimal>();
-      for (const mixId of uniqueMixIds) {
-        const sources = allSources.filter((s) => s.mixBatchId === mixId);
-        if (sources.length === 0) continue;
-        const blended = blendedSourceCost(sources, rawStockCostMap);
-        if (blended) mixCostMap.set(mixId, blended);
-      }
-
-      let updated = 0;
-      const now = new Date();
-      for (const bale of balesWithMix) {
-        const isGarbage = bale.articleCode?.startsWith("HMD16");
-        if (isGarbage) continue;
-        const newCost = bale.mixBatchId ? mixCostMap.get(bale.mixBatchId) : undefined;
-        if (newCost === undefined) continue;
-        const newTotal = toMoney(bale.weightKg).times(newCost);
-        await db
-          .update(factoryBales)
-          .set({
-            costPerKg: newCost.toFixed(BALE_COST_SCALE),
-            totalCost: newTotal.toFixed(BALE_COST_SCALE),
-            updatedAt: now,
-          })
-          .where(eq(factoryBales.id, bale.id));
-        updated++;
-      }
-
-      res.json({ updated, message: `Updated cost for ${updated} finalized bales using raw stock prices.` });
-    } catch (error: unknown) {
-      logger.error("Error backfilling bale costs:", { error: error });
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
+  // Retired (wave 11): it re-costed every in-stock bale from its mix's sources
+  // at the containers' native-currency cost, automatically and unaudited. Bales
+  // and open mixes are re-costed only through the reviewed preview → Owner
+  // confirm → apply (GET /api/factory/bale-cost/recost-preview, POST
+  // /api/factory/bale-cost/recost-apply).
+  app.post("/api/factory/bales/backfill-costs", requireAuth, async (_req: Request, res: Response) => {
+    res.status(410).json({ code: "FACTORY_BALE_RECOST_MOVED", message: FACTORY_BALE_RECOST_MOVED_MESSAGE });
   });
 }

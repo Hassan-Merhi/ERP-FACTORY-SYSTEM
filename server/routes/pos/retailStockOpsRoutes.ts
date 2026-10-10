@@ -15,6 +15,8 @@ import {
 import { requireAuth, requireNonPOS } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
+import { lineAmount, moneyString, toMoney } from "../../lib/money";
+import { RETAIL_GRNI_ACCOUNT, trackRetailStockValueTx } from "../../services/retail/retailInventoryJournal";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
 import {
   addMovement,
@@ -181,6 +183,10 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           .returning({ id: retailStockOperations.id });
         if (!operation) return { replayed: true };
         const stock = await lockInventoryRow(tx, companyId, body.variantId, body.locationId);
+        // Wave 17 (D): the value received is journalled once the Retail inventory opening is applied.
+        const stockValue = await trackRetailStockValueTx(tx, companyId, [
+          { variantId: body.variantId, locationId: body.locationId },
+        ]);
         const after = stock.quantity + body.quantity;
         const averageCost = nextAverageCost(stock.quantity, stock.averageCost, body.quantity, unitCost);
         await setInventoryQuantity(tx, companyId, body.variantId, body.locationId, after, averageCost);
@@ -197,6 +203,20 @@ export function registerRetailStockOpsRoutes(app: Express): void {
           referenceId: operation.id,
           createdBy: userId,
           metadata: { reason: body.notes || "Stock received", reference: body.reference ?? null, unitCost },
+        });
+        const receivedValue = lineAmount(body.quantity, unitCost);
+        await stockValue.post({
+          kind: "receipt",
+          sourceId: operation.id,
+          description: `Retail stock receipt #${operation.id}`,
+          actor: { userId, username: req.user?.username ?? null },
+          contra: [
+            {
+              accountCode: RETAIL_GRNI_ACCOUNT,
+              amount: receivedValue.negated(),
+              narration: `Retail stock receipt #${operation.id} · received not invoiced`,
+            },
+          ],
         });
         return { replayed: false, operationId: operation.id, quantity: after };
       });
@@ -250,7 +270,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             operationId: 0,
             returnId: Number(meta.returnId ?? 0),
             newSaleId: Number(meta.newSaleId ?? 0),
-            refundValue: toNumber(meta.refundValue),
+            refundValue: toMoney(meta.refundValue as string | number | null | undefined),
           };
         }
 
@@ -280,7 +300,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             idempotencyKey: `${body.idempotencyKey}:return`.slice(0, 191),
             userId,
           });
-          await postRetailRefundAccountingTx(tx, {
+          const refundVoucherId = await postRetailRefundAccountingTx(tx, {
             companyId,
             locationId: body.locationId,
             saleId: body.saleId,
@@ -293,6 +313,14 @@ export function registerRetailStockOpsRoutes(app: Express): void {
             refunds,
             userId,
             username: req.user?.username ?? null,
+          });
+          // Wave 17 (D): what the refund journal did not put back on Retail inventory.
+          await returned.stockValue?.post({
+            kind: "return",
+            sourceId: returned.returnId,
+            description: `Retail return #${returned.returnId} for sale #${body.saleId}`,
+            actor: { userId, username: req.user?.username ?? null },
+            alreadyDebited: refundVoucherId ? returned.costValue : undefined,
           });
         }
 
@@ -317,7 +345,7 @@ export function registerRetailStockOpsRoutes(app: Express): void {
               originalSaleId: body.saleId,
               returnId: returned.returnId,
               newSaleId: sold.saleId,
-              refundValue,
+              refundValue: refundValue.toFixed(),
             },
           })
           .where(eq(retailStockOperations.id, operation.id));
@@ -341,7 +369,8 @@ export function registerRetailStockOpsRoutes(app: Express): void {
         newSaleTotal: newTotal,
         sale: newSale,
         // Positive: customer pays the difference. Negative: refund the difference.
-        balanceDue: Math.round((newTotal - result.refundValue) * 100) / 100,
+        refundValue: result.refundValue.toNumber(),
+        balanceDue: Number(moneyString(toMoney(newSale?.totalAmount).minus(result.refundValue))),
       });
     } catch (error) {
       const message = getErrorMessage(error);

@@ -19,10 +19,7 @@ export type ParsedVoucherListQuery = Omit<VoucherListQuery, "page" | "pageSize">
   paginated: boolean;
 };
 
-type VoucherFilterQuery = Pick<
-  VoucherListQuery,
-  "type" | "search" | "status" | "minAmount" | "maxAmount" | "sort"
->;
+type VoucherFilterQuery = Pick<VoucherListQuery, "type" | "search" | "status" | "minAmount" | "maxAmount" | "sort">;
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -32,9 +29,9 @@ function isStrictDate(value: string): boolean {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-export function parseVoucherListQuery(raw: Record<string, unknown>):
-  | { ok: true; query: ParsedVoucherListQuery }
-  | { ok: false; message: string } {
+export function parseVoucherListQuery(
+  raw: Record<string, unknown>
+): { ok: true; query: ParsedVoucherListQuery } | { ok: false; message: string } {
   const startDate = raw.startDate == null ? undefined : String(raw.startDate);
   const endDate = raw.endDate == null ? undefined : String(raw.endDate);
   if (startDate && !isStrictDate(startDate)) return { ok: false, message: "Invalid startDate" };

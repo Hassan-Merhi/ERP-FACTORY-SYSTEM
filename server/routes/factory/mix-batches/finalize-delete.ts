@@ -13,6 +13,7 @@ import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { factoryRawStock, factoryMixBatches, factoryMixBatchSources } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
+import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 
 export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
   // ── Finalize a mix batch (mark as fully consumed/completed) ──
@@ -36,15 +37,27 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
         return res.status(400).json({ message: "Batch is already finalized" });
       }
 
-      const [updated] = await db
-        .update(factoryMixBatches)
-        .set({
-          usedKg: batch.totalWeightKg,
-          status: "COMPLETED",
-          updatedAt: new Date(),
-        })
-        .where(eq(factoryMixBatches.id, id))
-        .returning();
+      // Wave 11: finalizing marks the mix's remaining kg used with no bales
+      // pressed from them, so their cost leaves work in progress as a
+      // write-off (WASTE) in the daily factory stock journal.
+      const [updated] = await db.transaction((tx) =>
+        withFactoryValuationEventTx(
+          tx,
+          companyId,
+          "WASTE",
+          { sourceType: "factory-mix-batch-finalize", sourceId: id },
+          () =>
+            tx
+              .update(factoryMixBatches)
+              .set({
+                usedKg: batch.totalWeightKg,
+                status: "COMPLETED",
+                updatedAt: new Date(),
+              })
+              .where(eq(factoryMixBatches.id, id))
+              .returning()
+        )
+      );
 
       res.json(updated);
     } catch (error: unknown) {
@@ -66,56 +79,71 @@ export function registerFactoryMixBatchFinalizeDeleteRoutes(app: Express) {
       // (raw stock containers and/or upstream batches) so the material becomes
       // available again in Raw Materials stock. Previously this reversal never
       // happened, so deleting a batch permanently "lost" its consumed stock.
-      const result = await db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(factoryMixBatches)
-          .set({ deletedAt: new Date(), updatedAt: new Date() })
-          .where(
-            and(
-              eq(factoryMixBatches.id, id),
-              eq(factoryMixBatches.companyId, companyId),
-              isNull(factoryMixBatches.deletedAt)
-            )
-          )
-          .returning({ id: factoryMixBatches.id });
-
-        if (!updated) return null;
-
-        const batchSourceRows = await tx
-          .select({
-            containerId: factoryMixBatchSources.containerId,
-            sourceBatchId: factoryMixBatchSources.sourceBatchId,
-            weightKg: factoryMixBatchSources.weightKg,
-          })
-          .from(factoryMixBatchSources)
-          .where(eq(factoryMixBatchSources.mixBatchId, id));
-
-        for (const src of batchSourceRows) {
-          const weight = parseFloat(src.weightKg) || 0;
-          if (weight <= 0) continue;
-          if (src.containerId) {
-            // Reverse consumption on the underlying raw-stock container. Scoped to
-            // companyId too so a corrupted/cross-tenant containerId can never
-            // mutate another company's raw stock. GREATEST(...,0) is a defensive
-            // floor only — the restore path in deletedItemsRoutes.ts re-adds the
-            // same `weight` (not a clamped value), so a normal delete→restore
-            // round trip is exact as long as usedKg wasn't already corrupted below
-            // this batch's own contribution.
-            await tx
-              .update(factoryRawStock)
-              .set({ usedKg: sql`GREATEST(${factoryRawStock.usedKg} - ${weight}, 0)` })
-              .where(and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId)));
-          } else if (src.sourceBatchId) {
-            // Reverse consumption on the upstream batch this batch topped up from.
-            await tx
+      //
+      // Wave 11: deleting a mix undoes its creation (raw material back at its
+      // landed USD cost, the mix's work in progress gone), so the change of the
+      // factory valuation is the reverse of the material price variance the
+      // create recorded, and is tagged MATERIAL_PRICE as the create was.
+      const result = await db.transaction((tx) =>
+        withFactoryValuationEventTx(
+          tx,
+          companyId,
+          "MATERIAL_PRICE",
+          { sourceType: "factory-mix-batch-delete", sourceId: id },
+          async () => {
+            const [updated] = await tx
               .update(factoryMixBatches)
-              .set({ usedKg: sql`GREATEST(${factoryMixBatches.usedKg} - ${weight}, 0)`, updatedAt: new Date() })
-              .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
-          }
-        }
+              .set({ deletedAt: new Date(), updatedAt: new Date() })
+              .where(
+                and(
+                  eq(factoryMixBatches.id, id),
+                  eq(factoryMixBatches.companyId, companyId),
+                  isNull(factoryMixBatches.deletedAt)
+                )
+              )
+              .returning({ id: factoryMixBatches.id });
 
-        return updated;
-      });
+            if (!updated) return null;
+
+            const batchSourceRows = await tx
+              .select({
+                containerId: factoryMixBatchSources.containerId,
+                sourceBatchId: factoryMixBatchSources.sourceBatchId,
+                weightKg: factoryMixBatchSources.weightKg,
+              })
+              .from(factoryMixBatchSources)
+              .where(eq(factoryMixBatchSources.mixBatchId, id));
+
+            for (const src of batchSourceRows) {
+              const weight = parseFloat(src.weightKg) || 0;
+              if (weight <= 0) continue;
+              if (src.containerId) {
+                // Reverse consumption on the underlying raw-stock container. Scoped to
+                // companyId too so a corrupted/cross-tenant containerId can never
+                // mutate another company's raw stock. GREATEST(...,0) is a defensive
+                // floor only — the restore path in deletedItemsRoutes.ts re-adds the
+                // same `weight` (not a clamped value), so a normal delete→restore
+                // round trip is exact as long as usedKg wasn't already corrupted below
+                // this batch's own contribution.
+                await tx
+                  .update(factoryRawStock)
+                  .set({ usedKg: sql`GREATEST(${factoryRawStock.usedKg} - ${weight}, 0)` })
+                  .where(
+                    and(eq(factoryRawStock.containerId, src.containerId), eq(factoryRawStock.companyId, companyId))
+                  );
+              } else if (src.sourceBatchId) {
+                // Reverse consumption on the upstream batch this batch topped up from.
+                await tx
+                  .update(factoryMixBatches)
+                  .set({ usedKg: sql`GREATEST(${factoryMixBatches.usedKg} - ${weight}, 0)`, updatedAt: new Date() })
+                  .where(and(eq(factoryMixBatches.id, src.sourceBatchId), eq(factoryMixBatches.companyId, companyId)));
+              }
+            }
+
+            return updated;
+          }
+        )
+      );
 
       if (!result) return res.status(404).json({ message: "Mix batch not found" });
       await logAudit({

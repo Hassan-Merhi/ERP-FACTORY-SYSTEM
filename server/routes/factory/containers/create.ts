@@ -11,7 +11,8 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resolveStoredFxRateOrThrow } from "../../../services/factory/currencyConversion";
-import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { writeDaybookEntry, getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import {
   factorySuppliers,
   factoryContainers,
@@ -21,6 +22,8 @@ import {
 } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
+import { containerFreightFxRateToUsd } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
 import { toMoney } from "../../../lib/money";
 
 export function registerFactoryContainerCreateRoutes(app: Express) {
@@ -40,16 +43,20 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
 
       const parsed = insertFactoryContainerSchema.parse({ ...req.body, companyId });
       const currencyCode = parsed.currencyCode || "USD";
-      const fxRateSource = parsed.fxRateSource || "auto";
       const today = getClientDate(req);
       const importDate = parsed.arrivalDate || today;
 
-      let fxRate: string;
-      if (fxRateSource === "manual" && parsed.fxRateToUsd) {
-        fxRate = parsed.fxRateToUsd;
-      } else {
-        fxRate = await getOrFetchFxRateToUsd(companyId, currencyCode, importDate);
-      }
+      // Phase 19 C (M2): a non-USD container is posted at the recorded factory
+      // rate on or before its date (a manual rate entered on the container is
+      // used when such a rate exists), or refused (409 FACTORY_FX_RATE_REQUIRED).
+      // It used to fetch an external rate, never record it, and mark it confirmed.
+      const ownRate =
+        parsed.fxRateSource === "manual" && parsed.fxRateToUsd
+          ? { rate: parsed.fxRateToUsd, confirmed: true }
+          : undefined;
+      const documentRate = await factoryDocumentRate(db, companyId, currencyCode, importDate, ownRate);
+      const fxRate = documentRate.rate;
+      const fxRateSource = documentRate.source === "auto" ? "auto" : "manual";
 
       const ratePerKg = toMoney(parsed.ratePerKg);
       const ratePerKgUsd = currencyCode === "USD" ? ratePerKg : ratePerKg.times(toMoney(fxRate));
@@ -59,10 +66,10 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         currencyCode,
         fxRateToUsd: fxRate,
         fxRateToUsdImport: fxRate,
-        fxRateSource: fxRateSource === "manual" ? "manual" : "auto",
+        fxRateSource,
         fxRateDateImport: importDate,
         ratePerKgUsd: ratePerKgUsd.toFixed(),
-        // Explicitly resolved above (manual user entry or a real auto-fetch) — trust it.
+        // A recorded dated rate (or the container's own rate checked against one).
         fxRateConfirmed: true,
       };
 
@@ -127,14 +134,8 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
           // Same currency as container — container FX is correct
           commFxResolved = toMoney(fxRate);
         } else {
-          // Different non-USD currency: resolve independently
-          try {
-            commFxResolved = toMoney(await getOrFetchFxRateToUsd(companyId, commFxCcy, importDate));
-          } catch (err: unknown) {
-            return res.status(400).json({
-              message: `Cannot resolve FX rate for commission currency ${commFxCcy} on ${importDate}. ${getErrorMessage(err)}`,
-            });
-          }
+          // Different non-USD currency: the recorded rate on or before the date, or 409.
+          commFxResolved = toMoney((await factoryDocumentRate(db, companyId, commFxCcy, importDate)).rate);
         }
         values.commissionFxRateToUsd = commFxResolved.toFixed();
         values.commissionFxRateConfirmed = true;
@@ -178,143 +179,156 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         }
       }
 
-      const [container] = await db.insert(factoryContainers).values(values).returning();
+      // Ledger accounts the journals below may need are looked up (or created)
+      // first; an account is master data, not a posting.
+      const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
 
-      let supplierNameForDesc = "";
-      if (container.supplierId) {
-        const [sup] = await db
-          .select({ name: factorySuppliers.name })
-          .from(factorySuppliers)
-          .where(eq(factorySuppliers.id, container.supplierId));
-        supplierNameForDesc = sup?.name || "";
-      }
-      const kgForDesc = toMoney(container.totalKg).toNumber();
-      const rateForDesc = toMoney(container.ratePerKg).toNumber();
-      const ccyForDesc = container.currencyCode || "USD";
-      const descParts = [
-        container.containerNumber,
-        supplierNameForDesc,
-        kgForDesc > 0 ? `${kgForDesc.toLocaleString()} kg` : null,
-        rateForDesc > 0 ? `${rateForDesc} ${ccyForDesc}/kg` : null,
-      ].filter(Boolean);
+      // Wave 7: the container, its daybook row, the goods journal FACTORY-IMPORT,
+      // the freight journal FACTORY-FREIGHT and the commission journal
+      // FACTORY-COMM-{container} commit together or not at all. Before, only the
+      // container and its commission journal shared a transaction, so a failed
+      // goods or freight journal left a container with part of its postings.
+      const container = await db.transaction(async (tx) => {
+        const [container] = await tx.insert(factoryContainers).values(values).returning();
+        await syncContainerCommissionJournalTx(tx, companyId, container.id);
 
-      // Exact: 1000.5 kg at 0.35 is 350.175, kept as 350.18; the float product
-      // 350.17499999999995 was kept as 350.17.
-      const goodsValue = toMoney(container.ratePerKg).times(toMoney(container.totalKg));
-
-      await writeDaybookEntry(db, {
-        companyId,
-        txDate: container.arrivalDate || today,
-        txType: "CONTAINER_IMPORT",
-        referenceId: container.id,
-        referenceTable: "factory_containers",
-        description: descParts.join(" · "),
-        currencyCode: ccyForDesc,
-        amountCurrency: goodsValue.toNumber(),
-        fxRateToUsd: resolveStoredFxRateOrThrow(ccyForDesc, container.fxRateToUsd, container.fxRateConfirmed),
-      });
-
-      // Double-entry: Goods value — Dr Factory Import Cost / Cr Supplier Payable
-      if (goodsValue.greaterThan(0) && container.supplierId) {
-        const importCostAccId = await getOrCreateLedgerAccount(companyId, "FACTORY_IMPORT_COST", "Factory Import Cost");
-        const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
-        const [importVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: "Journal",
-            voucherNumber: importVoucherNum,
-            voucherDate: container.arrivalDate || today,
-            description: `Goods import - container ${container.containerNumber}`,
-            totalAmount: goodsValue.toFixed(),
-            currency: container.currencyCode || "USD",
-            exchangeRate: String(
-              resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-            ),
-            sourceModule: "FACTORY",
-          })
-          .returning();
-        const importFactoryFxRate = resolveStoredFxRateOrThrow(
-          container.currencyCode,
-          container.fxRateToUsd,
-          container.fxRateConfirmed
-        );
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          ledgerAccountId: importCostAccId,
-          ...normFactoryEntry(container.currencyCode || "USD", goodsValue.toFixed(), "0", importFactoryFxRate),
-          narration: `Goods import cost - container ${container.containerNumber}`,
-        });
-        await db.insert(voucherEntries).values({
-          voucherId: importVoucher.id,
-          factorySupplierId: container.supplierId,
-          ...normFactoryEntry(container.currencyCode || "USD", "0", goodsValue.toFixed(), importFactoryFxRate),
-          narration: `Goods payable to supplier - container ${container.containerNumber}`,
-        });
-      }
-
-      // Commission is already included in the factory supplier balance calculation
-      // (via container.commissionAmount in the supplier liability formula).
-      // Posting a separate journal voucher would double-count it, so we skip it here.
-
-      // Double-entry: Freight
-      // If freightPaidBy='own': Dr Freight Expense / Cr own ledger account
-      // If freightPaidBy='supplier' (default): Dr Freight Expense / Cr Supplier Payable
-      const freightAmt = toMoney(container.freight);
-      const freightCcy = container.freightCurrencyCode || container.currencyCode || "USD";
-      const freightPaidBy = container.freightPaidBy || "supplier";
-      const freightOwnAcctId = container.freightOwnAccountId ?? null;
-      if (freightAmt.greaterThan(0) && container.freightAccountId) {
-        const freightVoucherNum = `FACTORY-FREIGHT-${container.id}`;
-        const [freightVoucher] = await db
-          .insert(vouchers)
-          .values({
-            companyId,
-            voucherType: freightPaidBy === "own" ? "Payment" : "Journal",
-            voucherNumber: freightVoucherNum,
-            voucherDate: container.arrivalDate || today,
-            description: `Freight on container ${container.containerNumber}`,
-            totalAmount: freightAmt.toFixed(),
-            currency: freightCcy,
-            exchangeRate:
-              freightCcy === (container.currencyCode || "USD")
-                ? String(
-                    resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-                  )
-                : "1",
-            sourceModule: "FACTORY",
-          })
-          .returning();
-        // Compute factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign)
-        const freightFactoryFxRate =
-          freightCcy === (container.currencyCode || "USD")
-            ? resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
-            : 1; // USD-denominated freight — treat as USD-equivalent
-        // Dr Freight Expense
-        await db.insert(voucherEntries).values({
-          voucherId: freightVoucher.id,
-          ledgerAccountId: container.freightAccountId,
-          ...normFactoryEntry(freightCcy, freightAmt.toFixed(), "0", freightFactoryFxRate),
-          narration: `Freight expense - container ${container.containerNumber}`,
-        });
-        if (freightPaidBy === "own" && freightOwnAcctId) {
-          // Cr Own account (paid by company itself)
-          await db.insert(voucherEntries).values({
-            voucherId: freightVoucher.id,
-            ledgerAccountId: freightOwnAcctId,
-            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
-            narration: `Freight paid via own account - container ${container.containerNumber}`,
-          });
-        } else if (freightPaidBy === "supplier" && container.supplierId) {
-          // Cr Supplier Payable
-          await db.insert(voucherEntries).values({
-            voucherId: freightVoucher.id,
-            factorySupplierId: container.supplierId,
-            ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
-            narration: `Freight payable to supplier - container ${container.containerNumber}`,
-          });
+        let supplierNameForDesc = "";
+        if (container.supplierId) {
+          const [sup] = await tx
+            .select({ name: factorySuppliers.name })
+            .from(factorySuppliers)
+            .where(eq(factorySuppliers.id, container.supplierId));
+          supplierNameForDesc = sup?.name || "";
         }
-      }
+        const kgForDesc = toMoney(container.totalKg).toNumber();
+        const rateForDesc = toMoney(container.ratePerKg).toNumber();
+        const ccyForDesc = container.currencyCode || "USD";
+        const descParts = [
+          container.containerNumber,
+          supplierNameForDesc,
+          kgForDesc > 0 ? `${kgForDesc.toLocaleString()} kg` : null,
+          rateForDesc > 0 ? `${rateForDesc} ${ccyForDesc}/kg` : null,
+        ].filter(Boolean);
+
+        // Exact: 1000.5 kg at 0.35 is 350.175, kept as 350.18; the float product
+        // 350.17499999999995 was kept as 350.17.
+        const goodsValue = toMoney(container.ratePerKg).times(toMoney(container.totalKg));
+
+        await writeDaybookEntry(tx, {
+          companyId,
+          txDate: container.arrivalDate || today,
+          txType: "CONTAINER_IMPORT",
+          referenceId: container.id,
+          referenceTable: "factory_containers",
+          description: descParts.join(" · "),
+          currencyCode: ccyForDesc,
+          amountCurrency: goodsValue.toNumber(),
+          fxRateToUsd: resolveStoredFxRateOrThrow(ccyForDesc, container.fxRateToUsd, container.fxRateConfirmed),
+        });
+
+        // Double-entry: Goods value — Dr Factory Import Cost / Cr Supplier Payable
+        if (goodsValue.greaterThan(0) && container.supplierId) {
+          const importVoucherNum = `FACTORY-IMPORT-${container.id}-${Date.now()}`;
+          {
+            const [importVoucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId,
+                voucherType: "Journal",
+                voucherNumber: importVoucherNum,
+                voucherDate: container.arrivalDate || today,
+                description: `Goods import - container ${container.containerNumber}`,
+                totalAmount: goodsValue.toFixed(),
+                currency: container.currencyCode || "USD",
+                exchangeRate: String(
+                  resolveStoredFxRateOrThrow(container.currencyCode, container.fxRateToUsd, container.fxRateConfirmed)
+                ),
+                sourceModule: "FACTORY",
+              })
+              .returning();
+            const importFactoryFxRate = resolveStoredFxRateOrThrow(
+              container.currencyCode,
+              container.fxRateToUsd,
+              container.fxRateConfirmed
+            );
+            await tx.insert(voucherEntries).values({
+              voucherId: importVoucher.id,
+              ledgerAccountId: importCostAccId,
+              ...normFactoryEntry(container.currencyCode || "USD", goodsValue.toFixed(), "0", importFactoryFxRate),
+              narration: `Goods import cost - container ${container.containerNumber}`,
+            });
+            await tx.insert(voucherEntries).values({
+              voucherId: importVoucher.id,
+              factorySupplierId: container.supplierId,
+              ...normFactoryEntry(container.currencyCode || "USD", "0", goodsValue.toFixed(), importFactoryFxRate),
+              narration: `Goods payable to supplier - container ${container.containerNumber}`,
+            });
+          }
+        }
+
+        // Commission: posted above as FACTORY-COMM-{container} (Dr import cost /
+        // Cr the commission payee). The factory supplier pages add the container's
+        // commission from the container row and read only debit voucher lines as
+        // payments, so the journal's credit line is not counted twice there.
+
+        // Double-entry: Freight
+        // If freightPaidBy='own': Dr Freight Expense / Cr own ledger account
+        // If freightPaidBy='supplier' (default): Dr Freight Expense / Cr Supplier Payable
+        const freightAmt = toMoney(container.freight);
+        const freightCcy = container.freightCurrencyCode || container.currencyCode || "USD";
+        const freightPaidBy = container.freightPaidBy || "supplier";
+        const freightOwnAcctId = container.freightOwnAccountId ?? null;
+        if (freightAmt.greaterThan(0) && container.freightAccountId) {
+          const freightVoucherNum = `FACTORY-FREIGHT-${container.id}`;
+          {
+            const [freightVoucher] = await tx
+              .insert(vouchers)
+              .values({
+                companyId,
+                voucherType: freightPaidBy === "own" ? "Payment" : "Journal",
+                voucherNumber: freightVoucherNum,
+                voucherDate: container.arrivalDate || today,
+                description: `Freight on container ${container.containerNumber}`,
+                totalAmount: freightAmt.toFixed(),
+                currency: freightCcy,
+                exchangeRate: String(containerFreightFxRateToUsd(container)),
+                sourceModule: "FACTORY",
+              })
+              .returning();
+            // Factory freight FX rate (BASE_PER_TRANSACTION: USD per foreign unit)
+            const freightFactoryFxRate = containerFreightFxRateToUsd(container);
+            // Dr Freight Expense
+            await tx.insert(voucherEntries).values({
+              voucherId: freightVoucher.id,
+              ledgerAccountId: container.freightAccountId,
+              ...normFactoryEntry(freightCcy, freightAmt.toFixed(), "0", freightFactoryFxRate),
+              narration: `Freight expense - container ${container.containerNumber}`,
+            });
+            if (freightPaidBy === "own" && freightOwnAcctId) {
+              // Cr Own account (paid by company itself)
+              await tx.insert(voucherEntries).values({
+                voucherId: freightVoucher.id,
+                ledgerAccountId: freightOwnAcctId,
+                ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
+                narration: `Freight paid via own account - container ${container.containerNumber}`,
+              });
+            } else if (freightPaidBy === "supplier" && container.supplierId) {
+              // Cr Supplier Payable
+              await tx.insert(voucherEntries).values({
+                voucherId: freightVoucher.id,
+                factorySupplierId: container.supplierId,
+                ...normFactoryEntry(freightCcy, "0", freightAmt.toFixed(), freightFactoryFxRate),
+                narration: `Freight payable to supplier - container ${container.containerNumber}`,
+              });
+            } else {
+              // A one-sided freight journal would leave the voucher unbalanced;
+              // the container is not created (the transaction rolls back).
+              throw new Error("Freight needs a purchase supplier or an own account to credit");
+            }
+          }
+        }
+        return container;
+      });
 
       logger.info("factory container create succeeded", {
         module: "factoryContainers",
@@ -335,6 +349,7 @@ export function registerFactoryContainerCreateRoutes(app: Express) {
         error,
       });
       logger.error("Error creating factory container:", { error: error });
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       const cause = ((error as { cause?: unknown })?.cause ?? error) as { code?: string; detail?: string };
       if (cause?.code === "23505" && cause?.detail?.includes("container_number")) {
         return res

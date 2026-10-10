@@ -11,6 +11,7 @@ import { HttpError } from "../../lib/httpHandlers";
 import { syncIntercoParentVoucher } from "./containerHelpers";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, parseMoneyInput, sumMoney, toMoney } from "../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../services/accounting/perpetualInventory/stockReceipts";
 
 type PurchaseOrderRecord = NonNullable<Awaited<ReturnType<typeof storage.getPurchaseOrderById>>>;
 
@@ -104,16 +105,6 @@ export async function applyPurchaseOrderItemsUpdate(
     };
   });
 
-  // Capture freight in outer scope so the post-transaction parent-freight sync
-  // can access it without a ReferenceError.
-  let _b1FreightForSync = toMoney(existingPO.freight);
-  // ── Lifted for post-transaction interco sync (belt-and-suspenders) ────
-  let _b1GrandTotalForSync = new MoneyDecimal(0);
-  let _b1HasParentFreightForSync = false;
-  let _b1FreightParentAccountIdForSync: number | null = null;
-  let _b1PoNumsForSync: string | string[] = existingPO.poNumber;
-  let _b1ContainerNumForSync: string | undefined;
-
   // Use ?? to correctly handle explicit zero values from the request
   const freight = amountInput(req.body.freight ?? existingPO.freight ?? "0");
   const surcharge = amountInput(req.body.surcharge ?? existingPO.surcharge ?? "0");
@@ -188,8 +179,6 @@ export async function applyPurchaseOrderItemsUpdate(
     }
 
     // Update PO with new items total and charges
-    _b1FreightForSync = freight; // lift into outer scope for post-tx sync
-
     // Check if any charge field was explicitly provided in the request
     const chargesWereEdited =
       req.body.freight !== undefined ||
@@ -229,11 +218,17 @@ export async function applyPurchaseOrderItemsUpdate(
       .where(eq(purchaseOrders.id, id));
 
     // Also update container's totals if applicable
-    const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
-    if (container) {
+    if (lockedContainer) {
       // Get all POs for this container and recalculate totals
-      const allPOs = await storage.getAllPurchaseOrders(existingPO.companyId);
-      const containerPOs = allPOs.filter((po) => po.containerId === existingPO.containerId);
+      const containerPOs = await tx
+        .select()
+        .from(purchaseOrders)
+        .where(
+          and(
+            eq(purchaseOrders.companyId, existingPO.companyId),
+            eq(purchaseOrders.containerId, existingPO.containerId)
+          )
+        );
       let totalItemsCost = new MoneyDecimal(0);
       let totalCharges = new MoneyDecimal(0);
 
@@ -340,12 +335,6 @@ export async function applyPurchaseOrderItemsUpdate(
             `[PO-PATCH items] No INTERCO-PARENT voucher for PO(s): ${Array.isArray(_b1PoNums) ? _b1PoNums.join(", ") : _b1PoNums}`
           );
         }
-        // Lift to outer scope so post-transaction backup sync can use them
-        _b1GrandTotalForSync = poGrandTotalExact;
-        _b1HasParentFreightForSync = _b1HasParentFreight;
-        _b1FreightParentAccountIdForSync = _b1FreightParentAccountId;
-        _b1PoNumsForSync = _b1PoNums;
-        _b1ContainerNumForSync = _b1ContainerRow?.containerNumber;
       }
     }
 
@@ -392,57 +381,24 @@ export async function applyPurchaseOrderItemsUpdate(
         }
       }
     }
-  });
+    // Perpetual inventory (wave 8.2): goods in transit follows the edited PO voucher.
+    await syncPurchaseOrderGitTx(tx, existingPO.companyId, existingPO.id);
 
-  // ── Post-transaction interco sync (backup / belt-and-suspenders) ──────
-  // The in-transaction sync above uses `tx`, which can silently fail if the
-  // transaction encounters a locking issue.  This second sync runs OUTSIDE
-  // the transaction using the plain `db` handle — identical to the pattern
-  // used by the charges-only path — so the parent INTERCO-PARENT JV is
-  // guaranteed to be up-to-date even if the in-transaction call was a no-op.
-  if (_b1GrandTotalForSync.greaterThan(0)) {
-    const _b1PostParentId = await storage.getParentCompanyId();
-    if (_b1PostParentId && existingPO.companyId !== _b1PostParentId) {
-      const _b1PostSync = await syncIntercoParentVoucher(
-        db,
-        _b1PoNumsForSync,
-        _b1GrandTotalForSync,
-        _b1ContainerNumForSync,
-        _b1HasParentFreightForSync && _b1FreightParentAccountIdForSync
-          ? {
-              freightAmount: _b1FreightForSync,
-              freightParentAccountId: _b1FreightParentAccountIdForSync,
-              subsidiaryCompanyId: existingPO.companyId,
-            }
-          : undefined
-      );
-      if (!_b1PostSync.found) {
-        logger.warn(
-          `[PO-PATCH items post-tx] No INTERCO-PARENT voucher found for PO(s): ${Array.isArray(_b1PoNumsForSync) ? _b1PoNumsForSync.join(", ") : _b1PoNumsForSync}`
-        );
-      } else if (_b1PostSync.updated) {
-        logger.info(
-          `[PO-PATCH items post-tx] Updated parent JV #${_b1PostSync.voucherId}: ${_b1PostSync.oldAmount} → ${_b1PostSync.amount}`
-        );
-      }
-    }
-  }
-
-  // Get updated PO with items
-  const updatedPO = await storage.getPurchaseOrderByIdForCompany(id, existingPO.companyId);
-  const lineItems = await storage.getLineItemsByPO(id);
-  const supplier = await storage.getSupplierById(existingPO.supplierId);
-  const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
-
-  try {
+    // Wave 7: the audit row commits with the edit (it used to be written after
+    // the commit, and its failure was swallowed). The in-transaction
+    // inter-company sync above throws on failure, which rolls the whole edit
+    // back, so the post-commit "backup" sync on the pool is gone.
+    const [updatedRow] = await tx.select().from(purchaseOrders).where(eq(purchaseOrders.id, id)).limit(1);
+    const newLineItems = await tx.select().from(poLineItems).where(eq(poLineItems.poId, id));
     const _poItemChanges: Record<string, { old?: unknown; new?: unknown }> = {};
-    const _oldItemMap = new Map(existingLineItems.map((it) => [it.id, it]));
+    const _oldItemMap = new Map(existingLineItems.map((it) => [it.stockItemId, it]));
+    const _newItemMap = new Map(newLineItems.map((it) => [it.stockItemId, it]));
     const _addedItems: string[] = [];
     const _removedItems: string[] = [];
     const _changedItems: string[] = [];
-    for (const newIt of lineItems) {
-      if (newIt.id && _oldItemMap.has(newIt.id)) {
-        const oldIt = _oldItemMap.get(newIt.id)!;
+    for (const newIt of newLineItems) {
+      const oldIt = _oldItemMap.get(newIt.stockItemId);
+      if (oldIt) {
         const diffs: string[] = [];
         if (String(oldIt.quantity ?? "") !== String(newIt.quantity ?? ""))
           diffs.push(`qty: ${oldIt.quantity}→${newIt.quantity}`);
@@ -452,30 +408,36 @@ export async function applyPurchaseOrderItemsUpdate(
         _addedItems.push(String(newIt.stockItemId || "new"));
       }
     }
-    const _newIdSet = new Set(lineItems.filter((it) => it.id).map((it) => it.id));
-    for (const [oldId, _oldIt] of _oldItemMap) {
-      if (!_newIdSet.has(oldId)) _removedItems.push(String(oldId));
+    for (const oldIt of existingLineItems) {
+      if (!_newItemMap.has(oldIt.stockItemId)) _removedItems.push(String(oldIt.stockItemId));
     }
     if (_addedItems.length) _poItemChanges.itemsAdded = { new: _addedItems.join(", ") };
     if (_removedItems.length) _poItemChanges.itemsRemoved = { old: _removedItems.join(", ") };
     if (_changedItems.length) _poItemChanges.itemsChanged = { new: _changedItems.join("; ") };
-    if (existingPO.poNumber !== updatedPO?.poNumber)
-      _poItemChanges.poNumber = { old: existingPO.poNumber, new: updatedPO?.poNumber };
-    if (existingPO.itemsTotal !== updatedPO?.itemsTotal)
-      _poItemChanges.itemsTotal = { old: existingPO.itemsTotal, new: updatedPO?.itemsTotal };
-    await logAudit({
-      userId: req.session.userId!,
-      username: req.session.username || "unknown",
-      companyId: req.session.currentCompanyId!,
-      action: "update",
-      tableName: "purchase_orders",
-      recordId: id,
-      recordIdentifier: existingPO.poNumber || `PO #${id}`,
-      changes: _poItemChanges,
-    });
-  } catch {
-    /* non-fatal */
-  }
+    if (existingPO.poNumber !== updatedRow?.poNumber)
+      _poItemChanges.poNumber = { old: existingPO.poNumber, new: updatedRow?.poNumber };
+    if (existingPO.itemsTotal !== updatedRow?.itemsTotal)
+      _poItemChanges.itemsTotal = { old: existingPO.itemsTotal, new: updatedRow?.itemsTotal };
+    await logAudit(
+      {
+        userId: req.session.userId!,
+        username: req.session.username || "unknown",
+        companyId: req.session.currentCompanyId!,
+        action: "update",
+        tableName: "purchase_orders",
+        recordId: id,
+        recordIdentifier: existingPO.poNumber || `PO #${id}`,
+        changes: _poItemChanges,
+      },
+      tx
+    );
+  });
+
+  // Get updated PO with items
+  const updatedPO = await storage.getPurchaseOrderByIdForCompany(id, existingPO.companyId);
+  const lineItems = await storage.getLineItemsByPO(id);
+  const supplier = await storage.getSupplierById(existingPO.supplierId);
+  const container = await storage.getContainerByIdForCompany(existingPO.containerId, existingPO.companyId);
 
   // INTERCO-FREIGHT sync removed — freight is now inside the purchase voucher itself.
 

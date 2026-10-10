@@ -36,6 +36,18 @@ vi.mock("../server/db", async () => {
   };
 });
 
+// Wave 13 (owner decision 3): the ledger balance comes from the balance engine
+// (raw SQL this harness cannot run); this test pins the operational figures.
+vi.mock("../server/routes/factory/suppliers/balance/factorySupplierLedger", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../server/routes/factory/suppliers/balance/factorySupplierLedger")>();
+  return {
+    ...actual,
+    loadFactorySupplierLedgerViews: async () => new Map(),
+    loadFactorySupplierLedgerLines: async () => [],
+  };
+});
+
 import { registerSupplierStatementRoutes } from "../server/routes/factory/suppliers/supplierStatementRoutes";
 
 describe("factory supplier statement", () => {
@@ -81,6 +93,8 @@ describe("factory supplier statement", () => {
     expect(body?.statement[0].value).toBe("3005.00");
     expect(body?.ledger[0].amount).toBe("+$3,005.00");
     expect(body?.summary.totalValue).toBe("3005.00");
-    expect(body?.summary.netPayable).toBe("3005.00");
+    // summary.netPayable is the ledger balance since wave 13 (no lines here); the container figure is beside it.
+    expect(body?.summary.operationalNetPayable).toBe("3005.00");
+    expect(body?.summary.netPayable).toBe("0.00");
   });
 });

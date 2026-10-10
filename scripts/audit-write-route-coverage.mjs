@@ -88,6 +88,8 @@ const SENSITIVE_TABLES = [
   "factoryWorkerDeductions",
 ];
 
+const VOUCHER_RETIREMENT_CALL = /\bretireVouchers(?:Tx|ByNumberTx|WithClient|ForRequestTx)\s*\(/;
+
 /** Ways this codebase writes: drizzle builders and raw SQL alike. */
 function writesSensitiveTable(source) {
   for (const table of SENSITIVE_TABLES) {
@@ -101,6 +103,9 @@ function writesSensitiveTable(source) {
     ];
     if (patterns.some((pattern) => pattern.test(source))) return table;
   }
+  // Wave 16 (A): a route that removes vouchers through the retirement helpers
+  // (soft delete with audit) still writes vouchers.
+  if (VOUCHER_RETIREMENT_CALL.test(source)) return "vouchers";
   return null;
 }
 

@@ -1,4 +1,6 @@
 import { db, sql } from "./reportShardSupport";
+import { defaultOpeningSide } from "../../../services/accounting/accountClassification";
+import { toMoney } from "../../../lib/money";
 import type { DataQueryContext, DataQueryResult, ReportImplementationShard } from "../types";
 
 export const phase5QueryTypes = [
@@ -31,10 +33,17 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           COALESCE(SUM(CAST(ve.debit_amount AS numeric)), 0) AS total_dr,
           COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) AS total_cr
         FROM ledger_accounts la
-        LEFT JOIN voucher_entries ve ON ve.ledger_account_id = la.id
-        LEFT JOIN vouchers v ON v.id = ve.voucher_id
-          AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        -- Only lines of live, non-optional vouchers of this company dated in the
+        -- range are summed. The voucher filters used to sit on a second LEFT
+        -- JOIN, which kept every entry (deleted, optional and out-of-range
+        -- vouchers included) and only dropped the voucher row.
+        LEFT JOIN (
+          voucher_entries ve
+          JOIN vouchers v ON v.id = ve.voucher_id
+            AND v.company_id = ${companyId}
+            AND v.deleted_at IS NULL AND v.optional = false
+            AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
+        ) ON ve.ledger_account_id = la.id
         WHERE la.company_id = ${companyId}
           AND la.deleted_at IS NULL
           AND la.is_hidden = false
@@ -43,14 +52,16 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           OR COALESCE(SUM(CAST(ve.credit_amount AS numeric)), 0) > 0
         ORDER BY la.account_type, la.name
       `);
-      let grandDr = 0,
-        grandCr = 0;
+      let grandDrExact = toMoney(0),
+        grandCrExact = toMoney(0);
       const tableRows5 = rows.rows.map((r) => {
-        const dr = parseFloat(r.total_dr || "0");
-        const cr = parseFloat(r.total_cr || "0");
-        const net = dr - cr;
-        grandDr += dr;
-        grandCr += cr;
+        const drExact = toMoney(r.total_dr);
+        const crExact = toMoney(r.total_cr);
+        grandDrExact = grandDrExact.plus(drExact);
+        grandCrExact = grandCrExact.plus(crExact);
+        const dr = drExact.toNumber();
+        const cr = crExact.toNumber();
+        const net = drExact.minus(crExact).toNumber();
         return [
           r.code || "—",
           r.name,
@@ -61,6 +72,8 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
           net < 0 ? fmt(Math.abs(net)) : "—",
         ];
       });
+      const grandDr = grandDrExact.toNumber();
+      const grandCr = grandCrExact.toNumber();
       tableRows5.push([
         "",
         "GRAND TOTAL",
@@ -412,7 +425,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         LEFT JOIN locations sl ON sl.id = sti.source_location_id
         JOIN locations dl ON dl.id = stv.destination_location_id
         WHERE si.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
           ${locFilter5 ? sql`AND (sl.name ILIKE ${"%" + locFilter5 + "%"} OR dl.name ILIKE ${"%" + locFilter5 + "%"})` : sql``}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
@@ -456,9 +469,9 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         JOIN ledger_accounts la ON la.id = ve.ledger_account_id
-          AND la.account_type IN ('Bank', 'Cash')
+          AND LOWER(TRIM(la.account_type)) IN ('bank', 'cash')
         WHERE la.company_id = ${companyId}
         GROUP BY la.id, la.name, la.account_type
         ORDER BY total_in DESC
@@ -559,12 +572,17 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         FROM voucher_entries ve
         JOIN vouchers v ON v.id = ve.voucher_id
           AND v.deleted_at IS NULL AND v.optional = false
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         WHERE ve.ledger_account_id = ${la5.id}
         ORDER BY v.voucher_date, v.id
         LIMIT ${rowLimit}
       `);
-      const ob = parseFloat(la5.opening_balance || "0") * (la5.opening_balance_side === "Cr" ? -1 : 1);
+      // A sideless opening is on its type's usual side, as in the balance engine (wave 13, C1).
+      const obSide5 =
+        la5.opening_balance_side === "Dr" || la5.opening_balance_side === "Cr"
+          ? la5.opening_balance_side
+          : (defaultOpeningSide(la5.account_type) ?? "Dr");
+      const ob = parseFloat(la5.opening_balance || "0") * (obSide5 === "Cr" ? -1 : 1);
       let runningBal = ob;
       let totalDr = 0,
         totalCr = 0;
@@ -627,7 +645,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.optional = false
-          AND CAST(v.voucher_date AS text) = ${reportDate}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) = ${reportDate}
         ORDER BY v.voucher_type, v.voucher_number
         LIMIT ${rowLimit}
       `);
@@ -683,7 +701,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         JOIN vouchers v ON v.id = sal.voucher_id AND v.deleted_at IS NULL
         LEFT JOIN locations l ON l.id = v.location_id
         WHERE v.company_id = ${companyId}
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         GROUP BY l.id, l.name, v.location_name
         ORDER BY total_profit DESC
         LIMIT ${rowLimit}
@@ -737,7 +755,7 @@ async function runPhase5Report(ctx: DataQueryContext): Promise<DataQueryResult> 
         WHERE v.company_id = ${companyId}
           AND v.deleted_at IS NULL
           AND v.voucher_type = 'Debit Note'
-          AND CAST(v.voucher_date AS text) BETWEEN ${dateFrom} AND ${dateTo}
+          AND CAST(COALESCE(v.effective_date, v.voucher_date) AS text) BETWEEN ${dateFrom} AND ${dateTo}
         ORDER BY v.voucher_date DESC
         LIMIT ${rowLimit}
       `);

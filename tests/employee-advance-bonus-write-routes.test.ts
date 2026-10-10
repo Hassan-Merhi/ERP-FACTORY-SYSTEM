@@ -289,9 +289,16 @@ describe("DELETE /api/factory/employee-bonuses/:id", () => {
     const after = await employeeTotals(employeeId);
     expect(after.balance).toBeCloseTo(before.balance, 2);
     expect(after.deposits).toBeCloseTo(before.deposits, 2);
-    expect((await pool.query(`SELECT id FROM vouchers WHERE id = $1`, [bonus.voucher_id])).rowCount).toBe(0);
     expect(
-      (await pool.query(`SELECT id FROM voucher_entries WHERE voucher_id = $1`, [bonus.voucher_id])).rowCount
+      (await pool.query(`SELECT id FROM vouchers WHERE id = $1 AND deleted_at IS NULL`, [bonus.voucher_id])).rowCount
+    ).toBe(0);
+    expect(
+      (
+        await pool.query(
+          `SELECT ve.id FROM voucher_entries ve JOIN vouchers v ON v.id = ve.voucher_id AND v.deleted_at IS NULL WHERE ve.voucher_id = $1`,
+          [bonus.voucher_id]
+        )
+      ).rowCount
     ).toBe(0);
   });
 

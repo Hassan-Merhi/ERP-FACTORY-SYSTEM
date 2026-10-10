@@ -6,7 +6,14 @@ import { requireAuth } from "../../auth";
 import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { currentUserId, ensureCompanyLocation, requireRetailCompany } from "./retailPosContext";
-import { addMovement, lockInventoryRow, setInventoryQuantity } from "../../services/retail/retailStockLedger";
+import { lineAmount, MoneyDecimal, toMoney } from "../../lib/money";
+import {
+  addMovement,
+  lockInventoryRow,
+  nextAverageCost,
+  setInventoryQuantity,
+} from "../../services/retail/retailStockLedger";
+import { trackRetailStockValueTx } from "../../services/retail/retailInventoryJournal";
 
 import { loadSaleResponse } from "../../services/retail/retailSaleService";
 import {
@@ -82,22 +89,39 @@ export function registerRetailPosCancellationRoute(app: Express): void {
           .from(retailPosSaleItems)
           .where(and(eq(retailPosSaleItems.saleId, saleId), eq(retailPosSaleItems.companyId, companyId)));
 
-        let refundAmount = 0;
-        let refundTaxAmount = 0;
-        let restoredCost = 0;
+        // Exact money (wave 17 C).
+        let refundAmount = new MoneyDecimal(0);
+        let refundTaxAmount = new MoneyDecimal(0);
+        let restoredCost = new MoneyDecimal(0);
+        const stockValue = await trackRetailStockValueTx(
+          tx,
+          companyId,
+          saleItems.map((item) => ({ variantId: item.variantId, locationId: sale.locationId }))
+        );
         for (const item of saleItems) {
           const sold = toNumber(item.quantity);
           const quantityToRestore = Math.max(0, sold - toNumber(item.returnedQuantity));
           if (quantityToRestore <= 0) continue;
           // Refund what was paid: the tax-inclusive gross price, as returns do.
-          const grossPerUnit =
-            toNumber(item.grossUnitPrice) > 0 ? toNumber(item.grossUnitPrice) : toNumber(item.unitPrice);
-          refundAmount += quantityToRestore * grossPerUnit;
-          refundTaxAmount += sold > 0 ? (toNumber(item.taxAmount) / sold) * quantityToRestore : 0;
-          restoredCost += quantityToRestore * toNumber(item.unitCost);
+          const grossPerUnit = toMoney(item.grossUnitPrice).gt(0)
+            ? toMoney(item.grossUnitPrice)
+            : toMoney(item.unitPrice);
+          refundAmount = refundAmount.plus(lineAmount(quantityToRestore, grossPerUnit));
+          if (sold > 0) {
+            refundTaxAmount = refundTaxAmount.plus(toMoney(item.taxAmount).times(quantityToRestore).div(sold));
+          }
+          restoredCost = restoredCost.plus(lineAmount(quantityToRestore, item.unitCost));
           const stock = await lockInventoryRow(tx, companyId, item.variantId, sale.locationId);
           const after = stock.quantity + quantityToRestore;
-          await setInventoryQuantity(tx, companyId, item.variantId, sale.locationId, after);
+          // Wave 17 (D): the units come back at the cost they left with, blended into the average.
+          await setInventoryQuantity(
+            tx,
+            companyId,
+            item.variantId,
+            sale.locationId,
+            after,
+            nextAverageCost(stock.quantity, stock.averageCost, quantityToRestore, toNumber(item.unitCost))
+          );
           await addMovement(tx, {
             companyId,
             variantId: item.variantId,
@@ -132,7 +156,7 @@ export function registerRetailPosCancellationRoute(app: Express): void {
           idempotencyKey: body.idempotencyKey,
           userId,
         });
-        await postRetailRefundAccountingTx(tx, {
+        const cancelVoucherId = await postRetailRefundAccountingTx(tx, {
           companyId,
           locationId: body.locationId,
           saleId,
@@ -140,13 +164,25 @@ export function registerRetailPosCancellationRoute(app: Express): void {
           sourceId: String(saleId),
           idempotencyKey: `retail-pos-cancel:${saleId}`,
           refundAmount,
-          refundTaxAmount,
+          refundTaxAmount: refundTaxAmount.toDecimalPlaces(6),
           restoredCost,
           refunds,
           userId,
           username: req.user?.username ?? null,
         });
-        return { replayed: false, operationId: operation.id, refundAmount, restoredCost };
+        await stockValue.post({
+          kind: "cancel",
+          sourceId: saleId,
+          description: `Retail cancellation of sale #${saleId}`,
+          actor: { userId, username: req.user?.username ?? null },
+          alreadyDebited: cancelVoucherId ? restoredCost : undefined,
+        });
+        return {
+          replayed: false,
+          operationId: operation.id,
+          refundAmount: refundAmount.toNumber(),
+          restoredCost: restoredCost.toNumber(),
+        };
       });
       res.status(result.replayed ? 200 : 201).json({ ...result, sale: await loadSaleResponse(companyId, saleId) });
     } catch (error) {

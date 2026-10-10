@@ -16,7 +16,7 @@
  */
 import request from "supertest";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { and, eq, inArray, like } from "drizzle-orm";
+import { and, eq, inArray, isNull, like } from "drizzle-orm";
 
 import { db, pool } from "../server/db";
 import * as schema from "../shared/schema";
@@ -225,7 +225,9 @@ describe("intercompany POS mirror", () => {
       .where(
         and(
           eq(schema.vouchers.companyId, dest.companyId),
-          like(schema.vouchers.voucherNumber, `INTERCO-DST-${dest.companyId}-2026-04-02%`)
+          like(schema.vouchers.voucherNumber, `INTERCO-DST-${dest.companyId}-2026-04-02%`),
+          // Wave 16 (A): a rebuild retires the old journal (soft delete, renumbered).
+          isNull(schema.vouchers.deletedAt)
         )
       );
     expect(shared.map((row) => row.number).sort()).toEqual(

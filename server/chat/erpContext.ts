@@ -9,7 +9,10 @@
 import { db } from "../db";
 import { logger } from "../lib/logger";
 import * as schema from "@shared/schema";
-import { and, desc, eq, gt, gte, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, sql } from "drizzle-orm";
+import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
+import { sumMoney, toMoney } from "../lib/money";
+import { getPartyBalances } from "../services/accounting/balances/ledgerBalanceEngine";
 
 // ── ERP context in-memory cache (TTL = 60 s per companyId) ───────────────────
 const ERP_CACHE_TTL_MS = 60_000;
@@ -18,10 +21,7 @@ interface ERPCacheEntry {
   expiresAt: number;
 }
 const erpContextCache = new Map<string, ERPCacheEntry>();
-const ERP_CACHE_MAX_ENTRIES = Math.max(
-  4,
-  Number.parseInt(process.env.ERP_CONTEXT_CACHE_MAX_ENTRIES || "32", 10) || 32
-);
+const ERP_CACHE_MAX_ENTRIES = Math.max(4, Number.parseInt(process.env.ERP_CONTEXT_CACHE_MAX_ENTRIES || "32", 10) || 32);
 
 function pruneERPContextCache(now = Date.now()): void {
   for (const [key, entry] of erpContextCache) {
@@ -502,92 +502,75 @@ export async function getERPContext(companyId: number) {
     }
   }
 
-  // Fetch full supplier data including opening balances
-  const suppliersWithBalances = await db
-    .select({
-      id: schema.suppliers.id,
-      code: schema.suppliers.code,
-      legalName: schema.suppliers.legalName,
-      openingBalance: schema.suppliers.openingBalance,
-    })
-    .from(schema.suppliers)
-    .where(eq(schema.suppliers.active, true));
+  // Supplier and customer balances from the one balance engine (wave 13, A4/M3):
+  // only this company's suppliers and customers, plus any supplier of another
+  // company this company posted to (its payable counts here, owner decision 2);
+  // every line counted once in its voucher company. Amounts are exact until the
+  // context is built.
+  const [supplierEngine, customerEngine] = await Promise.all([
+    getPartyBalances(db, { companyId, kind: "supplier" }),
+    getPartyBalances(db, { companyId, kind: "customer", memo: true }),
+  ]);
+  const supplierIds = supplierEngine.parties.map((party) => party.id).filter((id): id is number => id !== null);
+  const supplierMasters =
+    supplierIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: companyScopedSuppliers.id,
+            code: companyScopedSuppliers.code,
+            legalName: companyScopedSuppliers.legalName,
+            companyId: companyScopedSuppliers.companyId,
+            active: companyScopedSuppliers.active,
+          })
+          .from(companyScopedSuppliers)
+          .where(inArray(companyScopedSuppliers.id, supplierIds));
+  const supplierMasterById = new Map(supplierMasters.map((supplier) => [supplier.id, supplier]));
 
-  // Get voucher entries for each supplier (matching supplier page calculation)
-  const supplierBalances = await Promise.all(
-    suppliersWithBalances.map(async (supplier) => {
-      const entries = await db
-        .select({
-          debitAmount: schema.voucherEntries.debitAmount,
-          creditAmount: schema.voucherEntries.creditAmount,
-        })
-        .from(schema.voucherEntries)
-        .innerJoin(schema.vouchers, eq(schema.voucherEntries.voucherId, schema.vouchers.id))
-        .where(
-          and(
-            eq(schema.voucherEntries.supplierId, supplier.id),
-            eq(schema.vouchers.companyId, companyId),
-            eq(schema.vouchers.optional, false),
-            isNull(schema.vouchers.deletedAt)
-          )
-        );
-
-      // Calculate balance same as supplier page: Opening Balance + Credits - Debits
-      const openingBalance = parseFloat(supplier.openingBalance || "0");
-      const balance = entries.reduce((sum, entry) => {
-        const credit = parseFloat(entry.creditAmount || "0");
-        const debit = parseFloat(entry.debitAmount || "0");
-        return sum + (credit - debit);
-      }, openingBalance);
-
+  const filteredSupplierBalances = supplierEngine.parties
+    .filter((party) => party.id !== null && !party.deleted)
+    .filter((party) => supplierMasterById.get(party.id!)?.active !== false)
+    .map((party) => {
+      const master = supplierMasterById.get(party.id!);
+      const balance = toMoney(party.closing).negated(); // Cr positive: we owe the supplier
       return {
-        supplierId: supplier.id,
-        supplierCode: supplier.code,
-        supplierName: supplier.legalName || "Unknown",
-        openingBalance: openingBalance,
-        balance: balance,
-        status: balance > 0 ? "PAYABLE" : balance < 0 ? "OVERPAID" : "SETTLED",
+        supplierId: party.id!,
+        supplierCode: master?.code ?? party.code ?? "",
+        supplierName: master?.legalName || party.name || "Unknown",
+        openingBalance: toMoney(party.masterOpening).negated().toNumber(),
+        balance: balance.toNumber(),
+        exact: balance,
+        status: balance.greaterThan(0) ? "PAYABLE" : balance.isNegative() ? "OVERPAID" : "SETTLED",
       };
     })
-  );
+    .filter((supplier) => supplier.exact.abs().greaterThan(0.01));
 
-  // Filter to only show suppliers with non-zero balances
-  const filteredSupplierBalances = supplierBalances.filter((sb) => Math.abs(sb.balance) > 0.01);
-
-  let customerBalancesList: Array<{
-    customerId: number;
-    customerName: string;
-    balance: number;
-  }> = [];
-  try {
-    const customerBalancesRaw = await db
-      .select({
-        customerId: schema.customerBalances.customerId,
-        totalDebit: sql<string>`COALESCE(SUM(CAST(${schema.customerBalances.debitAmount} AS NUMERIC)), 0)`,
-        totalCredit: sql<string>`COALESCE(SUM(CAST(${schema.customerBalances.creditAmount} AS NUMERIC)), 0)`,
-      })
-      .from(schema.customerBalances)
-      .where(eq(schema.customerBalances.companyId, companyId))
-      .groupBy(schema.customerBalances.customerId);
-
-    customerBalancesList = customerBalancesRaw
-      .map((cb) => {
-        const customer = customers.find((c) => c.id === cb.customerId);
-        const balance = parseFloat(cb.totalDebit) - parseFloat(cb.totalCredit);
-        return {
-          customerId: cb.customerId,
-          customerName: customer?.legalName || "Unknown",
-          balance: balance,
-        };
-      })
-      .filter((cb) => Math.abs(cb.balance) > 0.01);
-  } catch (error) {
-    logger.error("Error fetching customer balances:", { error: error });
-  }
+  const customerRows = customerEngine.parties
+    .filter((party) => party.id !== null && !party.deleted)
+    .map((party) => ({
+      customerId: party.id!,
+      customerName: customers.find((customer) => customer.id === party.id)?.legalName || party.name || "Unknown",
+      exact: toMoney(party.closing),
+      memo: toMoney(party.memoTotal),
+    }));
+  const customerBalancesList = customerRows
+    .filter((customer) => customer.exact.abs().greaterThan(0.01))
+    .map((customer) => ({
+      customerId: customer.customerId,
+      customerName: customer.customerName,
+      balance: customer.exact.toNumber(),
+    }));
 
   const financialSummary = {
-    totalPayables: filteredSupplierBalances.filter((s) => s.balance > 0).reduce((sum, s) => sum + s.balance, 0),
-    totalReceivables: customerBalancesList.filter((c) => c.balance > 0).reduce((sum, c) => sum + c.balance, 0),
+    totalPayables: sumMoney(
+      filteredSupplierBalances.filter((supplier) => supplier.exact.greaterThan(0)).map((supplier) => supplier.exact)
+    ).toNumber(),
+    totalReceivables: sumMoney(
+      customerRows.filter((customer) => customer.exact.greaterThan(0)).map((customer) => customer.exact)
+    ).toNumber(),
+    // Receivables not yet in the ledger (factory invoices before the cut-over,
+    // factory POS credit sales, cache-only rows): shown apart, never in the total.
+    receivablesNotInLedger: sumMoney(customerRows.map((customer) => customer.memo)).toNumber(),
     openPurchaseOrders: purchaseOrders.filter((po) => po.status === "Open").length,
     pendingContainerSales: containerSales.filter((cs) => cs.paymentStatus !== "PAID").length,
   };
@@ -838,7 +821,7 @@ export async function getERPContext(companyId: number) {
     todaysSales,
     thisMonthSales,
     lowStockAlerts,
-    supplierBalances: filteredSupplierBalances,
+    supplierBalances: filteredSupplierBalances.map(({ exact: _exact, ...supplier }) => supplier),
     customerBalances: customerBalancesList,
     purchaseOrders,
     containerSales,

@@ -1,17 +1,28 @@
+import type Decimal from "decimal.js";
 import { and, eq } from "drizzle-orm";
 
 import { stockAdjustmentItems, stockAdjustmentVouchers, voucherEntries, vouchers } from "@shared/schema";
 import { db } from "../db";
-import { reverseInventoryByExactValue } from "../inventoryHelper";
 import { voucherMutationBlockReason } from "../lib/migratedVoucherGuard";
 import { createDatabaseStockMovementAdapter } from "./inventory/databaseStockMovementAdapter";
-import { restoreInventoryByExactValue } from "./inventory/exactValueInventory";
+import {
+  inventoryLedgerNetTx,
+  lineValueMoved,
+  postReversalResidualTx,
+  restoreIssuedValueTx,
+  reverseReceivedValueTx,
+  sumDecimals,
+} from "./inventory/valueExactReversal";
 import { postStockMovementTx } from "./inventory/stockMovementIntegrityService";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
 export class StockAdjustmentDeletionError extends Error {
-  constructor(public readonly code: string, message: string, public readonly status: number) {
+  constructor(
+    public readonly code: string,
+    message: string,
+    public readonly status: number
+  ) {
     super(message);
     this.name = "StockAdjustmentDeletionError";
   }
@@ -27,7 +38,9 @@ export interface StockAdjustmentDeletionResult {
 }
 
 function isProduction(adjustmentType: string | null | undefined, quantity: number): boolean {
-  const normalized = String(adjustmentType ?? "").toLowerCase();
+  const normalized = String(adjustmentType ?? "")
+    .trim()
+    .toLowerCase();
   return normalized === "production" || (normalized === "mixed" && quantity > 0);
 }
 
@@ -99,10 +112,15 @@ export async function deleteStockAdjustmentVoucher(input: {
 
     let reversedInventory = false;
     if (!voucher.optional) {
+      // The Inventory line the voucher carries leaves the ledger with it; the
+      // sub-ledger change beyond it is posted as a reversal difference.
+      const ledgerBefore = await inventoryLedgerNetTx(tx, companyId, [voucherId]);
+      const deltas: Decimal[] = [];
       for (const item of items) {
         const signedQuantity = Number(item.quantity);
         const quantity = Math.abs(signedQuantity);
-        const storedValue = Math.abs(Number(item.totalAmount ?? 0));
+        // Wave 11: the exact value the line moved (legacy lines: their total).
+        const storedValue = lineValueMoved({ valueMoved: item.valueMoved, total: item.totalAmount ?? 0 }).toNumber();
         const storedRate = quantity > 0 ? storedValue / quantity : Number(item.rate ?? 0);
         if (
           !Number.isFinite(signedQuantity) ||
@@ -120,27 +138,16 @@ export async function deleteStockAdjustmentVoucher(input: {
         }
 
         const production = isProduction(adjustment.adjustmentType, signedQuantity);
-        if (production) {
-          await reverseInventoryByExactValue(
-            tx,
-            adjustment.locationId,
-            item.stockItemId,
-            quantity,
-            storedValue,
-            companyId,
-            "stock_adjustment_delete_reverse",
-            voucherId
-          );
-        } else {
-          await restoreInventoryByExactValue(
-            tx,
-            companyId,
-            adjustment.locationId,
-            item.stockItemId,
-            quantity,
-            storedValue
-          );
-        }
+        const reversal = {
+          companyId,
+          locationId: adjustment.locationId,
+          stockItemId: item.stockItemId,
+          quantity,
+          value: storedValue,
+          sourceVoucherType: "stock_adjustment_delete_reverse",
+          sourceVoucherId: voucherId,
+        };
+        deltas.push(production ? await reverseReceivedValueTx(tx, reversal) : await restoreIssuedValueTx(tx, reversal));
 
         await postStockMovementTx(
           tx,
@@ -164,6 +171,15 @@ export async function deleteStockAdjustmentVoucher(input: {
         );
       }
       reversedInventory = items.length > 0;
+      await postReversalResidualTx(tx, {
+        companyId,
+        sourceType: "stock-adjustment-delete",
+        sourceId: voucherId,
+        reference: voucher.voucherNumber,
+        subLedgerDelta: sumDecimals(deltas),
+        ledgerDelta: ledgerBefore.negated(),
+        locationId: adjustment.locationId,
+      });
     }
 
     await tx.delete(stockAdjustmentItems).where(eq(stockAdjustmentItems.adjustmentId, adjustment.id));

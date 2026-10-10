@@ -5,7 +5,7 @@ import { db } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
 import { authorizeCompanyIdParam } from "../helpers/supplierBalanceHelpers";
 import { getCustomerByLedgerId } from "../../lib/factoryCustomerLedger";
-import { bankAccounts, companies, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
+import { bankAccounts, customers, employees, fixedAssets, ledgerAccounts } from "@shared/schema";
 import { companyScopedSuppliers } from "@shared/schema/supplierCompanyScope";
 import type { StatementPage } from "./_helpers";
 import {
@@ -17,7 +17,6 @@ import {
 } from "./_helpers";
 import { runVoucherEntryStatement } from "./voucherEntryStatement";
 import { runCustomerBalanceStatement } from "./customerBalanceStatement";
-import { runFactoryCustomerLedgerStatement } from "./factoryCustomerLedgerStatement";
 import { ContinuousCursorError } from "../../lib/continuousCursor";
 
 export function registerAccountTransactionPaginationRoutes(app: Express): void {
@@ -61,26 +60,21 @@ export function registerAccountTransactionPaginationRoutes(app: Express): void {
       const pagination = parsePagination(req);
       const continuous = parseContinuousWindow(req);
       const dates = dateContext(req);
+      // A ledger account a customer owns is that customer's ledger statement
+      // (the balance engine rolls its lines into the customer), with amounts
+      // not yet in the ledger in a separate `notInLedger` section.
       const linkedCustomer = await getCustomerByLedgerId(accountId);
       if (linkedCustomer && linkedCustomer.companyId === account.companyId) {
-        const [company] = await db
-          .select({ companyType: companies.companyType })
-          .from(companies)
-          .where(eq(companies.id, linkedCustomer.companyId))
-          .limit(1);
-        if (company?.companyType === "factory") {
-          return send(
-            res,
-            await runFactoryCustomerLedgerStatement({
-              customerId: linkedCustomer.id,
-              ledgerAccountId: accountId,
-              companyId: linkedCustomer.companyId,
-              pagination,
-              dates,
-              continuous,
-            })
-          );
-        }
+        return send(
+          res,
+          await runCustomerBalanceStatement({
+            customerId: linkedCustomer.id,
+            companyId: linkedCustomer.companyId,
+            pagination,
+            dates,
+            continuous,
+          })
+        );
       }
       return send(
         res,

@@ -1,7 +1,6 @@
-import { storage } from "../../storage";
-import { db } from "../../db";
-import { employees } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
+import type { DatabaseOrTransaction } from "../../db";
+import { employees, ledgerAccounts } from "@shared/schema";
+import { and, eq, isNull, like } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, toMoney } from "../../lib/money";
 
@@ -12,6 +11,7 @@ function emptyChanges(): EmployeeBalanceChanges {
 }
 
 async function applyEmployeeBalanceChanges(
+  executor: DatabaseOrTransaction,
   employee: {
     id: number;
     currentBalance: string | null;
@@ -26,7 +26,7 @@ async function applyEmployeeBalanceChanges(
   const newBalance = toMoney(employee.currentBalance).plus(cents(changes.balanceChange));
   const newDeposits = MoneyDecimal.max(0, toMoney(employee.totalDeposits).plus(cents(changes.deposits)));
   const newWithdrawals = MoneyDecimal.max(0, toMoney(employee.totalWithdrawals).plus(cents(changes.withdrawals)));
-  await db
+  await executor
     .update(employees)
     .set({
       currentBalance: newBalance.toFixed(2),
@@ -41,6 +41,14 @@ function hasChanges(changes: EmployeeBalanceChanges): boolean {
 }
 
 // ─── Employee balance sync ────────────────────────────────────────────────────
+/**
+ * Moves employee balances by a voucher's lines.
+ *
+ * Wave 12 (audit trail): `executor` is required and is the caller's
+ * transaction whenever the voucher is written in one, so the balance moves
+ * commit or roll back with the lines. It used to write on the global pool,
+ * which committed the balance even when the voucher transaction rolled back.
+ */
 export async function syncEmployeeBalancesFromEntries(
   entries: Array<{
     ledgerAccountId: number | null;
@@ -49,9 +57,21 @@ export async function syncEmployeeBalancesFromEntries(
     creditAmount: string | null;
   }>,
   companyId: number,
-  reverse: boolean = false
+  reverse: boolean,
+  executor: DatabaseOrTransaction
 ): Promise<void> {
-  const allAccounts = await storage.getAllLedgerAccounts(companyId);
+  // The visible, live EMP- accounts of the company (getAllLedgerAccounts' filter), read on the executor.
+  const allAccounts = await executor
+    .select({ id: ledgerAccounts.id, code: ledgerAccounts.code })
+    .from(ledgerAccounts)
+    .where(
+      and(
+        eq(ledgerAccounts.companyId, companyId),
+        isNull(ledgerAccounts.deletedAt),
+        eq(ledgerAccounts.isHidden, false),
+        like(ledgerAccounts.code, "EMP-%")
+      )
+    );
 
   const employeeAccountMap = new Map<number, { code: string; employeeCode: string }>();
   for (const account of allAccounts) {
@@ -95,21 +115,21 @@ export async function syncEmployeeBalancesFromEntries(
   // another tenant's employee balance (employee codes are only unique per company).
   for (const [employeeId, changes] of Array.from(employeeChangesById.entries())) {
     if (!hasChanges(changes)) continue;
-    const [employee] = await db
+    const [employee] = await executor
       .select()
       .from(employees)
       .where(and(eq(employees.id, employeeId), eq(employees.companyId, companyId)));
     if (!employee) continue;
-    await applyEmployeeBalanceChanges(employee, changes);
+    await applyEmployeeBalanceChanges(executor, employee, changes);
   }
 
   for (const [employeeCode, changes] of Array.from(employeeChangesByCode.entries())) {
     if (!hasChanges(changes)) continue;
-    const [employee] = await db
+    const [employee] = await executor
       .select()
       .from(employees)
       .where(and(eq(employees.code, employeeCode), eq(employees.companyId, companyId)));
     if (!employee) continue;
-    await applyEmployeeBalanceChanges(employee, changes);
+    await applyEmployeeBalanceChanges(executor, employee, changes);
   }
 }

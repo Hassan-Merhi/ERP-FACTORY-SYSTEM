@@ -28,6 +28,7 @@ import {
 } from "../containerHelpers";
 import { moneyString, sumMoney, toMoney } from "../../../lib/money";
 import type Decimal from "decimal.js";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const CHARGE_FIELDS = ["freight", "surcharge", "fumigation", "documentCharges", "discount", "otherCharges"] as const;
 type ChargeField = (typeof CHARGE_FIELDS)[number];
@@ -184,203 +185,205 @@ export function registerContainerCostingRoutes(app: Express) {
                   logger.info(
                     `[SyncAll] PO ${po.poNumber}: local voucher #${po.voucherId} ${currentLocalTotal.toString()} → ${expectedLocalTotal.toString()}`
                   );
-                  await db
-                    .update(vouchers)
-                    .set({ totalAmount: moneyString(expectedLocalTotal) })
-                    .where(eq(vouchers.id, po.voucherId));
+                  const poVoucherId = po.voucherId;
+                  await db.transaction(async (tx) => {
+                    await tx
+                      .update(vouchers)
+                      .set({ totalAmount: moneyString(expectedLocalTotal) })
+                      .where(eq(vouchers.id, poVoucherId));
 
-                  if (hasParentFreight) {
-                    if (isSameCompanyPo) {
-                      // Same-company: embed freight into the PO voucher.
-                      // User pays freight themselves — freight account is a payable (CR).
-                      //   DR Purchases (grossTotal — goods + freight)
-                      //   CR (supplier/payable entry) (intercoTotal — goods only)
-                      //   CR freightParentAccountId (freight)
-                      let purchasesEntryId: number | null = null;
-                      let freightCrEntryId: number | null = null;
-                      let mainCrEntryId: number | null = null;
-                      const toDeleteIds: number[] = [];
-                      const freightCrCandidates3: number[] = [];
-                      for (const entry of entries) {
-                        const acctId = entry.ledgerAccountId as number | null;
-                        const isDebit = isDebitOnly(entry);
-                        const isCredit = isCreditOnly(entry);
-                        if (isCredit && acctId === poFreightParentAccountId) {
-                          freightCrCandidates3.push(entry.id);
-                        } else if (isDebit && purchasesEntryId === null) {
-                          purchasesEntryId = entry.id;
-                        } else if (isCredit && mainCrEntryId === null) {
-                          mainCrEntryId = entry.id;
-                        } else {
-                          toDeleteIds.push(entry.id);
+                    if (hasParentFreight) {
+                      if (isSameCompanyPo) {
+                        // Same-company: embed freight into the PO voucher.
+                        // User pays freight themselves — freight account is a payable (CR).
+                        //   DR Purchases (grossTotal — goods + freight)
+                        //   CR (supplier/payable entry) (intercoTotal — goods only)
+                        //   CR freightParentAccountId (freight)
+                        let purchasesEntryId: number | null = null;
+                        let mainCrEntryId: number | null = null;
+                        const toDeleteIds: number[] = [];
+                        const freightCrCandidates3: number[] = [];
+                        for (const entry of entries) {
+                          const acctId = entry.ledgerAccountId as number | null;
+                          const isDebit = isDebitOnly(entry);
+                          const isCredit = isCreditOnly(entry);
+                          if (isCredit && acctId === poFreightParentAccountId) {
+                            freightCrCandidates3.push(entry.id);
+                          } else if (isDebit && purchasesEntryId === null) {
+                            purchasesEntryId = entry.id;
+                          } else if (isCredit && mainCrEntryId === null) {
+                            mainCrEntryId = entry.id;
+                          } else {
+                            toDeleteIds.push(entry.id);
+                          }
                         }
-                      }
-                      freightCrEntryId = freightCrCandidates3[0] ?? null;
-                      toDeleteIds.push(...freightCrCandidates3.slice(1));
-                      if (toDeleteIds.length > 0)
-                        await db.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-                      if (purchasesEntryId !== null)
-                        await db
-                          .update(voucherEntries)
-                          .set({ debitAmount: moneyString(grossTotal), creditAmount: "0" })
-                          .where(eq(voucherEntries.id, purchasesEntryId));
-                      if (mainCrEntryId !== null)
-                        await db
-                          .update(voucherEntries)
-                          .set({ creditAmount: moneyString(intercoTotal), debitAmount: "0" })
-                          .where(eq(voucherEntries.id, mainCrEntryId));
-                      const _syncAllFreightNarration = `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`;
-                      if (freightCrEntryId !== null) {
-                        await db
-                          .update(voucherEntries)
-                          .set({
-                            creditAmount: moneyString(poFreight),
-                            debitAmount: "0",
+                        const freightCrEntryId = freightCrCandidates3[0] ?? null;
+                        toDeleteIds.push(...freightCrCandidates3.slice(1));
+                        if (toDeleteIds.length > 0)
+                          await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+                        if (purchasesEntryId !== null)
+                          await tx
+                            .update(voucherEntries)
+                            .set({ debitAmount: moneyString(grossTotal), creditAmount: "0" })
+                            .where(eq(voucherEntries.id, purchasesEntryId));
+                        if (mainCrEntryId !== null)
+                          await tx
+                            .update(voucherEntries)
+                            .set({ creditAmount: moneyString(intercoTotal), debitAmount: "0" })
+                            .where(eq(voucherEntries.id, mainCrEntryId));
+                        const _syncAllFreightNarration = `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`;
+                        if (freightCrEntryId !== null) {
+                          await tx
+                            .update(voucherEntries)
+                            .set({
+                              creditAmount: moneyString(poFreight),
+                              debitAmount: "0",
+                              ledgerAccountId: poFreightParentAccountId!,
+                              narration: _syncAllFreightNarration,
+                            })
+                            .where(eq(voucherEntries.id, freightCrEntryId));
+                        } else {
+                          await tx.insert(voucherEntries).values({
+                            voucherId: poVoucherId,
                             ledgerAccountId: poFreightParentAccountId!,
+                            debitAmount: "0",
+                            creditAmount: moneyString(poFreight),
                             narration: _syncAllFreightNarration,
-                          })
-                          .where(eq(voucherEntries.id, freightCrEntryId));
+                          });
+                        }
+                        updatedFreightVouchers++;
                       } else {
-                        await db.insert(voucherEntries).values({
-                          voucherId: po.voucherId,
-                          ledgerAccountId: poFreightParentAccountId!,
-                          debitAmount: "0",
-                          creditAmount: moneyString(poFreight),
-                          narration: _syncAllFreightNarration,
-                        });
-                      }
-                      updatedFreightVouchers++;
-                    } else {
-                      // Interco: delete-and-rebuild approach.
-                      //   DR Purchases (intercoTotal — goods)
-                      //   DR Purchases (freight — same account)
-                      //   CR parentCreditAccount (grossTotal)
-                      const childSettings = await storage.getCompanySettings(po.companyId);
-                      const parentCreditAcctId = childSettings?.parentCreditAccountId ?? null;
+                        // Interco: delete-and-rebuild approach.
+                        //   DR Purchases (intercoTotal — goods)
+                        //   DR Purchases (freight — same account)
+                        //   CR parentCreditAccount (grossTotal)
+                        const childSettings = await storage.getCompanySettings(po.companyId);
+                        const parentCreditAcctId = childSettings?.parentCreditAccountId ?? null;
 
-                      let parentCreditEntryId: number | null = null;
+                        let parentCreditEntryId: number | null = null;
+                        let purchasesAcctId: number | null = null;
+                        const toDeleteIds: number[] = [];
+
+                        for (const entry of entries) {
+                          const acctId = entry.ledgerAccountId as number | null;
+                          const isDebit = isDebitOnly(entry);
+                          const isCredit = isCreditOnly(entry);
+
+                          if (isCredit && acctId === parentCreditAcctId && parentCreditEntryId === null) {
+                            parentCreditEntryId = entry.id;
+                          } else {
+                            toDeleteIds.push(entry.id);
+                            if (isDebit && acctId !== poFreightParentAccountId && !purchasesAcctId) {
+                              purchasesAcctId = acctId;
+                            }
+                          }
+                        }
+
+                        if (toDeleteIds.length > 0) {
+                          await tx.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
+                        }
+
+                        if (parentCreditEntryId !== null) {
+                          await tx
+                            .update(voucherEntries)
+                            .set({ creditAmount: moneyString(grossTotal), debitAmount: "0" })
+                            .where(eq(voucherEntries.id, parentCreditEntryId));
+                        } else if (parentCreditAcctId) {
+                          await tx.insert(voucherEntries).values({
+                            voucherId: poVoucherId,
+                            ledgerAccountId: parentCreditAcctId,
+                            debitAmount: "0",
+                            creditAmount: moneyString(grossTotal),
+                            narration: `PO ${po.poNumber} - Credit to parent`,
+                          });
+                        }
+
+                        if (purchasesAcctId) {
+                          await tx.insert(voucherEntries).values([
+                            {
+                              voucherId: poVoucherId,
+                              ledgerAccountId: purchasesAcctId,
+                              debitAmount: moneyString(intercoTotal),
+                              creditAmount: "0",
+                              narration: `${po.poNumber}`,
+                            },
+                            {
+                              voucherId: poVoucherId,
+                              ledgerAccountId: purchasesAcctId,
+                              debitAmount: moneyString(poFreight),
+                              creditAmount: "0",
+                              narration: `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`,
+                            },
+                          ]);
+                        }
+                      } // end interco branch
+                    } else if (hasOwnFreight) {
+                      // Own-freight: DR Purchases (goods) + DR FreightOwnAccount (freight)
+                      //              CR Supplier (goods) + CR FreightOwnAccount (freight)
                       let purchasesAcctId: number | null = null;
-                      const toDeleteIds: number[] = [];
-
+                      let freightCrFound = false;
                       for (const entry of entries) {
-                        const acctId = entry.ledgerAccountId as number | null;
                         const isDebit = isDebitOnly(entry);
                         const isCredit = isCreditOnly(entry);
-
-                        if (isCredit && acctId === parentCreditAcctId && parentCreditEntryId === null) {
-                          parentCreditEntryId = entry.id;
-                        } else {
-                          toDeleteIds.push(entry.id);
-                          if (isDebit && acctId !== poFreightParentAccountId && !purchasesAcctId) {
-                            purchasesAcctId = acctId;
+                        if (isDebit) {
+                          if (!purchasesAcctId) purchasesAcctId = entry.ledgerAccountId ?? null;
+                          if (entry.ledgerAccountId !== freightAccountId) {
+                            await tx
+                              .update(voucherEntries)
+                              .set({ debitAmount: moneyString(intercoTotal), creditAmount: "0" })
+                              .where(eq(voucherEntries.id, entry.id));
+                          }
+                        } else if (isCredit) {
+                          if (entry.ledgerAccountId === freightAccountId) {
+                            freightCrFound = true;
+                            await tx
+                              .update(voucherEntries)
+                              .set({ creditAmount: moneyString(poFreight) })
+                              .where(eq(voucherEntries.id, entry.id));
+                          } else {
+                            await tx
+                              .update(voucherEntries)
+                              .set({ creditAmount: moneyString(intercoTotal), debitAmount: "0" })
+                              .where(eq(voucherEntries.id, entry.id));
                           }
                         }
                       }
-
-                      if (toDeleteIds.length > 0) {
-                        await db.delete(voucherEntries).where(inArray(voucherEntries.id, toDeleteIds));
-                      }
-
-                      if (parentCreditEntryId !== null) {
-                        await db
-                          .update(voucherEntries)
-                          .set({ creditAmount: moneyString(grossTotal), debitAmount: "0" })
-                          .where(eq(voucherEntries.id, parentCreditEntryId));
-                      } else if (parentCreditAcctId) {
-                        await db.insert(voucherEntries).values({
-                          voucherId: po.voucherId,
-                          ledgerAccountId: parentCreditAcctId,
-                          debitAmount: "0",
-                          creditAmount: moneyString(grossTotal),
-                          narration: `PO ${po.poNumber} - Credit to parent`,
-                        });
-                      }
-
-                      if (purchasesAcctId) {
-                        await db.insert(voucherEntries).values([
+                      if (!freightCrFound && purchasesAcctId) {
+                        await tx.insert(voucherEntries).values([
                           {
-                            voucherId: po.voucherId,
-                            ledgerAccountId: purchasesAcctId,
-                            debitAmount: moneyString(intercoTotal),
-                            creditAmount: "0",
-                            narration: `${po.poNumber}`,
-                          },
-                          {
-                            voucherId: po.voucherId,
+                            voucherId: poVoucherId,
                             ledgerAccountId: purchasesAcctId,
                             debitAmount: moneyString(poFreight),
                             creditAmount: "0",
                             narration: `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`,
                           },
+                          {
+                            voucherId: poVoucherId,
+                            ledgerAccountId: freightAccountId,
+                            debitAmount: "0",
+                            creditAmount: moneyString(poFreight),
+                            narration: `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`,
+                          },
                         ]);
                       }
-                    } // end interco branch
-                  } else if (hasOwnFreight) {
-                    // Own-freight: DR Purchases (goods) + DR FreightOwnAccount (freight)
-                    //              CR Supplier (goods) + CR FreightOwnAccount (freight)
-                    let purchasesAcctId: number | null = null;
-                    let freightCrFound = false;
-                    for (const entry of entries) {
-                      const isDebit = isDebitOnly(entry);
-                      const isCredit = isCreditOnly(entry);
-                      if (isDebit) {
-                        if (!purchasesAcctId) purchasesAcctId = entry.ledgerAccountId ?? null;
-                        if (entry.ledgerAccountId !== freightAccountId) {
-                          await db
+                    } else {
+                      // Standard supplier-paid freight: all entries → expectedLocalTotal
+                      for (const entry of entries) {
+                        const isDebit = isDebitOnly(entry) ? true : isCreditOnly(entry) ? false : !entry.supplierId;
+                        if (isDebit) {
+                          await tx
                             .update(voucherEntries)
-                            .set({ debitAmount: moneyString(intercoTotal), creditAmount: "0" })
-                            .where(eq(voucherEntries.id, entry.id));
-                        }
-                      } else if (isCredit) {
-                        if (entry.ledgerAccountId === freightAccountId) {
-                          freightCrFound = true;
-                          await db
-                            .update(voucherEntries)
-                            .set({ creditAmount: moneyString(poFreight) })
+                            .set({ debitAmount: moneyString(expectedLocalTotal), creditAmount: "0" })
                             .where(eq(voucherEntries.id, entry.id));
                         } else {
-                          await db
+                          await tx
                             .update(voucherEntries)
-                            .set({ creditAmount: moneyString(intercoTotal), debitAmount: "0" })
+                            .set({ creditAmount: moneyString(expectedLocalTotal), debitAmount: "0" })
                             .where(eq(voucherEntries.id, entry.id));
                         }
                       }
                     }
-                    if (!freightCrFound && purchasesAcctId) {
-                      await db.insert(voucherEntries).values([
-                        {
-                          voucherId: po.voucherId,
-                          ledgerAccountId: purchasesAcctId,
-                          debitAmount: moneyString(poFreight),
-                          creditAmount: "0",
-                          narration: `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`,
-                        },
-                        {
-                          voucherId: po.voucherId,
-                          ledgerAccountId: freightAccountId,
-                          debitAmount: "0",
-                          creditAmount: moneyString(poFreight),
-                          narration: `Freight - ${po.poNumber}${cNum && cNum !== String(po.id) ? ` (${cNum})` : ""}`,
-                        },
-                      ]);
-                    }
-                  } else {
-                    // Standard supplier-paid freight: all entries → expectedLocalTotal
-                    for (const entry of entries) {
-                      const isDebit = isDebitOnly(entry) ? true : isCreditOnly(entry) ? false : !entry.supplierId;
-                      if (isDebit) {
-                        await db
-                          .update(voucherEntries)
-                          .set({ debitAmount: moneyString(expectedLocalTotal), creditAmount: "0" })
-                          .where(eq(voucherEntries.id, entry.id));
-                      } else {
-                        await db
-                          .update(voucherEntries)
-                          .set({ creditAmount: moneyString(expectedLocalTotal), debitAmount: "0" })
-                          .where(eq(voucherEntries.id, entry.id));
-                      }
-                    }
-                  }
+                  });
                   updatedLocalVouchers++;
                 }
               }
@@ -425,8 +428,15 @@ export function registerContainerCostingRoutes(app: Express) {
                 .where(and(eq(vouchers.companyId, po.companyId), eq(vouchers.voucherNumber, freightVoucherNum)))
                 .limit(1);
               if (staleFV) {
-                await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, staleFV.id));
-                await db.delete(vouchers).where(eq(vouchers.id, staleFV.id));
+                // Wave 16 (A): retired (soft delete with lines, audited), not hard-deleted.
+                await db.transaction((tx) =>
+                  retireVouchersTx(tx, {
+                    companyId: po.companyId,
+                    voucherIds: [staleFV.id],
+                    reason: "stale-freight-voucher-sync",
+                    actor: sessionRetirementActor(req),
+                  })
+                );
                 updatedFreightVouchers++;
               }
             }
@@ -442,8 +452,15 @@ export function registerContainerCostingRoutes(app: Express) {
                 .where(and(eq(vouchers.companyId, po.companyId), eq(vouchers.voucherNumber, parentFreightVoucherNum)))
                 .limit(1);
               if (stalePFV) {
-                await db.delete(voucherEntries).where(eq(voucherEntries.voucherId, stalePFV.id));
-                await db.delete(vouchers).where(eq(vouchers.id, stalePFV.id));
+                // Wave 16 (A): retired (soft delete with lines, audited), not hard-deleted.
+                await db.transaction((tx) =>
+                  retireVouchersTx(tx, {
+                    companyId: po.companyId,
+                    voucherIds: [stalePFV.id],
+                    reason: "stale-parent-freight-journal-sync",
+                    actor: sessionRetirementActor(req),
+                  })
+                );
                 updatedFreightVouchers++;
                 logger.info(`[SyncAll] Deleted stale PARENT-FREIGHT journal for same-company PO ${po.poNumber}`);
               }

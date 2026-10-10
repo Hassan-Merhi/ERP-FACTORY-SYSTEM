@@ -185,7 +185,10 @@ describe("Phase 10 inventory receive and stock-in", () => {
     expect(Number(movement.rows[0].quantity_delta) * Number(movement.rows[0].unit_cost)).toBeCloseTo(70, 2);
   }, 60_000);
 
-  it("factory stock entry updates ERP quantity and weighted value and writes one receipt per batch item", async () => {
+  // Wave 11 (owner decision): the ERP mirror of factory bales holds quantity only.
+  // Bale value lives in the factory valuation (finished goods), so a stock entry
+  // adds bales to the mirror at zero value and the mirror's value never moves.
+  it("factory stock entry updates ERP quantity at zero value and writes one receipt per batch item", async () => {
     await pool.query(`UPDATE companies SET company_type = 'factory' WHERE id = $1`, [ctx.companyId]);
     expect((await agent.post("/api/auth/set-company").send({ companyId: ctx.companyId })).status).toBe(200);
 
@@ -210,8 +213,8 @@ describe("Phase 10 inventory receive and stock-in", () => {
 
     let inventory = await inventorySnapshot();
     expect(Number(inventory.quantity)).toBeCloseTo(4, 3);
-    expect(Number(inventory.total_value)).toBeCloseTo(300, 2);
-    expect(Number(inventory.average_rate)).toBeCloseTo(75, 2);
+    expect(Number(inventory.total_value)).toBeCloseTo(100, 2);
+    expect(Number(inventory.average_rate)).toBeCloseTo(25, 2);
 
     await pool.query(`UPDATE factory_bale_products SET production_price = '6.00' WHERE id = $1`, [productId]);
     const second = await agent.post("/api/factory/stock-entry").send({
@@ -223,15 +226,15 @@ describe("Phase 10 inventory receive and stock-in", () => {
 
     inventory = await inventorySnapshot();
     expect(Number(inventory.quantity)).toBeCloseTo(6, 3);
-    expect(Number(inventory.total_value)).toBeCloseTo(600, 2);
-    expect(Number(inventory.average_rate)).toBeCloseTo(100, 2);
+    expect(Number(inventory.total_value)).toBeCloseTo(100, 2);
+    expect(Number(inventory.average_rate)).toBeCloseTo(16.67, 2);
 
     const movements = await movementRows("factory-stock-entry");
     expect(movements).toHaveLength(2);
     expect(movements.map((row) => row.movement_kind)).toEqual(["receipt", "receipt"]);
     expect(movements.map((row) => Number(row.quantity_delta))).toEqual([2, 2]);
-    expect(Number(movements[0].unit_cost)).toBeCloseTo(100, 2);
-    expect(Number(movements[1].unit_cost)).toBeCloseTo(150, 2);
+    expect(Number(movements[0].unit_cost)).toBeCloseTo(0, 2);
+    expect(Number(movements[1].unit_cost)).toBeCloseTo(0, 2);
     expect(new Set(movements.map((row) => row.idempotency_key)).size).toBe(2);
   }, 60_000);
 });

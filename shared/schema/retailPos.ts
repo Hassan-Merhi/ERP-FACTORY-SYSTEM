@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   decimal,
   index,
   integer,
@@ -265,6 +266,10 @@ export const retailCashMovements = pgTable(
     movementType: varchar("movement_type", { length: 20 }).notNull(),
     amount: decimal("amount", { precision: 20, scale: 6 }).notNull(),
     reason: text("reason").notNull(),
+    /** Wave 17 D: the reason code that chooses the counter-account (null before the wave). */
+    reasonCode: varchar("reason_code", { length: 40 }),
+    /** Wave 17 D: the movement's journal (RETAIL-CASH-{id}); null before the wave. */
+    voucherId: integer("voucher_id"),
     idempotencyKey: varchar("idempotency_key", { length: 191 }).notNull(),
     createdBy: varchar("created_by")
       .notNull()
@@ -336,6 +341,51 @@ export const retailAccountingSettings = pgTable(
   })
 );
 
+/**
+ * Retail cash movement reason code -> counter-account (wave 17 D). A movement
+ * posts its shift's cash account against the reason's account; a reason with
+ * no row (or a row naming no account) is refused until it is mapped.
+ */
+export const retailCashReasonAccounts = pgTable(
+  "retail_cash_reason_accounts",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    reasonCode: varchar("reason_code", { length: 40 }).notNull(),
+    ledgerAccountId: integer("ledger_account_id").references(() => ledgerAccounts.id, { onDelete: "restrict" }),
+    bankAccountId: integer("bank_account_id").references(() => bankAccounts.id, { onDelete: "restrict" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyReasonUnique: uniqueIndex("retail_cash_reason_accounts_company_reason_unique").on(t.companyId, t.reasonCode),
+  })
+);
+
+/** The applied Retail inventory opening of a company (wave 17 D): one row per company. */
+export const retailInventoryOpenings = pgTable(
+  "retail_inventory_openings",
+  {
+    id: serial("id").primaryKey(),
+    companyId: integer("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    openingDate: date("opening_date").notNull(),
+    voucherId: integer("voucher_id"),
+    subLedgerValue: decimal("sub_ledger_value", { precision: 20, scale: 2 }).notNull(),
+    ledgerBalanceBefore: decimal("ledger_balance_before", { precision: 20, scale: 2 }).notNull(),
+    amount: decimal("amount", { precision: 20, scale: 2 }).notNull(),
+    planHash: varchar("plan_hash", { length: 64 }).notNull(),
+    appliedBy: varchar("applied_by").notNull(),
+    appliedAt: timestamp("applied_at").notNull().defaultNow(),
+  },
+  (t) => ({
+    companyUnique: uniqueIndex("retail_inventory_openings_company_unique").on(t.companyId),
+  })
+);
+
 export const retailStockOperations = pgTable(
   "retail_stock_operations",
   {
@@ -403,3 +453,5 @@ export type RetailPosPayment = typeof retailPosPayments.$inferSelect;
 export type RetailCashMovement = typeof retailCashMovements.$inferSelect;
 export type RetailAccountingSetting = typeof retailAccountingSettings.$inferSelect;
 export type RetailStockMovement = typeof retailStockMovements.$inferSelect;
+export type RetailCashReasonAccount = typeof retailCashReasonAccounts.$inferSelect;
+export type RetailInventoryOpening = typeof retailInventoryOpenings.$inferSelect;

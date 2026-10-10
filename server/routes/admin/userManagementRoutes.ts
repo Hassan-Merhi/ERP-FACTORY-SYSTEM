@@ -1,18 +1,23 @@
 import { getErrorMessage } from "../../lib/httpHandlers";
 import type { Express } from "express";
 import { db } from "../../db";
+import { companyStockValue } from "../../services/inventory/stockValuation";
 import { storage } from "../../storage";
 import { requireAuth, requireRole } from "../../auth";
 import { logAudit } from "../_helpers";
+import { closedPeriodErrorResponse } from "../../lib/closedPeriodError";
+import { sessionRetirementActor } from "../../services/accounting/voucherRetirement";
 import {
-  inventory,
+  LegacyEmployeeAccountRefusal,
+  migrateLegacyEmployeeAccountTx,
+} from "../../services/accounting/legacyEmployeeAccountMigration";
+import {
   stockItems,
   containers,
   bankAccounts,
   vouchers,
   voucherEntries,
   salesItems,
-  locations,
   employees,
   ledgerAccounts,
   userCompanyRoles,
@@ -165,12 +170,8 @@ export async function computeRawBalance(companyId: number): Promise<number> {
   const indirectExpenseBalance = await getBalance("Indirect Expense", false);
   const incomeBalance = await getBalance("Income", true);
 
-  const invRows = await db
-    .select({ quantity: inventory.quantity, averageRate: inventory.averageRate })
-    .from(inventory)
-    .innerJoin(locations, eq(inventory.locationId, locations.id))
-    .where(and(eq(inventory.companyId, companyId), isNull(locations.deletedAt)));
-  const stockOnFloorValue = sumMoney(invRows.map((i) => toMoney(i.quantity).times(toMoney(i.averageRate))));
+  // Wave 11: the one stock valuation (stockValuation.ts, SUM(total_value)).
+  const stockOnFloorValue = toMoney(await companyStockValue(db, companyId));
 
   const cogsRows = await db
     .select({ totalCost: salesItems.totalCost })
@@ -343,175 +344,127 @@ export function registerUserManagementRoutes(app: Express) {
     }
   });
 
-  // Migrate voucher entries from EMP-* ledger account to use employeeId directly
-  app.post("/api/admin/migrate-employee-account/:accountId", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      const accountId = parseInt(req.params.accountId);
-      if (isNaN(accountId)) {
-        return res.status(400).json({ message: "Invalid account ID" });
-      }
-
-      // Get the EMP-* account
-      const account = await storage.getLedgerAccountById(accountId);
-      if (!account) {
-        return res.status(404).json({ message: "Account not found" });
-      }
-      if (!account.code || !account.code.startsWith("EMP-")) {
-        return res.status(400).json({ message: "Not an EMP-* legacy account" });
-      }
-      if (account.companyId !== companyId) {
-        return res.status(403).json({ message: "Account belongs to a different company" });
-      }
-
-      // Extract employee code and find matching employee in the same company
-      const employeeCode = account.code.replace("EMP-", "");
-      const employee = await storage.getEmployeeByCode(employeeCode);
-      if (!employee) {
-        return res.status(400).json({
-          message: `Cannot migrate: No employee found with code "${employeeCode}"`,
-        });
-      }
-      if (employee.companyId !== companyId) {
-        return res.status(400).json({
-          message: `Cannot migrate: Employee "${employeeCode}" belongs to a different company`,
-        });
-      }
-
-      // Migrate all voucher entries from ledgerAccountId to employeeId
-      const result = await db
-        .update(voucherEntries)
-        .set({
-          ledgerAccountId: null,
-          employeeId: employee.id,
-        })
-        .where(eq(voucherEntries.ledgerAccountId, accountId))
-        .returning();
-
-      // Soft-delete the EMP-* account since it's no longer needed
-      await db
-        .update(ledgerAccounts)
-        .set({ deletedAt: new Date(), active: false })
-        .where(eq(ledgerAccounts.id, accountId));
-
-      res.json({
-        message: `Migrated ${result.length} voucher entries from ${account.code} to employee ${employee.code}`,
-        migratedCount: result.length,
-        accountDeleted: true,
-        employeeId: employee.id,
-        employeeCode: employee.code,
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
-    }
-  });
-
-  // Bulk migrate and cleanup all EMP-* accounts for the current company
-  app.post("/api/admin/cleanup-legacy-employee-accounts", requireAuth, requireRole("Admin"), async (req, res) => {
-    try {
-      const companyId = req.session.currentCompanyId;
-      if (!companyId) {
-        return res.status(400).json({ message: "No company selected" });
-      }
-
-      // Find all active EMP-* ledger accounts
-      const empAccounts = await db
-        .select()
-        .from(ledgerAccounts)
-        .where(
-          and(
-            eq(ledgerAccounts.companyId, companyId),
-            like(ledgerAccounts.code, "EMP-%"),
-            isNull(ledgerAccounts.deletedAt)
-          )
-        );
-
-      const results: Array<{
-        accountCode: string;
-        accountId: number;
-        employeeCode: string;
-        migratedEntries: number;
-        status: "migrated" | "deleted" | "skipped";
-        message: string;
-      }> = [];
-
-      for (const account of empAccounts) {
-        const employeeCode = account.code.replace("EMP-", "");
-        const employeeRaw = await storage.getEmployeeByCode(employeeCode);
-        // Only use employee if in same company
-        const employee = employeeRaw && employeeRaw.companyId === companyId ? employeeRaw : null;
-
-        // Get voucher entries count for this account
-        const entries = await db.select().from(voucherEntries).where(eq(voucherEntries.ledgerAccountId, account.id));
-
-        if (entries.length === 0) {
-          // No entries - just soft-delete the account
-          await db
-            .update(ledgerAccounts)
-            .set({ deletedAt: new Date(), active: false })
-            .where(eq(ledgerAccounts.id, account.id));
-
-          results.push({
-            accountCode: account.code,
-            accountId: account.id,
-            employeeCode,
-            migratedEntries: 0,
-            status: "deleted",
-            message: "Account had no entries, soft-deleted",
-          });
-        } else if (employee) {
-          // Has entries and matching employee - migrate then delete
-          await db
-            .update(voucherEntries)
-            .set({
-              ledgerAccountId: null,
-              employeeId: employee.id,
-            })
-            .where(eq(voucherEntries.ledgerAccountId, account.id));
-
-          await db
-            .update(ledgerAccounts)
-            .set({ deletedAt: new Date(), active: false })
-            .where(eq(ledgerAccounts.id, account.id));
-
-          results.push({
-            accountCode: account.code,
-            accountId: account.id,
-            employeeCode,
-            migratedEntries: entries.length,
-            status: "migrated",
-            message: `Migrated ${entries.length} entries to employee ${employee.code}`,
-          });
-        } else {
-          // Has entries but no matching employee - skip
-          results.push({
-            accountCode: account.code,
-            accountId: account.id,
-            employeeCode,
-            migratedEntries: 0,
-            status: "skipped",
-            message: `Skipped: No matching employee found for code "${employeeCode}"`,
-          });
+  // Legacy EMP-* ledger accounts onto the employee (phase 19 A, G2): one
+  // transaction per request, the company's employee by code, lines in a closed
+  // period refused, one audit row per account in the transaction, Admin/Owner.
+  // See services/accounting/legacyEmployeeAccountMigration.ts.
+  app.post(
+    "/api/admin/migrate-employee-account/:accountId",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
         }
+        const accountId = parseInt(req.params.accountId);
+        if (isNaN(accountId)) {
+          return res.status(400).json({ message: "Invalid account ID" });
+        }
+        const actor = sessionRetirementActor(req);
+        const result = await db.transaction((tx) =>
+          migrateLegacyEmployeeAccountTx(tx, { companyId, accountId, actor })
+        );
+        res.json({
+          message: `Migrated ${result.migratedEntries} voucher entries from ${result.accountCode} to employee ${result.employeeCode}`,
+          ...result,
+        });
+      } catch (error: unknown) {
+        if (error instanceof LegacyEmployeeAccountRefusal) {
+          return res.status(error.status).json({ code: error.code, message: error.message, vouchers: error.vouchers });
+        }
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        res.status(500).json({ message: getErrorMessage(error) });
       }
-
-      const migrated = results.filter((r) => r.status === "migrated").length;
-      const deleted = results.filter((r) => r.status === "deleted").length;
-      const skipped = results.filter((r) => r.status === "skipped").length;
-
-      res.json({
-        message: `Cleanup complete: ${migrated} migrated, ${deleted} deleted, ${skipped} skipped`,
-        results,
-        summary: { migrated, deleted, skipped, total: results.length },
-      });
-    } catch (error: unknown) {
-      res.status(500).json({ message: getErrorMessage(error) });
     }
-  });
+  );
+
+  // Every live EMP-* account of the current company, in one transaction. An
+  // account the migration refuses is listed as skipped with the reason and
+  // left as it was. (It was POST /api/admin/cleanup-legacy-employee-accounts;
+  // the path no longer carries the maintenance keyword, so the Owner passes
+  // privilegedMaintenanceRoutePolicy.)
+  app.post(
+    "/api/admin/legacy-employee-accounts/migrate-all",
+    requireAuth,
+    requireRole("Admin", "Owner"),
+    async (req, res) => {
+      try {
+        const companyId = req.session.currentCompanyId;
+        if (!companyId) {
+          return res.status(400).json({ message: "No company selected" });
+        }
+        const actor = sessionRetirementActor(req);
+        const results = await db.transaction(async (tx) => {
+          const empAccounts = await tx
+            .select({ id: ledgerAccounts.id, code: ledgerAccounts.code })
+            .from(ledgerAccounts)
+            .where(
+              and(
+                eq(ledgerAccounts.companyId, companyId),
+                like(ledgerAccounts.code, "EMP-%"),
+                isNull(ledgerAccounts.deletedAt)
+              )
+            )
+            .orderBy(ledgerAccounts.id);
+          const rows: Array<{
+            accountCode: string;
+            accountId: number;
+            employeeCode: string;
+            migratedEntries: number;
+            status: "migrated" | "deleted" | "skipped";
+            code?: string;
+            message: string;
+          }> = [];
+          for (const account of empAccounts) {
+            const employeeCode = account.code.slice("EMP-".length);
+            try {
+              const result = await migrateLegacyEmployeeAccountTx(tx, { companyId, accountId: account.id, actor });
+              rows.push({
+                accountCode: account.code,
+                accountId: account.id,
+                employeeCode,
+                migratedEntries: result.migratedEntries,
+                status: result.migratedEntries > 0 ? "migrated" : "deleted",
+                message:
+                  result.migratedEntries > 0
+                    ? `Migrated ${result.migratedEntries} entries to employee ${employeeCode}`
+                    : "Account had no entries, soft-deleted",
+              });
+            } catch (error: unknown) {
+              // Every refusal is raised before the account or its lines change.
+              if (!(error instanceof LegacyEmployeeAccountRefusal)) throw error;
+              rows.push({
+                accountCode: account.code,
+                accountId: account.id,
+                employeeCode,
+                migratedEntries: 0,
+                status: "skipped",
+                code: error.code,
+                message: error.message,
+              });
+            }
+          }
+          return rows;
+        });
+
+        const migrated = results.filter((r) => r.status === "migrated").length;
+        const deleted = results.filter((r) => r.status === "deleted").length;
+        const skipped = results.filter((r) => r.status === "skipped").length;
+        res.json({
+          message: `Cleanup complete: ${migrated} migrated, ${deleted} deleted, ${skipped} skipped`,
+          results,
+          summary: { migrated, deleted, skipped, total: results.length },
+        });
+      } catch (error: unknown) {
+        const closed = closedPeriodErrorResponse(error);
+        if (closed) return res.status(closed.status).json(closed.body);
+        res.status(500).json({ message: getErrorMessage(error) });
+      }
+    }
+  );
 
   // Recalculate Opening Balance Equity adjustment
   // Self-sufficient: computes rawBalance server-side so no body params are needed.

@@ -12,11 +12,13 @@ import { logger } from "../../../lib/logger";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { resolveStoredFxRate, UnresolvedExchangeRateError } from "../../../services/factory/currencyConversion";
-import { getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { getOrCreateLedgerAccount } from "../_helpers";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
 import { factoryContainers, voucherEntries, factoryContainerOtherCharges, vouchers } from "@shared/schema";
-import { eq, and, inArray, ilike } from "drizzle-orm";
+import { eq, and, ilike } from "drizzle-orm";
 import { normFactoryEntry } from "./_helpers";
 import { parseMoneyInput, sumMoney, toMoney } from "../../../lib/money";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 type OtherChargeInput = {
   description: string;
@@ -127,7 +129,8 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
             }
             fxRate = String(storedRate);
           } else {
-            fxRate = await getOrFetchFxRateToUsd(companyId, chargeCcy, voucherDate);
+            // Phase 19 C (M2): the recorded factory rate on or before the voucher date, or 409.
+            fxRate = (await factoryDocumentRate(db, companyId, chargeCcy, voucherDate)).rate;
           }
         }
 
@@ -166,8 +169,13 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
           );
         if (existingVouchers.length > 0) {
           const voucherIds = existingVouchers.map((voucher) => voucher.id);
-          await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, voucherIds));
-          await tx.delete(vouchers).where(inArray(vouchers.id, voucherIds));
+          // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+          await retireVouchersTx(tx, {
+            companyId,
+            voucherIds,
+            reason: "factory-container-other-charge-delete",
+            actor: sessionRetirementActor(req),
+          });
         }
 
         await tx
@@ -232,6 +240,7 @@ export function registerFactoryContainerOtherChargesRoutes(app: Express) {
 
       res.json({ charges: result, total: total.toFixed(2) });
     } catch (error: unknown) {
+      if (error instanceof FactoryFxRateRequiredError) return res.status(409).json(error.body);
       logger.error("Error syncing container other charges:", { error: error });
       res.status(500).json({ message: getErrorMessage(error) });
     }

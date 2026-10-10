@@ -9,10 +9,9 @@ import { eq, and, sql, isNull } from "drizzle-orm";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { factoryDaybookEntries, factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
+import { factoryWorkerAdvances, ledgerAccounts } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../../services/accounting/currencyAmounts";
 import type { AttendanceStatusRow } from "../../../services/payroll/factoryPayrollGenerationPolicy";
-import { daybookAmountUsd } from "../../../lib/money";
 
 /** Normalize a USD voucher entry (IDENTITY convention). Returns dual-currency fields spread-ready. */
 export function normUsd(debit: string | number, credit: string | number) {
@@ -42,42 +41,8 @@ export function getFactoryCompanyId(req: import("express").Request): number | un
 }
 
 /** Write a single daybook entry (factory audit log). */
-export async function writeDaybookEntry(
-  dbOrTx: typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0],
-  opts: {
-    companyId: number;
-    txDate: string;
-    txType: string;
-    referenceId?: number;
-    referenceTable?: string;
-    description: string;
-    metaJson?: string;
-    currencyCode?: string;
-    amountCurrency?: number;
-    fxRateToUsd?: number;
-    amountUsd?: number;
-    createdBy?: string | null;
-  }
-) {
-  const currency = opts.currencyCode || "USD";
-  const fxRate = opts.fxRateToUsd || 1;
-  const amtCurrency = opts.amountCurrency || 0;
-  const amtUsd = daybookAmountUsd(currency, amtCurrency, fxRate, opts.amountUsd);
-  await dbOrTx.insert(factoryDaybookEntries).values({
-    companyId: opts.companyId,
-    txDate: opts.txDate,
-    txType: opts.txType,
-    referenceId: opts.referenceId || null,
-    referenceTable: opts.referenceTable || null,
-    description: opts.description,
-    metaJson: opts.metaJson || null,
-    currencyCode: currency,
-    amountCurrency: String(amtCurrency),
-    fxRateToUsd: String(fxRate),
-    amountUsd: amtUsd,
-    createdBy: opts.createdBy || null,
-  });
-}
+// Phase 19 C (M3): one shared daybook writer; a missing rate is stored unresolved (0), never 1.
+export { writeDaybookEntry } from "../../../services/factory/factoryDaybookWriter";
 
 /** Find or create a ledger account by name for a company. Returns the account row.
  *  Skips soft-deleted accounts and handles race-condition unique-constraint failures.
@@ -125,21 +90,10 @@ export async function findOrCreateLedger(
       );
   }
   if (existing) {
-    // Payroll control accounts are system-owned accounting contracts. Repair any
-    // stale legacy type/visibility metadata when the account is reused so future
-    // postings and balance-sheet classification cannot silently lose them.
-    const normalizedName = accountName.trim().toLowerCase().replace(/\s+/g, " ");
-    const isPayrollControlAccount =
-      normalizedName === "payroll payable" || normalizedName === "factory worker advances";
-    if (
-      isPayrollControlAccount &&
-      (existing.accountType !== accountType || existing.active !== true || existing.isHidden === true)
-    ) {
-      await db
-        .update(ledgerAccounts)
-        .set({ accountType, active: true, isHidden: false })
-        .where(eq(ledgerAccounts.id, existing.id));
-    }
+    // Wave 18 B: an existing account is reused as it is. This helper never retypes,
+    // renames, reactivates, unhides or restores an account (it only skips
+    // soft-deleted rows when looking one up); a stale type is listed by the
+    // accounting integrity diagnostic and is corrected through the audited editor.
     return { id: existing.id };
   }
 

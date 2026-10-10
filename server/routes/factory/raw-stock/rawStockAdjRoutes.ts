@@ -1,11 +1,12 @@
 import { parseId } from "../../../lib/parseId";
 import { getErrorMessage } from "../../../lib/httpHandlers";
+import { withFactoryValuationEventTx } from "../../../services/factory/factoryStockValueEvents";
 import { logger } from "../../../lib/logger";
 import type { Express, Request, Response } from "express";
 import { db } from "../../../db";
 import { requireAuth } from "../../../auth";
 import { getLockedSupplierRate } from "../../../services/factory/rawStockLockedRate";
-import { writeDaybookEntry, getOrFetchFxRateToUsd, getOrCreateLedgerAccount } from "../_helpers";
+import { writeDaybookEntry, getOrCreateLedgerAccount } from "../_helpers";
 import {
   factorySuppliers,
   factoryContainers,
@@ -20,6 +21,10 @@ import {
 import { eq, and, desc, sql, inArray, ilike, isNull } from "drizzle-orm";
 import type Decimal from "decimal.js";
 import { MoneyDecimal, moneyString, parseMoneyInput, toMoney } from "../../../lib/money";
+import { normFactoryEntry } from "../../../services/factory/factoryVoucherEntryAmounts";
+import { FactoryFxRateRequiredError, factoryDocumentRate } from "../../../services/factory/factoryDocumentFxRate";
+import { syncContainerCommissionJournalTx } from "../../../services/factory/containerCommissionJournal";
+import { retireVouchersTx, sessionRetirementActor } from "../../../services/accounting/voucherRetirement";
 
 const ZERO = new MoneyDecimal(0);
 
@@ -288,12 +293,17 @@ export function registerRawStockAdjRoutes(app: Express) {
         );
       }
 
-      let fxRate = 1;
-      if (ccy !== "USD") {
+      // Wave 17 (D): the purchase voucher of a non-USD adjustment is posted at the
+      // confirmed factory rate on or before its date, or refused (409). It used
+      // to take a fetched rate, or 1 when the fetch failed, and then the legacy
+      // shape (native amount in the USD columns).
+      let fxRate = "1";
+      if (rawMaterialAcctId && totalAmount.gt(0) && ccy !== "USD") {
         try {
-          fxRate = toMoney(await getOrFetchFxRateToUsd(companyId, ccy, date)).toNumber();
-        } catch {
-          fxRate = 1;
+          fxRate = (await factoryDocumentRate(db, companyId, ccy, String(date).slice(0, 10))).rate;
+        } catch (rateError) {
+          if (rateError instanceof FactoryFxRateRequiredError) return res.status(409).json(rateError.body);
+          throw rateError;
         }
       }
 
@@ -336,17 +346,16 @@ export function registerRawStockAdjRoutes(app: Express) {
               description: `Manual raw material purchase: ${kgNum} kg @ ${costNum}/${ccy} — ${supplierName}`,
               totalAmount: moneyString(totalAmount),
               currency: ccy,
-              exchangeRate: String(fxRate),
+              exchangeRate: fxRate,
               sourceModule: "FACTORY",
             })
             .returning();
 
-          // Dr Raw Material Stock
+          // Dr Raw Material Stock (both legs normalized at the purchase's rate, wave 6)
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             ledgerAccountId: rawMaterialAcctId,
-            debitAmount: moneyString(totalAmount),
-            creditAmount: "0",
+            ...normFactoryEntry(ccy, moneyString(totalAmount), "0", fxRate),
             narration: `Raw material stock — ${kgNum} kg from ${supplierName}`,
           });
 
@@ -354,8 +363,7 @@ export function registerRawStockAdjRoutes(app: Express) {
           await tx.insert(voucherEntries).values({
             voucherId: voucher.id,
             factorySupplierId: resolvedSupplierId,
-            debitAmount: "0",
-            creditAmount: moneyString(totalAmount),
+            ...normFactoryEntry(ccy, "0", moneyString(totalAmount), fxRate),
             narration: `Payable to ${supplierName} for raw material`,
           });
 
@@ -368,7 +376,7 @@ export function registerRawStockAdjRoutes(app: Express) {
             description: `Manual purchase: ${kgNum} kg @ ${costNum} ${ccy} from ${supplierName}`,
             currencyCode: ccy,
             amountCurrency: totalAmount.toNumber(),
-            fxRateToUsd: fxRate,
+            fxRateToUsd: toMoney(fxRate).toNumber(),
           });
         }
       });
@@ -419,25 +427,35 @@ export function registerRawStockAdjRoutes(app: Express) {
           )
           .orderBy(desc(factoryRawStock.offloadedAt));
 
-        await db.transaction(async (tx) => {
-          let remaining = toMoney(adj.kg);
-          for (const row of stockRows) {
-            if (remaining.lte("0.001")) break;
-            const received = toMoney(row.receivedKg);
-            // Add back all remaining to this row (newest first)
-            await tx
-              .update(factoryRawStock)
-              .set({ receivedKg: received.plus(remaining).toFixed(3) })
-              .where(eq(factoryRawStock.id, row.id));
-            remaining = ZERO;
-          }
-          // Hard-delete the DEDUCT record
-          await tx
-            .delete(factoryRawMaterialAdjustments)
-            .where(
-              and(eq(factoryRawMaterialAdjustments.id, id), eq(factoryRawMaterialAdjustments.companyId, companyId))
-            );
-        });
+        // Wave 11: restoring a deduction reverses its write-off (WASTE) in the
+        // daily factory stock journal.
+        await db.transaction((tx) =>
+          withFactoryValuationEventTx(
+            tx,
+            companyId,
+            "WASTE",
+            { sourceType: "factory-raw-deduct-restore", sourceId: id },
+            async () => {
+              let remaining = toMoney(adj.kg);
+              for (const row of stockRows) {
+                if (remaining.lte("0.001")) break;
+                const received = toMoney(row.receivedKg);
+                // Add back all remaining to this row (newest first)
+                await tx
+                  .update(factoryRawStock)
+                  .set({ receivedKg: received.plus(remaining).toFixed(3) })
+                  .where(eq(factoryRawStock.id, row.id));
+                remaining = ZERO;
+              }
+              // Hard-delete the DEDUCT record
+              await tx
+                .delete(factoryRawMaterialAdjustments)
+                .where(
+                  and(eq(factoryRawMaterialAdjustments.id, id), eq(factoryRawMaterialAdjustments.companyId, companyId))
+                );
+            }
+          )
+        );
       } else {
         // For ADD / REMOVE: soft-delete + clean up linked daybook entries and vouchers
         await db.transaction(async (tx) => {
@@ -472,8 +490,13 @@ export function registerRawStockAdjRoutes(app: Express) {
             );
           if (linkedVouchers.length > 0) {
             const vIds = linkedVouchers.map((v) => v.id);
-            await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-            await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+            // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+            await retireVouchersTx(tx, {
+              companyId,
+              voucherIds: vIds,
+              reason: "factory-raw-stock-adjustment-delete",
+              actor: sessionRetirementActor(req),
+            });
           }
         });
       }
@@ -593,6 +616,10 @@ export function registerRawStockAdjRoutes(app: Express) {
           .update(factoryRawStock)
           .set({ deletedAt: new Date() })
           .where(and(eq(factoryRawStock.id, rawStockId), eq(factoryRawStock.companyId, companyId)));
+        // Wave 14: a commission held on this row leaves the ledger with it.
+        if (toMoney(row.commissionAmount ?? 0).greaterThan(0)) {
+          await syncContainerCommissionJournalTx(tx, companyId, row.containerId);
+        }
 
         // Delete linked OFFLOAD_RAW_STOCK daybook entry
         await tx

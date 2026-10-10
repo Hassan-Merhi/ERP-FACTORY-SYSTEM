@@ -1,5 +1,6 @@
+import type Decimal from "decimal.js";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { db } from "../../../db";
+import { db, type DbTransaction } from "../../../db";
 import * as schema from "@shared/schema";
 
 import { postChargeVouchers } from "./charge-vouchers";
@@ -17,14 +18,93 @@ import {
   positiveIds,
 } from "./types";
 import { firstRow } from "../../../lib/queryResult";
+import { MoneyDecimal, toMoney } from "../../../lib/money";
+import { adjustInventory, receiveInventoryAtValue } from "../../../inventoryHelper";
+import {
+  postInventoryMovementJournalTx,
+  type InventoryMovementLine,
+} from "../../accounting/perpetualInventory/inventoryMovementJournal";
+import {
+  isPreCutoverOffloadChangeTx,
+  postPreCutoverOffloadMovementTx,
+  syncContainerStockInTx,
+} from "../../accounting/perpetualInventory/stockReceipts";
+import { isPerpetualInventoryActive } from "../../accounting/perpetualInventory/cutover";
+import { isSupplierPartnerCompany } from "../../accounting/perpetualInventory/linkedJournal";
 
 /** The inventory row an offload locks FOR UPDATE before rewriting its cost. */
 type InventoryLockRow = { id: number; quantity: string; total_value: string };
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
+export const OFFLOAD_CURRENCY_UNCONFIRMED_CODE = "CONTAINER_OFFLOAD_CURRENCY_RATE_UNCONFIRMED" as const;
+export const OFFLOAD_CURRENCY_UNCONFIRMED_MESSAGE =
+  "This container's purchase orders are in a currency other than USD with no confirmed exchange rate: under perpetual inventory the stock cannot be valued, so the offload is refused. Record the purchase orders in USD first.";
+
+/**
+ * Under perpetual inventory (wave 11, owner decision) an offload values the
+ * stock it receives, and the INVENTORY account takes that value, in USD. An
+ * ERP purchase order's line rates are in the order's currency and the order
+ * carries no exchange rate, so a non-USD order has no confirmed rate to value
+ * its stock at: the offload (create, replace or edit) is refused rather than
+ * book native amounts as dollars. Before the company's cut-over (or for a
+ * supplier partner, which carries no perpetual INVENTORY) the offload keeps its
+ * behaviour.
+ */
+async function assertOffloadCurrencyValuedTx(
+  tx: DbTransaction,
+  companyId: number,
+  offloadDate: string,
+  purchaseOrders: ReadonlyArray<{ currency: string | null }>
+): Promise<void> {
+  const foreign = purchaseOrders.some((po) => {
+    const currency = String(po.currency ?? "")
+      .trim()
+      .toUpperCase();
+    return currency !== "" && currency !== "USD";
+  });
+  if (!foreign) return;
+  if (!(await isPerpetualInventoryActive(tx, companyId, offloadDate))) return;
+  if (await isSupplierPartnerCompany(tx, companyId)) return;
+  throw new ContainerOffloadLifecycleError(
+    OFFLOAD_CURRENCY_UNCONFIRMED_MESSAGE,
+    409,
+    OFFLOAD_CURRENCY_UNCONFIRMED_CODE
+  );
+}
+
+export const OFFLOAD_BEFORE_CUTOVER_CODE = "CONTAINER_OFFLOAD_BEFORE_CUTOVER" as const;
+export const OFFLOAD_BEFORE_CUTOVER_MESSAGE =
+  "The perpetual inventory cut-over is applied: an offload cannot be dated before the cut-over date unless it edits an offload already dated before it. Date the offload on or after the cut-over date.";
+
+/** The date an existing offload is booked at: the container's offload date, else the offload's own. */
+function offloadBookedDate(
+  container: { offloadDate: string | null },
+  offload: { offloadedAt: Date | string | null } | null
+): string | null {
+  if (container.offloadDate) return container.offloadDate;
+  if (!offload?.offloadedAt) return null;
+  return new Date(offload.offloadedAt).toISOString().slice(0, 10);
+}
+
+/**
+ * Wave 15 (M10): an inventory cost correction rewrites the cost of stock
+ * already on hand (a revaluation), so only Admin or Owner (Developer passes,
+ * as with requireRole) may send one; the offload itself keeps its own access.
+ * The route passes the session's company role.
+ */
+export const OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE = "CONTAINER_OFFLOAD_COST_CORRECTION_FORBIDDEN" as const;
+export const OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE =
+  "Only an Admin or Owner can correct the cost of stock already on hand during an offload.";
+const OFFLOAD_COST_CORRECTION_ROLES = new Set(["Admin", "Owner", "Developer"]);
+
+export interface OffloadCostCorrectionApprover {
+  /** The caller's company role; cost corrections need Admin or Owner. */
+  actorRole?: string | null;
+}
+
 export async function executeContainerOffloadLifecycle(
-  input: ContainerOffloadLifecycleInput
+  input: ContainerOffloadLifecycleInput & OffloadCostCorrectionApprover
 ): Promise<ContainerOffloadLifecycleResult> {
   return db.transaction(async (tx) => {
     // The container row is the offload's ownership token and it is taken FOR
@@ -108,6 +188,8 @@ export async function executeContainerOffloadLifecycle(
       );
     }
 
+    await assertOffloadCurrencyValuedTx(tx, input.companyId, input.offloadDate, purchaseOrders);
+
     const poIds = purchaseOrders.map((po: typeof schema.purchaseOrders.$inferSelect) => po.id);
     const lineItems = await tx
       .select({
@@ -155,13 +237,25 @@ export async function executeContainerOffloadLifecycle(
       );
     }
 
+    // Wave 15 (C1): once the cut-over applies, an offload dated before it posts
+    // no stock-in journal. Only an edit of an offload already dated before the
+    // cut-over may keep such a date (its change is journalled below); any other
+    // offload dated before the cut-over is refused.
+    const previousOffloadDate = existingOffload ? offloadBookedDate(container, existingOffload) : null;
+    const previousBeforeCutover = await isPreCutoverOffloadChangeTx(tx, input.companyId, previousOffloadDate);
+    if (!previousBeforeCutover && (await isPreCutoverOffloadChangeTx(tx, input.companyId, input.offloadDate))) {
+      throw new ContainerOffloadLifecycleError(OFFLOAD_BEFORE_CUTOVER_MESSAGE, 409, OFFLOAD_BEFORE_CUTOVER_CODE);
+    }
+
+    let reversalDelta: Decimal = new MoneyDecimal(0);
     if (existingOffload) {
-      await reverseExistingOffload(tx, container, existingOffload, lineItems);
+      reversalDelta = await reverseExistingOffload(tx, container, existingOffload, lineItems);
     }
 
     const itemMap = buildItemMap(lineItems);
-    const totalBales = [...itemMap.values()].reduce((sum, item) => sum + item.totalQuantity, 0);
-    if (totalBales <= 0) {
+    const zero = new MoneyDecimal(0);
+    const totalBales = [...itemMap.values()].reduce((sum, item) => sum.plus(item.totalQuantity), zero);
+    if (!totalBales.gt(0)) {
       throw new ContainerOffloadLifecycleError(
         "Container has no positive stock quantity to offload.",
         400,
@@ -169,51 +263,82 @@ export async function executeContainerOffloadLifecycle(
       );
     }
 
+    // Landed cost, in decimal arithmetic: the charges are spread per bale at
+    // 2dp and the cent remainder goes on the last line, so the lines add up
+    // to the purchase value plus the charges exactly.
     const additionalCharges = input.additionalCharges ?? [];
-    const totalCharges =
-      amount(input.duties) +
-      amount(input.officeCharges) +
-      amount(input.transferCharges) +
-      amount(input.transportFees) +
-      additionalCharges.reduce((sum, charge) => sum + charge.amount, 0) +
-      amount(container.chargesTotal);
-    const additionalCostPerBale = Math.round((totalCharges / totalBales) * 100) / 100;
-    const roundingDifference = Math.round((totalCharges - additionalCostPerBale * totalBales) * 100) / 100;
-    const storedItems: Array<{ stockItemId: number; quantity: number; rate: number; totalValue: number }> = [];
+    const totalCharges = [
+      input.duties,
+      input.officeCharges,
+      input.transferCharges,
+      input.transportFees,
+      ...additionalCharges.map((charge) => charge.amount),
+      container.chargesTotal,
+    ].reduce<Decimal>((sum, value) => sum.plus(toMoney(value)), zero);
+    const additionalCostPerBale = totalCharges.dividedBy(totalBales).toDecimalPlaces(2);
+    const roundingDifference = totalCharges.minus(additionalCostPerBale.times(totalBales)).toDecimalPlaces(2);
+    const storedItems: Array<{
+      stockItemId: number;
+      quantity: Decimal;
+      rate: Decimal;
+      totalValue: Decimal;
+      valueMoved: Decimal;
+      cogsVariance: Decimal;
+    }> = [];
     const entries = [...itemMap.entries()];
 
+    // Corrections of the cost of stock already on hand at the destination
+    // (the operator says its average was wrong). A revaluation of the
+    // sub-ledger: under perpetual inventory it is posted to Inventory
+    // Revaluation by an INV-MOVE journal once the offload record exists.
     const validCorrectionIds = new Set(itemMap.keys());
+    const correctionLines: InventoryMovementLine[] = [];
+    const requestsCorrection = (input.inventoryCostCorrections ?? []).some(
+      (correction) => correction.correctRate > 0 && validCorrectionIds.has(correction.stockItemId)
+    );
+    if (requestsCorrection && !OFFLOAD_COST_CORRECTION_ROLES.has(String(input.actorRole ?? ""))) {
+      throw new ContainerOffloadLifecycleError(
+        OFFLOAD_COST_CORRECTION_FORBIDDEN_MESSAGE,
+        403,
+        OFFLOAD_COST_CORRECTION_FORBIDDEN_CODE
+      );
+    }
     for (const correction of input.inventoryCostCorrections ?? []) {
-      if (correction.correctRate <= 0 || !validCorrectionIds.has(correction.stockItemId)) continue;
+      if (!(correction.correctRate > 0) || !validCorrectionIds.has(correction.stockItemId)) continue;
       const correctionRows = await tx.execute(
         sql`SELECT * FROM inventory WHERE location_id = ${input.locationId} AND stock_item_id = ${correction.stockItemId} FOR UPDATE`
       );
       const row = firstRow<InventoryLockRow>(correctionRows);
       if (!row) continue;
-      const existingQuantity = amount(row.quantity);
-      if (existingQuantity <= 0) continue;
+      const existingQuantity = toMoney(row.quantity);
+      if (!existingQuantity.gt(0)) continue;
+      const correctRate = toMoney(correction.correctRate);
+      const correctedValue = existingQuantity.times(correctRate).toDecimalPlaces(2);
+      const valueDelta = correctedValue.minus(toMoney(row.total_value));
       await tx
         .update(schema.inventory)
         .set({
-          averageRate: correction.correctRate.toFixed(2),
-          totalValue: (existingQuantity * correction.correctRate).toFixed(2),
+          averageRate: correctRate.toFixed(7),
+          totalValue: correctedValue.toFixed(2),
           lastUpdated: new Date(),
         })
         .where(eq(schema.inventory.id, row.id));
+      correctionLines.push({
+        stockItemId: correction.stockItemId,
+        locationId: input.locationId,
+        valueDelta: valueDelta.toFixed(2),
+      });
     }
 
     for (let index = 0; index < entries.length; index += 1) {
       const [stockItemId, item] = entries[index];
-      if (item.totalQuantity === 0) continue;
-      const originalRate = item.weightedRateSum / item.totalQuantity;
-      const newRate = originalRate + additionalCostPerBale;
-      let valueCents = Math.round(item.totalQuantity * newRate * 100);
-      if (index === entries.length - 1 && roundingDifference !== 0) {
-        valueCents += Math.round(roundingDifference * 100);
+      if (item.totalQuantity.isZero()) continue;
+      let offloadValue = item.weightedRateSum.plus(item.totalQuantity.times(additionalCostPerBale)).toDecimalPlaces(2);
+      if (index === entries.length - 1 && !roundingDifference.isZero()) {
+        offloadValue = offloadValue.plus(roundingDifference);
       }
-      const offloadValue = valueCents / 100;
-      const adjustedRate = offloadValue / item.totalQuantity;
-      if (!Number.isFinite(adjustedRate)) {
+      const adjustedRate = offloadValue.dividedBy(item.totalQuantity);
+      if (!adjustedRate.isFinite()) {
         throw new ContainerOffloadLifecycleError(
           `Calculated rate is invalid for stock item ${stockItemId}.`,
           409,
@@ -221,63 +346,50 @@ export async function executeContainerOffloadLifecycle(
         );
       }
 
+      if (item.totalQuantity.isNegative()) {
+        // A net-negative PO line returns stock: issued at the row's cost.
+        const issued = await adjustInventory(
+          tx,
+          input.locationId,
+          stockItemId,
+          item.totalQuantity.toNumber(),
+          input.companyId,
+          undefined,
+          `container-offload:${input.containerId}`
+        );
+        storedItems.push({
+          stockItemId,
+          quantity: item.totalQuantity,
+          rate: adjustedRate,
+          totalValue: offloadValue,
+          valueMoved: toMoney(issued.valueDelta),
+          cogsVariance: offloadValue.minus(toMoney(issued.valueDelta)),
+        });
+        continue;
+      }
+
+      // The receipt moves the sub-ledger by the line's exact landed value. Into
+      // negative stock it first settles the shortage (negative-stock policy):
+      // the sub-ledger takes back the shortage's provisional value and the
+      // difference to what the receipt paid for those bales goes to COGS on
+      // the stock-in journal (cogs_variance).
+      const received = await receiveInventoryAtValue(tx, {
+        locationId: input.locationId,
+        stockItemId,
+        quantity: item.totalQuantity,
+        value: offloadValue,
+        companyId: input.companyId,
+        // Not a voucher id: the layer's source_voucher_id references vouchers.
+        sourceVoucherType: `container-offload:${input.containerId}`,
+      });
       storedItems.push({
         stockItemId,
         quantity: item.totalQuantity,
         rate: adjustedRate,
         totalValue: offloadValue,
+        valueMoved: toMoney(received.valueDelta),
+        cogsVariance: toMoney(received.shortageSettlementVariance),
       });
-
-      const inventoryRows = await tx.execute(
-        sql`SELECT * FROM inventory WHERE location_id = ${input.locationId} AND stock_item_id = ${stockItemId} FOR UPDATE`
-      );
-      const current = firstRow<InventoryLockRow>(inventoryRows);
-      if (current) {
-        const currentQuantity = amount(current.quantity);
-        const currentValue = amount(current.total_value);
-        const nextQuantity = currentQuantity + item.totalQuantity;
-        let nextValue: number;
-        if (nextQuantity === 0) {
-          nextValue = 0;
-        } else if (nextQuantity < 0) {
-          nextValue = nextQuantity * adjustedRate;
-        } else if (currentQuantity <= 0) {
-          // Non-positive inventory carries no asset value. If an old workflow
-          // left a stale total_value behind at exactly zero quantity, never
-          // capitalize that stale amount into the new receipt.
-          nextValue = nextQuantity * Math.max(adjustedRate, 0);
-        } else {
-          nextValue = currentValue + offloadValue;
-          if (nextValue < 0) nextValue = nextQuantity * Math.max(adjustedRate, 0);
-        }
-        const nextRate = nextQuantity > 0 ? nextValue / nextQuantity : adjustedRate;
-        if (!Number.isFinite(nextRate)) {
-          throw new ContainerOffloadLifecycleError(
-            `Calculated weighted rate is invalid for stock item ${stockItemId}.`,
-            409,
-            "CONTAINER_OFFLOAD_WEIGHTED_RATE_INVALID"
-          );
-        }
-        await tx
-          .update(schema.inventory)
-          .set({
-            quantity: nextQuantity.toString(),
-            averageRate: nextRate.toFixed(2),
-            totalValue: nextValue.toFixed(2),
-            lastUpdated: new Date(),
-          })
-          .where(eq(schema.inventory.id, current.id));
-      } else {
-        await tx.insert(schema.inventory).values({
-          companyId: input.companyId,
-          locationId: input.locationId,
-          stockItemId,
-          quantity: item.totalQuantity.toString(),
-          averageRate: adjustedRate.toFixed(2),
-          totalValue: offloadValue.toFixed(2),
-          lastUpdated: new Date(),
-        });
-      }
     }
 
     await tx
@@ -329,6 +441,8 @@ export async function executeContainerOffloadLifecycle(
         quantity: item.quantity.toFixed(3),
         rate: item.rate.toFixed(2),
         totalValue: item.totalValue.toFixed(2),
+        valueMoved: item.valueMoved.toFixed(2),
+        cogsVariance: item.cogsVariance.toFixed(2),
       });
 
       // Canonical evidence for the stock this offload received, on the same
@@ -339,7 +453,7 @@ export async function executeContainerOffloadLifecycle(
       // A replace-only offload re-runs against the same container, so the
       // batch takes the next revision index rather than colliding with the
       // evidence the previous offload recorded.
-      if (item.quantity !== 0) {
+      if (!item.quantity.isZero()) {
         await postStockMovementTx(
           tx,
           {
@@ -362,7 +476,40 @@ export async function executeContainerOffloadLifecycle(
       }
     }
 
+    // Perpetual inventory (wave 11): the cost corrections revalue the stock on hand.
+    await postInventoryMovementJournalTx(tx, {
+      companyId: input.companyId,
+      sourceType: "offload-cost-correction",
+      sourceId: offload.id,
+      date: input.offloadDate,
+      reference: `Container ${container.containerNumber}`,
+      lines: correctionLines,
+      offsetAccountCode: "INVENTORY_REVALUATION",
+      narration: "Stock cost corrected at offload",
+      locationId: input.locationId,
+    });
+
     await postSupplierPartnerJournals(tx, container, purchaseOrders, input);
+    // Perpetual inventory (wave 8.2): the received stock moves to the ledger.
+    await syncContainerStockInTx(tx, input.companyId, input.containerId);
+    if (previousBeforeCutover) {
+      // Wave 15 (C1): the edit of an offload dated before the cut-over. A new
+      // date before it keeps the stock out of STOCK-IN, so the whole change is
+      // journalled; a new date on or after it is STOCK-IN's, so only the
+      // reversal of the old receipt is.
+      const newBeforeCutover = await isPreCutoverOffloadChangeTx(tx, input.companyId, input.offloadDate);
+      const received = storedItems.reduce<Decimal>((sum, item) => sum.plus(item.valueMoved), new MoneyDecimal(0));
+      await postPreCutoverOffloadMovementTx(tx, {
+        companyId: input.companyId,
+        containerId: input.containerId,
+        containerNumber: container.containerNumber,
+        offloadDate: previousOffloadDate,
+        locationId: input.locationId,
+        valueDelta: newBeforeCutover ? reversalDelta.plus(received) : reversalDelta,
+        mode: "inPlace",
+        reason: "Offload edited",
+      });
+    }
 
     return {
       offload,

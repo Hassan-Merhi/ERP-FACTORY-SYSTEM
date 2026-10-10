@@ -110,7 +110,10 @@ export async function reconcileHistoricalSalesCopy(params: { runId: string; sour
       continue;
     }
 
-    await db.execute(sql`
+    // Header and entry repairs commit together; run tracking/links are recorded after commit.
+    const afterCommit: Array<() => Promise<void>> = [];
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`
       UPDATE vouchers
       SET voucher_type = ${sourceVoucher.voucher_type},
           voucher_date = ${sourceVoucher.voucher_date},
@@ -121,28 +124,28 @@ export async function reconcileHistoricalSalesCopy(params: { runId: string; sour
           source_module = 'SP_MIGRATION_READONLY'
       WHERE id = ${targetVoucherId} AND company_id = ${targetId}
     `);
-    vouchersUpdated++;
+      vouchersUpdated++;
 
-    const sourceItemsResult = await db.execute(sql`
+      const sourceItemsResult = await tx.execute(sql`
       SELECT id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price
       FROM sales_items WHERE voucher_id = ${pn(sourceVoucher.id)} ORDER BY id ASC
     `);
-    const targetItemsResult = await db.execute(sql`
+      const targetItemsResult = await tx.execute(sql`
       SELECT id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price
       FROM sales_items WHERE voucher_id = ${targetVoucherId} ORDER BY id ASC
     `);
-    const targetItems = resultRows(targetItemsResult);
-    const linkedTargetItemIds = new Set(Array.from(itemLinks.values()));
+      const targetItems = resultRows(targetItemsResult);
+      const linkedTargetItemIds = new Set(Array.from(itemLinks.values()));
 
-    for (const sourceItem of resultRows(sourceItemsResult)) {
-      const targetStockItemId = stockMap.get(pn(sourceItem.stock_item_id));
-      if (!targetStockItemId) {
-        blockers.push(`Sale item ${sourceItem.id} has no target stock-item mapping.`);
-        continue;
-      }
-      const linkedTargetItemId = itemLinks.get(pn(sourceItem.id));
-      if (linkedTargetItemId) {
-        await db.execute(sql`
+      for (const sourceItem of resultRows(sourceItemsResult)) {
+        const targetStockItemId = stockMap.get(pn(sourceItem.stock_item_id));
+        if (!targetStockItemId) {
+          blockers.push(`Sale item ${sourceItem.id} has no target stock-item mapping.`);
+          continue;
+        }
+        const linkedTargetItemId = itemLinks.get(pn(sourceItem.id));
+        if (linkedTargetItemId) {
+          await tx.execute(sql`
           UPDATE sales_items
           SET stock_item_id = ${targetStockItemId}, quantity = ${sourceItem.quantity},
               selling_price = ${sourceItem.selling_price}, cost_price = ${sourceItem.cost_price},
@@ -150,25 +153,25 @@ export async function reconcileHistoricalSalesCopy(params: { runId: string; sour
               profit = ${sourceItem.profit ?? "0"}, configured_price = ${sourceItem.configured_price ?? null}
           WHERE id = ${linkedTargetItemId} AND voucher_id = ${targetVoucherId}
         `);
-        itemsUpdated++;
-        continue;
-      }
-      const candidates = targetItems.filter(
-        (targetItem) =>
-          !linkedTargetItemIds.has(pn(targetItem.id)) &&
-          pn(targetItem.stock_item_id) === targetStockItemId &&
-          numericEqual(targetItem.quantity, sourceItem.quantity) &&
-          numericEqual(targetItem.selling_price, sourceItem.selling_price) &&
-          numericEqual(targetItem.cost_price, sourceItem.cost_price) &&
-          numericEqual(targetItem.total_sales, sourceItem.total_sales, 0.01) &&
-          numericEqual(targetItem.total_cost, sourceItem.total_cost, 0.01)
-      );
-      let targetItemId: number;
-      if (candidates.length === 1) {
-        targetItemId = pn(candidates[0].id);
-        itemLinksAdded++;
-      } else if (candidates.length === 0) {
-        const inserted = await db.execute(sql`
+          itemsUpdated++;
+          continue;
+        }
+        const candidates = targetItems.filter(
+          (targetItem) =>
+            !linkedTargetItemIds.has(pn(targetItem.id)) &&
+            pn(targetItem.stock_item_id) === targetStockItemId &&
+            numericEqual(targetItem.quantity, sourceItem.quantity) &&
+            numericEqual(targetItem.selling_price, sourceItem.selling_price) &&
+            numericEqual(targetItem.cost_price, sourceItem.cost_price) &&
+            numericEqual(targetItem.total_sales, sourceItem.total_sales, 0.01) &&
+            numericEqual(targetItem.total_cost, sourceItem.total_cost, 0.01)
+        );
+        let targetItemId: number;
+        if (candidates.length === 1) {
+          targetItemId = pn(candidates[0].id);
+          itemLinksAdded++;
+        } else if (candidates.length === 0) {
+          const inserted = await tx.execute(sql`
           INSERT INTO sales_items
             (voucher_id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price)
           VALUES
@@ -177,81 +180,87 @@ export async function reconcileHistoricalSalesCopy(params: { runId: string; sour
              ${sourceItem.profit ?? "0"}, ${sourceItem.configured_price ?? null})
           RETURNING id
         `);
-        targetItemId = pn(resultRows(inserted)[0].id);
-        await trackRow(runId, "sales_items", targetItemId);
-        itemsInserted++;
-      } else {
-        blockers.push(`Sale item ${sourceItem.id} has ${candidates.length} ambiguous target matches.`);
-        continue;
+          targetItemId = pn(resultRows(inserted)[0].id);
+          afterCommit.push(() => trackRow(runId, "sales_items", targetItemId));
+          itemsInserted++;
+        } else {
+          blockers.push(`Sale item ${sourceItem.id} has ${candidates.length} ambiguous target matches.`);
+          continue;
+        }
+        afterCommit.push(() => linkSourceRow(runId, "sales_items", pn(sourceItem.id), "sales_items", targetItemId));
+        itemLinks.set(pn(sourceItem.id), targetItemId);
+        linkedTargetItemIds.add(targetItemId);
       }
-      await linkSourceRow(runId, "sales_items", pn(sourceItem.id), "sales_items", targetItemId);
-      itemLinks.set(pn(sourceItem.id), targetItemId);
-      linkedTargetItemIds.add(targetItemId);
-    }
 
-    const sourceEntriesResult = await db.execute(sql`
+      const sourceEntriesResult = await tx.execute(sql`
       SELECT id, ledger_account_id, debit_amount, credit_amount, narration
       FROM voucher_entries WHERE voucher_id = ${pn(sourceVoucher.id)} ORDER BY id ASC
     `);
-    const targetEntriesResult = await db.execute(sql`
+      const targetEntriesResult = await tx.execute(sql`
       SELECT id, ledger_account_id, debit_amount, credit_amount, narration
       FROM voucher_entries WHERE voucher_id = ${targetVoucherId} ORDER BY id ASC
     `);
-    const sourceEntries = resultRows(sourceEntriesResult);
-    const targetEntries = resultRows(targetEntriesResult);
-    for (const sourceEntry of sourceEntries) {
-      const linkedTargetEntryId = entryLinks.get(pn(sourceEntry.id));
-      if (!linkedTargetEntryId) continue;
-      await db.execute(sql`
+      const sourceEntries = resultRows(sourceEntriesResult);
+      const targetEntries = resultRows(targetEntriesResult);
+      for (const sourceEntry of sourceEntries) {
+        const linkedTargetEntryId = entryLinks.get(pn(sourceEntry.id));
+        if (!linkedTargetEntryId) continue;
+        await tx.execute(sql`
         UPDATE voucher_entries
         SET debit_amount = ${sourceEntry.debit_amount ?? "0"},
             credit_amount = ${sourceEntry.credit_amount ?? "0"},
             narration = ${sourceEntry.narration ?? null}
         WHERE id = ${linkedTargetEntryId} AND voucher_id = ${targetVoucherId}
       `);
-      entriesUpdated++;
-    }
-    const unlinkedSources = sourceEntries.filter((entry) => !entryLinks.has(pn(entry.id)));
-    const linkedTargetEntryIds = new Set(Array.from(entryLinks.values()));
-    const unlinkedTargets = targetEntries.filter((entry) => !linkedTargetEntryIds.has(pn(entry.id)));
-
-    if (
-      unlinkedSources.length > 0 &&
-      sourceEntries.length === targetEntries.length &&
-      unlinkedSources.length === unlinkedTargets.length
-    ) {
-      for (let index = 0; index < unlinkedSources.length; index++) {
-        const sourceEntryId = pn(unlinkedSources[index].id);
-        const targetEntryId = pn(unlinkedTargets[index].id);
-        await linkSourceRow(runId, "voucher_entries", sourceEntryId, "voucher_entries", targetEntryId);
-        entryLinks.set(sourceEntryId, targetEntryId);
-        entryLinksAdded++;
+        entriesUpdated++;
       }
-    } else if (unlinkedSources.length > 0 && targetEntries.length < sourceEntries.length) {
-      const missingCount = sourceEntries.length - targetEntries.length;
-      if (missingCount !== unlinkedSources.length) {
-        blockers.push(`Voucher ${sourceVoucher.voucher_number} has an ambiguous entry-count mismatch.`);
-      } else {
-        for (const sourceEntry of unlinkedSources) {
-          const targetLedgerAccountId = sourceEntry.ledger_account_id
-            ? (accountMap.map.get(pn(sourceEntry.ledger_account_id)) ?? accountMap.suspenseId)
-            : accountMap.suspenseId;
-          const inserted = await db.execute(sql`
+      const unlinkedSources = sourceEntries.filter((entry) => !entryLinks.has(pn(entry.id)));
+      const linkedTargetEntryIds = new Set(Array.from(entryLinks.values()));
+      const unlinkedTargets = targetEntries.filter((entry) => !linkedTargetEntryIds.has(pn(entry.id)));
+
+      if (
+        unlinkedSources.length > 0 &&
+        sourceEntries.length === targetEntries.length &&
+        unlinkedSources.length === unlinkedTargets.length
+      ) {
+        for (let index = 0; index < unlinkedSources.length; index++) {
+          const sourceEntryId = pn(unlinkedSources[index].id);
+          const targetEntryId = pn(unlinkedTargets[index].id);
+          afterCommit.push(() =>
+            linkSourceRow(runId, "voucher_entries", sourceEntryId, "voucher_entries", targetEntryId)
+          );
+          entryLinks.set(sourceEntryId, targetEntryId);
+          entryLinksAdded++;
+        }
+      } else if (unlinkedSources.length > 0 && targetEntries.length < sourceEntries.length) {
+        const missingCount = sourceEntries.length - targetEntries.length;
+        if (missingCount !== unlinkedSources.length) {
+          blockers.push(`Voucher ${sourceVoucher.voucher_number} has an ambiguous entry-count mismatch.`);
+        } else {
+          for (const sourceEntry of unlinkedSources) {
+            const targetLedgerAccountId = sourceEntry.ledger_account_id
+              ? (accountMap.map.get(pn(sourceEntry.ledger_account_id)) ?? accountMap.suspenseId)
+              : accountMap.suspenseId;
+            const inserted = await tx.execute(sql`
             INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
             VALUES (${targetVoucherId}, ${targetLedgerAccountId}, ${sourceEntry.debit_amount ?? "0"},
                     ${sourceEntry.credit_amount ?? "0"}, ${sourceEntry.narration ?? null})
             RETURNING id
           `);
-          const targetEntryId = pn(resultRows(inserted)[0].id);
-          await trackRow(runId, "voucher_entries", targetEntryId);
-          await linkSourceRow(runId, "voucher_entries", pn(sourceEntry.id), "voucher_entries", targetEntryId);
-          entryLinks.set(pn(sourceEntry.id), targetEntryId);
-          entriesInserted++;
+            const targetEntryId = pn(resultRows(inserted)[0].id);
+            afterCommit.push(() => trackRow(runId, "voucher_entries", targetEntryId));
+            afterCommit.push(() =>
+              linkSourceRow(runId, "voucher_entries", pn(sourceEntry.id), "voucher_entries", targetEntryId)
+            );
+            entryLinks.set(pn(sourceEntry.id), targetEntryId);
+            entriesInserted++;
+          }
         }
+      } else if (unlinkedSources.length > 0) {
+        blockers.push(`Voucher ${sourceVoucher.voucher_number} has unlinked entries that cannot be paired safely.`);
       }
-    } else if (unlinkedSources.length > 0) {
-      blockers.push(`Voucher ${sourceVoucher.voucher_number} has unlinked entries that cannot be paired safely.`);
-    }
+    });
+    for (const record of afterCommit) await record();
   }
 
   const createdRows = itemsInserted + entriesInserted;

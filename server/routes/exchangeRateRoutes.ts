@@ -7,15 +7,11 @@
  */
 import type { Express } from "express";
 import { getErrorMessage } from "../lib/httpHandlers";
-import { logger } from "../lib/logger";
-import { eq, and, ne, isNull, sql } from "drizzle-orm";
-import { db } from "../db";
 import { storage } from "../storage";
-import { requireAuth } from "../auth";
+import { requireAuth, requireRole } from "../auth";
 import { getCompanyBusinessDate } from "../lib/dateUtils";
-import { exchangeRates, insertExchangeRateSchema, ledgerAccounts, voucherEntries, vouchers } from "@shared/schema";
-import type Decimal from "decimal.js";
-import { MoneyDecimal, debitMinusCredit, signedOpeningBalance, toMoney } from "../lib/money";
+import { insertExchangeRateSchema } from "@shared/schema";
+import { saveCompanyExchangeRate } from "../services/accounting/exchangeRateWrites";
 
 export function registerExchangeRateRoutes(app: Express) {
   // Check if today's exchange rate exists
@@ -40,7 +36,8 @@ export function registerExchangeRateRoutes(app: Express) {
       const latestRate = await storage.getLatestExchangeRate(
         companyId,
         company.baseCurrency || "",
-        company.displayCurrency
+        company.displayCurrency,
+        today
       );
 
       if (!latestRate) {
@@ -89,8 +86,9 @@ export function registerExchangeRateRoutes(app: Express) {
     }
   });
 
-  // Create a new exchange rate
-  app.post("/api/exchange-rates", requireAuth, async (req, res) => {
+  // Save the company rate for a date (wave 14, owner decision 2): Admin/Owner
+  // (and Developer) only; the save and its audit (old and new rate) commit together.
+  app.post("/api/exchange-rates", requireAuth, requireRole("Admin", "Owner"), async (req, res) => {
     try {
       const companyId = req.session.currentCompanyId;
       if (!companyId) {
@@ -110,202 +108,22 @@ export function registerExchangeRateRoutes(app: Express) {
         });
       }
 
-      // Atomic upsert — relies on the exchange_rates_company_date_pair_unique DB
-      // constraint so two users saving the same company/date/pair concurrently can
-      // never create duplicate rows; the second save simply updates the first's row.
-      const rate = await storage.upsertExchangeRate(validationResult.data);
+      // One row per company/date/pair: a second save on the same date replaces the
+      // first's rate (serialised in the transaction, so two concurrent saves never
+      // create duplicates and the audit's old value is the one replaced).
+      const { fromCurrency, toCurrency, rate: rateValue, effectiveDate } = validationResult.data;
+      const rate = await saveCompanyExchangeRate(
+        { userId: req.session.userId!, username: req.session.username || "unknown", companyId },
+        { fromCurrency, toCurrency, rate: rateValue, effectiveDate }
+      );
 
-      // --- Auto-revalue Cash accounts when exchange rate changes ---
-      // Runs before the response so balance queries see the updated data immediately.
-      // Wrapped in try/catch so a revaluation failure never fails the main request.
-      // NOTE: the body below MUST stay inside this async IIFE — a bare `return` used to
-      // sit directly in the route handler's try block, which meant every early-exit path
-      // (no previous rate yet, no cash accounts, no meaningful change, etc.) returned from
-      // the whole POST handler and skipped res.json(rate) entirely, hanging the request
-      // forever. That silently broke "Set Today's Rate" on the very first save for any
-      // company (no previous rate to compare against) until the client eventually timed out.
-      try {
-        await (async () => {
-          const { fromCurrency, toCurrency } = validationResult.data;
-          const newRate = toMoney(validationResult.data.rate);
-
-          // Get the previous rate (second most-recent for this currency pair)
-          const [prevRateRow] = await db
-            .select()
-            .from(exchangeRates)
-            .where(
-              and(
-                eq(exchangeRates.companyId, companyId),
-                eq(exchangeRates.fromCurrency, fromCurrency),
-                eq(exchangeRates.toCurrency, toCurrency),
-                ne(exchangeRates.id, rate.id)
-              )
-            )
-            .orderBy(sql`${exchangeRates.effectiveDate} DESC`)
-            .limit(1);
-
-          if (!prevRateRow) return; // First-ever rate — nothing to revalue
-          const oldRate = toMoney(prevRateRow.rate);
-          if (oldRate.minus(newRate).abs().lt("0.0001") || newRate.lte(0)) return; // No meaningful change
-
-          // Find all Cash-type ledger accounts for this company
-          const cashAccounts = await db
-            .select()
-            .from(ledgerAccounts)
-            .where(
-              and(
-                eq(ledgerAccounts.companyId, companyId),
-                eq(ledgerAccounts.accountType, "Cash"),
-                isNull(ledgerAccounts.deletedAt)
-              )
-            );
-
-          if (cashAccounts.length === 0) return;
-
-          // Compute balance per account and calculate revaluation adjustment
-          // Exact decimals, each adjustment at cents: the voucher total is the sum
-          // of the cents actually posted, so header and lines always agree.
-          const adjustments: Array<{ accountId: number; diff: Decimal }> = [];
-          let totalAbsDiff: Decimal = new MoneyDecimal(0);
-
-          for (const account of cashAccounts) {
-            // Get all non-deleted, non-optional voucher entries for this account
-            const entries = await db
-              .select({
-                debitAmount: voucherEntries.debitAmount,
-                creditAmount: voucherEntries.creditAmount,
-              })
-              .from(voucherEntries)
-              .innerJoin(vouchers, eq(voucherEntries.voucherId, vouchers.id))
-              .where(
-                and(
-                  eq(voucherEntries.ledgerAccountId, account.id),
-                  eq(vouchers.companyId, companyId),
-                  isNull(vouchers.deletedAt),
-                  eq(vouchers.optional, false)
-                )
-              );
-
-            // Opening balance (Asset/Cash: Dr = positive)
-            const signedOpening = signedOpeningBalance(account.openingBalance, account.openingBalanceSide);
-
-            // Sum debit - credit for asset accounts
-            const voucherBalance = debitMinusCredit(entries);
-
-            const usdBalance = signedOpening.plus(voucherBalance);
-
-            if (usdBalance.abs().lt("0.01")) continue; // Skip zero-balance accounts
-
-            // Reconstruct approximate CFA amount and compute new USD value
-            // cfaAmount = usdBalance * oldRate  (how many CFA we hold)
-            // newUsd     = cfaAmount / newRate   (what those CFA are worth now)
-            const cfaAmount = usdBalance.times(oldRate);
-            const newUsd = cfaAmount.div(newRate);
-            // positive = FX gain, negative = FX loss
-            const diff = newUsd.minus(usdBalance).toDecimalPlaces(2);
-
-            if (diff.abs().lt("0.01")) continue;
-
-            adjustments.push({ accountId: account.id, diff });
-            totalAbsDiff = totalAbsDiff.plus(diff.abs());
-          }
-
-          if (adjustments.length === 0 || totalAbsDiff.lt("0.01")) return;
-
-          // Find or create the FX Revaluation ledger account
-          let [fxAccount] = await db
-            .select()
-            .from(ledgerAccounts)
-            .where(
-              and(
-                eq(ledgerAccounts.companyId, companyId),
-                eq(ledgerAccounts.code, "FX-REVALUATION"),
-                isNull(ledgerAccounts.deletedAt)
-              )
-            );
-
-          if (!fxAccount) {
-            [fxAccount] = await db
-              .insert(ledgerAccounts)
-              .values({
-                companyId,
-                code: "FX-REVALUATION",
-                name: "FX Revaluation Gain/Loss",
-                accountType: "Indirect Expense",
-                openingBalance: "0",
-                openingBalanceSide: "Dr",
-              })
-              .returning();
-          }
-
-          // Create a revaluation Journal voucher
-          const voucherNumber = `FX-REVAL-${Date.now()}`;
-          const voucherDate = validationResult.data.effectiveDate;
-          const rateChangeDesc = newRate.gt(oldRate)
-            ? `Rate ↑ ${oldRate.toNumber().toLocaleString()} → ${newRate.toNumber().toLocaleString()} ${toCurrency} (FX loss)`
-            : `Rate ↓ ${oldRate.toNumber().toLocaleString()} → ${newRate.toNumber().toLocaleString()} ${toCurrency} (FX gain)`;
-
-          const [revalVoucher] = await db
-            .insert(vouchers)
-            .values({
-              companyId,
-              voucherNumber,
-              voucherType: "Journal",
-              voucherDate,
-              description: `FX Revaluation — ${rateChangeDesc}`,
-              totalAmount: totalAbsDiff.toFixed(2),
-              currency: "USD",
-              optional: false,
-              sourceModule: "ERP",
-            })
-            .returning();
-
-          // Build voucher entries for every adjusted cash account
-          const entryRows = [];
-          for (const { accountId, diff } of adjustments) {
-            if (diff.lt(0)) {
-              // FX loss: Credit cash, Debit FX expense
-              entryRows.push({
-                voucherId: revalVoucher.id,
-                ledgerAccountId: accountId,
-                debitAmount: "0",
-                creditAmount: diff.abs().toFixed(2),
-                narration: "FX revaluation adjustment",
-              });
-              entryRows.push({
-                voucherId: revalVoucher.id,
-                ledgerAccountId: fxAccount.id,
-                debitAmount: diff.abs().toFixed(2),
-                creditAmount: "0",
-                narration: "FX revaluation adjustment",
-              });
-            } else {
-              // FX gain: Debit cash, Credit FX account
-              entryRows.push({
-                voucherId: revalVoucher.id,
-                ledgerAccountId: accountId,
-                debitAmount: diff.toFixed(2),
-                creditAmount: "0",
-                narration: "FX revaluation adjustment",
-              });
-              entryRows.push({
-                voucherId: revalVoucher.id,
-                ledgerAccountId: fxAccount.id,
-                debitAmount: "0",
-                creditAmount: diff.toFixed(2),
-                narration: "FX revaluation adjustment",
-              });
-            }
-          }
-
-          await db.insert(voucherEntries).values(entryRows);
-          logger.info(
-            `[FX Revaluation] Created voucher ${voucherNumber}: ${adjustments.length} cash account(s) adjusted, total Δ ${totalAbsDiff.toFixed(2)}`
-          );
-        })();
-      } catch (revalErr) {
-        logger.error("[FX Revaluation] Error during auto-revaluation:", { error: revalErr });
-      }
+      // Saving a rate only saves the rate. An automatic "FX-REVAL" journal used to be
+      // posted here (wave 9 ledger-safety audit, docs/accounting-audit-2026-10.md §7):
+      // it treated every Cash ledger account as CFA (ledger accounts carry no currency),
+      // used float maths, autocommit writes with swallowed errors and no audit, and
+      // re-posted every time a rate was re-saved. Revaluation is now report-time only
+      // (cashBankRevaluationService / /api/accounts/multi-currency/cash-bank-revaluation).
+      // Historical FX-REVAL vouchers are left untouched.
 
       res.json(rate);
     } catch (error: unknown) {

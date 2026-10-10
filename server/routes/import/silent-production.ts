@@ -18,6 +18,11 @@ import { requireAuth, requireNonPOS } from "../../auth";
 import { adjustInventory } from "../../inventoryHelper";
 import { createDatabaseStockMovementAdapter } from "../../services/inventory/databaseStockMovementAdapter";
 import { postStockMovementTx } from "../../services/inventory/stockMovementIntegrityService";
+import {
+  inventoryMovementLine,
+  postInventoryMovementJournalTx,
+  type InventoryMovementLine,
+} from "../../services/accounting/perpetualInventory/inventoryMovementJournal";
 
 const canonicalStockMovementAdapter = createDatabaseStockMovementAdapter();
 
@@ -57,6 +62,7 @@ export function registerSilentProductionRoutes(app: Express) {
       let applied = 0;
 
       await db.transaction(async (tx) => {
+        const movementLines: InventoryMovementLine[] = [];
         for (let index = 0; index < items.length; index++) {
           const item = items[index];
           const parsedQty = parseMoneyInput(item.quantity);
@@ -79,7 +85,15 @@ export function registerSilentProductionRoutes(app: Express) {
           }
 
           const delta = type === "Production" ? normalizedQty : -normalizedQty;
-          await adjustInventory(tx, locId, stockItemId, delta, companyId, type === "Production" ? rate : undefined);
+          const adjustment = await adjustInventory(
+            tx,
+            locId,
+            stockItemId,
+            delta,
+            companyId,
+            type === "Production" ? rate : undefined
+          );
+          movementLines.push(inventoryMovementLine(adjustment, { stockItemId, locationId: locId }));
           await postStockMovementTx(
             tx,
             {
@@ -102,6 +116,19 @@ export function registerSilentProductionRoutes(app: Express) {
           );
           applied++;
         }
+        // Wave 11: under perpetual inventory the ledger moves with the sub-ledger.
+        await postInventoryMovementJournalTx(tx, {
+          companyId,
+          sourceType: type === "Production" ? "silent-production" : "silent-consumption",
+          sourceId: operationId,
+          date: occurredAt.slice(0, 10),
+          reference: `${type} ${operationId.slice(0, 8)}`,
+          lines: movementLines,
+          offsetAccountCode: "INVENTORY_ADJUSTMENT",
+          narration: type === "Production" ? "Silent production" : "Silent consumption",
+          actor: req.user ? { userId: String(req.user.id), username: String(req.user.username) } : null,
+          locationId: locId,
+        });
       });
 
       res.json({ success: true, applied, type });

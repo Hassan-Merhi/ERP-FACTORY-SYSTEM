@@ -18,6 +18,7 @@ import { cascadeContainerCostChange } from "../rawStockCostCascade";
 import { computeCorrectContainerCost } from "../raw-stock-recalc";
 import { getAuthoritativeSupplierRemainingKg } from "../rawStockLockedRate";
 import { writeDaybookEntry } from "../../../routes/factory/_helpers";
+import { normFactoryEntry } from "../factoryVoucherEntryAmounts";
 import {
   assertNoLaterSupplierCostEvents,
   getSupplierRateForUpdate,
@@ -276,24 +277,21 @@ export async function applyPostOffloadChargeMutation(
       await tx.insert(voucherEntries).values({
         voucherId: voucherRow.id,
         ledgerAccountId: chargesPayableAcctId,
-        debitAmount: String(chargeData.amount),
-        creditAmount: "0",
+        ...normFactoryEntry(chargeData.currencyCode, String(chargeData.amount), "0", chargeData.fxRateToUsd),
         narration: `${chargeData.description} payable — container ${container.containerNumber}`,
       });
       if (chargeData.ledgerAccountId) {
         await tx.insert(voucherEntries).values({
           voucherId: voucherRow.id,
           ledgerAccountId: chargeData.ledgerAccountId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
+          ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
           narration: `${chargeData.description} — container ${container.containerNumber}`,
         });
       } else if (chargeData.supplierId) {
         await tx.insert(voucherEntries).values({
           voucherId: voucherRow.id,
           factorySupplierId: chargeData.supplierId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
+          ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
           narration: `${chargeData.description} — container ${container.containerNumber}`,
         });
       }
@@ -539,24 +537,21 @@ export async function applyPostOffloadChargeMutation(
         await tx.insert(voucherEntries).values({
           voucherId: chargeRow.voucherId,
           ledgerAccountId: chargesPayableAcctId,
-          debitAmount: String(chargeData.amount),
-          creditAmount: "0",
+          ...normFactoryEntry(chargeData.currencyCode, String(chargeData.amount), "0", chargeData.fxRateToUsd),
           narration: `${chargeData.description} payable — container ${container.containerNumber}`,
         });
         if (chargeData.ledgerAccountId) {
           await tx.insert(voucherEntries).values({
             voucherId: chargeRow.voucherId,
             ledgerAccountId: chargeData.ledgerAccountId,
-            debitAmount: "0",
-            creditAmount: String(chargeData.amount),
+            ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
             narration: `${chargeData.description} — container ${container.containerNumber}`,
           });
         } else if (chargeData.supplierId) {
           await tx.insert(voucherEntries).values({
             voucherId: chargeRow.voucherId,
             factorySupplierId: chargeData.supplierId,
-            debitAmount: "0",
-            creditAmount: String(chargeData.amount),
+            ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
             narration: `${chargeData.description} — container ${container.containerNumber}`,
           });
         }
@@ -589,24 +584,21 @@ export async function applyPostOffloadChargeMutation(
       await tx.insert(voucherEntries).values({
         voucherId: voucherRow.id,
         ledgerAccountId: chargesPayableAcctId,
-        debitAmount: String(chargeData.amount),
-        creditAmount: "0",
+        ...normFactoryEntry(chargeData.currencyCode, String(chargeData.amount), "0", chargeData.fxRateToUsd),
         narration: `${chargeData.description} payable — container ${container.containerNumber}`,
       });
       if (chargeData.ledgerAccountId) {
         await tx.insert(voucherEntries).values({
           voucherId: voucherRow.id,
           ledgerAccountId: chargeData.ledgerAccountId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
+          ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
           narration: `${chargeData.description} — container ${container.containerNumber}`,
         });
       } else if (chargeData.supplierId) {
         await tx.insert(voucherEntries).values({
           voucherId: voucherRow.id,
           factorySupplierId: chargeData.supplierId,
-          debitAmount: "0",
-          creditAmount: String(chargeData.amount),
+          ...normFactoryEntry(chargeData.currencyCode, "0", String(chargeData.amount), chargeData.fxRateToUsd),
           narration: `${chargeData.description} — container ${container.containerNumber}`,
         });
       }

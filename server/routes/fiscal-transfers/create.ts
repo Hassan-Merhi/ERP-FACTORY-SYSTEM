@@ -24,6 +24,7 @@ import {
   StockTransferPolicyError,
 } from "../../storage/stock-ops/transfers-create";
 import { lockInventoryRow } from "../../storage/inventoryRowLock";
+import { sendBaleMirrorMovementRefusal } from "../../services/accounting/perpetualInventory/cutoverRefusal";
 import {
   findExistingStockDocumentTx,
   recordStockDocumentTx,
@@ -489,6 +490,7 @@ export function registerStockTransferCreateRoutes(app: Express) {
           }
         });
     } catch (error: unknown) {
+      if (sendBaleMirrorMovementRefusal(res, error)) return;
       if (error instanceof StockTransferPolicyError) {
         logger.warn("stock transfer create rejected by inventory policy", {
           module: "stockTransfer",

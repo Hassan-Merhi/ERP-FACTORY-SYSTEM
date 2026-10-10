@@ -287,6 +287,9 @@ describeWithDatabase("Retail POS Wave 2 HTTP + PostgreSQL transaction flow", () 
       movementType: "cash_in",
       amount: 3,
       reason: "Float top-up",
+      // Wave 17 (D): the movement is journalled against its reason's account; the
+      // default reason "other" has none (409), so a mapped built-in reason is sent.
+      reasonCode: "owner_funding",
       idempotencyKey: "retail-wave1-cash-in-001",
     });
     expect(cashIn.status).toBe(201);

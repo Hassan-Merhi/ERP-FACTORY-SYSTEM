@@ -43,6 +43,11 @@ afterAll(async () => {
   await pool.query(`DELETE FROM factory_container_commissions WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM factory_raw_stock WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM factory_containers WHERE company_id = $1`, [ctx.companyId]);
+  // The opening-balance commission is journalled (FACTORY-COMM, wave 14 B); its lines reference the supplier.
+  await pool.query(`DELETE FROM voucher_entries WHERE voucher_id IN (SELECT id FROM vouchers WHERE company_id = $1)`, [
+    ctx.companyId,
+  ]);
+  await pool.query(`DELETE FROM vouchers WHERE company_id = $1`, [ctx.companyId]);
   await pool.query(`DELETE FROM factory_suppliers WHERE company_id = $1`, [ctx.companyId]);
   await cleanupTestData(TEST_PREFIX);
   closeTestServer();

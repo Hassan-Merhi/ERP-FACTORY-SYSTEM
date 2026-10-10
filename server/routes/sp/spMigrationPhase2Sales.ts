@@ -113,8 +113,11 @@ export async function importHistoricalSales(req: Request, res: Response): Promis
       let targetVoucherId = pn(firstRow(existingResult)?.id);
       let newlyCreated = false;
 
-      if (!targetVoucherId) {
-        const createdVoucher = await db.execute(sql`
+      // Header, sale items and entries commit together; run tracking/links are recorded after commit.
+      const afterCommit: Array<() => Promise<void>> = [];
+      await db.transaction(async (tx) => {
+        if (!targetVoucherId) {
+          const createdVoucher = await tx.execute(sql`
           INSERT INTO vouchers
             (company_id, voucher_number, voucher_type, voucher_date, description,
              total_amount, currency, exchange_rate, source_module)
@@ -124,34 +127,34 @@ export async function importHistoricalSales(req: Request, res: Response): Promis
              ${sourceVoucher.currency ?? "USD"}, ${sourceVoucher.exchange_rate ?? null}, 'SP_MIGRATION_READONLY')
           RETURNING id
         `);
-        targetVoucherId = pn(resultRows(createdVoucher)[0].id);
-        await trackRow(runId, "vouchers", targetVoucherId);
-        rowsCreated++;
-        vouchersCreated++;
-        newlyCreated = true;
-      } else {
-        vouchersReused++;
-      }
+          targetVoucherId = pn(resultRows(createdVoucher)[0].id);
+          afterCommit.push(() => trackRow(runId, "vouchers", targetVoucherId));
+          rowsCreated++;
+          vouchersCreated++;
+          newlyCreated = true;
+        } else {
+          vouchersReused++;
+        }
 
-      await linkSourceRow(runId, "vouchers", pn(sourceVoucher.id), "vouchers", targetVoucherId);
+        afterCommit.push(() => linkSourceRow(runId, "vouchers", pn(sourceVoucher.id), "vouchers", targetVoucherId));
 
-      if (newlyCreated) {
-        const sourceItemsResult = await db.execute(sql`
+        if (newlyCreated) {
+          const sourceItemsResult = await tx.execute(sql`
           SELECT id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price
           FROM sales_items
           WHERE voucher_id = ${pn(sourceVoucher.id)}
           ORDER BY id ASC
         `);
-        for (const sourceItem of resultRows(sourceItemsResult)) {
-          const targetStockItemId = stockItemMap.get(pn(sourceItem.stock_item_id));
-          if (!targetStockItemId) {
-            saleItemsSkipped++;
-            warnings.push(
-              `Voucher ${sourceVoucher.voucher_number}: stock item ${sourceItem.stock_item_id} has no target mapping.`
-            );
-            continue;
-          }
-          const inserted = await db.execute(sql`
+          for (const sourceItem of resultRows(sourceItemsResult)) {
+            const targetStockItemId = stockItemMap.get(pn(sourceItem.stock_item_id));
+            if (!targetStockItemId) {
+              saleItemsSkipped++;
+              warnings.push(
+                `Voucher ${sourceVoucher.voucher_number}: stock item ${sourceItem.stock_item_id} has no target mapping.`
+              );
+              continue;
+            }
+            const inserted = await tx.execute(sql`
             INSERT INTO sales_items
               (voucher_id, stock_item_id, quantity, selling_price, cost_price, total_sales, total_cost, profit, configured_price)
             VALUES
@@ -159,61 +162,67 @@ export async function importHistoricalSales(req: Request, res: Response): Promis
                ${sourceItem.total_sales}, ${sourceItem.total_cost}, ${sourceItem.profit ?? "0"}, ${sourceItem.configured_price ?? null})
             RETURNING id
           `);
-          const targetItemId = pn(resultRows(inserted)[0].id);
-          await trackRow(runId, "sales_items", targetItemId);
-          await linkSourceRow(runId, "sales_items", pn(sourceItem.id), "sales_items", targetItemId);
-          rowsCreated++;
-          saleItemsCreated++;
-        }
+            const targetItemId = pn(resultRows(inserted)[0].id);
+            afterCommit.push(() => trackRow(runId, "sales_items", targetItemId));
+            afterCommit.push(() => linkSourceRow(runId, "sales_items", pn(sourceItem.id), "sales_items", targetItemId));
+            rowsCreated++;
+            saleItemsCreated++;
+          }
 
-        const sourceEntriesResult = await db.execute(sql`
+          const sourceEntriesResult = await tx.execute(sql`
           SELECT id, ledger_account_id, debit_amount, credit_amount, narration
           FROM voucher_entries
           WHERE voucher_id = ${pn(sourceVoucher.id)}
           ORDER BY id ASC
         `);
-        for (const sourceEntry of resultRows(sourceEntriesResult)) {
-          const mapping = sourceEntry.ledger_account_id
-            ? (accountMap.get(pn(sourceEntry.ledger_account_id)) ?? { targetId: pn(suspense.id), method: "suspense" })
-            : { targetId: pn(suspense.id), method: "suspense" };
-          const inserted = await db.execute(sql`
+          for (const sourceEntry of resultRows(sourceEntriesResult)) {
+            const mapping = sourceEntry.ledger_account_id
+              ? (accountMap.get(pn(sourceEntry.ledger_account_id)) ?? { targetId: pn(suspense.id), method: "suspense" })
+              : { targetId: pn(suspense.id), method: "suspense" };
+            const inserted = await tx.execute(sql`
             INSERT INTO voucher_entries (voucher_id, ledger_account_id, debit_amount, credit_amount, narration)
             VALUES (${targetVoucherId}, ${mapping.targetId}, ${sourceEntry.debit_amount ?? "0"}, ${sourceEntry.credit_amount ?? "0"},
                     ${sourceEntry.narration ?? null})
             RETURNING id
           `);
-          const targetEntryId = pn(resultRows(inserted)[0].id);
-          await trackRow(runId, "voucher_entries", targetEntryId);
-          await linkSourceRow(runId, "voucher_entries", pn(sourceEntry.id), "voucher_entries", targetEntryId);
-          rowsCreated++;
-          entriesCreated++;
-        }
-      } else {
-        const sourceEntriesResult = await db.execute(sql`
-          SELECT id FROM voucher_entries WHERE voucher_id = ${pn(sourceVoucher.id)} ORDER BY id ASC
-        `);
-        const targetEntriesResult = await db.execute(sql`
-          SELECT id FROM voucher_entries WHERE voucher_id = ${targetVoucherId} ORDER BY id ASC
-        `);
-        const sourceEntries = resultRows(sourceEntriesResult);
-        const targetEntries = resultRows(targetEntriesResult);
-        if (sourceEntries.length === targetEntries.length) {
-          for (let index = 0; index < sourceEntries.length; index++) {
-            await linkSourceRow(
-              runId,
-              "voucher_entries",
-              pn(sourceEntries[index].id),
-              "voucher_entries",
-              pn(targetEntries[index].id)
+            const targetEntryId = pn(resultRows(inserted)[0].id);
+            afterCommit.push(() => trackRow(runId, "voucher_entries", targetEntryId));
+            afterCommit.push(() =>
+              linkSourceRow(runId, "voucher_entries", pn(sourceEntry.id), "voucher_entries", targetEntryId)
             );
-            entryLinksBackfilled++;
+            rowsCreated++;
+            entriesCreated++;
           }
         } else {
-          warnings.push(
-            `Voucher ${sourceVoucher.voucher_number}: existing migrated entry count (${targetEntries.length}) differs from source (${sourceEntries.length}); source links were not guessed.`
-          );
+          const sourceEntriesResult = await tx.execute(sql`
+          SELECT id FROM voucher_entries WHERE voucher_id = ${pn(sourceVoucher.id)} ORDER BY id ASC
+        `);
+          const targetEntriesResult = await tx.execute(sql`
+          SELECT id FROM voucher_entries WHERE voucher_id = ${targetVoucherId} ORDER BY id ASC
+        `);
+          const sourceEntries = resultRows(sourceEntriesResult);
+          const targetEntries = resultRows(targetEntriesResult);
+          if (sourceEntries.length === targetEntries.length) {
+            for (let index = 0; index < sourceEntries.length; index++) {
+              afterCommit.push(() =>
+                linkSourceRow(
+                  runId,
+                  "voucher_entries",
+                  pn(sourceEntries[index].id),
+                  "voucher_entries",
+                  pn(targetEntries[index].id)
+                )
+              );
+              entryLinksBackfilled++;
+            }
+          } else {
+            warnings.push(
+              `Voucher ${sourceVoucher.voucher_number}: existing migrated entry count (${targetEntries.length}) differs from source (${sourceEntries.length}); source links were not guessed.`
+            );
+          }
         }
-      }
+      });
+      for (const record of afterCommit) await record();
     }
 
     const suspenseReview = await getSuspenseReview(pair.sourceId, pair.targetId);

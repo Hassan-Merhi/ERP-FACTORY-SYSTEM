@@ -32,6 +32,7 @@ import {
   validateNewLocationBelongsToCompany,
 } from "./validateEditSaleRequest";
 import { reverseOriginalSaleInventory, clearOldSaleRecords } from "./reverseOriginalSaleInventory";
+import { postReversalResidualTx, saleCogsInventoryCreditTx } from "../../inventory/valueExactReversal";
 import { rebuildSaleItems } from "./rebuildSaleItems";
 import { nextCanonicalSourceRevision } from "../../inventory/canonicalSourceRevision";
 import { updateVoucherRecord } from "./updateSaleVoucher";
@@ -41,6 +42,8 @@ import {
   postGoldenCoastPosAccountingTx,
   retireGoldenCoastPosAccountingTx,
 } from "../goldenCoastPosAccounting";
+import { postSaleCogsTx } from "../../accounting/perpetualInventory/saleCogs";
+import { baleMirrorMovementRefusal } from "../../accounting/perpetualInventory/cutoverRefusal";
 import { spDeductionAmount, spPayableAfterDeduction } from "../spDeduction";
 
 function err(result: HandlerErrorResult): { status: number; body: PosSaleUpdateResponseBody } {
@@ -92,6 +95,15 @@ export async function applyPosSaleUpdateTx(
     return { error: { status: 400, body: { message: "At least one item is required" } } };
   }
   validateItemsPositive(items);
+
+  // Wave 11: a factory bale-mirror item is sold in the factory after the cut-over.
+  const mirrorRefusal = await baleMirrorMovementRefusal(
+    tx,
+    currentCompanyId,
+    items.map((item) => (item as { stockItemId?: unknown } | null)?.stockItemId),
+    "pos-sale-edit"
+  );
+  if (mirrorRefusal) return { error: { status: mirrorRefusal.status, body: { ...mirrorRefusal.body } } };
 
   const [lockedVoucher] = await tx
     .select()
@@ -163,7 +175,9 @@ export async function applyPosSaleUpdateTx(
   }
 
   const oldItemsMap = new Map(oldSalesItems.map((item) => [item.id, item]));
-  await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
+  // Wave 11: the old lines come back exactly; the ledger's COGS is compared below.
+  const cogsBefore = await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId);
+  const restoredDelta = await reverseOriginalSaleInventory(tx, lockedVoucher, oldSalesItems, canonicalRevision);
   await clearOldSaleRecords(tx, voucherId);
 
   const rebuildResult = await rebuildSaleItems(tx, {
@@ -238,6 +252,32 @@ export async function applyPosSaleUpdateTx(
       supplierPayableAccountId: editSpPayableAccountId!,
       payableAmountUsd: payableAmount,
       actor: { userId, username, reason: `Edit Golden Coast itemized POS sale ${lockedVoucher.voucherNumber}` },
+    });
+  }
+
+  // Perpetual inventory (wave 8.1): the edited sale's COGS replaces the old one.
+  if (!isSpCompanyEdit) {
+    await postSaleCogsTx(tx, {
+      companyId: lockedVoucher.companyId,
+      saleVoucherId: voucherId,
+      saleVoucherNumber: lockedVoucher.voucherNumber,
+      voucherDate: String(voucherDate || lockedVoucher.voucherDate),
+      locationId: targetLocationId,
+      relieved: rebuildResult.relieved,
+      optional: lockedVoucher.optional === true,
+    });
+    // What the restore of the old lines moved beyond the COGS journal it
+    // replaced (stock sold since, a legacy line) keeps the ledger with the
+    // sub-ledger.
+    await postReversalResidualTx(tx, {
+      companyId: lockedVoucher.companyId,
+      sourceType: "pos-edit",
+      sourceId: `${voucherId}:${Date.now().toString(36)}`,
+      reference: lockedVoucher.voucherNumber,
+      subLedgerDelta: restoredDelta.minus(rebuildResult.relieved),
+      ledgerDelta: cogsBefore.minus(await saleCogsInventoryCreditTx(tx, lockedVoucher.companyId, voucherId)),
+      actor: { userId, username },
+      locationId: targetLocationId,
     });
   }
 

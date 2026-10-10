@@ -1,4 +1,3 @@
-
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { pool } from "../server/db";
@@ -94,10 +93,10 @@ const PRIORITY_ROUTE_FILES = new Set([
   "../server/routes/vouchers/voucherPaymentRoutes.ts",
   "../server/routes/payroll/centralFactoryPayrollGenerationRoute.ts",
   "../server/routes/payroll/worker-statement/statement.ts",
-  "../server/routes/erp-payroll/runs-migration.ts",
 ]);
 
-const EXTERNAL_OR_DESTRUCTIVE = /(whatsapp|openai|gemini|track|trace|webhook|remote-control|permanent-delete|rebuild|purge)/i;
+const EXTERNAL_OR_DESTRUCTIVE =
+  /(whatsapp|openai|gemini|track|trace|webhook|remote-control|permanent-delete|rebuild|purge)/i;
 const moduleLoaders = import.meta.glob("../server/routes/**/*.ts");
 
 type Handler = (req: Record<string, any>, res: Record<string, any>, next: (error?: unknown) => void) => unknown;
@@ -337,7 +336,9 @@ function requestDouble(route: Registration, ctx: TestContext, sequence: number, 
 async function invokeWithBudget(handler: Handler, req: Record<string, any>, res: Record<string, any>): Promise<void> {
   let timer: NodeJS.Timeout | undefined;
   await Promise.race([
-    Promise.resolve().then(() => handler(req, res, () => undefined)).catch(() => undefined),
+    Promise.resolve()
+      .then(() => handler(req, res, () => undefined))
+      .catch(() => undefined),
     new Promise<void>((resolve) => {
       timer = setTimeout(resolve, 750);
     }),
@@ -353,10 +354,9 @@ describe("Phase 33 priority direct route-handler sweep", () => {
     erpCtx = await seedTestData(ERP_PREFIX);
     factoryCtx = await seedTestData(FACTORY_PREFIX);
     await pool.query("UPDATE companies SET company_type = 'factory' WHERE id = $1", [factoryCtx.companyId]);
-    await pool.query(
-      "UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'",
-      [String(erpCtx.companyId)]
-    );
+    await pool.query("UPDATE system_settings SET value = $1, updated_at = now() WHERE key = 'parentCompanyId'", [
+      String(erpCtx.companyId),
+    ]);
   }, 120_000);
 
   afterAll(async () => {
@@ -401,7 +401,8 @@ describe("Phase 33 priority direct route-handler sweep", () => {
     let invoked = 0;
     for (const [index, route] of registrations.entries()) {
       if (EXTERNAL_OR_DESTRUCTIVE.test(route.routePath) || route.handlers.length === 0) continue;
-      const ctx = route.modulePath.includes("/factory/") || route.routePath.startsWith("/api/factory/") ? factoryCtx : erpCtx;
+      const ctx =
+        route.modulePath.includes("/factory/") || route.routePath.startsWith("/api/factory/") ? factoryCtx : erpCtx;
       const handler = route.handlers[route.handlers.length - 1];
 
       for (const alternate of [false, true]) {

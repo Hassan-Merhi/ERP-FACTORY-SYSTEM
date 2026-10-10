@@ -1,5 +1,4 @@
 import {
-  deleteInfrastructurePostingIdentityForVoucherTx,
   infrastructurePostingIdentity,
   insertInfrastructureVoucherTx,
 } from "../../services/accounting/infrastructureVoucherIdentity";
@@ -11,10 +10,11 @@ import {
 
 import { db as globalDb, type DatabaseOrTransaction } from "../../db";
 import { getErrorMessage } from "../../lib/httpHandlers";
-import { eq, and, sql, inArray, ne, isNull } from "drizzle-orm";
+import { eq, and, sql, ne, isNull } from "drizzle-orm";
 import { ledgerAccounts, vouchers, voucherEntries, factoryPayrolls, factoryWorkers } from "@shared/schema";
 import { normalizeVoucherEntryAmounts } from "../../services/accounting/currencyAmounts";
 import { allocatePayrollAccountingAmounts, moneyFromCents } from "../../services/accounting/payrollAccountingAmounts";
+import { retireVouchersTx } from "../../services/accounting/voucherRetirement";
 
 /** Normalize a USD voucher entry (IDENTITY convention). */
 function normUsd(debit: string | number, credit: string | number) {
@@ -132,11 +132,12 @@ export async function rebuildPayrollGenVoucher(
 
   if (existingGenVouchers.length > 0) {
     const vIds = existingGenVouchers.map((v) => v.id);
-    for (const voucherId of vIds) {
-      await deleteInfrastructurePostingIdentityForVoucherTx(tx, voucherId);
-    }
-    await tx.delete(voucherEntries).where(inArray(voucherEntries.voucherId, vIds));
-    await tx.delete(vouchers).where(inArray(vouchers.id, vIds));
+    // Wave 16 (A): retired (soft delete with lines, audited here), not hard-deleted.
+    await retireVouchersTx(tx, {
+      companyId,
+      voucherIds: vIds,
+      reason: "payroll-generation-rebuild",
+    });
   }
 
   const remaining = await tx

@@ -269,7 +269,9 @@ describe("Phase 11 inventory sale and stock-out", () => {
 
     const inventory = await inventorySnapshot();
     expect(Number(inventory.quantity)).toBeCloseTo(-3, 3);
-    expect(Number(inventory.total_value)).toBeCloseTo(0, 2);
+    // Wave 11: the 3 sold short are relieved at the provisional cost 9.00 and the
+    // row holds that value negative (it used to pin zero, dropping their cost).
+    expect(Number(inventory.total_value)).toBeCloseTo(-27, 2);
     expect(Number(inventory.average_rate)).toBeCloseTo(9, 2);
 
     const layer = await pool.query<{ qty: string; provisional_rate: string }>(

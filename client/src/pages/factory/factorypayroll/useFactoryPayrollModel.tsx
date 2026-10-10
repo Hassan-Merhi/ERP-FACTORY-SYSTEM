@@ -10,7 +10,12 @@ import type { FactoryWorker } from "@shared/schema";
 import type { ProductionBonusDecisionResult } from "./ProductionBonusDecisionPanel";
 import type { Company, PayrollRecord } from "./types";
 import { amount } from "./utils";
-import { confirmAction } from "@/components/ConfirmHost";
+
+interface PayCashAccount {
+  id: number;
+  name: string;
+  code: string | null;
+}
 
 interface PayrollSettings {
   payrollTabWorkerMasterEnabled?: boolean;
@@ -25,12 +30,6 @@ interface WorkerImportResult {
   updated: number;
   skipped: number;
   errors?: unknown[];
-  message?: string;
-}
-
-interface PayrollMigrationResult {
-  vouchersUpdated: number;
-  bonusEntriesCreated: number;
   message?: string;
 }
 
@@ -88,10 +87,11 @@ export function useFactoryPayrollModel() {
   const [payDate, setPayDate] = useState(today);
   const [payReference, setPayReference] = useState("");
   const [payEffectiveDate, setPayEffectiveDate] = useState("");
+  // Wave 7: marking PAID posts Dr Payroll Payable / Cr this account, so it is required.
+  const [payCashAccountId, setPayCashAccountId] = useState("");
 
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
-  const [migrating, setMigrating] = useState(false);
 
   const [workerSearch, setWorkerSearch] = useState("");
   const [workerImporting, setWorkerImporting] = useState(false);
@@ -104,6 +104,18 @@ export function useFactoryPayrollModel() {
   useEffect(() => {
     if (companies.length === 1 && companyId === null) setCompanyId(companies[0].id);
   }, [companies, companyId]);
+
+  const { data: payCashAccounts = [] } = useQuery<PayCashAccount[]>({
+    queryKey: ["/api/factory/cash-accounts", selectedCompanyId],
+    queryFn: async () => {
+      const response = await fetch(`/api/factory/cash-accounts?companyId=${selectedCompanyId}`, {
+        credentials: "include",
+      });
+      return response.ok ? ((await response.json()) as PayCashAccount[]) : [];
+    },
+    enabled: !!selectedCompanyId && showPayDialog,
+    staleTime: 60000,
+  });
 
   const payrollQueryParams = new URLSearchParams();
   if (selectedCompanyId) payrollQueryParams.set("companyId", String(selectedCompanyId));
@@ -213,6 +225,7 @@ export function useFactoryPayrollModel() {
       setPaySource("Cash");
       setPayReference("");
       setPayEffectiveDate("");
+      setPayCashAccountId("");
       setShowPayDialog(true);
       return;
     }
@@ -230,7 +243,7 @@ export function useFactoryPayrollModel() {
   };
 
   const handleConfirmPayment = () => {
-    if (!editRecord) return;
+    if (!editRecord || !payCashAccountId) return;
     adjustMutation.mutate({
       id: editRecord.id,
       data: {
@@ -241,6 +254,7 @@ export function useFactoryPayrollModel() {
         notes: editNotes,
         status: "PAID",
         paymentSource: paySource,
+        cashAccountId: Number(payCashAccountId),
         paymentDate: payDate,
         paymentReference: payReference,
         effectiveDate: payEffectiveDate || null,
@@ -274,36 +288,6 @@ export function useFactoryPayrollModel() {
     } finally {
       setWorkerImporting(false);
       if (workerFileInput.current) workerFileInput.current.value = "";
-    }
-  };
-
-  const handleMigrateCitySplit = async () => {
-    if (!selectedCompanyId) return;
-    if (
-      !(await confirmAction({
-        title:
-          "This will split historical salary/bonus expense entries by city (Lubumbashi / Kolwezi). Run once only. Continue?",
-      }))
-    )
-      return;
-    setMigrating(true);
-    try {
-      const response = await fetch("/api/factory/payroll/migrate-city-split", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ companyId: selectedCompanyId }),
-      });
-      const data = (await response.json()) as PayrollMigrationResult;
-      if (!response.ok) throw new Error(data.message || "Migration failed");
-      toast({
-        title: "Migration complete",
-        description: `${data.vouchersUpdated} payroll vouchers split by city, ${data.bonusEntriesCreated} bonus entries created.`,
-      });
-    } catch (error: unknown) {
-      toast({ title: "Migration failed", description: errorMessage(error), variant: "destructive" });
-    } finally {
-      setMigrating(false);
     }
   };
 
@@ -435,9 +419,11 @@ export function useFactoryPayrollModel() {
     setPayReference,
     payEffectiveDate,
     setPayEffectiveDate,
+    payCashAccountId,
+    setPayCashAccountId,
+    payCashAccounts,
     exportingPdf,
     exportingExcel,
-    migrating,
     workerSearch,
     setWorkerSearch,
     workerImporting,
@@ -456,7 +442,6 @@ export function useFactoryPayrollModel() {
     handleAdjustSubmit,
     handleConfirmPayment,
     handleWorkerImport,
-    handleMigrateCitySplit,
     handleExportPdf,
     handleExportExcel,
     totals,

@@ -110,11 +110,15 @@ requireMarkers("server/lib/observabilityBootstrap.ts", [
   "captureRuntimeFailures",
 ]);
 
+// Wave 10: the overdue balance is the balance engine's customer closing (voucher
+// receipts reduce it); the cache only dates operational invoices not yet posted.
 const overdueQuerySource = requireMarkers("server/services/scheduler/overdueCustomerQuery.ts", [
+  "getPartyBalances",
+  'kind: "customer"',
   "cb.debit_amount",
-  "cb.credit_amount",
   "cb.transaction_date",
   "cb.company_id = c.company_id",
+  "v.company_id = c.company_id",
 ]);
 for (const forbiddenColumn of ["cb.entry_type", "cb.entry_date", "cb.amount"]) {
   if (overdueQuerySource.includes(forbiddenColumn)) {

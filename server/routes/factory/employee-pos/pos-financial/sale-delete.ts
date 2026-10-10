@@ -11,6 +11,8 @@ import { db } from "../../../../db";
 import { requireAuth } from "../../../../auth";
 import { factoryBales, factoryPosSales, factoryPosSaleItems } from "@shared/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { removeFactoryPosCogsTx } from "../../../../services/accounting/perpetualInventory/factoryPosCogs";
+import { releasePosSaleBalesTx } from "../../../../services/factory/factoryPosSaleBales";
 import { reverseFactoryPosSaleFinancialsTx } from "./sale-financials";
 
 export function registerPosSaleDeleteRoutes(app: Express) {
@@ -28,8 +30,15 @@ export function registerPosSaleDeleteRoutes(app: Express) {
       if (sale.status === "VOIDED") return res.status(400).json({ message: "Sale already voided" });
 
       await db.transaction(async (tx) => {
-        // Restore bales to IN_STOCK by finding bales that were sold around the sale date/product
-        const items = await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId));
+        // Perpetual inventory (wave 8.4): a voided sale takes its cost-of-sales journal with it.
+        await removeFactoryPosCogsTx(tx, companyId, saleId);
+        // Wave 11: put back exactly the bales the sale recorded. A sale written
+        // before that record falls back to re-opening the most recent SOLD bales
+        // of each product at its location.
+        const released = await releasePosSaleBalesTx(tx, companyId, saleId);
+        const items = released.legacy
+          ? await tx.select().from(factoryPosSaleItems).where(eq(factoryPosSaleItems.saleId, saleId))
+          : [];
         for (const item of items) {
           if (item.productId && sale.locationId) {
             // Re-open the most recently SOLD bales for that product at that location
@@ -56,7 +65,9 @@ export function registerPosSaleDeleteRoutes(app: Express) {
             }
           }
         }
-        // Take the sale's receipt voucher, daybook rows and customer balance back out of the books
+        // Take the sale's daybook rows (main #2129), its operational receivable
+        // rows (wave 14) and its revenue/receipt voucher (wave 8.4: FPOS-RCPT-{sale}
+        // or a legacy FPOS-{sale}-{timestamp}, retired) back out of the books.
         await reverseFactoryPosSaleFinancialsTx(tx, companyId, saleId);
         // Mark sale as voided
         await tx.update(factoryPosSales).set({ status: "VOIDED" }).where(eq(factoryPosSales.id, saleId));

@@ -9,6 +9,7 @@ import { logger } from "../../../lib/logger";
 import { storage } from "../../../storage";
 import { calcPoAmounts } from "../containerHelpers";
 import { sumMoney, toMoney } from "../../../lib/money";
+import { syncPurchaseOrderGitTx } from "../../../services/accounting/perpetualInventory/stockReceipts";
 
 interface StandaloneRepairSummary {
   handled: boolean;
@@ -249,6 +250,9 @@ export async function repairStandalonePurchaseOrderAccounting(companyId: number)
             .set({ freightPaidBy: "supplier", freightParentAccountId: null })
             .where(eq(purchaseOrders.id, po.id));
         }
+
+        // Perpetual inventory (wave 8.2): goods in transit follows the repaired PO voucher.
+        await syncPurchaseOrderGitTx(tx, po.companyId, po.id);
       });
 
       repairedStandaloneSupplierVouchers += 1;
